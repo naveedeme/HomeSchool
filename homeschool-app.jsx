@@ -7433,6 +7433,7 @@ function ttsClean(text) {
     .replace(/(\d)\s*<\s*(\d)/g, '$1 less than $2')
     .replace(/___\s*>\s*/g, ' is greater than ')
     .replace(/___\s*<\s*/g, ' is less than ')
+    .replace(/_{3,}/g, ' ')
     .replace(/\b>\b/g, ' greater than ')
     .replace(/[≈≥≤]/g, m => m==='≈'?' approximately ':m==='≥'?' greater than or equal to ':' less than or equal to ')
     .replace(/×/g, ' times ')
@@ -7447,7 +7448,7 @@ function ttsClean(text) {
 }
 
 // ─── TTS Clickable Sentence ───
-function SpeakableSentence({ text, lang = "en", highlight = null }) {
+function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null }) {
   const [speaking, setSpeaking] = useState(false);
   const handleClick = () => {
     window.speechSynthesis.cancel();
@@ -7505,11 +7506,16 @@ function SpeakableSentence({ text, lang = "en", highlight = null }) {
     return <>{text.slice(0,idx)}<span style={{color:"#38BDF8",fontWeight:700,textDecoration:"underline",textDecorationStyle:"wavy",textUnderlineOffset:"3px"}}>{text.slice(idx,idx+highlight.length)}</span>{text.slice(idx+highlight.length)}</>;
   };
   return (
-    <button onClick={handleClick} style={{ display: "block", width: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid rgba(148,163,184,0.15)", background: speaking ? "rgba(56,189,248,0.12)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "#F1F5F9", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : "none", position: "relative" }}>
+    <button onClick={handleClick} style={{ display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid rgba(148,163,184,0.15)", background: speaking ? "rgba(56,189,248,0.12)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "#F1F5F9", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : "none", position: "relative", ...buttonStyle }}>
       <span style={{ position: "absolute", right: lang === "ur" ? "auto" : 12, left: lang === "ur" ? 12 : "auto", top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
-      <span style={{ paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0 }}>{renderText()}</span>
+      <span style={{ paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0, ...textStyle }}>{renderText()}</span>
     </button>
   );
+}
+
+function formatListedAnswer(text) {
+  if (typeof text !== "string") return text;
+  return text.replace(/(\d+\.)\s+/g, (match, marker, offset) => offset === 0 ? `${marker} ` : `\n${marker} `);
 }
 
 function WordRow({ en, ur }) {
@@ -8002,15 +8008,6 @@ export default function HomeschoolApp() {
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx !== null && (() => {
         const sub = selectedLesson.subs[mathSubIdx];
         const toggleReveal = (k) => setRevealedEx(p => ({...p,[k]:!p[k]}));
-        const revealAndSpeak = (k, answer, e) => {
-          if (e) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-          const willReveal = !revealedEx[k];
-          if (willReveal && selectedSubject?.id === "social" && answer) speakText(answer);
-          toggleReveal(k);
-        };
         const isUr = selectedSubject?.id === "urdu";
         const urS = isUr ? {direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"} : {};
         return (<>
@@ -8116,8 +8113,8 @@ export default function HomeschoolApp() {
                       return (<div key={"A_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>A{pi+1}</span>
                         <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUr?"ur":"en"} /></div>
-                        <button onClick={(e)=>revealAndSpeak(rk, ex.ans && ex.ans[pi], e)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <span style={{background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.3)",borderRadius:8,padding:"4px 10px",color:"#22C55E",fontSize:12,fontWeight:700,whiteSpace:"nowrap",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUr?"rtl":"ltr"}}>✅ {ex.ans[pi]}</span>}
+                        <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
+                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUr?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line"}} /></div>}
                       </div>);
                     })}
                   </div>
@@ -8133,8 +8130,8 @@ export default function HomeschoolApp() {
                       return (<div key={"B_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>B{pi+1}</span>
                         <div style={{flex:1}}><SpeakableSentence text={a} lang={isUr?"ur":"en"} /></div>
-                        <button onClick={(e)=>revealAndSpeak(rk, ex.parts && ex.parts[originalIndex], e)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <span style={{background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.3)",borderRadius:8,padding:"4px 10px",color:"#22C55E",fontSize:12,fontWeight:700,whiteSpace:"nowrap",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUr?"rtl":"ltr"}}>✅ {ex.parts[originalIndex]}</span>}
+                        <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
+                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.parts[originalIndex])} lang={isUr?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line"}} /></div>}
                       </div>);
                     })}
                   </div>
@@ -8147,8 +8144,8 @@ export default function HomeschoolApp() {
                 return (<div key={pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:8,paddingRight:isUr?8:0,direction:isUr?"rtl":"ltr"}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{String.fromCharCode(97+pi)}</span>
                   <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUr?"ur":"en"} /></div>
-                  <button onClick={(e)=>revealAndSpeak(rk, ex.ans && ex.ans[pi], e)} style={{padding:"6px 14px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <span style={{background:"rgba(34,197,94,0.1)",border:"1px solid rgba(34,197,94,0.3)",borderRadius:8,padding:"4px 10px",color:"#22C55E",fontSize:12,fontWeight:700,whiteSpace:"nowrap",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUr?"rtl":"ltr"}}>✅ {ex.ans[pi]}</span>}
+                  <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 14px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
+                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUr?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line"}} /></div>}
                 </div>);
               })}
             </div>);
@@ -8165,8 +8162,15 @@ export default function HomeschoolApp() {
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:32,height:32,borderRadius:10,background:"#F59E0B22",border:"2px solid #F59E0B",color:"#F59E0B",fontSize:12,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",flexShrink:0}}>{isUr?("م"+(wi+1)):("W"+(wi+1))}</span>
                   <div style={{flex:1}}><SpeakableSentence text={qText} lang={isUr?"ur":"en"} /></div>
                 </div>
-                {aText && <div style={{marginTop:4,marginLeft:isUr?0:42,marginRight:isUr?42:0,padding:"8px 12px",background:"rgba(34,197,94,0.08)",borderRadius:8,borderLeft:isUr?"none":"3px solid #22C55E",borderRight:isUr?"3px solid #22C55E":"none",direction:isUr?"rtl":"ltr"}}>
-                  <span style={{color:"#22C55E",fontSize:13,fontWeight:700,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>✅ {aText}</span>
+                {aText && <div style={{marginTop:6,marginLeft:isUr?0:42,marginRight:isUr?42:0,direction:isUr?"rtl":"ltr"}}>
+                  {selectedSubject?.id === "social"
+                    ? <div style={{background:"rgba(34,197,94,0.08)",border:isUr?"1px solid rgba(34,197,94,0.28)":"1px solid rgba(34,197,94,0.28)",borderRadius:12,padding:"10px 10px 6px"}}>
+                        <div style={{color:"#86EFAC",fontSize:12,fontWeight:800,letterSpacing:0.4,textTransform:"uppercase",marginBottom:6,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"✅ جواب":"✅ Answer"}</div>
+                        <SpeakableSentence text={formatListedAnswer(aText)} lang={isUr?"ur":"en"} buttonStyle={{background:"rgba(34,197,94,0.16)",border:"1px solid rgba(34,197,94,0.38)",color:"#ECFDF5",marginBottom:0}} textStyle={{fontSize:16,lineHeight:1.55,whiteSpace:"pre-line"}} />
+                      </div>
+                    : <div style={{padding:"8px 12px",background:"rgba(34,197,94,0.08)",borderRadius:8,borderLeft:isUr?"none":"3px solid #22C55E",borderRight:isUr?"3px solid #22C55E":"none"}}>
+                        <span style={{color:"#22C55E",fontSize:13,fontWeight:700,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>✅ {aText}</span>
+                      </div>}
                 </div>}
               </div>);
             })}
