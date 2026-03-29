@@ -1,0 +1,1748 @@
+
+● Update(homeschool-app.jsx)
+  ⎿  Added 28 lines, removed 28 lines
+      1936  }
+      1937
+      1938  function LightRefractionSVG() {
+      1939 -  return (<div className="math-svg"><svg viewBox="0 0 600 185" xmlns="http://www.w3.org/2000/svg">
+      1940 -    <rect width="600" height="185" rx="12" fill="#1E293B"/>
+      1941 -    <text x="300" y="13" textAnchor="middle" fill="#94A3B8" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">💡 Reflection &amp; Refraction of Light</text>
+      1942 -    <rect x="10" y="20" width="278" height="157" rx="10" fill="#38BDF815" stroke="#38BDF8" strokeWidt
+           -h="1.5"/>
+      1943 -    <text x="149" y="34" textAnchor="middle" fill="#38BDF8" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">REFLECTION (Mirror)</text>
+      1944 -    <line x1="25" y1="130" x2="270" y2="130" stroke="#94A3B8" strokeWidth="4" strokeLinecap="round"/>
+      1945 -    <text x="149" y="148" textAnchor="middle" fill="#64748B" fontSize="8" fontFamily="'Baloo 2'">Smoo
+           -th mirror surface</text>
+      1946 -    <line x1="149" y1="70" x2="149" y2="130" stroke="#475569" strokeWidth="1" strokeDasharray="4"/>
+      1947 -    <text x="162" y="80" fill="#475569" fontSize="8" fontFamily="'Baloo 2'">Normal</text>
+      1948 -    <line x1="75" y1="52" x2="149" y2="130" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round"/
+           ->
+      1949 -    <text x="55" y="50" fill="#F59E0B" fontSize="8" fontWeight="700" fontFamily="'Baloo 2'">Incident<
+           -/text>
+      1950 -    <line x1="149" y1="130" x2="223" y2="52" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round"
+           -/>
+      1951 -    <text x="214" y="50" fill="#22C55E" fontSize="8" fontWeight="700" fontFamily="'Baloo 2'">Reflecte
+           -d</text>
+      1952 -    <text x="99" y="112" fill="#F59E0B" fontSize="10" fontFamily="'Baloo 2'">i°</text>
+      1953 -    <text x="188" y="112" fill="#22C55E" fontSize="10" fontFamily="'Baloo 2'">r°</text>
+      1954 -    <text x="149" y="168" textAnchor="middle" fill="#22C55E" fontSize="9" fontWeight="700" fontFamily
+           -="'Baloo 2'">Angle i = Angle r (Law of Reflection)</text>
+      1955 -    <rect x="312" y="20" width="278" height="157" rx="10" fill="#A855F715" stroke="#A855F7" strokeWid
+           -th="1.5"/>
+      1956 -    <text x="451" y="34" textAnchor="middle" fill="#A855F7" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">REFRACTION (Water/Glass)</text>
+      1957 -    <rect x="322" y="115" width="258" height="55" rx="5" fill="#38BDF818"/>
+      1958 -    <line x1="322" y1="115" x2="580" y2="115" stroke="#38BDF8" strokeWidth="2"/>
+      1959 -    <text x="451" y="162" textAnchor="middle" fill="#38BDF8" fontSize="8" fontFamily="'Baloo 2'">Wate
+           -r/Glass (denser medium)</text>
+      1960 -    <line x1="451" y1="55" x2="451" y2="145" stroke="#475569" strokeWidth="1" strokeDasharray="4"/>
+      1961 -    <line x1="375" y1="50" x2="451" y2="115" stroke="#F59E0B" strokeWidth="2.5" strokeLinecap="round"
+           -/>
+      1962 -    <text x="350" y="48" fill="#F59E0B" fontSize="8" fontWeight="700" fontFamily="'Baloo 2'">Incident
+           -</text>
+      1963 -    <line x1="451" y1="115" x2="472" y2="168" stroke="#EC4899" strokeWidth="2.5" strokeLinecap="round
+           -"/>
+      1964 -    <text x="474" y="168" fill="#EC4899" fontSize="8" fontWeight="700" fontFamily="'Baloo 2'">Refract
+           -ed (bent)</text>
+      1965 -    <text x="451" y="83" textAnchor="middle" fill="#94A3B8" fontSize="8" fontFamily="'Baloo 2'">Bends
+           - toward normal</text>
+      1966 -    <text x="451" y="178" textAnchor="middle" fill="#A855F7" fontSize="9" fontWeight="700" fontFamily
+           -="'Baloo 2'">Light slows &amp; bends as it enters denser medium</text>
+      1939 +  return (<div className="math-svg"><svg viewBox="0 0 640 265" xmlns="http://www.w3.org/2000/svg">
+      1940 +    <rect width="640" height="265" rx="12" fill="#1E293B"/>
+      1941 +    <text x="320" y="18" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">💡 Reflection &amp; Refraction of Light</text>
+      1942 +    <rect x="10" y="26" width="302" height="228" rx="10" fill="#38BDF815" stroke="#38BDF8" strokeWidt
+           +h="1.5"/>
+      1943 +    <text x="161" y="43" textAnchor="middle" fill="#38BDF8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">REFLECTION (Mirror)</text>
+      1944 +    <line x1="26" y1="188" x2="298" y2="188" stroke="#94A3B8" strokeWidth="5" strokeLinecap="round"/>
+      1945 +    <text x="161" y="208" textAnchor="middle" fill="#64748B" fontSize="11" fontFamily="'Baloo 2'">Smo
+           +oth mirror surface</text>
+      1946 +    <line x1="161" y1="100" x2="161" y2="188" stroke="#475569" strokeWidth="1.5" strokeDasharray="5"/
+           +>
+      1947 +    <text x="175" y="113" fill="#475569" fontSize="11" fontFamily="'Baloo 2'">Normal</text>
+      1948 +    <line x1="82" y1="74" x2="161" y2="188" stroke="#F59E0B" strokeWidth="3" strokeLinecap="round"/>
+      1949 +    <text x="52" y="70" fill="#F59E0B" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Incident
+           +</text>
+      1950 +    <line x1="161" y1="188" x2="240" y2="74" stroke="#22C55E" strokeWidth="3" strokeLinecap="round"/>
+      1951 +    <text x="228" y="70" fill="#22C55E" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Reflect
+           +ed</text>
+      1952 +    <text x="108" y="166" fill="#F59E0B" fontSize="15" fontFamily="'Baloo 2'">i°</text>
+      1953 +    <text x="200" y="166" fill="#22C55E" fontSize="15" fontFamily="'Baloo 2'">r°</text>
+      1954 +    <text x="161" y="244" textAnchor="middle" fill="#22C55E" fontSize="12" fontWeight="700" fontFamil
+           +y="'Baloo 2'">Angle i = Angle r (Law of Reflection)</text>
+      1955 +    <rect x="328" y="26" width="302" height="228" rx="10" fill="#A855F715" stroke="#A855F7" strokeWid
+           +th="1.5"/>
+      1956 +    <text x="479" y="43" textAnchor="middle" fill="#A855F7" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">REFRACTION (Water/Glass)</text>
+      1957 +    <rect x="338" y="164" width="282" height="78" rx="5" fill="#38BDF818"/>
+      1958 +    <line x1="338" y1="164" x2="620" y2="164" stroke="#38BDF8" strokeWidth="2.5"/>
+      1959 +    <text x="479" y="230" textAnchor="middle" fill="#38BDF8" fontSize="11" fontFamily="'Baloo 2'">Wat
+           +er/Glass (denser medium)</text>
+      1960 +    <line x1="479" y1="76" x2="479" y2="212" stroke="#475569" strokeWidth="1.5" strokeDasharray="5"/>
+      1961 +    <line x1="400" y1="72" x2="479" y2="164" stroke="#F59E0B" strokeWidth="3" strokeLinecap="round"/>
+      1962 +    <text x="372" y="68" fill="#F59E0B" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Inciden
+           +t</text>
+      1963 +    <line x1="479" y1="164" x2="504" y2="236" stroke="#EC4899" strokeWidth="3" strokeLinecap="round"/
+           +>
+      1964 +    <text x="506" y="242" fill="#EC4899" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Refrac
+           +ted (bent)</text>
+      1965 +    <text x="479" y="118" textAnchor="middle" fill="#94A3B8" fontSize="11" fontFamily="'Baloo 2'">Ben
+           +ds toward normal</text>
+      1966 +    <text x="479" y="255" textAnchor="middle" fill="#A855F7" fontSize="12" fontWeight="700" fontFamil
+           +y="'Baloo 2'">Light slows &amp; bends entering denser medium</text>
+      1967    </svg></div>);
+      1968  }
+      1969
+
+● Update(homeschool-app.jsx)
+  ⎿  Added 34 lines, removed 12 lines
+      1968  }
+      1969
+      1970  function SimpleMachinesSVG() {
+      1971 -  const machines = [{n:"Lever",e:"⚖️",d:"Bar + fulcrum",x:"Seesaw, scissors",c:"#38BDF8"},{n:"Wheel &
+           -Axle",e:"🎡",d:"Wheel on rod",x:"Doorknob, steering",c:"#22C55E"},{n:"Pulley",e:"🔧",d:"Rope + wheel"
+           -,x:"Flagpole, crane",c:"#F59E0B"},{n:"Inclined Plane",e:"📐",d:"Sloped surface",x:"Ramp, slide",c:"#A
+           -855F7"},{n:"Wedge",e:"🪓",d:"Thin sharp edge",x:"Axe, knife",c:"#EF4444"},{n:"Screw",e:"🔩",d:"Wrappe
+           -d ramp",x:"Jar lid, bolt",c:"#EC4899"}];
+      1972 -  return (<div className="math-svg"><svg viewBox="0 0 600 130" xmlns="http://www.w3.org/2000/svg">
+      1973 -    <rect width="600" height="130" rx="12" fill="#1E293B"/>
+      1974 -    <text x="300" y="13" textAnchor="middle" fill="#94A3B8" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">⚙️ The 6 Simple Machines</text>
+      1971 +  const machines = [
+      1972 +    {n:"Lever",e:"⚖️",d:"Bar + fulcrum",x:"Seesaw, scissors",c:"#38BDF8"},
+      1973 +    {n:"Wheel & Axle",e:"🎡",d:"Wheel on rod",x:"Doorknob, steering",c:"#22C55E"},
+      1974 +    {n:"Pulley",e:null,d:"Rope + wheel",x:"Flagpole, crane",c:"#F59E0B"},
+      1975 +    {n:"Inclined Plane",e:"📐",d:"Sloped surface",x:"Ramp, slide",c:"#A855F7"},
+      1976 +    {n:"Wedge",e:"🪓",d:"Thin sharp edge",x:"Axe, knife",c:"#EF4444"},
+      1977 +    {n:"Screw",e:"🔩",d:"Wrapped ramp",x:"Jar lid, bolt",c:"#EC4899"}
+      1978 +  ];
+      1979 +  return (<div className="math-svg"><svg viewBox="0 0 590 310" xmlns="http://www.w3.org/2000/svg">
+      1980 +    <rect width="590" height="310" rx="12" fill="#1E293B"/>
+      1981 +    <text x="295" y="19" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">⚙️ The 6 Simple Machines</text>
+      1982      {machines.map((m,i) => {
+      1976 -      const x = 8 + i * 98;
+      1983 +      const col = i%3, row = Math.floor(i/3);
+      1984 +      const bx = 10 + col*192, by = 28 + row*136;
+      1985        return (<g key={i}>
+      1978 -        <rect x={x} y="18" width="88" height="107" rx="8" fill={m.c+"18"} stroke={m.c} strokeWidth="1
+           -.5"/>
+      1979 -        <text x={x+44} y="46" textAnchor="middle" fontSize="24">{m.e}</text>
+      1980 -        <text x={x+44} y="62" textAnchor="middle" fill={m.c} fontSize="9.5" fontWeight="700" fontFami
+           -ly="'Baloo 2'">{m.n}</text>
+      1981 -        <text x={x+44} y="76" textAnchor="middle" fill="#94A3B8" fontSize="8" fontFamily="'Baloo 2'">
+           -{m.d}</text>
+      1982 -        <line x1={x+10} y1="82" x2={x+78} y2="82" stroke={m.c+"40"} strokeWidth="1"/>
+      1983 -        <text x={x+44} y="97" textAnchor="middle" fill="#64748B" fontSize="7.5" fontFamily="'Baloo 2'
+           -">{m.x.split(',')[0]}</text>
+      1984 -        <text x={x+44} y="110" textAnchor="middle" fill="#64748B" fontSize="7.5" fontFamily="'Baloo 2
+           -'">{m.x.split(',')[1]||''}</text>
+      1986 +        <rect x={bx} y={by} width="182" height="128" rx="10" fill={m.c+"18"} stroke={m.c} strokeWidth
+           +="1.5"/>
+      1987 +        {m.e ? (
+      1988 +          <text x={bx+91} y={by+46} textAnchor="middle" fontSize="32">{m.e}</text>
+      1989 +        ) : (
+      1990 +          <g>
+      1991 +            <rect x={bx+60} y={by+9} width="62" height="8" rx="3" fill="#64748B"/>
+      1992 +            <line x1={bx+91} y1={by+17} x2={bx+91} y2={by+24} stroke="#64748B" strokeWidth="2.5"/>
+      1993 +            <circle cx={bx+91} cy={by+38} r="14" fill="none" stroke="#F59E0B" strokeWidth="2.5"/>
+      1994 +            <circle cx={bx+91} cy={by+38} r="5" fill="#F59E0B"/>
+      1995 +            <path d={`M${bx+77},${by+38} A14,14 0 0,0 ${bx+105},${by+38}`} fill="none" stroke="#94A3B
+           +8" strokeWidth="2"/>
+      1996 +            <line x1={bx+77} y1={by+38} x2={bx+77} y2={by+60} stroke="#94A3B8" strokeWidth="2"/>
+      1997 +            <rect x={bx+69} y={by+60} width="16" height="9" rx="2" fill="#F59E0B30" stroke="#F59E0B"
+           +strokeWidth="1.5"/>
+      1998 +            <line x1={bx+105} y1={by+38} x2={bx+105} y2={by+55} stroke="#94A3B8" strokeWidth="2"/>
+      1999 +            <text x={bx+107} y={by+53} fill="#22C55E" fontSize="13" fontFamily="'Baloo 2'">↑F</text>
+      2000 +          </g>
+      2001 +        )}
+      2002 +        <text x={bx+91} y={by+76} textAnchor="middle" fill={m.c} fontSize="12" fontWeight="700" fontF
+           +amily="'Baloo 2'">{m.n}</text>
+      2003 +        <text x={bx+91} y={by+93} textAnchor="middle" fill="#94A3B8" fontSize="10" fontFamily="'Baloo
+           + 2'">{m.d}</text>
+      2004 +        <line x1={bx+12} y1={by+99} x2={bx+170} y2={by+99} stroke={m.c+"40"} strokeWidth="1"/>
+      2005 +        <text x={bx+91} y={by+114} textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Bal
+           +oo 2'">{m.x.split(',')[0]}</text>
+      2006 +        <text x={bx+91} y={by+127} textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Bal
+           +oo 2'">{m.x.split(',')[1]||''}</text>
+      2007        </g>);
+      2008      })}
+      2009    </svg></div>);
+
+● Update(homeschool-app.jsx)
+  ⎿  Added 29 lines, removed 29 lines
+      2010  }
+      2011
+      2012  function SkeletonSVG() {
+      2013 -  return (<div className="math-svg"><svg viewBox="0 0 500 230" xmlns="http://www.w3.org/2000/svg">
+      2014 -    <rect width="500" height="230" rx="12" fill="#1E293B"/>
+      2015 -    <text x="250" y="14" textAnchor="middle" fill="#94A3B8" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">🦴 Human Skeleton — 206 Bones</text>
+      2016 -    <ellipse cx="185" cy="42" rx="22" ry="25" fill="#1E3A5F" stroke="#CBD5E1" strokeWidth="1.5"/>
+      2017 -    <text x="185" y="47" textAnchor="middle" fill="#CBD5E1" fontSize="11">💀</text>
+      2018 -    <line x1="185" y1="67" x2="185" y2="158" stroke="#94A3B8" strokeWidth="3.5" strokeLinecap="round"
+           -/>
+      2019 -    {[78,90,102,114,126,138,150].map((y,i) => <rect key={i} x="179" y={y-4} width="12" height="7" rx=
+           -"2" fill="#64748B" stroke="#94A3B8" strokeWidth="1"/>)}
+      2020 -    {[0,1,2,3,4].map(i => (<g key={i}><path d={`M185,${89+i*10} Q168,${84+i*10} 162,${94+i*10}`} fill
+           -="none" stroke="#94A3B8" strokeWidth="1.5"/><path d={`M185,${89+i*10} Q202,${84+i*10} 208,${94+i*10}`
+           -} fill="none" stroke="#94A3B8" strokeWidth="1.5"/></g>))}
+      2021 -    <ellipse cx="185" cy="162" rx="26" ry="13" fill="#1E3A5F" stroke="#94A3B8" strokeWidth="1.5"/>
+      2022 -    <line x1="162" y1="80" x2="138" y2="130" stroke="#94A3B8" strokeWidth="3.5" strokeLinecap="round"
+           -/>
+      2023 -    <line x1="138" y1="130" x2="122" y2="170" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round
+           -"/>
+      2024 -    <line x1="208" y1="80" x2="232" y2="130" stroke="#94A3B8" strokeWidth="3.5" strokeLinecap="round"
+           -/>
+      2025 -    <line x1="232" y1="130" x2="248" y2="170" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round
+           -"/>
+      2026 -    <line x1="172" y1="174" x2="158" y2="215" stroke="#94A3B8" strokeWidth="5" strokeLinecap="round"/
+           ->
+      2027 -    <line x1="198" y1="174" x2="212" y2="215" stroke="#94A3B8" strokeWidth="5" strokeLinecap="round"/
+           ->
+      2028 -    <line x1="207" y1="42" x2="262" y2="40" stroke="#F59E0B" strokeWidth="1" strokeDasharray="3" opac
+           -ity="0.7"/>
+      2029 -    <text x="264" y="44" fill="#F59E0B" fontSize="9" fontFamily="'Baloo 2'">Skull (Cranium)</text>
+      2030 -    <line x1="197" y1="100" x2="262" y2="95" stroke="#F59E0B" strokeWidth="1" strokeDasharray="3" opa
+           -city="0.7"/>
+      2031 -    <text x="264" y="99" fill="#F59E0B" fontSize="9" fontFamily="'Baloo 2'">Rib Cage (24 ribs)</text>
+      2032 -    <line x1="192" y1="122" x2="262" y2="132" stroke="#38BDF8" strokeWidth="1" strokeDasharray="3" op
+           -acity="0.7"/>
+      2033 -    <text x="264" y="136" fill="#38BDF8" fontSize="9" fontFamily="'Baloo 2'">Spine (33 vertebrae)</te
+           -xt>
+      2034 -    <line x1="211" y1="162" x2="262" y2="165" stroke="#22C55E" strokeWidth="1" strokeDasharray="3" op
+           -acity="0.7"/>
+      2035 -    <text x="264" y="169" fill="#22C55E" fontSize="9" fontFamily="'Baloo 2'">Pelvis</text>
+      2036 -    <line x1="138" y1="105" x2="78" y2="100" stroke="#A855F7" strokeWidth="1" strokeDasharray="3" opa
+           -city="0.7"/>
+      2037 -    <text x="8" y="104" fill="#A855F7" fontSize="9" fontFamily="'Baloo 2'">Humerus</text>
+      2038 -    <line x1="130" y1="152" x2="78" y2="148" stroke="#A855F7" strokeWidth="1" strokeDasharray="3" opa
+           -city="0.7"/>
+      2039 -    <text x="4" y="152" fill="#A855F7" fontSize="9" fontFamily="'Baloo 2'">Radius/Ulna</text>
+      2040 -    <line x1="162" y1="196" x2="100" y2="200" stroke="#EC4899" strokeWidth="1" strokeDasharray="3" op
+           -acity="0.7"/>
+      2041 -    <text x="12" y="204" fill="#EC4899" fontSize="9" fontFamily="'Baloo 2'">Femur (longest)</text>
+      2013 +  return (<div className="math-svg"><svg viewBox="0 0 560 310" xmlns="http://www.w3.org/2000/svg">
+      2014 +    <rect width="560" height="310" rx="12" fill="#1E293B"/>
+      2015 +    <text x="280" y="18" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">🦴 Human Skeleton — 206 Bones</text>
+      2016 +    <ellipse cx="207" cy="57" rx="25" ry="34" fill="#1E3A5F" stroke="#CBD5E1" strokeWidth="1.5"/>
+      2017 +    <text x="207" y="63" textAnchor="middle" fill="#CBD5E1" fontSize="15">💀</text>
+      2018 +    <line x1="207" y1="91" x2="207" y2="213" stroke="#94A3B8" strokeWidth="4" strokeLinecap="round"/>
+      2019 +    {[105,121,137,153,169,185,201].map((y,i) => <rect key={i} x="200" y={y-5} width="14" height="9" r
+           +x="2" fill="#64748B" stroke="#94A3B8" strokeWidth="1"/>)}
+      2020 +    {[0,1,2,3,4].map(i => (<g key={i}><path d={`M207,${120+i*14} Q188,${113+i*14} 181,${127+i*14}`} f
+           +ill="none" stroke="#94A3B8" strokeWidth="2"/><path d={`M207,${120+i*14} Q226,${113+i*14} 233,${127+i*
+           +14}`} fill="none" stroke="#94A3B8" strokeWidth="2"/></g>))}
+      2021 +    <ellipse cx="207" cy="218" rx="29" ry="18" fill="#1E3A5F" stroke="#94A3B8" strokeWidth="1.5"/>
+      2022 +    <line x1="181" y1="108" x2="155" y2="175" stroke="#94A3B8" strokeWidth="4" strokeLinecap="round"/
+           +>
+      2023 +    <line x1="155" y1="175" x2="137" y2="229" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round"/
+           +>
+      2024 +    <line x1="233" y1="108" x2="260" y2="175" stroke="#94A3B8" strokeWidth="4" strokeLinecap="round"/
+           +>
+      2025 +    <line x1="260" y1="175" x2="278" y2="229" stroke="#94A3B8" strokeWidth="3" strokeLinecap="round"/
+           +>
+      2026 +    <line x1="193" y1="235" x2="177" y2="290" stroke="#94A3B8" strokeWidth="6" strokeLinecap="round"/
+           +>
+      2027 +    <line x1="221" y1="235" x2="237" y2="290" stroke="#94A3B8" strokeWidth="6" strokeLinecap="round"/
+           +>
+      2028 +    <line x1="232" y1="57" x2="295" y2="54" stroke="#F59E0B" strokeWidth="1" strokeDasharray="4" opac
+           +ity="0.7"/>
+      2029 +    <text x="297" y="58" fill="#F59E0B" fontSize="11" fontFamily="'Baloo 2'">Skull (Cranium)</text>
+      2030 +    <line x1="221" y1="135" x2="295" y2="128" stroke="#F59E0B" strokeWidth="1" strokeDasharray="4" op
+           +acity="0.7"/>
+      2031 +    <text x="297" y="132" fill="#F59E0B" fontSize="11" fontFamily="'Baloo 2'">Rib Cage (24 ribs)</tex
+           +t>
+      2032 +    <line x1="215" y1="165" x2="295" y2="178" stroke="#38BDF8" strokeWidth="1" strokeDasharray="4" op
+           +acity="0.7"/>
+      2033 +    <text x="297" y="182" fill="#38BDF8" fontSize="11" fontFamily="'Baloo 2'">Spine (33 vertebrae)</t
+           +ext>
+      2034 +    <line x1="236" y1="218" x2="295" y2="222" stroke="#22C55E" strokeWidth="1" strokeDasharray="4" op
+           +acity="0.7"/>
+      2035 +    <text x="297" y="226" fill="#22C55E" fontSize="11" fontFamily="'Baloo 2'">Pelvis</text>
+      2036 +    <line x1="155" y1="141" x2="87" y2="135" stroke="#A855F7" strokeWidth="1" strokeDasharray="4" opa
+           +city="0.7"/>
+      2037 +    <text x="8" y="139" fill="#A855F7" fontSize="11" fontFamily="'Baloo 2'">Humerus</text>
+      2038 +    <line x1="146" y1="205" x2="87" y2="200" stroke="#A855F7" strokeWidth="1" strokeDasharray="4" opa
+           +city="0.7"/>
+      2039 +    <text x="4" y="204" fill="#A855F7" fontSize="11" fontFamily="'Baloo 2'">Radius/Ulna</text>
+      2040 +    <line x1="182" y1="264" x2="112" y2="270" stroke="#EC4899" strokeWidth="1" strokeDasharray="4" op
+           +acity="0.7"/>
+      2041 +    <text x="12" y="274" fill="#EC4899" fontSize="11" fontFamily="'Baloo 2'">Femur (longest)</text>
+      2042    </svg></div>);
+      2043  }
+      2044
+
+● Update(homeschool-app.jsx)
+  ⎿  Added 20 lines, removed 20 lines
+      2043  }
+      2044
+      2045  function WaterCycleSVG() {
+      2046 -  return (<div className="math-svg"><svg viewBox="0 0 620 180" xmlns="http://www.w3.org/2000/svg">
+      2047 -    <rect width="620" height="180" rx="12" fill="#0F172A"/>
+      2048 -    <text x="310" y="13" textAnchor="middle" fill="#94A3B8" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">💧 The Water Cycle</text>
+      2049 -    <circle cx="70" cy="48" r="24" fill="#F59E0B" opacity="0.75"/>
+      2050 -    <text x="70" y="53" textAnchor="middle" fontSize="20">☀️</text>
+      2051 -    <path d="M0 140 Q105 128 210 140 Q315 152 420 140 Q520 128 620 140 L620 180 L0 180 Z" fill="#38BD
+           -F830" stroke="#38BDF8" strokeWidth="1.5"/>
+      2052 -    <text x="310" y="165" textAnchor="middle" fill="#38BDF8" fontSize="10" fontWeight="700" fontFamil
+           -y="'Baloo 2'">Ocean / Lake / River</text>
+      2053 -    <ellipse cx="290" cy="45" rx="60" ry="27" fill="#F1F5F9" opacity="0.88"/>
+      2054 -    <ellipse cx="258" cy="52" rx="38" ry="22" fill="#F1F5F9" opacity="0.88"/>
+      2055 -    <ellipse cx="322" cy="52" rx="38" ry="22" fill="#F1F5F9" opacity="0.88"/>
+      2056 -    <text x="290" y="53" textAnchor="middle" fill="#475569" fontSize="9" fontWeight="700" fontFamily=
+           -"'Baloo 2'">☁️ Cloud</text>
+      2057 -    <text x="178" y="110" textAnchor="middle" fill="#F59E0B" fontSize="10" fontWeight="700" fontFamil
+           -y="'Baloo 2'">⬆ Evaporation</text>
+      2058 -    {[130,160,195,225].map((x,i) => (<text key={i} x={x} y={132} fill="#F59E0B" fontSize="13" opacity
+           -="0.8">↑</text>))}
+      2059 -    <text x="290" y="27" textAnchor="middle" fill="#94A3B8" fontSize="9" fontFamily="'Baloo 2'">Conde
+           -nsation (vapor → droplets)</text>
+      2060 -    <text x="430" y="72" textAnchor="middle" fill="#38BDF8" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">🌧️ Precipitation</text>
+      2061 -    {[378,408,438,468,498].map((x,i) => (<text key={i} x={x} y={90} fill="#38BDF8" fontSize="14">↓</t
+           -ext>))}
+      2062 -    <polygon points="558,140 585,80 612,140" fill="#64748B" opacity="0.75"/>
+      2063 -    <text x="562" y="108" fill="#94A3B8" fontSize="9" fontFamily="'Baloo 2'">⛰️ Mountains</text>
+      2064 -    <path d="M582 140 Q595 140 600 155" fill="none" stroke="#38BDF8" strokeWidth="1.5" strokeDasharra
+           -y="3"/>
+      2065 -    <text x="580" y="170" textAnchor="middle" fill="#64748B" fontSize="8" fontFamily="'Baloo 2'">Runo
+           -ff</text>
+      2046 +  return (<div className="math-svg"><svg viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg">
+      2047 +    <rect width="680" height="260" rx="12" fill="#0F172A"/>
+      2048 +    <text x="340" y="18" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">💧 The Water Cycle</text>
+      2049 +    <circle cx="77" cy="69" r="30" fill="#F59E0B" opacity="0.75"/>
+      2050 +    <text x="77" y="77" textAnchor="middle" fontSize="26">☀️</text>
+      2051 +    <path d="M0 202 Q115 185 230 202 Q345 219 460 202 Q570 185 680 202 L680 260 L0 260 Z" fill="#38BD
+           +F830" stroke="#38BDF8" strokeWidth="1.5"/>
+      2052 +    <text x="340" y="238" textAnchor="middle" fill="#38BDF8" fontSize="13" fontWeight="700" fontFamil
+           +y="'Baloo 2'">Ocean / Lake / River</text>
+      2053 +    <ellipse cx="318" cy="65" rx="66" ry="39" fill="#F1F5F9" opacity="0.88"/>
+      2054 +    <ellipse cx="283" cy="75" rx="42" ry="32" fill="#F1F5F9" opacity="0.88"/>
+      2055 +    <ellipse cx="353" cy="75" rx="42" ry="32" fill="#F1F5F9" opacity="0.88"/>
+      2056 +    <text x="318" y="77" textAnchor="middle" fill="#475569" fontSize="12" fontWeight="700" fontFamily
+           +="'Baloo 2'">☁️ Cloud</text>
+      2057 +    <text x="195" y="158" textAnchor="middle" fill="#F59E0B" fontSize="13" fontWeight="700" fontFamil
+           +y="'Baloo 2'">⬆ Evaporation</text>
+      2058 +    {[143,176,214,247].map((x,i) => (<text key={i} x={x} y={191} fill="#F59E0B" fontSize="17" opacity
+           +="0.8">↑</text>))}
+      2059 +    <text x="318" y="39" textAnchor="middle" fill="#94A3B8" fontSize="11" fontFamily="'Baloo 2'">Cond
+           +ensation (vapor → droplets)</text>
+      2060 +    <text x="472" y="104" textAnchor="middle" fill="#38BDF8" fontSize="13" fontWeight="700" fontFamil
+           +y="'Baloo 2'">🌧️ Precipitation</text>
+      2061 +    {[415,448,481,514,547].map((x,i) => (<text key={i} x={x} y={130} fill="#38BDF8" fontSize="18">↓</
+           +text>))}
+      2062 +    <polygon points="612,202 642,115 672,202" fill="#64748B" opacity="0.75"/>
+      2063 +    <text x="617" y="156" fill="#94A3B8" fontSize="11" fontFamily="'Baloo 2'">⛰️ Mts</text>
+      2064 +    <path d="M639 202 Q651 202 659 224" fill="none" stroke="#38BDF8" strokeWidth="2" strokeDasharray=
+           +"4"/>
+      2065 +    <text x="636" y="245" textAnchor="middle" fill="#64748B" fontSize="10" fontFamily="'Baloo 2'">Run
+           +off</text>
+      2066    </svg></div>);
+      2067  }
+      2068
+
+● Update(homeschool-app.jsx)
+  ⎿  Added 26 lines, removed 26 lines
+      2067  }
+      2068
+      2069  function PhotosynthesisSVG() {
+      2070 -  return (<div className="math-svg"><svg viewBox="0 0 580 155" xmlns="http://www.w3.org/2000/svg">
+      2071 -    <rect width="580" height="155" rx="12" fill="#1E293B"/>
+      2072 -    <text x="290" y="13" textAnchor="middle" fill="#94A3B8" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">🌿 Photosynthesis — How Plants Make Food</text>
+      2073 -    <circle cx="60" cy="65" r="28" fill="#F59E0B" opacity="0.75"/>
+      2074 -    <text x="60" y="70" textAnchor="middle" fontSize="22">☀️</text>
+      2075 -    <text x="60" y="103" textAnchor="middle" fill="#F59E0B" fontSize="9" fontWeight="700" fontFamily=
+           -"'Baloo 2'">Sunlight</text>
+      2076 -    <text x="60" y="118" textAnchor="middle" fill="#EF4444" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">CO₂ ↗</text>
+      2077 -    <text x="60" y="135" textAnchor="middle" fill="#38BDF8" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">H₂O ↗</text>
+      2078 -    <path d="M88 67 L182 82" stroke="#F59E0B" strokeWidth="2" opacity="0.8" markerEnd="url(#phArr)"/>
+      2079 -    <path d="M88 118 L182 100" stroke="#EF4444" strokeWidth="1.5" opacity="0.7" markerEnd="url(#phArr
+           -)"/>
+      2080 -    <path d="M88 134 L182 110" stroke="#38BDF8" strokeWidth="1.5" opacity="0.7" markerEnd="url(#phArr
+           -)"/>
+      2081 -    <ellipse cx="255" cy="92" rx="68" ry="42" fill="#22C55E" opacity="0.65" stroke="#22C55E" strokeWi
+           -dth="2"/>
+      2082 -    <line x1="190" y1="92" x2="320" y2="92" stroke="#15803D" strokeWidth="2"/>
+      2083 -    <line x1="255" y1="53" x2="255" y2="130" stroke="#15803D" strokeWidth="1.5"/>
+      2084 -    <text x="255" y="95" textAnchor="middle" fill="#F0FDF4" fontSize="11" fontWeight="700" fontFamily
+           -="'Baloo 2'">🌿 Leaf</text>
+      2085 -    <text x="255" y="110" textAnchor="middle" fill="#dcfce7" fontSize="8" fontFamily="'Baloo 2'">Chlo
+           -rophyll absorbs light</text>
+      2086 -    <path d="M322 76 L398 52" stroke="#A855F7" strokeWidth="2" opacity="0.8" markerEnd="url(#phArr)"/
+           ->
+      2087 -    <path d="M322 107 L398 120" stroke="#22C55E" strokeWidth="2" opacity="0.8" markerEnd="url(#phArr)
+           -"/>
+      2088 -    <rect x="400" y="38" width="115" height="36" rx="8" fill="#A855F720" stroke="#A855F7" strokeWidth
+           -="1.5"/>
+      2089 -    <text x="457" y="55" textAnchor="middle" fill="#A855F7" fontSize="10" fontWeight="700" fontFamily
+           -="'Baloo 2'">🍬 Glucose</text>
+      2090 -    <text x="457" y="67" textAnchor="middle" fill="#A855F7" fontSize="8" fontFamily="'Baloo 2'">(Ener
+           -gy / Food)</text>
+      2091 -    <rect x="400" y="108" width="115" height="36" rx="8" fill="#22C55E20" stroke="#22C55E" strokeWidt
+           -h="1.5"/>
+      2092 -    <text x="457" y="125" textAnchor="middle" fill="#22C55E" fontSize="10" fontWeight="700" fontFamil
+           -y="'Baloo 2'">💨 Oxygen</text>
+      2093 -    <text x="457" y="137" textAnchor="middle" fill="#22C55E" fontSize="8" fontFamily="'Baloo 2'">(Rel
+           -eased into air)</text>
+      2094 -    <text x="290" y="150" textAnchor="middle" fill="#475569" fontSize="8.5" fontFamily="'Baloo 2'">Fo
+           -rmula: 6CO₂ + 6H₂O + Sunlight → C₆H₁₂O₆ + 6O₂</text>
+      2095 -    <defs><marker id="phArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" o
+           -rient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+      2070 +  return (<div className="math-svg"><svg viewBox="0 0 620 230" xmlns="http://www.w3.org/2000/svg">
+      2071 +    <rect width="620" height="230" rx="12" fill="#1E293B"/>
+      2072 +    <text x="310" y="18" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">🌿 Photosynthesis — How Plants Make Food</text>
+      2073 +    <defs><marker id="phArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" o
+           +rient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+      2074 +    <circle cx="64" cy="96" r="34" fill="#F59E0B" opacity="0.75"/>
+      2075 +    <text x="64" y="103" textAnchor="middle" fontSize="28">☀️</text>
+      2076 +    <text x="64" y="152" textAnchor="middle" fill="#F59E0B" fontSize="12" fontWeight="700" fontFamily
+           +="'Baloo 2'">Sunlight</text>
+      2077 +    <text x="64" y="174" textAnchor="middle" fill="#EF4444" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">CO₂ ↗</text>
+      2078 +    <text x="64" y="197" textAnchor="middle" fill="#38BDF8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">H₂O ↗</text>
+      2079 +    <path d="M98 99 L195 121" stroke="#F59E0B" strokeWidth="2.5" opacity="0.8" markerEnd="url(#phArr)
+           +"/>
+      2080 +    <path d="M98 174 L195 148" stroke="#EF4444" strokeWidth="2" opacity="0.7" markerEnd="url(#phArr)"
+           +/>
+      2081 +    <path d="M98 196 L195 163" stroke="#38BDF8" strokeWidth="2" opacity="0.7" markerEnd="url(#phArr)"
+           +/>
+      2082 +    <ellipse cx="273" cy="137" rx="74" ry="60" fill="#22C55E" opacity="0.65" stroke="#22C55E" strokeW
+           +idth="2.5"/>
+      2083 +    <line x1="202" y1="137" x2="344" y2="137" stroke="#15803D" strokeWidth="2.5"/>
+      2084 +    <line x1="273" y1="80" x2="273" y2="193" stroke="#15803D" strokeWidth="2"/>
+      2085 +    <text x="273" y="141" textAnchor="middle" fill="#F0FDF4" fontSize="14" fontWeight="700" fontFamil
+           +y="'Baloo 2'">🌿 Leaf</text>
+      2086 +    <text x="273" y="160" textAnchor="middle" fill="#dcfce7" fontSize="10" fontFamily="'Baloo 2'">Chl
+           +orophyll absorbs light</text>
+      2087 +    <path d="M344 113 L425 77" stroke="#A855F7" strokeWidth="2.5" opacity="0.8" markerEnd="url(#phArr
+           +)"/>
+      2088 +    <path d="M344 159 L425 178" stroke="#22C55E" strokeWidth="2.5" opacity="0.8" markerEnd="url(#phAr
+           +r)"/>
+      2089 +    <rect x="427" y="56" width="125" height="54" rx="8" fill="#A855F720" stroke="#A855F7" strokeWidth
+           +="1.5"/>
+      2090 +    <text x="489" y="81" textAnchor="middle" fill="#A855F7" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">🍬 Glucose</text>
+      2091 +    <text x="489" y="99" textAnchor="middle" fill="#A855F7" fontSize="10" fontFamily="'Baloo 2'">(Ene
+           +rgy / Food)</text>
+      2092 +    <rect x="427" y="160" width="125" height="54" rx="8" fill="#22C55E20" stroke="#22C55E" strokeWidt
+           +h="1.5"/>
+      2093 +    <text x="489" y="185" textAnchor="middle" fill="#22C55E" fontSize="13" fontWeight="700" fontFamil
+           +y="'Baloo 2'">💨 Oxygen</text>
+      2094 +    <text x="489" y="203" textAnchor="middle" fill="#22C55E" fontSize="10" fontFamily="'Baloo 2'">(Re
+           +leased into air)</text>
+      2095 +    <text x="310" y="222" textAnchor="middle" fill="#475569" fontSize="11" fontFamily="'Baloo 2'">For
+           +mula: 6CO₂ + 6H₂O + Sunlight → C₆H₁₂O₆ + 6O₂</text>
+      2096    </svg></div>);
+      2097  }
+      2098
+  ⎿  You've hit your limit · resets 3pm (Asia/Karachi)
+
+✻ Churned for 13m 2s
+
+❯ /rate-limit-options
+  ⎿  Login successful
+
+❯ a lot has changed since your last change. now add social studies content for grade 5 along with svg considering
+Pakistan as a country, add good topics.
+
+  Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+● Now let me find the current social studies data and understand its structure:
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● Let me check the SVG renderer section:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+● Let me check how wordProblems are rendered in the UI:
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+● Now I have a complete picture. I'll add the 5 new SVG functions and a richly expanded Grade 5 Social Studies section
+  (Pakistan-focused, 6 topics × 2 subs × 20 word problems each), then sync both files. Let me build it in stages.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Now I'll insert the 5 new SVG functions after PhotosynthesisSVG, then replace the Social Studies data:
+
+● Update(homeschool-app.jsx)
+  ⎿  Added 246 lines
+      2248    </svg></div>);
+      2249  }
+      2250
+      2251 +// ─── Social Studies SVG Components ───
+      2252 +function PakistanMapSVG() {
+      2253 +  const legend = [["#38BDF8","KPK"],["#F59E0B","Punjab"],["#22C55E","Balochistan"],["#EF4444","Sindh"
+           +],["#8B5CF6","GB/AJK"]];
+      2254 +  return (<div className="math-svg"><svg viewBox="0 0 600 340" xmlns="http://www.w3.org/2000/svg">
+      2255 +    <rect width="600" height="340" rx="12" fill="#0F172A"/>
+      2256 +    <text x="300" y="19" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">🗺️ Pakistan — Provinces &amp; Borders</text>
+      2257 +    {/* Gilgit-Baltistan / AJK (top crown) */}
+      2258 +    <polygon points="152,72 200,44 280,40 325,57 385,72 245,67 225,67" fill="#8B5CF6" opacity="0.78"
+           +stroke="#7C3AED" strokeWidth="1.5"/>
+      2259 +    <text x="268" y="60" textAnchor="middle" fill="#DDD6FE" fontSize="9" fontWeight="700" fontFamily=
+           +"'Baloo 2'">Gilgit-Baltistan / AJK</text>
+      2260 +    {/* KPK */}
+      2261 +    <polygon points="92,135 155,72 225,67 245,84 245,164 188,184 122,169" fill="#38BDF8" opacity="0.7
+           +8" stroke="#0EA5E9" strokeWidth="1.5"/>
+      2262 +    <text x="172" y="124" textAnchor="middle" fill="#E0F2FE" fontSize="11" fontWeight="700" fontFamil
+           +y="'Baloo 2'">KPK</text>
+      2263 +    <text x="172" y="140" textAnchor="middle" fill="#BAE6FD" fontSize="9" fontFamily="'Baloo 2'">● Pe
+           +shawar</text>
+      2264 +    {/* Punjab */}
+      2265 +    <polygon points="245,67 388,72 400,88 398,190 328,200 268,200 245,164 245,84" fill="#F59E0B" opac
+           +ity="0.78" stroke="#D97706" strokeWidth="1.5"/>
+      2266 +    <text x="320" y="130" textAnchor="middle" fill="#FEF3C7" fontSize="13" fontWeight="700" fontFamil
+           +y="'Baloo 2'">Punjab</text>
+      2267 +    <text x="320" y="148" textAnchor="middle" fill="#FDE68A" fontSize="9" fontFamily="'Baloo 2'">● La
+           +hore</text>
+      2268 +    {/* Balochistan */}
+      2269 +    <polygon points="92,169 122,169 188,184 245,200 268,200 258,290 200,300 138,290 92,225" fill="#22
+           +C55E" opacity="0.72" stroke="#16A34A" strokeWidth="1.5"/>
+      2270 +    <text x="176" y="248" textAnchor="middle" fill="#DCFCE7" fontSize="11" fontWeight="700" fontFamil
+           +y="'Baloo 2'">Balochistan</text>
+      2271 +    <text x="176" y="266" textAnchor="middle" fill="#BBF7D0" fontSize="9" fontFamily="'Baloo 2'">● Qu
+           +etta</text>
+      2272 +    {/* Sindh */}
+      2273 +    <polygon points="268,200 328,200 398,190 435,210 448,300 392,300 258,290" fill="#EF4444" opacity=
+           +"0.72" stroke="#DC2626" strokeWidth="1.5"/>
+      2274 +    <text x="352" y="252" textAnchor="middle" fill="#FEE2E2" fontSize="11" fontWeight="700" fontFamil
+           +y="'Baloo 2'">Sindh</text>
+      2275 +    <text x="352" y="270" textAnchor="middle" fill="#FECACA" fontSize="9" fontFamily="'Baloo 2'">● Ka
+           +rachi (Port)</text>
+      2276 +    {/* Islamabad star */}
+      2277 +    <circle cx="282" cy="104" r="6" fill="#F1F5F9" stroke="#F59E0B" strokeWidth="2"/>
+      2278 +    <text x="296" y="102" fill="#F59E0B" fontSize="9" fontWeight="700" fontFamily="'Baloo 2'">★ Islam
+           +abad (Capital)</text>
+      2279 +    {/* Neighbor labels */}
+      2280 +    <text x="44" y="100" fill="#64748B" fontSize="10" fontWeight="700" fontFamily="'Baloo 2'">Afghani
+           +stan ←</text>
+      2281 +    <text x="44" y="210" fill="#64748B" fontSize="10" fontWeight="700" fontFamily="'Baloo 2'">Iran ←<
+           +/text>
+      2282 +    <text x="300" y="24" textAnchor="middle" fill="#64748B" fontSize="10" fontWeight="700" fontFamily
+           +="'Baloo 2'">↑ China</text>
+      2283 +    <text x="492" y="148" fill="#64748B" fontSize="10" fontWeight="700" fontFamily="'Baloo 2'">→ Indi
+           +a</text>
+      2284 +    <text x="300" y="322" textAnchor="middle" fill="#38BDF8" fontSize="12" fontWeight="700" fontFamil
+           +y="'Baloo 2'">🌊 Arabian Sea</text>
+      2285 +    {/* Legend */}
+      2286 +    {legend.map(([c,n],i) => (
+      2287 +      <g key={i}>
+      2288 +        <rect x={480} y={58+i*28} width="15" height="15" rx="3" fill={c} opacity="0.78"/>
+      2289 +        <text x={499} y={70+i*28} fill="#94A3B8" fontSize="10" fontFamily="'Baloo 2'">{n}</text>
+      2290 +      </g>
+      2291 +    ))}
+      2292 +    <text x="490" y="202" textAnchor="middle" fill="#64748B" fontSize="9" fontFamily="'Baloo 2'">4 Pr
+           +ovinces</text>
+      2293 +    <text x="490" y="215" textAnchor="middle" fill="#64748B" fontSize="9" fontFamily="'Baloo 2'">+ 2
+           +Territories</text>
+      2294 +  </svg></div>);
+      2295 +}
+      2296 +
+      2297 +function IndusValleySVG() {
+      2298 +  const facts = ["📅 2600–1900 BCE","🌍 South Asia (Pakistan)","📏 Grid-plan streets","🚿 Drainage sy
+           +stem","📦 Standard weights","✍️ Undeciphered script","🌾 Agriculture & trade","🏺 Pottery & seals"];
+      2299 +  const timeline = [{x:32,l:"3000 BCE",s:"Early Indus",c:"#22C55E"},{x:148,l:"2600 BCE",s:"Peak Civil
+           +ization",c:"#38BDF8"},{x:268,l:"1900 BCE",s:"Decline",c:"#EF4444"},{x:388,l:"1526 CE",s:"Mughal Empir
+           +e",c:"#F59E0B"},{x:505,l:"1947",s:"Independence",c:"#A855F7"}];
+      2300 +  return (<div className="math-svg"><svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg">
+      2301 +    <rect width="600" height="300" rx="12" fill="#1E293B"/>
+      2302 +    <text x="300" y="18" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">🏛️ Indus Valley Civilization — Mohenjo-daro</text>
+      2303 +    {/* Citadel */}
+      2304 +    <rect x="18" y="28" width="176" height="152" rx="8" fill="#B4530930" stroke="#D97706" strokeWidth
+           +="2"/>
+      2305 +    <text x="106" y="46" textAnchor="middle" fill="#FDE68A" fontSize="11" fontWeight="700" fontFamily
+           +="'Baloo 2'">⬆ Citadel (Upper City)</text>
+      2306 +    {/* Great Bath */}
+      2307 +    <rect x="28" y="54" width="72" height="52" rx="5" fill="#38BDF840" stroke="#0EA5E9" strokeWidth="
+           +2"/>
+      2308 +    <text x="64" y="74" textAnchor="middle" fill="#F1F5F9" fontSize="10" fontWeight="700" fontFamily=
+           +"'Baloo 2'">Great</text>
+      2309 +    <text x="64" y="88" textAnchor="middle" fill="#F1F5F9" fontSize="10" fontWeight="700" fontFamily=
+           +"'Baloo 2'">Bath</text>
+      2310 +    <text x="64" y="102" textAnchor="middle" fill="#BAE6FD" fontSize="8" fontFamily="'Baloo 2'">🛁 11
+           +.9×7m</text>
+      2311 +    {/* Granary */}
+      2312 +    <rect x="112" y="54" width="70" height="52" rx="5" fill="#F59E0B40" stroke="#D97706" strokeWidth=
+           +"2"/>
+      2313 +    <text x="147" y="78" textAnchor="middle" fill="#FEF3C7" fontSize="10" fontWeight="700" fontFamily
+           +="'Baloo 2'">Granary</text>
+      2314 +    <text x="147" y="96" textAnchor="middle" fill="#FDE68A" fontSize="8" fontFamily="'Baloo 2'">🌾 Fo
+           +od Store</text>
+      2315 +    {/* Assembly */}
+      2316 +    <rect x="28" y="116" width="154" height="56" rx="5" fill="#A855F730" stroke="#9333EA" strokeWidth
+           +="1.5"/>
+      2317 +    <text x="105" y="148" textAnchor="middle" fill="#E9D5FF" fontSize="10" fontWeight="700" fontFamil
+           +y="'Baloo 2'">🏛 Assembly Hall</text>
+      2318 +    {/* Lower city */}
+      2319 +    <rect x="206" y="28" width="240" height="152" rx="8" fill="#64748B18" stroke="#475569" strokeWidt
+           +h="2"/>
+      2320 +    <text x="326" y="45" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily
+           +="'Baloo 2'">Lower City (Residential)</text>
+      2321 +    {[0,1,2,3].map(i => <line key={"h"+i} x1="206" y1={54+i*40} x2="446" y2={54+i*40} stroke="#94A3B8
+           +" strokeWidth="1" opacity="0.5"/>)}
+      2322 +    {[0,1,2,3,4].map(i => <line key={"v"+i} x1={214+i*46} y1="28" x2={214+i*46} y2="180" stroke="#94A
+           +3B8" strokeWidth="1" opacity="0.5"/>)}
+      2323 +    {[[214,54],[260,54],[306,54],[352,54],[214,94],[260,94],[306,94],[352,94],[214,134],[260,134]].ma
+           +p(([x,y],i) => (
+      2324 +      <rect key={i} x={x+2} y={y+2} width="38" height="34" rx="4" fill="#92400E" opacity="0.4" stroke
+           +="#D97706" strokeWidth="1"/>
+      2325 +    ))}
+      2326 +    <circle cx="380" cy="140" r="11" fill="#38BDF840" stroke="#0EA5E9" strokeWidth="1.5"/>
+      2327 +    <text x="380" y="144" textAnchor="middle" fill="#BAE6FD" fontSize="10">💧</text>
+      2328 +    <text x="380" y="160" textAnchor="middle" fill="#94A3B8" fontSize="8" fontFamily="'Baloo 2'">Publ
+           +ic Well</text>
+      2329 +    {/* Key facts panel */}
+      2330 +    <rect x="458" y="28" width="132" height="152" rx="8" fill="#1E3A5F" stroke="#38BDF8" strokeWidth=
+           +"1.5"/>
+      2331 +    <text x="524" y="46" textAnchor="middle" fill="#38BDF8" fontSize="10" fontWeight="700" fontFamily
+           +="'Baloo 2'">Key Facts</text>
+      2332 +    {facts.map((f,i) => <text key={i} x="466" y={60+i*18} fill="#CBD5E1" fontSize="8.5" fontFamily="'
+           +Baloo 2'">{f}</text>)}
+      2333 +    {/* Timeline */}
+      2334 +    <rect x="10" y="188" width="580" height="102" rx="8" fill="#0F172A" stroke="#334155" strokeWidth=
+           +"1"/>
+      2335 +    <text x="300" y="204" textAnchor="middle" fill="#94A3B8" fontSize="10" fontWeight="700" fontFamil
+           +y="'Baloo 2'">Timeline — Civilizations in Pakistan</text>
+      2336 +    <line x1="28" y1="225" x2="572" y2="225" stroke="#334155" strokeWidth="1.5"/>
+      2337 +    {timeline.map((t,i) => (
+      2338 +      <g key={i}>
+      2339 +        <circle cx={t.x} cy={225} r="6" fill={t.c}/>
+      2340 +        <text x={t.x} y={218} textAnchor="middle" fill={t.c} fontSize="8.5" fontWeight="700" fontFami
+           +ly="'Baloo 2'">{t.l}</text>
+      2341 +        <text x={t.x} y={238} textAnchor="middle" fill="#94A3B8" fontSize="8" fontFamily="'Baloo 2'">
+           +{t.s.split(" ")[0]}</text>
+      2342 +        <text x={t.x} y={250} textAnchor="middle" fill="#64748B" fontSize="7.5" fontFamily="'Baloo 2'
+           +">{t.s.split(" ").slice(1).join(" ")}</text>
+      2343 +        <text x={t.x} y={283} textAnchor="middle" fill="#475569" fontSize="7.5" fontFamily="'Baloo 2'
+           +">───────</text>
+      2344 +      </g>
+      2345 +    ))}
+      2346 +    <text x="300" y="282" textAnchor="middle" fill="#475569" fontSize="9" fontFamily="'Baloo 2'">Paki
+           +stan has 5,000+ years of continuous civilization</text>
+      2347 +  </svg></div>);
+      2348 +}
+      2349 +
+      2350 +function PakFlagSVG() {
+      2351 +  const symbols = [
+      2352 +    {e:"🐆",n:"National Animal",v:"Snow Leopard"},
+      2353 +    {e:"🌸",n:"National Flower",v:"Jasmine"},
+      2354 +    {e:"🦅",n:"National Bird",v:"Shaheen (Falcon)"},
+      2355 +    {e:"🌲",n:"National Tree",v:"Deodar Cedar"},
+      2356 +    {e:"🥭",n:"National Fruit",v:"Mango"},
+      2357 +    {e:"🏑",n:"National Sport",v:"Field Hockey"}
+      2358 +  ];
+      2359 +  return (<div className="math-svg"><svg viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg">
+      2360 +    <rect width="600" height="280" rx="12" fill="#1E293B"/>
+      2361 +    <text x="300" y="18" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">🇵🇰 Pakistan — National Identity &amp; Symbols</text>
+      2362 +    {/* Flag panel */}
+      2363 +    <rect x="18" y="28" width="208" height="136" rx="6" fill="#01411C" stroke="#334155" strokeWidth="
+           +2"/>
+      2364 +    <rect x="18" y="28" width="42" height="136" rx="0" fill="#F8FAFC"/>
+      2365 +    {/* crescent + star */}
+      2366 +    <text x="138" y="108" textAnchor="middle" fill="#F8FAFC" fontSize="52">☪</text>
+      2367 +    {/* Flag meaning */}
+      2368 +    <text x="122" y="180" textAnchor="middle" fill="#22C55E" fontSize="11" fontWeight="700" fontFamil
+           +y="'Baloo 2'">Pakistan Flag</text>
+      2369 +    {[
+      2370 +      "🟩 Green = Muslim majority",
+      2371 +      "⬜ White = Religious minorities",
+      2372 +      "☪  Crescent = Progress",
+      2373 +      "✦  Star = Light &amp; knowledge"
+      2374 +    ].map((t,i) => <text key={i} x="18" y={196+i*14} fill="#64748B" fontSize="9.5" fontFamily="'Baloo
+           + 2'">{t}</text>)}
+      2375 +    {/* National Anthem box */}
+      2376 +    <rect x="18" y="250" width="208" height="24" rx="6" fill="#22C55E18" stroke="#22C55E" strokeWidth
+           +="1"/>
+      2377 +    <text x="122" y="262" textAnchor="middle" fill="#22C55E" fontSize="9" fontWeight="700" fontFamily
+           +="'Baloo 2'">Qaumi Tarana — Words: Hafeez Jalandhari (1954)</text>
+      2378 +    {/* National Symbols grid 2×3 */}
+      2379 +    {symbols.map((s,i) => {
+      2380 +      const col=i%3, row=Math.floor(i/3);
+      2381 +      const sx=238+col*118, sy=28+row*124;
+      2382 +      return (<g key={i}>
+      2383 +        <rect x={sx} y={sy} width="112" height="116" rx="8" fill="#334155" stroke="#475569" strokeWid
+           +th="1.5"/>
+      2384 +        <text x={sx+56} y={sy+38} textAnchor="middle" fontSize="26">{s.e}</text>
+      2385 +        <text x={sx+56} y={sy+56} textAnchor="middle" fill="#94A3B8" fontSize="9" fontFamily="'Baloo
+           +2'">{s.n}</text>
+      2386 +        <line x1={sx+8} y1={sy+62} x2={sx+104} y2={sy+62} stroke="#475569" strokeWidth="1"/>
+      2387 +        <text x={sx+56} y={sy+80} textAnchor="middle" fill="#F1F5F9" fontSize="11" fontWeight="700" f
+           +ontFamily="'Baloo 2'">{s.v}</text>
+      2388 +        <text x={sx+56} y={sy+100} textAnchor="middle" fill="#64748B" fontSize="8.5" fontFamily="'Bal
+           +oo 2'">Pakistan</text>
+      2389 +      </g>);
+      2390 +    })}
+      2391 +  </svg></div>);
+      2392 +}
+      2393 +
+      2394 +function PakGovSVG() {
+      2395 +  return (<div className="math-svg"><svg viewBox="0 0 600 296" xmlns="http://www.w3.org/2000/svg">
+      2396 +    <rect width="600" height="296" rx="12" fill="#1E293B"/>
+      2397 +    <text x="300" y="18" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">🏛️ Pakistan's Government Structure (Federal Republic)</text>
+      2398 +    {/* President */}
+      2399 +    <rect x="222" y="26" width="156" height="46" rx="8" fill="#F59E0B18" stroke="#F59E0B" strokeWidth
+           +="2"/>
+      2400 +    <text x="300" y="45" textAnchor="middle" fill="#F59E0B" fontSize="12" fontWeight="700" fontFamily
+           +="'Baloo 2'">🏛 President</text>
+      2401 +    <text x="300" y="60" textAnchor="middle" fill="#FDE68A" fontSize="9" fontFamily="'Baloo 2'">Head
+           +of State (Ceremonial)</text>
+      2402 +    <line x1="300" y1="72" x2="300" y2="88" stroke="#475569" strokeWidth="2"/>
+      2403 +    {/* PM */}
+      2404 +    <rect x="208" y="88" width="184" height="46" rx="8" fill="#A855F718" stroke="#A855F7" strokeWidth
+           +="2"/>
+      2405 +    <text x="300" y="107" textAnchor="middle" fill="#A855F7" fontSize="12" fontWeight="700" fontFamil
+           +y="'Baloo 2'">👔 Prime Minister</text>
+      2406 +    <text x="300" y="122" textAnchor="middle" fill="#E9D5FF" fontSize="9" fontFamily="'Baloo 2'">Head
+           + of Government (Executive)</text>
+      2407 +    <line x1="300" y1="134" x2="300" y2="148" stroke="#475569" strokeWidth="2"/>
+      2408 +    {/* Cabinet */}
+      2409 +    <rect x="218" y="148" width="164" height="40" rx="8" fill="#38BDF818" stroke="#38BDF8" strokeWidt
+           +h="1.5"/>
+      2410 +    <text x="300" y="165" textAnchor="middle" fill="#38BDF8" fontSize="11" fontWeight="700" fontFamil
+           +y="'Baloo 2'">📋 Federal Cabinet</text>
+      2411 +    <text x="300" y="180" textAnchor="middle" fill="#BAE6FD" fontSize="9" fontFamily="'Baloo 2'">Mini
+           +sters of departments</text>
+      2412 +    {/* Split line to parliament */}
+      2413 +    <line x1="300" y1="188" x2="300" y2="204" stroke="#475569" strokeWidth="2"/>
+      2414 +    <line x1="144" y1="204" x2="456" y2="204" stroke="#475569" strokeWidth="2"/>
+      2415 +    <line x1="144" y1="204" x2="144" y2="218" stroke="#475569" strokeWidth="2"/>
+      2416 +    <line x1="300" y1="204" x2="300" y2="218" stroke="#475569" strokeWidth="2"/>
+      2417 +    <line x1="456" y1="204" x2="456" y2="218" stroke="#475569" strokeWidth="2"/>
+      2418 +    {/* Senate */}
+      2419 +    <rect x="54" y="218" width="180" height="48" rx="8" fill="#22C55E18" stroke="#22C55E" strokeWidth
+           +="1.5"/>
+      2420 +    <text x="144" y="236" textAnchor="middle" fill="#22C55E" fontSize="11" fontWeight="700" fontFamil
+           +y="'Baloo 2'">🏛 Senate</text>
+      2421 +    <text x="144" y="250" textAnchor="middle" fill="#BBF7D0" fontSize="9" fontFamily="'Baloo 2'">Uppe
+           +r House — 96 seats</text>
+      2422 +    <text x="144" y="262" textAnchor="middle" fill="#86EFAC" fontSize="8.5" fontFamily="'Baloo 2'">Pr
+           +ovinces equally represented</text>
+      2423 +    {/* Supreme Court */}
+      2424 +    <rect x="218" y="218" width="164" height="48" rx="8" fill="#EC489918" stroke="#EC4899" strokeWidt
+           +h="1.5"/>
+      2425 +    <text x="300" y="236" textAnchor="middle" fill="#EC4899" fontSize="11" fontWeight="700" fontFamil
+           +y="'Baloo 2'">⚖️ Supreme Court</text>
+      2426 +    <text x="300" y="250" textAnchor="middle" fill="#FBCFE8" fontSize="9" fontFamily="'Baloo 2'">Judi
+           +ciary — interprets law</text>
+      2427 +    <text x="300" y="262" textAnchor="middle" fill="#F9A8D4" fontSize="8.5" fontFamily="'Baloo 2'">In
+           +dependent branch</text>
+      2428 +    {/* National Assembly */}
+      2429 +    <rect x="366" y="218" width="180" height="48" rx="8" fill="#EF444418" stroke="#EF4444" strokeWidt
+           +h="1.5"/>
+      2430 +    <text x="456" y="236" textAnchor="middle" fill="#EF4444" fontSize="11" fontWeight="700" fontFamil
+           +y="'Baloo 2'">🗳 National Assembly</text>
+      2431 +    <text x="456" y="250" textAnchor="middle" fill="#FECACA" fontSize="9" fontFamily="'Baloo 2'">Lowe
+           +r House — 342 seats</text>
+      2432 +    <text x="456" y="262" textAnchor="middle" fill="#FCA5A5" fontSize="8.5" fontFamily="'Baloo 2'">El
+           +ected directly by citizens</text>
+      2433 +    <text x="300" y="286" textAnchor="middle" fill="#475569" fontSize="9.5" fontFamily="'Baloo 2'">📜
+           + All branches governed by Pakistan Constitution (1973)</text>
+      2434 +  </svg></div>);
+      2435 +}
+      2436 +
+      2437 +function PakRiversSVG() {
+      2438 +  const rivers = [
+      2439 +    {n:"Indus",km:"3,180 km",c:"#38BDF8",note:"Longest — main artery"},
+      2440 +    {n:"Jhelum",km:"725 km",c:"#22C55E",note:"Punjab — Mangla Dam"},
+      2441 +    {n:"Chenab",km:"960 km",c:"#A855F7",note:"Joins Indus in Sindh"},
+      2442 +    {n:"Ravi",km:"720 km",c:"#F59E0B",note:"Flows past Lahore"},
+      2443 +    {n:"Kabul",km:"700 km",c:"#EC4899",note:"Meets Indus at Attock"},
+      2444 +    {n:"Sutlej",km:"1,551 km",c:"#14B8A6",note:"Enters from India"},
+      2445 +  ];
+      2446 +  return (<div className="math-svg"><svg viewBox="0 0 630 295" xmlns="http://www.w3.org/2000/svg">
+      2447 +    <rect width="630" height="295" rx="12" fill="#0F172A"/>
+      2448 +    <text x="315" y="18" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily
+           +="'Baloo 2'">🌊 Pakistan's Rivers &amp; Water System</text>
+      2449 +    {/* Map area */}
+      2450 +    <rect x="18" y="26" width="368" height="256" rx="8" fill="#1E3A5F14" stroke="#334155" strokeWidth
+           +="1"/>
+      2451 +    {/* Mountain range at top */}
+      2452 +    <polygon points="18,95 48,52 90,72 130,44 168,64 198,40 232,57 268,36 300,54 340,30 372,50 386,95
+           +" fill="#64748B" opacity="0.45"/>
+      2453 +    <text x="202" y="72" textAnchor="middle" fill="#94A3B8" fontSize="9" fontFamily="'Baloo 2'">Himal
+           +ayas / Karakoram / Hindu Kush</text>
+      2454 +    {/* Indus River (main, thick blue) */}
+      2455 +    <path d="M232,44 Q236,82 222,118 Q212,154 217,194 Q220,234 212,268" fill="none" stroke="#38BDF8"
+           +strokeWidth="5.5" strokeLinecap="round" opacity="0.9"/>
+      2456 +    <text x="168" y="178" fill="#38BDF8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Indus<
+           +/text>
+      2457 +    <text x="168" y="192" fill="#38BDF8" fontSize="9" fontFamily="'Baloo 2'">River</text>
+      2458 +    {/* Jhelum */}
+      2459 +    <path d="M298,48 Q292,82 283,112 Q267,142 244,162 Q234,167 222,168" fill="none" stroke="#22C55E"
+           +strokeWidth="3" strokeLinecap="round" opacity="0.85"/>
+      2460 +    <text x="276" y="112" fill="#22C55E" fontSize="9" fontWeight="700" fontFamily="'Baloo 2'">Jhelum<
+           +/text>
+      2461 +    {/* Chenab */}
+      2462 +    <path d="M332,52 Q322,82 312,114 Q297,142 272,160 Q257,165 242,166" fill="none" stroke="#A855F7"
+           +strokeWidth="3" strokeLinecap="round" opacity="0.85"/>
+      2463 +    <text x="314" y="110" fill="#A855F7" fontSize="9" fontWeight="700" fontFamily="'Baloo 2'">Chenab<
+           +/text>
+      2464 +    {/* Ravi */}
+      2465 +    <path d="M362,57 Q350,82 340,107 Q322,132 302,150 Q282,160 267,160" fill="none" stroke="#F59E0B"
+           +strokeWidth="2.5" strokeLinecap="round" opacity="0.85"/>
+      2466 +    <text x="346" y="102" fill="#F59E0B" fontSize="9" fontWeight="700" fontFamily="'Baloo 2'">Ravi</t
+           +ext>
+      2467 +    {/* Kabul River */}
+      2468 +    <path d="M18,110 Q78,110 132,114 Q178,118 217,118" fill="none" stroke="#EC4899" strokeWidth="2.5"
+           + strokeLinecap="round" opacity="0.85"/>
+      2469 +    <text x="82" y="106" fill="#EC4899" fontSize="9" fontWeight="700" fontFamily="'Baloo 2'">Kabul R.
+           +</text>
+      2470 +    {/* Dams */}
+      2471 +    {[{x:234,y:102,n:"Tarbela",c:"#EF4444"},{x:287,y:128,n:"Mangla",c:"#EF4444"},{x:172,y:118,n:"Wars
+           +ak",c:"#F97316"}].map((d,i) => (
+      2472 +      <g key={i}>
+      2473 +        <rect x={d.x-13} y={d.y-9} width="26" height="18" rx="3" fill={d.c} opacity="0.85"/>
+      2474 +        <text x={d.x} y={d.y+5} textAnchor="middle" fill="#F1F5F9" fontSize="7" fontWeight="700" font
+           +Family="'Baloo 2'">DAM</text>
+      2475 +        <text x={d.x} y={d.y-13} textAnchor="middle" fill={d.c} fontSize="8.5" fontWeight="700" fontF
+           +amily="'Baloo 2'">{d.n}</text>
+      2476 +      </g>
+      2477 +    ))}
+      2478 +    {/* Arabian Sea */}
+      2479 +    <rect x="18" y="268" width="368" height="14" rx="0" fill="#38BDF8" opacity="0.25"/>
+      2480 +    <text x="202" y="279" textAnchor="middle" fill="#38BDF8" fontSize="9.5" fontFamily="'Baloo 2'">🌊
+           + Arabian Sea</text>
+      2481 +    {/* Info panel */}
+      2482 +    <rect x="398" y="26" width="220" height="256" rx="8" fill="#1E293B" stroke="#334155" strokeWidth=
+           +"1"/>
+      2483 +    <text x="508" y="44" textAnchor="middle" fill="#38BDF8" fontSize="12" fontWeight="700" fontFamily
+           +="'Baloo 2'">🌊 Major Rivers</text>
+      2484 +    {rivers.map((r,i) => (
+      2485 +      <g key={i}>
+      2486 +        <line x1="406" y1={58+i*34} x2="610" y2={58+i*34} stroke={r.c} strokeWidth="2.5" opacity="0.7
+           +"/>
+      2487 +        <text x="408" y={72+i*34} fill={r.c} fontSize="10" fontWeight="700" fontFamily="'Baloo 2'">{r
+           +.n} ({r.km})</text>
+      2488 +        <text x="408" y={84+i*34} fill="#64748B" fontSize="8.5" fontFamily="'Baloo 2'">{r.note}</text
+           +>
+      2489 +      </g>
+      2490 +    ))}
+      2491 +    <rect x="406" y="240" width="210" height="36" rx="6" fill="#F59E0B18" stroke="#F59E0B" strokeWidt
+           +h="1"/>
+      2492 +    <text x="511" y="255" textAnchor="middle" fill="#F59E0B" fontSize="10" fontWeight="700" fontFamil
+           +y="'Baloo 2'">💧 Indus Basin Irrigation</text>
+      2493 +    <text x="511" y="269" textAnchor="middle" fill="#64748B" fontSize="8.5" fontFamily="'Baloo 2'">Wo
+           +rld's largest canal network</text>
+      2494 +  </svg></div>);
+      2495 +}
+      2496 +
+      2497  function ColumnAddSVG({ num1, num2, result }) {
+      2498    const sr = String(result).split("");
+      2499    const maxL = sr.length;
+
+● Now replace the Social Studies Grade 5 data:
+
+● Update(homeschool-app.jsx)
+  ⎿  Added 323 lines, removed 49 lines
+      1569        ] },
+      1570      ],
+      1571      social: g === 5 ? [
+      1572 -      { title: "دودح روا نیمزرس — ناتسکاپ", content: "۔رہش روا تاہید ،ےبوص ،دودح ،ہیفارغج اک ناتسکاپ"
+           -, key: "geography5", hasMathSub: true, subs: [
+      1573 -        {t:"ماقم روا دودح یک ناتسکاپ", c:"روا نیچ ںیم لامش ،تراھب ںیم قرشم ۔ےہ ںیم ایشیا بونج ناتسکاپ
+                                                        ,"۔ردنمس یبرع ںیم بونج ،ناریا ںیم برغم ،ناتسناغفا -
+      1574 -          examples:["24 :عقوم°N - 37°N 61 ،دلب ضرع°E - 77°E مولک عبرم 881,913 اًبیرقت :ہبقر","دلب لوط
+     رواشپ ،ناتلم ،دابآ لصیف ،روہال ،یچارک :رہش ےڑب",")رپ یدنلب یک رٹیم 2500( دابآ مالسا :تموکحلاراد","رٹی-
+                                                             ,]")ردنمس یبرع( رٹیمولک 1,046 :لحاس یردنمس","-
+      1575 -          exercises:[{q:"تالاوس:", parts:["؟مان اک تموکحلاراد","؟ںیہ کلامم ےس نوک ںیم لامش ےک ناتسکاپ
+     ,"دابآ مالسا","ناتسناغفا روا نیچ"[:ans ,]"؟رہش اڑب ےس بس","؟یئابمل یک لحاس یردنمس","؟دح یک دلب ضرع","-
+           -"24°N - 37°N","1,046 یچارک","رٹیمولک"]}],
+      1576 -          wordProblems:["تسرہف یک ںورہش ےڑب ےک ناتسکاپ","۔ںیھکل مان ےک کلامم یسوڑپ ےک سا روا ناتسکاپ
+                                                                                                ,]"۔ںیئانب-
+      1577 -          quiz:[{q:"ہبقر اک ناتسکاپ:",a:["500,000 ک عبرم نیلم 1","رٹیمولک عبرم 881,913","رٹیمولک عبرم
+                                                                     ]}c:1,]"رٹیمولک عبرم 750,000","رٹیمول-
+      1572 +      { title: "Pakistan Geography & Provinces", content: "Pakistan's location in South Asia, its bor
+           +ders with India, Afghanistan, China, Iran and the Arabian Sea. Four provinces, capital cities, and ma
+           +jor landmarks.", key: "geography5", hasMathSub: true, subs: [
+      1573 +        {t:"Pakistan's Location & Borders", svgType:"pakistanMap", c:"Pakistan is in South Asia. It b
+           +orders India (east), Afghanistan & China (north), Iran (west), and the Arabian Sea (south). Area: ~88
+           +1,913 km². Capital: Islamabad.",
+      1574 +          examples:["Location: 24°N–37°N latitude, 61°E–77°E longitude","Borders: India (east), Afgha
+           +nistan (northwest), China (northeast), Iran (west)","Coastline: 1,046 km along the Arabian Sea","Capi
+           +tal: Islamabad; Largest city: Karachi","K2 (8,611 m) — world's 2nd highest peak, in northern Pakistan
+           +"],
+      1575 +          exercises:[{q:"Fill in the blanks:",parts:["Pakistan's capital city is ___","The sea to Pak
+           +istan's south is ___","Area of Pakistan is approx ___ km²","Country to Pakistan's east is ___","Count
+           +ry to Pakistan's north (northeast) is ___"],ans:["Islamabad","Arabian Sea","881,913","India","China"]
+           +}],
+      1576 +          wordProblems:[
+      1577 +            {q:"Name the four countries that share a land border with Pakistan.",a:"1. India (east) 2
+           +. Afghanistan (northwest) 3. China (northeast) 4. Iran (west)"},
+      1578 +            {q:"On which side of Pakistan is the Arabian Sea located?",a:"South"},
+      1579 +            {q:"If you travel due north from Islamabad, which country will you reach first?",a:"China
+           + (through the Gilgit-Baltistan mountain area)"},
+      1580 +            {q:"What continent is Pakistan located in?",a:"Asia (specifically South Asia)"},
+      1581 +            {q:"What is the capital city of Pakistan?",a:"Islamabad"},
+      1582 +            {q:"Pakistan gained independence in which year?",a:"1947 (August 14, 1947)"},
+      1583 +            {q:"What is the approximate area of Pakistan in square kilometers?",a:"881,913 square kil
+           +ometres"},
+      1584 +            {q:"Pakistan's coastline along the Arabian Sea is approximately how many kilometres long?
+           +",a:"1,046 kilometres"},
+      1585 +            {q:"Name three major cities of Pakistan besides the capital.",a:"1. Karachi 2. Lahore 3.
+           +Peshawar (also Faisalabad, Multan, Rawalpindi)"},
+      1586 +            {q:"What is the name of the mountain pass that connects Pakistan with Afghanistan?",a:"Kh
+           +yber Pass"},
+      1587 +            {q:"Which city serves as Pakistan's largest port on the Arabian Sea?",a:"Karachi"},
+      1588 +            {q:"If you stand in Karachi and face the sea, which direction are you facing?",a:"South"}
+           +,
+      1589 +            {q:"Pakistan shares the longest land border with which country?",a:"India (approximately
+           +3,323 km)"},
+      1590 +            {q:"How many time zones does Pakistan use?",a:"One — Pakistan Standard Time (PKT), UTC+5"
+           +},
+      1591 +            {q:"Pakistan is located in which hemisphere?",a:"Northern hemisphere"},
+      1592 +            {q:"What latitude range does Pakistan cover?",a:"24°N to 37°N (North latitude)"},
+      1593 +            {q:"Name the world's second-highest mountain peak located in Pakistan.",a:"K2, at 8,611 m
+           +etres, in the Karakoram range"},
+      1594 +            {q:"Which ocean does the Arabian Sea (at Pakistan's coast) connect to?",a:"Indian Ocean"}
+           +,
+      1595 +            {q:"What is the name of Pakistan's second largest city by population?",a:"Lahore"},
+      1596 +            {q:"If Iran is to the west of Pakistan, in which direction is India from Pakistan?",a:"Ea
+           +st"}
+      1597 +          ],
+      1598 +          quiz:[{q:"Pakistan's capital city is?",a:["Karachi","Lahore","Islamabad","Peshawar"],c:2},{
+           +q:"Which sea is south of Pakistan?",a:["Red Sea","Arabian Sea","Bay of Bengal","Mediterranean"],c:1},
+           +{q:"Which country is to Pakistan's east?",a:["Afghanistan","China","India","Iran"],c:2},{q:"Pakistan'
+           +s area is approx?",a:["500,000 km²","881,913 km²","1.2 million km²","750,000 km²"],c:1}]
+      1599          },
+      1579 -        {t:"ےبوص راچ ےک ناتسکاپ", c:"ب ،اوخنوتخپ ربیخ ،ھدنس ،باجنپ :ےہ لمتشم رپ ںوبوص مہا راچ ناتسکاپ
+                                                   ,"۔ےہ تیمہا روا تفاقث ،تایصوصخ ینپا یک ےبوص رہ ۔ناتسچول-
+      1580 -          examples:["یک لواچ روا مدنگ ،ھڑگجار روہال ،ہصح بایرس ،ھدنس ےئایرد ،یدابآ ہدایز ےس بس :باجنپ
+     تفاقث نوتشپ :اوخنوتخپ ربیخ","جاور و مسر نیگنر ،موص یھدنس ،تفاقث یھدنس ،ہاگردنب یچارک :ھدنس","راوادیپ -
+     ,]"رہش ہٹئوک ،نابز یچولب ،ماظن یلئابق ،ہبقر اڑب ےس بس :ناتسچولب","ساپ ربیھک ،رہش رواشپ ،ےقالع یڑاہپ ،-
+      1581 -          exercises:[{q:"تایصوصخ یک ںوبوص:", parts:["اگردنب","ہبقر اڑب ےس بس","الاو یدابآ ہدایز ےس بس
+                                ,]}]"اوخنوتخپ ربیخ","ھدنس","ناتسچولب","باجنپ"[:ans ,]"ہقالع یڑاہپ","الاو ہ-
+      1582 -          wordProblems:["۔ںیئاتب تایصوصخ یک ےبوص رہ","۔ںیھکل ںیتموکحلاراد ےک ںوبوص ںوراچ"],
+      1583 -          quiz:[{q:"تموکحلاراد اک باجنپ:",a:["رواشپ","یچارک","روہال","دابآ مالسا"],c:1}]
+      1600 +        {t:"Four Provinces & Major Cities", c:"Pakistan has 4 provinces: Punjab (most populous), Sind
+           +h, Khyber Pakhtunkhwa (KPK), and Balochistan (largest area). Plus Gilgit-Baltistan and AJK territorie
+           +s.",
+      1601 +          examples:["Punjab: Capital Lahore, most people, wheat & rice farming, Ravi & Chenab rivers"
+           +,"Sindh: Capital Karachi, port city, Sindhi culture, Thar Desert","KPK: Capital Peshawar, Pashtun cul
+           +ture, mountains, Khyber Pass","Balochistan: Capital Quetta, largest province (44% of Pakistan's area)
+           +, borders Iran & Afghanistan","Islamabad: Federal Capital Territory — seat of Pakistan's government"]
+           +,
+      1602 +          exercises:[{q:"Match provinces to capitals:",parts:["Punjab","Sindh","KPK","Balochistan"],a
+           +ns:["Lahore","Karachi","Peshawar","Quetta"]},{q:"Province features:",parts:["Most populous","Largest
+           +area","Has Khyber Pass","Has main seaport"],ans:["Punjab","Balochistan","KPK","Sindh"]}],
+      1603 +          wordProblems:[
+      1604 +            {q:"Name Pakistan's four provinces.",a:"1. Punjab 2. Sindh 3. Khyber Pakhtunkhwa (KPK) 4.
+           + Balochistan"},
+      1605 +            {q:"Which province has the largest population in Pakistan?",a:"Punjab (over 60% of Pakist
+           +an's population)"},
+      1606 +            {q:"Which province has the largest area in Pakistan?",a:"Balochistan (about 44% of Pakist
+           +an's total area)"},
+      1607 +            {q:"What is the capital of Sindh province?",a:"Karachi"},
+      1608 +            {q:"Which province is known as the 'Gateway to the Silk Route'?",a:"Khyber Pakhtunkhwa (K
+           +PK) — through the Khyber Pass"},
+      1609 +            {q:"Lahore is the capital of which province?",a:"Punjab"},
+      1610 +            {q:"Which province is home to the famous Khyber Pass?",a:"Khyber Pakhtunkhwa (KPK)"},
+      1611 +            {q:"If you visit Quetta, which province are you in?",a:"Balochistan"},
+      1612 +            {q:"Which city is called the 'City of Lights'?",a:"Karachi"},
+      1613 +            {q:"Which province produces most of Pakistan's wheat and rice?",a:"Punjab"},
+      1614 +            {q:"Peshawar is the capital of which province?",a:"Khyber Pakhtunkhwa (KPK)"},
+      1615 +            {q:"Which province borders Iran to the west?",a:"Balochistan"},
+      1616 +            {q:"In which province is the port city of Gwadar located?",a:"Balochistan (on the Arabian
+           + Sea coast)"},
+      1617 +            {q:"Which Pakistani city is famous for its historical fort and Badshahi Mosque?",a:"Lahor
+           +e (Punjab)"},
+      1618 +            {q:"Which province is known for Sindhi embroidery and the Thar Desert?",a:"Sindh"},
+      1619 +            {q:"Name the two territories of Pakistan besides the four provinces.",a:"1. Gilgit-Baltis
+           +tan (GB) 2. Azad Jammu & Kashmir (AJK)"},
+      1620 +            {q:"What is the name of the federal capital territory of Pakistan?",a:"Islamabad Capital
+           +Territory (ICT)"},
+      1621 +            {q:"Which province has the most rivers flowing through it?",a:"Punjab (the five rivers —
+           +Jhelum, Chenab, Ravi, Beas, Sutlej)"},
+      1622 +            {q:"Name two famous cities in Punjab province.",a:"1. Lahore 2. Faisalabad (also Multan,
+           +Rawalpindi, Gujranwala)"},
+      1623 +            {q:"What does 'Punjab' mean in Urdu/Persian?",a:"Land of Five Rivers (Panj = five, Aab =
+           +water)"}
+      1624 +          ],
+      1625 +          quiz:[{q:"Capital of Balochistan?",a:["Karachi","Peshawar","Quetta","Lahore"],c:2},{q:"Whic
+           +h province is largest in area?",a:["Punjab","Sindh","KPK","Balochistan"],c:3},{q:"Capital of KPK?",a:
+           +["Quetta","Peshawar","Lahore","Islamabad"],c:1},{q:"Punjab means?",a:["Land of Rivers","Five Rivers",
+           +"Land of Peace","Green Land"],c:1}]
+      1626 +        }
+      1627 +      ] },
+      1628 +      { title: "Pakistan's Rivers, Climate & Environment", content: "The Indus River system waters Pa
+           +kistan's farms. Pakistan has four seasons. Different climate zones: mountains, plains, deserts, and c
+           +oast.", key: "rivers5", hasMathSub: true, subs: [
+      1629 +        {t:"Pakistan's Rivers & Dams", svgType:"pakRivers", c:"The Indus River is Pakistan's lifeline
+           +. Its tributaries (Jhelum, Chenab, Ravi, Sutlej) water the Punjab plains. Major dams: Tarbela (Indus)
+           + and Mangla (Jhelum) provide water and electricity.",
+      1630 +          examples:["Indus River: 3,180 km total length, flows from Tibet through Pakistan to Arabian
+           + Sea","Five Rivers of Punjab: Jhelum, Chenab, Ravi, Beas (India), Sutlej","Tarbela Dam: Largest dam i
+           +n Pakistan, on Indus, in KPK","Mangla Dam: On Jhelum River, Punjab/AJK border","Indus Basin Irrigatio
+           +n System: World's largest contiguous irrigation network"],
+      1631 +          exercises:[{q:"Rivers & dams:",parts:["Longest river in Pakistan","Dam on Indus River","Riv
+           +er flowing past Lahore","Dam on Jhelum River"],ans:["Indus River","Tarbela Dam","Ravi River","Mangla
+           +Dam"]}],
+      1632 +          wordProblems:[
+      1633 +            {q:"What is the name of the longest river in Pakistan?",a:"Indus River (Darya-e-Sindh), a
+           +pproximately 3,180 km total length"},
+      1634 +            {q:"Name the 'Five Rivers' of Punjab.",a:"1. Jhelum 2. Chenab 3. Ravi 4. Beas (now mostly
+           + in India) 5. Sutlej"},
+      1635 +            {q:"Which dam is the largest in Pakistan by storage capacity?",a:"Tarbela Dam (on the Ind
+           +us River in KPK)"},
+      1636 +            {q:"What is the purpose of the Indus Basin Irrigation System?",a:"To carry water from riv
+           +ers to farmlands through a vast network of canals, enabling farming in dry areas"},
+      1637 +            {q:"In which province does the Indus River finally empty into the Arabian Sea?",a:"Sindh
+           +(near Thatta)"},
+      1638 +            {q:"Name the dam built on the Jhelum River.",a:"Mangla Dam (on the Jhelum River, near Mir
+           +pur, AJK)"},
+      1639 +            {q:"Which river flows past Lahore city?",a:"Ravi River"},
+      1640 +            {q:"The Indus River starts in which country/region?",a:"Tibet (China), in the Himalayas /
+           + Tibetan Plateau"},
+      1641 +            {q:"Name two rivers that are tributaries of the Chenab River.",a:"The Jhelum and the Ravi
+           + both join the Chenab (the Jhelum joins first, then the combined flow joins Chenab)"},
+      1642 +            {q:"What does 'irrigation' mean?",a:"Irrigation means artificially supplying water to far
+           +mland through canals, pipes, or channels to grow crops"},
+      1643 +            {q:"If a canal diverts water from the Indus River, what is its main purpose?",a:"To water
+           + crops in dry or semi-arid farmland that does not receive enough rain"},
+      1644 +            {q:"Which major river comes from Afghanistan and joins the Indus at Attock?",a:"Kabul Riv
+           +er"},
+      1645 +            {q:"Name three ways the Tarbela Dam helps Pakistan.",a:"1. Stores water for irrigation 2.
+           + Generates hydroelectric power 3. Controls floods"},
+      1646 +            {q:"In which season do rivers in northern Pakistan flood due to snowmelt?",a:"Summer (May
+           +–July), when warm weather melts glaciers and snow in the mountains"},
+      1647 +            {q:"What type of farming depends on canals from rivers?",a:"Irrigated farming (canal irri
+           +gation) — used for wheat, rice, cotton, sugarcane"},
+      1648 +            {q:"The Chenab River eventually joins which other major river?",a:"The Chenab joins the S
+           +utlej, which then joins the Indus River"},
+      1649 +            {q:"How many provinces benefit from the Indus River's water?",a:"All four provinces: Punj
+           +ab, Sindh, KPK, and Balochistan"},
+      1650 +            {q:"What is the significance of the Indus Waters Treaty (1960)?",a:"It divides the Indus
+           +River waters between Pakistan and India: Pakistan gets Indus, Jhelum, Chenab; India gets Ravi, Beas,
+           +Sutlej"},
+      1651 +            {q:"Where does the Kabul River originate?",a:"In Afghanistan, in the Hindu Kush mountains
+           + near Kabul city"},
+      1652 +            {q:"Why is the Indus River called Pakistan's 'lifeline'?",a:"It provides water for farmin
+           +g, drinking, and industry to millions of people across all provinces of Pakistan"}
+      1653 +          ],
+      1654 +          quiz:[{q:"Longest river in Pakistan?",a:["Jhelum","Chenab","Indus","Ravi"],c:2},{q:"Tarbela
+           + Dam is on which river?",a:["Jhelum","Chenab","Indus","Ravi"],c:2},{q:"Which river flows past Lahore?
+           +",a:["Indus","Jhelum","Chenab","Ravi"],c:3},{q:"Mangla Dam is on?",a:["Indus","Jhelum","Chenab","Ravi
+           +"],c:1}]
+      1655          },
+      1585 -        {t:"ڑاہپ روا ںیئایرد مہا یک ناتسکاپ", c:"مہا یک ناتسکاپ یفار ےئایرد ،ملہج ےئایرد ،ھدنس ےئایرد
+                                                     ,"۔ںیہ ںیم لامش شکودنہ روا ہیلامہ ہوک ۔ںیہ عئارذ یبآ -
+      1586 -          examples:["ئایرد","اکنل یرس ،ےہ اتاج ںیم ردنمس رک وہ ےس ناتسکاپ ،رٹیمولک 2,880 :ھدنس ےئایرد
+      ناتسناغفا ،ںیم برغم لامش :شکودنہ","تبرپ اگنان ،K2 ،ںیم لامش :ہیلامہ ہوک","ںیم باجنپ :یفار روا ملہج ے-
+                                                                                             ,]"اوہ الم ےس-
+      1587 -          exercises:[{q:"ںیئایرد:", parts:["ڑاہپ ںیم لامش","ںیئایرد یک باجنپ","یئابمل یک ھدنس ےئایرد"
+           -,"K2 ؟ےہ ںاہک"], ans:["2,880 ںیم لامش","شکودنہ روا ہیلامہ ہوک","یفار روا ملہج","رٹیمولک"]}],
+      1588 -          wordProblems:["۔ںیئاتب تیمہا یک ھدنس ےئایرد"],
+      1589 -          quiz:[{q:"K2 ےہ ںاہک:",a:["ںیم برغم","ںیم لامش","ںیم باجنپ","ںیم ھدنس"],c:2}]
+      1656 +        {t:"Pakistan's Climate Zones & Seasons", c:"Pakistan has 4 seasons. Northern mountains are co
+           +ld and snowy. The plains of Punjab/Sindh are hot and dry. The monsoon brings rain from July–September
+           +. Balochistan and Thar Desert are very dry.",
+      1657 +          examples:["Four Seasons: Spring (Feb–Apr), Summer (May–Aug), Autumn (Sep–Nov), Winter (Dec–
+           +Jan)","Monsoon: July–September, brings rain from southwest, vital for crops","Desert: Thar (Sindh) an
+           +d Cholistan (Punjab) — very low rainfall","Mountain Climate: Gilgit-Baltistan — heavy snowfall, glaci
+           +ers, very cold winters","Coastal: Karachi has mild climate due to sea breezes"],
+      1658 +          exercises:[{q:"Climate matching:",parts:["Season for wheat farming","Direction of monsoon w
+           +inds","Driest region","Coldest month in north"],ans:["Winter (Rabi season)","Southwest (Indian Ocean)
+           +","Balochistan/Thar Desert","January"]}],
+      1659 +          wordProblems:[
+      1660 +            {q:"How many main seasons does Pakistan have?",a:"Four: 1. Spring (Feb–Apr) 2. Summer (Ma
+           +y–Aug) 3. Autumn (Sep–Nov) 4. Winter (Dec–Jan)"},
+      1661 +            {q:"Which season is hottest in Pakistan?",a:"Summer (June–August), especially in Sindh an
+           +d Punjab where temperatures exceed 45°C"},
+      1662 +            {q:"What causes the monsoon rains in Pakistan?",a:"Warm, moist winds blowing from the sou
+           +thwest (Arabian Sea and Indian Ocean) cool and drop rain"},
+      1663 +            {q:"In which months does winter occur in Pakistan?",a:"December to February"},
+      1664 +            {q:"Which region of Pakistan receives the most snowfall?",a:"Northern areas: Gilgit-Balti
+           +stan and northern KPK (Swat, Chitral, Murree)"},
+      1665 +            {q:"Name the driest region of Pakistan.",a:"Balochistan (Makran coast and central Balochi
+           +stan) and the Thar Desert in Sindh"},
+      1666 +            {q:"Which coastal city has a milder climate due to sea breezes?",a:"Karachi (Sindh) — coo
+           +led by Arabian Sea breezes"},
+      1667 +            {q:"What type of climate does most of Pakistan have?",a:"Arid (dry) to semi-arid; the sou
+           +th is very dry, north is cold, monsoon affects east"},
+      1668 +            {q:"In which season do farmers grow wheat in Pakistan?",a:"Rabi season (winter, October–M
+           +arch) — wheat is sown in October/November, harvested in April"},
+      1669 +            {q:"What is a 'monsoon'?",a:"A seasonal wind that brings heavy rainfall, in Pakistan from
+           + July to September"},
+      1670 +            {q:"Which direction do monsoon winds come from in Pakistan?",a:"From the southwest — cros
+           +sing the Arabian Sea and Indian Ocean"},
+      1671 +            {q:"Name the coldest month in northern Pakistan.",a:"January — temperatures can drop belo
+           +w -20°C in Gilgit-Baltistan"},
+      1672 +            {q:"What is the effect of the Himalayas on Pakistan's climate?",a:"They block cold winds
+           +from Central Asia and force moisture-laden clouds to drop rain/snow on the southern slopes"},
+      1673 +            {q:"How does elevation affect temperature in northern Pakistan?",a:"The higher the altitu
+           +de, the colder it gets (temperature drops ~6°C for every 1,000 m rise)"},
+      1674 +            {q:"Name two crops grown in the Kharif (summer/monsoon) season.",a:"1. Rice 2. Cotton (al
+           +so maize, sugarcane, millet)"},
+      1675 +            {q:"Name two crops grown in the Rabi (winter) season.",a:"1. Wheat 2. Mustard (also barle
+           +y, gram, lentils)"},
+      1676 +            {q:"What is the 'Loo' wind and where does it blow?",a:"A hot, dry, dusty wind in summer b
+           +lowing across Punjab and Sindh from the west; can cause heatstroke"},
+      1677 +            {q:"Which part of Pakistan is good for tourism in winter because of snow?",a:"Northern ar
+           +eas: Murree, Nathia Gali, Swat, and Gilgit-Baltistan"},
+      1678 +            {q:"What happens to rivers in Pakistan during the monsoon season?",a:"River levels rise s
+           +ignificantly due to heavy rain and glacier melt, sometimes causing floods"},
+      1679 +            {q:"Why does Karachi have a more moderate temperature than Lahore in summer?",a:"Karachi
+           +is on the coast — sea breezes cool it down; Lahore is inland and exposed to intense heat"}
+      1680 +          ],
+      1681 +          quiz:[{q:"Pakistan's monsoon brings rain from?",a:["North","East","Southwest","Northwest"],
+           +c:2},{q:"Which season is wheat grown?",a:["Summer","Spring","Rabi (winter)","Monsoon"],c:2},{q:"Hotte
+           +st region of Pakistan?",a:["KPK","Gilgit","Sindh/Punjab plains","Balochistan coast"],c:2},{q:"Loo is
+           +a type of?",a:["River","Hot dry wind","Mountain","Cloud"],c:1}]
+      1682          }
+      1683        ] },
+      1592 -      { title: "یدازآ روا خیرات یک ناتسکاپ", content: "ک یدازآ ،مظعادئاق ،1947 تسگا 14 ،ےلہپ ےس یدازآ
+                                                     [ :key: "history5", hasMathSub: true, subs ,"۔کیرحت ی-
+      1593 -        {t:"ناتسکاپ اک ےلہپ ےس یدازآ", c:"س فلتخم ۔اھت ہصح اک ناتسودنہ یوناطرب ہقالع ہی ےلہپ ےس یدازآ
+                                                                                     ,"۔یک تموکح ےن ںوتنطل-
+      1594 -          examples:["ح یوناطرب","قلغت ،یجلخ ،یروغ :تنطلس یلہد","بیز گنروا ،ںاہج ہاش ،ربکا :تنطلس لگوم
+                                                                                  ,]"کت 1947 ےس 1857 :تموک-
+      1595 -          exercises:[{q:"راودا یخیرات:", parts:["ہد","تدم یک تموکح یوناطرب","ہاشداب ےڑب ےک تنطلس لگوم
+                  ,]}]"قلغت ،یجلخ ،یروغ","1947-1857","بیز گنروا ،ںاہج ہاش ،ربکا"[:ans ,]"امنہر ےک تنطلس یل-
+      1596 -          wordProblems:["۔ںیھکل مان ےک ںوہاشداب مہا ےک تنطلس لگوم"],
+      1597 -          quiz:[{q:"یئوہ عورش بک تموکح یوناطرب:",a:["1800","1857","1900","1947"],c:1}]
+      1684 +      { title: "Ancient History of Pakistan", content: "Pakistan has one of the world's oldest civili
+           +zations — the Indus Valley. Later came the Mughal Empire and British rule, all leaving deep marks on
+           +Pakistan's culture.", key: "history_ancient5", hasMathSub: true, subs: [
+      1685 +        {t:"Indus Valley Civilization", svgType:"indusValley", c:"The Indus Valley Civilization (2600
+           +–1900 BCE) was one of the world's first urban civilizations. Cities like Mohenjo-daro and Harappa had
+           + planned streets, drainage systems, and standardized weights.",
+      1686 +          examples:["Period: ~3000–1900 BCE, located in modern-day Pakistan (Sindh & Punjab)","Major
+           +cities: Mohenjo-daro (Sindh) and Harappa (Punjab)","Features: Grid-plan streets, covered drains, stan
+           +dardized baked-brick houses","Great Bath: Large public pool at Mohenjo-daro — sign of cleanliness cul
+           +ture","Trade: Traded with Mesopotamia (modern Iraq); had standardized weights for fair commerce"],
+      1687 +          exercises:[{q:"Indus Valley facts:",parts:["Two major cities","Famous structure at Mohenjo-
+           +daro","Material used for houses","What the script status is"],ans:["Mohenjo-daro and Harappa","Great
+           +Bath","Baked mud bricks","Undeciphered (not decoded yet)"]}],
+      1688 +          wordProblems:[
+      1689 +            {q:"In which modern-day province of Pakistan is Mohenjo-daro located?",a:"Sindh province
+           +(near Larkana)"},
+      1690 +            {q:"When did the Indus Valley Civilization reach its peak?",a:"Around 2600–1900 BCE (appr
+           +oximately 4,600 years ago)"},
+      1691 +            {q:"What was special about the street layout of Mohenjo-daro?",a:"Streets were laid out i
+           +n a grid pattern — straight roads crossing at right angles, like a modern planned city"},
+      1692 +            {q:"Name one famous structure found in Mohenjo-daro.",a:"The Great Bath — a large public
+           +bathing pool (11.9 m × 7 m), also the Granary"},
+      1693 +            {q:"What does the 'Great Bath' tell us about Indus Valley people?",a:"They valued cleanli
+           +ness and likely had rituals involving public bathing, possibly for religious purification"},
+      1694 +            {q:"How did Indus Valley people communicate in writing?",a:"Through a pictographic script
+           + (symbols on clay seals), but it has not been fully decoded yet"},
+      1695 +            {q:"Has the Indus Valley script been fully decoded?",a:"No — scholars have been trying fo
+           +r over 100 years but the script remains undeciphered"},
+      1696 +            {q:"What materials did Indus Valley people use to build houses?",a:"Standardized baked mu
+           +d bricks of uniform size — showing organized city planning"},
+      1697 +            {q:"Name two cities of the Indus Valley Civilization.",a:"1. Mohenjo-daro (Sindh) 2. Hara
+           +ppa (Punjab)"},
+      1698 +            {q:"What evidence shows Indus Valley cities had good sanitation?",a:"Covered underground
+           +drainage systems, bathrooms in houses, public wells — far advanced for their time"},
+      1699 +            {q:"The Indus Valley Civilization is also known by what other name?",a:"Harappan Civiliza
+           +tion (named after Harappa, the first city discovered)"},
+      1700 +            {q:"What animals did Indus Valley people keep?",a:"Cattle, buffalo, sheep, goats, elephan
+           +ts, and dogs"},
+      1701 +            {q:"Why did the Indus Valley Civilization decline around 1900 BCE?",a:"Possible causes: 1
+           +. Flooding/river change 2. Climate change/drought 3. Foreign invasions 4. Disease"},
+      1702 +            {q:"With which ancient civilization did Indus Valley people trade?",a:"Mesopotamia (moder
+           +n-day Iraq) — seals and goods found in both regions"},
+      1703 +            {q:"What were the weights and measures used for in Indus Valley cities?",a:"For fair trad
+           +e — standardized weights ensured honest buying and selling in markets"},
+      1704 +            {q:"Where is Harappa located in modern-day Pakistan?",a:"In Punjab province, near Sahiwal
+           + (formerly Montgomery District)"},
+      1705 +            {q:"The discovery of Mohenjo-daro in 1922 was made by whom?",a:"R. D. Banerji (Indian arc
+           +haeologist); later excavated by Sir John Marshall"},
+      1706 +            {q:"Why is the Indus Valley Civilization important to Pakistan's history?",a:"It shows Pa
+           +kistan has 5,000+ years of advanced civilization, predating Rome and ancient Greece"},
+      1707 +            {q:"What type of government did Indus Valley cities likely have?",a:"Evidence suggests a
+           +governing council or priest-kings — all cities used uniform weights and city plans, suggesting centra
+           +l authority"},
+      1708 +            {q:"Name one skill or craft the Indus Valley people were known for.",a:"1. Pottery 2. Bea
+           +d-making 3. Copper and bronze tools 4. Weaving cotton cloth"}
+      1709 +          ],
+      1710 +          quiz:[{q:"Mohenjo-daro is in which province?",a:["Punjab","KPK","Sindh","Balochistan"],c:2}
+           +,{q:"The Great Bath was used for?",a:["Swimming sports","Public bathing/ritual","Water storage","Fish
+           +ing"],c:1},{q:"Indus Valley script is?",a:["Decoded","Partially decoded","Not yet decoded","Arabic"],
+           +c:2},{q:"Harappan Civilization is named after?",a:["Harappa city","Harappa king","Harappa river","Har
+           +appa mountain"],c:0}]
+      1711          },
+      1599 -        {t:"مظعادئاق روا کیرحت یک یدازآ", c:"194 تسگا 14 ۔یک تدایق یک کیرحت یک یدازآ ےن حانج یلع دمحم
+                                                                                  ,"۔اوہ دازآ ناتسکاپ وک 7-
+      1600 -          examples:["نرک لصاح یدازآ — ےہ انرک ماک کیا فرص ںیمہ'","1948 - 1876 :حانج یلع دمحم مظعادئاق
+     19 - 1919 :تفالخ کیرحت","ناخ دمحا دیس رس :کیرحت ھڑگ یلع","داینب یک ہیرظن ،قرشم رعاش :لابقا ہمالع","'ا-
+           -24"],
+      1601 -          exercises:[{q:"قلعتم ےس مظعادئاق:", parts:["لہپ","ند اک یدازآ","لاس اک تافو","لاس اک شئادیپ
+     ک لابقا ہمالع"[:parts ,":قرشم رعاش":q{,}]"مظعادئاق","1947 تسگا 1876","1948","14"[:ans ,]"لرنج رنروگ ا-
+     ینطو","رثاتم ےس کیرحت ھڑگ یلع","بلاغ ،تلم ےنارت"[:ans ,]"تبحم ےس نطو","داینب یک ےیرظن","ماک ہنارعاش ے-
+                                                                                          ,]}]"مالسا روا ت-
+      1602 -          wordProblems:["ںیم یدازآ یک ناتسکاپ اک لابقا ہمالع","۔ںیھکل تاعقاو مہا ےک یگدنز یک مظعادئاق
+                                                                                         ,]"۔ںیئاتب رادرک -
+      1603 -          quiz:[{q:"مان اروپ اک مظعادئاق:",a:["ع دمحم","نسح یلع دمحم","حانج یلع دمحم","یقیدص یلع دمحم
+                                                                                            ]}c:1,]"ناخ یل-
+      1712 +        {t:"Mughal Empire & British Rule", c:"The Mughal Empire (1526–1857) ruled the subcontinent fo
+           +r over 300 years, leaving magnificent mosques, forts, and gardens in Pakistan. British rule (1857–194
+           +7) then transformed the region until independence.",
+      1713 +          examples:["Mughal founder: Babur, won Battle of Panipat (1526)","Akbar the Great: Most powe
+           +rful Mughal emperor, policy of tolerance","Shah Jahan: Built Taj Mahal (Agra) and Badshahi Mosque (La
+           +hore)","British East India Company took control after 1857 uprising","Sir Syed Ahmad Khan: Founded Al
+           +igarh Muslim University to modernize Muslim education"],
+      1714 +          exercises:[{q:"Mughal era:",parts:["Mughal founder","Emperor who built Badshahi Mosque","Ye
+           +ar empire began","Last Mughal emperor"],ans:["Babur","Aurangzeb (1673)","1526","Bahadur Shah Zafar II
+           +"]}],
+      1715 +          wordProblems:[
+      1716 +            {q:"Who founded the Mughal Empire and in which year?",a:"Babur (Zahiruddin Muhammad Babur
+           +) founded the Mughal Empire in 1526 after the First Battle of Panipat"},
+      1717 +            {q:"Which Mughal emperor built the Taj Mahal?",a:"Shah Jahan (built 1632–1653 in Agra, as
+           + a memorial for his wife Mumtaz Mahal)"},
+      1718 +            {q:"Name the famous mosque in Lahore built by the Mughals.",a:"Badshahi Mosque (built by
+           +Aurangzeb in 1673) — one of the world's largest mosques"},
+      1719 +            {q:"Which Mughal emperor's rule is called the 'Golden Age'?",a:"Akbar the Great (1556–160
+           +5) — expanded empire, promoted arts, was religiously tolerant"},
+      1720 +            {q:"What was the official language of the Mughal court?",a:"Persian (Farsi) — also promot
+           +ed Urdu as a mixed language of the court"},
+      1721 +            {q:"When did British rule formally begin in the subcontinent?",a:"1858 (after the 1857 Wa
+           +r of Independence, the British Crown took direct control)"},
+      1722 +            {q:"What event in 1857 is called the 'War of Independence' in Pakistan?",a:"The uprising
+           +against the British East India Company — soldiers and civilians rebelled but were defeated"},
+      1723 +            {q:"Who founded the Aligarh Muslim University to modernize Muslim education?",a:"Sir Syed
+           + Ahmad Khan (founded MAO College in Aligarh, 1875)"},
+      1724 +            {q:"What was the 'Two Nation Theory'?",a:"The idea that Muslims and Hindus are two separa
+           +te nations with different religion, culture and way of life — they need separate homelands"},
+      1725 +            {q:"Name one important fort built by the Mughals in Lahore.",a:"Lahore Fort (Shahi Qila)
+           +— built and expanded by multiple Mughal emperors"},
+      1726 +            {q:"How did British rule affect local industries?",a:"British factory goods replaced loca
+           +l crafts; traditional textile industries suffered; taxes increased poverty"},
+      1727 +            {q:"Which Mughal emperor extended the empire to its greatest size?",a:"Aurangzeb Alamgir
+           +(reigned 1658–1707) — empire reached into the Deccan (southern India)"},
+      1728 +            {q:"Name two examples of Mughal architecture still found in Pakistan.",a:"1. Lahore Fort
+           +(Shahi Qila) 2. Badshahi Mosque 3. Shalimar Gardens (all in Lahore)"},
+      1729 +            {q:"What was the role of the East India Company in South Asia?",a:"Started as a trading c
+           +ompany; gradually seized political and military control; ruled India until 1858"},
+      1730 +            {q:"Who was the last Mughal emperor?",a:"Bahadur Shah Zafar II — exiled by the British to
+           + Burma in 1858 after the failed uprising"},
+      1731 +            {q:"How did the Mughal era contribute to Pakistan's culture today?",a:"Mughal art, archit
+           +ecture (mosques, forts, gardens), Urdu language, music, and cuisine became integral parts of Pakistan
+           +i culture"},
+      1732 +            {q:"Name a garden built by the Mughals still visited in Lahore.",a:"Shalimar Gardens (Bag
+           +h-e-Shalimar) — built by Shah Jahan in 1641"},
+      1733 +            {q:"What language became common among the people during the Mughal era?",a:"Urdu — a mix
+           +of Persian, Arabic, and local languages, still Pakistan's national language"},
+      1734 +            {q:"Why did Muslims need a separate country according to the Two Nation Theory?",a:"They
+           +feared their religion, culture, and rights would not be protected in a Hindu-majority India"},
+      1735 +            {q:"Name three qualities of Akbar the Great that made him an outstanding ruler.",a:"1. Re
+           +ligious tolerance (Din-i-Ilahi) 2. Just administration 3. Patronage of arts, music, and literature"}
+      1736 +          ],
+      1737 +          quiz:[{q:"Mughal Empire was founded in?",a:["1400","1489","1526","1600"],c:2},{q:"Badshahi
+           +Mosque was built by?",a:["Akbar","Shah Jahan","Aurangzeb","Babur"],c:2},{q:"British rule began after?
+           +",a:["1700 revolt","1857 uprising","1900 treaty","1920 act"],c:1},{q:"Sir Syed Ahmad Khan founded?",a
+           +:["Pakistan","Muslim League","Aligarh University","All India Congress"],c:2}]
+      1738          }
+      1739        ] },
+      1606 -      { title: "تفاقث روا ہرشاعم — کلم ارامہ", content: "جاور و مسر ،ںینابز ،تایاور ،تفاقث یک ناتسکاپ
+                                                      [ :key: "culture5", hasMathSub: true, subs ,"۔بہذم ،-
+      1607 -        {t:"تایاور روا تفاقث یناتسکاپ", c:"نکیل ےہ نابز یموق ودرا ۔ںیہ لماش ںیتفاقث فلتخم ںیم ناتسکاپ
+                                                                          ,"۔ںیہ یھب ںینابز یئاقالع ددعتم -
+      1608 -          examples:["رطفلا ڈیا :راوہت","یچولب ،وتشپ ،یھدنس ،یباجنپ :ںینابز یئاقالع","ودرا :نابز یموق،
+     ن نامہم","اتہب ،صیمق راولس ،راد ینچ ،یناوریش :سابل یتیاور","یبنلادالیم دیع ،یلاوید ،یلوہ ،یٰحضالادیع -
+                                                                  ,]"ےہ مہا تفایض ںیم تیاور یناتسکاپ :یزاو-
+      1609 -          exercises:[{q:"رصانع یتفاقث:", parts:["راوہت روہشم","ںیلاثم یک ںونابز یئاقالع","نابز یموق",
+     ]}]"صیمق راولس ،یناوریش","یلاوید ،یلوہ ،دیع","یچولب ،وتشپ ،یھدنس ،یباجنپ","ودرا"[:ans ,]"سابل یتیاور"-
+           -,
+      1610 -          wordProblems:["۔ںیرک نایب ھتاس ےک تیمہا وک ںوراوہت یناتسکاپ"],
+      1611 -          quiz:[{q:"نابز یموق:",a:["یزیرگنا","ودرا","یھدنس","یباجنپ"],c:2}]
+      1740 +      { title: "Independence & National Identity", content: "Pakistan's struggle for independence, th
+           +e role of Quaid-e-Azam Muhammad Ali Jinnah and Allama Iqbal, August 14 1947, and Pakistan's national
+           +symbols.", key: "independence5", hasMathSub: true, subs: [
+      1741 +        {t:"Freedom Movement & Quaid-e-Azam", svgType:"pakFlag", c:"Muhammad Ali Jinnah (Quaid-e-Azam
+           +) led the All India Muslim League to win Pakistan's independence on August 14, 1947. Allama Iqbal's v
+           +ision of a Muslim homeland inspired the movement.",
+      1742 +          examples:["Quaid-e-Azam: Born December 25, 1876 in Karachi; passed away September 11, 1948"
+           +,"Pakistan Resolution (1940): Passed in Lahore at Minto Park, called for a separate Muslim state","Al
+           +lama Iqbal (1877–1938): Poet-philosopher, dreamed of an independent Muslim homeland","First Prime Min
+           +ister: Liaquat Ali Khan","August 14, 1947: Pakistan's Independence Day"],
+      1743 +          exercises:[{q:"Fill in the blanks:",parts:["Quaid-e-Azam's birth year","Pakistan's Independ
+           +ence Day","Pakistan Resolution passed in","First PM of Pakistan"],ans:["1876","August 14, 1947","Laho
+           +re","Liaquat Ali Khan"]}],
+      1744 +          wordProblems:[
+      1745 +            {q:"What is Quaid-e-Azam's full name?",a:"Muhammad Ali Jinnah (Quaid-e-Azam = 'Great Lead
+           +er' in Urdu)"},
+      1746 +            {q:"In which city was Quaid-e-Azam born?",a:"Karachi (born December 25, 1876)"},
+      1747 +            {q:"When was Pakistan created (full date)?",a:"August 14, 1947 (14th August 1947)"},
+      1748 +            {q:"What does 'Quaid-e-Azam' mean in English?",a:"'Great Leader' or 'Supreme Leader'"},
+      1749 +            {q:"What was Allama Iqbal's vision for the Muslims of the subcontinent?",a:"A separate, i
+           +ndependent homeland where Muslims could live freely according to their faith and culture — which beca
+           +me Pakistan"},
+      1750 +            {q:"What was the Pakistan Resolution of 1940?",a:"A resolution passed by the All India Mu
+           +slim League demanding a separate independent state for Muslims in the subcontinent"},
+      1751 +            {q:"In which city was the Pakistan Resolution passed?",a:"Lahore (at Minto Park, now call
+           +ed Iqbal Park)"},
+      1752 +            {q:"Who was the first Prime Minister of Pakistan?",a:"Liaquat Ali Khan"},
+      1753 +            {q:"When did Quaid-e-Azam become Pakistan's first Governor-General?",a:"August 14, 1947 —
+           + the day of independence"},
+      1754 +            {q:"Which political party led the movement for Pakistan's independence?",a:"All India Mus
+           +lim League (founded 1906)"},
+      1755 +            {q:"Name two leaders who worked for Pakistan's independence besides Quaid-e-Azam.",a:"1.
+           +Allama Iqbal 2. Liaquat Ali Khan (also Fatima Jinnah, Sir Syed Ahmad Khan)"},
+      1756 +            {q:"What is the significance of August 14th for Pakistan?",a:"It is Pakistan's Independen
+           +ce Day — celebrated every year with flag hoisting, parades, and national pride"},
+      1757 +            {q:"What does 'Pakistan' literally mean?",a:"'Land of the Pure' (Pak = Pure, Stan = Land)
+           +"},
+      1758 +            {q:"In which year did the All India Muslim League pass the Lahore Resolution?",a:"1940"},
+      1759 +            {q:"When did Quaid-e-Azam pass away?",a:"September 11, 1948 (just 13 months after indepen
+           +dence)"},
+      1760 +            {q:"What was Allama Iqbal's famous poem that inspired Muslim youth?",a:"'Lab pe aati hai
+           +dua ban ke tamanna meri' and 'Tarana-e-Milli' ('Chino Arab hamara') among many others"},
+      1761 +            {q:"What hardships faced by Muslims led to the demand for a separate homeland?",a:"1. Sep
+           +arate electorates ignored 2. Cultural and religious differences 3. Fear of Hindu-majority rule 4. Eco
+           +nomic discrimination"},
+      1762 +            {q:"Name two places in Pakistan where you can visit memorials to Quaid-e-Azam.",a:"1. Maz
+           +ar-e-Quaid (tomb) in Karachi 2. Quaid-e-Azam's birthplace and museum in Karachi"},
+      1763 +            {q:"Why is Allama Iqbal called the 'Poet of the East' (Shair-e-Mashriq)?",a:"His poetry i
+           +n Urdu and Persian inspired Muslim identity, revival, and the dream of freedom across the Muslim worl
+           +d"},
+      1764 +            {q:"What profession was Quaid-e-Azam trained in?",a:"Law — he was a brilliant barrister t
+           +rained in London (Lincoln's Inn)"}
+      1765 +          ],
+      1766 +          quiz:[{q:"Quaid-e-Azam was born in?",a:["Lahore","Islamabad","Karachi","Peshawar"],c:2},{q:
+           +"Pakistan Resolution was passed in?",a:["Karachi","Lahore","Delhi","Islamabad"],c:1},{q:"Pakistan's I
+           +ndependence Day is?",a:["23rd March","14th August","25th December","11th September"],c:1},{q:"Allama
+           +Iqbal was a?",a:["General","Poet-philosopher","Prime Minister","Judge"],c:1}]
+      1767          },
+      1613 -        {t:"تامالع روا تخانش یموق", c:"۔ںیہ ےترک راہظا اک ےبذج یموق تامالع یموق ےک ناتسکاپ",
+      1614 -          examples:["یک لابقا ہمالع — ہنارت یموق :تیگ یموق","لالہ روا ہراتس ،دیفس روا زبس :مچرپ یموق
+                                 ,]"بالگ :لوھپ یموق","گنلپزوی :روناج یموق","لابقا ہمالع :رعاش یموق","فینصت-
+      1615 -          exercises:[{q:"تامالع یموق:", parts:["یموق","رعاش یموق","عوضوم اک ےنارت یموق","گنر ےک مچرپ
+                                        ,]}]"بالگ","لابقا ہمالع","تبحم ےس نطو","دیفس روا زبس"[:ans ,]"لوھپ-
+      1616 -          wordProblems:["۔ںیئاتب تیمہا یک مچرپ یموق"],
+      1617 -          quiz:[{q:"اھکل ہنارت یموق:",a:["یسیراف نوراہ","مظعادئاق","لابقا ہمالع","دمحا زارف"],c:1}]
+      1768 +        {t:"Pakistan's National Symbols", c:"Pakistan's flag is dark green and white with a crescent
+           +and star. The national anthem is 'Qaumi Tarana'. Other symbols include the Snow Leopard, Jasmine, Sha
+           +heen (Falcon), and Field Hockey.",
+      1769 +          examples:["Flag: Dark green + white; ☪ crescent & star; Green = Muslim majority, White = mi
+           +norities","National Anthem: 'Qaumi Tarana' — words by Hafeez Jalandhari, music by Chagla (1954)","Nat
+           +ional Animal: Snow Leopard (Uncia uncia)","National Bird: Shaheen (Peregrine Falcon)","National Fruit
+           +: Mango | National Flower: Jasmine | National Sport: Field Hockey"],
+      1770 +          exercises:[{q:"National symbols:",parts:["Flag colors","National animal","National fruit","
+           +Anthem lyricist"],ans:["Green and white","Snow Leopard","Mango","Hafeez Jalandhari"]}],
+      1771 +          wordProblems:[
+      1772 +            {q:"What are the two colors of Pakistan's national flag?",a:"Dark green and white"},
+      1773 +            {q:"What does the green color on Pakistan's flag represent?",a:"Islam and the Muslim majo
+           +rity of Pakistan"},
+      1774 +            {q:"What does the white portion of Pakistan's flag represent?",a:"Religious minorities of
+           + Pakistan (non-Muslim citizens)"},
+      1775 +            {q:"What do the crescent (hilal) and star on the flag represent?",a:"Crescent = progress
+           +and light; Star = knowledge and guidance (also Islamic symbolism)"},
+      1776 +            {q:"Who wrote the words of Pakistan's national anthem (Qaumi Tarana)?",a:"Hafeez Jalandha
+           +ri (adopted officially in 1954)"},
+      1777 +            {q:"Who composed the music for Pakistan's national anthem?",a:"Ahmed Ghulamali Chagla"},
+      1778 +            {q:"What is the national animal of Pakistan?",a:"Snow Leopard (Panthera uncia) — lives in
+           + the mountains of northern Pakistan"},
+      1779 +            {q:"What is the national bird of Pakistan?",a:"Shaheen (Peregrine Falcon) — a symbol of c
+           +ourage and speed"},
+      1780 +            {q:"What is the national flower of Pakistan?",a:"Jasmine (Chambeli/Yasmeen)"},
+      1781 +            {q:"What is the national fruit of Pakistan?",a:"Mango (Mangifera indica) — Pakistan expor
+           +ts famous varieties like Chaunsa and Anwar Ratol"},
+      1782 +            {q:"What is the national sport of Pakistan?",a:"Field Hockey — Pakistan won multiple Olym
+           +pic gold medals (1960, 1968, 1976, 1978, 1982, 1984)"},
+      1783 +            {q:"What is the national tree of Pakistan?",a:"Deodar Cedar (Cedrus deodara)"},
+      1784 +            {q:"What is the national language of Pakistan?",a:"Urdu"},
+      1785 +            {q:"How many stars are on Pakistan's flag?",a:"One star (5-pointed star alongside the cre
+           +scent)"},
+      1786 +            {q:"What does 'Qaumi Tarana' mean in English?",a:"'National Anthem' (Qaumi = national, Ta
+           +rana = anthem/song)"},
+      1787 +            {q:"What is the currency of Pakistan?",a:"Pakistani Rupee (PKR)"},
+      1788 +            {q:"What is Quaid-e-Azam's famous three-word motto for Pakistan?",a:"'Iman, Ittehad, Nazm
+           +' — Faith, Unity, Discipline"},
+      1789 +            {q:"On which occasions is the Pakistan flag flown at half-mast?",a:"On national days of m
+           +ourning, death of national leaders, or national tragedies"},
+      1790 +            {q:"What is March 23 celebrated as in Pakistan?",a:"Pakistan Day (Youm-e-Pakistan) — anni
+           +versary of the 1940 Lahore/Pakistan Resolution"},
+      1791 +            {q:"Name the national monument in Islamabad that represents Pakistan's four provinces.",a
+           +:"Minar-e-Pakistan is in Lahore; the Pakistan Monument in Islamabad has four petals representing the
+           +four provinces"}
+      1792 +          ],
+      1793 +          quiz:[{q:"National bird of Pakistan?",a:["Eagle","Peacock","Shaheen (Falcon)","Parrot"],c:2
+           +},{q:"National fruit of Pakistan?",a:["Apple","Mango","Banana","Guava"],c:1},{q:"Flag color for minor
+           +ities?",a:["Green","White","Red","Blue"],c:1},{q:"National sport of Pakistan?",a:["Cricket","Squash",
+           +"Field Hockey","Kabaddi"],c:2}]
+      1794          }
+      1795        ] },
+      1620 -      { title: "راگزور و ماک روا تالاح یشاعم", content: "یمرگرس یشاعم ،تراجت ،تعنص ،تعارز ںیم ناتسکاپ
+                                                          [ :key: "economy5", hasMathSub: true, subs ,"۔ںا-
+      1621 -        {t:"لکاپاچ روا تعارز", c:"۔ںیہ ںیلصف مہا یدنق رکش ،ساپک ،لواچ ،مدنگ ۔ےہ کلم یعارز کیا ناتسکاپ
+           -",
+      1622 -          examples:["اک لواچ یتمساب :لواچ","تشاک ںیم ھدنس روا باجنپ ،لصف مہا ےس بس ںیم ناتسکاپ :مدنگ
+     جنپ :یدنقرکش","یرورض ےیل ےک یرٹسڈنا لئاٹسکیٹ ،ےہ اتاج اہک انوس دیفس :ساپک","ےہ روہشم ںیم رھب ایند مان-
+                                                                           ,]"ےہ یتوہ تشاک ںیم ھدنس روا با-
+      1623 -          exercises:[{q:"ںیلصف:", parts:["اک","لامعتسا اک ساپک","ہدئاف اک لواچ یتمساب","لصف مہا ےس بس
+                                  ,]}]"ھدنس روا باجنپ","لئاٹسکیٹ","نشیرک ٹروپر","مدنگ"[:ans ,]"ہقالع اک تش-
+      1624 -          wordProblems:["۔ںیئاتب وک ںولصف مہا یک ناتسکاپ"],
+      1625 -          quiz:[{q:"ےہ ےس ںاہک لواچ یتمساب:",a:["ناتسچولب","اوخنوتخپ ربیخ","باجنپ","ھدنس"],c:0}]
+      1796 +      { title: "Pakistan's Government & Citizenship", content: "Pakistan is a federal republic. It ha
+           +s a President, Prime Minister, Parliament (Senate + National Assembly), and Supreme Court. Citizens h
+           +ave rights and responsibilities.", key: "government5", hasMathSub: true, subs: [
+      1797 +        {t:"Pakistan's Government Structure", svgType:"pakGov", c:"Pakistan is an Islamic Federal Rep
+           +ublic. The President is Head of State. The Prime Minister is Head of Government. Parliament makes law
+           +s; the Supreme Court upholds them. The 1973 Constitution is supreme.",
+      1798 +          examples:["President: Head of State — ceremonial role, guardian of constitution","Prime Min
+           +ister: Head of Government — runs the country, leads cabinet","Parliament: Majlis-e-Shoora — Senate (9
+           +6 seats) + National Assembly (342 seats)","Supreme Court: Highest court, independent judiciary","Cons
+           +titution: Adopted August 14, 1973 — supreme law of Pakistan"],
+      1799 +          exercises:[{q:"Government structure:",parts:["Head of State","Head of Government","Lower ho
+           +use of Parliament","Highest court"],ans:["President","Prime Minister","National Assembly","Supreme Co
+           +urt"]}],
+      1800 +          wordProblems:[
+      1801 +            {q:"What type of government does Pakistan have?",a:"Islamic Federal Republic (Federal Par
+           +liamentary Democracy)"},
+      1802 +            {q:"Who is the Head of State of Pakistan?",a:"The President of Pakistan (ceremonial role)
+           +"},
+      1803 +            {q:"Who is the Head of Government with executive power in Pakistan?",a:"The Prime Ministe
+           +r of Pakistan"},
+      1804 +            {q:"What is the Parliament of Pakistan called?",a:"Majlis-e-Shoora (Council of Common Int
+           +erest)"},
+      1805 +            {q:"Name the two houses of Pakistan's Parliament.",a:"1. Senate (Upper House) — 96 seats
+           + 2. National Assembly (Lower House) — 342 seats"},
+      1806 +            {q:"How many seats are in the National Assembly of Pakistan?",a:"342 seats (elected by ci
+           +tizens directly)"},
+      1807 +            {q:"How many seats are in the Senate of Pakistan?",a:"96 seats (senators chosen by provin
+           +cial assemblies)"},
+      1808 +            {q:"How often are general elections held in Pakistan?",a:"Every 5 years"},
+      1809 +            {q:"What is the Constitution of Pakistan and when was it adopted?",a:"Pakistan's Constitu
+           +tion is the supreme law; adopted on August 14, 1973 under PM Zulfikar Ali Bhutto"},
+      1810 +            {q:"What are the three branches of Pakistan's government?",a:"1. Legislature (Parliament
+           +— makes laws) 2. Executive (PM + Cabinet — runs government) 3. Judiciary (Courts — enforces laws)"},
+      1811 +            {q:"Which court is the highest court of law in Pakistan?",a:"Supreme Court of Pakistan (b
+           +ased in Islamabad)"},
+      1812 +            {q:"What is the role of a Prime Minister in Pakistan's government?",a:"Leads the governme
+           +nt, heads the cabinet, implements laws and policies, represents Pakistan internationally"},
+      1813 +            {q:"What is a 'constitution' and why is it important?",a:"A constitution is the written s
+           +et of fundamental laws and principles for a country; it protects citizens' rights and defines governm
+           +ent powers"},
+      1814 +            {q:"Name the four provinces of Pakistan and their capitals.",a:"1. Punjab — Lahore 2. Sin
+           +dh — Karachi 3. KPK — Peshawar 4. Balochistan — Quetta"},
+      1815 +            {q:"What is the role of the President of Pakistan?",a:"Ceremonial Head of State — signs b
+           +ills into law, represents the state, guardian of the Constitution"},
+      1816 +            {q:"How are senators chosen in Pakistan?",a:"By the members of Provincial Assemblies (ind
+           +irect election), not directly by the public"},
+      1817 +            {q:"What does 'federalism' mean in Pakistan's context?",a:"Power is shared between the ce
+           +ntral (federal) government and the four provincial governments"},
+      1818 +            {q:"Name two fundamental rights given by Pakistan's Constitution to citizens.",a:"1. Righ
+           +t to education (Article 25-A) 2. Freedom of religion 3. Equality before law (also freedom of speech,
+           +right to life)"},
+      1819 +            {q:"What is the minimum voting age in Pakistan?",a:"18 years old"},
+      1820 +            {q:"Why does Pakistan have both a President and a Prime Minister?",a:"The President is th
+           +e ceremonial head of state (non-political); the PM is the elected political leader who actually gover
+           +ns — based on the parliamentary system"}
+      1821 +          ],
+      1822 +          quiz:[{q:"Pakistan's Parliament is called?",a:["Dewan","Majlis-e-Shoora","Lok Sabha","Jirga
+           +"],c:1},{q:"How many seats in National Assembly?",a:["96","200","342","500"],c:2},{q:"Pakistan's Cons
+           +titution was adopted in?",a:["1947","1956","1962","1973"],c:3},{q:"Minimum voting age in Pakistan?",a
+           +:["16","18","21","25"],c:1}]
+      1823          },
+      1627 -        {t:"تراجت روا تعنص", c:"۔ںیہ مہا ںیتعنص رگید روا ینیچ ،ٹنمیس ،لئاٹسکیٹ ںیم ناتسکاپ",
+      1628 -          examples:["ش ،روصق :تعنص یک ینیچ","مہا ںیم تاریمعت :ٹنمیس","دنمترہش ںیم ایند :تعنص لئاٹسکیٹ
+                                                     ,]"گنسیسورپ یک یفاک ،ےئاچ :کاروخ","لم یڑب ںیم روپ دہا-
+      1629 -          exercises:[{q:"ںیتعنص:", parts:["تعنص یڑب ےس بس","لامعتسا ںیم تاریمعت","تعنص دنمترہش"], ans
+                                                                       ,]}]"لئاٹسکیٹ","ٹنمیس","لئاٹسکیٹ"[:-
+      1630 -          wordProblems:["۔ںیھکل مان ےک ںوتعنص یڑب نیت یک ناتسکاپ"],
+      1631 -          quiz:[{q:"تعنص یڑب ےس بس:",a:["کاروخ","اہول","لئاٹسکیٹ","ٹنمیس"],c:1}]
+      1824 +        {t:"Citizens' Rights & Responsibilities", c:"Every Pakistani citizen has rights (education, h
+           +ealth, equality) and responsibilities (follow laws, pay taxes, vote, respect others). Good citizens m
+           +ake a strong nation.",
+      1825 +          examples:["Right to Education: Article 25-A — free education for children 5–16 years","Righ
+           +t to Equality: No discrimination based on religion, race, or gender","Child Rights: No child labour u
+           +nder 14; protection from abuse","Responsibility: Pay taxes, vote wisely, keep environment clean, resp
+           +ect the law","Good Citizenship: Honesty, tolerance, community service, civic participation"],
+      1826 +          exercises:[{q:"Rights vs Responsibilities:",parts:["Right to education","Pay taxes","Vote i
+           +n elections","Respect others' religion"],ans:["Right","Responsibility","Right AND Responsibility","Re
+           +sponsibility"]}],
+      1827 +          wordProblems:[
+      1828 +            {q:"What is a 'right'? Give two examples.",a:"A right is something you are entitled to by
+           + law. Examples: 1. Right to education 2. Right to safety (also freedom of religion, equality)"},
+      1829 +            {q:"What is a 'responsibility'? Give two examples.",a:"A responsibility is a duty you mus
+           +t fulfill as a citizen. Examples: 1. Following laws 2. Paying taxes (also voting, keeping the environ
+           +ment clean)"},
+      1830 +            {q:"Name three rights that every Pakistani child has.",a:"1. Right to free education (5–1
+           +6 years) 2. Right to protection from abuse 3. Right to health care"},
+      1831 +            {q:"Why is the right to education especially important?",a:"Education empowers people to
+           +improve their lives, get jobs, think critically, and contribute to their country's progress"},
+      1832 +            {q:"Is it legal for children under 14 to work in factories in Pakistan?",a:"No — child la
+           +bour under 14 is illegal under Pakistan's Constitution (Article 11) and child labour laws"},
+      1833 +            {q:"What responsibility do citizens have toward their country's laws?",a:"Citizens must o
+           +bey laws, even if they disagree; they can work to change laws through legal means like voting or peac
+           +eful protest"},
+      1834 +            {q:"Name three responsibilities of a good citizen.",a:"1. Pay taxes 2. Respect others' ri
+           +ghts 3. Vote in elections 4. Keep the environment clean 5. Serve the community"},
+      1835 +            {q:"Why is it important to pay taxes?",a:"Taxes fund schools, hospitals, roads, police, a
+           +nd government services — they are how citizens contribute to public welfare"},
+      1836 +            {q:"What is the right to vote and who can exercise it in Pakistan?",a:"The right to choos
+           +e representatives in elections; Pakistani citizens aged 18 and above can vote"},
+      1837 +            {q:"Why should we respect people of different religions and cultures in Pakistan?",a:"Pak
+           +istan is a diverse country — respect promotes peace, unity, and strong communities; discrimination ca
+           +uses conflict"},
+      1838 +            {q:"What is the responsibility of a student in school?",a:"1. Attend regularly 2. Study s
+           +incerely 3. Respect teachers and classmates 4. Help others learn"},
+      1839 +            {q:"How can a Grade 5 student be a responsible citizen in their community?",a:"1. Keep st
+           +reets clean 2. Plant trees 3. Conserve water/electricity 4. Help neighbours 5. Report wrongdoing to a
+           +dults"},
+      1840 +            {q:"What is 'freedom of speech' and what are its limits?",a:"Freedom to express opinions
+           +freely; limited by laws against hate speech, false accusations, and inciting violence"},
+      1841 +            {q:"Name two organisations that protect children's rights in Pakistan.",a:"1. UNICEF Paki
+           +stan 2. Human Rights Commission of Pakistan (also Edhi Foundation, Sahil)"},
+      1842 +            {q:"Why is access to clean water a right for all citizens?",a:"Clean water is essential f
+           +or health; its absence causes disease and death — especially for children"},
+      1843 +            {q:"What is the difference between a right and a privilege?",a:"A right cannot be taken a
+           +way and applies to everyone by law; a privilege is something given by authorities that can be removed
+           +"},
+      1844 +            {q:"How does voting help democracy work?",a:"Citizens elect representatives who make laws
+           + and decisions; without voting, the government does not reflect the people's will"},
+      1845 +            {q:"What is the 'right to a fair trial'?",a:"Every person accused of a crime has the righ
+           +t to a proper legal hearing, a defence lawyer, and an impartial judge before any punishment"},
+      1846 +            {q:"What does 'equality before the law' mean in Pakistan's Constitution?",a:"Every person
+           + — rich or poor, any religion or gender — is treated equally under the law; no one is above the law"}
+           +,
+      1847 +            {q:"What should citizens do if they see unfair treatment in their community?",a:"1. Repor
+           +t to police or authorities 2. Contact human rights organisations 3. Speak up peacefully 4. Support th
+           +e affected person"}
+      1848 +          ],
+      1849 +          quiz:[{q:"Pakistan's right to free education covers ages?",a:["1–5","5–16","10–18","6–14"],
+           +c:1},{q:"Minimum voting age in Pakistan?",a:["16","18","21","25"],c:1},{q:"Child labour under ___ is
+           +illegal?",a:["10","12","14","16"],c:2},{q:"Freedom of speech is a?",a:["Responsibility","Privilege","
+           +Right","Rule"],c:2}]
+      1850          }
+      1851 +      ] },
+      1852 +      { title: "Pakistan's Economy, Agriculture & Culture", content: "Pakistan's economy depends on a
+           +griculture (wheat, cotton, rice), industry (textiles), and trade. Its rich culture includes Urdu lite
+           +rature, folk music, regional crafts, and festivals.", key: "economy5", hasMathSub: true, subs: [
+      1853 +        {t:"Agriculture & Natural Resources", c:"About 42% of Pakistanis work in agriculture. Main cr
+           +ops: wheat, cotton (white gold), rice (basmati), sugarcane. Pakistan has coal (Thar), natural gas (Ba
+           +lochistan), copper & gold (Reko Diq), and the world's largest salt mines (Khewra).",
+      1854 +          examples:["Kharif crops (summer/monsoon): Rice, cotton, maize, sugarcane","Rabi crops (wint
+           +er): Wheat, mustard, barley, gram","Cotton: Pakistan is world's 4th largest producer — vital for text
+           +ile exports","Khewra Salt Mine (Punjab): 2nd largest salt mine in world","Thar Desert (Sindh): One of
+           + world's largest coal deposits"],
+      1855 +          exercises:[{q:"Agriculture facts:",parts:["Cotton nickname","Most important food crop","Kha
+           +rif season crop","Location of major salt mine"],ans:["White gold","Wheat","Rice / Cotton","Khewra, Pu
+           +njab"]}],
+      1856 +          wordProblems:[
+      1857 +            {q:"What percentage of Pakistan's workforce works in agriculture?",a:"About 42% of Pakist
+           +an's total workforce"},
+      1858 +            {q:"Name the four major crops grown in Pakistan.",a:"1. Wheat 2. Rice (basmati) 3. Cotton
+           + 4. Sugarcane"},
+      1859 +            {q:"Why is cotton called 'white gold' in Pakistan?",a:"Cotton is Pakistan's most importan
+           +t export crop; it earns billions of dollars in foreign exchange through textile and clothing exports"
+           +},
+      1860 +            {q:"Which province produces the most wheat and rice in Pakistan?",a:"Punjab (the 'breadba
+           +sket of Pakistan')"},
+      1861 +            {q:"What is the difference between Kharif and Rabi crops?",a:"Kharif = summer crops sown
+           +in June–July, harvested Oct–Nov (rice, cotton, maize); Rabi = winter crops sown Oct–Nov, harvested Ap
+           +ril (wheat, mustard)"},
+      1862 +            {q:"Name two important minerals found in Pakistan.",a:"1. Coal (Thar Desert, Sindh) 2. Na
+           +tural gas (Sui, Balochistan) 3. Copper & gold (Reko Diq, Balochistan) 4. Rock salt (Khewra, Punjab)"}
+           +,
+      1863 +            {q:"Where are Pakistan's famous salt mines located?",a:"Khewra Salt Mine in Punjab — the
+           +world's second largest salt mine, a popular tourist attraction"},
+      1864 +            {q:"Which natural resource is Balochistan most rich in?",a:"Natural gas (Sui gas fields)
+           +and also coal, copper, gold (Reko Diq)"},
+      1865 +            {q:"How does the Indus River system help Pakistan's agriculture?",a:"It provides water fo
+           +r irrigation through canals and dams, allowing millions of hectares of farming in otherwise dry land"
+           +},
+      1866 +            {q:"Name two dams that provide hydroelectric power in Pakistan.",a:"1. Tarbela Dam (Indus
+           +, KPK) 2. Mangla Dam (Jhelum, AJK)"},
+      1867 +            {q:"What is the significance of Pakistan's fishing industry?",a:"Provides livelihood to c
+           +oastal communities in Sindh and Balochistan; Karachi is a major fishing port; fish is exported intern
+           +ationally"},
+      1868 +            {q:"Which region has large natural gas reserves?",a:"Balochistan (Sui gas field) and Sind
+           +h — natural gas heats homes and fuels industry across Pakistan"},
+      1869 +            {q:"Name three fruits Pakistan is famous for exporting.",a:"1. Mangoes (Chaunsa, Anwar Ra
+           +tol) 2. Kinnow oranges 3. Dates (from Sindh and Balochistan)"},
+      1870 +            {q:"What is the Thar Desert rich in, and why is it important?",a:"Coal — the Thar Coal Fi
+           +eld in Sindh has one of the world's 6th largest coal deposits; it can fuel Pakistan's electricity for
+           + centuries"},
+      1871 +            {q:"Name three animals raised on farms in Pakistan.",a:"1. Cattle (for milk and meat) 2.
+           +Buffalo (for milk — Pakistan is 4th largest milk producer) 3. Goats 4. Sheep 5. Poultry"},
+      1872 +            {q:"Why is deforestation a problem for Pakistan?",a:"Less forest means more floods, soil
+           +erosion, reduced rainfall, loss of wildlife, and climate change — Pakistan has less than 5% forest co
+           +ver"},
+      1873 +            {q:"How does tourism contribute to Pakistan's economy?",a:"Foreign tourists bring income;
+           + Pakistan has world-class mountains (K2, Nanga Parbat), ancient ruins (Mohenjo-daro), and beautiful v
+           +alleys"},
+      1874 +            {q:"Name one challenge facing Pakistani farmers and suggest a solution.",a:"Challenge: Wa
+           +ter shortage / Solution: Build more dams, use drip irrigation, conserve water, improve canal systems"
+           +},
+      1875 +            {q:"What is Pakistan's most important export industry?",a:"Textile industry — Pakistan ex
+           +ports clothes, bed linen, yarn and towels worth billions of dollars annually"},
+      1876 +            {q:"Name two types of industries in Pakistan besides agriculture.",a:"1. Textile industry
+           + (largest) 2. Cement industry 3. Sugar industry 4. Chemical industry 5. Food processing"}
+      1877 +          ],
+      1878 +          quiz:[{q:"Cotton is called?",a:["Black gold","White gold","Green gold","Blue gold"],c:1},{q
+           +:"Khewra is famous for?",a:["Coal","Salt mine","Gold","Oil"],c:1},{q:"Kharif season crops are grown i
+           +n?",a:["Winter","Summer/Monsoon","Spring","Autumn"],c:1},{q:"Pakistan's largest export industry?",a:[
+           +"Cement","Food","Textiles","Mining"],c:2}]
+      1879 +        },
+      1880 +        {t:"Pakistan's Culture, Festivals & Arts", c:"Pakistan has rich cultural diversity — Punjabi,
+           + Sindhi, Pashto, Balochi cultures and Urdu literature. Festivals include Eid ul-Fitr, Eid ul-Adha, an
+           +d Basant. Traditional arts: truck art, Sindhi ajrak, blue pottery, and Sufi qawwali music.",
+      1881 +          examples:["Languages: Urdu (national), Punjabi, Sindhi, Pashto, Balochi + English (official
+           +)","Eid celebrations: Eid ul-Fitr (end of Ramadan), Eid ul-Adha (sacrifice festival)","Sufi Music: Qa
+           +wwali — devotional music; Nusrat Fateh Ali Khan world-famous","Traditional dress: Shalwar kameez for
+           +everyone; regional variations with embroidery","UNESCO sites: Lahore Fort & Shalimar Gardens; Mohenjo
+           +-daro; Rohtas Fort"],
+      1882 +          exercises:[{q:"Culture matching:",parts:["National language","Famous qawwali singer","Tradi
+           +tional dress","Two Eid festivals"],ans:["Urdu","Nusrat Fateh Ali Khan","Shalwar kameez","Eid ul-Fitr
+           +and Eid ul-Adha"]}],
+      1883 +          wordProblems:[
+      1884 +            {q:"Name four languages spoken in Pakistan.",a:"1. Urdu (national) 2. Punjabi 3. Sindhi 4
+           +. Pashto 5. Balochi (also English as official language)"},
+      1885 +            {q:"What is the national and official language of Pakistan?",a:"Urdu is the national lang
+           +uage; English is also used as an official language"},
+      1886 +            {q:"Name the two main Eid festivals celebrated in Pakistan.",a:"1. Eid ul-Fitr — marks en
+           +d of Ramadan fasting 2. Eid ul-Adha — Festival of Sacrifice (Qurbani)"},
+      1887 +            {q:"What traditional dress is commonly worn in Pakistan?",a:"Shalwar kameez — for both me
+           +n and women; often with a dupatta (scarf) for women"},
+      1888 +            {q:"Name a famous folk dance from Punjab.",a:"Bhangra (also Luddi, Jhumar, Sammi) — energ
+           +etic dances performed at celebrations"},
+      1889 +            {q:"Name a traditional craft that Pakistan is known for internationally.",a:"1. Truck art
+           + (vibrant painted trucks) 2. Sindhi ajrak (block-printed fabric) 3. Multan blue pottery"},
+      1890 +            {q:"What is 'qawwali' and who is Pakistan's most famous qawwali singer?",a:"Qawwali is de
+           +votional Sufi music praising God and saints; Nusrat Fateh Ali Khan is world-famous"},
+      1891 +            {q:"Name two famous Urdu poets of Pakistan.",a:"1. Faiz Ahmed Faiz 2. Ahmad Faraz 3. Parv
+           +een Shakir (also Allama Iqbal, Mir Taqi Mir in classical)"},
+      1892 +            {q:"What is the significance of food in Pakistani culture?",a:"Food is central to hospita
+           +lity; sharing meals with family and guests is a sacred tradition; refusing food can be seen as impoli
+           +te"},
+      1893 +            {q:"Name three traditional Pakistani foods.",a:"1. Biryani 2. Nihari 3. Halwa puri (also
+           +karahi, samosas, lassi, kebabs)"},
+      1894 +            {q:"What is 'truck art' and what makes it unique to Pakistan?",a:"Vibrant, colourful pain
+           +tings on trucks and buses — a distinctly Pakistani art form using bold patterns, mirrors, and calligr
+           +aphy"},
+      1895 +            {q:"Name the famous spring kite festival held in Lahore.",a:"Basant — a kite-flying festi
+           +val celebrating the arrival of spring (now restricted but still culturally celebrated)"},
+      1896 +            {q:"How is Eid ul-Fitr celebrated in Pakistan?",a:"Special prayers at mosque, new clothes
+           +, Zakat (charity), visiting relatives, giving Eidi (gifts/money), eating sweets and festive food"},
+      1897 +            {q:"What is 'mehndi' (henna) and when is it applied?",a:"Henna is a natural dye applied i
+           +n decorative patterns on hands and feet — traditionally at weddings, Eid, and celebrations"},
+      1898 +            {q:"Name two UNESCO World Heritage Sites in Pakistan.",a:"1. Lahore Fort and Shalimar Gar
+           +dens 2. Mohenjo-daro (Sindh) 3. Rohtas Fort (Punjab) 4. Taxila (Punjab)"},
+      1899 +            {q:"What traditional music instruments are used in Pakistani music?",a:"Tabla (drums), dh
+           +ol (large drum), sitar, harmonium, flute, rubab (string instrument)"},
+      1900 +            {q:"What is 'Sufi music' and which region is it associated with?",a:"Devotional songs (qa
+           +wwali, kalam) praising God, saints, and spiritual love; associated with shrines in Punjab and Sindh"}
+           +,
+      1901 +            {q:"Name a famous Punjabi folk story (qissa) still loved in Pakistan.",a:"Heer Ranjha (by
+           + Waris Shah) — the most beloved Punjabi love story; also Sohni Mahiwal, Mirza Sahiban"},
+      1902 +            {q:"What is the role of elders in Pakistani family culture?",a:"Elders are deeply respect
+           +ed; their advice is sought on important matters; they head family decisions; children are expected to
+           + care for elderly parents"},
+      1903 +            {q:"Name two sports that are popular in Pakistan besides cricket.",a:"1. Kabaddi (traditi
+           +onal contact sport) 2. Squash (Pakistan has produced world champions) 3. Polo 4. Field hockey 5. Wres
+           +tling (pehlwani)"}
+      1904 +          ],
+      1905 +          quiz:[{q:"Pakistan's national language is?",a:["Punjabi","Sindhi","Urdu","English"],c:2},{q
+           +:"Qawwali is a type of?",a:["Dance","Sport","Sufi devotional music","Food"],c:2},{q:"Eid ul-Fitr mark
+           +s end of?",a:["Hajj","Ramadan","New Year","Spring"],c:1},{q:"Famous Pakistan truck art is a form of?"
+           +,a:["Music","Dance","Visual/Folk art","Literature"],c:2}]
+      1906 +        }
+      1907        ] }
+      1908      ] : g === 4 ? [
+      1909        { title: "دعاوق", content: "۔ماسقا یداینب — فرح ،لعف ،مسا", key: "qawaid" },
+
+● Now add the new SVG render cases:
+
+● Update(homeschool-app.jsx)
+  ⎿  Added 5 lines
+      3563            {sub.svgType === "skeleton" && <SkeletonSVG />}
+      3564            {sub.svgType === "waterCycle" && <WaterCycleSVG />}
+      3565            {sub.svgType === "photosynthesis" && <PhotosynthesisSVG />}
+      3566 +          {sub.svgType === "pakistanMap" && <PakistanMapSVG />}
+      3567 +          {sub.svgType === "indusValley" && <IndusValleySVG />}
+      3568 +          {sub.svgType === "pakFlag" && <PakFlagSVG />}
+      3569 +          {sub.svgType === "pakGov" && <PakGovSVG />}
+      3570 +          {sub.svgType === "pakRivers" && <PakRiversSVG />}
+      3571            {sub.svgType === "numberLine" && <>
+      3572              <NumberLineSVG min={sub.svgData.min} max={sub.svgData.max} marks={sub.svgData.marks} high
+            light={sub.svgData.highlight} />
+      3573              <div className="math-svg"><svg viewBox="0 0 620 100" xmlns="http://www.w3.org/2000/svg">
+
+● Now sync everything to HomeSchool.html. Let me find the key sections to update:
+
+● Agent(Sync JSX changes to HTML file)
+  ⎿  Done (85 tool uses · 12.1k tokens · 13m 38s)
+  (ctrl+o to expand)
+
+● All done. Here's what was added to both homeschool-app.jsx and HomeSchool.html:
+
+  5 New Social Studies SVGs:
+
+  ┌────────────────┬──────────────────────────────────────────────────────────────────┐
+  │      SVG       │                              Shows                               │
+  ├────────────────┼──────────────────────────────────────────────────────────────────┤
+  │ PakistanMapSVG │ Colour-coded provinces map with borders & neighbours             │
+  ├────────────────┼──────────────────────────────────────────────────────────────────┤
+  │ IndusValleySVG │ Mohenjo-daro layout + timeline of Pakistan's civilizations       │
+  ├────────────────┼──────────────────────────────────────────────────────────────────┤
+  │ PakFlagSVG     │ Pakistan flag explained + 6-symbol national identity grid        │
+  ├────────────────┼──────────────────────────────────────────────────────────────────┤
+  │ PakGovSVG      │ Full government hierarchy (President → PM → Parliament → Courts) │
+  ├────────────────┼──────────────────────────────────────────────────────────────────┤
+  │ PakRiversSVG   │ River system with Indus tributaries, dams, and info panel        │
+  └────────────────┴──────────────────────────────────────────────────────────────────┘
+
+  6 Grade 5 Social Studies Topics (2 subs each, 20 word problems per sub):
+  1. Pakistan Geography & Provinces — location/borders + four provinces & cities (pakistanMap)
+  2. Rivers, Climate & Environment — Indus system/dams + climate zones/seasons (pakRivers)
+  3. Ancient History — Indus Valley Civilization + Mughal Empire & British rule (indusValley)
+  4. Independence & National Identity — Freedom movement/Quaid-e-Azam + national symbols (pakFlag)
+  5. Government & Citizenship — Government structure + rights & responsibilities (pakGov)
+  6. Economy, Agriculture & Culture — crops/minerals/industries + culture/festivals/arts
+
+  Total: 240 new word problems in {q, a} format, plus 24 quiz questions with multiple-choice answers.
+
+✻ Cogitated for 28m 0s
+
+❯ It is showing blank screen, you consumed and 91% limit and produced this broken code?
+
+● Bash(node -e "
+      const fs = require('fs');…)
+  ⎿  ERROR at: Unexpected token ':'
+
+● Bash(node -e "
+      const fs = require('fs');…)
+  ⎿  Around line 1775 :     urdu: g <= 3 ? [
+
+● Bash(node -e "
+      const fs = require('fs');…)
+  ⎿  (No output)
+
+● Bash(node -e "
+      const fs = require('fs');…)
+  ⎿  JSX line 539: {q:"Write >, < or = :", parts:["4,567 ___ 4,576","12,345 ___ 12,345","99,999 ___ 100,000","56,78
+     9 ___ 56,798","123,456 _
+     JSX line 540: {q:"Arrange in ascending order (smallest to largest):", parts:["5,432; 3,210; 4,567; 1,234","45,
+     … +7 lines (ctrl+o to expand)
+
+● Bash(node -e "
+      const fs = require('fs');…)
+  ⎿  Line 1572: { title: "Pakistan Geography & Provinces", content: "Pakistan's location in South Asia, its borders
+      with India, Afghanis
+
+
+
+
+
+
+
