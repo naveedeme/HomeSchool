@@ -10,7 +10,8 @@ const {
   getLessons,
   getQuiz,
 } = window.HomeSchoolData;
-const { loadState, saveState } = window.HomeSchoolUtils;
+const { loadState, saveState, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled } = window.HomeSchoolUtils;
+const { SettingsPanel } = window.HomeSchoolSettings || {};
 const {
   adverbs: ADVERBS_DATA,
   prepositions: PREPOSITIONS_DATA,
@@ -20,6 +21,7 @@ const {
   collectiveNouns: COLLECTIVE_NOUNS_DATA,
   verbs: VERBS_DATA,
 } = POS_DATA;
+const AppContext = React.createContext(null);
 
 function PlaceValueChart({ number }) {
   const s = String(number).replace(/,/g,"");
@@ -2013,7 +2015,7 @@ function MathSubQuiz({ questions, isUrdu }) {
   const questionIsUrdu = isUrdu || isUrduText(currentQ.q);
   const mqScore = mqDone ? mqAns.reduce((a,v,i) => a + (v === mq[i]?.c ? 1 : 0), 0) : 0;
   const reset = () => { setMqIdx(0); setMqAns([]); setMqRev(false); setMqDone(false); };
-  const speakText = (txt, e) => { if(e) e.stopPropagation(); const ur = isUrduText(txt); window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(ttsClean(txt)); u.lang=ur?"ur-PK":"en-US"; u.rate=0.85; const v=window.speechSynthesis.getVoices(); const p=ur?(v.find(x=>x.lang.startsWith("ur"))||v.find(x=>x.lang.startsWith("hi"))||v.find(x=>x.lang.includes("IN"))):(v.find(x=>x.lang.startsWith("en")&&x.localService)||v.find(x=>x.lang.startsWith("en"))); if(p){u.voice=p; if(ur)u.lang=p.lang;} window.speechSynthesis.speak(u); };
+  const speakText = (txt, e) => { if(e) e.stopPropagation(); if (!isTtsEnabled()) return; const ur = isUrduText(txt); window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(ttsClean(txt)); u.lang=ur?"ur-PK":"en-US"; u.rate=0.85; const v=window.speechSynthesis.getVoices(); const p=ur?(v.find(x=>x.lang.startsWith("ur"))||v.find(x=>x.lang.startsWith("hi"))||v.find(x=>x.lang.includes("IN"))):(v.find(x=>x.lang.startsWith("en")&&x.localService)||v.find(x=>x.lang.startsWith("en"))); if(p){u.voice=p; if(ur)u.lang=p.lang;} window.speechSynthesis.speak(u); };
   const playSound = (correct) => { try { const ac = new (window.AudioContext||window.webkitAudioContext)(); const osc = ac.createOscillator(); const gain = ac.createGain(); osc.connect(gain); gain.connect(ac.destination); gain.gain.value = 0.15; if(correct){ osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ac.currentTime+0.1); osc.frequency.setValueAtTime(784,ac.currentTime+0.2); osc.stop(ac.currentTime+0.35); } else { osc.frequency.value=330; osc.type="square"; osc.start(); osc.frequency.setValueAtTime(277,ac.currentTime+0.15); osc.stop(ac.currentTime+0.3); } } catch(e){} };
 
   if (mqDone) return (
@@ -2209,6 +2211,7 @@ function stripInlineUrduForKnownWords(text, words) {
 function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null }) {
   const [speaking, setSpeaking] = useState(false);
   const handleClick = () => {
+    if (!isTtsEnabled()) return;
     window.speechSynthesis.cancel();
     setSpeaking(true);
     const u = new SpeechSynthesisUtterance(ttsClean(text));
@@ -2271,6 +2274,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
 function MixedUrduParagraphSentence({ text, highlight = null }) {
   const [speaking, setSpeaking] = useState(false);
   const handleClick = () => {
+    if (!isTtsEnabled()) return;
     window.speechSynthesis.cancel();
     setSpeaking(true);
     const u = new SpeechSynthesisUtterance(ttsClean(text));
@@ -2637,6 +2641,7 @@ function WordRow({ en, ur }) {
     return voices.find(v => v.lang.startsWith("ur")) || voices.find(v => v.lang.startsWith("hi")) || voices.find(v => v.lang.includes("IN"));
   };
   const speakEn = (e) => {
+    if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSEn(true);
     const u = new SpeechSynthesisUtterance(ttsClean(en)); u.lang = "en-US"; u.rate = 0.8;
     const pref = getEnglishVoice();
@@ -2645,6 +2650,7 @@ function WordRow({ en, ur }) {
     window.speechSynthesis.speak(u);
   };
   const speakUr = (e) => {
+    if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSUr(true);
     const u = new SpeechSynthesisUtterance(ur); u.lang = "ur-PK"; u.rate = 0.8;
     const pref = getUrduVoice();
@@ -2653,6 +2659,7 @@ function WordRow({ en, ur }) {
     window.speechSynthesis.speak(u);
   };
   const speakBoth = () => {
+    if (!isTtsEnabled()) return;
     window.speechSynthesis.cancel();
     setSBoth(true);
     setSEn(true);
@@ -2742,6 +2749,7 @@ function AdjWordRow({ en, ur, comp, sup }) {
   const [sEn, setSEn] = useState(false);
   const [sUr, setSUr] = useState(false);
   const speakEn = (e) => {
+    if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSEn(true);
     const txt = en + ". " + comp + ". " + sup + ".";
     const u = new SpeechSynthesisUtterance(ttsClean(txt)); u.lang = "en-US"; u.rate = 0.75;
@@ -2752,6 +2760,7 @@ function AdjWordRow({ en, ur, comp, sup }) {
     window.speechSynthesis.speak(u);
   };
   const speakUr = (e) => {
+    if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSUr(true);
     const u = new SpeechSynthesisUtterance(ur); u.lang = "ur-PK"; u.rate = 0.8;
     const voices = window.speechSynthesis.getVoices();
@@ -2774,6 +2783,7 @@ function VerbWordRow({ en, ur, v2, v3 }) {
   const [sEn, setSEn] = useState(false);
   const [sUr, setSUr] = useState(false);
   const speakEn = (e) => {
+    if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSEn(true);
     const txt = en + ". " + v2 + ". " + v3 + ".";
     const u = new SpeechSynthesisUtterance(ttsClean(txt)); u.lang = "en-US"; u.rate = 0.75;
@@ -2784,6 +2794,7 @@ function VerbWordRow({ en, ur, v2, v3 }) {
     window.speechSynthesis.speak(u);
   };
   const speakUr = (e) => {
+    if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSUr(true);
     const u = new SpeechSynthesisUtterance(ur); u.lang = "ur-PK"; u.rate = 0.8;
     const voices = window.speechSynthesis.getVoices();
@@ -2804,6 +2815,7 @@ function VerbWordRow({ en, ur, v2, v3 }) {
 
 function HomeschoolApp() {
   const stored = loadState();
+  const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
   const [grade, setGrade] = useState(stored?.grade || null);
   const [studentName, setStudentName] = useState(stored?.studentName || "");
   const [tab, setTab] = useState("home");
@@ -2843,6 +2855,11 @@ function HomeschoolApp() {
   const [chatMessages, setChatMessages] = useState([{ role: "ai", text: "Assalam-o-Alaikum! 👋 I'm your AI tutor. Ask me anything about your lessons — I'll explain it in a way that's easy to understand!" }]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
+  const [language, setLanguage] = useState(stored?.language || "bilingual");
+  const [storageLabel, setStorageLabel] = useState("IndexedDB + localStorage");
   const chatEndRef = useRef(null);
 
   // ─── DB-backed data state ───
@@ -2863,6 +2880,26 @@ function HomeschoolApp() {
         if (Object.keys(tens).length > 0) setDbTenses(tens);
         const voc = await window.HomeSchoolDB.getVocab();
         if (voc.length > 0) setDbVocab(voc);
+        const progressMap = await window.HomeSchoolDB.getProgressMap();
+        if (Object.keys(progressMap).length > 0 && (!stored?.completedQuizzes || Object.keys(stored.completedQuizzes).length === 0)) {
+          setCompletedQuizzes(progressMap);
+        }
+        const persistedStats = await window.HomeSchoolDB.getUserStats();
+        if (persistedStats && persistedStats.totalQuizzes > 0 && !stored?.totalQuizzesDone) {
+          setTotalQuizzesDone(persistedStats.totalQuizzes || 0);
+          setTotalScore(persistedStats.totalScore || 0);
+          setStreak(persistedStats.streak || 0);
+          setLastQuizDate(persistedStats.lastQuizDate || null);
+          setEarnedBadges(persistedStats.badges || []);
+          setXp(persistedStats.xp || 0);
+        }
+        const stats = await window.HomeSchoolDB.getStats();
+        setStorageLabel(`IndexedDB • ${stats.coreData || 0} lessons`);
+        if (versionManagerRef.current) {
+          const versionState = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION);
+          setCurrentVersion(versionState.newVersion || window.HomeSchoolData.VERSION);
+          setUpdateAvailable(versionState.needsUpdate);
+        }
       } catch(e) { console.log("DB load fallback to inline:", e); }
       setDbLoaded(true);
     })();
@@ -2882,7 +2919,13 @@ function HomeschoolApp() {
   const VOCAB = dbVocab.length > 0 ? dbVocab : VOCABULARY_DATA;
 
   useEffect(() => { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); return () => window.speechSynthesis.cancel(); }, []);
-  useEffect(() => { if (grade) saveState({ grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp }); }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp]);
+  useEffect(() => {
+    window.HomeSchoolPrefs = { ttsEnabled, language };
+    if (!ttsEnabled) window.speechSynthesis.cancel();
+  }, [ttsEnabled, language]);
+  useEffect(() => {
+    if (grade) saveState({ grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language });
+  }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
   const checkBadges = useCallback((qs, qt, si) => {
@@ -2892,17 +2935,30 @@ function HomeschoolApp() {
     if (totalQuizzesDone + 1 >= 5) ck("five_quizzes"); if (totalQuizzesDone + 1 >= 10) ck("ten_quizzes");
     if (qt < 30) ck("speed_demon"); if (streak + 1 >= 3) ck("streak_3"); if (streak + 1 >= 7) ck("streak_7");
     const ds = new Set(Object.keys(completedQuizzes).map(k => k.split("_")[0])); ds.add(si);
-    if (ds.size >= 5) ck("all_subjects"); if (nb.length > 0) { setEarnedBadges(all); setNewBadges(nb); }
+    if (ds.size >= 5) ck("all_subjects");
+    setEarnedBadges(all);
+    setNewBadges(nb);
+    return { all, nb };
   }, [earnedBadges, totalQuizzesDone, streak, completedQuizzes]);
 
-  const finishQuiz = (ans, qs) => {
+  const finishQuiz = async (ans, qs) => {
     const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
     const el = (Date.now() - quizStartTime) / 1000, today = new Date().toDateString();
-    const ns = lastQuizDate === new Date(Date.now() - 86400000).toDateString() ? streak + 1 : lastQuizDate === today ? streak : 1;
+    const streakMode = calculateStreak(lastQuizDate, today);
+    const ns = streakMode === "increment" ? streak + 1 : streakMode === null ? streak : 1;
+    const earnedXp = calculateXP(sc, qs.length, el < 30);
     setTotalScore(s => s + sc); setTotalQuizzesDone(n => n + 1); setStreak(ns); setLastQuizDate(today);
-    setXp(x => x + sc * 25 + (sc === 4 ? 50 : 0));
-    setCompletedQuizzes(p => ({ ...p, [selectedLesson.id]: { score: sc, total: 4, date: today } }));
-    checkBadges(sc, el, selectedSubject.id); setQuizDone(true);
+    setXp(x => x + earnedXp);
+    setCompletedQuizzes(p => ({ ...p, [selectedLesson.id]: { score: sc, total: qs.length, date: today } }));
+    const badgeResult = checkBadges(sc, el, selectedSubject.id);
+    if (window.HomeSchoolDB) {
+      try {
+        await window.HomeSchoolDB.saveQuizResult(selectedSubject.id, selectedLesson.id, sc, qs.length, el, grade, badgeResult.all);
+      } catch (error) {
+        console.log("Unable to persist quiz result:", error);
+      }
+    }
+    setQuizDone(true);
   };
 
   const sendChat = async () => {
@@ -2915,6 +2971,100 @@ function HomeschoolApp() {
     } catch { setChatMessages(m => [...m, { role: "ai", text: "Oops! Connection issue. Please try again. 🙏" }]); }
     setChatLoading(false);
   };
+
+  const handleCheckUpdates = useCallback(async () => {
+    if (!versionManagerRef.current) return;
+    const result = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION);
+    setCurrentVersion(result.newVersion || window.HomeSchoolData.VERSION);
+    setUpdateAvailable(result.needsUpdate);
+    alert(result.needsUpdate ? `An update is available.\nCurrent DB version: ${result.currentVersion ?? "not seeded"}\nNew version: ${result.newVersion}` : `Curriculum is up to date.\nVersion: ${result.newVersion}`);
+  }, []);
+
+  const handleRefreshData = useCallback(async () => {
+    if (!window.HomeSchoolDB) return;
+    if (!confirm("Refresh curriculum data from the split source files while keeping your progress?")) return;
+    await window.HomeSchoolDB.refreshData(window.HomeSchoolData, window.HomeSchoolData.VERSION);
+    const pos = await window.HomeSchoolDB.getAllPosTypes();
+    const tens = await window.HomeSchoolDB.getAllTenses();
+    const voc = await window.HomeSchoolDB.getVocab();
+    setDbPos(pos);
+    setDbTenses(tens);
+    setDbVocab(voc);
+    setCurrentVersion(window.HomeSchoolData.VERSION);
+    setUpdateAvailable(false);
+    alert(`Curriculum refreshed successfully on ${formatDate(Date.now())}.`);
+  }, []);
+
+  const handleExportProgress = useCallback(async () => {
+    const dbProgress = window.HomeSchoolDB ? await window.HomeSchoolDB.exportProgress() : null;
+    downloadJson(`homeschool-progress-${Date.now()}.json`, {
+      exportedAt: new Date().toISOString(),
+      appVersion: window.HomeSchoolData.VERSION,
+      appState: {
+        grade,
+        studentName,
+        completedQuizzes,
+        totalScore,
+        totalQuizzesDone,
+        streak,
+        lastQuizDate,
+        earnedBadges,
+        xp,
+        ttsEnabled,
+        language,
+      },
+      dbProgress,
+    });
+  }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language]);
+
+  const handleImportProgress = useCallback(async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const nextState = parsed.appState || {};
+    if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
+    if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
+    if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
+    if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
+    if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
+    if (typeof nextState.streak !== "undefined") setStreak(nextState.streak);
+    if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate(nextState.lastQuizDate);
+    if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
+    if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
+    if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
+    if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
+    if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress);
+    alert("Progress imported successfully.");
+    event.target.value = "";
+  }, []);
+
+  const handleResetProgress = useCallback(async () => {
+    if (!confirm("Reset quiz progress while keeping the curriculum data?")) return;
+    setCompletedQuizzes({});
+    setTotalScore(0);
+    setTotalQuizzesDone(0);
+    setStreak(0);
+    setLastQuizDate(null);
+    setEarnedBadges([]);
+    setXp(0);
+    setNewBadges([]);
+    if (window.HomeSchoolDB) await window.HomeSchoolDB.resetProgress();
+  }, []);
+
+  const handleFullReset = useCallback(async () => {
+    if (!confirm("Full reset will clear the database, progress, and reseed the curriculum. Continue?")) return;
+    setCompletedQuizzes({});
+    setTotalScore(0);
+    setTotalQuizzesDone(0);
+    setStreak(0);
+    setLastQuizDate(null);
+    setEarnedBadges([]);
+    setXp(0);
+    setNewBadges([]);
+    if (window.HomeSchoolDB) await window.HomeSchoolDB.fullReset(window.HomeSchoolData, window.HomeSchoolData.VERSION);
+    location.reload();
+  }, []);
 
   // Show loading while DB initializes
   if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Loading HomeSchool...</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>Setting up your learning database</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
@@ -2957,9 +3107,9 @@ function HomeschoolApp() {
   const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
 
-  const playAll = (p) => { window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
+  const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
 
-  return (<><div className="app-container">
+  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel }}><><div className="app-container">
     <div className="app-header" style={selectedSubject?.id==="urdu"?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title="Home">🏠</button><h1 style={selectedSubject?.id==="urdu"?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{headerTitle}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
     <div className="content">
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
@@ -3482,16 +3632,32 @@ function HomeschoolApp() {
 
       {tab === "tutor" && (<><div className="tutor-chat">{chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}{chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}<div ref={chatEndRef} /></div><div className="chat-input-area"><input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Ask your tutor anything..." /><button onClick={sendChat} disabled={chatLoading}>➤</button></div></>)}
 
-      {tab === "settings" && (<><div className="settings-item"><span className="si-label">👤 Student Name</span><span className="si-value">{studentName || "Not set"}</span></div><div className="settings-item"><span className="si-label">📚 Current Grade</span><span className="si-value">Grade {grade}</span></div><h3 className="section-title" style={{ marginTop: 20 }}>Change Grade</h3><div className="grade-grid">{GRADES.map(g => <button key={g.id} className={"grade-btn " + (g.id === grade ? "active" : "")} onClick={() => setGrade(g.id)}>{g.id}</button>)}</div><button className="reset-btn" onClick={() => { if (confirm("Reset all progress?")) { setCompletedQuizzes({}); setTotalScore(0); setTotalQuizzesDone(0); setStreak(0); setLastQuizDate(null); setEarnedBadges([]); setXp(0); setNewBadges([]); } }}>🗑️ Reset All Progress</button>
-        <h3 className="section-title" style={{ marginTop: 20 }}>📦 Database</h3>
-        <div className="settings-item"><span className="si-label">💾 Storage</span><span className="si-value">IndexedDB (Dexie)</span></div>
-        <button style={{ width:"100%",padding:"12px",borderRadius:10,border:"1px solid rgba(56,189,248,0.3)",background:"rgba(56,189,248,0.1)",color:"#38BDF8",fontFamily:"'Baloo 2',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:8 }} onClick={async()=>{if(window.HomeSchoolDB){const s=await window.HomeSchoolDB.getStats();alert("DB Records:\\nParts of Speech: "+s.posData+"\\nTenses: "+s.tensesData+"\\nVocabulary: "+s.vocabData+"\\nMath Chapters: "+s.mathChapters+"\\nQuizzes: "+s.quizData+"\\nCustomizations: "+s.customizations);}}}>📊 View DB Stats</button>
-        <button style={{ width:"100%",padding:"12px",borderRadius:10,border:"1px solid rgba(34,197,94,0.3)",background:"rgba(34,197,94,0.1)",color:"#22C55E",fontFamily:"'Baloo 2',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:8 }} onClick={async()=>{if(window.HomeSchoolDB){const d=await window.HomeSchoolDB.exportAll();const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="homeschool-backup.json";a.click();}}}>💾 Export Backup</button>
-        <button style={{ width:"100%",padding:"12px",borderRadius:10,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#EF4444",fontFamily:"'Baloo 2',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer" }} onClick={()=>{if(confirm("Reset database? All customizations will be lost. The app will reload and re-seed from defaults.")){window.HomeSchoolDB?.resetDB();}}}>🔄 Reset Database</button>
+      {tab === "settings" && (<>
+        <div className="settings-item"><span className="si-label">👤 Student Name</span><span className="si-value">{studentName || "Not set"}</span></div>
+        <div className="settings-item"><span className="si-label">📚 Current Grade</span><span className="si-value">Grade {grade}</span></div>
+        <h3 className="section-title" style={{ marginTop: 20 }}>Change Grade</h3>
+        <div className="grade-grid">{GRADES.map(g => <button key={g.id} className={"grade-btn " + (g.id === grade ? "active" : "")} onClick={() => setGrade(g.id)}>{g.id}</button>)}</div>
+        {SettingsPanel ? (
+          <SettingsPanel
+            currentVersion={currentVersion}
+            updateAvailable={updateAvailable}
+            storageLabel={storageLabel}
+            onCheckUpdates={handleCheckUpdates}
+            onRefreshData={handleRefreshData}
+            onExportProgress={handleExportProgress}
+            onImportProgress={handleImportProgress}
+            onResetProgress={handleResetProgress}
+            onFullReset={handleFullReset}
+            onToggleTTS={() => setTtsEnabled(value => !value)}
+            ttsEnabled={ttsEnabled}
+            language={language}
+            onLanguageChange={setLanguage}
+          />
+        ) : null}
       </>)}
     </div>
     <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: "Home" }, { id: "progress", icon: "📊", label: "Progress" }, { id: "badges", icon: "🏆", label: "Badges" }, { id: "tutor", icon: "🤖", label: "Tutor" }, { id: "settings", icon: "⚙️", label: "Settings" }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); }}><span className="nav-icon">{item.icon}</span>{item.label}</button>)}</div>
-  </div></>);
+  </div></></AppContext.Provider>);
 }
 
 window.HomeSchoolAppModule = { HomeschoolApp };

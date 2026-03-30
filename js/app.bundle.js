@@ -10,7 +10,8 @@
     getLessons,
     getQuiz
   } = window.HomeSchoolData;
-  const { loadState, saveState } = window.HomeSchoolUtils;
+  const { loadState, saveState, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled } = window.HomeSchoolUtils;
+  const { SettingsPanel } = window.HomeSchoolSettings || {};
   const {
     adverbs: ADVERBS_DATA,
     prepositions: PREPOSITIONS_DATA,
@@ -20,6 +21,7 @@
     collectiveNouns: COLLECTIVE_NOUNS_DATA,
     verbs: VERBS_DATA
   } = POS_DATA;
+  const AppContext = React.createContext(null);
   function PlaceValueChart({ number }) {
     const s2 = String(number).replace(/,/g, "");
     const places = ["Ones", "Tens", "Hundreds", "Thousands", "Ten-Th", "Hund-Th", "Millions", "Ten-M", "Hund-M", "Billions"];
@@ -731,6 +733,7 @@
     };
     const speakText = (txt, e) => {
       if (e) e.stopPropagation();
+      if (!isTtsEnabled()) return;
       const ur = isUrduText(txt);
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(ttsClean(txt));
@@ -919,6 +922,7 @@
   function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null }) {
     const [speaking, setSpeaking] = useState(false);
     const handleClick = () => {
+      if (!isTtsEnabled()) return;
       window.speechSynthesis.cancel();
       setSpeaking(true);
       const u = new SpeechSynthesisUtterance(ttsClean(text));
@@ -977,6 +981,7 @@
   function MixedUrduParagraphSentence({ text, highlight = null }) {
     const [speaking, setSpeaking] = useState(false);
     const handleClick = () => {
+      if (!isTtsEnabled()) return;
       window.speechSynthesis.cancel();
       setSpeaking(true);
       const u = new SpeechSynthesisUtterance(ttsClean(text));
@@ -1265,6 +1270,7 @@ ${marker} `);
       return voices.find((v) => v.lang.startsWith("ur")) || voices.find((v) => v.lang.startsWith("hi")) || voices.find((v) => v.lang.includes("IN"));
     };
     const speakEn = (e) => {
+      if (!isTtsEnabled()) return;
       e.stopPropagation();
       window.speechSynthesis.cancel();
       setSEn(true);
@@ -1278,6 +1284,7 @@ ${marker} `);
       window.speechSynthesis.speak(u);
     };
     const speakUr = (e) => {
+      if (!isTtsEnabled()) return;
       e.stopPropagation();
       window.speechSynthesis.cancel();
       setSUr(true);
@@ -1294,6 +1301,7 @@ ${marker} `);
       window.speechSynthesis.speak(u);
     };
     const speakBoth = () => {
+      if (!isTtsEnabled()) return;
       window.speechSynthesis.cancel();
       setSBoth(true);
       setSEn(true);
@@ -1363,6 +1371,7 @@ ${marker} `);
     const [sEn, setSEn] = useState(false);
     const [sUr, setSUr] = useState(false);
     const speakEn = (e) => {
+      if (!isTtsEnabled()) return;
       e.stopPropagation();
       window.speechSynthesis.cancel();
       setSEn(true);
@@ -1378,6 +1387,7 @@ ${marker} `);
       window.speechSynthesis.speak(u);
     };
     const speakUr = (e) => {
+      if (!isTtsEnabled()) return;
       e.stopPropagation();
       window.speechSynthesis.cancel();
       setSUr(true);
@@ -1400,6 +1410,7 @@ ${marker} `);
     const [sEn, setSEn] = useState(false);
     const [sUr, setSUr] = useState(false);
     const speakEn = (e) => {
+      if (!isTtsEnabled()) return;
       e.stopPropagation();
       window.speechSynthesis.cancel();
       setSEn(true);
@@ -1415,6 +1426,7 @@ ${marker} `);
       window.speechSynthesis.speak(u);
     };
     const speakUr = (e) => {
+      if (!isTtsEnabled()) return;
       e.stopPropagation();
       window.speechSynthesis.cancel();
       setSUr(true);
@@ -1435,6 +1447,7 @@ ${marker} `);
   }
   function HomeschoolApp() {
     const stored = loadState();
+    const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
     const [grade, setGrade] = useState(stored?.grade || null);
     const [studentName, setStudentName] = useState(stored?.studentName || "");
     const [tab, setTab] = useState("home");
@@ -1474,6 +1487,11 @@ ${marker} `);
     const [chatMessages, setChatMessages] = useState([{ role: "ai", text: "Assalam-o-Alaikum! \u{1F44B} I'm your AI tutor. Ask me anything about your lessons \u2014 I'll explain it in a way that's easy to understand!" }]);
     const [chatInput, setChatInput] = useState("");
     const [chatLoading, setChatLoading] = useState(false);
+    const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
+    const [updateAvailable, setUpdateAvailable] = useState(false);
+    const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
+    const [language, setLanguage] = useState(stored?.language || "bilingual");
+    const [storageLabel, setStorageLabel] = useState("IndexedDB + localStorage");
     const chatEndRef = useRef(null);
     const [dbLoaded, setDbLoaded] = useState(false);
     const [dbPos, setDbPos] = useState({});
@@ -1493,6 +1511,26 @@ ${marker} `);
           if (Object.keys(tens).length > 0) setDbTenses(tens);
           const voc = await window.HomeSchoolDB.getVocab();
           if (voc.length > 0) setDbVocab(voc);
+          const progressMap = await window.HomeSchoolDB.getProgressMap();
+          if (Object.keys(progressMap).length > 0 && (!stored?.completedQuizzes || Object.keys(stored.completedQuizzes).length === 0)) {
+            setCompletedQuizzes(progressMap);
+          }
+          const persistedStats = await window.HomeSchoolDB.getUserStats();
+          if (persistedStats && persistedStats.totalQuizzes > 0 && !stored?.totalQuizzesDone) {
+            setTotalQuizzesDone(persistedStats.totalQuizzes || 0);
+            setTotalScore(persistedStats.totalScore || 0);
+            setStreak(persistedStats.streak || 0);
+            setLastQuizDate(persistedStats.lastQuizDate || null);
+            setEarnedBadges(persistedStats.badges || []);
+            setXp(persistedStats.xp || 0);
+          }
+          const stats = await window.HomeSchoolDB.getStats();
+          setStorageLabel(`IndexedDB \u2022 ${stats.coreData || 0} lessons`);
+          if (versionManagerRef.current) {
+            const versionState = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION);
+            setCurrentVersion(versionState.newVersion || window.HomeSchoolData.VERSION);
+            setUpdateAvailable(versionState.needsUpdate);
+          }
         } catch (e) {
           console.log("DB load fallback to inline:", e);
         }
@@ -1516,8 +1554,12 @@ ${marker} `);
       return () => window.speechSynthesis.cancel();
     }, []);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp });
-    }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp]);
+      window.HomeSchoolPrefs = { ttsEnabled, language };
+      if (!ttsEnabled) window.speechSynthesis.cancel();
+    }, [ttsEnabled, language]);
+    useEffect(() => {
+      if (grade) saveState({ grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language });
+    }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language]);
     useEffect(() => {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
@@ -1539,22 +1581,30 @@ ${marker} `);
       const ds = new Set(Object.keys(completedQuizzes).map((k) => k.split("_")[0]));
       ds.add(si);
       if (ds.size >= 5) ck("all_subjects");
-      if (nb.length > 0) {
-        setEarnedBadges(all);
-        setNewBadges(nb);
-      }
+      setEarnedBadges(all);
+      setNewBadges(nb);
+      return { all, nb };
     }, [earnedBadges, totalQuizzesDone, streak, completedQuizzes]);
-    const finishQuiz = (ans, qs) => {
+    const finishQuiz = async (ans, qs) => {
       const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
       const el = (Date.now() - quizStartTime) / 1e3, today = (/* @__PURE__ */ new Date()).toDateString();
-      const ns = lastQuizDate === new Date(Date.now() - 864e5).toDateString() ? streak + 1 : lastQuizDate === today ? streak : 1;
+      const streakMode = calculateStreak(lastQuizDate, today);
+      const ns = streakMode === "increment" ? streak + 1 : streakMode === null ? streak : 1;
+      const earnedXp = calculateXP(sc, qs.length, el < 30);
       setTotalScore((s2) => s2 + sc);
       setTotalQuizzesDone((n) => n + 1);
       setStreak(ns);
       setLastQuizDate(today);
-      setXp((x) => x + sc * 25 + (sc === 4 ? 50 : 0));
-      setCompletedQuizzes((p) => ({ ...p, [selectedLesson.id]: { score: sc, total: 4, date: today } }));
-      checkBadges(sc, el, selectedSubject.id);
+      setXp((x) => x + earnedXp);
+      setCompletedQuizzes((p) => ({ ...p, [selectedLesson.id]: { score: sc, total: qs.length, date: today } }));
+      const badgeResult = checkBadges(sc, el, selectedSubject.id);
+      if (window.HomeSchoolDB) {
+        try {
+          await window.HomeSchoolDB.saveQuizResult(selectedSubject.id, selectedLesson.id, sc, qs.length, el, grade, badgeResult.all);
+        } catch (error) {
+          console.log("Unable to persist quiz result:", error);
+        }
+      }
       setQuizDone(true);
     };
     const sendChat = async () => {
@@ -1572,6 +1622,97 @@ ${marker} `);
       }
       setChatLoading(false);
     };
+    const handleCheckUpdates = useCallback(async () => {
+      if (!versionManagerRef.current) return;
+      const result = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION);
+      setCurrentVersion(result.newVersion || window.HomeSchoolData.VERSION);
+      setUpdateAvailable(result.needsUpdate);
+      alert(result.needsUpdate ? `An update is available.
+Current DB version: ${result.currentVersion ?? "not seeded"}
+New version: ${result.newVersion}` : `Curriculum is up to date.
+Version: ${result.newVersion}`);
+    }, []);
+    const handleRefreshData = useCallback(async () => {
+      if (!window.HomeSchoolDB) return;
+      if (!confirm("Refresh curriculum data from the split source files while keeping your progress?")) return;
+      await window.HomeSchoolDB.refreshData(window.HomeSchoolData, window.HomeSchoolData.VERSION);
+      const pos = await window.HomeSchoolDB.getAllPosTypes();
+      const tens = await window.HomeSchoolDB.getAllTenses();
+      const voc = await window.HomeSchoolDB.getVocab();
+      setDbPos(pos);
+      setDbTenses(tens);
+      setDbVocab(voc);
+      setCurrentVersion(window.HomeSchoolData.VERSION);
+      setUpdateAvailable(false);
+      alert(`Curriculum refreshed successfully on ${formatDate(Date.now())}.`);
+    }, []);
+    const handleExportProgress = useCallback(async () => {
+      const dbProgress = window.HomeSchoolDB ? await window.HomeSchoolDB.exportProgress() : null;
+      downloadJson(`homeschool-progress-${Date.now()}.json`, {
+        exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        appVersion: window.HomeSchoolData.VERSION,
+        appState: {
+          grade,
+          studentName,
+          completedQuizzes,
+          totalScore,
+          totalQuizzesDone,
+          streak,
+          lastQuizDate,
+          earnedBadges,
+          xp,
+          ttsEnabled,
+          language
+        },
+        dbProgress
+      });
+    }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language]);
+    const handleImportProgress = useCallback(async (event) => {
+      const file = event?.target?.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const nextState = parsed.appState || {};
+      if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
+      if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
+      if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
+      if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
+      if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
+      if (typeof nextState.streak !== "undefined") setStreak(nextState.streak);
+      if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate(nextState.lastQuizDate);
+      if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
+      if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
+      if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
+      if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
+      if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress);
+      alert("Progress imported successfully.");
+      event.target.value = "";
+    }, []);
+    const handleResetProgress = useCallback(async () => {
+      if (!confirm("Reset quiz progress while keeping the curriculum data?")) return;
+      setCompletedQuizzes({});
+      setTotalScore(0);
+      setTotalQuizzesDone(0);
+      setStreak(0);
+      setLastQuizDate(null);
+      setEarnedBadges([]);
+      setXp(0);
+      setNewBadges([]);
+      if (window.HomeSchoolDB) await window.HomeSchoolDB.resetProgress();
+    }, []);
+    const handleFullReset = useCallback(async () => {
+      if (!confirm("Full reset will clear the database, progress, and reseed the curriculum. Continue?")) return;
+      setCompletedQuizzes({});
+      setTotalScore(0);
+      setTotalQuizzesDone(0);
+      setStreak(0);
+      setLastQuizDate(null);
+      setEarnedBadges([]);
+      setXp(0);
+      setNewBadges([]);
+      if (window.HomeSchoolDB) await window.HomeSchoolDB.fullReset(window.HomeSchoolData, window.HomeSchoolData.VERSION);
+      location.reload();
+    }, []);
     if (!dbLoaded) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 16 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 700, marginBottom: 8 } }, "Loading HomeSchool..."), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 13 } }, "Setting up your learning database"), /* @__PURE__ */ React.createElement("div", { style: { width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" } })))));
     if (!grade) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px" } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 32 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 12 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h1", { style: { fontSize: 28, fontWeight: 800, marginBottom: 4 } }, "HomeSchool"), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 14 } }, "Your personal learning companion"), /* @__PURE__ */ React.createElement("p", { style: { fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 } }, "\u0622\u067E \u06A9\u0627 \u0630\u0627\u062A\u06CC \u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u062A\u06BE\u06CC")), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, "YOUR NAME"), /* @__PURE__ */ React.createElement("input", { value: studentName, onChange: (e) => setStudentName(e.target.value), placeholder: "Enter your name...", style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font)", fontSize: 15, outline: "none" } })), /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" } }, "SELECT YOUR GRADE"), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn", onClick: () => setGrade(g.id) }, g.id))))));
     const goHome = () => {
@@ -1653,6 +1794,7 @@ ${marker} `);
     const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
     const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
     const playAll = (p) => {
+      if (!isTtsEnabled()) return;
       window.speechSynthesis.cancel();
       const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean);
       let i = 0;
@@ -1674,7 +1816,7 @@ ${marker} `);
       };
       next();
     };
-    return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "app-header", style: selectedSubject?.id === "urdu" ? { direction: "rtl" } : {} }, showBack && /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190"), /* @__PURE__ */ React.createElement("button", { className: "home-btn", onClick: goHome, title: "Home" }, "\u{1F3E0}"), /* @__PURE__ */ React.createElement("h1", { style: selectedSubject?.id === "urdu" ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, headerTitle), /* @__PURE__ */ React.createElement("div", { className: "header-badge" }, /* @__PURE__ */ React.createElement("span", null, "\u2B50"), /* @__PURE__ */ React.createElement("span", null, xp, " XP"))), /* @__PURE__ */ React.createElement("div", { className: "content" }, tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "welcome-card" }, /* @__PURE__ */ React.createElement("h2", null, studentName ? "Hi, " + studentName + "!" : "Welcome!", " \u{1F44B}"), /* @__PURE__ */ React.createElement("p", null, "Ready to learn something amazing today?"), /* @__PURE__ */ React.createElement("span", { className: "grade-tag" }, "Grade ", grade)), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, streak, " Day Streak!"), /* @__PURE__ */ React.createElement("p", null, "Keep going \u2014 you're doing great!"))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, "Subjects"), /* @__PURE__ */ React.createElement("div", { className: "subject-grid" }, SUBJECTS.map((subj) => {
+    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "app-header", style: selectedSubject?.id === "urdu" ? { direction: "rtl" } : {} }, showBack && /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190"), /* @__PURE__ */ React.createElement("button", { className: "home-btn", onClick: goHome, title: "Home" }, "\u{1F3E0}"), /* @__PURE__ */ React.createElement("h1", { style: selectedSubject?.id === "urdu" ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, headerTitle), /* @__PURE__ */ React.createElement("div", { className: "header-badge" }, /* @__PURE__ */ React.createElement("span", null, "\u2B50"), /* @__PURE__ */ React.createElement("span", null, xp, " XP"))), /* @__PURE__ */ React.createElement("div", { className: "content" }, tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "welcome-card" }, /* @__PURE__ */ React.createElement("h2", null, studentName ? "Hi, " + studentName + "!" : "Welcome!", " \u{1F44B}"), /* @__PURE__ */ React.createElement("p", null, "Ready to learn something amazing today?"), /* @__PURE__ */ React.createElement("span", { className: "grade-tag" }, "Grade ", grade)), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, streak, " Day Streak!"), /* @__PURE__ */ React.createElement("p", null, "Keep going \u2014 you're doing great!"))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, "Subjects"), /* @__PURE__ */ React.createElement("div", { className: "subject-grid" }, SUBJECTS.map((subj) => {
       const ls = getLessons(subj.id, grade), done = ls.filter((l) => completedQuizzes[l.id]).length, pct = ls.length > 0 ? done / ls.length * 100 : 0;
       return /* @__PURE__ */ React.createElement("button", { key: subj.id, className: "subject-card", onClick: () => setSelectedSubject(subj) }, /* @__PURE__ */ React.createElement("span", { className: "subj-icon" }, subj.icon), /* @__PURE__ */ React.createElement("span", { className: "subj-name" }, subj.name), /* @__PURE__ */ React.createElement("span", { className: "subj-name-ur" }, subj.nameUr), /* @__PURE__ */ React.createElement("div", { className: "subj-progress" }, /* @__PURE__ */ React.createElement("div", { className: "subj-progress-fill", style: { width: pct + "%", background: subj.color } })));
     }))), tab === "home" && selectedSubject && !selectedLesson && !quizActive && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: selectedSubject?.id === "urdu" ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 36 } }, selectedSubject.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, fontFamily: selectedSubject?.id === "urdu" ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, selectedSubject?.id === "urdu" ? selectedSubject.nameUr : selectedSubject.name), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", fontFamily: selectedSubject?.id === "urdu" ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, selectedSubject?.id === "urdu" ? "\u062C\u0645\u0627\u0639\u062A " + grade + " \u2022 " + getLessons(selectedSubject.id, grade).length + " \u0627\u0633\u0628\u0627\u0642" : "Grade " + grade + " \u2022 " + getLessons(selectedSubject.id, grade).length + " lessons"))), /* @__PURE__ */ React.createElement("div", { className: "lesson-list", style: selectedSubject?.id === "urdu" ? { direction: "rtl" } : {} }, getLessons(selectedSubject.id, grade).map((l, i) => {
@@ -1854,36 +1996,24 @@ ${marker} `);
     } }, "\u{1F4DA} More Lessons"))), tab === "progress" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DD}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, totalQuizzesDone), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, "Quizzes Done")), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3AF}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, totalQuizzesDone > 0 ? Math.round(totalScore / (totalQuizzesDone * 4) * 100) : 0, "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, "Avg Score")), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, streak), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, "Day Streak")), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, xp), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, "Total XP"))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, "Subject Progress"), SUBJECTS.map((subj) => {
       const ls = getLessons(subj.id, grade), done = ls.filter((l) => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round(done / ls.length * 100) : 0;
       return /* @__PURE__ */ React.createElement("div", { key: subj.id, className: "progress-bar-container" }, /* @__PURE__ */ React.createElement("div", { className: "progress-bar-label" }, /* @__PURE__ */ React.createElement("span", null, subj.icon, " ", subj.name), /* @__PURE__ */ React.createElement("span", { style: { color: "var(--text-muted)" } }, done, "/", ls.length)), /* @__PURE__ */ React.createElement("div", { className: "progress-bar-track" }, /* @__PURE__ */ React.createElement("div", { className: "progress-bar-fill", style: { width: pct + "%", background: subj.color } })));
-    })), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("input", { value: chatInput, onChange: (e) => setChatInput(e.target.value), onKeyDown: (e) => e.key === "Enter" && sendChat(), placeholder: "Ask your tutor anything..." }), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading }, "\u27A4"))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F464} Student Name"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName || "Not set")), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} Current Grade"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, "Grade ", grade)), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, "Change Grade"), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn " + (g.id === grade ? "active" : ""), onClick: () => setGrade(g.id) }, g.id))), /* @__PURE__ */ React.createElement("button", { className: "reset-btn", onClick: () => {
-      if (confirm("Reset all progress?")) {
-        setCompletedQuizzes({});
-        setTotalScore(0);
-        setTotalQuizzesDone(0);
-        setStreak(0);
-        setLastQuizDate(null);
-        setEarnedBadges([]);
-        setXp(0);
-        setNewBadges([]);
+    })), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("input", { value: chatInput, onChange: (e) => setChatInput(e.target.value), onKeyDown: (e) => e.key === "Enter" && sendChat(), placeholder: "Ask your tutor anything..." }), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading }, "\u27A4"))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F464} Student Name"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName || "Not set")), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} Current Grade"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, "Grade ", grade)), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, "Change Grade"), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn " + (g.id === grade ? "active" : ""), onClick: () => setGrade(g.id) }, g.id))), SettingsPanel ? /* @__PURE__ */ React.createElement(
+      SettingsPanel,
+      {
+        currentVersion,
+        updateAvailable,
+        storageLabel,
+        onCheckUpdates: handleCheckUpdates,
+        onRefreshData: handleRefreshData,
+        onExportProgress: handleExportProgress,
+        onImportProgress: handleImportProgress,
+        onResetProgress: handleResetProgress,
+        onFullReset: handleFullReset,
+        onToggleTTS: () => setTtsEnabled((value) => !value),
+        ttsEnabled,
+        language,
+        onLanguageChange: setLanguage
       }
-    } }, "\u{1F5D1}\uFE0F Reset All Progress"), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, "\u{1F4E6} Database"), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4BE} Storage"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, "IndexedDB (Dexie)")), /* @__PURE__ */ React.createElement("button", { style: { width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(56,189,248,0.3)", background: "rgba(56,189,248,0.1)", color: "#38BDF8", fontFamily: "'Baloo 2',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }, onClick: async () => {
-      if (window.HomeSchoolDB) {
-        const s2 = await window.HomeSchoolDB.getStats();
-        alert("DB Records:\\nParts of Speech: " + s2.posData + "\\nTenses: " + s2.tensesData + "\\nVocabulary: " + s2.vocabData + "\\nMath Chapters: " + s2.mathChapters + "\\nQuizzes: " + s2.quizData + "\\nCustomizations: " + s2.customizations);
-      }
-    } }, "\u{1F4CA} View DB Stats"), /* @__PURE__ */ React.createElement("button", { style: { width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.1)", color: "#22C55E", fontFamily: "'Baloo 2',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }, onClick: async () => {
-      if (window.HomeSchoolDB) {
-        const d = await window.HomeSchoolDB.exportAll();
-        const b = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(b);
-        a.download = "homeschool-backup.json";
-        a.click();
-      }
-    } }, "\u{1F4BE} Export Backup"), /* @__PURE__ */ React.createElement("button", { style: { width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "#EF4444", fontFamily: "'Baloo 2',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }, onClick: () => {
-      if (confirm("Reset database? All customizations will be lost. The app will reload and re-seed from defaults.")) {
-        window.HomeSchoolDB?.resetDB();
-      }
-    } }, "\u{1F504} Reset Database"))), /* @__PURE__ */ React.createElement("div", { className: "bottom-nav" }, [{ id: "home", icon: "\u{1F3E0}", label: "Home" }, { id: "progress", icon: "\u{1F4CA}", label: "Progress" }, { id: "badges", icon: "\u{1F3C6}", label: "Badges" }, { id: "tutor", icon: "\u{1F916}", label: "Tutor" }, { id: "settings", icon: "\u2699\uFE0F", label: "Settings" }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, className: "nav-item " + (tab === item.id ? "active" : ""), onClick: () => {
+    ) : null)), /* @__PURE__ */ React.createElement("div", { className: "bottom-nav" }, [{ id: "home", icon: "\u{1F3E0}", label: "Home" }, { id: "progress", icon: "\u{1F4CA}", label: "Progress" }, { id: "badges", icon: "\u{1F3C6}", label: "Badges" }, { id: "tutor", icon: "\u{1F916}", label: "Tutor" }, { id: "settings", icon: "\u2699\uFE0F", label: "Settings" }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, className: "nav-item " + (tab === item.id ? "active" : ""), onClick: () => {
       if (item.id === "home") {
         goHome();
         return;
@@ -1911,7 +2041,7 @@ ${marker} `);
       setPosTab("adverbs");
       setTenseMain("present");
       setTenseSub("simple");
-    } }, /* @__PURE__ */ React.createElement("span", { className: "nav-icon" }, item.icon), item.label)))));
+    } }, /* @__PURE__ */ React.createElement("span", { className: "nav-icon" }, item.icon), item.label))))));
   }
   window.HomeSchoolAppModule = { HomeschoolApp };
   if (!window.__HOME_SCHOOL_BOOTSTRAPPED__ && document.getElementById("root")) {

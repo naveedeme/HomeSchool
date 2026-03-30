@@ -12,6 +12,7 @@
         currentVersion,
         newVersion: loadedDataVersion,
         needsUpdate: currentVersion !== loadedDataVersion,
+        changes: currentVersion === loadedDataVersion ? [] : ["Curriculum data files changed"],
       };
     }
 
@@ -20,6 +21,16 @@
       return {
         applied: true,
         version: newVersion,
+      };
+    }
+
+    getVersionInfo() {
+      return {
+        currentSchema: "v3",
+        notes: [
+          "Curriculum data is loaded from split subject and grade files.",
+          "IndexedDB stores curriculum version metadata separately from user progress.",
+        ],
       };
     }
   }
