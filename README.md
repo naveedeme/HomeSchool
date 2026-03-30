@@ -9,6 +9,14 @@ HomeSchool is a browser-based learning app designed for school students, with a 
 
 Both files are intended to stay in sync. The HTML file contains the same app logic in an embedded Babel script so it can be opened directly in a browser without a separate build step.
 
+## Live Access
+
+You can use the published version of the app directly in the browser here:
+
+[https://naveedeme.github.io/HomeSchool/](https://naveedeme.github.io/HomeSchool/)
+
+This allows visitors to open and use HomeSchool without downloading the repository first.
+
 ## What the App Contains
 
 The app currently includes five major subject areas:
