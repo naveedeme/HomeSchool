@@ -5708,6 +5708,7 @@ function buildAdverbPhrasesSubsection() {
     t: "Adverb Phrases",
     c: "Learn adverbial phrases day by day — how, where, when, how often, and how much. Each phrase comes with its Urdu meaning and an example sentence. Practise with fill-in-the-blank exercises and Urdu-meaning quizzes.",
     lessonLabel: "📅 Days",
+    showWordSentences: true,
     dayLessons: buildWordDayLessons(ADVERB_PHRASES_DATA, null),
     exerciseGroups: buildDayRangeExerciseGroups(
       ADVERB_PHRASES_DATA,
@@ -14957,7 +14958,16 @@ function HomeschoolApp() {
               {lessonDay.words && lessonDay.words.map((w, i) => (
                 <div key={i} style={{ marginBottom: 10 }}>
                   {"opposite" in w || "oppositeUr" in w ? <OppositeWordRow en={w.en} ur={w.ur} opposite={w.opposite} oppositeUr={w.oppositeUr} /> : "comp" in w || "super" in w ? <AdjWordRow en={w.en} ur={w.ur} comp={w.comp} sup={w.super} /> : "v2" in w || "v3" in w ? <VerbWordRow en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} /> : <WordRow en={w.en} ur={w.ur} />}
-                  {w.meaning && <div style={{ padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>→ {w.meaning}</div>}
+                  {!sub.showWordSentences && w.meaning && <div style={{ padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>→ {w.meaning}</div>}
+                  {sub.showWordSentences && (w.sentence || w.meaning) && (
+                    <div style={{ marginTop: 8, paddingLeft: 14, paddingRight: 14 }}>
+                      <SpeakableSentence
+                        text={w.sentence || w.meaning}
+                        lang="en"
+                        buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: "#E0F2FE", marginBottom: 0, justifyContent: "flex-start", width: "100%" }}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
               {lessonDay.pairs && lessonDay.pairs.map((pair, i) => (
