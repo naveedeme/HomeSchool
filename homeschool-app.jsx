@@ -449,6 +449,1256 @@ const BADGES = [
   { id: "speed_demon", name: "Speed Demon", icon: "🚀", desc: "Finish a quiz in under 30s" },
 ];
 
+const ENGLISH_OPPOSITES_DATA = [
+  {
+    "day": 1,
+    "words": [
+      {
+        "en": "chase",
+        "ur": "پیچھا کرنا",
+        "opposite": "escape",
+        "oppositeUr": "بچنا / فرار ہونا"
+      },
+      {
+        "en": "concerned",
+        "ur": "فکرمند",
+        "opposite": "carefree",
+        "oppositeUr": "بے فکر"
+      },
+      {
+        "en": "crowded",
+        "ur": "بھیڑ بھرا",
+        "opposite": "empty",
+        "oppositeUr": "خالی"
+      }
+    ],
+    "paragraph": "I chased (پیچھا کیا) my little dog in the crowded (بھیڑ بھرا) park, but it managed to escape (بچ نکلا). I was concerned (فکرمند) but my friend felt carefree (بے فکر). Soon the park became empty (خالی)."
+  },
+  {
+    "day": 2,
+    "words": [
+      {
+        "en": "delighted",
+        "ur": "خوش",
+        "opposite": "sad",
+        "oppositeUr": "اداس"
+      },
+      {
+        "en": "firmly",
+        "ur": "مضبوطی سے",
+        "opposite": "loosely",
+        "oppositeUr": "ڈھیلے طریقے سے"
+      },
+      {
+        "en": "harsh",
+        "ur": "سخت",
+        "opposite": "gentle",
+        "oppositeUr": "نرم"
+      }
+    ],
+    "paragraph": "I was delighted (خوش) to see my friend and held his hand firmly (مضبوطی سے). The teacher was harsh (سخت) with the class but spoke in a gentle (نرم) way. The sad (اداس) faces slowly smiled."
+  },
+  {
+    "day": 3,
+    "words": [
+      {
+        "en": "idle",
+        "ur": "سست",
+        "opposite": "busy",
+        "oppositeUr": "مصروف"
+      },
+      {
+        "en": "observe",
+        "ur": "مشاہدہ کرنا",
+        "opposite": "ignore",
+        "oppositeUr": "نظر انداز کرنا"
+      },
+      {
+        "en": "promptly",
+        "ur": "فوراً",
+        "opposite": "slowly",
+        "oppositeUr": "آہستہ"
+      }
+    ],
+    "paragraph": "He was idle (سست) while I stayed busy (مصروف) all day. I tried to observe (مشاہدہ کرنا) him, but he ignored (نظر انداز کیا) me. I finished promptly (فوراً) while he worked slowly (آہستہ)."
+  },
+  {
+    "day": 4,
+    "words": [
+      {
+        "en": "sparkle",
+        "ur": "چمکنا",
+        "opposite": "dull",
+        "oppositeUr": "بے رونق"
+      },
+      {
+        "en": "affection",
+        "ur": "محبت",
+        "opposite": "hatred",
+        "oppositeUr": "نفرت"
+      },
+      {
+        "en": "brilliant",
+        "ur": "ذہین",
+        "opposite": "stupid",
+        "oppositeUr": "بیوقوف"
+      }
+    ],
+    "paragraph": "Stars sparkle (چمکتے ہیں) at night, but the sky looks dull (بے رونق) in fog. I feel affection (محبت) for my family, not hatred (نفرت). A brilliant (ذہین) child learns faster than a stupid (بیوقوف) one."
+  },
+  {
+    "day": 5,
+    "words": [
+      {
+        "en": "bullied",
+        "ur": "ستایا گیا",
+        "opposite": "encouraged",
+        "oppositeUr": "حوصلہ دیا گیا"
+      },
+      {
+        "en": "friendly",
+        "ur": "دوستانہ",
+        "opposite": "unfriendly",
+        "oppositeUr": "غیر دوستانہ"
+      },
+      {
+        "en": "grace",
+        "ur": "نرمی",
+        "opposite": "crude",
+        "oppositeUr": "بدتمیز"
+      }
+    ],
+    "paragraph": "The bullied (ستایا گیا) boy was encouraged (حوصلہ دیا گیا) by his teacher. His classmates were friendly (دوستانہ), not unfriendly (غیر دوستانہ). He showed grace (نرمی) and was not crude (بدتمیز)."
+  },
+  {
+    "day": 6,
+    "words": [
+      {
+        "en": "marvel",
+        "ur": "حیرت کرنا",
+        "opposite": "disregard",
+        "oppositeUr": "نظر انداز کرنا"
+      },
+      {
+        "en": "radiant",
+        "ur": "چمکدار",
+        "opposite": "dark",
+        "oppositeUr": "تاریک"
+      },
+      {
+        "en": "trivial",
+        "ur": "معمولی",
+        "opposite": "valuable",
+        "oppositeUr": "قیمتی"
+      }
+    ],
+    "paragraph": "I marvelled (حیران ہوا) at the radiant (چمکدار) sun, not the dark (تاریک) clouds. He did not disregard (نظر انداز کیا) small things. Even trivial (معمولی) moments can be valuable (قیمتی)."
+  },
+  {
+    "day": 7,
+    "words": [
+      {
+        "en": "closing",
+        "ur": "بند ہونا",
+        "opposite": "opening",
+        "oppositeUr": "کھلنا"
+      },
+      {
+        "en": "follow",
+        "ur": "پیروی کرنا",
+        "opposite": "lead",
+        "oppositeUr": "رہنمائی کرنا"
+      },
+      {
+        "en": "injustice",
+        "ur": "ناانصافی",
+        "opposite": "justice",
+        "oppositeUr": "انصاف"
+      }
+    ],
+    "paragraph": "The shop is closing (بند ہو رہی ہے) but another is opening (کھل رہی ہے). Good leaders lead (رہنمائی کرتے ہیں) and others follow (پیروی کرتے ہیں). There is no injustice (ناانصافی) where there is justice (انصاف)."
+  },
+  {
+    "day": 8,
+    "words": [
+      {
+        "en": "major",
+        "ur": "اہم",
+        "opposite": "minor",
+        "oppositeUr": "چھوٹا"
+      },
+      {
+        "en": "obedience",
+        "ur": "فرمانبرداری",
+        "opposite": "disobedience",
+        "oppositeUr": "نافرمانی"
+      },
+      {
+        "en": "sacred",
+        "ur": "مقدس",
+        "opposite": "cursed",
+        "oppositeUr": "لعنت زدہ"
+      }
+    ],
+    "paragraph": "This is a major (اہم) rule, not a minor (چھوٹا) one. Obedience (فرمانبرداری) brings peace but disobedience (نافرمانی) causes trouble. A sacred (مقدس) thing should never be cursed (لعنت زدہ)."
+  },
+  {
+    "day": 9,
+    "words": [
+      {
+        "en": "sunrise",
+        "ur": "طلوع آفتاب",
+        "opposite": "sunset",
+        "oppositeUr": "غروب آفتاب"
+      },
+      {
+        "en": "zeal",
+        "ur": "جوش",
+        "opposite": "indifference",
+        "oppositeUr": "بے پروائی"
+      },
+      {
+        "en": "escaped",
+        "ur": "فرار ہو گیا",
+        "opposite": "captured",
+        "oppositeUr": "پکڑا گیا"
+      }
+    ],
+    "paragraph": "We watched the sunrise (طلوع آفتاب) and later the sunset (غروب آفتاب). His zeal (جوش) was strong, not indifference (بے پروائی). The escaped (فرار ہوا) bird was finally captured (پکڑا گیا)."
+  },
+  {
+    "day": 10,
+    "words": [
+      {
+        "en": "eventually",
+        "ur": "آخرکار",
+        "opposite": "initially",
+        "oppositeUr": "ابتدا میں"
+      },
+      {
+        "en": "grief",
+        "ur": "غم",
+        "opposite": "joy",
+        "oppositeUr": "خوشی"
+      },
+      {
+        "en": "mean",
+        "ur": "کنجوس",
+        "opposite": "generous",
+        "oppositeUr": "سخی"
+      }
+    ],
+    "paragraph": "Initially (ابتدا میں) he felt nothing, but eventually (آخرکار) he felt grief (غم). Kind words brought joy (خوشی). A mean (کنجوس) person learns from a generous (سخی) one."
+  },
+  {
+    "day": 11,
+    "words": [
+      {
+        "en": "miserly",
+        "ur": "کنجوس",
+        "opposite": "extravagant",
+        "oppositeUr": "فضول خرچ"
+      },
+      {
+        "en": "picked",
+        "ur": "چنا",
+        "opposite": "threw",
+        "oppositeUr": "پھینکا"
+      },
+      {
+        "en": "recognised",
+        "ur": "پہچانا",
+        "opposite": "unidentified",
+        "oppositeUr": "غیر شناخت شدہ"
+      }
+    ],
+    "paragraph": "The miserly (کنجوس) man saved money, unlike the extravagant (فضول خرچ) one. I picked (چنا) a flower and threw (پھینکا) the waste away. She recognised (پہچانا) her friend in an unidentified (غیر شناخت شدہ) crowd."
+  },
+  {
+    "day": 12,
+    "words": [
+      {
+        "en": "yelled",
+        "ur": "چیخا",
+        "opposite": "whispered",
+        "oppositeUr": "سرگوشی کی"
+      },
+      {
+        "en": "addition",
+        "ur": "جمع",
+        "opposite": "subtraction",
+        "oppositeUr": "تفریق"
+      },
+      {
+        "en": "better",
+        "ur": "بہتر",
+        "opposite": "worse",
+        "oppositeUr": "بدتر"
+      }
+    ],
+    "paragraph": "He yelled (چیخا) loudly, but I whispered (سرگوشی کی). Addition (جمع) is easier than subtraction (تفریق). The better (بہتر) student tried harder than the worse (بدتر) one."
+  },
+  {
+    "day": 13,
+    "words": [
+      {
+        "en": "guide",
+        "ur": "رہنمائی کرنا",
+        "opposite": "misguide",
+        "oppositeUr": "گمراہ کرنا"
+      },
+      {
+        "en": "homework",
+        "ur": "گھر کا کام",
+        "opposite": "classwork",
+        "oppositeUr": "کلاس کا کام"
+      },
+      {
+        "en": "kid",
+        "ur": "بچہ",
+        "opposite": "adult",
+        "oppositeUr": "بالغ"
+      }
+    ],
+    "paragraph": "The guide (رہنما) helped us, but someone tried to misguide (گمراہ کرنا) us. Homework (گھر کا کام) felt harder than classwork (کلاس کا کام). The kid (بچہ) learned faster than the adult (بالغ)."
+  },
+  {
+    "day": 14,
+    "words": [
+      {
+        "en": "old-fashioned",
+        "ur": "پرانے طرز کا",
+        "opposite": "modern",
+        "oppositeUr": "جدید"
+      },
+      {
+        "en": "praise",
+        "ur": "تعریف",
+        "opposite": "blame",
+        "oppositeUr": "الزام"
+      },
+      {
+        "en": "rude",
+        "ur": "بدتمیز",
+        "opposite": "polite",
+        "oppositeUr": "شائستہ"
+      }
+    ],
+    "paragraph": "He likes old-fashioned (پرانے طرز کا) clothes, but she prefers modern (جدید) ones. I praise (تعریف کرتا ہوں) good work and never blame (الزام لگاتا ہوں). The rude (بدتمیز) boy later became polite (شائستہ)."
+  },
+  {
+    "day": 15,
+    "words": [
+      {
+        "en": "tiniest",
+        "ur": "سب سے چھوٹا",
+        "opposite": "biggest",
+        "oppositeUr": "سب سے بڑا"
+      },
+      {
+        "en": "weary",
+        "ur": "تھکا ہوا",
+        "opposite": "energetic",
+        "oppositeUr": "توانا"
+      },
+      {
+        "en": "beneath",
+        "ur": "نیچے",
+        "opposite": "above",
+        "oppositeUr": "اوپر"
+      }
+    ],
+    "paragraph": "The tiniest (سب سے چھوٹا) bird sat near the biggest (سب سے بڑا) tree. I felt weary (تھکا ہوا) but my friend stayed energetic (توانا). We rested beneath (نیچے) the tree while birds flew above (اوپر)."
+  },
+  {
+    "day": 16,
+    "words": [
+      {
+        "en": "crying",
+        "ur": "رونا",
+        "opposite": "laughing",
+        "oppositeUr": "ہنسنا"
+      },
+      {
+        "en": "day",
+        "ur": "دن",
+        "opposite": "night",
+        "oppositeUr": "رات"
+      },
+      {
+        "en": "down",
+        "ur": "نیچے",
+        "opposite": "up",
+        "oppositeUr": "اوپر"
+      }
+    ],
+    "paragraph": "The crying (روتا ہوا) baby soon started laughing (ہنسنا). The day (دن) slowly turned into night (رات). I looked down (نیچے دیکھا) and then climbed up (اوپر چڑھا)."
+  },
+  {
+    "day": 17,
+    "words": [
+      {
+        "en": "fright",
+        "ur": "خوف",
+        "opposite": "unafraid",
+        "oppositeUr": "بے خوف"
+      },
+      {
+        "en": "frightening",
+        "ur": "خوفناک",
+        "opposite": "pleasant",
+        "oppositeUr": "خوشگوار"
+      },
+      {
+        "en": "move",
+        "ur": "حرکت کرنا",
+        "opposite": "stand still",
+        "oppositeUr": "ساکن رہنا"
+      }
+    ],
+    "paragraph": "The fright (خوف) was strong but he was unafraid (بے خوف). The frightening (خوفناک) storm later became pleasant (خوشگوار). We moved forward while others stood still (ساکن رہے)."
+  },
+  {
+    "day": 18,
+    "words": [
+      {
+        "en": "tall",
+        "ur": "لمبا",
+        "opposite": "short",
+        "oppositeUr": "چھوٹا"
+      },
+      {
+        "en": "near",
+        "ur": "قریب",
+        "opposite": "far",
+        "oppositeUr": "دور"
+      },
+      {
+        "en": "poor",
+        "ur": "غریب",
+        "opposite": "rich",
+        "oppositeUr": "امیر"
+      }
+    ],
+    "paragraph": "The tall (لمبا) man helped the short (چھوٹا) child. The near (قریب) shop was better than the far (دور) one. The poor (غریب) family dreamed of becoming rich (امیر)."
+  },
+  {
+    "day": 19,
+    "words": [
+      {
+        "en": "sell",
+        "ur": "بیچنا",
+        "opposite": "buy",
+        "oppositeUr": "خریدنا"
+      },
+      {
+        "en": "mother",
+        "ur": "ماں",
+        "opposite": "father",
+        "oppositeUr": "باپ"
+      },
+      {
+        "en": "next",
+        "ur": "اگلا",
+        "opposite": "previous",
+        "oppositeUr": "پچھلا"
+      }
+    ],
+    "paragraph": "I decided to sell (بیچنا) old books and buy (خریدنا) new ones. My mother (ماں) advised me while my father (باپ) listened. The next (اگلا) child came after the previous (پچھلا) one."
+  },
+  {
+    "day": 20,
+    "words": [
+      {
+        "en": "trust",
+        "ur": "بھروسا",
+        "opposite": "distrust",
+        "oppositeUr": "عدم اعتماد"
+      },
+      {
+        "en": "avail",
+        "ur": "فائدہ اٹھانا",
+        "opposite": "conserve",
+        "oppositeUr": "بچانا"
+      },
+      {
+        "en": "blacker",
+        "ur": "زیادہ کالا",
+        "opposite": "whiter",
+        "oppositeUr": "زیادہ سفید"
+      }
+    ],
+    "paragraph": "I trust (بھروسا کرتا ہوں) my friend but distrust (اعتماد نہیں کرتا) strangers. We should avail (فائدہ اٹھانا) chances and conserve (بچانا) resources. The blacker (زیادہ کالا) clouds covered the whiter (زیادہ سفید) sky."
+  },
+  {
+    "day": 21,
+    "words": [
+      {
+        "en": "bragging",
+        "ur": "شیخی مارنا",
+        "opposite": "humble",
+        "oppositeUr": "عاجز"
+      },
+      {
+        "en": "different",
+        "ur": "مختلف",
+        "opposite": "same",
+        "oppositeUr": "ایک جیسا"
+      },
+      {
+        "en": "disguise",
+        "ur": "بھیس بدلنا",
+        "opposite": "reveal",
+        "oppositeUr": "ظاہر کرنا"
+      }
+    ],
+    "paragraph": "He kept bragging (شیخی مارتا رہا) but she stayed humble (عاجز رہی). People can be different (مختلف) yet some are the same (ایک جیسے). He tried to disguise (بھیس بدلنا) himself, but the truth was revealed (ظاہر ہو گیا)."
+  },
+  {
+    "day": 22,
+    "words": [
+      {
+        "en": "envious",
+        "ur": "حسد کرنے والا",
+        "opposite": "admiring",
+        "oppositeUr": "تعریف کرنے والا"
+      },
+      {
+        "en": "noticed",
+        "ur": "محسوس کیا",
+        "opposite": "ignored",
+        "oppositeUr": "نظر انداز کیا"
+      },
+      {
+        "en": "pleased",
+        "ur": "خوش",
+        "opposite": "displeased",
+        "oppositeUr": "ناخوش"
+      }
+    ],
+    "paragraph": "The envious (حسد کرنے والا) boy watched the admiring (تعریف کرنے والا) crowd. I noticed (محسوس کیا) the mistake, but others ignored (نظر انداز کیا) it. I felt pleased (خوش), not displeased (ناخوش)."
+  },
+  {
+    "day": 23,
+    "words": [
+      {
+        "en": "recall",
+        "ur": "یاد کرنا",
+        "opposite": "forget",
+        "oppositeUr": "بھولنا"
+      },
+      {
+        "en": "safe",
+        "ur": "محفوظ",
+        "opposite": "unsafe",
+        "oppositeUr": "غیر محفوظ"
+      },
+      {
+        "en": "hide",
+        "ur": "چھپنا",
+        "opposite": "show",
+        "oppositeUr": "دکھانا"
+      }
+    ],
+    "paragraph": "I recall (یاد کرتا ہوں) my childhood but sometimes forget (بھول جاتا ہوں) details. This place is safe (محفوظ), not unsafe (غیر محفوظ). He tried to hide (چھپنا) but we showed (دکھایا) him."
+  },
+  {
+    "day": 24,
+    "words": [
+      {
+        "en": "leisure",
+        "ur": "فراغت",
+        "opposite": "work",
+        "oppositeUr": "کام"
+      },
+      {
+        "en": "life",
+        "ur": "زندگی",
+        "opposite": "death",
+        "oppositeUr": "موت"
+      },
+      {
+        "en": "night",
+        "ur": "رات",
+        "opposite": "day",
+        "oppositeUr": "دن"
+      }
+    ],
+    "paragraph": "During leisure (فراغت) time, I rest, but work (کام) waits. Life (زندگی) is precious, unlike death (موت). Night (رات) always follows day (دن)."
+  },
+  {
+    "day": 25,
+    "words": [
+      {
+        "en": "closer",
+        "ur": "زیادہ قریب",
+        "opposite": "farther",
+        "oppositeUr": "زیادہ دور"
+      },
+      {
+        "en": "free",
+        "ur": "آزاد",
+        "opposite": "bound",
+        "oppositeUr": "پابند"
+      },
+      {
+        "en": "growling",
+        "ur": "گرجنا",
+        "opposite": "murmuring",
+        "oppositeUr": "بڑبڑانا"
+      }
+    ],
+    "paragraph": "My closer (زیادہ قریب) friend helped me, while the farther (زیادہ دور) one stayed away. I felt free (آزاد) inside though rules kept me bound (پابند). The dog was growling (گرجنا) while the cat was murmuring (بڑبڑانا)."
+  },
+  {
+    "day": 26,
+    "words": [
+      {
+        "en": "low",
+        "ur": "نیچا",
+        "opposite": "high",
+        "oppositeUr": "اونچا"
+      },
+      {
+        "en": "mighty",
+        "ur": "طاقتور",
+        "opposite": "weak",
+        "oppositeUr": "کمزور"
+      },
+      {
+        "en": "slave",
+        "ur": "غلام",
+        "opposite": "master",
+        "oppositeUr": "آقا"
+      }
+    ],
+    "paragraph": "The low (نیچی) hill stood before a high (اونچی) mountain. A mighty (طاقتور) ruler defeated the weak (کمزور) enemy. The slave (غلام) obeyed his master (آقا)."
+  },
+  {
+    "day": 27,
+    "words": [
+      {
+        "en": "dark",
+        "ur": "اندھیرا",
+        "opposite": "light",
+        "oppositeUr": "روشن"
+      },
+      {
+        "en": "far away",
+        "ur": "بہت دور",
+        "opposite": "near",
+        "oppositeUr": "قریب"
+      },
+      {
+        "en": "little",
+        "ur": "تھوڑا",
+        "opposite": "big",
+        "oppositeUr": "بڑا"
+      }
+    ],
+    "paragraph": "The room was dark (اندھیرا) but a light (روشن) came through the window. My house is not far away (بہت دور); it is near (قریب) the school. I had little (تھوڑا) food, but my brother had a big (بڑا) plate."
+  },
+  {
+    "day": 28,
+    "words": [
+      {
+        "en": "none",
+        "ur": "کوئی نہیں",
+        "opposite": "all",
+        "oppositeUr": "سب"
+      },
+      {
+        "en": "prowled",
+        "ur": "آہستہ گھوما",
+        "opposite": "brisk walk",
+        "oppositeUr": "تیز چہل قدمی"
+      },
+      {
+        "en": "solitude",
+        "ur": "تنہائی",
+        "opposite": "crowd",
+        "oppositeUr": "ہجوم"
+      }
+    ],
+    "paragraph": "There were none (کوئی نہیں) in the park at first, but soon all (سب) arrived. A cat prowled (آہستہ گھوما) while people took a brisk walk (تیز چہل قدمی). He enjoyed solitude (تنہائی) but the crowd (ہجوم) grew loud."
+  },
+  {
+    "day": 29,
+    "words": [
+      {
+        "en": "dropping down",
+        "ur": "نیچے گرنا",
+        "opposite": "rising up",
+        "oppositeUr": "اوپر اٹھنا"
+      },
+      {
+        "en": "fine",
+        "ur": "باریک",
+        "opposite": "coarse / rough",
+        "oppositeUr": "کھردرا"
+      },
+      {
+        "en": "giant",
+        "ur": "بہت بڑا",
+        "opposite": "tiny",
+        "oppositeUr": "نہایت چھوٹا"
+      }
+    ],
+    "paragraph": "Leaves were dropping down (نیچے گر رہے تھے) as the sun was rising up (اوپر اٹھ رہا تھا). This cloth feels fine (باریک), not coarse (کھردرا). A giant (بہت بڑا) tree stood near a tiny (نہایت چھوٹا) plant."
+  },
+  {
+    "day": 30,
+    "words": [
+      {
+        "en": "pure",
+        "ur": "خالص",
+        "opposite": "impure",
+        "oppositeUr": "ناپاک"
+      },
+      {
+        "en": "apart",
+        "ur": "الگ",
+        "opposite": "together",
+        "oppositeUr": "اکٹھا"
+      },
+      {
+        "en": "badly",
+        "ur": "بری طرح",
+        "opposite": "well",
+        "oppositeUr": "اچھی طرح"
+      }
+    ],
+    "paragraph": "Clean water is pure (خالص), not impure (ناپاک). We stayed apart (الگ) before working together (اکٹھا). He played badly (بری طرح) before learning to play well (اچھی طرح)."
+  },
+  {
+    "day": 31,
+    "words": [
+      {
+        "en": "Brave",
+        "ur": "بہادر",
+        "opposite": "Cowardly",
+        "oppositeUr": "بزدل"
+      },
+      {
+        "en": "Ancient",
+        "ur": "قدیم",
+        "opposite": "Modern",
+        "oppositeUr": "جدید"
+      },
+      {
+        "en": "Broad",
+        "ur": "چوڑا",
+        "opposite": "Narrow",
+        "oppositeUr": "تنگ"
+      }
+    ]
+  },
+  {
+    "day": 32,
+    "words": [
+      {
+        "en": "Calm",
+        "ur": "پرسکون",
+        "opposite": "Noisy",
+        "oppositeUr": "شور والا"
+      },
+      {
+        "en": "Capture",
+        "ur": "پکڑنا",
+        "opposite": "Release",
+        "oppositeUr": "چھوڑنا"
+      },
+      {
+        "en": "Cheerful",
+        "ur": "خوش مزاج",
+        "opposite": "Gloomy",
+        "oppositeUr": "اداس"
+      }
+    ]
+  },
+  {
+    "day": 33,
+    "words": [
+      {
+        "en": "Distant",
+        "ur": "دور",
+        "opposite": "Nearby",
+        "oppositeUr": "قریب"
+      },
+      {
+        "en": "Early",
+        "ur": "جلد",
+        "opposite": "Late",
+        "oppositeUr": "دیر"
+      },
+      {
+        "en": "Empty",
+        "ur": "خالی",
+        "opposite": "Full",
+        "oppositeUr": "بھرا ہوا"
+      }
+    ]
+  },
+  {
+    "day": 34,
+    "words": [
+      {
+        "en": "Gentle",
+        "ur": "نرم",
+        "opposite": "Rough",
+        "oppositeUr": "سخت"
+      },
+      {
+        "en": "Huge",
+        "ur": "بہت بڑا",
+        "opposite": "Tiny",
+        "oppositeUr": "بہت چھوٹا"
+      },
+      {
+        "en": "Honest",
+        "ur": "ایماندار",
+        "opposite": "Dishonest",
+        "oppositeUr": "بے ایمان"
+      }
+    ]
+  },
+  {
+    "day": 35,
+    "words": [
+      {
+        "en": "Import",
+        "ur": "درآمد",
+        "opposite": "Export",
+        "oppositeUr": "برآمد"
+      },
+      {
+        "en": "Kind",
+        "ur": "مہربان",
+        "opposite": "Cruel",
+        "oppositeUr": "ظالم"
+      },
+      {
+        "en": "Major",
+        "ur": "اہم",
+        "opposite": "Minor",
+        "oppositeUr": "معمولی"
+      }
+    ]
+  },
+  {
+    "day": 36,
+    "words": [
+      {
+        "en": "Ordinary",
+        "ur": "عام",
+        "opposite": "Extraordinary",
+        "oppositeUr": "غیر معمولی"
+      },
+      {
+        "en": "Polite",
+        "ur": "شائستہ",
+        "opposite": "Rude",
+        "oppositeUr": "بدتمیز"
+      },
+      {
+        "en": "Rare",
+        "ur": "نایاب",
+        "opposite": "Common",
+        "oppositeUr": "عام"
+      }
+    ]
+  },
+  {
+    "day": 37,
+    "words": [
+      {
+        "en": "Rigid",
+        "ur": "سخت",
+        "opposite": "Flexible",
+        "oppositeUr": "لچکدار"
+      },
+      {
+        "en": "Success",
+        "ur": "کامیابی",
+        "opposite": "Failure",
+        "oppositeUr": "ناکامی"
+      },
+      {
+        "en": "Timid",
+        "ur": "ڈرپوک",
+        "opposite": "Bold",
+        "oppositeUr": "دلیر"
+      }
+    ]
+  },
+  {
+    "day": 38,
+    "words": [
+      {
+        "en": "Upward",
+        "ur": "اوپر کی طرف",
+        "opposite": "Downward",
+        "oppositeUr": "نیچے کی طرف"
+      },
+      {
+        "en": "Victory",
+        "ur": "فتح",
+        "opposite": "Defeat",
+        "oppositeUr": "شکست"
+      },
+      {
+        "en": "Visible",
+        "ur": "نمایاں",
+        "opposite": "Hidden",
+        "oppositeUr": "چھپا ہوا"
+      }
+    ]
+  },
+  {
+    "day": 39,
+    "words": [
+      {
+        "en": "Wealthy",
+        "ur": "مالدار",
+        "opposite": "Poor",
+        "oppositeUr": "غریب"
+      },
+      {
+        "en": "Swift",
+        "ur": "تیز",
+        "opposite": "Slow",
+        "oppositeUr": "سست"
+      },
+      {
+        "en": "Wise",
+        "ur": "عقل مند",
+        "opposite": "Foolish",
+        "oppositeUr": "احمق"
+      }
+    ]
+  },
+  {
+    "day": 40,
+    "words": [
+      {
+        "en": "Accept",
+        "ur": "قبول کرنا",
+        "opposite": "Reject",
+        "oppositeUr": "رد کرنا"
+      },
+      {
+        "en": "Increase",
+        "ur": "بڑھانا",
+        "opposite": "Decrease",
+        "oppositeUr": "کم کرنا"
+      },
+      {
+        "en": "Quiet",
+        "ur": "خاموش",
+        "opposite": "Loud",
+        "oppositeUr": "اونچی آواز والا"
+      }
+    ]
+  }
+];
+
+function chunkDays(days, size = 5, maxDay = null) {
+  const filtered = maxDay ? days.filter(day => day.day <= maxDay) : days.slice();
+  const chunks = [];
+  for (let i = 0; i < filtered.length; i += size) chunks.push(filtered.slice(i, i + size));
+  return chunks;
+}
+
+function getDayRangeLabel(chunk) {
+  return `Days ${chunk[0].day} to ${chunk[chunk.length - 1].day}`;
+}
+
+function flattenDayWords(days, maxDay, mapper) {
+  const flat = [];
+  (maxDay ? days.filter(day => day.day <= maxDay) : days).forEach(day => {
+    (day.words || []).forEach((word, idx) => flat.push(mapper ? mapper(day, word, idx) : { day: day.day, ...word }));
+  });
+  return flat;
+}
+
+function buildDayExamples(days, formatter, maxDay = null) {
+  return chunkDays(days, 5, maxDay).map(chunk => `${getDayRangeLabel(chunk)}: ${chunk.map(day => `Day ${day.day} — ${formatter(day)}`).join(" | ")}`);
+}
+
+function uniquePool(values, skipValue) {
+  return values.filter((value, index) => value && value !== skipValue && values.indexOf(value) === index);
+}
+
+function buildChoices(correct, pool, seed) {
+  const distractors = [];
+  const base = uniquePool(pool, correct);
+  for (let i = 0; i < base.length && distractors.length < 3; i++) {
+    const candidate = base[(seed + i * 3) % base.length];
+    if (candidate !== correct && !distractors.includes(candidate)) distractors.push(candidate);
+  }
+  const options = [correct, ...distractors];
+  while (options.length < 4 && base.length) {
+    const candidate = base[(seed + options.length * 5) % base.length];
+    if (!options.includes(candidate)) options.push(candidate);
+  }
+  const rotation = seed % options.length;
+  return options.slice(rotation).concat(options.slice(0, rotation));
+}
+
+function buildLanguageExercises(entries, fillPrompt, answerFn, answerPool, matchPrompt, fillHeader = "Fill in the blanks:") {
+  const sample = entries.slice(0, 10);
+  const fill = {
+    q: fillHeader,
+    parts: sample.map((entry, idx) => fillPrompt(entry, idx)),
+    ans: sample.map(entry => answerFn(entry))
+  };
+  const tf = {
+    q: "True or False:",
+    parts: sample.map((entry, idx) => {
+      const alt = sample[(idx + 1) % sample.length];
+      const shown = idx % 2 === 0 ? answerFn(entry) : answerFn(alt);
+      return `${matchPrompt ? matchPrompt(entry) : entry.label}: ${shown}`;
+    }),
+    ans: sample.map((entry, idx) => idx % 2 === 0 ? "True" : "False")
+  };
+  const match = {
+    q: "Match the columns:",
+    parts: sample.map(entry => matchPrompt ? matchPrompt(entry) : entry.label),
+    ans: sample.map(entry => answerFn(entry))
+  };
+  return [fill, tf, match];
+}
+
+function buildLanguageQuiz(entries, count, questionFn, answerFn, optionPoolFn) {
+  const quiz = [];
+  const answerPool = optionPoolFn(entries);
+  for (let i = 0; i < count; i++) {
+    const entry = entries[i % entries.length];
+    const correct = answerFn(entry, i);
+    const options = buildChoices(correct, answerPool, i + entry.day);
+    quiz.push({ q: questionFn(entry, i), a: options, c: options.indexOf(correct) });
+  }
+  return quiz;
+}
+
+function buildWordDayLessons(days, maxDay = 30) {
+  const filtered = maxDay ? days.filter(day => day.day <= maxDay) : days.slice();
+  return filtered.map(day => ({
+    day: day.day,
+    words: (day.words || []).map(word => ({ ...word })),
+    paragraph: day.paragraph,
+    difficult: day.difficult
+  }));
+}
+
+function buildPairDayLessons(items) {
+  return items.map(item => ({
+    day: item.day,
+    pairs: [{ left: item.word, right: item.opposite }]
+  }));
+}
+
+function buildDayRangeExerciseGroups(days, maxDay, mapper, fillPrompt, answerFn, matchPrompt, fillHeader) {
+  return chunkDays(days, 5, maxDay).map(chunk => {
+    const entries = flattenDayWords(chunk, null, mapper);
+    return {
+      label: getDayRangeLabel(chunk),
+      exercises: buildLanguageExercises(entries, fillPrompt, answerFn, entries.map(entry => answerFn(entry)), matchPrompt, fillHeader)
+    };
+  });
+}
+
+function buildDayRangeQuizGroups(days, maxDay, mapper, count, questionFn, answerFn, optionPoolFn) {
+  return chunkDays(days, 5, maxDay).map(chunk => {
+    const entries = flattenDayWords(chunk, null, mapper);
+    return {
+      label: getDayRangeLabel(chunk),
+      questions: buildLanguageQuiz(entries, count, questionFn, answerFn, optionPoolFn || (list => list.map(entry => answerFn(entry))))
+    };
+  });
+}
+
+function buildBasicWordSubsection(title, description, days, maxDay = 30) {
+  return {
+    t: title,
+    c: description,
+    lessonLabel: "📅 Days",
+    dayLessons: buildWordDayLessons(days, maxDay),
+    exerciseGroups: buildDayRangeExerciseGroups(
+      days,
+      maxDay,
+      (day, word) => ({ day: day.day, label: word.en, answer: word.ur }),
+      entry => `${entry.label} = ___`,
+      entry => entry.answer,
+      entry => entry.label,
+      "Fill in the blanks with correct meaning:"
+    ),
+    quizGroups: buildDayRangeQuizGroups(
+      days,
+      maxDay,
+      (day, word) => ({ day: day.day, label: word.en, answer: word.ur }),
+      20,
+      entry => `What is the Urdu meaning of "${entry.label}"?`,
+      entry => entry.answer,
+      list => list.map(entry => entry.answer)
+    )
+  };
+}
+
+function buildAdjectiveSubsection(days) {
+  return {
+    t: "Adjectives",
+    c: "Learn adjectives through textbook-style day groups, with focus on positive, comparative, and superlative forms.",
+    lessonLabel: "📅 Days",
+    dayLessons: buildWordDayLessons(days, 30),
+    exerciseGroups: chunkDays(days, 5, 30).map(chunk => {
+      const entries = flattenDayWords(chunk, null, (day, word) => ({ day: day.day, label: word.en, comp: word.comp, super: word.super }));
+      return {
+        label: getDayRangeLabel(chunk),
+        exercises: [
+          { q: "Fill in the blanks:", parts: entries.slice(0, 10).map(entry => `Comparative of "${entry.label}" is ___`), ans: entries.slice(0, 10).map(entry => entry.comp) },
+          { q: "True or False:", parts: entries.slice(0, 10).map((entry, idx) => `${entry.label}: ${idx % 2 === 0 ? entry.super : entries[(idx + 1) % entries.length].super}`), ans: entries.slice(0, 10).map((entry, idx) => idx % 2 === 0 ? "True" : "False") },
+          { q: "Match the columns:", parts: entries.slice(0, 10).map(entry => entry.label), ans: entries.slice(0, 10).map(entry => `${entry.comp} / ${entry.super}`) }
+        ]
+      };
+    }),
+    quizGroups: chunkDays(days, 5, 30).map(chunk => {
+      const entries = flattenDayWords(chunk, null, (day, word) => ({ day: day.day, label: word.en, comp: word.comp, super: word.super }));
+      return {
+        label: getDayRangeLabel(chunk),
+        questions: buildLanguageQuiz(entries, 20, (entry, idx) => idx % 2 === 0 ? `What is the comparative form of "${entry.label}"?` : `What is the superlative form of "${entry.label}"?`, (entry, idx) => idx % 2 === 0 ? entry.comp : entry.super, list => list.flatMap(entry => [entry.comp, entry.super]))
+      };
+    })
+  };
+}
+
+function buildVerbSubsection(days) {
+  return {
+    t: "Verbs",
+    c: "Study present, past, and past participle verb forms in 5-day textbook-style lesson blocks.",
+    lessonLabel: "📅 Days",
+    dayLessons: buildWordDayLessons(days, 30),
+    exerciseGroups: chunkDays(days, 5, 30).map(chunk => {
+      const entries = flattenDayWords(chunk, null, (day, word) => ({ day: day.day, label: word.en, v2: word.v2, v3: word.v3 }));
+      return {
+        label: getDayRangeLabel(chunk),
+        exercises: [
+          { q: "Fill in the blanks:", parts: entries.slice(0, 10).map(entry => `Past form of "${entry.label}" is ___`), ans: entries.slice(0, 10).map(entry => entry.v2) },
+          { q: "True or False:", parts: entries.slice(0, 10).map((entry, idx) => `${entry.label}: ${idx % 2 === 0 ? entry.v3 : entries[(idx + 1) % entries.length].v3}`), ans: entries.slice(0, 10).map((entry, idx) => idx % 2 === 0 ? "True" : "False") },
+          { q: "Match the columns:", parts: entries.slice(0, 10).map(entry => entry.label), ans: entries.slice(0, 10).map(entry => `${entry.v2} / ${entry.v3}`) }
+        ]
+      };
+    }),
+    quizGroups: chunkDays(days, 5, 30).map(chunk => {
+      const entries = flattenDayWords(chunk, null, (day, word) => ({ day: day.day, label: word.en, v2: word.v2, v3: word.v3 }));
+      return {
+        label: getDayRangeLabel(chunk),
+        questions: buildLanguageQuiz(entries, 20, (entry, idx) => idx % 2 === 0 ? `What is the past form of "${entry.label}"?` : `What is the past participle of "${entry.label}"?`, (entry, idx) => idx % 2 === 0 ? entry.v2 : entry.v3, list => list.flatMap(entry => [entry.v2, entry.v3]))
+      };
+    })
+  };
+}
+
+function buildVocabularyMeaningSubsection() {
+  return {
+    t: "Words Meanings",
+    c: "Build word power through day-wise textbook review blocks, keeping Urdu meanings for tests and English meanings as lesson support.",
+    lessonLabel: "📅 Days",
+    dayLessons: buildWordDayLessons(VOCABULARY_DATA, 30),
+    exerciseGroups: buildDayRangeExerciseGroups(
+      VOCABULARY_DATA,
+      30,
+      (day, word) => ({ day: day.day, label: word.en, answer: word.ur, reference: word.meaning }),
+      entry => `${entry.label} = ___`,
+      entry => entry.answer,
+      entry => entry.label,
+      "Fill in the blanks with correct meaning:"
+    ),
+    quizGroups: buildDayRangeQuizGroups(
+      VOCABULARY_DATA,
+      30,
+      (day, word) => ({ day: day.day, label: word.en, answer: word.ur, reference: word.meaning }),
+      20,
+      entry => `What is the Urdu meaning of "${entry.label}"?`,
+      entry => entry.answer,
+      list => list.map(entry => entry.answer)
+    )
+  };
+}
+
+function buildOppositesSubsection() {
+  return {
+    t: "Words Opposites",
+    c: "Learn common opposite words in meaningful 5-day review blocks, so students can connect vocabulary with contrast.",
+    lessonLabel: "📅 Days",
+    dayLessons: buildWordDayLessons(ENGLISH_OPPOSITES_DATA, null),
+    exerciseGroups: buildDayRangeExerciseGroups(
+      ENGLISH_OPPOSITES_DATA,
+      null,
+      (day, word) => ({ day: day.day, label: word.en, answer: word.opposite }),
+      entry => `Opposite of "${entry.label}" is ___`,
+      entry => entry.answer,
+      entry => entry.label
+    ),
+    quizGroups: buildDayRangeQuizGroups(
+      ENGLISH_OPPOSITES_DATA,
+      null,
+      (day, word) => ({ day: day.day, label: word.en, answer: word.opposite }),
+      20,
+      entry => `What is the opposite of "${entry.label}"?`,
+      entry => entry.answer,
+      list => list.map(entry => entry.answer)
+    )
+  };
+}
+
+function buildVocabularyCollectiveNounsSubsection() {
+  return {
+    t: "Collective Nouns",
+    c: "Review collective nouns in day-wise lesson cards, keeping each day's words and paragraph together for textbook-style study.",
+    lessonLabel: "📅 Days",
+    dayLessons: buildWordDayLessons(COLLECTIVE_NOUNS_DATA, 30),
+    exerciseGroups: buildDayRangeExerciseGroups(
+      COLLECTIVE_NOUNS_DATA,
+      30,
+      (day, word) => ({ day: day.day, label: word.en, answer: word.ur }),
+      entry => `${entry.label} = ___`,
+      entry => entry.answer,
+      entry => entry.label,
+      "Fill in the blanks with correct meaning:"
+    ),
+    quizGroups: buildDayRangeQuizGroups(
+      COLLECTIVE_NOUNS_DATA,
+      30,
+      (day, word) => ({ day: day.day, label: word.en, answer: word.ur }),
+      20,
+      entry => `What is the Urdu meaning of "${entry.label}"?`,
+      entry => entry.answer,
+      list => list.map(entry => entry.answer)
+    )
+  };
+}
+
+function buildEnglishVocabularySubs() {
+  return [
+    buildVocabularyMeaningSubsection(),
+    buildOppositesSubsection(),
+    buildVocabularyCollectiveNounsSubsection()
+  ];
+}
+
+function buildEnglishPartsOfSpeechSubs() {
+  return [
+    buildBasicWordSubsection("Adverbs", "Study adverbs in 5-day blocks and connect each English adverb with its Urdu meaning and usage.", ADVERBS_DATA, 30),
+    buildBasicWordSubsection("Prepositions", "Study prepositions in grouped day ranges and review how each one connects ideas of place, time, or movement.", PREPOSITIONS_DATA, 30),
+    buildAdjectiveSubsection(ADJECTIVES_DATA),
+    buildBasicWordSubsection("Conjunctions", "Review conjunctions in day-wise groups and learn how they join words, phrases, and clauses.", CONJUNCTIONS_DATA, 30),
+    buildBasicWordSubsection("Pronouns", "Practice pronouns in 5-day textbook review blocks and connect each English pronoun with its Urdu meaning.", PRONOUNS_DATA, 30),
+    buildBasicWordSubsection("Collective Nouns", "Review collective nouns in grouped day ranges and connect the English term with its Urdu meaning.", COLLECTIVE_NOUNS_DATA, 30),
+    buildVerbSubsection(VERBS_DATA)
+  ];
+}
+
 function getLessons(subject, grade) {
   const g = grade;
   const L = {
@@ -1253,13 +2503,13 @@ function getLessons(subject, grade) {
          wordProblems:[{q:"Explain what happens to a glass of cold water on a hot day — why do drops form outside?",a:"Water vapor in air condenses on the cold surface — this is condensation."},{q:"A puddle disappears on a sunny day. What happened?",a:"The water evaporated — changed from liquid to gas due to heat from the sun."},{q:"Why does your bathroom mirror get foggy after a hot shower?",a:"Hot steam (water vapor) condenses on the cooler mirror surface."},{q:"At what temperature does water freeze? What about boiling?",a:"Water freezes at 0°C and boils at 100°C."},{q:"Explain the water cycle using the terms evaporation, condensation, and precipitation.",a:"Sun heats water (evaporation) → vapor rises and cools (condensation) → clouds form → water falls as rain (precipitation)."},{q:"What is the difference between evaporation and boiling?",a:"Evaporation happens at the surface at any temperature. Boiling happens throughout the liquid at 100°C."},{q:"Label the water cycle diagram: name 3 key processes.",a:"1. Evaporation (water → vapor, heated by sun) 2. Condensation (vapor → cloud droplets) 3. Precipitation (rain/snow falling)"},{q:"Why do clothes dry faster on a hot, windy day?",a:"Heat speeds up evaporation. Wind carries away water vapor, preventing saturation near the cloth."},{q:"What state change happens when wax drips from a burning candle?",a:"Melting — solid wax turns to liquid wax near the flame."},{q:"What happens when steam touches a cold window?",a:"It condenses — water vapor turns back into liquid droplets on the cool glass."},{q:"Name all 5 types of state change.",a:"1. Melting (solid→liquid) 2. Freezing (liquid→solid) 3. Evaporation (liquid→gas) 4. Condensation (gas→liquid) 5. Sublimation (solid→gas)"},{q:"What is sublimation? Give one example.",a:"Solid changes directly to gas without becoming liquid. Example: dry ice, mothballs shrinking."},{q:"Why do ice cubes shrink slightly in a freezer even without melting?",a:"Sublimation — tiny amounts of ice change directly to water vapor in the dry freezer air."},{q:"Dew forms on grass in the morning. Explain why.",a:"Air cools overnight. Water vapor in air condenses on cool grass surfaces (condensation)."},{q:"Why does boiling water produce steam?",a:"At 100°C, liquid water has enough energy to break free as water vapor (gas)."},{q:"What change of state happens when you make ice lollies in a freezer?",a:"Freezing — liquid juice loses heat energy and turns into a solid."},{q:"The melting point of iron is 1538°C. What does this tell us?",a:"Iron is solid below 1538°C and needs extreme heat to become liquid."},{q:"When you breathe out on a cold day, why does it look like mist?",a:"Warm moist air from your lungs meets cold outside air and condenses into tiny droplets."},{q:"Why does water in a pot boil faster with a lid on?",a:"Lid traps steam (heat energy), raising temperature inside faster."},{q:"Explain how a refrigerator uses state changes to keep food cold.",a:"Refrigerant liquid evaporates (absorbs heat from inside), then condenses outside (releases heat) — cools the fridge."}],
          quiz:[{q:"Ice → water is:",a:["Freezing","Melting","Boiling","Condensation"],c:1},{q:"Water → steam is:",a:["Melting","Freezing","Evaporation","Condensation"],c:2},{q:"Condensation is:",a:["Solid → liquid","Liquid → gas","Gas → liquid","Solid → gas"],c:2},{q:"Water freezes at:",a:["10°C","0°C","100°C","-10°C"],c:1},{q:"Sublimation is:",a:["Solid → liquid","Solid → gas directly","Gas → solid","Liquid → solid"],c:1},{q:"Boiling point of water:",a:["50°C","80°C","100°C","120°C"],c:2}]
         },
-        {t:"Properties of Materials", c:"Materials have properties like hardness, flexibility, transparency, and conductivity. These properties determine how we use them.",
+        {t:"Properties of Materials", svgType:"materialProperties", c:"Materials have properties like hardness, flexibility, transparency, and conductivity. These properties determine how we use them.",
          examples:["Hard materials: diamond, steel, glass","Flexible materials: rubber, cloth, plastic","Transparent: glass, water, clear plastic","Opaque: wood, metal, stone — light cannot pass through","Conductors: metals (copper, iron) conduct heat and electricity","Insulators: rubber, wood, plastic — do not conduct"],
          exercises:[{q:"Classify as Conductor or Insulator:", parts:["Copper wire","Rubber gloves","Iron nail","Wooden spoon","Aluminium foil","Plastic ruler"], ans:["Conductor","Insulator","Conductor","Insulator","Conductor","Insulator"]},{q:"Transparent, Translucent, or Opaque:", parts:["Clear glass","Frosted glass","Wooden door","Clean water","Wax paper","Brick wall"], ans:["Transparent","Translucent","Opaque","Transparent","Translucent","Opaque"]}],
          wordProblems:[{q:"Why are cooking pots made of metal but handles of plastic or wood?",a:"Metal conducts heat well (heats food). Plastic/wood are insulators (protect hands from heat)."},{q:"Why do we use glass for windows instead of wood?",a:"Glass is transparent — light passes through. Wood is opaque — blocks light."},{q:"Why are electrical wires covered in rubber or plastic?",a:"Rubber and plastic are insulators — they prevent electric shock and short circuits."},{q:"Name a material that is both hard and transparent.",a:"Glass — it is hard (difficult to scratch) and transparent (light passes through)."},{q:"Why do builders use steel instead of wood for tall buildings?",a:"Steel is much stronger, more durable, and can support heavy loads better than wood."},{q:"Name 3 properties of a good material for making a frying pan.",a:"1. Good heat conductor 2. Hard/strong 3. Non-flammable (e.g., iron or steel)"},{q:"Label the diagram: classify each — conductor or insulator: copper wire, rubber glove, iron nail, plastic ruler.",a:"Conductors: copper wire, iron nail. Insulators: rubber glove, plastic ruler."},{q:"Why is rubber used for car tyres?",a:"Rubber is flexible, durable, and provides good grip (friction) on roads."},{q:"What is the difference between transparent and translucent?",a:"Transparent: light passes clearly through (glass). Translucent: light passes but blurry (frosted glass)."},{q:"Name a material that is flexible and an insulator.",a:"Rubber or plastic — both flexible and do not conduct electricity."},{q:"Why are bridges built with steel and concrete instead of wood?",a:"Steel and concrete are much stronger, more durable, and weather-resistant than wood."},{q:"Name 3 hard materials found at home.",a:"1. Glass 2. Stone/ceramic 3. Metal (iron, steel)"},{q:"Why is cotton used for clothing instead of metal?",a:"Cotton is flexible, soft, lightweight, and breathes — metal is rigid and heavy."},{q:"What material would you use for a waterproof raincoat? Why?",a:"Plastic or rubber-coated fabric — water cannot pass through (waterproof/impermeable)."},{q:"Name one property each: wood, iron, rubber, glass.",a:"Wood: strong but not as hard as metal. Iron: hard conductor. Rubber: flexible insulator. Glass: transparent but brittle."},{q:"What makes diamond the hardest natural material?",a:"Its carbon atoms are arranged in an extremely strong tetrahedral crystal structure."},{q:"Why are fuses made of thin wire that melts easily?",a:"Fuse wire melts quickly when too much current flows — protecting the circuit from damage."},{q:"Give one example each of a material that is: magnetic, non-magnetic.",a:"Magnetic: iron nail. Non-magnetic: plastic spoon."},{q:"Why is aluminium used to make aeroplanes?",a:"Aluminium is lightweight, strong, and resistant to corrosion — ideal for aircraft."},{q:"What property of glass makes it useful for spectacle lenses?",a:"Glass is transparent and can be shaped to bend (refract) light to correct vision."}],
          quiz:[{q:"Which is a conductor?",a:["Rubber","Wood","Copper","Plastic"],c:2},{q:"Transparent means:",a:["Light passes through","Light blocked","Partially see-through","Flexible"],c:0},{q:"Insulators are used for:",a:["Carrying electricity","Blocking electricity flow","Making heat","None"],c:1},{q:"Diamond is very:",a:["Soft","Flexible","Hard","Light"],c:2},{q:"Opaque material:",a:["Glass","Water","Wood","Air"],c:2},{q:"Rubber is:",a:["Conductor","Insulator","Transparent","Magnetic"],c:1}]
         },
-        {t:"Mixtures & Solutions", c:"A mixture combines two or more substances without chemical change. A solution is a mixture where one substance dissolves in another.",
+        {t:"Mixtures & Solutions", svgType:"mixturesSolutions", c:"A mixture combines two or more substances without chemical change. A solution is a mixture where one substance dissolves in another.",
          examples:["Mixture: sand and iron filings (can be separated with magnet)","Mixture: salad — vegetables mixed together","Solution: salt dissolved in water (salt is solute, water is solvent)","Solution: sugar in tea — sugar dissolves completely","Separation methods: filtering, evaporation, magnetic separation, sieving","Oil and water do not mix — this is an immiscible mixture"],
          exercises:[{q:"Mixture or Solution?", parts:["Salt in water","Sand and gravel","Sugar in tea","Oil and water","Ink in water","Iron filings and sand"], ans:["Solution","Mixture","Solution","Mixture (immiscible)","Solution","Mixture"]},{q:"How would you separate:", parts:["Sand from water","Salt from water","Iron filings from sand","Large stones from small pebbles"], ans:["Filtering","Evaporation","Magnet","Sieving"]}],
          wordProblems:[{q:"You accidentally mix salt and sand. How can you separate them?",a:"Add water (salt dissolves), filter out sand, then evaporate water to get salt back."},{q:"Why does sugar dissolve in hot tea faster than cold tea?",a:"Higher temperature gives particles more energy, so they move faster and dissolve quicker."},{q:"Is air a mixture or a pure substance? Explain.",a:"Air is a mixture — it contains nitrogen (~78%), oxygen (~21%), CO₂, and other gases."},{q:"Explain how you would get clean water from muddy water.",a:"Filter the muddy water through cloth or filter paper to remove solid particles."},{q:"Why does oil float on water instead of mixing?",a:"Oil is less dense than water and is immiscible (doesn't dissolve in water)."},{q:"What is the difference between a mixture and a solution?",a:"Mixture: substances combined but not dissolved (sand+water). Solution: one substance fully dissolves in another (salt+water)."},{q:"Name 4 methods of separating mixtures.",a:"1. Filtering (sand from water) 2. Evaporation (salt from water) 3. Magnet (iron from sand) 4. Sieving (large from small)"},{q:"What is the solute and solvent in salt water?",a:"Solute: salt (the substance that dissolves). Solvent: water (the substance it dissolves in)."},{q:"Label the diagram: identify solute and solvent in a beaker of sugar water.",a:"Solute = sugar (dissolved substance). Solvent = water (liquid doing the dissolving). Together = solution."},{q:"Why does a spoonful of salt disappear when stirred into water?",a:"Salt dissolves — its particles spread evenly between water particles (it becomes invisible but is still there)."},{q:"How would you separate iron filings from a mixture of iron and sand?",a:"Use a magnet — iron filings are attracted to it and stick, while sand stays behind."},{q:"Can you get the salt back from salt water? How?",a:"Yes — evaporate (heat) the water. Water turns to steam and the salt crystals are left behind."},{q:"A mixture of different-sized pebbles and sand — how do you separate them?",a:"Use a sieve — larger pebbles stay on top, sand falls through the holes."},{q:"Why is seawater not safe to drink directly?",a:"It contains dissolved salt (too much salt is harmful). It must be desalinated first."},{q:"What makes a solution different from muddy water?",a:"In a solution, the solute is fully dissolved and cannot be filtered out. Muddy water has visible solid particles that can be filtered."},{q:"Is blood a mixture or a pure substance?",a:"A mixture — it contains red blood cells, white blood cells, platelets, and plasma."},{q:"If you mix oil and water and shake it, what happens?",a:"They temporarily mix but quickly separate — oil rises on top because it is less dense and immiscible."},{q:"What is filtration? When is it used?",a:"Filtration separates insoluble solids from liquids using a filter. Used for muddy water, coffee grounds."},{q:"Explain how salt is obtained from sea water in salt farms.",a:"Sea water is put in shallow pans. Sun evaporates the water, leaving salt crystals behind."},{q:"Name 3 examples of solutions in everyday life.",a:"1. Salt water 2. Sugar in tea 3. Lemon juice in water"}],
@@ -1267,13 +2517,13 @@ function getLessons(subject, grade) {
         }
       ] },
       { title: "Forces & Energy", content: "Gravity, friction, simple machines, types of energy, energy conversions.", key: "forces5", hasMathSub: true, subs: [
-        {t:"Gravity", c:"Gravity is a force that pulls objects toward the center of the Earth. It gives objects weight and keeps us on the ground.",
+        {t:"Gravity", svgType:"gravityForce", c:"Gravity is a force that pulls objects toward the center of the Earth. It gives objects weight and keeps us on the ground.",
          examples:["An apple falls from a tree because of gravity","The Moon orbits Earth because of gravity","Objects fall at the same rate regardless of weight (in vacuum)","Weight = mass × gravity","Gravity on Moon is 1/6 of Earth's gravity","Without gravity, everything would float away"],
          exercises:[{q:"True or False:", parts:["Gravity pulls things upward","A heavier ball falls faster than a lighter ball in vacuum","Gravity keeps the Moon in orbit","You weigh less on the Moon","There is no gravity in space","Gravity acts on all objects"], ans:["False — pulls downward","False — same rate in vacuum","True","True — Moon has less gravity","False — it's weaker but exists","True"]}],
          wordProblems:[{q:"Why don't we float off the Earth?",a:"Earth's gravity pulls all objects toward its center, keeping us on the ground."},{q:"If you weigh 60 kg on Earth, about how much would you weigh on the Moon?",a:"About 10 kg — Moon's gravity is 1/6 of Earth's gravity (60 ÷ 6 = 10 kg)."},{q:"Why do astronauts float inside the space station?",a:"They are in free fall (microgravity) — orbiting Earth so fast they constantly fall around it."},{q:"Drop a feather and a coin. Which lands first? Why?",a:"Coin lands first due to less air resistance. In vacuum, both fall at the same rate."},{q:"Explain how gravity causes rain to fall.",a:"Gravity pulls water droplets in clouds downward toward Earth's surface."},{q:"What is the difference between mass and weight?",a:"Mass: amount of matter (stays same everywhere). Weight: force of gravity on mass (changes on Moon)."},{q:"Why does a ball thrown upward come back down?",a:"Gravity constantly pulls it downward, slowing it, stopping it, then pulling it back."},{q:"If you weigh 48 kg on Earth, what is your weight on the Moon?",a:"48 ÷ 6 = 8 kg — Moon's gravity is 1/6 of Earth's."},{q:"Name 3 effects of gravity in everyday life.",a:"1. Objects fall when dropped 2. Rain falls from clouds 3. We stay on the ground"},{q:"Why does the Moon orbit Earth instead of flying off into space?",a:"Earth's gravity pulls the Moon inward, keeping it in orbit around Earth."},{q:"Why do skydivers fall fast before opening a parachute?",a:"Gravity accelerates them downward. Air resistance is low until the parachute opens."},{q:"Label the diagram: show direction of gravity on an object held above the ground.",a:"Gravity arrow points straight downward toward Earth's center."},{q:"Can gravity be zero? Explain.",a:"Not truly zero, but gets weaker with distance. Deep in space far from all planets it becomes almost zero."},{q:"Why are large planets like Jupiter able to hold thick atmospheres?",a:"Jupiter has very strong gravity (large mass) — it holds gas molecules close."},{q:"A fruit hangs on a tree. Describe all forces acting on it.",a:"1. Gravity pulling it down 2. Tension in the stem pulling it up (these balance until it falls)."},{q:"If Earth had twice the gravity, what would happen to you?",a:"You would feel twice as heavy, movement would be harder, and jumping would be lower."},{q:"Why do rivers flow downhill?",a:"Gravity pulls water downward. Water flows from high ground to lower ground."},{q:"What did Galileo discover about falling objects?",a:"All objects fall at the same rate in a vacuum, regardless of their mass (weight)."},{q:"What keeps satellites orbiting Earth?",a:"Earth's gravity pulls them toward Earth while their high speed keeps them moving forward — they orbit."},{q:"Why do we not notice gravity from a nearby tree?",a:"Trees have very little mass compared to Earth. Gravity is only noticeable from very massive objects."}],
          quiz:[{q:"Gravity pulls objects:",a:["Upward","Sideways","Toward Earth's center","Away from Earth"],c:2},{q:"On Moon, you weigh:",a:["Same as Earth","More","About 1/6","Double"],c:2},{q:"What keeps planets orbiting Sun?",a:["Magnetism","Friction","Gravity","Wind"],c:2},{q:"Who discovered gravity?",a:["Einstein","Newton","Galileo","Archimedes"],c:1},{q:"Without gravity:",a:["Nothing changes","Objects would float","Objects would be heavier","Earth would spin faster"],c:1},{q:"Gravity acts on:",a:["Only heavy objects","Only falling objects","All objects with mass","Only Earth"],c:2}]
         },
-        {t:"Friction", c:"Friction is a force that opposes motion between two surfaces in contact. It can be useful or a nuisance.",
+        {t:"Friction", svgType:"frictionForce", c:"Friction is a force that opposes motion between two surfaces in contact. It can be useful or a nuisance.",
          examples:["Rubbing hands together creates friction and heat","Brakes use friction to stop a car","Ice is slippery because it has very low friction","Rough surfaces have more friction than smooth ones","Useful friction: walking, writing, braking","Unwanted friction: engine parts wearing out, squeaky hinges"],
          exercises:[{q:"More friction or Less friction?", parts:["Rough sandpaper","Smooth ice","Rubber shoes on concrete","Oil on a surface","Tires on wet road vs dry road","A polished floor"], ans:["More","Less","More","Less","Wet = less","Less"]},{q:"Useful or Unwanted friction?", parts:["Walking without slipping","Car engine wearing out","Writing with a pencil","A rusty hinge","Brakes stopping a bicycle","Dragging heavy furniture"], ans:["Useful","Unwanted","Useful","Unwanted","Useful","Unwanted"]}],
          wordProblems:[{q:"Why do we put oil in machines?",a:"Oil reduces friction between moving parts, preventing wear and heat buildup."},{q:"Why are tires made with rough patterns (treads)?",a:"Treads increase friction/grip between tire and road, especially on wet surfaces."},{q:"Why is it harder to walk on ice than on concrete?",a:"Ice has very low friction — smooth surface gives less grip for your shoes."},{q:"How does a parachute use friction (air resistance) to slow down?",a:"Large surface area creates high air resistance (friction with air), reducing falling speed."},{q:"Why do your hands feel warm when you rub them together?",a:"Friction between your hands converts kinetic energy into heat energy."},{q:"Name 3 situations where friction is useful.",a:"1. Brakes stopping a car 2. Shoes gripping the floor 3. Writing with a pencil"},{q:"Name 3 situations where friction is unwanted.",a:"1. Engine parts wearing out 2. Rusty hinges 3. Dragging heavy furniture"},{q:"How do ball bearings reduce friction in machines?",a:"Balls roll instead of sliding — rolling friction is much less than sliding friction."},{q:"Why does a bicycle slow down and stop if you stop pedalling?",a:"Friction between tyres and road, plus air resistance, gradually remove kinetic energy."},{q:"Label the diagram: show where friction acts on a book being pushed across a table.",a:"Friction acts on the bottom of the book, opposing the direction of motion (pointing backward)."},{q:"Why do runners wear spiked shoes?",a:"Spikes dig into the ground, increasing friction/grip to prevent slipping when running fast."},{q:"What is air resistance? Give one example.",a:"Air resistance is friction between a moving object and air. Example: wind slowing a cyclist."},{q:"Why do modern cars have streamlined (curved) shapes?",a:"Streamlined shape reduces air resistance, allowing the car to move faster using less fuel."},{q:"A box is pushed on a rough floor vs a smooth floor. Where does it travel farther?",a:"Smooth floor — less friction means less force opposing motion, so it slides farther."},{q:"Why do brakes work better on dry roads than wet roads?",a:"Water reduces friction between brake pads and wheels/tyres, making stopping harder."},{q:"How does friction help you write with a pencil?",a:"Friction between pencil tip and paper scrapes graphite particles off, leaving marks."},{q:"What would happen if there were no friction at all?",a:"Nothing could grip — you couldn't walk, cars couldn't stop, objects would slide forever."},{q:"Why do match sticks work?",a:"Friction from striking the match generates heat energy that ignites the chemicals."},{q:"How does sandpaper use friction?",a:"The rough surface creates strong friction that wears down and smooths the material it rubs."},{q:"Why do you slow down when swimming?",a:"Water resistance (friction between water and your body) pushes against your forward motion."}],
@@ -1285,7 +2535,7 @@ function getLessons(subject, grade) {
          wordProblems:[{q:"Why is it easier to push a heavy box up a ramp than to lift it straight up?",a:"A ramp (inclined plane) spreads the effort over a longer distance, reducing the force needed."},{q:"Name 3 levers you use at home.",a:"1. Scissors 2. Bottle opener 3. Door handle — all have a fulcrum where force is applied."},{q:"How does a pulley help raise a flag?",a:"It changes the direction of force — you pull down on the rope, the flag goes up."},{q:"A knife is what type of simple machine? How does it work?",a:"A wedge — it concentrates force on a thin edge to cut/split materials apart."},{q:"Why are screws used instead of nails in some furniture?",a:"Screws grip tighter (more friction due to spiral thread) and can be removed easily."},{q:"Name all 6 simple machines.",a:"1. Lever 2. Wheel and axle 3. Pulley 4. Inclined plane 5. Wedge 6. Screw"},{q:"Label the diagram: name the 3 parts of a lever.",a:"1. Fulcrum (pivot point) 2. Effort (where you push/pull) 3. Load (what you are moving)"},{q:"What type of simple machine is a staircase?",a:"An inclined plane — it reduces the effort needed to raise yourself to a higher level."},{q:"How does a screw differ from a nail?",a:"A screw is a wrapped inclined plane — its spiral thread grips tighter and can be unscrewed."},{q:"Name the simple machine in a bicycle wheel.",a:"Wheel and axle — the wheel turns on a central axle, reducing friction and multiplying force."},{q:"Why do crowbars make it easier to lift heavy slabs?",a:"A crowbar is a lever — the long arm multiplies your force many times at the fulcrum."},{q:"How does a doorknob work as a wheel and axle?",a:"The large knob (wheel) multiplies your turning force on the small axle (shaft) that turns the latch."},{q:"What is the fulcrum on a pair of scissors?",a:"The rivet/pin in the middle where the two blades are joined — that is the pivot/fulcrum."},{q:"How does a ramp help people in wheelchairs?",a:"The ramp spreads the upward movement over a longer distance, reducing the force needed."},{q:"Name 2 examples of pulleys used in buildings or construction.",a:"1. Crane lifting materials 2. Elevator cable system"},{q:"A wedge splits wood. How does the shape help?",a:"The thin end concentrates force on a small area. As it goes deeper, the slanted sides push wood apart."},{q:"Do simple machines reduce the total work done? Explain.",a:"No — they make it easier (less force) but you must move over a longer distance. Total work stays the same."},{q:"What makes a jar lid a screw?",a:"The spiral groove (thread) is an inclined plane wrapped around a cylinder — it tightens by turning."},{q:"Name the type of simple machine: 1. Ramp 2. Axe 3. Flagpole rope 4. Seesaw.",a:"1. Inclined plane 2. Wedge 3. Pulley 4. Lever"},{q:"How does a block and tackle (multiple pulleys) help lift very heavy loads?",a:"Multiple pulleys share the load — each pulley halves the force needed, though you pull the rope farther."}],
          quiz:[{q:"A seesaw is a:",a:["Pulley","Lever","Wedge","Screw"],c:1},{q:"How many simple machines?",a:["4","5","6","8"],c:2},{q:"A ramp is:",a:["Lever","Pulley","Inclined plane","Wedge"],c:2},{q:"Pulleys change:",a:["Speed","Direction of force","Weight","Color"],c:1},{q:"A knife blade is a:",a:["Lever","Screw","Wedge","Pulley"],c:2},{q:"Simple machines make work:",a:["Disappear","Easier","Harder","Impossible"],c:1}]
         },
-        {t:"Types of Energy", c:"Energy is the ability to do work. It exists in many forms and can change from one form to another.",
+        {t:"Types of Energy", svgType:"energyTypes", c:"Energy is the ability to do work. It exists in many forms and can change from one form to another.",
          examples:["Kinetic energy: energy of moving objects (running, flowing water)","Potential energy: stored energy (a ball on a shelf, stretched rubber band)","Heat energy: from fire, sun, friction","Light energy: from sun, bulb, candle","Sound energy: from speakers, drums, voice","Electrical energy: from batteries, power lines, lightning","Chemical energy: stored in food, fuel, batteries"],
          exercises:[{q:"Name the type of energy:", parts:["A moving car","Food you eat","A burning candle","A charged battery","Music from a speaker","Sunlight","A ball at the top of a hill","A stretched spring"], ans:["Kinetic","Chemical","Heat + light","Electrical/chemical","Sound","Light","Potential","Potential (elastic)"]},{q:"What energy conversion happens?", parts:["Turning on a light bulb","Eating food and running","A solar panel","Burning wood","A windmill generating electricity"], ans:["Electrical → light + heat","Chemical → kinetic + heat","Light → electrical","Chemical → heat + light","Kinetic → electrical"]}],
          wordProblems:[{q:"When you eat food and then play, what energy conversions happen?",a:"Chemical energy (food) → kinetic energy (movement) + heat energy (body warmth)."},{q:"A ball rolls down a hill. Describe the energy change.",a:"Potential energy (at top) converts to kinetic energy (moving) as it rolls down."},{q:"How does a solar panel convert energy?",a:"Light energy from the Sun → electrical energy through photovoltaic cells."},{q:"Name 3 sources of light energy.",a:"1. Sun 2. Light bulb 3. Candle — Sun is natural, others artificial."},{q:"Why does rubbing your hands create heat?",a:"Friction converts kinetic energy (movement) into heat energy (thermal)."},{q:"Name 7 types of energy.",a:"1. Kinetic 2. Potential 3. Heat 4. Light 5. Sound 6. Electrical 7. Chemical"},{q:"What type of energy does a stretched rubber band have?",a:"Elastic potential energy — stored energy due to its stretched/deformed shape."},{q:"Label the diagram: A ball at the top of a ramp, a ball rolling down, a ball at the bottom. Label energy type at each point.",a:"Top: Potential energy (maximum). Rolling: Mix of potential and kinetic. Bottom: Kinetic energy (maximum)."},{q:"A torch battery powers a light bulb. Name the energy conversions.",a:"Chemical (battery) → Electrical (current) → Light + Heat (bulb)"},{q:"What is the Law of Conservation of Energy?",a:"Energy cannot be created or destroyed — it can only be converted from one form to another."},{q:"A guitar is played. Name all energy types involved.",a:"Kinetic energy (fingers plucking) → Sound energy (vibrating string) → some Heat (friction)."},{q:"Why does food give us energy?",a:"Food contains chemical energy stored in molecules. Our body breaks it down and releases it."},{q:"What type of energy do batteries store?",a:"Chemical energy — converted to electrical energy when connected in a circuit."},{q:"How does a windmill/wind turbine convert energy?",a:"Kinetic energy (wind) → Mechanical energy (spinning blades) → Electrical energy (generator)."},{q:"Compare kinetic and potential energy with an example each.",a:"Kinetic: energy of movement (a running dog). Potential: stored energy (a book on a shelf)."},{q:"A TV is switched on. Name the energy conversions.",a:"Electrical energy → Light energy + Sound energy + Heat energy."},{q:"Name 3 natural sources of energy.",a:"1. Sun (solar) 2. Wind 3. Water (hydropower) — all renewable."},{q:"What energy does a compressed spring store?",a:"Elastic potential energy — released as kinetic energy when the spring is let go."},{q:"Why does a light bulb get hot?",a:"Electrical energy converts to light AND heat — the heat is wasted energy."},{q:"Why do power stations burn fuel?",a:"Chemical energy (fuel) → Heat → Steam → Mechanical (turbine) → Electrical energy."}],
@@ -1293,7 +2543,7 @@ function getLessons(subject, grade) {
         }
       ] },
       { title: "Earth & Space", content: "Day and night, Moon phases, the solar system, Earth's structure, seasons.", key: "earth5", hasMathSub: true, subs: [
-        {t:"Day & Night", c:"Day and night are caused by Earth rotating on its axis. One full rotation takes about 24 hours. The side facing the Sun has daytime.",
+        {t:"Day & Night", svgType:"dayNight", c:"Day and night are caused by Earth rotating on its axis. One full rotation takes about 24 hours. The side facing the Sun has daytime.",
          examples:["Earth spins like a top on its axis","One rotation = 24 hours = 1 day","When Pakistan has daytime, America has nighttime","The Sun doesn't actually move — Earth rotates","At the equator, day and night are roughly equal (12 hours each)","Near the poles, days can be very long or very short depending on season"],
          exercises:[{q:"True or False:", parts:["Earth rotates once every 24 hours","The Sun moves around Earth","When it's day in Pakistan, it's night in the USA","Earth's axis is perfectly straight up","All places on Earth have 12-hour days"], ans:["True","False — Earth rotates","True (approximately)","False — it's tilted 23.5°","False — varies by location and season"]}],
          wordProblems:[{q:"If it's 12 noon in Pakistan, is it day or night in Japan?",a:"It's late afternoon/evening in Japan — Japan is about 4 hours ahead of Pakistan."},{q:"Why do we experience sunrise in the east and sunset in the west?",a:"Earth rotates from west to east, so the Sun appears to move from east to west."},{q:"How many times does Earth rotate in one week?",a:"7 times — one rotation per day, 7 days in a week."},{q:"If Earth stopped rotating, what would happen to day and night?",a:"One side would have permanent day (extreme heat), other permanent night (extreme cold)."},{q:"Why are days longer in summer and shorter in winter?",a:"Earth's tilted axis means your hemisphere gets more direct sunlight in summer."},{q:"How long does one full rotation of Earth take?",a:"24 hours — this is one day."},{q:"Why does the Sun appear to move across the sky?",a:"The Sun does not move — Earth rotates, making it look like the Sun travels from east to west."},{q:"Label the diagram: show Earth with its axis. Label where it is day and where it is night.",a:"Side facing the Sun = Day. Side facing away from the Sun = Night. Axis tilted at 23.5°."},{q:"Name 3 things that would be different if Earth rotated in the opposite direction.",a:"1. Sun would rise in the west 2. Day/night pattern would reverse 3. Weather patterns would change."},{q:"Why do clocks in different countries show different times?",a:"Earth is divided into 24 time zones. As Earth rotates, different regions face the Sun at different times."},{q:"How many degrees does Earth rotate in one hour?",a:"360° ÷ 24 hours = 15° per hour."},{q:"At the North Pole in summer, it can be daylight for 24 hours. Why?",a:"Earth's axis tilts the North Pole toward the Sun — it stays in sunlight even as Earth rotates."},{q:"Why is it colder at the poles than at the equator?",a:"Sunlight hits the equator directly (concentrated). At poles it hits at an angle (spread out, less intense)."},{q:"What would happen if Earth rotated much faster?",a:"Days and nights would be much shorter. Winds would become very strong."},{q:"Why is the sky blue during the day but dark at night?",a:"Day: sunlight scatters in the atmosphere, making it look blue. Night: no sunlight on that side."},{q:"Pakistan has daylight roughly 12-13 hours in summer. How many hours of night?",a:"24 - 13 = about 11 hours of night."},{q:"How does a shadow change from morning to noon to evening?",a:"Morning: long shadow pointing west. Noon: shortest shadow (sun overhead). Evening: long shadow pointing east."},{q:"Why is there no day and night on the Moon like on Earth?",a:"The Moon rotates very slowly — one Moon day equals about 27 Earth days."},{q:"What is Earth's axis?",a:"An imaginary line through Earth from North Pole to South Pole, tilted at 23.5°, around which Earth rotates."},{q:"Can you see stars during daytime? Why or why not?",a:"Usually not — the Sun's light scatters in the atmosphere and outshines the stars. Stars are still there."}],
@@ -1317,11 +2567,11 @@ function getLessons(subject, grade) {
          wordProblems:[{q:"If you could dig a hole through the Earth, what layers would you pass through?",a:"Crust → Mantle → Outer Core (liquid) → Inner Core (solid) → then reverse."},{q:"Why do earthquakes happen?",a:"Tectonic plates floating on the mantle shift and collide, releasing energy as seismic waves."},{q:"What creates Earth's magnetic field?",a:"The spinning liquid iron and nickel in the outer core generates the magnetic field."},{q:"Compare Earth's layers to a boiled egg.",a:"Shell = crust (thin), white = mantle (thick), yolk = core (center, hot)."},{q:"Why is the inner core solid even though it's the hottest?",a:"Extreme pressure at the center keeps the iron solid despite the high temperature."},{q:"Label the Earth layers diagram: name the 4 layers from outside to inside.",a:"1. Crust (outermost, thin) 2. Mantle (thickest layer) 3. Outer Core (liquid iron/nickel) 4. Inner Core (solid, hottest)"},{q:"What is the thinnest and thickest layer of the Earth?",a:"Thinnest: Crust (5-70 km). Thickest: Mantle (~2,900 km)."},{q:"Why do volcanoes erupt?",a:"Magma (molten rock from the mantle) is pushed up through cracks in the crust and erupts at the surface."},{q:"What is the temperature of Earth's inner core?",a:"About 5,500°C — as hot as the surface of the Sun."},{q:"What are tectonic plates?",a:"Giant pieces of Earth's crust that float on the semi-molten mantle and slowly move."},{q:"Name 3 effects of tectonic plate movement.",a:"1. Earthquakes 2. Volcanoes 3. Formation of mountains"},{q:"What is the difference between magma and lava?",a:"Magma: molten rock inside the Earth. Lava: magma that has erupted and reached the surface."},{q:"Why is the outer core liquid?",a:"The temperature is so high that iron and nickel melt. Less pressure than the inner core allows it to remain liquid."},{q:"How do we know what is inside the Earth if we can't drill that deep?",a:"Scientists study seismic waves (from earthquakes) that travel through Earth — different waves travel at different speeds through different layers."},{q:"What would happen if Earth had no magnetic field?",a:"Solar wind would strip away the atmosphere, and harmful radiation would reach the surface — life would be impossible."},{q:"Why does the crust vary in thickness?",a:"Oceanic crust (~5 km) under oceans is thinner. Continental crust (~35-70 km) under land is thicker."},{q:"Name the layer where tectonic plates float.",a:"The Mantle — plates float on the semi-molten (asthenosphere) part of the upper mantle."},{q:"What is a seismometer used for?",a:"It measures the strength and location of earthquakes (seismic waves)."},{q:"Why do mountains form at plate boundaries?",a:"When two continental plates collide, the crust buckles and is pushed upward forming mountains."},{q:"What are the main elements in Earth's core?",a:"Iron and nickel — Earth's outer core is liquid iron-nickel, inner core is solid iron-nickel."}],
          quiz:[{q:"We live on the:",a:["Mantle","Crust","Core","Atmosphere"],c:1},{q:"Thickest layer:",a:["Crust","Mantle","Outer core","Inner core"],c:1},{q:"Inner core is:",a:["Liquid","Gas","Solid","Semi-solid"],c:2},{q:"Outer core creates:",a:["Atmosphere","Magnetic field","Oceans","Mountains"],c:1},{q:"Earthquakes caused by:",a:["Wind","Rain","Tectonic plates moving","Gravity"],c:2},{q:"Earth's core is mainly:",a:["Rock","Water","Iron and nickel","Gas"],c:2}]
         },
-        {t:"Seasons", c:"Seasons are caused by Earth's tilted axis (23.5°) as it orbits the Sun. Different parts of Earth receive different amounts of sunlight throughout the year.",
-         examples:["Summer: your hemisphere tilts toward the Sun — longer days, more heat","Winter: your hemisphere tilts away — shorter days, less heat","Spring and Autumn: transition seasons, moderate temperatures","Pakistan has 4 seasons: Spring (Mar-May), Summer (Jun-Aug), Autumn (Sep-Nov), Winter (Dec-Feb)","When Northern Hemisphere has summer, Southern has winter","At the equator, seasons change very little"],
+        {t:"Seasons", svgType:"seasonsCycle", c:"Seasons are caused by Earth's tilted axis (23.5°) as it orbits the Sun. Different parts of Earth receive different amounts of sunlight throughout the year.",
+         examples:["Summer: your hemisphere tilts toward the Sun — longer days, more heat","Winter: your hemisphere tilts away — shorter days, less heat","Spring and Autumn: transition seasons, moderate temperatures","Pakistan has 4 seasons: Spring (March-May), Summer (June-August), Autumn (September-November), Winter (December-February)","When the Northern Hemisphere has summer, the Southern Hemisphere has winter","At the equator, seasons change very little"],
          exercises:[{q:"Match season to description:", parts:["Longest days, hottest","Shortest days, coldest","Leaves fall, cooling down","Flowers bloom, warming up"], ans:["Summer","Winter","Autumn","Spring"]},{q:"True or False:", parts:["Seasons are caused by Earth's distance from Sun","Earth's axis is tilted 23.5°","Both hemispheres have summer at the same time","Days are longer in summer","The equator has extreme seasons"], ans:["False — caused by tilt","True","False — opposite seasons","True","False — mild changes"]}],
-         wordProblems:[{q:"Why is it winter in Australia when it's summer in Pakistan?",a:"Earth's tilt means when N. Hemisphere faces Sun (summer), S. Hemisphere faces away (winter)."},{q:"If Earth's axis were not tilted, would we have seasons?",a:"No — everywhere would get equal sunlight year-round. No seasons."},{q:"Why are summer days longer than winter days?",a:"In summer, your hemisphere is tilted toward Sun, so it stays in sunlight longer."},{q:"Which season do you think is best for farming? Why?",a:"Spring/summer — warm temperatures, more sunlight, and rainfall help crops grow."},{q:"How do animals adapt to changing seasons?",a:"Migration (birds), hibernation (bears), growing thicker fur (winter), shedding fur (summer)."},{q:"What causes seasons on Earth?",a:"Earth's tilted axis (23.5°) as it orbits the Sun — not its distance from the Sun."},{q:"Name the 4 seasons and when they occur in Pakistan.",a:"1. Spring (Mar-May) 2. Summer (Jun-Aug) 3. Autumn (Sep-Nov) 4. Winter (Dec-Feb)"},{q:"Label the diagram: show Earth at its summer and winter positions in orbit around the Sun.",a:"Summer: N. Hemisphere tilted toward the Sun. Winter: N. Hemisphere tilted away from the Sun."},{q:"Why is it hotter in summer even though Earth is slightly farther from the Sun?",a:"In summer, your hemisphere tilts toward the Sun — sunlight hits more directly (concentrated), giving more heat."},{q:"What is the longest day of the year called?",a:"The summer solstice — around June 21 in the Northern Hemisphere (longest day, shortest night)."},{q:"What is the shortest day of the year called?",a:"The winter solstice — around December 21 in the Northern Hemisphere (shortest day, longest night)."},{q:"What are equinoxes? When do they occur?",a:"Days when day and night are equal (12 hours each). Occur around March 21 and September 23."},{q:"Why does the equator not have distinct seasons?",a:"The equator is always close to the Sun's direct rays — little change in sunlight throughout the year."},{q:"How does Earth's tilt affect the angle of sunlight?",a:"Tilting toward Sun = direct rays (concentrated, more heat). Tilting away = angled rays (spread out, less heat)."},{q:"In which season do trees shed leaves? Why?",a:"Autumn — decreasing daylight and cooler temperatures trigger trees to shed leaves to conserve water/energy."},{q:"Why do deserts near the equator stay hot year-round?",a:"Near the equator, the Sun is always nearly overhead — strong sunlight all year with no seasonal change."},{q:"What would happen if Earth were tilted at 90°?",a:"Extreme seasons — poles would have months of sunlight and months of darkness. Tropics would freeze."},{q:"Why do countries near the poles have very long days in summer and very long nights in winter?",a:"Earth's strong tilt means the pole faces the Sun continuously in summer and faces away all of winter."},{q:"How many times does Earth orbit the Sun in one year?",a:"Once — Earth takes 365.25 days to complete one full orbit."},{q:"Name one way plants and one way animals respond to the change from summer to winter.",a:"Plants: shed leaves, stop growing. Animals: hibernate or migrate to warmer places."}],
-         quiz:[{q:"Seasons caused by:",a:["Distance from Sun","Earth's tilted axis","Moon's orbit","Wind patterns"],c:1},{q:"Earth's tilt:",a:["0°","23.5°","45°","90°"],c:1},{q:"Longest days in:",a:["Winter","Spring","Summer","Autumn"],c:2},{q:"When N. Hemisphere has summer:",a:["S. Hemisphere also summer","S. has winter","Both have spring","No seasons in south"],c:1},{q:"How many seasons?",a:["2","3","4","6"],c:2},{q:"Equator has:",a:["Extreme seasons","Mild/no seasons","Only summer","Only winter"],c:1}]
+         wordProblems:[{q:"Why is it winter in Australia when it's summer in Pakistan?",a:"Earth's tilt means when the Northern Hemisphere faces the Sun (summer), the Southern Hemisphere faces away from the Sun (winter)."},{q:"If Earth's axis were not tilted, would we have seasons?",a:"No — everywhere would get equal sunlight year-round. No seasons."},{q:"Why are summer days longer than winter days?",a:"In summer, your hemisphere is tilted toward the Sun, so it stays in sunlight longer."},{q:"Which season do you think is best for farming? Why?",a:"Spring/summer — warm temperatures, more sunlight, and rainfall help crops grow."},{q:"How do animals adapt to changing seasons?",a:"Migration (birds), hibernation (bears), growing thicker fur (winter), shedding fur (summer)."},{q:"What causes seasons on Earth?",a:"Earth's tilted axis (23.5°) as it orbits the Sun — not its distance from the Sun."},{q:"Name the 4 seasons and when they occur in Pakistan.",a:"1. Spring (March-May) 2. Summer (June-August) 3. Autumn (September-November) 4. Winter (December-February)"},{q:"Label the diagram: show Earth at its summer and winter positions in orbit around the Sun.",a:"Summer: Northern Hemisphere tilted toward the Sun. Winter: Northern Hemisphere tilted away from the Sun."},{q:"Why is it hotter in summer even though Earth is slightly farther from the Sun?",a:"In summer, your hemisphere tilts toward the Sun — sunlight hits more directly (concentrated), giving more heat."},{q:"What is the longest day of the year called?",a:"The summer solstice — around June 21 in the Northern Hemisphere (longest day, shortest night)."},{q:"What is the shortest day of the year called?",a:"The winter solstice — around December 21 in the Northern Hemisphere (shortest day, longest night)."},{q:"What are equinoxes? When do they occur?",a:"Days when day and night are equal (12 hours each). Occur around March 21 and September 23."},{q:"Why does the equator not have distinct seasons?",a:"The equator is always close to the Sun's direct rays — little change in sunlight throughout the year."},{q:"How does Earth's tilt affect the angle of sunlight?",a:"Tilting toward the Sun = direct rays (concentrated, more heat). Tilting away = angled rays (spread out, less heat)."},{q:"In which season do trees shed leaves? Why?",a:"Autumn — decreasing daylight and cooler temperatures trigger trees to shed leaves to conserve water/energy."},{q:"Why do deserts near the equator stay hot year-round?",a:"Near the equator, the Sun is always nearly overhead — strong sunlight all year with no seasonal change."},{q:"What would happen if Earth were tilted at 90°?",a:"Extreme seasons — poles would have months of sunlight and months of darkness. Tropics would freeze."},{q:"Why do countries near the poles have very long days in summer and very long nights in winter?",a:"Earth's strong tilt means the pole faces the Sun continuously in summer and faces away all of winter."},{q:"How many times does Earth orbit the Sun in one year?",a:"Once — Earth takes 365.25 days to complete one full orbit."},{q:"Name one way plants and one way animals respond to the change from summer to winter.",a:"Plants: shed leaves, stop growing. Animals: hibernate or migrate to warmer places."}],
+         quiz:[{q:"Seasons caused by:",a:["Distance from Sun","Earth's tilted axis","Moon's orbit","Wind patterns"],c:1},{q:"Earth's tilt:",a:["0°","23.5°","45°","90°"],c:1},{q:"Longest days in:",a:["Winter","Spring","Summer","Autumn"],c:2},{q:"When the Northern Hemisphere has summer:",a:["The Southern Hemisphere also has summer","The Southern Hemisphere has winter","Both have spring","There are no seasons in the south"],c:1},{q:"How many seasons?",a:["2","3","4","6"],c:2},{q:"Equator has:",a:["Extreme seasons","Mild/no seasons","Only summer","Only winter"],c:1}]
         }
       ] },
       { title: "Human Body Systems", content: "Digestive, respiratory, circulatory, skeletal, and nervous systems.", key: "body5", hasMathSub: true, subs: [
@@ -1343,13 +2593,13 @@ function getLessons(subject, grade) {
          wordProblems:[{q:"Why does heart beat faster during exercise?",a:"Muscles need more oxygen and nutrients, so heart pumps faster to deliver more blood."},{q:"Why is the heart called a double pump?",a:"Right side pumps blood to lungs, left side pumps oxygenated blood to the body."},{q:"Why do doctors check your pulse?",a:"Pulse shows heart rate — helps detect if heart is beating normally or abnormally."},{q:"Label the circulatory system diagram: name the 4 main parts.",a:"1. Heart (pump) 2. Arteries (carry blood away) 3. Veins (bring blood back) 4. Capillaries (exchange vessels)"},{q:"How many times does the heart beat per day?",a:"About 100,000 times per day."},{q:"What is the difference between arteries and veins?",a:"Arteries: carry oxygen-rich blood AWAY from heart. Veins: carry oxygen-poor blood BACK to heart."},{q:"What are capillaries?",a:"Tiny blood vessels where oxygen and nutrients pass into body cells and CO₂ passes out."},{q:"What are the 4 chambers of the heart?",a:"1. Right atrium 2. Right ventricle 3. Left atrium 4. Left ventricle"},{q:"Why does the left side of the heart have thicker walls?",a:"The left side pumps blood to the entire body — it needs more force, so the muscle is thicker."},{q:"What does blood carry around the body?",a:"1. Oxygen 2. Nutrients (glucose) 3. Waste products (CO₂) 4. White blood cells (immunity)"},{q:"What is blood pressure?",a:"The force of blood pushing against artery walls as the heart pumps. High pressure can damage vessels."},{q:"What happens to your heart rate when you are frightened?",a:"It speeds up (adrenaline released) — preparing your body to fight or flee."},{q:"Why is regular exercise good for the heart?",a:"Exercise strengthens the heart muscle, making it pump more efficiently and reducing disease risk."},{q:"Name 3 components of blood and their functions.",a:"1. Red blood cells (carry oxygen) 2. White blood cells (fight infection) 3. Platelets (clot blood)"},{q:"What is the function of platelets?",a:"Platelets clump together to form a clot when a blood vessel is cut, stopping bleeding."},{q:"Why do athletes have a lower resting heart rate?",a:"Regular exercise makes the heart stronger — it pumps more blood per beat, so it beats less often at rest."},{q:"Why do veins appear blue/green under the skin?",a:"Veins carry oxygen-poor blood (darker red). The skin layer makes them appear blue/green."},{q:"What is anaemia?",a:"A condition where there are too few red blood cells or too little haemoglobin, reducing oxygen delivery."},{q:"What does the heart do when you are asleep?",a:"It still beats (about 50-60 times/min) pumping blood to all organs — it never stops."},{q:"How does the circulatory system and respiratory system work together?",a:"Lungs add oxygen to blood and remove CO₂. Heart pumps oxygenated blood to body — they are linked."}],
          quiz:[{q:"Heart beats/day:",a:["1,000","10,000","100,000","1,000,000"],c:2},{q:"Arteries carry blood:",a:["To heart","Away from heart","Nowhere","Only legs"],c:1},{q:"Heart chambers:",a:["2","3","4","5"],c:2},{q:"Oxygen-poor blood in:",a:["Arteries","Veins","Heart only","Lungs"],c:1},{q:"Capillaries are:",a:["Large tubes","Tiny vessels","Bones","Muscles"],c:1},{q:"Blood carries:",a:["Only oxygen","Only food","O₂, nutrients, waste","Only water"],c:2}]
         },
-        {t:"Skeletal & Muscular", svgType:"skeleton", c:"206 bones give shape, protect organs, work with muscles for movement. Joints allow bending.",
+         {t:"Skeletal and Muscular Systems", svgType:"skeleton", c:"206 bones give shape, protect organs, work with muscles for movement. Joints allow bending.",
          examples:["Skull protects brain","Rib cage protects heart and lungs","Spine: 33 vertebrae, supports body","Joints: hinge (knee), ball-and-socket (shoulder)","Muscles contract to pull bones","Tendons: muscle to bone. Ligaments: bone to bone"],
          exercises:[{q:"What does it protect?", parts:["Skull","Rib cage","Spine","Pelvis"], ans:["Brain","Heart+lungs","Spinal cord","Organs"]},{q:"True or False:", parts:["Adults have 206 bones","Muscles push bones","Spine is one solid bone","Babies have more bones"], ans:["True","False — pull","False — 33 vertebrae","True — bones fuse"]}],
          wordProblems:[{q:"Why is calcium important for bones?",a:"Calcium makes bones hard and strong. Without it, bones become weak and brittle."},{q:"What would happen without joints?",a:"You couldn't bend, move, or walk — body would be completely rigid like a statue."},{q:"Name the largest and smallest bones.",a:"Largest: femur (thigh bone). Smallest: stapes (in the ear)."},{q:"Label the skeleton diagram: identify skull, spine, rib cage, femur, humerus.",a:"Skull: head. Spine: backbone (33 vertebrae). Rib cage: chest. Femur: thigh. Humerus: upper arm."},{q:"How many bones does an adult human have?",a:"206 bones."},{q:"Name 3 functions of the skeletal system.",a:"1. Gives body shape and support 2. Protects organs (skull→brain, ribs→lungs) 3. Works with muscles for movement"},{q:"What is the difference between a tendon and a ligament?",a:"Tendon: connects muscle to bone. Ligament: connects bone to bone at joints."},{q:"Why do babies have more bones than adults?",a:"Babies have about 270-300 bones. As they grow, many fuse together into the 206 adult bones."},{q:"Name 2 types of joints and give an example of each.",a:"1. Hinge joint (knee, elbow) — bends in one direction. 2. Ball-and-socket (shoulder, hip) — moves in all directions."},{q:"How do muscles move bones?",a:"Muscles contract (shorten) and pull bones — muscles always pull, never push."},{q:"What is a fracture?",a:"A fracture is a broken or cracked bone. It heals when new bone cells grow across the break."},{q:"Why do humans have a spine (backbone)?",a:"The spine supports the body upright, protects the spinal cord, and allows flexible movement."},{q:"What does the rib cage protect?",a:"The heart and lungs — it forms a protective bony cage around these vital organs."},{q:"Why is the skull hard and curved?",a:"Its rounded, hard shape distributes impact force across its surface, protecting the brain."},{q:"Name 3 nutrients needed for healthy bones.",a:"1. Calcium 2. Phosphorus 3. Vitamin D (helps absorb calcium)"},{q:"What is osteoporosis?",a:"A condition where bones lose density and become weak and brittle, usually in old age."},{q:"How do muscles work in pairs?",a:"When one muscle contracts (bicep), the other relaxes (tricep) and vice versa — antagonistic pairs."},{q:"Name the bones that protect the brain and spinal cord.",a:"Brain: skull (cranium). Spinal cord: vertebrae (spine)."},{q:"Why does regular exercise strengthen bones?",a:"Exercise puts stress on bones, stimulating them to grow denser and stronger."},{q:"What is cartilage?",a:"Smooth, flexible tissue that covers bone ends at joints, reducing friction and absorbing shock."}],
          quiz:[{q:"Adult bones:",a:["106","206","306","406"],c:1},{q:"Skull protects:",a:["Heart","Lungs","Brain","Stomach"],c:2},{q:"Muscles move by:",a:["Pushing","Pulling","Stretching","Twisting"],c:1},{q:"Knee joint type:",a:["Ball-socket","Hinge","Pivot","Fixed"],c:1},{q:"Tendons connect:",a:["Bone-bone","Muscle-bone","Muscle-muscle","Skin-bone"],c:1},{q:"Spine vertebrae:",a:["12","24","33","44"],c:2}]
         },
-        {t:"Nervous System", c:"Brain is command center, spinal cord is highway, nerves are wires carrying electrical signals.",
+        {t:"Nervous System", svgType:"nervousSystem", c:"Brain is command center, spinal cord is highway, nerves are wires carrying electrical signals.",
          examples:["Brain: thinking, memory, senses — 1.4 kg","Spinal cord: signals between brain and body","Nerves: throughout body, carry electrical signals","Reflex: automatic response — hand from hot stove","Cerebrum: thinking. Cerebellum: balance. Brain stem: breathing","5 senses connected to brain: sight, hearing, smell, taste, touch"],
          exercises:[{q:"Match:", parts:["Thinking","Signals in spine","Throughout body","Quick auto response","Balance"], ans:["Cerebrum","Spinal cord","Nerves","Reflex","Cerebellum"]}],
          wordProblems:[{q:"Why pull hand from hot stove before thinking?",a:"Reflex arc — signal goes to spinal cord and back (not brain), so response is faster."},{q:"What if spinal cord is damaged?",a:"Signals can't travel between brain and body below the injury — paralysis may occur."},{q:"Why wear helmets?",a:"Helmets protect the brain (skull alone may not absorb all impact force)."},{q:"Name the 3 main parts of the nervous system.",a:"1. Brain (control centre) 2. Spinal cord (highway for signals) 3. Nerves (wires throughout body)"},{q:"Label the nervous system diagram: identify brain, spinal cord, and nerves.",a:"Brain: in skull. Spinal cord: runs through vertebrae. Nerves: branch out to all body parts."},{q:"What are the 3 main parts of the brain?",a:"1. Cerebrum (thinking, memory, senses) 2. Cerebellum (balance, coordination) 3. Brain stem (breathing, heartbeat)"},{q:"What is a reflex action? Give one example.",a:"A reflex is an automatic, fast response without thinking. Example: pulling hand from heat, blinking."},{q:"Why do reflexes bypass the brain?",a:"Reflexes use the spinal cord as a shortcut — making them much faster than conscious reactions."},{q:"Name the 5 senses and the organ for each.",a:"1. Sight (eyes) 2. Hearing (ears) 3. Smell (nose) 4. Taste (tongue) 5. Touch (skin)"},{q:"How fast do nerve signals travel?",a:"Up to 120 metres per second — very fast, but varies by nerve type."},{q:"What happens when a nerve is damaged?",a:"Signals cannot be transmitted along that nerve — loss of feeling or movement in that area."},{q:"Why do you sometimes feel pain in a cut finger for hours after the injury?",a:"Pain nerves continue sending signals to the brain, which keeps processing them as pain."},{q:"What is the difference between the brain and the spinal cord?",a:"Brain: processes information and makes decisions. Spinal cord: transmits signals between brain and body."},{q:"Why do some medicines make you drowsy?",a:"They slow down nerve activity in the brain, reducing alertness."},{q:"What does the cerebellum control?",a:"Balance, coordination, and fine motor movements (like walking, catching a ball)."},{q:"Name 3 things the brain controls automatically.",a:"1. Breathing 2. Heartbeat 3. Digestion — controlled by the brain stem without conscious thought."},{q:"Why is sleep important for the brain?",a:"During sleep, the brain processes memories, repairs itself, and removes waste products."},{q:"What is the brain stem responsible for?",a:"Vital automatic functions: breathing, heartbeat, blood pressure, swallowing."},{q:"How does your nervous system help you avoid danger?",a:"Senses detect danger → nerves send signal to brain → brain decides response → muscles react."},{q:"Why does a person who is blind from birth often have a sharper sense of hearing?",a:"The brain adapts — areas normally used for vision are taken over and used to sharpen other senses."}],
@@ -1357,7 +2607,7 @@ function getLessons(subject, grade) {
         }
       ] },
       { title: "Living Things & Ecosystems", content: "Classification, food chains, ecosystems, adaptation, plant biology.", key: "eco5", hasMathSub: true, subs: [
-        {t:"Classification", c:"Living things grouped by shared features. Kingdoms: Animals, Plants, Fungi, Bacteria. Animals split into vertebrates and invertebrates.",
+        {t:"Classification", svgType:"classificationGroups", c:"Living things grouped by shared features. Kingdoms: Animals, Plants, Fungi, Bacteria. Animals split into vertebrates and invertebrates.",
          examples:["Vertebrates: fish, amphibians, reptiles, birds, mammals","Invertebrates: insects, spiders, worms — 97% of animals","Plants: make own food via photosynthesis","Fungi: mushrooms, mold — decompose dead matter","Bacteria: single-celled, some helpful some harmful"],
          exercises:[{q:"Vertebrate or Invertebrate?", parts:["Eagle","Butterfly","Snake","Spider","Whale","Earthworm","Frog","Ant"], ans:["V","I","V","I","V","I","V","I"]},{q:"Which kingdom?", parts:["Rose","Mushroom","Cat","Mango tree","Mold"], ans:["Plant","Fungi","Animal","Plant","Fungi"]}],
          wordProblems:[{q:"Why aren't mushrooms plants?",a:"Mushrooms don't have chlorophyll and can't photosynthesize — they decompose dead matter for food."},{q:"Name 3 vertebrates and 3 invertebrates at home.",a:"Vertebrates: cat, bird, fish. Invertebrates: ant, spider, housefly."},{q:"Why classify living things?",a:"To organize, study, and understand the millions of species — makes science manageable."},{q:"Name the 5 vertebrate groups.",a:"1. Fish 2. Amphibians 3. Reptiles 4. Birds 5. Mammals"},{q:"Label the classification diagram: sort these into vertebrate/invertebrate — eagle, butterfly, frog, spider.",a:"Vertebrates: eagle, frog. Invertebrates: butterfly, spider."},{q:"What is the main difference between vertebrates and invertebrates?",a:"Vertebrates have a backbone (spine). Invertebrates do not have a backbone."},{q:"Name the 5 kingdoms of living things.",a:"1. Animals 2. Plants 3. Fungi 4. Bacteria 5. Protists"},{q:"Name 3 characteristics of mammals.",a:"1. Warm-blooded 2. Have hair/fur 3. Feed young with milk"},{q:"Why is a bat classified as a mammal, not a bird?",a:"Bats have fur, give birth to live young, and nurse them with milk — they do not lay eggs."},{q:"What is the difference between cold-blooded and warm-blooded animals?",a:"Warm-blooded: maintain constant body temperature (birds, mammals). Cold-blooded: body temperature changes with environment (fish, reptiles)."},{q:"Name 3 characteristics of birds.",a:"1. Have feathers 2. Have beaks/bills 3. Lay eggs 4. Warm-blooded"},{q:"Name 3 examples of amphibians.",a:"1. Frog 2. Toad 3. Salamander — live in water as young, on land as adults."},{q:"Why are insects the most numerous type of animal on Earth?",a:"Insects reproduce rapidly, adapt to many environments, and are small — over 1 million known species."},{q:"What kingdom does a cactus belong to? Why?",a:"Plant kingdom — it has chlorophyll and makes food through photosynthesis."},{q:"What is a scientific name (binomial nomenclature)?",a:"A two-part Latin name given to each species (e.g., Homo sapiens for humans). First = genus, second = species."},{q:"Name 3 animals that are warm-blooded.",a:"1. Dog 2. Eagle 3. Whale — all mammals or birds maintain constant body temperature."},{q:"How do scientists classify a new species they discover?",a:"They study its features (body structure, DNA, behaviour) and place it in the correct kingdom, genus, and species."},{q:"Give one example of a fish, reptile, and amphibian.",a:"Fish: trout. Reptile: lizard. Amphibian: frog."},{q:"Are viruses living things? Why or why not?",a:"Debated — viruses cannot reproduce on their own and have no cells. Most scientists classify them as non-living."},{q:"Why are there so many more invertebrates than vertebrates?",a:"Invertebrates are simpler in structure, reproduce faster, and have adapted to almost every environment on Earth."}],
@@ -1369,7 +2619,7 @@ function getLessons(subject, grade) {
          wordProblems:[{q:"If all rabbits vanished, what happens to foxes?",a:"Foxes lose food source — population decreases or they must find other prey."},{q:"Why are plants called producers?",a:"They produce their own food through photosynthesis using sunlight, water, and CO₂."},{q:"What if there were no decomposers?",a:"Dead matter would pile up, nutrients wouldn't recycle back to soil — ecosystems collapse."},{q:"Label the food chain diagram: Sun → ? → ? → ? → ?",a:"Sun → Grass (producer) → Rabbit (herbivore/primary consumer) → Fox (carnivore/secondary) → Eagle (top predator)"},{q:"What is the difference between a food chain and a food web?",a:"Food chain: single sequence (grass→rabbit→fox). Food web: multiple overlapping chains showing real feeding relationships."},{q:"Name the 4 roles in a food chain.",a:"1. Producer (plants) 2. Primary consumer (herbivore) 3. Secondary consumer (carnivore) 4. Decomposer (fungi/bacteria)"},{q:"What is the original source of energy for all food chains?",a:"The Sun — plants capture solar energy through photosynthesis, and energy passes up the chain."},{q:"If the fox population increases greatly, what happens to rabbits?",a:"Rabbit population decreases — more foxes eat more rabbits than they can reproduce."},{q:"What is a carnivore? Give 2 examples.",a:"An animal that eats only other animals. Examples: 1. Lion 2. Eagle"},{q:"What is an omnivore? Give 2 examples.",a:"An animal that eats both plants and animals. Examples: 1. Human 2. Bear"},{q:"Why is there less energy at each level of a food chain?",a:"About 90% of energy is lost as heat at each stage — only 10% passes to the next level."},{q:"What would happen if all plants disappeared from an ecosystem?",a:"All herbivores would die. Then all carnivores that eat them would die. The entire ecosystem collapses."},{q:"What is a decomposer? Why are they essential?",a:"Decomposers (bacteria, fungi) break down dead matter and recycle nutrients back into soil for plants."},{q:"Give an example of a food chain with 4 links.",a:"Grass → Cricket → Frog → Snake (or Sun → Seaweed → Fish → Shark)"},{q:"What is a predator? What is prey?",a:"Predator: hunts and eats other animals. Prey: the animal that is hunted and eaten."},{q:"Name 3 producers in a pond ecosystem.",a:"1. Algae 2. Water lily 3. Pondweed — all make food through photosynthesis."},{q:"Why do we say energy 'flows' through a food chain?",a:"Energy moves in one direction — from producers to consumers to decomposers, never backward."},{q:"What is a secondary consumer?",a:"An animal that eats the primary consumer (herbivore). Example: fox eats rabbit (rabbit is primary consumer)."},{q:"How do decomposers help the food chain?",a:"They break down dead plants and animals into simple nutrients that go back into the soil for plants."},{q:"Name one example of a food web (list at least 3 chains that overlap).",a:"Chain 1: Grass→Rabbit→Fox. Chain 2: Grass→Mouse→Owl. Chain 3: Grass→Caterpillar→Bird→Hawk. Rabbit and mouse share grass as producer."}],
          quiz:[{q:"Chain starts with:",a:["Consumer","Decomposer","Producer","Predator"],c:2},{q:"Herbivore eats:",a:["Meat","Plants","Both","Nothing"],c:1},{q:"Top predator:",a:["Rabbit","Grass","Eagle","Worm"],c:2},{q:"Decomposers:",a:["Plants","Predators","Break down dead matter","Producers"],c:2},{q:"Energy source:",a:["Water","Soil","Sun","Wind"],c:2},{q:"Food web is:",a:["One chain","Many chains connected","No chains","Only plants"],c:1}]
         },
-        {t:"Adaptation", c:"Special features helping survival. Physical (body) or behavioral (actions).",
+        {t:"Adaptation", svgType:"adaptationTraits", c:"Special features helping survival. Physical (body) or behavioral (actions).",
          examples:["Camel: hump (fat), wide feet, long eyelashes","Polar bear: thick white fur","Cactus: stores water, spines not leaves","Fish: gills, streamlined body","Chameleon: color change (camouflage)","Birds migrate south (behavioral)"],
          exercises:[{q:"Physical or Behavioral?", parts:["Thick fur","Migration","Long neck","Hibernation","Webbed feet","Bee dance"], ans:["Physical","Behavioral","Physical","Behavioral","Physical","Behavioral"]}],
          wordProblems:[{q:"How does a camel survive in desert?",a:"Hump stores fat (energy), wide feet (don't sink in sand), long eyelashes (block sand)."},{q:"Why do animals hibernate?",a:"To conserve energy during winter when food is scarce — body slows down drastically."},{q:"Design an animal for the Arctic — what features?",a:"Thick white fur (warmth+camouflage), small ears (less heat loss), fat layer, large paws."},{q:"What is adaptation?",a:"A special feature (physical or behavioural) that helps an organism survive in its environment."},{q:"Label the adaptation diagram: name 4 adaptations of a camel.",a:"1. Hump (stores fat for energy) 2. Wide padded feet (don't sink in sand) 3. Long eyelashes (block sand) 4. Can close nostrils (stop sand)"},{q:"What is the difference between physical and behavioural adaptation?",a:"Physical: body feature (thick fur, long beak). Behavioural: action/habit (migration, hibernation)."},{q:"How is a polar bear adapted to Arctic life?",a:"1. Thick white fur (insulation + camouflage) 2. Fat layer under skin 3. Large paws (grip ice) 4. Small ears (less heat loss)"},{q:"Why do fish have streamlined bodies?",a:"Streamlined (torpedo) shape reduces water resistance, allowing fast, efficient swimming."},{q:"How is a cactus adapted to the desert?",a:"1. Spines instead of leaves (reduce water loss) 2. Thick stem stores water 3. Deep roots absorb rain quickly"},{q:"What is camouflage? Give 2 examples.",a:"When an animal blends into its surroundings. Examples: 1. Chameleon changing colour 2. Stick insect looking like a twig"},{q:"Why do birds migrate?",a:"Behavioural adaptation — to escape cold winters and find food in warmer areas, then return in spring."},{q:"How is a duck's foot adapted for swimming?",a:"Webbed feet work like paddles — the flat surface pushes water backward, moving the duck forward."},{q:"Name 3 adaptations of a polar bear.",a:"1. Thick fur (insulation) 2. White colour (camouflage in snow) 3. Layer of blubber (fat for warmth and energy)"},{q:"What adaptation helps an eagle catch prey from high in the sky?",a:"Sharp talons (grip prey), powerful curved beak (tear meat), excellent eyesight (spot prey from great height)."},{q:"How has the giraffe adapted to feed in trees?",a:"Long neck allows it to reach high leaves that other animals cannot reach (reduces competition)."},{q:"What is mimicry? Give an example.",a:"When one animal looks like another dangerous animal to avoid predators. Example: harmless king snake mimics venomous coral snake."},{q:"How do desert plants conserve water?",a:"1. Waxy coating on leaves 2. Spines reduce leaf area 3. Deep roots 4. Stored water in stems"},{q:"Why do animals in cold climates have smaller ears?",a:"Small ears have less surface area — less heat is lost from the body (Allen's Rule)."},{q:"What adaptation helps a woodpecker drill into trees?",a:"Very hard, sharp beak, long sticky tongue, strong neck muscles, and claws to grip bark."},{q:"Name one structural and one behavioural adaptation of a penguin.",a:"Structural: thick blubber layer (keeps warm). Behavioural: huddle together in groups (share body heat in storms)."}],
@@ -1389,7 +2639,7 @@ function getLessons(subject, grade) {
          wordProblems:[{q:"Why see reflection in mirror but not wall?",a:"Mirror has smooth surface (specular reflection). Wall is rough (diffuse reflection)."},{q:"Why rainbow after rain?",a:"Sunlight enters raindrops, splits into 7 colours (refraction), and reflects back to us."},{q:"Why shadows longer in morning?",a:"Sun is low on horizon — light hits objects at a steep angle, creating longer shadows."},{q:"Label the reflection diagram: identify incident ray, reflected ray, normal, and angle of incidence.",a:"Incident ray: incoming light. Normal: perpendicular to surface. Reflected ray: bounced light. Angle in = Angle out."},{q:"Label the refraction diagram: what happens when light enters water?",a:"Light slows down and bends toward the normal as it enters the denser medium (water)."},{q:"What is the speed of light?",a:"300,000 km per second — the fastest speed in the universe."},{q:"Name the 7 colours of the visible spectrum (rainbow order).",a:"Red, Orange, Yellow, Green, Blue, Indigo, Violet — remembered as ROYGBIV."},{q:"What is white light made of?",a:"White light is a mixture of all 7 colours of the visible spectrum — shown by a prism or rainbow."},{q:"What is the law of reflection?",a:"Angle of incidence = Angle of reflection (the incoming and outgoing angles are equal)."},{q:"What is refraction? Give one everyday example.",a:"Refraction: bending of light as it passes from one medium to another. Example: a straw looks bent in a glass of water."},{q:"Why does a swimming pool look shallower than it really is?",a:"Light from the bottom refracts as it exits the water, making the pool appear shallower."},{q:"What is a shadow? How is it formed?",a:"A shadow is a dark area where light is blocked by an opaque object — formed when light cannot pass through."},{q:"Why does a prism split white light into colours?",a:"Different colours of light travel at different speeds in glass — each bends at a slightly different angle."},{q:"What is the difference between a luminous and a non-luminous object?",a:"Luminous: produces its own light (sun, fire, torch). Non-luminous: reflects light (moon, book, you)."},{q:"Why can you see yourself in a calm lake but not in rough water?",a:"Calm water has a smooth, flat surface (specular reflection). Rough water scatters light (diffuse)."},{q:"What happens when light hits an opaque object?",a:"Light cannot pass through — a shadow forms on the other side."},{q:"What happens when light hits a transparent object?",a:"Light passes through — you can see clearly through it (e.g., glass window)."},{q:"Why do we see objects in colour?",a:"Objects absorb some colours of light and reflect others — we see the reflected colour."},{q:"A red apple looks red. What happens to the other colours?",a:"The apple absorbs all other colours (orange, yellow, green, blue) and reflects only red."},{q:"Why does light travel faster in air than in water?",a:"Water molecules are denser — they interact with light and slow it down compared to air."}],
          quiz:[{q:"Light travels:",a:["Curves","Straight lines","Circles","Zigzag"],c:1},{q:"Reflection:",a:["Bending","Bouncing off","Absorbed","Stopping"],c:1},{q:"Refraction:",a:["Bouncing","Bending through medium","Stopping","Disappearing"],c:1},{q:"Speed of light:",a:["300 km/s","3,000 km/s","300,000 km/s","3M km/s"],c:2},{q:"Rainbow order:",a:["ROYGBIV","BVIGYOR","RGBYIV","Random"],c:0},{q:"Shadows need:",a:["Light only","Light + opaque","Darkness only","Water"],c:1}]
         },
-        {t:"Sound", c:"Sound = vibrations. Travels through solid/liquid/gas, NOT vacuum. Fastest in solids. Pitch = vibration speed. Loudness = decibels.",
+        {t:"Sound", svgType:"soundWaves", c:"Sound = vibrations. Travels through solid/liquid/gas, NOT vacuum. Fastest in solids. Pitch = vibration speed. Loudness = decibels.",
          examples:["Guitar string vibrates → sound","Needs medium to travel","Fastest in solids, slowest in gases","Loudness: whisper 20dB, concert 110dB","High pitch = fast vibration, low = slow","Echo: sound bouncing back"],
          exercises:[{q:"True or False:", parts:["Sound in vacuum","Faster in water than air","Higher pitch = faster vibration","See lightning before thunder","Sound from vibrations","Louder = higher decibels"], ans:["False","True","True","True — light faster","True","True"]}],
          wordProblems:[{q:"Why lightning before thunder?",a:"Light travels at 300,000 km/s, sound at ~340 m/s — light is much faster."},{q:"Why can't astronauts hear in space?",a:"Sound needs a medium (solid/liquid/gas). Space is vacuum — no medium to carry sound."},{q:"How does guitar make different sounds?",a:"Thicker/longer strings vibrate slower (low pitch). Thinner/shorter = faster (high pitch)."},{q:"What is sound?",a:"Sound is a vibration that travels as a wave through a medium (solid, liquid, or gas)."},{q:"Label the sound diagram: what does high frequency vs low frequency look like on a wave diagram?",a:"High frequency (high pitch): waves are close together. Low frequency (low pitch): waves are spread apart."},{q:"In which medium does sound travel fastest?",a:"Solids — particles are close together and pass vibrations quickly. Sound is slowest in gases."},{q:"Can sound travel through water?",a:"Yes — sound travels faster in water than in air. Dolphins and whales use sound to communicate underwater."},{q:"What is the unit of loudness (volume)?",a:"Decibels (dB) — a whisper is ~20 dB, normal talk ~60 dB, a jet engine ~130 dB."},{q:"What is pitch? What determines pitch?",a:"Pitch is how high or low a sound is. Higher frequency = higher pitch. Lower frequency = lower pitch."},{q:"What is frequency? What unit is it measured in?",a:"Frequency: number of vibrations per second. Measured in Hertz (Hz)."},{q:"How do ears detect sound?",a:"Sound waves enter the ear canal → vibrate the eardrum → tiny bones amplify → nerve signals sent to brain."},{q:"What is an echo?",a:"An echo is sound that reflects off a hard surface and comes back to you."},{q:"How can you estimate the distance of lightning?",a:"Count seconds between lightning and thunder. Sound travels ~340 m/s — every 3 seconds ≈ 1 km away."},{q:"Why do concert halls have padded walls?",a:"Soft/padded surfaces absorb sound, preventing echoes that would muddle the music."},{q:"What is the difference between sound and light in terms of travelling through space?",a:"Light travels through vacuum (space). Sound cannot — it needs a medium (particles to vibrate)."},{q:"Why do you hear a low rumble from a plane before you see it moving?",a:"No — actually you see the plane before you hear its sound because light is faster than sound."},{q:"Name 3 uses of ultrasound (high-frequency sound humans can't hear).",a:"1. Medical scans (ultrasound images of babies) 2. Sonar (submarine detection) 3. Bat navigation"},{q:"How does a drum make sound?",a:"Hitting the drum skin makes it vibrate rapidly. These vibrations travel through air to your ears."},{q:"Why does sound get quieter the farther you are from the source?",a:"Sound energy spreads out in all directions as it travels — less energy reaches your ears at greater distance."},{q:"What is the range of human hearing?",a:"Humans hear from about 20 Hz to 20,000 Hz. Dogs and bats can hear much higher frequencies."}],
@@ -1423,9 +2673,9 @@ function getLessons(subject, grade) {
       { title: "Grammar", content: (g === 4 ? "Parts of speech" : g === 5 ? "Tenses, subject-verb agreement" : "Complex sentences, punctuation") + ".", key: "grammar" },
       { title: "Reading Comprehension", content: "Main idea, supporting details, author's purpose.", key: "reading" },
       { title: "Creative Writing", content: (g === 4 ? "Narrative writing" : g === 5 ? "Descriptive writing" : "Persuasive writing") + ".", key: "creative" },
-      ...(g === 5 ? [{ title: "Parts of Speech", content: "Learn about Nouns, Verbs, Adjectives, and Adverbs. This lesson includes a 30-day adverb vocabulary course with English-Urdu translations and text-to-speech practice. Tap any word or sentence to hear it spoken aloud!", key: "parts_of_speech", hasAdverbs: true }] : []),
+      ...(g === 5 ? [{ title: "Parts of Speech", content: "Study the main parts of speech in textbook-style subsections, with day-range review blocks, exercises, and quizzes.", key: "parts_of_speech", hasMathSub: true, subs: buildEnglishPartsOfSpeechSubs() }] : []),
       ...(g === 5 ? [{ title: "Tenses", content: "Learn all 12 English tenses — Present, Past, and Future. Each tense has Simple, Continuous, Perfect, and Perfect Continuous forms with practice paragraphs and comprehension questions. Tap any sentence to hear it read aloud!", key: "tenses", hasTenses: true }] : []),
-      ...(g === 5 ? [{ title: "Vocabulary", content: "Build your word power with 55 days of vocabulary! Learn 3 new words each day with English meanings, Urdu translations, and practice paragraphs. Tap any word or sentence to hear it spoken aloud!", key: "vocabulary", hasVocab: true }] : []),
+      ...(g === 5 ? [{ title: "Vocabulary", content: "Build vocabulary through textbook-style subsections for meanings, opposites, and collective nouns, with day-range review blocks, exercises, and quizzes.", key: "vocabulary", hasMathSub: true, subs: buildEnglishVocabularySubs() }] : []),
     ] : [
       { title: "Literature", content: (g === 7 ? "Short stories" : g === 8 ? "Poetry analysis" : g === 9 ? "Novel study" : "Drama") + ".", key: "literature" },
       { title: "Essay Writing", content: (g === 7 ? "Five-paragraph essays" : g === 8 ? "Argumentative essays" : g === 9 ? "Research papers" : "Critical analysis") + ".", key: "essay" },
@@ -6613,24 +7863,28 @@ function EarthLayersSVG() {
     <circle cx="210" cy="175" r="100" fill="#F59E0B22" stroke="#F59E0B" strokeWidth="2"/>
     <circle cx="210" cy="175" r="62" fill="#EF444432" stroke="#EF4444" strokeWidth="2"/>
     <circle cx="210" cy="175" r="30" fill="#F9731670" stroke="#F97316" strokeWidth="2.5"/>
-    <text x="210" y="179" textAnchor="middle" fill="#F1F5F9" fontSize="9" fontWeight="800" fontFamily="'Baloo 2'">Core</text>
-    <line x1="340" y1="175" x2="390" y2="95" stroke="#38BDF8" strokeWidth="1" strokeDasharray="4" opacity="0.5"/>
-    <rect x="392" y="66" width="152" height="58" rx="8" fill="#38BDF812" stroke="#38BDF8" strokeWidth="1"/>
-    <text x="468" y="83" textAnchor="middle" fill="#38BDF8" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Crust</text>
-    <text x="468" y="97" textAnchor="middle" fill="#94A3B8" fontSize="10" fontFamily="'Baloo 2'">5–70 km thick</text>
-    <text x="468" y="113" textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Baloo 2'">We live here</text>
-    <line x1="310" y1="175" x2="390" y2="148" stroke="#F59E0B" strokeWidth="1" strokeDasharray="4" opacity="0.5"/>
-    <rect x="392" y="134" width="152" height="58" rx="8" fill="#F59E0B12" stroke="#F59E0B" strokeWidth="1"/>
-    <text x="468" y="152" textAnchor="middle" fill="#F59E0B" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Mantle</text>
-    <text x="468" y="166" textAnchor="middle" fill="#94A3B8" fontSize="10" fontFamily="'Baloo 2'">~2,900 km thick</text>
-    <text x="468" y="182" textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Baloo 2'">Semi-solid rock</text>
-    <line x1="272" y1="175" x2="390" y2="205" stroke="#EF4444" strokeWidth="1" strokeDasharray="4" opacity="0.5"/>
-    <rect x="392" y="202" width="152" height="58" rx="8" fill="#EF444412" stroke="#EF4444" strokeWidth="1"/>
-    <text x="468" y="220" textAnchor="middle" fill="#EF4444" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Outer Core</text>
-    <text x="468" y="234" textAnchor="middle" fill="#94A3B8" fontSize="10" fontFamily="'Baloo 2'">Liquid iron+nickel</text>
-    <text x="468" y="250" textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Baloo 2'">Makes magnetic field</text>
-    <line x1="240" y1="175" x2="270" y2="278" stroke="#F97316" strokeWidth="1" strokeDasharray="4" opacity="0.5"/>
-    <text x="210" y="286" textAnchor="middle" fill="#F97316" fontSize="11" fontWeight="800" fontFamily="'Baloo 2'">Inner Core — Solid iron — ~5,500°C</text>
+    <text x="210" y="172" textAnchor="middle" fill="#F1F5F9" fontSize="8.5" fontWeight="800" fontFamily="'Baloo 2'">Inner</text>
+    <text x="210" y="182" textAnchor="middle" fill="#F1F5F9" fontSize="8.5" fontWeight="800" fontFamily="'Baloo 2'">Core</text>
+    <line x1="318" y1="92" x2="390" y2="92" stroke="#38BDF8" strokeWidth="1" strokeDasharray="4" opacity="0.6"/>
+    <rect x="392" y="62" width="152" height="50" rx="8" fill="#38BDF812" stroke="#38BDF8" strokeWidth="1"/>
+    <text x="468" y="80" textAnchor="middle" fill="#38BDF8" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Crust</text>
+    <text x="468" y="94" textAnchor="middle" fill="#94A3B8" fontSize="10" fontFamily="'Baloo 2'">5–70 km thick</text>
+    <text x="468" y="106" textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Baloo 2'">Thin outer shell</text>
+    <line x1="292" y1="150" x2="390" y2="150" stroke="#F59E0B" strokeWidth="1" strokeDasharray="4" opacity="0.6"/>
+    <rect x="392" y="122" width="152" height="50" rx="8" fill="#F59E0B12" stroke="#F59E0B" strokeWidth="1"/>
+    <text x="468" y="140" textAnchor="middle" fill="#F59E0B" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Mantle</text>
+    <text x="468" y="154" textAnchor="middle" fill="#94A3B8" fontSize="10" fontFamily="'Baloo 2'">~2,900 km thick</text>
+    <text x="468" y="166" textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Baloo 2'">Hot semi-solid rock</text>
+    <line x1="258" y1="205" x2="390" y2="205" stroke="#EF4444" strokeWidth="1" strokeDasharray="4" opacity="0.6"/>
+    <rect x="392" y="182" width="152" height="50" rx="8" fill="#EF444412" stroke="#EF4444" strokeWidth="1"/>
+    <text x="468" y="200" textAnchor="middle" fill="#EF4444" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Outer Core</text>
+    <text x="468" y="214" textAnchor="middle" fill="#94A3B8" fontSize="10" fontFamily="'Baloo 2'">Liquid iron + nickel</text>
+    <text x="468" y="226" textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Baloo 2'">Creates magnetic field</text>
+    <line x1="236" y1="175" x2="390" y2="266" stroke="#F97316" strokeWidth="1" strokeDasharray="4" opacity="0.6"/>
+    <rect x="392" y="242" width="152" height="50" rx="8" fill="#F9731618" stroke="#F97316" strokeWidth="1"/>
+    <text x="468" y="260" textAnchor="middle" fill="#F97316" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Inner Core</text>
+    <text x="468" y="274" textAnchor="middle" fill="#94A3B8" fontSize="10" fontFamily="'Baloo 2'">Solid iron + nickel</text>
+    <text x="468" y="286" textAnchor="middle" fill="#64748B" fontSize="9.5" fontFamily="'Baloo 2'">~5,500°C</text>
   </svg></div>);
 }
 
@@ -6977,6 +8231,209 @@ function PhotosynthesisSVG() {
     <text x="489" y="185" textAnchor="middle" fill="#22C55E" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">💨 Oxygen</text>
     <text x="489" y="203" textAnchor="middle" fill="#22C55E" fontSize="10" fontFamily="'Baloo 2'">(Released into air)</text>
     <text x="310" y="222" textAnchor="middle" fill="#475569" fontSize="11" fontFamily="'Baloo 2'">Formula: 6CO₂ + 6H₂O + Sunlight → C₆H₁₂O₆ + 6O₂</text>
+  </svg></div>);
+}
+
+function MaterialPropertiesSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 240" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="240" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Properties of Materials</text>
+    <rect x="36" y="52" width="258" height="154" rx="14" fill="#0F172A" stroke="#38BDF8" strokeWidth="2"/>
+    <text x="165" y="76" textAnchor="middle" fill="#38BDF8" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Conductors and Insulators</text>
+    <circle cx="80" cy="128" r="18" fill="#F59E0B"/><rect x="74" y="109" width="12" height="8" rx="2" fill="#94A3B8"/><rect x="74" y="139" width="12" height="8" rx="2" fill="#94A3B8"/>
+    <line x1="98" y1="128" x2="150" y2="128" stroke="#F59E0B" strokeWidth="5"/>
+    <line x1="150" y1="128" x2="192" y2="104" stroke="#22C55E" strokeWidth="5"/>
+    <line x1="150" y1="128" x2="192" y2="152" stroke="#22C55E" strokeWidth="5"/>
+    <circle cx="208" cy="104" r="7" fill="#22C55E"/><circle cx="208" cy="152" r="7" fill="#22C55E"/>
+    <rect x="58" y="166" width="58" height="24" rx="8" fill="#334155"/><text x="87" y="182" textAnchor="middle" fill="#F8FAFC" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">Metal</text>
+    <rect x="178" y="166" width="74" height="24" rx="8" fill="#334155"/><text x="215" y="182" textAnchor="middle" fill="#F8FAFC" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">Rubber</text>
+    <rect x="324" y="52" width="260" height="154" rx="14" fill="#0F172A" stroke="#22C55E" strokeWidth="2"/>
+    <text x="454" y="76" textAnchor="middle" fill="#22C55E" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Transparent to Opaque</text>
+    <rect x="360" y="98" width="44" height="82" rx="10" fill="#DDF4FF" stroke="#7DD3FC" strokeWidth="2"/><text x="382" y="194" textAnchor="middle" fill="#7DD3FC" fontSize="10" fontWeight="700" fontFamily="'Baloo 2'">Clear</text>
+    <rect x="436" y="98" width="44" height="82" rx="10" fill="#E2E8F055" stroke="#CBD5E1" strokeWidth="2"/><text x="458" y="194" textAnchor="middle" fill="#CBD5E1" fontSize="10" fontWeight="700" fontFamily="'Baloo 2'">Frosted</text>
+    <rect x="512" y="98" width="44" height="82" rx="10" fill="#64748B" stroke="#94A3B8" strokeWidth="2"/><text x="534" y="194" textAnchor="middle" fill="#94A3B8" fontSize="10" fontWeight="700" fontFamily="'Baloo 2'">Wood</text>
+    <polygon points="336,139 351,132 351,146" fill="#F8FAFC"/><polygon points="412,139 427,132 427,146" fill="#F8FAFC88"/><polygon points="488,139 503,132 503,146" fill="#F8FAFC33"/>
+  </svg></div>);
+}
+
+function MixturesSolutionsSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 240" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="240" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Mixtures and Solutions</text>
+    <rect x="42" y="54" width="248" height="150" rx="14" fill="#0F172A" stroke="#F59E0B" strokeWidth="2"/>
+    <text x="166" y="78" textAnchor="middle" fill="#F59E0B" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Mixture</text>
+    <rect x="104" y="96" width="124" height="84" rx="12" fill="#38BDF822" stroke="#7DD3FC" strokeWidth="2"/>
+    <circle cx="129" cy="118" r="8" fill="#FACC15"/><circle cx="159" cy="146" r="8" fill="#F97316"/><circle cx="198" cy="121" r="8" fill="#22C55E"/><circle cx="145" cy="167" r="8" fill="#F97316"/><circle cx="205" cy="159" r="8" fill="#FACC15"/>
+    <text x="166" y="195" textAnchor="middle" fill="#94A3B8" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">Different parts can still be seen</text>
+    <rect x="330" y="54" width="248" height="150" rx="14" fill="#0F172A" stroke="#38BDF8" strokeWidth="2"/>
+    <text x="454" y="78" textAnchor="middle" fill="#38BDF8" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Solution</text>
+    <rect x="392" y="96" width="124" height="84" rx="12" fill="#22C55E22" stroke="#86EFAC" strokeWidth="2"/>
+    {Array.from({length:5}).map((_,r)=>Array.from({length:6}).map((__,c)=><circle key={r+"_"+c} cx={411+c*16} cy={114+r*13} r="4" fill={r%2===0 ? "#E2E8F0" : "#22C55E"} />))}
+    <text x="454" y="195" textAnchor="middle" fill="#94A3B8" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">Particles spread evenly through the liquid</text>
+  </svg></div>);
+}
+
+function GravityForceSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 240" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="240" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Gravity Pulls Toward Earth</text>
+    <circle cx="310" cy="184" r="44" fill="#2563EB"/>
+    <path d="M282 175c10-18 30-28 52-22" stroke="#34D399" strokeWidth="9" fill="none" strokeLinecap="round"/>
+    <path d="M302 199c15 9 33 8 46-3" stroke="#BBF7D0" strokeWidth="9" fill="none" strokeLinecap="round"/>
+    <text x="310" y="189" textAnchor="middle" fill="#F8FAFC" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Earth</text>
+    <circle cx="310" cy="72" r="18" fill="#F59E0B"/>
+    <line x1="310" y1="90" x2="310" y2="126" stroke="#F59E0B" strokeWidth="4"/>
+    <polygon points="310,146 301,128 319,128" fill="#F59E0B"/>
+    <line x1="310" y1="146" x2="310" y2="136" stroke="#38BDF8" strokeWidth="4" strokeDasharray="10 8"/>
+    <line x1="310" y1="136" x2="310" y2="148" stroke="#38BDF8" strokeWidth="4"/>
+    <text x="350" y="110" fill="#F8FAFC" fontSize="14" fontWeight="700" fontFamily="'Baloo 2'">apple falls</text>
+    <path d="M310 140 L310 148" stroke="#38BDF8" strokeWidth="4" markerEnd="url(#gravityArrow)"/>
+    <text x="310" y="214" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Gravity gives objects weight, makes things fall, and keeps moons and satellites in orbit.</text>
+    <defs>
+      <marker id="gravityArrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#38BDF8"/>
+      </marker>
+    </defs>
+  </svg></div>);
+}
+
+function FrictionForceSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 240" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="240" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Friction Opposes Motion</text>
+    <rect x="78" y="118" width="180" height="40" rx="12" fill="#F59E0B"/>
+    <rect x="58" y="160" width="230" height="18" rx="8" fill="#475569"/>
+    {Array.from({length:11}).map((_,i)=><line key={i} x1={68+i*20} y1="178" x2={78+i*20} y2="190" stroke="#94A3B8" strokeWidth="2"/>)}
+    <line x1="118" y1="100" x2="238" y2="100" stroke="#22C55E" strokeWidth="5"/><polygon points="253,100 235,91 235,109" fill="#22C55E"/>
+    <line x1="238" y1="90" x2="148" y2="90" stroke="#EF4444" strokeWidth="5"/><polygon points="133,90 151,81 151,99" fill="#EF4444"/>
+    <text x="186" y="72" textAnchor="middle" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">motion</text>
+    <text x="194" y="56" textAnchor="middle" fill="#EF4444" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">friction</text>
+    <circle cx="426" cy="140" r="54" fill="#0F172A" stroke="#38BDF8" strokeWidth="2"/>
+    <path d="M387 141c15-20 47-28 78-18" stroke="#7DD3FC" strokeWidth="8" fill="none" strokeLinecap="round"/>
+    <text x="426" y="146" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">rough grip</text>
+    <text x="310" y="214" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Rough surfaces increase friction. Oil, ice, and polished floors reduce friction.</text>
+  </svg></div>);
+}
+
+function EnergyTypesSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 255" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="255" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Types of Energy</text>
+    {[
+      [110,84,'#F59E0B','Heat'],[220,84,'#38BDF8','Light'],[330,84,'#A855F7','Sound'],[440,84,'#22C55E','Kinetic'],
+      [165,164,'#EC4899','Chemical'],[290,164,'#F97316','Electrical'],[415,164,'#14B8A6','Potential']
+    ].map(([x,y,color,label],i)=><g key={i}><circle cx={x} cy={y} r="34" fill={color+"22"} stroke={color} strokeWidth="3"/><text x={x} y={y+5} textAnchor="middle" fill={color} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">{label}</text></g>)}
+    <rect x="234" y="116" width="152" height="26" rx="13" fill="#0F172A" stroke="#64748B" strokeWidth="1.5"/>
+    <text x="310" y="133" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">Energy can change form</text>
+    <path d="M199 157 C 225 157, 238 157, 251 157" stroke="#EC4899" strokeWidth="3" fill="none" markerEnd="url(#energyArrow)"/>
+    <path d="M316 149 C 300 126, 275 112, 244 102" stroke="#38BDF8" strokeWidth="3" fill="none" markerEnd="url(#energyArrow)"/>
+    <path d="M314 147 C 323 125, 332 112, 334 102" stroke="#A855F7" strokeWidth="3" fill="none" markerEnd="url(#energyArrow)"/>
+    <path d="M421 149 C 432 132, 438 118, 440 102" stroke="#22C55E" strokeWidth="3" fill="none" markerEnd="url(#energyArrow)"/>
+    <path d="M412 90 C 340 70, 220 68, 143 80" stroke="#F59E0B" strokeWidth="3" fill="none" markerEnd="url(#energyArrow)"/>
+    <text x="225" y="151" fill="#EC4899" fontSize="9.5" fontWeight="700" fontFamily="'Baloo 2'">stored to current</text>
+    <text x="239" y="94" fill="#38BDF8" fontSize="9.5" fontWeight="700" fontFamily="'Baloo 2'">powers light</text>
+    <text x="342" y="96" fill="#A855F7" fontSize="9.5" fontWeight="700" fontFamily="'Baloo 2'">makes sound</text>
+    <text x="451" y="124" fill="#22C55E" fontSize="9.5" fontWeight="700" fontFamily="'Baloo 2'">becomes motion</text>
+    <text x="272" y="66" textAnchor="middle" fill="#F59E0B" fontSize="9.5" fontWeight="700" fontFamily="'Baloo 2'">motion creates heat</text>
+    <text x="310" y="232" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Energy can change form, such as chemical energy in food becoming motion and body heat.</text>
+    <defs>
+      <marker id="energyArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="#CBD5E1"/>
+      </marker>
+    </defs>
+  </svg></div>);
+}
+
+function DayNightSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 240" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="240" rx="16" fill="#0F172A"/>
+    <circle cx="132" cy="108" r="38" fill="#FACC15"/>
+    {Array.from({length:10}).map((_,i)=>{ const a=i*Math.PI/5; return <line key={i} x1={132+Math.cos(a)*48} y1={108+Math.sin(a)*48} x2={132+Math.cos(a)*64} y2={108+Math.sin(a)*64} stroke="#FDE68A" strokeWidth="4" strokeLinecap="round"/>; })}
+    <circle cx="395" cy="122" r="66" fill="#2563EB"/>
+    <path d="M395 56A66 66 0 0 1 395 188" fill="#0B1220"/>
+    <line x1="395" y1="56" x2="395" y2="188" stroke="#F8FAFC55" strokeWidth="2" strokeDasharray="8 8"/>
+    <line x1="395" y1="40" x2="415" y2="204" stroke="#F59E0B" strokeWidth="4"/>
+    <line x1="182" y1="86" x2="332" y2="86" stroke="#FACC15" strokeWidth="5" strokeLinecap="round" opacity="0.95"/>
+    <line x1="182" y1="108" x2="340" y2="108" stroke="#FDE68A" strokeWidth="6" strokeLinecap="round" opacity="0.95"/>
+    <line x1="182" y1="130" x2="332" y2="130" stroke="#FACC15" strokeWidth="5" strokeLinecap="round" opacity="0.95"/>
+    <polygon points="349,108 334,100 334,116" fill="#FDE68A"/>
+    <path d="M438 94c8-12 24-17 38-13-6 8-8 18-5 28-13 2-27-3-33-15z" fill="#E2E8F0"/>
+    <circle cx="472" cy="156" r="5" fill="#E2E8F0"/><circle cx="495" cy="138" r="4" fill="#E2E8F0"/><circle cx="504" cy="164" r="3.5" fill="#E2E8F0"/>
+    <text x="395" y="222" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">As Earth rotates, one side faces the Sun for day while the opposite side experiences night.</text>
+  </svg></div>);
+}
+
+function SeasonsCycleSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 250" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="250" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Seasons and Earth's Tilt</text>
+    <circle cx="310" cy="128" r="34" fill="#FACC15"/>
+    <ellipse cx="310" cy="128" rx="205" ry="72" fill="none" stroke="#475569" strokeWidth="2" strokeDasharray="10 8"/>
+    {[[105,128,'Summer'],[310,56,'Autumn'],[515,128,'Winter'],[310,200,'Spring']].map(([x,y,label],i)=><g key={i}><circle cx={x} cy={y} r="18" fill="#2563EB"/><line x1={x-8} y1={y-22} x2={x+8} y2={y+22} stroke="#F59E0B" strokeWidth="3"/><text x={x} y={y+40} textAnchor="middle" fill="#F8FAFC" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">{label}</text></g>)}
+    <text x="310" y="230" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Earth's tilt stays the same as it orbits the Sun, so different hemispheres get different sunlight.</text>
+  </svg></div>);
+}
+
+function NervousSystemSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 255" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="255" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Nervous System</text>
+    <circle cx="310" cy="72" r="26" fill="#A855F7"/>
+    <rect x="300" y="96" width="20" height="78" rx="10" fill="#8B5CF6"/>
+    <line x1="310" y1="115" x2="240" y2="138" stroke="#C084FC" strokeWidth="6"/><line x1="310" y1="115" x2="380" y2="138" stroke="#C084FC" strokeWidth="6"/>
+    <line x1="250" y1="140" x2="220" y2="188" stroke="#C084FC" strokeWidth="5"/><line x1="370" y1="140" x2="400" y2="188" stroke="#C084FC" strokeWidth="5"/>
+    <line x1="310" y1="174" x2="280" y2="224" stroke="#C084FC" strokeWidth="5"/><line x1="310" y1="174" x2="340" y2="224" stroke="#C084FC" strokeWidth="5"/>
+    <rect x="60" y="74" width="120" height="56" rx="12" fill="#0F172A" stroke="#A855F7" strokeWidth="2"/><text x="120" y="98" textAnchor="middle" fill="#A855F7" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Brain</text><text x="120" y="116" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">command center</text>
+    <rect x="440" y="74" width="120" height="56" rx="12" fill="#0F172A" stroke="#A855F7" strokeWidth="2"/><text x="500" y="98" textAnchor="middle" fill="#A855F7" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Spinal Cord</text><text x="500" y="116" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">signal highway</text>
+    <text x="310" y="240" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Nerves carry messages between the brain, senses, muscles, and organs.</text>
+  </svg></div>);
+}
+
+function ClassificationSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 245" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="245" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Classification of Living Things</text>
+    <rect x="246" y="48" width="128" height="40" rx="12" fill="#22C55E22" stroke="#22C55E" strokeWidth="2"/><text x="310" y="73" textAnchor="middle" fill="#22C55E" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Living Things</text>
+    <line x1="310" y1="88" x2="310" y2="116" stroke="#94A3B8" strokeWidth="3"/><line x1="180" y1="116" x2="440" y2="116" stroke="#94A3B8" strokeWidth="3"/>
+    <line x1="180" y1="116" x2="180" y2="140" stroke="#94A3B8" strokeWidth="3"/><line x1="440" y1="116" x2="440" y2="140" stroke="#94A3B8" strokeWidth="3"/>
+    <rect x="110" y="140" width="140" height="44" rx="12" fill="#38BDF822" stroke="#38BDF8" strokeWidth="2"/><text x="180" y="166" textAnchor="middle" fill="#38BDF8" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Vertebrates</text>
+    <rect x="370" y="140" width="140" height="44" rx="12" fill="#F59E0B22" stroke="#F59E0B" strokeWidth="2"/><text x="440" y="166" textAnchor="middle" fill="#F59E0B" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Invertebrates</text>
+    <text x="180" y="206" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">have backbones</text>
+    <text x="440" y="206" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">no backbone</text>
+    <text x="310" y="228" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Scientists group organisms by shared features such as kingdom and body structure.</text>
+  </svg></div>);
+}
+
+function AdaptationSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 245" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="245" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Adaptation Helps Survival</text>
+    <rect x="46" y="60" width="242" height="146" rx="14" fill="#0F172A" stroke="#F59E0B" strokeWidth="2"/>
+    <text x="167" y="84" textAnchor="middle" fill="#F59E0B" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Desert Camel</text>
+    <ellipse cx="167" cy="150" rx="65" ry="30" fill="#D6A56B"/><circle cx="224" cy="132" r="18" fill="#D6A56B"/><rect x="128" y="100" width="40" height="26" rx="12" fill="#C08457"/>
+    <line x1="132" y1="175" x2="125" y2="204" stroke="#D6A56B" strokeWidth="6"/><line x1="158" y1="175" x2="153" y2="204" stroke="#D6A56B" strokeWidth="6"/><line x1="185" y1="175" x2="190" y2="204" stroke="#D6A56B" strokeWidth="6"/><line x1="210" y1="175" x2="217" y2="204" stroke="#D6A56B" strokeWidth="6"/>
+    <text x="167" y="223" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">hump, eyelashes, wide feet</text>
+    <rect x="332" y="60" width="242" height="146" rx="14" fill="#0F172A" stroke="#22C55E" strokeWidth="2"/>
+    <text x="453" y="84" textAnchor="middle" fill="#22C55E" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Arctic Polar Bear</text>
+    <ellipse cx="453" cy="152" rx="68" ry="26" fill="#F8FAFC"/><circle cx="505" cy="136" r="16" fill="#F8FAFC"/><circle cx="494" cy="123" r="5" fill="#E2E8F0"/><circle cx="515" cy="123" r="5" fill="#E2E8F0"/>
+    <text x="453" y="223" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">fur, camouflage, fat layer</text>
+  </svg></div>);
+}
+
+function SoundWavesSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 620 245" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="245" rx="16" fill="#1E293B"/>
+    <text x="310" y="24" textAnchor="middle" fill="#E2E8F0" fontSize="17" fontWeight="800" fontFamily="'Baloo 2'">Sound Waves and Vibration</text>
+    <rect x="60" y="94" width="48" height="74" rx="12" fill="#475569"/>
+    <circle cx="130" cy="131" r="8" fill="#F59E0B"/>
+    {[0,1,2,3,4].map(i => <path key={i} d={`M ${145+i*18} 131 q 9 -18 18 0 q 9 18 18 0`} fill="none" stroke="#38BDF8" strokeWidth="4"/>)}
+    <text x="84" y="183" textAnchor="middle" fill="#CBD5E1" fontSize="11" fontWeight="700" fontFamily="'Baloo 2'">speaker</text>
+    <text x="272" y="98" textAnchor="middle" fill="#38BDF8" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">sound wave</text>
+    <path d="M400 92 q 10 -24 20 0 q 10 24 20 0 q 10 -24 20 0 q 10 24 20 0" fill="none" stroke="#A855F7" strokeWidth="4"/>
+    <path d="M400 152 q 25 -10 50 0 q 25 10 50 0" fill="none" stroke="#22C55E" strokeWidth="4"/>
+    <text x="486" y="82" textAnchor="middle" fill="#A855F7" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">high pitch</text>
+    <text x="486" y="184" textAnchor="middle" fill="#22C55E" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">low pitch</text>
+    <text x="310" y="224" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Sound is made by vibrations and travels through solids, liquids, and gases, but not through vacuum.</text>
   </svg></div>);
 }
 
@@ -7354,6 +8811,787 @@ function EstimationSVG({ num1, num2, op, rounded1, rounded2, estimate, exact }) 
   </svg></div>);
 }
 
+function getMathVisualTheme(sub, lessonTitle) {
+  const title = `${lessonTitle || ""} ${sub?.t || ""}`.toLowerCase();
+  if (/fraction|decimal|ratio|percent/.test(title)) return { accent: "#8B5CF6", soft: "#EDE9FE", dark: "#312E81", chip: "#C4B5FD" };
+  if (/algebra|unknown|equation|symbol/.test(title)) return { accent: "#EC4899", soft: "#FCE7F3", dark: "#831843", chip: "#F9A8D4" };
+  if (/graph|data|pattern|sequence/.test(title)) return { accent: "#14B8A6", soft: "#CCFBF1", dark: "#134E4A", chip: "#5EEAD4" };
+  if (/measure|time|temperature|area|volume|perimeter|shape|angle|line/.test(title)) return { accent: "#F97316", soft: "#FFEDD5", dark: "#9A3412", chip: "#FDBA74" };
+  if (/multiply|division|table|factor|multiple|prime|lcm|hcf/.test(title)) return { accent: "#22C55E", soft: "#DCFCE7", dark: "#14532D", chip: "#86EFAC" };
+  return { accent: "#38BDF8", soft: "#E0F2FE", dark: "#0F172A", chip: "#7DD3FC" };
+}
+
+function clipSvgText(text, maxLength = 140) {
+  const clean = normalizeText(text);
+  if (clean.length <= maxLength) return clean;
+  return clean.slice(0, Math.max(0, maxLength - 1)).trimEnd() + "…";
+}
+
+function wrapSvgLines(text, maxChars = 30, maxLines = 4) {
+  const words = clipSvgText(text, maxChars * maxLines + 20).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  words.forEach(word => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= maxChars) current = next;
+    else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  });
+  if (current) lines.push(current);
+  if (lines.length <= maxLines) return lines;
+  const trimmed = lines.slice(0, maxLines);
+  trimmed[maxLines - 1] = trimmed[maxLines - 1].replace(/…?$/, "") + "…";
+  return trimmed;
+}
+
+function SvgTextBlock({ text, x, y, maxChars = 30, maxLines = 4, lineHeight = 18, fill = "#E2E8F0", anchor = "start", size = 14, weight = 600 }) {
+  const lines = wrapSvgLines(text, maxChars, maxLines);
+  return (
+    <text x={x} y={y} textAnchor={anchor} fill={fill} fontSize={size} fontWeight={weight} fontFamily="'Baloo 2'">
+      {lines.map((line, idx) => <tspan key={idx} x={x} dy={idx === 0 ? 0 : lineHeight}>{line}</tspan>)}
+    </text>
+  );
+}
+
+function getUniqueMathText(items, limit) {
+  const seen = new Set();
+  const out = [];
+  items.forEach(item => {
+    const clean = clipSvgText(item, 150);
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) return;
+    seen.add(key);
+    out.push(clean);
+  });
+  return out.slice(0, limit);
+}
+
+function getMathSummaryPoints(sub) {
+  const points = [];
+  splitFactSentences(sub?.c).forEach(line => points.push(line));
+  (sub?.examples || []).forEach(line => points.push(line));
+  return getUniqueMathText(points, 3);
+}
+
+function getMathWorkedExamples(sub) {
+  const examples = getUniqueMathText(sub?.examples || [], 3);
+  if (examples.length >= 3) return examples;
+  const derived = [...examples];
+  (sub?.exercises || []).forEach(ex => {
+    if (!Array.isArray(ex.parts) || !Array.isArray(ex.ans)) return;
+    ex.parts.forEach((part, idx) => {
+      if (derived.length >= 3) return;
+      derived.push(`${trimQuestionText(part)} -> ${normalizeText(ex.ans[idx])}`);
+    });
+  });
+  return getUniqueMathText(derived, 3);
+}
+
+function getMathPracticeExample(sub) {
+  if (Array.isArray(sub?.wordProblems) && sub.wordProblems.length) return sub.wordProblems[0];
+  if (Array.isArray(sub?.quiz) && sub.quiz.length) return sub.quiz[0].q;
+  if (Array.isArray(sub?.examples) && sub.examples.length) return sub.examples[0];
+  return sub?.c || "";
+}
+
+function getMathQuickRule(sub, lessonTitle) {
+  const title = `${lessonTitle || ""} ${sub?.t || ""}`.toLowerCase();
+  if (/place value/.test(title)) return "Value = digit × its place.";
+  if (/expanded form/.test(title)) return "Write each non-zero place value separately, then add.";
+  if (/comparing/.test(title)) return "More digits wins; otherwise compare from the left.";
+  if (/rounding/.test(title)) return "Look one place to the right before rounding.";
+  if (/number lines/.test(title)) return "Equal spacing helps you locate, compare, and jump correctly.";
+  if (/addition/.test(title)) return "Line up place values and carry only when a column reaches 10 or more.";
+  if (/borrowing/.test(title)) return "Borrow 1 from the next place to make 10 extra in the current column.";
+  if (/estimation in multiplication/.test(title)) return "Round first, multiply quickly, then compare with the exact answer.";
+  if (/estimation/.test(title)) return "Round first to get a quick answer that checks your exact work.";
+  if (/large multiplication/.test(title)) return "Multiply by each place separately, then add the partial products.";
+  if (/long division/.test(title)) return "D-M-S-B: Divide, Multiply, Subtract, Bring down.";
+  if (/table/.test(title)) return "Tables are equal groups and skip-counting patterns.";
+  if (/factor|multiple/.test(title)) return "Factors divide exactly; multiples come from repeated multiplication.";
+  if (/prime|composite/.test(title)) return "Prime numbers have exactly two factors.";
+  if (/lcm/.test(title)) return "LCM is the first common multiple you see.";
+  if (/hcf/.test(title)) return "HCF is the greatest factor shared by all numbers.";
+  if (/divisibility/.test(title)) return "Check the last digit or digit sum before doing full division.";
+  if (/proper|improper/.test(title)) return "Compare the numerator with the denominator to decide the type.";
+  if (/mixed numbers/.test(title)) return "Divide to make a mixed number; multiply-and-add to go back.";
+  if (/equivalent fractions/.test(title)) return "Multiply or divide the top and bottom by the same number.";
+  if (/simplifying/.test(title)) return "Use the HCF to reduce a fraction to lowest terms.";
+  if (/add & subtract fractions/.test(title)) return "Make denominators the same before combining numerators.";
+  if (/multiply fractions/.test(title)) return "Multiply top with top and bottom with bottom, then simplify.";
+  if (/decimal place value/.test(title)) return "Each place to the right of the decimal is ten times smaller.";
+  if (/fractions ↔ decimals/.test(title)) return "Divide to get a decimal; use place value to turn decimals into fractions.";
+  if (/add & subtract decimals/.test(title)) return "Line up decimal points before calculating.";
+  if (/comparing decimals/.test(title)) return "Compare whole numbers first, then tenths, hundredths, and beyond.";
+  if (/ratio to fraction/.test(title)) return "Turn the ratio into part/whole by adding all parts first.";
+  if (/ratio/.test(title)) return "Keep the order the same and simplify only if both parts stay proportional.";
+  if (/percentage|real-life problems/.test(title)) return "Percent means out of 100, so benchmark fractions help a lot.";
+  if (/conversion/.test(title)) return "Multiply when changing to a smaller unit; divide for a bigger unit.";
+  if (/length|mass|capacity/.test(title)) return "Choose a unit that matches the size of the object.";
+  if (/time/.test(title)) return "Convert minutes and seconds whenever the total passes 60.";
+  if (/temperature/.test(title)) return "Use Celsius and compare hotter/colder by the scale.";
+  if (/perimeter/.test(title)) return "Perimeter measures the distance around a shape.";
+  if (/area/.test(title)) return "Area measures the space inside a shape.";
+  if (/volume/.test(title)) return "Volume measures how much space a solid can hold.";
+  if (/bar graph/.test(title)) return "Read the title, scale, and bar height before answering.";
+  if (/pictograph/.test(title)) return "Always use the key before counting symbols.";
+  if (/line graph/.test(title)) return "Connected points show how values change over time.";
+  if (/data/.test(title)) return "Highest, lowest, total, and trend come after reading labels and scale.";
+  if (/pattern|sequence|skip counting|missing numbers/.test(title)) return "The change between terms reveals the rule.";
+  if (/unknown|equation|symbol/.test(title)) return "Undo operations in reverse order and check by substitution.";
+  if (/parallel|perpendicular/.test(title)) return "Parallel never meet; perpendicular meet at 90°.";
+  if (/2d shapes/.test(title)) return "Count sides, angles, and lines of symmetry.";
+  if (/3d shapes/.test(title)) return "Look at faces, edges, and vertices to name the solid.";
+  return "Read carefully, choose the right rule, solve step by step, and check the answer.";
+}
+
+function getMathSolveSteps(sub, lessonTitle) {
+  const title = `${lessonTitle || ""} ${sub?.t || ""}`.toLowerCase();
+  if (/place value/.test(title)) return ["Start at the ones place on the right.", "Move left to name the correct place.", "Find the target digit in the number.", "Multiply the digit by that place value."];
+  if (/expanded form/.test(title)) return ["Read each digit and its place.", "Write the non-zero place values separately.", "Join the parts with plus signs.", "Add the parts back to check the number."];
+  if (/comparing/.test(title)) return ["Check which number has more digits.", "If equal, compare from the leftmost place.", "Stop at the first place that is different.", "Use >, <, or = and order the numbers."];
+  if (/rounding/.test(title)) return ["Choose the place to round to.", "Look at the digit just to its right.", "5 or more means up; 4 or less means down.", "Keep that place and change the rest to zero."];
+  if (/number lines/.test(title)) return ["Read the start, end, and interval marks.", "Count equal jumps along the line.", "Locate the point or midpoint carefully.", "Check that the position matches the scale."];
+  if (/multi-digit addition/.test(title)) return ["Line up the digits by place value.", "Add from ones toward the left.", "Carry to the next column if needed.", "Estimate to see if the total makes sense."];
+  if (/carrying|borrowing/.test(title)) return ["Work from ones to higher places.", "Borrow or carry when the column needs it.", "Rewrite the changed digits clearly.", "Subtract or add again to verify the result."];
+  if (/large multiplication/.test(title)) return ["Write the numbers in columns.", "Multiply by the ones digit first.", "Multiply by the next place value.", "Add the partial products carefully."];
+  if (/long division/.test(title)) return ["Divide the leading part of the number.", "Multiply the quotient digit back.", "Subtract to find the remainder.", "Bring down the next digit and repeat."];
+  if (/table/.test(title)) return ["See the fact as equal groups.", "Skip count or use repeated addition.", "Notice doubles, 5s, and 10s patterns.", "Recall the fact quickly in bigger questions."];
+  if (/estimation/.test(title)) return ["Round the numbers to friendly values.", "Do the easier calculation first.", "Compare the estimate with the exact answer.", "Use the estimate to catch mistakes."];
+  if (/factor|multiple/.test(title)) return ["List factor pairs or multiples neatly.", "Circle the shared numbers if needed.", "Choose the exact factor or multiple asked for.", "Check by multiplication or division."];
+  if (/prime|composite/.test(title)) return ["Test small divisors one by one.", "Count how many factors the number has.", "Exactly two factors means prime.", "More than two factors means composite."];
+  if (/lcm/.test(title)) return ["Write multiples of each number.", "Keep going until a common multiple appears.", "Choose the smallest common one.", "Check both numbers divide into it exactly."];
+  if (/hcf/.test(title)) return ["List factors of each number.", "Find the common factors.", "Choose the greatest common factor.", "Check it divides every number exactly."];
+  if (/divisibility/.test(title)) return ["Look at the last digit or the digit sum.", "Apply the matching divisibility rule.", "Decide if the number divides evenly.", "Confirm with a quick division if needed."];
+  if (/proper|improper/.test(title)) return ["Compare numerator with denominator.", "Decide if the fraction is less than or at least 1.", "Name it as proper or improper.", "Sketch or imagine the fraction as parts of a whole."];
+  if (/mixed numbers/.test(title)) return ["Divide the numerator by the denominator.", "Use the quotient as the whole number.", "Keep the remainder over the same denominator.", "Reverse by multiply-and-add when needed."];
+  if (/equivalent fractions/.test(title)) return ["Choose a number to multiply or divide by.", "Do the same operation to top and bottom.", "Write the new fraction.", "Check the value stays the same."];
+  if (/simplifying/.test(title)) return ["Find the HCF of numerator and denominator.", "Divide both by that HCF.", "Write the reduced fraction.", "Check that no common factor is left."];
+  if (/add & subtract fractions/.test(title)) return ["Check if denominators already match.", "If not, find a common denominator.", "Combine the numerators only.", "Simplify the final fraction if possible."];
+  if (/multiply fractions/.test(title)) return ["Multiply the numerators together.", "Multiply the denominators together.", "Reduce the fraction if possible.", "Convert to a mixed number if needed."];
+  if (/decimal place value/.test(title)) return ["Find the decimal point first.", "Read places to the right as tenths, hundredths, and thousandths.", "Match each digit to its place.", "Write the value of the target digit."];
+  if (/fractions ↔ decimals/.test(title)) return ["Use division to turn a fraction into a decimal.", "Use place value to turn a decimal into a fraction.", "Write the fraction over 10, 100, or 1000.", "Simplify if possible."];
+  if (/add & subtract decimals/.test(title)) return ["Line up decimal points vertically.", "Add zeros to empty places if needed.", "Calculate column by column.", "Bring the decimal point straight down."];
+  if (/comparing decimals/.test(title)) return ["Make the decimal lengths equal with zeros.", "Compare whole numbers first.", "Then compare tenths, hundredths, and beyond.", "Choose the greater or smaller value."];
+  if (/ratio to fraction/.test(title)) return ["Add the ratio parts to get the total.", "Write the chosen part over the total.", "Simplify the fraction if possible.", "Check both part-fractions match the ratio."];
+  if (/ratio/.test(title)) return ["Keep the quantities in the same order.", "Write the ratio with a colon.", "Simplify both parts together.", "Check that the comparison still means the same thing."];
+  if (/percentage|real-life problems/.test(title)) return ["Turn the percent into a fraction or decimal.", "Find the whole amount first.", "Calculate the required part, discount, or score.", "Write the answer with context."];
+  if (/length|mass|capacity/.test(title)) return ["Choose the correct unit for the object.", "Estimate or read the measurement.", "Convert only if the question asks for it.", "Write the unit with the answer."];
+  if (/conversion/.test(title)) return ["Decide whether the new unit is bigger or smaller.", "Multiply for smaller units or divide for bigger ones.", "Use 10, 100, or 1000 as needed.", "Check the size of the answer for reasonableness."];
+  if (/time/.test(title)) return ["Read hours, minutes, and seconds carefully.", "Convert when totals pass 60.", "Use counting on or subtraction for elapsed time.", "Write the final time clearly."];
+  if (/temperature/.test(title)) return ["Read the Celsius scale carefully.", "Compare hotter and colder values.", "Find the difference if asked.", "Keep the degree sign in the answer."];
+  if (/lines & angles/.test(title)) return ["Identify the line or angle shown.", "Estimate or measure the size.", "Classify it by its property.", "Check the name matches the picture."];
+  if (/parallel|perpendicular/.test(title)) return ["See whether the lines ever meet.", "If they meet, check for a 90° angle.", "Name them as parallel or perpendicular.", "Match the idea to a real-life example."];
+  if (/2d shapes/.test(title)) return ["Count sides and corners.", "Look for equal sides or right angles.", "Check symmetry if needed.", "Name the shape using its properties."];
+  if (/3d shapes/.test(title)) return ["Count faces, edges, and vertices.", "Notice whether the solid rolls or stacks.", "Match its net or real object.", "Name the solid correctly."];
+  if (/perimeter/.test(title)) return ["Read every side length.", "Add all outer sides together.", "Use the same unit throughout.", "Check that you measured around the shape."];
+  if (/area/.test(title)) return ["Identify the base and height or length and width.", "Use the correct area formula.", "Multiply to find the space inside.", "Write square units in the answer."];
+  if (/volume/.test(title)) return ["Read the three dimensions.", "Multiply length × width × height.", "Compare the result with cube counting if helpful.", "Write cubic units in the answer."];
+  if (/word problems/.test(title) && /perimeter|area|volume/.test(sub?.c || "")) return ["Underline the dimensions and units.", "Choose perimeter, area, or volume.", "Apply the correct formula carefully.", "Write the answer with units or cost."];
+  if (/word problems/.test(title) && /each|shared equally|divided/.test(sub?.c || "")) return ["Read the story and underline numbers.", "Look for equal groups or sharing clues.", "Choose multiplication or division.", "Label the final answer clearly."];
+  if (/word problems/.test(title)) return ["Read the story twice.", "Underline clue words like total, left, or difference.", "Choose addition or subtraction.", "Solve neatly and write the unit."];
+  if (/bar graph/.test(title)) return ["Read the title, axes, and scale.", "Compare the heights of the bars.", "Find the highest, lowest, or difference asked.", "Use the scale to read exact values."];
+  if (/pictograph/.test(title)) return ["Read the key before counting anything.", "Count whole and half symbols carefully.", "Multiply by the key value.", "Check the total matches the picture."];
+  if (/line graph/.test(title)) return ["Read the time and value axes.", "Follow the points in order.", "Notice rises, falls, and flat parts.", "State the trend with evidence from the graph."];
+  if (/interpreting data/.test(title)) return ["Read the title and labels first.", "Find the highest and lowest values.", "Work out totals, averages, or differences.", "Describe any clear pattern or trend."];
+  if (/number patterns/.test(title)) return ["Compare one term to the next.", "Spot the repeated change.", "State the rule clearly.", "Use the rule to continue the pattern."];
+  if (/skip counting/.test(title)) return ["Choose the jump size.", "Count forward or backward by that amount.", "Write the sequence in order.", "Link the pattern to multiplication facts."];
+  if (/missing numbers/.test(title)) return ["Look at the numbers before and after the gap.", "Work out the rule of the pattern.", "Fill in the missing value.", "Check the whole sequence again."];
+  if (/sequence/.test(title)) return ["Decide if the pattern adds or multiplies.", "Find the constant difference or ratio.", "Continue the rule carefully.", "Check that every step follows the same pattern."];
+  if (/unknown|equation|symbol/.test(title)) return ["Find the operation attached to the variable.", "Undo it in reverse order.", "Isolate the variable step by step.", "Substitute back to check the solution."];
+  return ["Read the question carefully.", "Highlight the numbers and key words.", "Choose the correct operation or rule.", "Solve and check if the answer makes sense."];
+}
+
+function renderMathPrimaryVisual(sub) {
+  if (!sub || !sub.svgType) return null;
+  if (sub.svgType === "placeValue") return <PlaceValueChart number={sub.svgData.number} />;
+  if (sub.svgType === "expandedForm") return <ExpandedFormSVG number={sub.svgData.number} parts={sub.svgData.parts} />;
+  if (sub.svgType === "compare") return <CompareTripleSVG />;
+  if (sub.svgType === "rounding") return <RoundingDualSVG />;
+  if (sub.svgType === "columnAdd") return <ColumnAddSVG num1={sub.svgData.num1} num2={sub.svgData.num2} result={sub.svgData.result} />;
+  if (sub.svgType === "columnSub") return <ColumnSubSVG num1={sub.svgData.num1} num2={sub.svgData.num2} result={sub.svgData.result} />;
+  if (sub.svgType === "estimation") return <EstimationSVG num1={sub.svgData.num1} num2={sub.svgData.num2} op={sub.svgData.op} rounded1={sub.svgData.rounded1} rounded2={sub.svgData.rounded2} estimate={sub.svgData.estimate} exact={sub.svgData.exact} />;
+  if (sub.svgType === "numberLine") {
+    return <>
+      <NumberLineSVG min={sub.svgData.min} max={sub.svgData.max} marks={sub.svgData.marks} highlight={sub.svgData.highlight} />
+      <div className="math-svg"><svg viewBox="0 0 620 100" xmlns="http://www.w3.org/2000/svg">
+        <rect width="620" height="100" rx="12" fill="#1E293B"/>
+        <text x="310" y="18" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Positive &amp; Negative Numbers</text>
+        <line x1="30" y1="52" x2="590" y2="52" stroke="#475569" strokeWidth="3" strokeLinecap="round"/>
+        <polygon points="22,52 30,46 30,58" fill="#475569"/>
+        <polygon points="598,52 590,46 590,58" fill="#475569"/>
+        {[-5,-4,-3,-2,-1,0,1,2,3,4,5].map((n,i) => {
+          const x = 310 + n * 52;
+          const isZero = n === 0;
+          const isNeg = n < 0;
+          const col = isZero ? "#F59E0B" : isNeg ? "#EF4444" : "#22C55E";
+          return <g key={i}>
+            <line x1={x} y1="44" x2={x} y2="60" stroke={col} strokeWidth={isZero ? 4 : 2}/>
+            <text x={x} y="80" textAnchor="middle" fill={col} fontSize={isZero ? "18" : "15"} fontWeight={isZero ? "900" : "700"} fontFamily="'Baloo 2'">{n}</text>
+            {isZero && <circle cx={x} cy="52" r="6" fill="#F59E0B"/>}
+          </g>;
+        })}
+        <text x="80" y="38" textAnchor="middle" fill="#EF4444" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">← Negative</text>
+        <text x="540" y="38" textAnchor="middle" fill="#22C55E" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Positive →</text>
+      </svg></div>
+    </>;
+  }
+  return null;
+}
+
+function MathWordProblemStrategySVG({ sub, lessonTitle }) {
+  const title = `${lessonTitle || ""} ${sub?.t || ""}`.toLowerCase();
+  const multDiv = /multiplication|division/.test(title) || /shared equally|each|per|divided/.test(sub?.c || "");
+  const pav = /perimeter|area|volume/.test(lessonTitle || "");
+  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="260" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#F59E0B" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <rect x="28" y="56" width="182" height="152" rx="16" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5"/>
+    <text x="50" y="82" fill="#38BDF8" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">1. Read the Story</text>
+    <SvgTextBlock text={multDiv ? "Circle equal groups, each, total, and share clues." : pav ? "Underline dimensions, units, cost, and what must be found." : "Circle numbers and clue words like total, left, or difference."} x={50} y={108} maxChars={22} maxLines={5} fill="#E2E8F0" size={13} weight={600} />
+    <rect x="228" y="56" width="182" height="152" rx="16" fill="#1E293B" stroke="#22C55E" strokeWidth="1.5"/>
+    <text x="250" y="82" fill="#22C55E" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">2. Choose Method</text>
+    {multDiv ? <>
+      <rect x="252" y="108" width="48" height="36" rx="10" fill="#22C55E22" stroke="#22C55E"/><text x="276" y="131" textAnchor="middle" fill="#F8FAFC" fontSize="20" fontWeight="900" fontFamily="'Baloo 2'">4</text>
+      <text x="306" y="131" fill="#94A3B8" fontSize="18" fontWeight="700" fontFamily="'Baloo 2'">groups × 6</text>
+      <text x="250" y="170" fill="#E2E8F0" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Equal groups → multiply</text>
+      <text x="250" y="190" fill="#E2E8F0" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Shared equally → divide</text>
+    </> : pav ? <>
+      <rect x="250" y="104" width="96" height="54" rx="10" fill="#F59E0B22" stroke="#F59E0B"/>
+      <text x="298" y="128" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">l = 12 m</text>
+      <text x="298" y="148" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">w = 8 m</text>
+      <text x="250" y="182" fill="#E2E8F0" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Around → perimeter</text>
+      <text x="250" y="200" fill="#E2E8F0" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Inside → area or volume</text>
+    </> : <>
+      <text x="250" y="116" fill="#F8FAFC" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">48 + 27 = 75</text>
+      <text x="250" y="148" fill="#F8FAFC" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">75 − 19 = 56</text>
+      <text x="250" y="178" fill="#E2E8F0" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Total / altogether → add</text>
+      <text x="250" y="198" fill="#E2E8F0" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Left / difference → subtract</text>
+    </>}
+    <rect x="428" y="56" width="184" height="152" rx="16" fill="#1E293B" stroke="#A855F7" strokeWidth="1.5"/>
+    <text x="450" y="82" fill="#A855F7" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">3. Solve & Check</text>
+    <SvgTextBlock text={multDiv ? "Write the number sentence, solve, and check if the answer matches the groups." : pav ? "Use the right formula, keep units, and check whether the answer is distance, area, or capacity." : "Solve neatly, label the answer, then compare it with the story."} x={450} y={110} maxChars={20} maxLines={5} fill="#E2E8F0" size={13} weight={600} />
+    <line x1="210" y1="132" x2="228" y2="132" stroke="#64748B" strokeWidth="3"/><polygon points="228,132 218,126 218,138" fill="#64748B"/>
+    <line x1="410" y1="132" x2="428" y2="132" stroke="#64748B" strokeWidth="3"/><polygon points="428,132 418,126 418,138" fill="#64748B"/>
+  </svg></div>);
+}
+
+function MathMultiplicationMethodSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="260" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="64" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Large Multiplication</text>
+    <rect x="34" y="84" width="220" height="136" rx="16" fill="#1E293B" stroke="#22C55E"/>
+    <text x="54" y="112" fill="#22C55E" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Area / Partial Products</text>
+    <rect x="70" y="132" width="90" height="58" fill="#38BDF822" stroke="#38BDF8"/>
+    <rect x="160" y="132" width="54" height="58" fill="#F59E0B22" stroke="#F59E0B"/>
+    <text x="115" y="124" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">20</text>
+    <text x="187" y="124" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">3</text>
+    <text x="54" y="166" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">14</text>
+    <text x="115" y="166" textAnchor="middle" fill="#F8FAFC" fontSize="15" fontWeight="900" fontFamily="'Baloo 2'">280</text>
+    <text x="187" y="166" textAnchor="middle" fill="#F8FAFC" fontSize="15" fontWeight="900" fontFamily="'Baloo 2'">42</text>
+    <text x="54" y="208" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">14 × 23 = 280 + 42 = 322</text>
+    <rect x="278" y="84" width="332" height="136" rx="16" fill="#1E293B" stroke="#86EFAC"/>
+    <text x="300" y="112" fill="#86EFAC" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Column Method</text>
+    <text x="520" y="130" textAnchor="end" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">23</text>
+    <text x="520" y="160" textAnchor="end" fill="#22C55E" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">× 14</text>
+    <line x1="420" y1="168" x2="532" y2="168" stroke="#F59E0B" strokeWidth="3"/>
+    <text x="520" y="196" textAnchor="end" fill="#38BDF8" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">92</text>
+    <text x="520" y="220" textAnchor="end" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">230</text>
+    <text x="334" y="196" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">23 × 4</text>
+    <text x="326" y="220" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">23 × 10</text>
+  </svg></div>);
+}
+
+function MathLongDivisionMethodSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="260" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#38BDF8" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="64" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Long Division House</text>
+    <path d="M90 118 h210 v92" fill="none" stroke="#38BDF8" strokeWidth="4"/>
+    <path d="M90 118 q18 -18 36 0" fill="none" stroke="#38BDF8" strokeWidth="4"/>
+    <text x="64" y="164" fill="#F8FAFC" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">4</text>
+    <text x="128" y="106" fill="#22C55E" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">24</text>
+    <text x="130" y="164" fill="#F8FAFC" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">96</text>
+    <text x="326" y="102" fill="#94A3B8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">D-M-S-B</text>
+    <rect x="326" y="116" width="274" height="104" rx="16" fill="#1E293B" stroke="#22C55E"/>
+    <text x="346" y="142" fill="#22C55E" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">1. Divide: 9 ÷ 4 = 2</text>
+    <text x="346" y="166" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">2. Multiply: 2 × 4 = 8</text>
+    <text x="346" y="190" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">3. Subtract: 9 − 8 = 1</text>
+    <text x="346" y="214" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">4. Bring down 6 and repeat</text>
+    <text x="130" y="198" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">− 8</text>
+    <line x1="124" y1="204" x2="198" y2="204" stroke="#F59E0B" strokeWidth="3"/>
+    <text x="130" y="232" fill="#F8FAFC" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">16</text>
+  </svg></div>);
+}
+
+function MathFactorsToolkitSVG({ sub }) {
+  const title = (sub?.t || "").toLowerCase();
+  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="260" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    {title.includes("lcm") ? <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Find the LCM</text>
+      <text x="48" y="108" fill="#38BDF8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Multiples of 4</text>
+      {["4","8","12","16"].map((n,i)=><rect key={n} x={48+i*64} y="122" width="52" height="34" rx="10" fill={n==="12"?"#22C55E22":"#1E293B"} stroke={n==="12"?"#22C55E":"#475569"}/>)}
+      {["4","8","12","16"].map((n,i)=><text key={"t"+n} x={74+i*64} y="144" textAnchor="middle" fill="#F8FAFC" fontSize="16" fontWeight="900" fontFamily="'Baloo 2'">{n}</text>)}
+      <text x="48" y="192" fill="#F59E0B" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Multiples of 6</text>
+      {["6","12","18","24"].map((n,i)=><rect key={n} x={48+i*64} y="206" width="52" height="34" rx="10" fill={n==="12"?"#22C55E22":"#1E293B"} stroke={n==="12"?"#22C55E":"#475569"}/>)}
+      {["6","12","18","24"].map((n,i)=><text key={"b"+n} x={74+i*64} y="228" textAnchor="middle" fill="#F8FAFC" fontSize="16" fontWeight="900" fontFamily="'Baloo 2'">{n}</text>)}
+      <text x="374" y="150" fill="#22C55E" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">LCM(4, 6) = 12</text>
+      <SvgTextBlock text="List multiples in order and choose the first number that appears in both lists." x={374} y={182} maxChars={28} maxLines={3} fill="#E2E8F0" size={13} weight={700} />
+    </> : title.includes("hcf") ? <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Find the HCF</text>
+      <text x="48" y="104" fill="#38BDF8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Factors of 18</text>
+      <text x="48" y="126" fill="#F8FAFC" fontSize="16" fontWeight="700" fontFamily="'Baloo 2'">1, 2, 3, 6, 9, 18</text>
+      <text x="48" y="166" fill="#F59E0B" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Factors of 24</text>
+      <text x="48" y="188" fill="#F8FAFC" fontSize="16" fontWeight="700" fontFamily="'Baloo 2'">1, 2, 3, 4, 6, 8, 12, 24</text>
+      <rect x="394" y="92" width="174" height="110" rx="16" fill="#1E293B" stroke="#22C55E"/>
+      <text x="482" y="126" textAnchor="middle" fill="#22C55E" fontSize="16" fontWeight="900" fontFamily="'Baloo 2'">Common Factors</text>
+      <text x="482" y="154" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">1, 2, 3, 6</text>
+      <text x="482" y="184" textAnchor="middle" fill="#F59E0B" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">HCF = 6</text>
+    </> : <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Prime, Composite, Factors</text>
+      <rect x="44" y="104" width="160" height="108" rx="16" fill="#1E293B" stroke="#38BDF8"/>
+      <text x="124" y="130" textAnchor="middle" fill="#38BDF8" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">Prime: 13</text>
+      <text x="124" y="164" textAnchor="middle" fill="#F8FAFC" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">1 and 13</text>
+      <text x="124" y="192" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Exactly two factors</text>
+      <rect x="238" y="104" width="160" height="108" rx="16" fill="#1E293B" stroke="#F59E0B"/>
+      <text x="318" y="130" textAnchor="middle" fill="#F59E0B" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">Composite: 12</text>
+      <text x="318" y="164" textAnchor="middle" fill="#F8FAFC" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">1, 2, 3, 4, 6, 12</text>
+      <text x="318" y="192" textAnchor="middle" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">More than two factors</text>
+      <rect x="432" y="104" width="164" height="108" rx="16" fill="#1E293B" stroke="#A855F7"/>
+      <SvgTextBlock text="List factor pairs to find all factors, then classify the number." x={452} y={144} maxChars={18} maxLines={4} fill="#E2E8F0" size={14} weight={700} />
+    </>}
+  </svg></div>);
+}
+function MathConceptSummarySVG({ sub, lessonTitle }) {
+  const theme = getMathVisualTheme(sub, lessonTitle);
+  const points = getMathSummaryPoints(sub);
+  return (<div className="math-svg"><svg viewBox="0 0 640 250" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="250" rx="20" fill="#0F172A"/>
+    <rect x="18" y="18" width="604" height="214" rx="18" fill={theme.soft} opacity="0.14" stroke={theme.accent} strokeWidth="1.6"/>
+    <text x="34" y="46" fill={theme.accent} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Key Idea</text>
+    <text x="34" y="74" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">{sub.t}</text>
+    <SvgTextBlock text={getMathQuickRule(sub, lessonTitle)} x={34} y={102} maxChars={42} maxLines={2} lineHeight={18} fill="#CBD5E1" size={14} weight={600} />
+    {points.map((point, idx) => {
+      const y = 132 + idx * 34;
+      return <g key={idx}>
+        <circle cx="42" cy={y - 5} r="8" fill={theme.accent}/>
+        <SvgTextBlock text={point} x={60} y={y} maxChars={55} maxLines={2} lineHeight={16} fill="#E2E8F0" size={13} weight={600} />
+      </g>;
+    })}
+  </svg></div>);
+}
+
+function MathFractionsToolkitSVG({ sub }) {
+  const title = (sub?.t || "").toLowerCase();
+  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="260" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#8B5CF6" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    {title.includes("mixed") ? <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Improper to Mixed Number</text>
+      <text x="54" y="116" fill="#F8FAFC" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">11 ÷ 4 = 2 remainder 3</text>
+      <text x="54" y="170" fill="#8B5CF6" fontSize="30" fontWeight="900" fontFamily="'Baloo 2'">11/4 = 2 3/4</text>
+      <rect x="346" y="96" width="216" height="108" rx="16" fill="#1E293B" stroke="#C4B5FD"/>
+      <SvgTextBlock text="Whole number = quotient, fraction = remainder over the same denominator." x={366} y={130} maxChars={22} maxLines={4} fill="#E2E8F0" size={14} weight={700} />
+    </> : title.includes("equivalent") || title.includes("simplifying") ? <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">{title.includes("equivalent") ? "Equivalent Fractions" : "Simplifying Fractions"}</text>
+      <rect x="48" y="108" width="92" height="34" rx="10" fill="#8B5CF622" stroke="#8B5CF6"/><text x="94" y="131" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">1/2</text>
+      <text x="158" y="132" fill="#94A3B8" fontSize="20" fontWeight="900" fontFamily="'Baloo 2'">=</text>
+      <rect x="180" y="108" width="92" height="34" rx="10" fill="#8B5CF622" stroke="#8B5CF6"/><text x="226" y="131" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">2/4</text>
+      <text x="290" y="132" fill="#94A3B8" fontSize="20" fontWeight="900" fontFamily="'Baloo 2'">=</text>
+      <rect x="312" y="108" width="92" height="34" rx="10" fill="#8B5CF622" stroke="#8B5CF6"/><text x="358" y="131" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">4/8</text>
+      <text x="50" y="188" fill="#F59E0B" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">12/18 ÷ 6 = 2/3</text>
+      <SvgTextBlock text="Multiply or divide the numerator and denominator by the same number to keep the value unchanged." x={50} y={214} maxChars={40} maxLines={2} fill="#E2E8F0" size={13} weight={700}/>
+    </> : title.includes("add") || title.includes("subtract") ? <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Add and Subtract Fractions</text>
+      <rect x="50" y="110" width="180" height="28" rx="10" fill="#1E293B" stroke="#8B5CF6"/><rect x="50" y="110" width="45" height="28" rx="10" fill="#8B5CF6"/>
+      <rect x="250" y="110" width="180" height="28" rx="10" fill="#1E293B" stroke="#8B5CF6"/><rect x="250" y="110" width="90" height="28" rx="10" fill="#A78BFA"/>
+      <text x="140" y="92" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">1/4</text>
+      <text x="240" y="128" textAnchor="middle" fill="#94A3B8" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">+</text>
+      <text x="340" y="92" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="900" fontFamily="'Baloo 2'">2/4</text>
+      <text x="500" y="128" fill="#22C55E" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">= 3/4</text>
+      <SvgTextBlock text="If denominators match, add only the numerators. If they differ, make equivalent fractions first." x={50} y={192} maxChars={42} maxLines={3} fill="#E2E8F0" size={13} weight={700}/>
+    </> : <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Proper and Improper Fractions</text>
+      <text x="74" y="100" fill="#8B5CF6" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Proper 3/5</text>
+      <rect x="54" y="116" width="160" height="28" rx="10" fill="#1E293B" stroke="#8B5CF6"/><rect x="54" y="116" width="96" height="28" rx="10" fill="#8B5CF6"/>
+      <text x="332" y="100" fill="#F59E0B" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Improper 7/5</text>
+      <rect x="268" y="116" width="160" height="28" rx="10" fill="#1E293B" stroke="#F59E0B"/><rect x="268" y="116" width="160" height="28" rx="10" fill="#F59E0B"/>
+      <rect x="438" y="116" width="60" height="28" rx="10" fill="#F59E0B"/>
+      <SvgTextBlock text="Numerator smaller than denominator → proper. Numerator equal to or greater than denominator → improper." x={54} y={188} maxChars={44} maxLines={3} fill="#E2E8F0" size={13} weight={700}/>
+    </>}
+  </svg></div>);
+}
+
+function MathDecimalsToolkitSVG({ sub }) {
+  const title = (sub?.t || "").toLowerCase();
+  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="260" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#8B5CF6" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    {title.includes("fractions") ? <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Fractions and Decimals</text>
+      <text x="62" y="130" fill="#F8FAFC" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">3/4 = 0.75</text>
+      <text x="62" y="170" fill="#94A3B8" fontSize="16" fontWeight="700" fontFamily="'Baloo 2'">divide 3 by 4</text>
+      <rect x="342" y="94" width="220" height="116" rx="16" fill="#1E293B" stroke="#38BDF8"/>
+      <text x="452" y="126" textAnchor="middle" fill="#38BDF8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Place Value</text>
+      <text x="452" y="158" textAnchor="middle" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">0 . 7 5</text>
+      <text x="452" y="186" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">7 tenths, 5 hundredths</text>
+    </> : title.includes("add") || title.includes("subtract") ? <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Add and Subtract Decimals</text>
+      <text x="144" y="126" textAnchor="end" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">12.30</text>
+      <text x="144" y="156" textAnchor="end" fill="#22C55E" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">+ 4.75</text>
+      <line x1="68" y1="166" x2="150" y2="166" stroke="#F59E0B" strokeWidth="3"/>
+      <text x="144" y="198" textAnchor="end" fill="#38BDF8" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">17.05</text>
+      <SvgTextBlock text="Keep decimal points in one straight line and add zeros if places are missing." x={220} y={136} maxChars={28} maxLines={3} fill="#E2E8F0" size={14} weight={700}/>
+    </> : <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Decimal Place Value</text>
+      <rect x="52" y="96" width="508" height="82" rx="16" fill="#1E293B" stroke="#38BDF8"/>
+      {["Ones","Tenths","Hundredths","Thousandths"].map((label,i)=><g key={label}><line x1={52+i*127} y1="96" x2={52+i*127} y2="178" stroke="#334155"/><text x={115+i*127} y="122" textAnchor="middle" fill="#38BDF8" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">{label}</text></g>)}
+      <text x="115" y="156" textAnchor="middle" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">3</text>
+      <text x="242" y="156" textAnchor="middle" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">4</text>
+      <text x="369" y="156" textAnchor="middle" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">8</text>
+      <text x="496" y="156" textAnchor="middle" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">2</text>
+      <text x="177" y="156" textAnchor="middle" fill="#F59E0B" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">.</text>
+    </>}
+  </svg></div>);
+}
+
+function MathRatioPercentToolkitSVG({ sub }) {
+  const title = (sub?.t || "").toLowerCase();
+  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="260" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#EC4899" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    {title.includes("ratio to fraction") ? <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Ratio to Fraction</text>
+      <rect x="56" y="104" width="72" height="52" rx="14" fill="#EC489922"/><text x="92" y="138" textAnchor="middle" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">2</text>
+      <text x="144" y="138" fill="#94A3B8" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">:</text>
+      <rect x="164" y="104" width="72" height="52" rx="14" fill="#EC489922"/><text x="200" y="138" textAnchor="middle" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">3</text>
+      <text x="280" y="138" fill="#94A3B8" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">→</text>
+      <text x="332" y="138" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">2/5 and 3/5</text>
+      <SvgTextBlock text="Add parts first: 2 + 3 = 5. Then write each part over the total." x={58} y={196} maxChars={42} maxLines={2} fill="#E2E8F0" size={13} weight={700}/>
+    </> : <>
+      <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Percent as Part of 100</text>
+      {Array.from({length:20}).map((_,i)=> { const x = 58 + (i%10)*20; const y = 106 + Math.floor(i/10)*20; return <rect key={i} x={x} y={y} width="18" height="18" fill="#EC4899" stroke="#0F172A"/>; })}
+      {Array.from({length:80}).map((_,i)=> { const x = 58 + ((i+20)%10)*20; const y = 106 + Math.floor((i+20)/10)*20; return <rect key={"w"+i} x={x} y={y} width="18" height="18" fill="#1E293B" stroke="#334155"/>; })}
+      <text x="300" y="150" fill="#F8FAFC" fontSize="30" fontWeight="900" fontFamily="'Baloo 2'">20%</text>
+      <SvgTextBlock text="Shade 20 out of 100 boxes. 25% = one quarter, 50% = one half, 75% = three quarters." x={372} y={126} maxChars={24} maxLines={4} fill="#E2E8F0" size={13} weight={700}/>
+    </>}
+  </svg></div>);
+}
+
+function MathLinesAnglesToolkitSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#38BDF8" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Lines and Angles</text>
+    <rect x="34" y="88" width="250" height="146" rx="16" fill="#1E293B" stroke="#38BDF8"/>
+    <text x="52" y="112" fill="#38BDF8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Line, Ray, Segment</text>
+    <line x1="64" y1="138" x2="246" y2="138" stroke="#F8FAFC" strokeWidth="4"/><polygon points="64,138 74,132 74,144" fill="#F8FAFC"/><polygon points="246,138 236,132 236,144" fill="#F8FAFC"/>
+    <text x="52" y="156" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Line goes on in both directions</text>
+    <circle cx="68" cy="188" r="6" fill="#22C55E"/><line x1="68" y1="188" x2="246" y2="188" stroke="#F8FAFC" strokeWidth="4"/><polygon points="246,188 236,182 236,194" fill="#F8FAFC"/>
+    <text x="52" y="208" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Ray has one endpoint</text>
+    <circle cx="68" cy="224" r="6" fill="#F59E0B"/><circle cx="246" cy="224" r="6" fill="#F59E0B"/><line x1="68" y1="224" x2="246" y2="224" stroke="#F8FAFC" strokeWidth="4"/>
+    <text x="52" y="244" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Segment has two endpoints</text>
+    <rect x="306" y="88" width="300" height="146" rx="16" fill="#1E293B" stroke="#22C55E"/>
+    <text x="326" y="112" fill="#22C55E" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Classify the Angles</text>
+    <line x1="346" y1="192" x2="346" y2="136" stroke="#F8FAFC" strokeWidth="4"/><line x1="346" y1="192" x2="402" y2="192" stroke="#F8FAFC" strokeWidth="4"/>
+    <path d="M346 176 A16 16 0 0 1 362 192" fill="none" stroke="#22C55E" strokeWidth="3"/><text x="372" y="170" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">90° Right</text>
+    <line x1="456" y1="192" x2="456" y2="136" stroke="#F8FAFC" strokeWidth="4"/><line x1="456" y1="192" x2="508" y2="154" stroke="#F8FAFC" strokeWidth="4"/>
+    <path d="M456 174 A22 22 0 0 1 478 176" fill="none" stroke="#F59E0B" strokeWidth="3"/><text x="500" y="144" fill="#F59E0B" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Acute &lt; 90°</text>
+    <line x1="346" y1="234" x2="396" y2="234" stroke="#F8FAFC" strokeWidth="4"/><line x1="346" y1="234" x2="316" y2="194" stroke="#F8FAFC" strokeWidth="4"/>
+    <path d="M332 214 A26 26 0 0 0 372 232" fill="none" stroke="#A855F7" strokeWidth="3"/><text x="404" y="236" fill="#A855F7" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Obtuse &gt; 90°</text>
+    <line x1="456" y1="234" x2="522" y2="234" stroke="#F8FAFC" strokeWidth="4"/><line x1="456" y1="234" x2="390" y2="234" stroke="#F8FAFC" strokeWidth="4"/>
+    <text x="464" y="220" fill="#38BDF8" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">180° Straight</text>
+  </svg></div>);
+}
+
+function MathParallelPerpendicularToolkitSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Parallel and Perpendicular</text>
+    <rect x="34" y="88" width="266" height="146" rx="16" fill="#1E293B" stroke="#22C55E"/>
+    <text x="54" y="112" fill="#22C55E" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Parallel Lines</text>
+    <line x1="74" y1="142" x2="254" y2="142" stroke="#F8FAFC" strokeWidth="5"/><line x1="74" y1="178" x2="254" y2="178" stroke="#F8FAFC" strokeWidth="5"/>
+    <line x1="96" y1="130" x2="96" y2="192" stroke="#F59E0B" strokeWidth="2"/><line x1="232" y1="130" x2="232" y2="192" stroke="#F59E0B" strokeWidth="2"/>
+    <text x="54" y="214" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Same distance apart like train tracks</text>
+    <text x="54" y="234" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Symbol: ||</text>
+    <rect x="322" y="88" width="284" height="146" rx="16" fill="#1E293B" stroke="#F59E0B"/>
+    <text x="342" y="112" fill="#F59E0B" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Perpendicular Lines</text>
+    <line x1="462" y1="132" x2="462" y2="220" stroke="#F8FAFC" strokeWidth="5"/><line x1="396" y1="176" x2="528" y2="176" stroke="#F8FAFC" strokeWidth="5"/>
+    <rect x="462" y="160" width="20" height="20" fill="none" stroke="#38BDF8" strokeWidth="3"/>
+    <text x="342" y="206" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Meet to form a right angle of 90°</text>
+    <text x="342" y="226" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Symbol: ⊥</text>
+  </svg></div>);
+}
+
+function Math2DShapesToolkitSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#8B5CF6" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">2D Shapes</text>
+    <rect x="34" y="88" width="572" height="146" rx="16" fill="#1E293B" stroke="#8B5CF6"/>
+    <rect x="68" y="128" width="54" height="54" fill="#8B5CF622" stroke="#C4B5FD" strokeWidth="3"/><text x="95" y="204" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Square</text>
+    <rect x="156" y="136" width="76" height="42" fill="#38BDF822" stroke="#38BDF8" strokeWidth="3"/><text x="194" y="204" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Rectangle</text>
+    <polygon points="288,182 250,128 326,128" fill="#F59E0B22" stroke="#F59E0B" strokeWidth="3"/><text x="288" y="204" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Triangle</text>
+    <circle cx="390" cy="156" r="28" fill="#22C55E22" stroke="#22C55E" strokeWidth="3"/><text x="390" y="204" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Circle</text>
+    <polygon points="470,182 444,162 454,130 486,130 496,162" fill="#EC489922" stroke="#EC4899" strokeWidth="3"/><text x="470" y="204" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Pentagon</text>
+    <polygon points="554,182 530,168 530,142 554,128 578,142 578,168" fill="#FACC1522" stroke="#FACC15" strokeWidth="3"/><text x="554" y="204" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Hexagon</text>
+    <text x="52" y="112" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Flat shapes have length and width. Count sides, corners, and equal sides.</text>
+  </svg></div>);
+}
+
+function Math3DShapesToolkitSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#F59E0B" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">3D Shapes</text>
+    <rect x="34" y="88" width="572" height="146" rx="16" fill="#1E293B" stroke="#F59E0B"/>
+    <g transform="translate(70 112)">
+      <rect x="0" y="18" width="54" height="54" fill="none" stroke="#38BDF8" strokeWidth="3"/><rect x="18" y="0" width="54" height="54" fill="none" stroke="#38BDF8" strokeWidth="3"/><line x1="0" y1="18" x2="18" y2="0" stroke="#38BDF8" strokeWidth="3"/><line x1="54" y1="18" x2="72" y2="0" stroke="#38BDF8" strokeWidth="3"/><line x1="54" y1="72" x2="72" y2="54" stroke="#38BDF8" strokeWidth="3"/><line x1="0" y1="72" x2="18" y2="54" stroke="#38BDF8" strokeWidth="3"/>
+      <text x="36" y="96" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Cube</text>
+    </g>
+    <g transform="translate(206 110)">
+      <ellipse cx="36" cy="12" rx="30" ry="12" fill="#22C55E22" stroke="#22C55E" strokeWidth="3"/><line x1="6" y1="12" x2="6" y2="72" stroke="#22C55E" strokeWidth="3"/><line x1="66" y1="12" x2="66" y2="72" stroke="#22C55E" strokeWidth="3"/><ellipse cx="36" cy="72" rx="30" ry="12" fill="#22C55E22" stroke="#22C55E" strokeWidth="3"/>
+      <text x="36" y="102" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Cylinder</text>
+    </g>
+    <g transform="translate(338 110)">
+      <ellipse cx="36" cy="74" rx="32" ry="12" fill="#A855F722" stroke="#A855F7" strokeWidth="3"/><line x1="4" y1="74" x2="36" y2="8" stroke="#A855F7" strokeWidth="3"/><line x1="68" y1="74" x2="36" y2="8" stroke="#A855F7" strokeWidth="3"/>
+      <text x="36" y="102" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Cone</text>
+    </g>
+    <g transform="translate(470 110)">
+      <circle cx="36" cy="42" r="34" fill="#F59E0B22" stroke="#F59E0B" strokeWidth="3"/><ellipse cx="36" cy="42" rx="34" ry="12" fill="none" stroke="#FDE68A" strokeWidth="2"/>
+      <text x="36" y="102" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Sphere</text>
+    </g>
+    <text x="52" y="112" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">3D shapes have length, width, and height. Count faces, edges, and vertices.</text>
+  </svg></div>);
+}
+
+function MathGeometryToolkitSVG({ sub }) {
+  const title = (sub?.t || "").toLowerCase();
+  if (title.includes("parallel") || title.includes("perpendicular")) return <MathParallelPerpendicularToolkitSVG />;
+  if (title.includes("2d")) return <Math2DShapesToolkitSVG />;
+  if (title.includes("3d")) return <Math3DShapesToolkitSVG />;
+  return <MathLinesAnglesToolkitSVG />;
+}
+
+function MathBarGraphToolkitSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#38BDF8" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Bar Graphs</text>
+    <line x1="86" y1="210" x2="292" y2="210" stroke="#F8FAFC" strokeWidth="4"/><line x1="86" y1="210" x2="86" y2="98" stroke="#F8FAFC" strokeWidth="4"/>
+    {[0,10,20,30].map((n, i) => <g key={n}><line x1="78" y1={210 - i*34} x2="94" y2={210 - i*34} stroke="#94A3B8" strokeWidth="2"/><text x="64" y={214 - i*34} textAnchor="end" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">{n}</text></g>)}
+    <rect x="114" y="142" width="34" height="68" rx="6" fill="#F59E0B"/><rect x="170" y="108" width="34" height="102" rx="6" fill="#22C55E"/><rect x="226" y="74" width="34" height="136" rx="6" fill="#A855F7"/>
+    <text x="131" y="230" textAnchor="middle" fill="#F8FAFC" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Apple</text><text x="187" y="230" textAnchor="middle" fill="#F8FAFC" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Banana</text><text x="243" y="230" textAnchor="middle" fill="#F8FAFC" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">Mango</text>
+    <rect x="330" y="88" width="276" height="146" rx="16" fill="#1E293B" stroke="#38BDF8"/>
+    <text x="350" y="114" fill="#38BDF8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">How to Read</text>
+    <text x="350" y="146" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">1. Read the title and both axes.</text>
+    <text x="350" y="172" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">2. Check the scale: 0, 10, 20, 30.</text>
+    <text x="350" y="198" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">3. Compare bar heights to find most or least.</text>
+    <text x="350" y="224" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Equal-width bars with equal spacing make the graph fair.</text>
+  </svg></div>);
+}
+
+function MathPictographToolkitSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Pictographs</text>
+    <rect x="34" y="88" width="262" height="146" rx="16" fill="#1E293B" stroke="#22C55E"/>
+    <text x="54" y="114" fill="#22C55E" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Key</text>
+    <text x="54" y="142" fill="#F8FAFC" fontSize="20" fontWeight="900" fontFamily="'Baloo 2'">★ = 4 students</text>
+    <text x="54" y="178" fill="#F8FAFC" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">Blue  ★ ★ ★  = 12</text>
+    <text x="54" y="204" fill="#F8FAFC" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">Red   ★ ★    = 8</text>
+    <text x="54" y="228" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Half a symbol means half the key value.</text>
+    <rect x="318" y="88" width="288" height="146" rx="16" fill="#1E293B" stroke="#86EFAC"/>
+    <text x="338" y="114" fill="#86EFAC" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">How to Solve</text>
+    <text x="338" y="146" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">1. Read one picture from the key.</text>
+    <text x="338" y="172" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">2. Count pictures in each row.</text>
+    <text x="338" y="198" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">3. Multiply count by key value.</text>
+    <text x="338" y="224" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Example: 3 stars means 3 × 4 = 12 students.</text>
+  </svg></div>);
+}
+
+function MathLineGraphToolkitSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#A855F7" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Line Graphs</text>
+    <line x1="86" y1="212" x2="300" y2="212" stroke="#F8FAFC" strokeWidth="4"/><line x1="86" y1="212" x2="86" y2="96" stroke="#F8FAFC" strokeWidth="4"/>
+    <polyline points="110,188 154,170 198,136 242,150 286,116" fill="none" stroke="#A855F7" strokeWidth="4"/>
+    {[["Mon",110,188],["Tue",154,170],["Wed",198,136],["Thu",242,150],["Fri",286,116]].map(([d,x,y]) => <g key={d}><circle cx={x} cy={y} r="6" fill="#F59E0B"/><text x={x} y="232" textAnchor="middle" fill="#F8FAFC" fontSize="12" fontWeight="800" fontFamily="'Baloo 2'">{d}</text></g>)}
+    <text x="330" y="112" fill="#A855F7" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Trend Reading</text>
+    <rect x="330" y="126" width="276" height="108" rx="16" fill="#1E293B" stroke="#A855F7"/>
+    <text x="350" y="154" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Line rising upward = increase</text>
+    <text x="350" y="180" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Line falling downward = decrease</text>
+    <text x="350" y="206" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Flat line = no change</text>
+    <text x="350" y="228" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Steeper slope means faster change.</text>
+  </svg></div>);
+}
+
+function MathDataInterpretationToolkitSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill="#F59E0B" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Interpreting Data</text>
+    <rect x="34" y="88" width="248" height="146" rx="16" fill="#1E293B" stroke="#F59E0B"/>
+    <text x="54" y="114" fill="#F59E0B" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Sample Table</text>
+    <text x="54" y="142" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Apples   30</text>
+    <text x="54" y="168" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Bananas  45</text>
+    <text x="54" y="194" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Oranges  20</text>
+    <text x="54" y="220" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Grapes   35</text>
+    <rect x="304" y="88" width="302" height="146" rx="16" fill="#1E293B" stroke="#FDE68A"/>
+    <text x="324" y="114" fill="#FDE68A" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Question Checks</text>
+    <text x="324" y="144" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Highest: 45 bananas</text>
+    <text x="324" y="170" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Lowest: 20 oranges</text>
+    <text x="324" y="196" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">Range: 45 - 20 = 25</text>
+    <text x="324" y="222" fill="#94A3B8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Always read title, labels, total, difference, and trend.</text>
+  </svg></div>);
+}
+
+function MathDataHandlingToolkitSVG({ sub }) {
+  const title = (sub?.t || "").toLowerCase();
+  if (title.includes("pictograph")) return <MathPictographToolkitSVG />;
+  if (title.includes("line")) return <MathLineGraphToolkitSVG />;
+  if (title.includes("interpreting")) return <MathDataInterpretationToolkitSVG />;
+  return <MathBarGraphToolkitSVG />;
+}
+
+function MathTextbookStarterSVG({ sub, lessonTitle }) {
+  const theme = getMathVisualTheme(sub, lessonTitle);
+  const examples = getMathWorkedExamples(sub).slice(0, 2);
+  const rule = getMathQuickRule(sub, lessonTitle);
+  const steps = getMathSolveSteps(sub, lessonTitle).slice(0, 3);
+  return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="270" rx="20" fill="#0F172A"/>
+    <text x="34" y="38" fill={theme.accent} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
+    <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">{clipSvgText(sub?.t || "Math Method", 24)}</text>
+    <rect x="32" y="86" width="242" height="152" rx="18" fill={theme.soft} opacity="0.18" stroke={theme.accent} strokeWidth="1.4"/>
+    <text x="52" y="112" fill={theme.accent} fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Worked Pattern</text>
+    <SvgTextBlock text={examples[0] || rule} x={52} y={138} maxChars={24} maxLines={3} lineHeight={18} fill="#F8FAFC" size={14} weight={700}/>
+    <line x1="52" y1="178" x2="254" y2="178" stroke="#334155" strokeWidth="1.5"/>
+    <SvgTextBlock text={examples[1] || "Check the same pattern with another example."} x={52} y={202} maxChars={24} maxLines={3} lineHeight={18} fill="#CBD5E1" size={13} weight={600}/>
+    <rect x="292" y="86" width="316" height="58" rx="18" fill={theme.accent} opacity="0.16" stroke={theme.accent} strokeWidth="1.4"/>
+    <text x="314" y="112" fill={theme.chip} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Rule to Remember</text>
+    <SvgTextBlock text={rule} x={314} y={134} maxChars={31} maxLines={2} lineHeight={17} fill="#F8FAFC" size={14} weight={700}/>
+    {steps.map((step, idx) => {
+      const y = 170 + idx * 28;
+      return <g key={idx}>
+        <circle cx="314" cy={y - 4} r="10" fill={theme.accent}/>
+        <text x="314" y={y} textAnchor="middle" fill="#082F49" fontSize="12" fontWeight="900" fontFamily="'Baloo 2'">{idx + 1}</text>
+        <SvgTextBlock text={step} x={334} y={y} maxChars={31} maxLines={1} lineHeight={16} fill="#E2E8F0" size={13} weight={700}/>
+      </g>;
+    })}
+  </svg></div>);
+}
+
+function renderMathTextbookPrimarySVG(sub, lessonTitle) {
+  const title = `${lessonTitle || ""} ${sub?.t || ""}`.toLowerCase();
+  const content = (sub?.c || "").toLowerCase();
+  if ((lessonTitle || "").toLowerCase().includes("geometry")) return <MathGeometryToolkitSVG sub={sub} />;
+  if ((lessonTitle || "").toLowerCase().includes("data handling")) return <MathDataHandlingToolkitSVG sub={sub} />;
+  if (/word problem|story problem|problem solving/.test(title) || /shared equally|each|perimeter|area|volume|altogether|left/.test(content)) return <MathWordProblemStrategySVG sub={sub} lessonTitle={lessonTitle} />;
+  if (/multiplication|multiply|times/.test(title)) return <MathMultiplicationMethodSVG />;
+  if (/division|divide|quotient|remainder/.test(title)) return <MathLongDivisionMethodSVG />;
+  if (/prime|composite|factor|multiple|hcf|lcm/.test(title)) return <MathFactorsToolkitSVG sub={sub} />;
+  if (/fraction|numerator|denominator|mixed number|equivalent/.test(title)) return <MathFractionsToolkitSVG sub={sub} />;
+  if (/decimal/.test(title)) return <MathDecimalsToolkitSVG sub={sub} />;
+  if (/ratio|percent|percentage/.test(title)) return <MathRatioPercentToolkitSVG sub={sub} />;
+  return <MathTextbookStarterSVG sub={sub} lessonTitle={lessonTitle} />;
+}
+
+function MathMethodStepsSVG({ sub, lessonTitle }) {
+  const theme = getMathVisualTheme(sub, lessonTitle);
+  const steps = getMathSolveSteps(sub, lessonTitle);
+  return (<div className="math-svg"><svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="300" rx="20" fill="#0F172A"/>
+    <text x="36" y="40" fill={theme.accent} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Method Path</text>
+    {steps.map((step, idx) => {
+      const y = 64 + idx * 56;
+      return <g key={idx}>
+        {idx < steps.length - 1 && <line x1="78" y1={y + 40} x2="78" y2={y + 60} stroke={theme.chip} strokeWidth="4" strokeLinecap="round" opacity="0.8"/>}
+        <circle cx="78" cy={y + 20} r="18" fill={theme.accent}/>
+        <text x="78" y={y + 26} textAnchor="middle" fill="#082F49" fontSize="16" fontWeight="900" fontFamily="'Baloo 2'">{idx + 1}</text>
+        <rect x="112" y={y} width="486" height="40" rx="14" fill={theme.soft} opacity="0.18" stroke={theme.accent} strokeWidth="1.3"/>
+        <SvgTextBlock text={step} x={132} y={y + 24} maxChars={50} maxLines={2} lineHeight={15} fill="#E2E8F0" size={13} weight={700} />
+      </g>;
+    })}
+  </svg></div>);
+}
+
+function MathWorkedExamplesSVG({ sub, lessonTitle }) {
+  const theme = getMathVisualTheme(sub, lessonTitle);
+  const samples = getMathWorkedExamples(sub);
+  return (<div className="math-svg"><svg viewBox="0 0 640 280" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="280" rx="20" fill="#0F172A"/>
+    <text x="34" y="40" fill={theme.accent} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Worked Examples</text>
+    {samples.map((sample, idx) => {
+      const y = 58 + idx * 68;
+      return <g key={idx}>
+        <rect x="28" y={y} width="584" height="52" rx="16" fill={theme.soft} opacity="0.16" stroke={theme.accent} strokeWidth="1.2"/>
+        <rect x="42" y={y + 10} width="78" height="30" rx="12" fill={theme.accent}/>
+        <text x="81" y={y + 30} textAnchor="middle" fill="#082F49" fontSize="13" fontWeight="900" fontFamily="'Baloo 2'">Example {idx + 1}</text>
+        <SvgTextBlock text={sample} x={136} y={y + 22} maxChars={49} maxLines={2} lineHeight={17} fill="#F8FAFC" size={14} weight={700} />
+      </g>;
+    })}
+  </svg></div>);
+}
+
+function MathPracticePlanSVG({ sub, lessonTitle }) {
+  const theme = getMathVisualTheme(sub, lessonTitle);
+  const problem = clipSvgText(getMathPracticeExample(sub), 180);
+  const checks = ["Underline the numbers.", "Pick the rule or operation.", "Solve neatly step by step.", "Check the answer against the story."];
+  return (<div className="math-svg"><svg viewBox="0 0 640 280" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="280" rx="20" fill="#0F172A"/>
+    <text x="34" y="40" fill={theme.accent} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Problem Plan</text>
+    <rect x="28" y="58" width="270" height="182" rx="18" fill={theme.soft} opacity="0.16" stroke={theme.accent} strokeWidth="1.2"/>
+    <text x="46" y="86" fill="#F8FAFC" fontSize="18" fontWeight="800" fontFamily="'Baloo 2'">Try This Question</text>
+    <SvgTextBlock text={problem} x={46} y={110} maxChars={28} maxLines={6} lineHeight={18} fill="#E2E8F0" size={14} weight={600} />
+    <rect x="316" y="58" width="296" height="70" rx="18" fill={theme.accent} opacity="0.16" stroke={theme.accent} strokeWidth="1.2"/>
+    <text x="336" y="86" fill={theme.chip} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Quick Rule</text>
+    <SvgTextBlock text={getMathQuickRule(sub, lessonTitle)} x={336} y={110} maxChars={30} maxLines={2} lineHeight={17} fill="#F8FAFC" size={14} weight={700} />
+    {checks.map((item, idx) => {
+      const y = 142 + idx * 28;
+      return <g key={idx}>
+        <rect x="334" y={y - 13} width="18" height="18" rx="4" fill={theme.soft} opacity="0.26" stroke={theme.chip} strokeWidth="1.1"/>
+        <SvgTextBlock text={item} x={364} y={y} maxChars={28} maxLines={1} lineHeight={16} fill="#E2E8F0" size={13} weight={700} />
+      </g>;
+    })}
+  </svg></div>);
+}
+
+function MathVisualDeck({ sub, lessonTitle }) {
+  const primary = renderMathPrimaryVisual(sub);
+  const cards = primary
+    ? [
+        { label: "Core Model", content: primary },
+        { label: "Solve Steps", content: <MathMethodStepsSVG sub={sub} lessonTitle={lessonTitle} /> },
+        { label: "Worked Examples", content: <MathWorkedExamplesSVG sub={sub} lessonTitle={lessonTitle} /> },
+        { label: "Problem Practice", content: <MathPracticePlanSVG sub={sub} lessonTitle={lessonTitle} /> }
+      ]
+    : [
+        { label: "Textbook Model", content: renderMathTextbookPrimarySVG(sub, lessonTitle) },
+        { label: "Solve Steps", content: <MathMethodStepsSVG sub={sub} lessonTitle={lessonTitle} /> },
+        { label: "Worked Examples", content: <MathWorkedExamplesSVG sub={sub} lessonTitle={lessonTitle} /> },
+        { label: "Problem Practice", content: <MathPracticePlanSVG sub={sub} lessonTitle={lessonTitle} /> }
+      ];
+  return (
+    <div className="math-visual-stack">
+      {cards.map((card, idx) => (
+        <div key={idx} className="math-visual-panel">
+          <div className="math-visual-label">{card.label}</div>
+          {card.content}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Math Sub-Quiz Component (proper hooks) ───
 function MathSubQuiz({ questions, isUrdu }) {
   const [mqIdx, setMqIdx] = useState(0);
@@ -7361,9 +9599,11 @@ function MathSubQuiz({ questions, isUrdu }) {
   const [mqRev, setMqRev] = useState(false);
   const [mqDone, setMqDone] = useState(false);
   const mq = questions;
+  const currentQ = mq[mqIdx] || {};
+  const questionIsUrdu = isUrdu || isUrduText(currentQ.q);
   const mqScore = mqDone ? mqAns.reduce((a,v,i) => a + (v === mq[i]?.c ? 1 : 0), 0) : 0;
   const reset = () => { setMqIdx(0); setMqAns([]); setMqRev(false); setMqDone(false); };
-  const speakText = (txt, e) => { if(e) e.stopPropagation(); window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(ttsClean(txt)); u.lang="en-US"; u.rate=0.85; const v=window.speechSynthesis.getVoices(); const p=v.find(x=>x.lang.startsWith("en")&&x.localService)||v.find(x=>x.lang.startsWith("en")); if(p)u.voice=p; window.speechSynthesis.speak(u); };
+  const speakText = (txt, e) => { if(e) e.stopPropagation(); const ur = isUrduText(txt); window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(ttsClean(txt)); u.lang=ur?"ur-PK":"en-US"; u.rate=0.85; const v=window.speechSynthesis.getVoices(); const p=ur?(v.find(x=>x.lang.startsWith("ur"))||v.find(x=>x.lang.startsWith("hi"))||v.find(x=>x.lang.includes("IN"))):(v.find(x=>x.lang.startsWith("en")&&x.localService)||v.find(x=>x.lang.startsWith("en"))); if(p){u.voice=p; if(ur)u.lang=p.lang;} window.speechSynthesis.speak(u); };
   const playSound = (correct) => { try { const ac = new (window.AudioContext||window.webkitAudioContext)(); const osc = ac.createOscillator(); const gain = ac.createGain(); osc.connect(gain); gain.connect(ac.destination); gain.gain.value = 0.15; if(correct){ osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ac.currentTime+0.1); osc.frequency.setValueAtTime(784,ac.currentTime+0.2); osc.stop(ac.currentTime+0.35); } else { osc.frequency.value=330; osc.type="square"; osc.start(); osc.frequency.setValueAtTime(277,ac.currentTime+0.15); osc.stop(ac.currentTime+0.3); } } catch(e){} };
 
   if (mqDone) return (
@@ -7376,24 +9616,25 @@ function MathSubQuiz({ questions, isUrdu }) {
   );
 
   return (
-    <div className="quiz-container" style={isUrdu?{direction:"rtl"}:{}}>
+    <div className="quiz-container" style={questionIsUrdu?{direction:"rtl"}:{}}>
       <div className="quiz-progress">{mq.map((_, i) => <div key={i} className={"qp-dot" + (i < mqIdx ? " done" : i === mqIdx ? " current" : "")} />)}</div>
-      <div className="quiz-question" onClick={()=>speakText(mq[mqIdx].q)} style={{cursor:"pointer",direction:isUrdu?"rtl":"ltr",fontFamily:isUrdu?"'Noto Nastaliq Urdu',serif":"inherit",textAlign:isUrdu?"right":"left"}}>
-        <div className="q-num" style={{textAlign:isUrdu?"right":"left",marginBottom:8,fontFamily:isUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{isUrdu?("سوال "+(mqIdx+1)+" از "+mq.length):("Q "+(mqIdx+1)+" of "+mq.length)} <span style={{fontSize:14,opacity:0.5,marginLeft:6}}>🔈</span></div>
-        <h3 style={{marginTop:4,fontFamily:isUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{mq[mqIdx].q}</h3>
+      <div className="quiz-question" onClick={()=>speakText(currentQ.q)} style={{cursor:"pointer",direction:questionIsUrdu?"rtl":"ltr",fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit",textAlign:questionIsUrdu?"right":"left"}}>
+        <div className="q-num" style={{textAlign:questionIsUrdu?"right":"left",marginBottom:8,fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{questionIsUrdu?("سوال "+(mqIdx+1)+" از "+mq.length):("Q "+(mqIdx+1)+" of "+mq.length)} <span style={{fontSize:14,opacity:0.5,marginLeft:6}}>🔈</span></div>
+        <h3 style={{marginTop:4,fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{currentQ.q}</h3>
       </div>
-      <div className="quiz-options" style={isUrdu?{direction:"rtl"}:{}}>{mq[mqIdx].a.map((opt, oi) => {
+      <div className="quiz-options" style={questionIsUrdu?{direction:"rtl"}:{}}>{currentQ.a.map((opt, oi) => {
+        const optionIsUrdu = isUrdu || isUrduText(opt);
         const sel = mqAns[mqIdx] === oi, cor = oi === mq[mqIdx].c;
         let cls = "quiz-option";
         if (mqRev && cor) cls += " correct";
         else if (mqRev && sel && !cor) cls += " wrong";
         else if (sel) cls += " selected";
-        return (<button key={oi} className={cls} disabled={mqRev} style={isUrdu?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}} onClick={() => {
+        return (<button key={oi} className={cls} disabled={mqRev} style={optionIsUrdu?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}} onClick={() => {
           if (mqRev) return;
           const na = [...mqAns]; na[mqIdx] = oi; setMqAns(na); setMqRev(true);
           playSound(oi === mq[mqIdx].c);
           setTimeout(() => { if (mqIdx < mq.length - 1) { setMqIdx(mqIdx + 1); setMqRev(false); } else setMqDone(true); }, 1200);
-        }}><span className="opt-letter">{"ABCD"[oi]}</span><span style={{flex:1,fontFamily:isUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{opt}</span><span style={{fontSize:13,opacity:0.4,marginLeft:6}} onClick={(e)=>speakText(opt,e)}>🔈</span></button>);
+        }}><span className="opt-letter">{"ABCD"[oi]}</span><span style={{flex:1,fontFamily:optionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit",direction:optionIsUrdu?"rtl":"ltr",textAlign:optionIsUrdu?"right":"left"}}>{opt}</span><span style={{fontSize:13,opacity:0.4,marginLeft:6}} onClick={(e)=>speakText(opt,e)}>🔈</span></button>);
       })}</div>
     </div>
   );
@@ -7513,9 +9754,363 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
   );
 }
 
+function MixedUrduParagraphSentence({ text, highlight = null }) {
+  const [speaking, setSpeaking] = useState(false);
+  const handleClick = () => {
+    window.speechSynthesis.cancel();
+    setSpeaking(true);
+    const u = new SpeechSynthesisUtterance(ttsClean(text));
+    u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05;
+    const voices = window.speechSynthesis.getVoices();
+    const pref = voices.find(v => v.lang.startsWith("en") && v.localService) || voices.find(v => v.lang.startsWith("en"));
+    if (pref) u.voice = pref;
+    u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(u);
+  };
+  const renderHighlighted = (segment, keyBase) => {
+    if (!highlight) return segment;
+    const idx = segment.toLowerCase().indexOf(String(highlight).toLowerCase());
+    if (idx === -1) return segment;
+    return <>{segment.slice(0, idx)}<span key={keyBase + "-hl"} style={{color:"#38BDF8",fontWeight:700,textDecoration:"underline",textDecorationStyle:"wavy",textUnderlineOffset:"3px"}}>{segment.slice(idx, idx + highlight.length)}</span>{segment.slice(idx + highlight.length)}</>;
+  };
+  const renderText = () => {
+    const parts = [];
+    const re = /\(([^)]*[\u0600-\u06FF][^)]*)\)/g;
+    let lastIdx = 0;
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        parts.push(<React.Fragment key={"txt-" + match.index}>{renderHighlighted(text.slice(lastIdx, match.index), "txt-" + match.index)}</React.Fragment>);
+      }
+      parts.push(
+        <span key={"ur-" + match.index}>
+          (
+          <span style={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", unicodeBidi: "isolate", textAlign: "right", color: "#C4B5FD" }}>
+            {match[1]}
+          </span>
+          )
+        </span>
+      );
+      lastIdx = match.index + match[0].length;
+    }
+    if (lastIdx < text.length) {
+      parts.push(<React.Fragment key={"tail"}>{renderHighlighted(text.slice(lastIdx), "tail")}</React.Fragment>);
+    }
+    return parts.length ? <>{parts}</> : renderHighlighted(text, "full");
+  };
+  return (
+    <button onClick={handleClick} style={{ display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid rgba(148,163,184,0.15)", background: speaking ? "rgba(56,189,248,0.12)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "#F1F5F9", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : "none", position: "relative" }}>
+      <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
+      <span style={{ paddingRight: 28 }}>{renderText()}</span>
+    </button>
+  );
+}
+
 function formatListedAnswer(text) {
   if (typeof text !== "string") return text;
   return text.replace(/(\d+\.)\s+/g, (match, marker, offset) => offset === 0 ? `${marker} ` : `\n${marker} `);
+}
+
+function isUrduText(text) {
+  return /[\u0600-\u06FF]/.test(String(text || ""));
+}
+
+function normalizeText(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function trimQuestionText(text) {
+  return normalizeText(String(text || "").replace(/_{3,}/g, "").replace(/\s*:\s*$/, "").replace(/\s*[?؟]\s*$/, ""));
+}
+
+function shortPromptLabel(text, isUrdu) {
+  const words = trimQuestionText(text).split(/\s+/).filter(Boolean);
+  const maxWords = isUrdu ? 6 : 7;
+  const label = words.slice(0, maxWords).join(" ");
+  return words.length > maxWords ? label + "…" : label;
+}
+
+function capitalizeFirst(text) {
+  const value = String(text || "").trim();
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+function buildPromptCue(text, isUrdu) {
+  const clean = trimQuestionText(text);
+  if (!clean) return "";
+  if (isUrdu) {
+    return clean
+      .replace(/^(کیا|کون|کہاں|کب|کتنے|کس|نام)\s+/u, "")
+      .replace(/\s+(کیا ہے|کون ہے|کہاں ہے|کب ہوا|کتنے ہیں)$/u, "")
+      .trim();
+  }
+  return clean
+    .replace(/^(what|which|who|where|when|why|how many|how much|name|list|identify|define|write)\s+/i, "")
+    .trim();
+}
+
+function buildEnglishAnswerSentence(prompt, valueText) {
+  const clean = trimQuestionText(prompt);
+  let match;
+  if ((match = clean.match(/^What is (.+)$/i))) return `${capitalizeFirst(match[1])} is ${valueText}.`;
+  if ((match = clean.match(/^What are (.+)$/i))) return `${capitalizeFirst(match[1])} are ${valueText}.`;
+  if ((match = clean.match(/^Who is (.+)$/i))) return `${capitalizeFirst(match[1])} is ${valueText}.`;
+  if ((match = clean.match(/^Who was (.+)$/i))) return `${capitalizeFirst(match[1])} was ${valueText}.`;
+  if ((match = clean.match(/^Where is (.+)$/i))) return `${capitalizeFirst(match[1])} is located in ${valueText}.`;
+  if ((match = clean.match(/^Where are (.+)$/i))) return `${capitalizeFirst(match[1])} are located in ${valueText}.`;
+  if ((match = clean.match(/^When did (.+?) become (.+)$/i))) return `${capitalizeFirst(match[1])} became ${match[2]} in ${valueText}.`;
+  if ((match = clean.match(/^When did (.+?) begin$/i))) return `${capitalizeFirst(match[1])} began in ${valueText}.`;
+  if ((match = clean.match(/^When did (.+?) start$/i))) return `${capitalizeFirst(match[1])} started in ${valueText}.`;
+  if ((match = clean.match(/^When did (.+?) happen$/i))) return `${capitalizeFirst(match[1])} happened in ${valueText}.`;
+  if ((match = clean.match(/^Which (.+?) is (.+)$/i))) return `The ${match[1]} that is ${match[2]} is ${valueText}.`;
+  if ((match = clean.match(/^Which (.+?) are (.+)$/i))) return `The ${match[1]} that are ${match[2]} are ${valueText}.`;
+  if ((match = clean.match(/^How many (.+)$/i))) return `${capitalizeFirst(match[1])}: ${valueText}.`;
+  if ((match = clean.match(/^(Name|List|Identify|Write) (.+)$/i))) return `${capitalizeFirst(match[2])}: ${valueText}.`;
+  return `${shortPromptLabel(buildPromptCue(clean, false) || clean, false)}: ${valueText}`;
+}
+
+function buildUrduAnswerSentence(prompt, valueText) {
+  const clean = trimQuestionText(prompt);
+  let match;
+  if ((match = clean.match(/^(.+)\s+کیا ہے$/u))) return `${match[1]} ${valueText} ہے۔`;
+  if ((match = clean.match(/^(.+)\s+کون ہے$/u))) return `${match[1]} ${valueText} ہے۔`;
+  if ((match = clean.match(/^(.+)\s+کون تھا$/u))) return `${match[1]} ${valueText} تھا۔`;
+  if ((match = clean.match(/^(.+)\s+کہاں ہے$/u))) return `${match[1]} ${valueText} میں ہے۔`;
+  if ((match = clean.match(/^(.+)\s+کتنے ہیں$/u))) return `${match[1]} ${valueText} ہیں۔`;
+  if ((match = clean.match(/^(.+)\s+کب ہوا$/u))) return `${match[1]} ${valueText} میں ہوا۔`;
+  if ((match = clean.match(/^نام لکھیں[: ]*(.+)$/u))) return `${match[1]}: ${valueText}`;
+  return `${shortPromptLabel(buildPromptCue(clean, true) || clean, true)}: ${valueText}`;
+}
+
+function getExerciseKind(question) {
+  const q = String(question || "");
+  const lower = q.toLowerCase();
+  if (lower.includes("fill in the blank") || q.includes("خالی جگہ")) return "fill";
+  if (lower.includes("true or false") || q.includes("درست یا غلط")) return "tf";
+  if (lower.includes("match the columns") || q.includes("کالم ملائیں")) return "match";
+  return null;
+}
+
+function buildSeedPairs(sub) {
+  const pairs = [];
+  const pushPair = (prompt, answer) => {
+    const cleanPrompt = trimQuestionText(prompt);
+    const cleanAnswer = normalizeText(answer);
+    if (!cleanPrompt || !cleanAnswer) return;
+    const key = cleanPrompt + "||" + cleanAnswer;
+    if (!pairs.some(p => p.key === key)) pairs.push({ key, prompt: cleanPrompt, answer: cleanAnswer });
+  };
+
+  (sub.exercises || []).forEach(ex => {
+    if (!Array.isArray(ex.parts) || !Array.isArray(ex.ans)) return;
+    ex.parts.forEach((part, index) => pushPair(part, ex.ans[index]));
+  });
+
+  (sub.quiz || []).forEach(item => {
+    if (!item || !Array.isArray(item.a) || typeof item.c !== "number") return;
+    pushPair(item.q, item.a[item.c]);
+  });
+
+  (sub.wordProblems || []).forEach(item => {
+    if (item && typeof item === "object" && item.q && item.a) pushPair(item.q, item.a);
+  });
+
+  return pairs;
+}
+
+function buildFillPrompt(pair, isUrdu) {
+  return isUrdu
+    ? buildUrduAnswerSentence(pair.prompt, "___")
+    : buildEnglishAnswerSentence(pair.prompt, "___");
+}
+
+function buildTrueFalseStatement(pair, answerText, isUrdu) {
+  return isUrdu
+    ? buildUrduAnswerSentence(pair.prompt, answerText)
+    : buildEnglishAnswerSentence(pair.prompt, answerText);
+}
+
+function buildGeneratedExercise(kind, pairs, count, isUrdu) {
+  const parts = [];
+  const ans = [];
+  if (!pairs.length || count <= 0) return { parts, ans };
+
+  for (let i = 0; i < count; i++) {
+    const pair = pairs[i % pairs.length];
+    if (kind === "fill") {
+      parts.push(buildFillPrompt(pair, isUrdu));
+      ans.push(pair.answer);
+      continue;
+    }
+
+    if (kind === "tf") {
+      const altPair = pairs[(i + 1) % pairs.length];
+      const useFalse = i % 2 === 1 && altPair && altPair.answer !== pair.answer;
+      parts.push(buildTrueFalseStatement(pair, useFalse ? altPair.answer : pair.answer, isUrdu));
+      ans.push(isUrdu ? (useFalse ? "غلط" : "درست") : (useFalse ? "False" : "True"));
+      continue;
+    }
+
+    if (kind === "match") {
+      const cue = buildPromptCue(pair.prompt, isUrdu) || pair.prompt;
+      parts.push(shortPromptLabel(cue, isUrdu));
+      ans.push(pair.answer);
+    }
+  }
+
+  return { parts, ans };
+}
+
+function splitFactSentences(text) {
+  return String(text || "")
+    .split(/(?<=[.!?۔؟])\s+/)
+    .map(s => normalizeText(s))
+    .filter(Boolean);
+}
+
+function buildScienceTrueFalseFacts(sub, isUrdu) {
+  const facts = [];
+  const seen = new Set();
+  const addFact = (text) => {
+    const clean = normalizeText(text);
+    if (!clean) return;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    facts.push({ part: clean, ans: isUrdu ? "درست" : "True" });
+  };
+
+  (sub.examples || []).forEach(addFact);
+  splitFactSentences(sub.c).forEach(addFact);
+  (sub.wordProblems || []).forEach(item => {
+    if (!item || typeof item !== "object" || !item.a) return;
+    const firstSentence = splitFactSentences(item.a)[0];
+    if (firstSentence) addFact(firstSentence);
+  });
+
+  return facts;
+}
+
+function ensureScienceTrueFalseCount(exercise, sub, isUrdu) {
+  const targetCount = 10;
+  const currentParts = Array.isArray(exercise.parts) ? [...exercise.parts] : [];
+  const currentAns = Array.isArray(exercise.ans) ? [...exercise.ans] : [];
+  if (currentParts.length >= targetCount) return exercise;
+
+  const existing = new Set(currentParts.map(p => normalizeText(p).toLowerCase()));
+  const facts = buildScienceTrueFalseFacts(sub, isUrdu);
+  for (const fact of facts) {
+    const key = fact.part.toLowerCase();
+    if (existing.has(key)) continue;
+    currentParts.push(fact.part);
+    currentAns.push(fact.ans);
+    existing.add(key);
+    if (currentParts.length >= targetCount) break;
+  }
+
+  if (currentParts.length < targetCount) {
+    const fallback = buildGeneratedExercise("tf", buildSeedPairs(sub), targetCount - currentParts.length, isUrdu);
+    currentParts.push(...fallback.parts);
+    currentAns.push(...fallback.ans);
+  }
+
+  return { ...exercise, parts: currentParts, ans: currentAns };
+}
+
+function stripMatchPrefixes(exercise) {
+  const currentParts = Array.isArray(exercise.parts) ? exercise.parts : [];
+  return {
+    ...exercise,
+    parts: currentParts.map(part => String(part || "").replace(/^Question\s+\d+:\s*/i, "").replace(/^سوال\s+\d+:\s*/i, ""))
+  };
+}
+
+function ensureExerciseCount(exercise, kind, pairs, isUrdu) {
+  const targetCount = 10;
+  const currentParts = Array.isArray(exercise.parts) ? [...exercise.parts] : [];
+  const currentAns = Array.isArray(exercise.ans) ? [...exercise.ans] : [];
+  if (currentParts.length >= targetCount) return exercise;
+
+  const generated = buildGeneratedExercise(kind, pairs, targetCount - currentParts.length, isUrdu);
+  return { ...exercise, parts: [...currentParts, ...generated.parts], ans: [...currentAns, ...generated.ans] };
+}
+
+function normalizeSubLesson(sub, subjectId) {
+  if (!sub || !Array.isArray(sub.exercises)) return sub;
+
+  const isUrdu = subjectId === "urdu" || isUrduText(sub.t) || isUrduText(sub.c);
+  const isScience = subjectId === "science";
+  const canonicalLabels = {
+    fill: isUrdu ? "خالی جگہیں پُر کریں:" : "Fill in the blanks:",
+    tf: isUrdu ? "درست یا غلط:" : "True or False:",
+    match: isUrdu ? "کالم ملائیں:" : "Match the columns:"
+  };
+  const pairs = buildSeedPairs(sub);
+  const seenKinds = new Set();
+  const exercises = sub.exercises.map(ex => {
+    const kind = getExerciseKind(ex.q);
+    if (!kind || seenKinds.has(kind)) return ex;
+    seenKinds.add(kind);
+    let ensured = isScience && kind === "tf"
+      ? ensureScienceTrueFalseCount(ex, sub, isUrdu)
+      : ensureExerciseCount(ex, kind, pairs, isUrdu);
+    if (kind === "match") ensured = stripMatchPrefixes(ensured);
+    return { ...ensured, q: canonicalLabels[kind] };
+  });
+
+  ["fill", "tf", "match"].forEach(kind => {
+    if (seenKinds.has(kind) || !pairs.length) return;
+    if (isScience && kind === "tf") {
+      const generated = ensureScienceTrueFalseCount({ q: canonicalLabels[kind], parts: [], ans: [] }, sub, isUrdu);
+      exercises.push({ q: canonicalLabels[kind], parts: generated.parts, ans: generated.ans });
+      return;
+    }
+    let generated = buildGeneratedExercise(kind, pairs, 10, isUrdu);
+    if (kind === "match") generated = stripMatchPrefixes(generated);
+    exercises.push({ q: canonicalLabels[kind], parts: generated.parts, ans: generated.ans });
+  });
+
+  return { ...sub, exercises };
+}
+
+function getSimpleMachinePromptVisual(sub, exercise, prompt) {
+  if (!sub || sub.t !== "Simple Machines" || !exercise || exercise.q !== "Name the simple machine:") return null;
+  const lower = (prompt || "").toLowerCase();
+  const badgeStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    background: "rgba(245,158,11,0.12)",
+    border: "1px solid rgba(245,158,11,0.28)",
+    color: "#FDE68A",
+    flexShrink: 0
+  };
+  if (lower.includes("flagpole rope")) {
+    return (
+      <span style={badgeStyle}>
+        <svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <line x1="15" y1="3" x2="15" y2="18" stroke="#CBD5E1" strokeWidth="1.8"/>
+          <circle cx="11" cy="8" r="3.6" fill="none" stroke="#F59E0B" strokeWidth="1.8"/>
+          <line x1="11" y1="11.6" x2="11" y2="16.5" stroke="#CBD5E1" strokeWidth="1.8"/>
+          <rect x="8.1" y="16.5" width="5.8" height="2.8" rx="1.2" fill="#F59E0B" opacity="0.28" stroke="#F59E0B" strokeWidth="1.1"/>
+          <line x1="15" y1="5" x2="18.2" y2="6.8" stroke="#22C55E" strokeWidth="1.8"/>
+          <polygon points="18.6,6.9 16.6,5.8 16.8,8.1" fill="#22C55E"/>
+        </svg>
+      </span>
+    );
+  }
+  const icon = lower.includes("seesaw") ? "⚖️"
+    : lower.includes("doorknob") ? "🚪"
+    : lower.includes("wheelchair ramp") ? "♿"
+    : lower.includes("axe blade") ? "🪓"
+    : lower.includes("screw in wood") ? "🔩"
+    : lower.includes("scissors") ? "✂️"
+    : lower.includes("slide") ? "🛝"
+    : null;
+  return icon ? <span style={{...badgeStyle,fontSize:18}}>{icon}</span> : null;
 }
 
 function WordRow({ en, ur }) {
@@ -7543,6 +10138,36 @@ function WordRow({ en, ur }) {
     <div className="word-row" style={{ cursor: "default" }}>
       <span className={"word-en" + (sEn ? " word-active" : "")} onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{en} {sEn ? "🔊" : "🔈"}</span>
       <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+    </div>
+  );
+}
+
+
+function OppositeWordRow({ en, ur, opposite, oppositeUr }) {
+  const cardStyle = {
+    background: "rgba(15,23,42,0.45)",
+    border: "1px solid rgba(148,163,184,0.18)",
+    borderRadius: 12,
+    padding: "10px 12px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 6
+  };
+  const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "#94A3B8", textTransform: "uppercase" };
+  return (
+    <div className="word-row" style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, width: "100%" }}>
+        <div style={cardStyle}>
+          <span style={labelStyle}>Word</span>
+          <SpeakableSentence text={en} lang="en" fullWidth={false} buttonStyle={{ background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.28)", color: "#E0F2FE", justifyContent: "flex-start" }} />
+          <SpeakableSentence text={ur} lang="ur" fullWidth={false} buttonStyle={{ background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: "#DCFCE7", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+        </div>
+        <div style={cardStyle}>
+          <span style={labelStyle}>Opposite</span>
+          <SpeakableSentence text={opposite} lang="en" fullWidth={false} buttonStyle={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", color: "#FEF3C7", justifyContent: "flex-start" }} />
+          <SpeakableSentence text={oppositeUr} lang="ur" fullWidth={false} buttonStyle={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.30)", color: "#F3E8FF", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -7618,8 +10243,8 @@ const CSS = `
 body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text-primary);min-height:100vh;overflow-x:hidden}
 .app-container{max-width:720px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--bg-primary)}
 .app-header{padding:16px 20px 12px;display:flex;align-items:center;gap:12px;background:var(--bg-secondary);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
-.app-header .back-btn{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
-.app-header .back-btn:hover{background:var(--accent);color:#0F172A}
+.app-header .back-btn,.app-header .home-btn{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.app-header .back-btn:hover,.app-header .home-btn:hover{background:var(--accent);color:#0F172A}
 .app-header h1{font-size:18px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .header-badge{display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#F59E0B22,#F59E0B44);border:1px solid #F59E0B55;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;color:#F59E0B}
 .bottom-nav{display:flex;background:var(--bg-secondary);border-top:1px solid var(--border);padding:6px 0 max(6px,env(safe-area-inset-bottom));position:sticky;bottom:0;z-index:100}
@@ -7748,6 +10373,9 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 }
 .math-svg{width:100%;max-width:100%;border-radius:12px;margin:12px auto;overflow:hidden;display:flex;justify-content:center}
 .math-svg svg{width:100%;height:auto;display:block;max-width:720px}
+.math-visual-stack{display:flex;flex-direction:column;gap:16px;margin-top:12px}
+.math-visual-panel{padding:14px;border-radius:18px;background:rgba(15,23,42,0.58);border:1px solid rgba(148,163,184,0.18);box-shadow:0 14px 30px rgba(2,6,23,0.22)}
+.math-visual-label{font-family:'Baloo 2',sans-serif;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#F59E0B;margin-bottom:4px}
 `;
 
 export default function HomeschoolApp() {
@@ -7777,6 +10405,8 @@ export default function HomeschoolApp() {
   const [selectedVocabDay, setSelectedVocabDay] = useState(null);
   const [mathSubIdx, setMathSubIdx] = useState(null);
   const [mathSubTab, setMathSubTab] = useState("examples");
+  const [subExerciseGroupIdx, setSubExerciseGroupIdx] = useState(null);
+  const [subQuizGroupIdx, setSubQuizGroupIdx] = useState(null);
   const [revealedEx, setRevealedEx] = useState({});
   const [completedQuizzes, setCompletedQuizzes] = useState(stored?.completedQuizzes || {});
   const [totalScore, setTotalScore] = useState(stored?.totalScore || 0);
@@ -7866,7 +10496,36 @@ export default function HomeschoolApp() {
 
   if (!grade) return (<><style>{CSS}</style><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px" }}><div style={{ textAlign: "center", marginBottom: 32 }}><div style={{ fontSize: 56, marginBottom: 12 }}>📚</div><h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>HomeSchool</h1><p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Your personal learning companion</p><p style={{ fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 }}>آپ کا ذاتی تعلیمی ساتھی</p></div><div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>YOUR NAME</label><input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder="Enter your name..." style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font)", fontSize: 15, outline: "none" }} /></div><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" }}>SELECT YOUR GRADE</label><div className="grade-grid">{GRADES.map(g => <button key={g.id} className="grade-btn" onClick={() => setGrade(g.id)}>{g.id}</button>)}</div></div></div></>);
 
-  const goBack = () => { window.speechSynthesis.cancel(); if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else setTab("home"); };
+  const goHome = () => {
+    window.speechSynthesis.cancel();
+    setTab("home");
+    setSelectedSubject(null);
+    setSelectedLesson(null);
+    setQuizActive(false);
+    setQuizDone(false);
+    setQuizAnswers([]);
+    setQuizIdx(0);
+    setQuizRevealed(false);
+    setSelectedAdverbDay(null);
+    setSelectedPrepDay(null);
+    setSelectedAdjDay(null);
+    setSelectedConjDay(null);
+    setSelectedPronDay(null);
+    setSelectedNounDay(null);
+    setSelectedVerbDay(null);
+    setSelectedTensePara(null);
+    setSelectedVocabDay(null);
+    setMathSubIdx(null);
+    setMathSubTab("examples");
+    setSubExerciseGroupIdx(null);
+    setSubQuizGroupIdx(null);
+    setRevealedEx({});
+    setPosTab("adverbs");
+    setTenseMain("present");
+    setTenseSub("simple");
+    setNewBadges([]);
+  };
+  const goBack = () => { window.speechSynthesis.cancel(); if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
   const headerTitle = quizActive || quizDone ? (selectedSubject?.id==="urdu"?"امتحان":"Quiz") : selectedAdverbDay ? "Day " + selectedAdverbDay.day + " — Adverbs" : selectedPrepDay ? "Day " + selectedPrepDay.day + " — Prepositions" : selectedAdjDay ? "Day " + selectedAdjDay.day + " — Adjectives" : selectedConjDay ? "Day " + selectedConjDay.day + " — Conjunctions" : selectedPronDay ? "Day " + selectedPronDay.day + " — Pronouns" : selectedNounDay ? "Day " + selectedNounDay.day + " — Nouns" : selectedVerbDay ? "Day " + selectedVerbDay.day + " — Verbs" : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? "Day " + selectedVocabDay.day + " — Vocabulary" : selectedLesson ? selectedLesson.title : selectedSubject ? (selectedSubject.id==="urdu"?selectedSubject.nameUr:selectedSubject.name) : tab === "home" ? "HomeSchool" : tab === "progress" ? "Progress" : tab === "badges" ? "Achievements" : tab === "tutor" ? "AI Tutor" : "Settings";
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
@@ -7876,7 +10535,7 @@ export default function HomeschoolApp() {
   const playAll = (p) => { window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
 
   return (<><style>{CSS}</style><div className="app-container">
-    <div className="app-header" style={selectedSubject?.id==="urdu"?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<h1 style={selectedSubject?.id==="urdu"?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{headerTitle}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
+    <div className="app-header" style={selectedSubject?.id==="urdu"?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title="Home">🏠</button><h1 style={selectedSubject?.id==="urdu"?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{headerTitle}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
     <div className="content">
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
         <div className="welcome-card"><h2>{studentName ? "Hi, " + studentName + "!" : "Welcome!"} 👋</h2><p>Ready to learn something amazing today?</p><span className="grade-tag">Grade {grade}</span></div>
@@ -7994,7 +10653,7 @@ export default function HomeschoolApp() {
           const topicColors = ["#38BDF8","#22C55E","#F59E0B","#A855F7","#EC4899","#14B8A6","#F97316"];
           const tc = topicColors[i % topicColors.length];
           return (
-          <div key={i} className="adverb-day-card" onClick={() => { setMathSubIdx(i); setMathSubTab("examples"); setRevealedEx({}); }} style={{display:"flex",alignItems:"center",gap:14,direction:isUr?"rtl":"ltr"}}>
+          <div key={i} className="adverb-day-card" onClick={() => { setMathSubIdx(i); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); }} style={{display:"flex",alignItems:"center",gap:14,direction:isUr?"rtl":"ltr"}}>
             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:40,height:40,borderRadius:12,background:tc+"22",border:"2px solid "+tc,color:tc,fontSize:16,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",flexShrink:0}}>{i+1}</span>
             <div style={{flex:1,textAlign:isUr?"right":"left"}}>
               <h3 style={{fontSize:16,fontWeight:700,margin:0,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit"}}>{sub.t}</h3>
@@ -8006,13 +10665,19 @@ export default function HomeschoolApp() {
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx !== null && (() => {
-        const sub = selectedLesson.subs[mathSubIdx];
+        const sub = normalizeSubLesson(selectedLesson.subs[mathSubIdx], selectedSubject?.id);
         const toggleReveal = (k) => setRevealedEx(p => ({...p,[k]:!p[k]}));
         const isUr = selectedSubject?.id === "urdu";
+        const isMath = selectedSubject?.id === "math";
+        const activeExerciseGroup = sub.exerciseGroups && subExerciseGroupIdx !== null ? sub.exerciseGroups[subExerciseGroupIdx] : null;
+        const activeQuizGroup = sub.quizGroups && subQuizGroupIdx !== null ? sub.quizGroups[subQuizGroupIdx] : null;
+        const exercisesToRender = activeExerciseGroup ? activeExerciseGroup.exercises : (sub.exerciseGroups ? null : sub.exercises);
+        const quizToRender = activeQuizGroup ? activeQuizGroup.questions : (sub.quizGroups ? null : sub.quiz);
         const urS = isUr ? {direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"} : {};
         return (<>
         <div className="adverb-detail-section" style={{marginBottom:10,...urS}}>
           <h3 style={{color:"#FF6B35",...urS}}>{isUr?"📖":"📐"} {sub.t}</h3>
+          {isMath ? <MathVisualDeck sub={sub} lessonTitle={selectedLesson?.title} /> : <>
           {sub.svgType === "placeValue" && <PlaceValueChart number={sub.svgData.number} />}
           {sub.svgType === "expandedForm" && <ExpandedFormSVG number={sub.svgData.number} parts={sub.svgData.parts} />}
           {sub.svgType === "compare" && <CompareTripleSVG />}
@@ -8020,16 +10685,27 @@ export default function HomeschoolApp() {
           {sub.svgType === "columnAdd" && <ColumnAddSVG num1={sub.svgData.num1} num2={sub.svgData.num2} result={sub.svgData.result} />}
           {sub.svgType === "columnSub" && <ColumnSubSVG num1={sub.svgData.num1} num2={sub.svgData.num2} result={sub.svgData.result} />}
           {sub.svgType === "estimation" && <EstimationSVG num1={sub.svgData.num1} num2={sub.svgData.num2} op={sub.svgData.op} rounded1={sub.svgData.rounded1} rounded2={sub.svgData.rounded2} estimate={sub.svgData.estimate} exact={sub.svgData.exact} />}
-          {sub.svgType === "statesOfMatter" && <StatesOfMatterSVG />}
-          {sub.svgType === "foodChain" && <FoodChainSVG />}
-          {sub.svgType === "solarSystem" && <SolarSystemSVG />}
-          {sub.svgType === "earthLayers" && <EarthLayersSVG />}
-          {sub.svgType === "bodySystem" && <BodySystemSVG system={sub.svgData.system} />}
-          {sub.svgType === "moonPhases" && <MoonPhasesSVG />}
-          {sub.svgType === "magnetPoles" && <MagnetPolesSVG />}
-          {sub.svgType === "lightReflection" && <LightRefractionSVG />}
-          {sub.svgType === "simpleMachines" && <SimpleMachinesSVG />}
-          {sub.svgType === "skeleton" && <SkeletonSVG />}
+{sub.svgType === "statesOfMatter" && <StatesOfMatterSVG />}
+{sub.svgType === "materialProperties" && <MaterialPropertiesSVG />}
+{sub.svgType === "mixturesSolutions" && <MixturesSolutionsSVG />}
+{sub.svgType === "gravityForce" && <GravityForceSVG />}
+{sub.svgType === "frictionForce" && <FrictionForceSVG />}
+{sub.svgType === "foodChain" && <FoodChainSVG />}
+{sub.svgType === "solarSystem" && <SolarSystemSVG />}
+{sub.svgType === "earthLayers" && <EarthLayersSVG />}
+{sub.svgType === "bodySystem" && <BodySystemSVG system={sub.svgData.system} />}
+{sub.svgType === "moonPhases" && <MoonPhasesSVG />}
+{sub.svgType === "magnetPoles" && <MagnetPolesSVG />}
+{sub.svgType === "lightReflection" && <LightRefractionSVG />}
+{sub.svgType === "simpleMachines" && <SimpleMachinesSVG />}
+{sub.svgType === "energyTypes" && <EnergyTypesSVG />}
+{sub.svgType === "dayNight" && <DayNightSVG />}
+{sub.svgType === "seasonsCycle" && <SeasonsCycleSVG />}
+{sub.svgType === "nervousSystem" && <NervousSystemSVG />}
+{sub.svgType === "classificationGroups" && <ClassificationSVG />}
+{sub.svgType === "adaptationTraits" && <AdaptationSVG />}
+{sub.svgType === "soundWaves" && <SoundWavesSVG />}
+{sub.svgType === "skeleton" && <SkeletonSVG />}
           {sub.svgType === "waterCycle" && <WaterCycleSVG />}
           {sub.svgType === "photosynthesis" && <PhotosynthesisSVG />}
           {sub.svgType === "pakistanMap" && <PakistanMapSVG />}
@@ -8062,27 +10738,86 @@ export default function HomeschoolApp() {
               <text x="540" y="38" textAnchor="middle" fill="#22C55E" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">Positive →</text>
             </svg></div>
           </>}
+          </>}
           {sub.c.split(/(?<=[.!?۔؟])\s+/).filter(Boolean).map((s,i) => <SpeakableSentence key={i} text={s} lang={isUr?"ur":"en"} />)}
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={() => playAll(sub.c)}>{isUr?"▶️ سنیں":"▶️ Play Explanation"}</button>
         </div>
 
         <div style={{display:"flex",gap:6,marginBottom:14,direction:isUr?"rtl":"ltr"}}>
           {[{id:"examples",label:isUr?"💡 مثالیں":"💡 Examples",c:"#38BDF8"},{id:"exercises",label:isUr?"✏️ مشقیں":"✏️ Exercises",c:"#22C55E"},{id:"quiz",label:isUr?"🎯 امتحان":"🎯 Quiz",c:"#F59E0B"}].map(t=>(
-            <button key={t.id} onClick={()=>{setMathSubTab(t.id);setRevealedEx({});}} style={{flex:1,padding:"10px 6px",borderRadius:10,border:mathSubTab===t.id?"2px solid "+t.c:"1px solid rgba(148,163,184,0.15)",background:mathSubTab===t.id?t.c+"22":"rgba(30,41,59,0.6)",color:mathSubTab===t.id?t.c:"#94A3B8",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",fontSize:isUr?14:13,fontWeight:700,cursor:"pointer"}}>{t.label}</button>
+            <button key={t.id} onClick={()=>{setMathSubTab(t.id);setSubExerciseGroupIdx(null);setSubQuizGroupIdx(null);setRevealedEx({});}} style={{flex:1,padding:"10px 6px",borderRadius:10,border:mathSubTab===t.id?"2px solid "+t.c:"1px solid rgba(148,163,184,0.15)",background:mathSubTab===t.id?t.c+"22":"rgba(30,41,59,0.6)",color:mathSubTab===t.id?t.c:"#94A3B8",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",fontSize:isUr?14:13,fontWeight:700,cursor:"pointer"}}>{t.label}</button>
           ))}
         </div>
 
-        {mathSubTab === "examples" && sub.examples && (<div className="adverb-detail-section" style={urS}>
-          <h3 style={{color:"#38BDF8",marginBottom:10,...urS}}>{isUr?"💡 مثالیں":"💡 Examples"}</h3>
+        {mathSubTab === "examples" && sub.dayLessons && (<div style={urS}>
+          <h3 className="section-title" style={{color:"#38BDF8",marginBottom:12,direction:isUr?"rtl":"ltr",textAlign:isUr?"right":"left"}}>{sub.lessonLabel || (isUr?"📅 اسباق کے دن":"📅 Lesson Days")}</h3>
+          {sub.dayLessons.map((lessonDay, dayIdx) => (
+            <div key={lessonDay.day || dayIdx} className="adverb-detail-section" style={urS}>
+              <h3 style={{color:"#38BDF8",marginBottom:12,...urS}}>{isUr ? `📅 دن ${lessonDay.day}` : `📅 Day ${lessonDay.day}`}</h3>
+              {lessonDay.words && lessonDay.words.map((w, i) => (
+                <div key={i} style={{ marginBottom: 10 }}>
+                  {"opposite" in w || "oppositeUr" in w ? <OppositeWordRow en={w.en} ur={w.ur} opposite={w.opposite} oppositeUr={w.oppositeUr} /> : "comp" in w || "super" in w ? <AdjWordRow en={w.en} ur={w.ur} comp={w.comp} sup={w.super} /> : "v2" in w || "v3" in w ? <VerbWordRow en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} /> : <WordRow en={w.en} ur={w.ur} />}
+                  {w.meaning && <div style={{ padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>→ {w.meaning}</div>}
+                </div>
+              ))}
+              {lessonDay.pairs && lessonDay.pairs.map((pair, i) => (
+                <div key={i} className="word-row" style={{cursor:"default",gap:10}}>
+                  <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" /></div>
+                  <span style={{color:"var(--accent)",fontWeight:800}}>↔</span>
+                  <div style={{flex:1}}><SpeakableSentence text={pair.right} lang="en" /></div>
+                </div>
+              ))}
+              {lessonDay.paragraph && (<>
+                <div style={{fontSize:12,fontWeight:800,color:"#22C55E",marginTop:12,marginBottom:8,fontFamily:"'Baloo 2',sans-serif"}}>{isUr?"📖 پیراگراف":"📖 Practice Paragraph"}</div>
+                {lessonDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => {
+                  const found = (lessonDay.words || []).find(w => s.toLowerCase().includes((w.en || "").toLowerCase().split(" ")[0].replace("(", "")));
+                  const hasOpposites = (lessonDay.words || []).some(w => "opposite" in w || "oppositeUr" in w);
+                  return hasOpposites
+                    ? <MixedUrduParagraphSentence key={i} text={s} highlight={found?.en} />
+                    : <SpeakableSentence key={i} text={s} lang="en" highlight={found?.en} />;
+                })}
+                <button className="play-all-btn" onClick={() => playAll(lessonDay.paragraph)}>▶️ Play Entire Paragraph</button>
+              </>)}
+              {lessonDay.difficult && lessonDay.difficult.length > 0 && (<>
+                <div style={{fontSize:12,fontWeight:800,color:"#F59E0B",marginTop:12,marginBottom:8,fontFamily:"'Baloo 2',sans-serif"}}>{isUr?"📚 مشکل الفاظ":"📚 Difficult Words"}</div>
+                {lessonDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}
+              </>)}
+            </div>
+          ))}
+        </div>)}
+
+        {mathSubTab === "examples" && !sub.dayLessons && sub.examples && (<div className="adverb-detail-section" style={urS}>
+          <h3 style={{color:"#38BDF8",marginBottom:10,...urS}}>{sub.examplesLabel || (isUr?"💡 مثالیں":"💡 Examples")}</h3>
           {sub.examples.map((ex,i) => <SpeakableSentence key={i} text={ex} lang={isUr?"ur":"en"} />)}
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={()=>playAll(sub.examples.join(". "))}>{isUr?"▶️ سب سنیں":"▶️ Play All Examples"}</button>
         </div>)}
 
-        {mathSubTab === "exercises" && sub.exercises && (<div style={urS}>
-          {sub.exercises.map((ex,ei) => {
+        {mathSubTab === "exercises" && (sub.exerciseGroups || sub.exercises) && (<div style={urS}>
+          {sub.exerciseGroups && subExerciseGroupIdx === null ? (
+            <>
+              <h3 className="section-title" style={{color:"#22C55E",marginBottom:12,direction:isUr?"rtl":"ltr",textAlign:isUr?"right":"left"}}>{isUr?"✏️ مشق کے دن":"✏️ Exercise Days"}</h3>
+              {sub.exerciseGroups.map((group, gi) => (
+                <div key={group.label} className="adverb-day-card" onClick={() => { setSubExerciseGroupIdx(gi); setRevealedEx({}); }} style={{display:"flex",alignItems:"center",gap:14,direction:isUr?"rtl":"ltr"}}>
+                  <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:40,height:40,borderRadius:12,background:"#22C55E22",border:"2px solid #22C55E",color:"#22C55E",fontSize:16,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{gi + 1}</span>
+                  <div style={{flex:1,textAlign:isUr?"right":"left"}}>
+                    <h3 style={{fontSize:16,fontWeight:700,margin:0,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit"}}>{group.label}</h3>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit" }}>{isUr?"ان دنوں کی تمام مشقیں":"All exercises for these days"}</p>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {activeExerciseGroup && <div className="adverb-detail-section" style={{marginBottom:14,...urS}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",direction:isUr?"rtl":"ltr"}}>
+                  <h3 style={{color:"#22C55E",margin:0,...urS}}>{activeExerciseGroup.label}</h3>
+                  <button className="play-all-btn" style={{width:"auto",marginTop:0,padding:"10px 14px",background:"linear-gradient(135deg,#475569,#334155)"}} onClick={() => { setSubExerciseGroupIdx(null); setRevealedEx({}); }}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
+                </div>
+              </div>}
+          {exercisesToRender && exercisesToRender.map((ex,ei) => {
             const qColors = ["#38BDF8","#22C55E","#F59E0B","#A855F7","#EC4899","#14B8A6","#F97316","#6366F1"];
             const qc = qColors[ei % qColors.length];
-            const isColumnMatch = ex.q === "Match the columns:";
+            const isColumnMatch = ex.q === "Match the columns:" || ex.q === "کالم ملائیں:";
             const matchOrder = isColumnMatch && ex.ans ? ex.ans.map((_,i) => i) : [];
             if (isColumnMatch && matchOrder.length > 1) {
               for (let i = matchOrder.length - 1; i > 0; i--) {
@@ -8112,9 +10847,9 @@ export default function HomeschoolApp() {
                       const displayP = p.replace(/(\d)̲/g, '[$1]').replace(/(\d)\u0332/g, '[$1]');
                       return (<div key={"A_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>A{pi+1}</span>
-                        <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUr?"ur":"en"} /></div>
+                        <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} /></div>
                         <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUr?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line"}} /></div>}
+                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line",fontFamily:isUrduText(ex.ans[pi])?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUrduText(ex.ans[pi])?"rtl":"ltr",textAlign:isUrduText(ex.ans[pi])?"right":"left"}} /></div>}
                       </div>);
                     })}
                   </div>
@@ -8129,9 +10864,9 @@ export default function HomeschoolApp() {
                       const a = ex.ans[originalIndex];
                       return (<div key={"B_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>B{pi+1}</span>
-                        <div style={{flex:1}}><SpeakableSentence text={a} lang={isUr?"ur":"en"} /></div>
+                        <div style={{flex:1}}><SpeakableSentence text={a} lang={isUrduText(a)?"ur":"en"} /></div>
                         <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.parts[originalIndex])} lang={isUr?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line"}} /></div>}
+                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.parts[originalIndex])} lang={isUrduText(ex.parts[originalIndex])?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line",fontFamily:isUrduText(ex.parts[originalIndex])?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUrduText(ex.parts[originalIndex])?"rtl":"ltr",textAlign:isUrduText(ex.parts[originalIndex])?"right":"left"}} /></div>}
                       </div>);
                     })}
                   </div>
@@ -8141,11 +10876,15 @@ export default function HomeschoolApp() {
                 const pc = qColors[(ei+pi+1) % qColors.length];
                 // Replace underlined chars (like 4̲) with boxed display
                 const displayP = p.replace(/(\d)̲/g, '[$1]').replace(/(\d)\u0332/g, '[$1]');
+                const promptVisual = getSimpleMachinePromptVisual(sub, ex, displayP);
                 return (<div key={pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:8,paddingRight:isUr?8:0,direction:isUr?"rtl":"ltr"}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{String.fromCharCode(97+pi)}</span>
-                  <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUr?"ur":"en"} /></div>
+                  <div style={{flex:1,display:"flex",alignItems:"center",gap:8}}>
+                    {promptVisual}
+                    <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} /></div>
+                  </div>
                   <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 14px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUr?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line"}} /></div>}
+                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line",fontFamily:isUrduText(ex.ans[pi])?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUrduText(ex.ans[pi])?"rtl":"ltr",textAlign:isUrduText(ex.ans[pi])?"right":"left"}} /></div>}
                 </div>);
               })}
             </div>);
@@ -8163,21 +10902,48 @@ export default function HomeschoolApp() {
                   <div style={{flex:1}}><SpeakableSentence text={qText} lang={isUr?"ur":"en"} /></div>
                 </div>
                 {aText && <div style={{marginTop:6,marginLeft:isUr?0:42,marginRight:isUr?42:0,direction:isUr?"rtl":"ltr"}}>
-                  {selectedSubject?.id === "social"
-                    ? <div style={{background:"rgba(34,197,94,0.08)",border:isUr?"1px solid rgba(34,197,94,0.28)":"1px solid rgba(34,197,94,0.28)",borderRadius:12,padding:"10px 10px 6px"}}>
-                        <div style={{color:"#86EFAC",fontSize:12,fontWeight:800,letterSpacing:0.4,textTransform:"uppercase",marginBottom:6,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"✅ جواب":"✅ Answer"}</div>
-                        <SpeakableSentence text={formatListedAnswer(aText)} lang={isUr?"ur":"en"} buttonStyle={{background:"rgba(34,197,94,0.16)",border:"1px solid rgba(34,197,94,0.38)",color:"#ECFDF5",marginBottom:0}} textStyle={{fontSize:16,lineHeight:1.55,whiteSpace:"pre-line"}} />
-                      </div>
-                    : <div style={{padding:"8px 12px",background:"rgba(34,197,94,0.08)",borderRadius:8,borderLeft:isUr?"none":"3px solid #22C55E",borderRight:isUr?"3px solid #22C55E":"none"}}>
-                        <span style={{color:"#22C55E",fontSize:13,fontWeight:700,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>✅ {aText}</span>
-                      </div>}
+                  <div style={{background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.28)",borderRadius:12,padding:"10px 10px 6px"}}>
+                    <div style={{color:"#86EFAC",fontSize:12,fontWeight:800,letterSpacing:0.4,textTransform:"uppercase",marginBottom:6,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"✅ جواب":"✅ Answer"}</div>
+                    <SpeakableSentence text={formatListedAnswer(aText)} lang={isUr?"ur":"en"} buttonStyle={{background:"rgba(34,197,94,0.16)",border:"1px solid rgba(34,197,94,0.38)",color:"#ECFDF5",marginBottom:0}} textStyle={{fontSize:16,lineHeight:1.55,whiteSpace:"pre-line"}} />
+                  </div>
                 </div>}
               </div>);
             })}
           </div>)}
+            </>
+          )}
         </div>)}
 
-        {mathSubTab === "quiz" && sub.quiz && <MathSubQuiz key={"mq_"+mathSubIdx} questions={sub.quiz} isUrdu={selectedSubject?.id === "urdu"} />}
+        {mathSubTab === "quiz" && (sub.quizGroups || sub.quiz) && (
+          sub.quizGroups ? (
+            subQuizGroupIdx === null ? (
+              <div style={urS}>
+                <h3 className="section-title" style={{color:"#F59E0B",marginBottom:12,direction:isUr?"rtl":"ltr",textAlign:isUr?"right":"left"}}>{isUr?"🎯 کوئز کے دن":"🎯 Quiz Days"}</h3>
+                {sub.quizGroups.map((group, gi) => (
+                  <div key={group.label} className="adverb-day-card" onClick={() => setSubQuizGroupIdx(gi)} style={{display:"flex",alignItems:"center",gap:14,direction:isUr?"rtl":"ltr"}}>
+                    <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:40,height:40,borderRadius:12,background:"#F59E0B22",border:"2px solid #F59E0B",color:"#F59E0B",fontSize:16,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{gi + 1}</span>
+                    <div style={{flex:1,textAlign:isUr?"right":"left"}}>
+                      <h3 style={{fontSize:16,fontWeight:700,margin:0,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit"}}>{group.label}</h3>
+                      <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit" }}>{isUr?"ان دنوں کے سوالات":"Quiz questions for these days"}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={urS}>
+                {activeQuizGroup && <div className="adverb-detail-section" style={{marginBottom:14,...urS}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",direction:isUr?"rtl":"ltr"}}>
+                    <h3 style={{color:"#F59E0B",margin:0,...urS}}>{activeQuizGroup.label}</h3>
+                    <button className="play-all-btn" style={{width:"auto",marginTop:0,padding:"10px 14px",background:"linear-gradient(135deg,#475569,#334155)"}} onClick={() => setSubQuizGroupIdx(null)}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
+                  </div>
+                </div>}
+                {quizToRender && <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizGroupIdx} questions={quizToRender} isUrdu={selectedSubject?.id === "urdu"} />}
+              </div>
+            )
+          ) : (
+            <MathSubQuiz key={"mq_"+mathSubIdx} questions={sub.quiz} isUrdu={selectedSubject?.id === "urdu"} />
+          )
+        )}
         </>);
       })()}
 
@@ -8279,6 +11045,6 @@ export default function HomeschoolApp() {
         <button style={{ width:"100%",padding:"12px",borderRadius:10,border:"1px solid rgba(239,68,68,0.3)",background:"rgba(239,68,68,0.1)",color:"#EF4444",fontFamily:"'Baloo 2',sans-serif",fontSize:13,fontWeight:700,cursor:"pointer" }} onClick={()=>{if(confirm("Reset database? All customizations will be lost. The app will reload and re-seed from defaults.")){window.HomeSchoolDB?.resetDB();}}}>🔄 Reset Database</button>
       </>)}
     </div>
-    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: "Home" }, { id: "progress", icon: "📊", label: "Progress" }, { id: "badges", icon: "🏆", label: "Badges" }, { id: "tutor", icon: "🤖", label: "Tutor" }, { id: "settings", icon: "⚙️", label: "Settings" }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} onClick={() => { window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); }}><span className="nav-icon">{item.icon}</span>{item.label}</button>)}</div>
+    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: "Home" }, { id: "progress", icon: "📊", label: "Progress" }, { id: "badges", icon: "🏆", label: "Badges" }, { id: "tutor", icon: "🤖", label: "Tutor" }, { id: "settings", icon: "⚙️", label: "Settings" }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); }}><span className="nav-icon">{item.icon}</span>{item.label}</button>)}</div>
   </div></>);
 }

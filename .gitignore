@@ -1,3 +1,6 @@
-node_modules/
-.claude/
-*.log
+/*
+!.gitignore
+!/img/
+!/img/**
+!/homeschool-app.jsx
+!/HomeSchool.html
