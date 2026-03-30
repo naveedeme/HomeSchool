@@ -27,6 +27,12 @@ jobs:
           rm -rf .deploy
           mkdir -p .deploy
           cp HomeSchool.html .deploy/index.html
+          if [ -d js ]; then
+            cp -R js .deploy/js
+          fi
+          if [ -d css ]; then
+            cp -R css .deploy/css
+          fi
           if [ -d img ]; then
             cp -R img .deploy/img
           fi
