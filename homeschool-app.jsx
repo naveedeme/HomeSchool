@@ -13727,11 +13727,19 @@ function getSimpleMachinePromptVisual(sub, exercise, prompt) {
 function WordRow({ en, ur }) {
   const [sEn, setSEn] = useState(false);
   const [sUr, setSUr] = useState(false);
+  const [sBoth, setSBoth] = useState(false);
+  const getEnglishVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find(v => v.lang.startsWith("en") && v.localService) || voices.find(v => v.lang.startsWith("en"));
+  };
+  const getUrduVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find(v => v.lang.startsWith("ur")) || voices.find(v => v.lang.startsWith("hi")) || voices.find(v => v.lang.includes("IN"));
+  };
   const speakEn = (e) => {
     e.stopPropagation(); window.speechSynthesis.cancel(); setSEn(true);
     const u = new SpeechSynthesisUtterance(ttsClean(en)); u.lang = "en-US"; u.rate = 0.8;
-    const voices = window.speechSynthesis.getVoices();
-    const pref = voices.find(v => v.lang.startsWith("en") && v.localService) || voices.find(v => v.lang.startsWith("en"));
+    const pref = getEnglishVoice();
     if (pref) u.voice = pref;
     u.onend = () => setSEn(false); u.onerror = () => setSEn(false);
     window.speechSynthesis.speak(u);
@@ -13739,14 +13747,38 @@ function WordRow({ en, ur }) {
   const speakUr = (e) => {
     e.stopPropagation(); window.speechSynthesis.cancel(); setSUr(true);
     const u = new SpeechSynthesisUtterance(ur); u.lang = "ur-PK"; u.rate = 0.8;
-    const voices = window.speechSynthesis.getVoices();
-    const pref = voices.find(v => v.lang.startsWith("ur")) || voices.find(v => v.lang.startsWith("hi")) || voices.find(v => v.lang.includes("IN"));
+    const pref = getUrduVoice();
     if (pref) { u.voice = pref; u.lang = pref.lang; }
     u.onend = () => setSUr(false); u.onerror = () => setSUr(false);
     window.speechSynthesis.speak(u);
   };
+  const speakBoth = () => {
+    window.speechSynthesis.cancel();
+    setSBoth(true);
+    setSEn(true);
+    setSUr(false);
+    const enUtter = new SpeechSynthesisUtterance(ttsClean(en));
+    enUtter.lang = "en-US";
+    enUtter.rate = 0.8;
+    const enVoice = getEnglishVoice();
+    if (enVoice) enUtter.voice = enVoice;
+    enUtter.onend = () => {
+      setSEn(false);
+      setSUr(true);
+      const urUtter = new SpeechSynthesisUtterance(ur);
+      urUtter.lang = "ur-PK";
+      urUtter.rate = 0.8;
+      const urVoice = getUrduVoice();
+      if (urVoice) { urUtter.voice = urVoice; urUtter.lang = urVoice.lang; }
+      urUtter.onend = () => { setSUr(false); setSBoth(false); };
+      urUtter.onerror = () => { setSUr(false); setSBoth(false); };
+      window.speechSynthesis.speak(urUtter);
+    };
+    enUtter.onerror = () => { setSEn(false); setSUr(false); setSBoth(false); };
+    window.speechSynthesis.speak(enUtter);
+  };
   return (
-    <div className="word-row" style={{ cursor: "default" }}>
+    <div className="word-row" onClick={speakBoth} style={{ cursor: "pointer", boxShadow: sBoth ? "0 0 0 1px rgba(56,189,248,0.22)" : "none", transition: "box-shadow 0.2s" }}>
       <span className={"word-en" + (sEn ? " word-active" : "")} onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{en} {sEn ? "🔊" : "🔈"}</span>
       <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
     </div>
