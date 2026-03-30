@@ -6,31 +6,41 @@
       this.db = db;
     }
 
-    async checkForUpdates(loadedDataVersion) {
-      const currentVersion = await this.db.getStoredVersion();
+    async checkForUpdates(loadedDataVersion, dataLoader = window.HomeSchoolData) {
+      const metadata = await this.db.getStoredMetadata();
+      const currentVersion = metadata?.version ?? null;
+      const loadedFingerprints = this.db.buildSubjectFingerprints(dataLoader);
+      const storedFingerprints = metadata?.fingerprints || {};
+      const changedSubjects = Object.keys(loadedFingerprints).filter((subjectId) => {
+        return loadedFingerprints[subjectId]?.hash !== storedFingerprints[subjectId]?.hash;
+      });
+
       return {
         currentVersion,
         newVersion: loadedDataVersion,
-        needsUpdate: currentVersion !== loadedDataVersion,
-        changes: currentVersion === loadedDataVersion ? [] : ["Curriculum data files changed"],
+        needsUpdate: currentVersion !== loadedDataVersion || changedSubjects.length > 0,
+        changedSubjects,
+        changes: changedSubjects.length > 0
+          ? changedSubjects.map((subjectId) => `Updated ${subjectId} curriculum files`)
+          : (window.HomeSchoolDataVersion?.DATA_CHANGELOG || []).find((entry) => entry.version === loadedDataVersion)?.changes || [],
       };
     }
 
     async applyUpdate(dataLoader, newVersion) {
-      await this.db.refreshData(dataLoader, newVersion);
+      const result = await this.db.refreshData(dataLoader, newVersion);
       return {
         applied: true,
         version: newVersion,
+        changedSubjects: result.changedSubjects || [],
+        refreshed: result.refreshed,
       };
     }
 
     getVersionInfo() {
       return {
         currentSchema: "v3",
-        notes: [
-          "Curriculum data is loaded from split subject and grade files.",
-          "IndexedDB stores curriculum version metadata separately from user progress.",
-        ],
+        currentVersion: window.HomeSchoolDataVersion?.DATA_VERSION || null,
+        history: window.HomeSchoolDataVersion?.DATA_CHANGELOG || [],
       };
     }
   }

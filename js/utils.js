@@ -41,6 +41,40 @@
     };
   }
 
+  function chunkArray(items, size) {
+    const normalizedSize = Math.max(1, Number(size) || 1);
+    const chunks = [];
+    for (let index = 0; index < items.length; index += normalizedSize) {
+      chunks.push(items.slice(index, index + normalizedSize));
+    }
+    return chunks;
+  }
+
+  function splitIntoSentences(text) {
+    return String(text || "")
+      .split(/(?<=[.!?۔؟])\s+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function mapSentencesToWords(sentences, wordCount) {
+    const totalWords = Math.max(0, Number(wordCount) || 0);
+    if (!sentences.length || totalWords === 0) return Array.from({ length: totalWords }, () => []);
+
+    if (totalWords <= sentences.length) {
+      return Array.from({ length: totalWords }, (_, index) => {
+        const start = Math.floor((index * sentences.length) / totalWords);
+        const end = Math.floor(((index + 1) * sentences.length) / totalWords);
+        return sentences.slice(start, Math.max(start + 1, end));
+      });
+    }
+
+    return Array.from({ length: totalWords }, (_, index) => {
+      const sentenceIndex = Math.min(sentences.length - 1, Math.floor((index * sentences.length) / totalWords));
+      return sentences[sentenceIndex] ? [sentences[sentenceIndex]] : [];
+    });
+  }
+
   function numToWords(n) {
     if (n === 0) return "zero";
     const ones = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
@@ -171,6 +205,137 @@
     }
   }
 
+  function formatBytes(bytes) {
+    const value = Number(bytes) || 0;
+    if (!value) return "0 B";
+    const units = ["B", "KB", "MB", "GB"];
+    let size = value;
+    let unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+    return `${size >= 10 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`;
+  }
+
+  async function getStorageEstimateLabel(fallbackLabel = "IndexedDB + localStorage") {
+    try {
+      if (!navigator.storage?.estimate) return fallbackLabel;
+      const estimate = await navigator.storage.estimate();
+      const usage = formatBytes(estimate.usage || 0);
+      const quota = formatBytes(estimate.quota || 0);
+      return `${usage} used / ${quota} available`;
+    } catch {
+      return fallbackLabel;
+    }
+  }
+
+  function regroupDayEntries(entries, itemsPerDay) {
+    const list = Array.isArray(entries) ? entries : [];
+    if (!list.length) return [];
+    const flattened = [];
+
+    list.forEach((entry) => {
+      const words = Array.isArray(entry.words) ? entry.words : [];
+      const sentences = splitIntoSentences(entry.paragraph || "");
+      const sentenceGroups = mapSentencesToWords(sentences, words.length);
+      words.forEach((word, wordIndex) => {
+        flattened.push({
+          ...word,
+          __paragraphSentences: sentenceGroups[wordIndex] || [],
+          __difficult: Array.isArray(entry.difficult) ? entry.difficult : [],
+          __sourceDay: entry.day,
+        });
+      });
+    });
+
+    const groups = chunkArray(flattened, itemsPerDay);
+    return groups.map((group, index) => {
+      const paragraphSentences = [];
+      const seenSentences = new Set();
+      group.forEach((item) => {
+        (item.__paragraphSentences || []).forEach((sentence) => {
+          const key = sentence.trim();
+          if (!key || seenSentences.has(key)) return;
+          seenSentences.add(key);
+          paragraphSentences.push(sentence);
+        });
+      });
+      const paragraph = paragraphSentences.join(" ");
+      const difficult = [];
+      const difficultSeen = new Set();
+      group.forEach((item) => {
+        (item.__difficult || []).forEach((word) => {
+          const key = JSON.stringify(word);
+          if (!difficultSeen.has(key)) {
+            difficultSeen.add(key);
+            difficult.push(word);
+          }
+        });
+      });
+
+      return {
+        day: index + 1,
+        words: group.map((item) => {
+          const nextItem = { ...item };
+          delete nextItem.__paragraphSentences;
+          delete nextItem.__difficult;
+          delete nextItem.__sourceDay;
+          return nextItem;
+        }),
+        paragraph,
+        paragraphSentences,
+        difficult,
+        sourceDays: Array.from(new Set(group.map((item) => item.__sourceDay))),
+      };
+    });
+  }
+
+  function regroupSentencePairs(pairs, itemsPerDay) {
+    const list = Array.isArray(pairs) ? pairs : [];
+    if (!list.length) return [];
+    return chunkArray(list, itemsPerDay).map((group, index) => ({
+      day: index + 1,
+      sentencePairs: group,
+      sourceRange: [index * Math.max(1, Number(itemsPerDay) || 1) + 1, index * Math.max(1, Number(itemsPerDay) || 1) + group.length],
+    }));
+  }
+
+  function validateProgressImport(payload) {
+    const errors = [];
+    if (!payload || typeof payload !== "object") {
+      errors.push("Import file is empty or invalid.");
+      return { ok: false, errors };
+    }
+
+    if (payload.appState && typeof payload.appState !== "object") {
+      errors.push("App state must be an object.");
+    }
+
+    if (payload.dbProgress && typeof payload.dbProgress !== "object") {
+      errors.push("Database progress must be an object.");
+    }
+
+    const progress = payload.dbProgress?.progress;
+    const userStats = payload.dbProgress?.userStats;
+    const customizations = payload.dbProgress?.customizations;
+
+    if (typeof progress !== "undefined" && !Array.isArray(progress)) {
+      errors.push("Progress rows must be an array.");
+    }
+    if (typeof userStats !== "undefined" && !Array.isArray(userStats)) {
+      errors.push("User stats rows must be an array.");
+    }
+    if (typeof customizations !== "undefined" && !Array.isArray(customizations)) {
+      errors.push("Customizations rows must be an array.");
+    }
+
+    return {
+      ok: errors.length === 0,
+      errors,
+    };
+  }
+
   function downloadJson(filename, payload) {
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
@@ -188,12 +353,19 @@
     saveState,
     localStorageFallback,
     debounce,
+    chunkArray,
+    splitIntoSentences,
     ttsClean,
     speakText,
     calculateXP,
     calculateStreak,
     checkBadges,
     formatDate,
+    formatBytes,
+    getStorageEstimateLabel,
+    regroupDayEntries,
+    regroupSentencePairs,
+    validateProgressImport,
     downloadJson,
     isTtsEnabled,
   };

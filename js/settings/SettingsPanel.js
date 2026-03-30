@@ -1,25 +1,199 @@
 (() => {
-  (() => {
-    "use strict";
-    function SettingsPanel({
-      currentVersion,
-      updateAvailable,
-      storageLabel,
-      onCheckUpdates,
-      onRefreshData,
-      onExportProgress,
-      onImportProgress,
-      onResetProgress,
-      onFullReset,
-      onToggleTTS,
-      ttsEnabled,
-      language,
-      onLanguageChange
-    }) {
-      return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, "Data Management"), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F9FE} Data Version"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, "v", currentVersion, updateAvailable ? " \u2022 Update" : "")), /* @__PURE__ */ React.createElement("button", { style: { width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(56,189,248,0.3)", background: "rgba(56,189,248,0.1)", color: "#38BDF8", fontFamily: "'Baloo 2',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }, onClick: onCheckUpdates }, "\u{1F50E} Check Updates"), /* @__PURE__ */ React.createElement("button", { style: { width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.1)", color: "#F59E0B", fontFamily: "'Baloo 2',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }, onClick: onRefreshData }, "\u267B\uFE0F Re-seed from Source"), /* @__PURE__ */ React.createElement("button", { style: { width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.1)", color: "#22C55E", fontFamily: "'Baloo 2',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8 }, onClick: onExportProgress }, "\u{1F4BE} Export Progress"), /* @__PURE__ */ React.createElement("label", { style: { display: "block", width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(168,85,247,0.3)", background: "rgba(168,85,247,0.1)", color: "#E9D5FF", fontFamily: "'Baloo 2',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 8, textAlign: "center" } }, "\u{1F4E5} Import Progress", /* @__PURE__ */ React.createElement("input", { type: "file", accept: ".json,application/json", style: { display: "none" }, onChange: onImportProgress })), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, "User Data"), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4BE} Storage"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, storageLabel)), /* @__PURE__ */ React.createElement("button", { className: "reset-btn", style: { marginTop: 0, marginBottom: 8 }, onClick: onResetProgress }, "\u{1F5D1}\uFE0F Reset Progress"), /* @__PURE__ */ React.createElement("button", { style: { width: "100%", padding: "12px", borderRadius: 10, border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "#EF4444", fontFamily: "'Baloo 2',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }, onClick: onFullReset }, "\u{1F4A5} Full Reset"), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, "Preferences"), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F50A} Text to Speech"), /* @__PURE__ */ React.createElement("button", { className: "grade-btn active", style: { width: 120 }, onClick: onToggleTTS }, ttsEnabled ? "Enabled" : "Disabled")), /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: { display: "block" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F310} Interface Language"), /* @__PURE__ */ React.createElement("select", { value: language, onChange: (event) => onLanguageChange(event.target.value), style: { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)" } }, /* @__PURE__ */ React.createElement("option", { value: "en" }, "English"), /* @__PURE__ */ React.createElement("option", { value: "ur" }, "\u0627\u0631\u062F\u0648"), /* @__PURE__ */ React.createElement("option", { value: "bilingual" }, "Bilingual")))));
-    }
-    window.HomeSchoolSettings = {
-      SettingsPanel
-    };
-  })();
+  "use strict";
+
+  function actionButton(text, onClick, accent, extraStyle) {
+    return React.createElement("button", {
+      style: Object.assign({
+        width: "100%",
+        padding: "12px",
+        borderRadius: 10,
+        border: `1px solid ${accent}55`,
+        background: `${accent}1A`,
+        color: accent,
+        fontFamily: "'Baloo 2',sans-serif",
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: "pointer",
+        marginBottom: 8,
+      }, extraStyle || {}),
+      onClick,
+    }, text);
+  }
+
+  function sectionTitle(text) {
+    return React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, text);
+  }
+
+  function renderPacingControl(sectionKey, sectionConfig, labels, onDaySectionChange) {
+    return React.createElement("div", {
+      key: sectionKey,
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        background: "rgba(15,23,42,0.55)",
+        border: "1px solid rgba(148,163,184,0.16)",
+        marginBottom: 10,
+      },
+    },
+    React.createElement("div", {
+      style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6 },
+    },
+    React.createElement("strong", { style: { color: "var(--text-primary)", fontSize: 14 } }, sectionConfig.label),
+    React.createElement("span", { style: { color: "var(--text-muted)", fontSize: 12 } }, `${sectionConfig.itemsPerDay} ${sectionConfig.unitLabel}`)),
+    React.createElement("div", {
+      style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
+    },
+    React.createElement("span", { style: { color: "var(--text-secondary)", fontSize: 12 } }, labels.perDay),
+    React.createElement("input", {
+      type: "range",
+      min: sectionConfig.min || 1,
+      max: sectionConfig.max || 20,
+      step: 1,
+      value: sectionConfig.itemsPerDay,
+      onChange: (event) => onDaySectionChange(sectionKey, Number(event.target.value) || sectionConfig.itemsPerDay),
+      style: { flex: 1, minWidth: 140 },
+    }),
+    React.createElement("input", {
+      type: "number",
+      min: sectionConfig.min || 1,
+      max: sectionConfig.max || 20,
+      value: sectionConfig.itemsPerDay,
+      onChange: (event) => onDaySectionChange(sectionKey, Number(event.target.value) || sectionConfig.itemsPerDay),
+      style: {
+        width: 76,
+        padding: "8px 10px",
+        borderRadius: 8,
+        border: "1px solid var(--border)",
+        background: "var(--bg-elevated)",
+        color: "var(--text-primary)",
+        fontFamily: "var(--font)",
+      },
+    })),
+    React.createElement("div", { style: { marginTop: 6, color: "var(--text-muted)", fontSize: 12 } }, sectionConfig.helpText || labels.pacingHelp));
+  }
+
+  function SettingsPanel({
+    currentVersion,
+    updateAvailable,
+    storageLabel,
+    versionInfo,
+    onCheckUpdates,
+    onRefreshData,
+    onExportProgress,
+    onImportProgress,
+    onResetProgress,
+    onFullReset,
+    onToggleTTS,
+    ttsEnabled,
+    language,
+    onLanguageChange,
+    daySectionSettings,
+    onDaySectionChange,
+    labels,
+  }) {
+    const ui = labels || {};
+    const history = Array.isArray(versionInfo?.history) ? versionInfo.history : [];
+    const versionHistoryBlock = history.length > 0 ? React.createElement("div", {
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        background: "rgba(15,23,42,0.55)",
+        border: "1px solid rgba(148,163,184,0.16)",
+        marginBottom: 8,
+      },
+    },
+    React.createElement("div", { style: { color: "#E2E8F0", fontSize: 13, fontWeight: 700, marginBottom: 6 } }, ui.versionHistory || "Version History"),
+    ...history.slice(0, 2).map((entry) => React.createElement("div", {
+      key: `${entry.version}`,
+      style: { marginBottom: 8, color: "var(--text-secondary)", fontSize: 12 },
+    },
+    React.createElement("div", { style: { color: "#F8FAFC", fontWeight: 700, marginBottom: 4 } }, `v${entry.version} • ${entry.date}`),
+    React.createElement("div", null, (entry.changes || []).join(" • "))))) : null;
+
+    return React.createElement("div", null,
+      sectionTitle(ui.dataManagement || "Data Management"),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, ui.dataVersion || "Data Version"),
+        React.createElement("span", { className: "si-value" }, `v${currentVersion}${updateAvailable ? " • Update" : ""}`)),
+      actionButton(ui.checkUpdates || "Check Updates", onCheckUpdates, "#38BDF8"),
+      actionButton(ui.refreshCurriculum || "Re-seed from Source", onRefreshData, "#F59E0B"),
+      actionButton(ui.exportProgress || "Export Progress", onExportProgress, "#22C55E"),
+      React.createElement("label", {
+        style: {
+          display: "block",
+          width: "100%",
+          padding: "12px",
+          borderRadius: 10,
+          border: "1px solid rgba(168,85,247,0.3)",
+          background: "rgba(168,85,247,0.1)",
+          color: "#E9D5FF",
+          fontFamily: "'Baloo 2',sans-serif",
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: "pointer",
+          marginBottom: 8,
+          textAlign: "center",
+        },
+      }, ui.importProgress || "Import Progress",
+      React.createElement("input", {
+        type: "file",
+        accept: ".json,application/json",
+        style: { display: "none" },
+        onChange: onImportProgress,
+      })),
+      versionHistoryBlock,
+
+      sectionTitle(ui.userData || "User Data"),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, ui.storageUsage || "Storage"),
+        React.createElement("span", { className: "si-value" }, storageLabel)),
+      actionButton(ui.resetProgress || "Reset Progress", onResetProgress, "#EF4444", { marginBottom: 8 }),
+      actionButton(ui.fullReset || "Full Reset", onFullReset, "#DC2626", { marginBottom: 0 }),
+
+      sectionTitle(ui.dayBasedSections || "Day-Based English Sections"),
+      React.createElement("div", {
+        style: {
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: "rgba(15,23,42,0.55)",
+          border: "1px solid rgba(148,163,184,0.16)",
+          marginBottom: 10,
+          color: "var(--text-secondary)",
+          fontSize: 12,
+          lineHeight: 1.5,
+        },
+      }, ui.dayBasedDescription || "Control how many words or sentences appear in each study day for every English subsection."),
+      Object.keys(daySectionSettings || {}).map((sectionKey) => renderPacingControl(sectionKey, daySectionSettings[sectionKey], ui, onDaySectionChange)),
+
+      sectionTitle(ui.preferences || "Preferences"),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, ui.textToSpeech || "Text to Speech"),
+        React.createElement("button", {
+          className: "grade-btn active",
+          style: { width: 120 },
+          onClick: onToggleTTS,
+        }, ttsEnabled ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled"))),
+      React.createElement("div", { className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } },
+          React.createElement("span", { className: "si-label" }, ui.interfaceLanguage || "Interface Language"),
+          React.createElement("select", {
+            value: language,
+            onChange: (event) => onLanguageChange(event.target.value),
+            style: {
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid var(--border)",
+              background: "var(--bg-elevated)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font)",
+            },
+          },
+          React.createElement("option", { value: "en" }, ui.languageEnglish || "English"),
+          React.createElement("option", { value: "ur" }, ui.languageUrdu || "اردو"),
+          React.createElement("option", { value: "bilingual" }, ui.languageBilingual || "Bilingual")))));
+  }
+
+  window.HomeSchoolSettings = {
+    SettingsPanel,
+  };
 })();

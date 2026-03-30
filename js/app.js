@@ -10,7 +10,7 @@ const {
   getLessons,
   getQuiz,
 } = window.HomeSchoolData;
-const { loadState, saveState, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled } = window.HomeSchoolUtils;
+const { loadState, saveState, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport } = window.HomeSchoolUtils;
 const { SettingsPanel } = window.HomeSchoolSettings || {};
 const {
   adverbs: ADVERBS_DATA,
@@ -22,6 +22,181 @@ const {
   verbs: VERBS_DATA,
 } = POS_DATA;
 const AppContext = React.createContext(null);
+
+const UI_TEXT = {
+  en: {
+    loadingHome: "Loading HomeSchool...",
+    loadingDb: "Setting up your learning database",
+    tagline: "Your personal learning companion",
+    yourName: "YOUR NAME",
+    enterName: "Enter your name...",
+    selectGrade: "SELECT YOUR GRADE",
+    lessons: "lessons",
+    grade: "Grade",
+    lesson: "Lesson",
+    completed: "Completed",
+    notStarted: "Not started",
+    startQuiz: "Start Quiz",
+    progress: "Progress",
+    achievements: "Achievements",
+    tutor: "AI Tutor",
+    settings: "Settings",
+    home: "Home",
+    badges: "Badges",
+    quiz: "Quiz",
+    currentGrade: "Current Grade",
+    changeGrade: "Change Grade",
+    dataManagement: "Data Management",
+    dataVersion: "Data Version",
+    checkUpdates: "Check Updates",
+    refreshCurriculum: "Re-seed from Source",
+    exportProgress: "Export Progress",
+    importProgress: "Import Progress",
+    versionHistory: "Version History",
+    userData: "User Data",
+    storageUsage: "Storage",
+    resetProgress: "Reset Progress",
+    fullReset: "Full Reset",
+    dayBasedSections: "Day-Based English Sections",
+    dayBasedDescription: "Adjust how many words appear in each study day for every English subsection independently.",
+    perDay: "Items per day",
+    pacingHelp: "These pacing controls change the study-day grouping without changing the source curriculum files.",
+    preferences: "Preferences",
+    textToSpeech: "Text to Speech",
+    enabled: "Enabled",
+    disabled: "Disabled",
+    interfaceLanguage: "Interface Language",
+    languageEnglish: "English",
+    languageUrdu: "اردو",
+    languageBilingual: "Bilingual",
+    importNow: "Import this backup now?",
+    replacePrompt: "Press OK to replace your current saved progress.\nPress Cancel to merge this backup with your current progress.",
+    importSuccessReplace: "Progress imported successfully and replaced your current saved progress.",
+    importSuccessMerge: "Progress imported successfully and merged with your current saved progress.",
+    importInvalid: "This backup file is not valid.",
+    importNewer: "This backup was created from a newer curriculum version. Import anyway?",
+    refreshConfirm: "Refresh curriculum data from the split source files while keeping your progress?",
+    refreshSuccess: "Curriculum refreshed successfully",
+    refreshNoChanges: "Curriculum is already up to date.",
+    resetConfirm: "Reset quiz progress while keeping the curriculum data?",
+    fullResetConfirm: "Full reset will clear the database, progress, and reseed the curriculum. Continue?",
+    updateAvailableTitle: "An update is available.",
+    upToDateTitle: "Curriculum is up to date.",
+    changedSubjects: "Changed subjects",
+  },
+  ur: {
+    loadingHome: "ہوم اسکول لوڈ ہو رہا ہے...",
+    loadingDb: "آپ کا لرننگ ڈیٹا بیس تیار کیا جا رہا ہے",
+    tagline: "آپ کا ذاتی تعلیمی ساتھی",
+    yourName: "آپ کا نام",
+    enterName: "اپنا نام درج کریں...",
+    selectGrade: "اپنی جماعت منتخب کریں",
+    lessons: "اسباق",
+    grade: "جماعت",
+    lesson: "سبق",
+    completed: "مکمل",
+    notStarted: "شروع نہیں ہوا",
+    startQuiz: "امتحان شروع کریں",
+    progress: "پیش رفت",
+    achievements: "کامیابیاں",
+    tutor: "اے آئی استاد",
+    settings: "ترتیبات",
+    home: "ہوم",
+    badges: "بیجز",
+    quiz: "امتحان",
+    currentGrade: "موجودہ جماعت",
+    changeGrade: "جماعت تبدیل کریں",
+    dataManagement: "ڈیٹا مینجمنٹ",
+    dataVersion: "ڈیٹا ورژن",
+    checkUpdates: "اپ ڈیٹس چیک کریں",
+    refreshCurriculum: "سورس سے دوبارہ لوڈ کریں",
+    exportProgress: "پیش رفت ایکسپورٹ کریں",
+    importProgress: "پیش رفت امپورٹ کریں",
+    versionHistory: "ورژن ہسٹری",
+    userData: "یوزر ڈیٹا",
+    storageUsage: "اسٹوریج",
+    resetProgress: "پیش رفت ری سیٹ کریں",
+    fullReset: "مکمل ری سیٹ",
+    dayBasedSections: "دن کے حساب سے انگریزی سیکشنز",
+    dayBasedDescription: "ہر انگریزی ذیلی سیکشن کے لیے الگ الگ طے کریں کہ ایک دن میں کتنے الفاظ یا جملے دکھائے جائیں۔",
+    perDay: "فی دن",
+    pacingHelp: "یہ سیٹنگز صرف مطالعے کی دن وار گروپنگ بدلتی ہیں، اصل ڈیٹا فائلیں نہیں۔",
+    preferences: "ترجیحات",
+    textToSpeech: "آواز میں پڑھنا",
+    enabled: "آن",
+    disabled: "آف",
+    interfaceLanguage: "انٹرفیس زبان",
+    languageEnglish: "English",
+    languageUrdu: "اردو",
+    languageBilingual: "Bilingual",
+    importNow: "کیا یہ بیک اپ ابھی امپورٹ کرنا ہے؟",
+    replacePrompt: "اوکے دبائیں تاکہ موجودہ پیش رفت بدل دی جائے۔\nکینسل دبائیں تاکہ بیک اپ کو موجودہ پیش رفت کے ساتھ ملا دیا جائے۔",
+    importSuccessReplace: "پیش رفت کامیابی سے امپورٹ ہو گئی اور موجودہ ڈیٹا بدل دیا گیا۔",
+    importSuccessMerge: "پیش رفت کامیابی سے امپورٹ ہو گئی اور موجودہ ڈیٹا کے ساتھ ملا دی گئی۔",
+    importInvalid: "یہ بیک اپ فائل درست نہیں ہے۔",
+    importNewer: "یہ بیک اپ نئے نصابی ورژن سے بنایا گیا تھا۔ کیا پھر بھی امپورٹ کرنا ہے؟",
+    refreshConfirm: "کیا سورس فائلز سے نصاب دوبارہ لوڈ کیا جائے جبکہ آپ کی پیش رفت محفوظ رہے؟",
+    refreshSuccess: "نصاب کامیابی سے ریفریش ہو گیا",
+    refreshNoChanges: "نصاب پہلے ہی تازہ ترین ہے۔",
+    resetConfirm: "کیا نصابی ڈیٹا برقرار رکھتے ہوئے کوئز پیش رفت ری سیٹ کرنی ہے؟",
+    fullResetConfirm: "مکمل ری سیٹ ڈیٹا بیس اور پیش رفت دونوں صاف کر دے گا۔ کیا جاری رکھنا ہے؟",
+    updateAvailableTitle: "نئی اپ ڈیٹ دستیاب ہے۔",
+    upToDateTitle: "نصاب پہلے ہی تازہ ترین ہے۔",
+    changedSubjects: "بدلے گئے مضامین",
+  },
+};
+
+const DAY_SECTION_META = {
+  adverbs: { labelEn: "Adverbs", labelUr: "قید", unitEn: "words", unitUr: "الفاظ", defaultSize: 3, max: 10 },
+  prepositions: { labelEn: "Prepositions", labelUr: "حروف جار", unitEn: "words", unitUr: "الفاظ", defaultSize: 3, max: 10 },
+  adjectives: { labelEn: "Adjectives", labelUr: "صفات", unitEn: "words", unitUr: "الفاظ", defaultSize: 3, max: 10 },
+  conjunctions: { labelEn: "Conjunctions", labelUr: "حروف عطف", unitEn: "words", unitUr: "الفاظ", defaultSize: 3, max: 10 },
+  pronouns: { labelEn: "Pronouns", labelUr: "ضمائر", unitEn: "words", unitUr: "الفاظ", defaultSize: 3, max: 10 },
+  collectiveNouns: { labelEn: "Collective Nouns", labelUr: "اسم جمع", unitEn: "words", unitUr: "الفاظ", defaultSize: 3, max: 10 },
+  verbs: { labelEn: "Verbs", labelUr: "افعال", unitEn: "words", unitUr: "الفاظ", defaultSize: 3, max: 10 },
+  vocabulary: { labelEn: "Vocabulary", labelUr: "ذخیرہ الفاظ", unitEn: "words", unitUr: "الفاظ", defaultSize: 5, max: 20 },
+  wordMeanings: { labelEn: "Words Meanings", labelUr: "الفاظ کے معانی", unitEn: "words", unitUr: "الفاظ", defaultSize: 5, max: 20 },
+  wordOpposites: { labelEn: "Words Opposites", labelUr: "الفاظ کے متضاد", unitEn: "words", unitUr: "الفاظ", defaultSize: 5, max: 20 },
+  adverbPhrases: { labelEn: "Adverb Phrases", labelUr: "فقراتِ حال", unitEn: "phrases", unitUr: "فقرے", defaultSize: 5, max: 15 },
+  sentences: { labelEn: "Sentence Sections", labelUr: "جملوں والے سیکشن", unitEn: "sentences", unitUr: "جملے", defaultSize: 10, max: 20 },
+};
+
+function getUiText(language) {
+  return language === "ur" ? UI_TEXT.ur : UI_TEXT.en;
+}
+
+function buildDaySectionSettings(language, overrides = {}) {
+  const isUrdu = language === "ur";
+  return Object.keys(DAY_SECTION_META).reduce((acc, key) => {
+    const meta = DAY_SECTION_META[key];
+    acc[key] = {
+      label: isUrdu ? meta.labelUr : meta.labelEn,
+      unitLabel: isUrdu ? meta.unitUr : meta.unitEn,
+      itemsPerDay: Math.max(1, Math.min(meta.max, Number(overrides?.[key]?.itemsPerDay) || meta.defaultSize)),
+      min: 1,
+      max: meta.max,
+      helpText: isUrdu
+        ? `اس سیکشن میں ایک دن میں ${meta.unitUr} کی تعداد مقرر کریں۔`
+        : `Set how many ${meta.unitEn} appear in each study day for this section.`,
+    };
+    return acc;
+  }, {});
+}
+
+function getSubsectionSettingKey(subtitle) {
+  const value = String(subtitle || "").trim().toLowerCase();
+  if (value === "adverb phrases") return "adverbPhrases";
+  if (value === "words meanings") return "wordMeanings";
+  if (value === "words opposites") return "wordOpposites";
+  if (value === "adverbs") return "adverbs";
+  if (value === "prepositions") return "prepositions";
+  if (value === "adjectives") return "adjectives";
+  if (value === "conjunctions") return "conjunctions";
+  if (value === "pronouns") return "pronouns";
+  if (value === "collective nouns") return "collectiveNouns";
+  if (value === "verbs") return "verbs";
+  return null;
+}
 
 function PlaceValueChart({ number }) {
   const s = String(number).replace(/,/g,"");
@@ -2588,6 +2763,159 @@ function normalizeSubLesson(sub, subjectId) {
   return { ...sub, exercises };
 }
 
+function formatDerivedDayLabel(dayEntry, isUrdu) {
+  const dayNumber = dayEntry?.day || 1;
+  return isUrdu ? `دن ${dayNumber}` : `Day ${dayNumber}`;
+}
+
+function buildDaySectionPairs(dayEntry, settingKey) {
+  const pairs = [];
+  const pushPair = (prompt, answer) => {
+    const cleanPrompt = normalizeText(prompt);
+    const cleanAnswer = normalizeText(answer);
+    if (!cleanPrompt || !cleanAnswer) return;
+    const key = `${cleanPrompt}||${cleanAnswer}`;
+    if (!pairs.some((item) => item.key === key)) pairs.push({ key, prompt: cleanPrompt, answer: cleanAnswer });
+  };
+
+  if (Array.isArray(dayEntry?.words)) {
+    dayEntry.words.forEach((word) => {
+      if (!word) return;
+      if (settingKey === "wordOpposites") {
+        pushPair(word.en, word.opposite || word.oppositeUr || word.ur);
+        return;
+      }
+      pushPair(word.en, word.ur || word.meaning || word.opposite || word.oppositeUr);
+    });
+  }
+
+  if (Array.isArray(dayEntry?.sentencePairs)) {
+    dayEntry.sentencePairs.forEach((pair) => pushPair(pair.en, pair.ur));
+  }
+
+  if (Array.isArray(dayEntry?.pairs)) {
+    dayEntry.pairs.forEach((pair) => pushPair(pair.left, pair.right));
+  }
+
+  return pairs;
+}
+
+function buildDaySectionPrompt(kind, prompt, answer, settingKey, isUrdu) {
+  const normalizedPrompt = normalizeText(prompt);
+  const normalizedAnswer = normalizeText(answer);
+  if (settingKey === "wordOpposites") {
+    if (kind === "fill") return isUrdu ? `"${normalizedPrompt}" کا متضاد ___ ہے` : `Opposite of "${normalizedPrompt}" is ___`;
+    if (kind === "tf") return `${normalizedPrompt}: ${normalizedAnswer}`;
+    return normalizedPrompt;
+  }
+  return kind === "fill" ? `${normalizedPrompt} = ___` : kind === "tf" ? `${normalizedPrompt}: ${normalizedAnswer}` : normalizedPrompt;
+}
+
+function buildDaySectionQuestion(prompt, settingKey, isUrdu) {
+  const normalizedPrompt = normalizeText(prompt);
+  if (settingKey === "wordOpposites") {
+    return isUrdu ? `"${normalizedPrompt}" کا متضاد کیا ہے؟` : `What is the opposite of "${normalizedPrompt}"?`;
+  }
+  if (settingKey === "sentences") {
+    return isUrdu ? `"${normalizedPrompt}" کا اردو ترجمہ کیا ہے؟` : `What is the Urdu translation of "${normalizedPrompt}"?`;
+  }
+  return isUrdu ? `"${normalizedPrompt}" کا اردو مطلب کیا ہے؟` : `What is the Urdu meaning of "${normalizedPrompt}"?`;
+}
+
+function buildDaySectionExercises(dayEntry, settingKey, subjectId) {
+  const isUrdu = subjectId === "urdu";
+  const pairs = buildDaySectionPairs(dayEntry, settingKey);
+  if (!pairs.length) return [];
+
+  const fillLabel = isUrdu
+    ? (settingKey === "wordOpposites" ? "خالی جگہیں پُر کریں:" : "صحیح معنی سے خالی جگہیں پُر کریں:")
+    : (settingKey === "wordOpposites" ? "Fill in the blanks:" : "Fill in the blanks with correct meaning:");
+  const tfLabel = isUrdu ? "درست یا غلط:" : "True or False:";
+  const matchLabel = isUrdu ? "کالم ملائیں:" : "Match the columns:";
+
+  const partsFill = pairs.map((pair) => buildDaySectionPrompt("fill", pair.prompt, pair.answer, settingKey, isUrdu));
+  const ansFill = pairs.map((pair) => pair.answer);
+  const partsTf = pairs.map((pair, index) => {
+    const alternate = pairs[(index + 1) % pairs.length];
+    const useFalse = index % 2 === 1 && alternate && alternate.answer !== pair.answer;
+    return buildDaySectionPrompt("tf", pair.prompt, useFalse ? alternate.answer : pair.answer, settingKey, isUrdu);
+  });
+  const ansTf = pairs.map((_, index) => isUrdu ? (index % 2 === 1 ? "غلط" : "درست") : (index % 2 === 1 ? "False" : "True"));
+  const partsMatch = pairs.map((pair) => buildDaySectionPrompt("match", pair.prompt, pair.answer, settingKey, isUrdu));
+  const ansMatch = pairs.map((pair) => pair.answer);
+
+  return [
+    { q: fillLabel, parts: partsFill, ans: ansFill },
+    { q: tfLabel, parts: partsTf, ans: ansTf },
+    { q: matchLabel, parts: partsMatch, ans: ansMatch },
+  ];
+}
+
+function buildDaySectionQuiz(dayEntry, settingKey, subjectId) {
+  const isUrdu = subjectId === "urdu";
+  const pairs = buildDaySectionPairs(dayEntry, settingKey);
+  if (!pairs.length) return [];
+  const pool = Array.from(new Set(pairs.map((pair) => pair.answer)));
+
+  return pairs.map((pair, index) => {
+    const distractors = [];
+    for (let offset = 1; offset < pairs.length && distractors.length < 3; offset += 1) {
+      const candidate = pairs[(index + offset) % pairs.length]?.answer;
+      if (candidate && candidate !== pair.answer && !distractors.includes(candidate)) distractors.push(candidate);
+    }
+    for (const candidate of pool) {
+      if (distractors.length >= 3) break;
+      if (candidate !== pair.answer && !distractors.includes(candidate)) distractors.push(candidate);
+    }
+    while (distractors.length < 3) distractors.push(pair.answer);
+    const options = [pair.answer, ...distractors.slice(0, 3)];
+    const rotation = index % options.length;
+    const shuffled = options.map((_, optionIndex) => options[(optionIndex + rotation) % options.length]);
+    return {
+      q: buildDaySectionQuestion(pair.prompt, settingKey, isUrdu),
+      a: shuffled,
+      c: shuffled.indexOf(pair.answer),
+    };
+  });
+}
+
+function buildDerivedDayBasedSub(sub, settingKey, itemsPerDay, subjectId) {
+  if (!sub || !Array.isArray(sub.dayLessons)) return sub;
+  const adjustedDayLessons = regroupDayEntries(sub.dayLessons, itemsPerDay);
+  const exerciseGroups = adjustedDayLessons.map((lessonDay) => ({
+    label: formatDerivedDayLabel(lessonDay, subjectId === "urdu"),
+    exercises: buildDaySectionExercises(lessonDay, settingKey, subjectId),
+  }));
+  const quizGroups = adjustedDayLessons.map((lessonDay) => ({
+    label: formatDerivedDayLabel(lessonDay, subjectId === "urdu"),
+    questions: buildDaySectionQuiz(lessonDay, settingKey, subjectId),
+  }));
+  return {
+    ...sub,
+    dayLessons: adjustedDayLessons,
+    exerciseGroups,
+    quizGroups,
+  };
+}
+
+function buildDerivedSentenceSub(subs, itemsPerDay, subjectId) {
+  const sentencePairs = [];
+  (subs || []).forEach((sub) => {
+    (sub.sentencePairs || []).forEach((pair) => sentencePairs.push(pair));
+  });
+  const groups = regroupSentencePairs(sentencePairs, itemsPerDay);
+  return groups.map((group) => ({
+    t: subjectId === "urdu" ? `جملے دن ${group.day}` : `Sentences Day ${group.day}`,
+    c: subjectId === "urdu"
+      ? "روزمرہ استعمال کے انگریزی جملے اور ان کے اردو ترجمے پڑھیں۔"
+      : "Read daily-use English sentences with Urdu translations. Practice only this grouped set in the exercises and quiz.",
+    examplesLabel: subjectId === "urdu" ? "🗣️ جملے" : "🗣️ Sentences",
+    sentencePairs: group.sentencePairs,
+    exercises: buildDaySectionExercises(group, "sentences", subjectId),
+    quiz: buildDaySectionQuiz(group, "sentences", subjectId),
+  }));
+}
+
 function getSimpleMachinePromptVisual(sub, exercise, prompt) {
   if (!sub || sub.t !== "Simple Machines" || !exercise || exercise.q !== "Name the simple machine:") return null;
   const lower = (prompt || "").toLowerCase();
@@ -2816,6 +3144,9 @@ function VerbWordRow({ en, ur, v2, v3 }) {
 function HomeschoolApp() {
   const stored = loadState();
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
+  const [language, setLanguage] = useState(stored?.language || "bilingual");
+  const ui = getUiText(language);
+  const [daySectionOverrides, setDaySectionOverrides] = useState(stored?.daySectionOverrides || {});
   const [grade, setGrade] = useState(stored?.grade || null);
   const [studentName, setStudentName] = useState(stored?.studentName || "");
   const [tab, setTab] = useState("home");
@@ -2858,7 +3189,6 @@ function HomeschoolApp() {
   const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
-  const [language, setLanguage] = useState(stored?.language || "bilingual");
   const [storageLabel, setStorageLabel] = useState("IndexedDB + localStorage");
   const chatEndRef = useRef(null);
 
@@ -2867,6 +3197,18 @@ function HomeschoolApp() {
   const [dbPos, setDbPos] = useState({});
   const [dbTenses, setDbTenses] = useState({});
   const [dbVocab, setDbVocab] = useState([]);
+  const daySectionSettings = buildDaySectionSettings(language, daySectionOverrides);
+
+  const refreshStorageLabel = useCallback(async () => {
+    if (!window.HomeSchoolDB) {
+      setStorageLabel(await getStorageEstimateLabel("localStorage"));
+      return;
+    }
+    const stats = await window.HomeSchoolDB.getStats();
+    const quotaLabel = await getStorageEstimateLabel(`IndexedDB • ${stats.coreData || 0} lessons`);
+    const lessonCountLabel = language === "ur" ? `${stats.coreData || 0} اسباق` : `${stats.coreData || 0} lessons`;
+    setStorageLabel(`${quotaLabel} • ${lessonCountLabel}`);
+  }, [language]);
 
   // Load from IndexedDB on mount
   useEffect(() => {
@@ -2893,10 +3235,9 @@ function HomeschoolApp() {
           setEarnedBadges(persistedStats.badges || []);
           setXp(persistedStats.xp || 0);
         }
-        const stats = await window.HomeSchoolDB.getStats();
-        setStorageLabel(`IndexedDB • ${stats.coreData || 0} lessons`);
+        await refreshStorageLabel();
         if (versionManagerRef.current) {
-          const versionState = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION);
+          const versionState = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION, window.HomeSchoolData);
           setCurrentVersion(versionState.newVersion || window.HomeSchoolData.VERSION);
           setUpdateAvailable(versionState.needsUpdate);
         }
@@ -2917,16 +3258,51 @@ function HomeschoolApp() {
   };
   const TENSES = (dbTenses && Object.keys(dbTenses).length > 0) ? dbTenses : TENSES_DATA;
   const VOCAB = dbVocab.length > 0 ? dbVocab : VOCABULARY_DATA;
+  const pacedPos = {
+    adverbs: regroupDayEntries(POS.adverbs, daySectionSettings.adverbs.itemsPerDay),
+    prepositions: regroupDayEntries(POS.prepositions, daySectionSettings.prepositions.itemsPerDay),
+    adjectives: regroupDayEntries(POS.adjectives, daySectionSettings.adjectives.itemsPerDay),
+    conjunctions: regroupDayEntries(POS.conjunctions, daySectionSettings.conjunctions.itemsPerDay),
+    pronouns: regroupDayEntries(POS.pronouns, daySectionSettings.pronouns.itemsPerDay),
+    collectiveNouns: regroupDayEntries(POS.collectiveNouns, daySectionSettings.collectiveNouns.itemsPerDay),
+    verbs: regroupDayEntries(POS.verbs, daySectionSettings.verbs.itemsPerDay),
+  };
+  const pacedVocab = regroupDayEntries(VOCAB, daySectionSettings.vocabulary.itemsPerDay);
+  const activeLessonSubs = selectedLesson?.hasMathSub
+    ? (selectedLesson.key === "sentences"
+      ? buildDerivedSentenceSub(selectedLesson.subs || [], daySectionSettings.sentences.itemsPerDay, selectedSubject?.id)
+      : (selectedLesson.subs || []).map((sub) => {
+        const settingKey = getSubsectionSettingKey(sub.t);
+        if (!settingKey) return sub;
+        return buildDerivedDayBasedSub(sub, settingKey, daySectionSettings[settingKey]?.itemsPerDay || 5, selectedSubject?.id);
+      }))
+    : [];
 
   useEffect(() => { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); return () => window.speechSynthesis.cancel(); }, []);
+  useEffect(() => {
+    if (dbLoaded) refreshStorageLabel();
+  }, [dbLoaded, language]);
   useEffect(() => {
     window.HomeSchoolPrefs = { ttsEnabled, language };
     if (!ttsEnabled) window.speechSynthesis.cancel();
   }, [ttsEnabled, language]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language });
-  }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language]);
+    if (grade) saveState({ grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides });
+  }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
+  useEffect(() => {
+    setSelectedAdverbDay(null);
+    setSelectedPrepDay(null);
+    setSelectedAdjDay(null);
+    setSelectedConjDay(null);
+    setSelectedPronDay(null);
+    setSelectedNounDay(null);
+    setSelectedVerbDay(null);
+    setSelectedVocabDay(null);
+    setMathSubIdx(null);
+    setSubExerciseGroupIdx(null);
+    setSubQuizGroupIdx(null);
+  }, [daySectionOverrides]);
 
   const checkBadges = useCallback((qs, qt, si) => {
     const nb = [], all = [...earnedBadges];
@@ -2940,6 +3316,16 @@ function HomeschoolApp() {
     setNewBadges(nb);
     return { all, nb };
   }, [earnedBadges, totalQuizzesDone, streak, completedQuizzes]);
+
+  const handleDaySectionChange = useCallback((sectionKey, itemsPerDay) => {
+    const sectionMeta = DAY_SECTION_META[sectionKey];
+    if (!sectionMeta) return;
+    const nextValue = Math.max(1, Math.min(sectionMeta.max, Number(itemsPerDay) || sectionMeta.defaultSize));
+    setDaySectionOverrides((current) => ({
+      ...current,
+      [sectionKey]: { itemsPerDay: nextValue },
+    }));
+  }, []);
 
   const finishQuiz = async (ans, qs) => {
     const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
@@ -2974,26 +3360,32 @@ function HomeschoolApp() {
 
   const handleCheckUpdates = useCallback(async () => {
     if (!versionManagerRef.current) return;
-    const result = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION);
+    const result = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION, window.HomeSchoolData);
     setCurrentVersion(result.newVersion || window.HomeSchoolData.VERSION);
     setUpdateAvailable(result.needsUpdate);
-    alert(result.needsUpdate ? `An update is available.\nCurrent DB version: ${result.currentVersion ?? "not seeded"}\nNew version: ${result.newVersion}` : `Curriculum is up to date.\nVersion: ${result.newVersion}`);
-  }, []);
+    const changedSubjects = (result.changedSubjects || []).length > 0 ? `\n${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : "";
+    alert(result.needsUpdate
+      ? `${ui.updateAvailableTitle}\nCurrent DB version: ${result.currentVersion ?? "not seeded"}\nNew version: ${result.newVersion}${changedSubjects}`
+      : `${ui.upToDateTitle}\nVersion: ${result.newVersion}`);
+  }, [ui.changedSubjects, ui.updateAvailableTitle, ui.upToDateTitle]);
 
   const handleRefreshData = useCallback(async () => {
     if (!window.HomeSchoolDB) return;
-    if (!confirm("Refresh curriculum data from the split source files while keeping your progress?")) return;
-    await window.HomeSchoolDB.refreshData(window.HomeSchoolData, window.HomeSchoolData.VERSION);
+    if (!confirm(ui.refreshConfirm)) return;
+    const result = await window.HomeSchoolDB.refreshData(window.HomeSchoolData, window.HomeSchoolData.VERSION);
     const pos = await window.HomeSchoolDB.getAllPosTypes();
     const tens = await window.HomeSchoolDB.getAllTenses();
     const voc = await window.HomeSchoolDB.getVocab();
     setDbPos(pos);
     setDbTenses(tens);
     setDbVocab(voc);
+    await refreshStorageLabel();
     setCurrentVersion(window.HomeSchoolData.VERSION);
     setUpdateAvailable(false);
-    alert(`Curriculum refreshed successfully on ${formatDate(Date.now())}.`);
-  }, []);
+    alert(result.refreshed
+      ? `${ui.refreshSuccess} (${formatDate(Date.now())})${result.changedSubjects?.length ? `\n${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}`
+      : ui.refreshNoChanges);
+  }, [refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
 
   const handleExportProgress = useCallback(async () => {
     const dbProgress = window.HomeSchoolDB ? await window.HomeSchoolDB.exportProgress() : null;
@@ -3012,35 +3404,69 @@ function HomeschoolApp() {
         xp,
         ttsEnabled,
         language,
+        daySectionOverrides,
       },
       dbProgress,
     });
-  }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language]);
+  }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    const nextState = parsed.appState || {};
-    if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
-    if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
-    if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
-    if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
-    if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
-    if (typeof nextState.streak !== "undefined") setStreak(nextState.streak);
-    if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate(nextState.lastQuizDate);
-    if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
-    if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
-    if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
-    if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
-    if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress);
-    alert("Progress imported successfully.");
-    event.target.value = "";
-  }, []);
+    try {
+      if (!confirm(ui.importNow)) return;
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const validation = validateProgressImport(parsed);
+      if (!validation.ok) {
+        alert(`${ui.importInvalid}\n${validation.errors.join("\n")}`);
+        return;
+      }
+      if (parsed?.dbProgress?.dataVersion && parsed.dbProgress.dataVersion > window.HomeSchoolData.VERSION && !confirm(ui.importNewer)) {
+        return;
+      }
+      const replaceMode = confirm(ui.replacePrompt);
+      const mode = replaceMode ? "replace" : "merge";
+      const nextState = parsed.appState || {};
+      if (mode === "replace") {
+        if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
+        if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
+        if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
+        if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
+        if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
+        if (typeof nextState.streak !== "undefined") setStreak(nextState.streak);
+        if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate(nextState.lastQuizDate);
+        if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
+        if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
+        if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
+        if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
+        setDaySectionOverrides(nextState.daySectionOverrides || {});
+      } else {
+        if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
+        if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
+        if (nextState.completedQuizzes) setCompletedQuizzes((current) => ({ ...current, ...nextState.completedQuizzes }));
+        if (typeof nextState.totalScore !== "undefined") setTotalScore((current) => Math.max(current, nextState.totalScore));
+        if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone((current) => Math.max(current, nextState.totalQuizzesDone));
+        if (typeof nextState.streak !== "undefined") setStreak((current) => Math.max(current, nextState.streak));
+        if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate((current) => current || nextState.lastQuizDate);
+        if (nextState.earnedBadges) setEarnedBadges((current) => Array.from(new Set([...(current || []), ...nextState.earnedBadges])));
+        if (typeof nextState.xp !== "undefined") setXp((current) => Math.max(current, nextState.xp));
+        if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
+        if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
+        if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
+      }
+      if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress, { mode });
+      await refreshStorageLabel();
+      alert(mode === "replace" ? ui.importSuccessReplace : ui.importSuccessMerge);
+    } catch (error) {
+      alert(`${ui.importInvalid}\n${error.message || error}`);
+    } finally {
+      event.target.value = "";
+    }
+  }, [refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
 
   const handleResetProgress = useCallback(async () => {
-    if (!confirm("Reset quiz progress while keeping the curriculum data?")) return;
+    if (!confirm(ui.resetConfirm)) return;
     setCompletedQuizzes({});
     setTotalScore(0);
     setTotalQuizzesDone(0);
@@ -3050,10 +3476,10 @@ function HomeschoolApp() {
     setXp(0);
     setNewBadges([]);
     if (window.HomeSchoolDB) await window.HomeSchoolDB.resetProgress();
-  }, []);
+  }, [ui.resetConfirm]);
 
   const handleFullReset = useCallback(async () => {
-    if (!confirm("Full reset will clear the database, progress, and reseed the curriculum. Continue?")) return;
+    if (!confirm(ui.fullResetConfirm)) return;
     setCompletedQuizzes({});
     setTotalScore(0);
     setTotalQuizzesDone(0);
@@ -3064,12 +3490,12 @@ function HomeschoolApp() {
     setNewBadges([]);
     if (window.HomeSchoolDB) await window.HomeSchoolDB.fullReset(window.HomeSchoolData, window.HomeSchoolData.VERSION);
     location.reload();
-  }, []);
+  }, [ui.fullResetConfirm]);
 
   // Show loading while DB initializes
-  if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Loading HomeSchool...</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>Setting up your learning database</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
+  if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{ui.loadingHome}</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ui.loadingDb}</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
 
-  if (!grade) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px" }}><div style={{ textAlign: "center", marginBottom: 32 }}><div style={{ fontSize: 56, marginBottom: 12 }}>📚</div><h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>HomeSchool</h1><p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Your personal learning companion</p><p style={{ fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 }}>آپ کا ذاتی تعلیمی ساتھی</p></div><div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>YOUR NAME</label><input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder="Enter your name..." style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font)", fontSize: 15, outline: "none" }} /></div><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" }}>SELECT YOUR GRADE</label><div className="grade-grid">{GRADES.map(g => <button key={g.id} className="grade-btn" onClick={() => setGrade(g.id)}>{g.id}</button>)}</div></div></div></>);
+  if (!grade) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: language === "ur" ? "rtl" : "ltr" }}><div style={{ textAlign: "center", marginBottom: 32 }}><div style={{ fontSize: 56, marginBottom: 12 }}>📚</div><h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>HomeSchool</h1><p style={{ color: "var(--text-secondary)", fontSize: 14 }}>{ui.tagline}</p>{language !== "ur" ? <p style={{ fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 }}>آپ کا ذاتی تعلیمی ساتھی</p> : null}</div><div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{ui.yourName}</label><input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder={ui.enterName} style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: language === "ur" ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" }} /></div><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" }}>{ui.selectGrade}</label><div className="grade-grid">{GRADES.map(g => <button key={g.id} className="grade-btn" onClick={() => setGrade(g.id)}>{g.id}</button>)}</div></div></div></>);
 
   const goHome = () => {
     window.speechSynthesis.cancel();
@@ -3102,7 +3528,7 @@ function HomeschoolApp() {
   };
   const goBack = () => { window.speechSynthesis.cancel(); if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? (selectedSubject?.id==="urdu"?"امتحان":"Quiz") : selectedAdverbDay ? "Day " + selectedAdverbDay.day + " — Adverbs" : selectedPrepDay ? "Day " + selectedPrepDay.day + " — Prepositions" : selectedAdjDay ? "Day " + selectedAdjDay.day + " — Adjectives" : selectedConjDay ? "Day " + selectedConjDay.day + " — Conjunctions" : selectedPronDay ? "Day " + selectedPronDay.day + " — Pronouns" : selectedNounDay ? "Day " + selectedNounDay.day + " — Nouns" : selectedVerbDay ? "Day " + selectedVerbDay.day + " — Verbs" : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? "Day " + selectedVocabDay.day + " — Vocabulary" : selectedLesson ? selectedLesson.title : selectedSubject ? (selectedSubject.id==="urdu"?selectedSubject.nameUr:selectedSubject.name) : tab === "home" ? "HomeSchool" : tab === "progress" ? "Progress" : tab === "badges" ? "Achievements" : tab === "tutor" ? "AI Tutor" : "Settings";
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? "Day " + selectedAdverbDay.day + " — Adverbs" : selectedPrepDay ? "Day " + selectedPrepDay.day + " — Prepositions" : selectedAdjDay ? "Day " + selectedAdjDay.day + " — Adjectives" : selectedConjDay ? "Day " + selectedConjDay.day + " — Conjunctions" : selectedPronDay ? "Day " + selectedPronDay.day + " — Pronouns" : selectedNounDay ? "Day " + selectedNounDay.day + " — Nouns" : selectedVerbDay ? "Day " + selectedVerbDay.day + " — Verbs" : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? "Day " + selectedVocabDay.day + " — Vocabulary" : selectedLesson ? selectedLesson.title : selectedSubject ? ((selectedSubject.id==="urdu" || language === "ur")?selectedSubject.nameUr:selectedSubject.name) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
   const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
@@ -3110,24 +3536,24 @@ function HomeschoolApp() {
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
 
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel }}><><div className="app-container">
-    <div className="app-header" style={selectedSubject?.id==="urdu"?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title="Home">🏠</button><h1 style={selectedSubject?.id==="urdu"?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{headerTitle}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
+    <div className="app-header" style={(selectedSubject?.id==="urdu" || language === "ur")?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title={ui.home}>🏠</button><h1 style={(selectedSubject?.id==="urdu" || language === "ur")?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{headerTitle}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
     <div className="content">
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
-        <div className="welcome-card"><h2>{studentName ? "Hi, " + studentName + "!" : "Welcome!"} 👋</h2><p>Ready to learn something amazing today?</p><span className="grade-tag">Grade {grade}</span></div>
+        <div className="welcome-card"><h2>{studentName ? (language === "ur" ? `${studentName}، خوش آمدید!` : "Hi, " + studentName + "!") : (language === "ur" ? "خوش آمدید!" : "Welcome!")} 👋</h2><p>{language === "ur" ? "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟" : "Ready to learn something amazing today?"}</p><span className="grade-tag">{ui.grade} {grade}</span></div>
         {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{streak} Day Streak!</h4><p>Keep going — you're doing great!</p></div></div>}
-        <h3 className="section-title">Subjects</h3>
+        <h3 className="section-title">{language === "ur" ? "مضامین" : "Subjects"}</h3>
         <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0; return (<button key={subj.id} className="subject-card" onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className="subj-name">{subj.name}</span><span className="subj-name-ur">{subj.nameUr}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
       </>)}
 
 
       {tab === "home" && selectedSubject && !selectedLesson && !quizActive && (<>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: selectedSubject?.id==="urdu"?"rtl":"ltr" }}><span style={{ fontSize: 36 }}>{selectedSubject.icon}</span><div><h2 style={{ fontSize: 20, fontWeight: 800, fontFamily: selectedSubject?.id==="urdu"?"'Noto Nastaliq Urdu',serif":"inherit" }}>{selectedSubject?.id==="urdu"?selectedSubject.nameUr:selectedSubject.name}</h2><p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: selectedSubject?.id==="urdu"?"'Noto Nastaliq Urdu',serif":"inherit" }}>{selectedSubject?.id==="urdu"?("جماعت "+grade+" • "+getLessons(selectedSubject.id, grade).length+" اسباق"):("Grade "+grade+" • "+getLessons(selectedSubject.id, grade).length+" lessons")}</p></div></div>
-        <div className="lesson-list" style={selectedSubject?.id==="urdu"?{direction:"rtl"}:{}}>{getLessons(selectedSubject.id, grade).map((l, i) => { const d = completedQuizzes[l.id]; const isUr = selectedSubject?.id==="urdu"; return (<button key={l.id} className="lesson-card" onClick={() => setSelectedLesson(l)} style={isUr?{direction:"rtl",textAlign:"right",fontFamily:"'Noto Nastaliq Urdu',serif"}:{}}><span className="lesson-num">{isUr?("سبق نمبر "+(i+1)):("Lesson "+(i+1))}</span><h3>{l.title}</h3><p style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif"}:{}}>{l.content.substring(0, 80)}...</p><div className="lesson-status" style={{ color: d ? "var(--success)" : "var(--text-muted)" }}>{d ? "✅" : "○"} {d ? (isUr?"مکمل — "+d.score+"/4":"Completed — "+d.score+"/4") : (isUr?"شروع نہیں ہوا":"Not started")}</div></button>); })}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject?.id==="urdu" || language === "ur")?"rtl":"ltr" }}><span style={{ fontSize: 36 }}>{selectedSubject.icon}</span><div><h2 style={{ fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject?.id==="urdu" || language === "ur")?"'Noto Nastaliq Urdu',serif":"inherit" }}>{(selectedSubject?.id==="urdu" || language === "ur")?selectedSubject.nameUr:selectedSubject.name}</h2><p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject?.id==="urdu" || language === "ur")?"'Noto Nastaliq Urdu',serif":"inherit" }}>{language === "ur" ? (`${ui.grade} ${grade} • ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`) : (`${ui.grade} ${grade} • ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`)}</p></div></div>
+        <div className="lesson-list" style={(selectedSubject?.id==="urdu" || language === "ur")?{direction:"rtl"}:{}}>{getLessons(selectedSubject.id, grade).map((l, i) => { const d = completedQuizzes[l.id]; const isUr = selectedSubject?.id==="urdu" || language === "ur"; return (<button key={l.id} className="lesson-card" onClick={() => setSelectedLesson(l)} style={isUr?{direction:"rtl",textAlign:"right",fontFamily:"'Noto Nastaliq Urdu',serif"}:{}}><span className="lesson-num">{isUr?(`${ui.lesson} ${i+1}`):(`${ui.lesson} ${i+1}`)}</span><h3>{l.title}</h3><p style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif"}:{}}>{l.content.substring(0, 80)}...</p><div className="lesson-status" style={{ color: d ? "var(--success)" : "var(--text-muted)" }}>{d ? "✅" : "○"} {d ? `${ui.completed} — ${d.score}/4` : ui.notStarted}</div></button>); })}</div>
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
         <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p>
-          <button className="start-quiz-btn" onClick={() => { setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizRevealed(false); setQuizDone(false); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button>
+          <button className="start-quiz-btn" onClick={() => { setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizRevealed(false); setQuizDone(false); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 {ui.startQuiz}</button>
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, marginBottom: 14 }}>
@@ -3138,19 +3564,19 @@ function HomeschoolApp() {
 
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice</div>
 
-        {posTab === "adverbs" && POS.adverbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedAdverbDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "adverbs" && pacedPos.adverbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedAdverbDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "prepositions" && POS.prepositions.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedPrepDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "prepositions" && pacedPos.prepositions.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedPrepDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "adjectives" && POS.adjectives.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedAdjDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "adjectives" && pacedPos.adjectives.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedAdjDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "conjunctions" && POS.conjunctions.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedConjDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "conjunctions" && pacedPos.conjunctions.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedConjDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "pronouns" && POS.pronouns.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedPronDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "pronouns" && pacedPos.pronouns.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedPronDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "nouns" && POS.collectiveNouns.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedNounDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "nouns" && pacedPos.collectiveNouns.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedNounDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "verbs" && POS.verbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVerbDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "verbs" && pacedPos.verbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVerbDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedAdverbDay && (<>
@@ -3224,7 +3650,7 @@ function HomeschoolApp() {
         {(() => { const isUr = selectedSubject?.id === "urdu"; return (<>
         <div className="lesson-detail" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p></div>
         <h3 className="section-title" style={{ marginTop: 8, direction: isUr?"rtl":"ltr", textAlign: isUr?"right":"left" }}>{isUr ? "📐 موضوعات" : "📐 Topics"}</h3>
-        {selectedLesson.subs.map((sub, i) => {
+        {activeLessonSubs.map((sub, i) => {
           const topicColors = ["#38BDF8","#22C55E","#F59E0B","#A855F7","#EC4899","#14B8A6","#F97316"];
           const tc = topicColors[i % topicColors.length];
           return (
@@ -3240,7 +3666,8 @@ function HomeschoolApp() {
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx !== null && (() => {
-        const sub = normalizeSubLesson(selectedLesson.subs[mathSubIdx], selectedSubject?.id);
+        const sub = normalizeSubLesson(activeLessonSubs[mathSubIdx], selectedSubject?.id);
+        const adjustedDayLessons = sub.dayLessons;
         const toggleReveal = (k) => setRevealedEx(p => ({...p,[k]:!p[k]}));
         const isUr = selectedSubject?.id === "urdu";
         const isMath = selectedSubject?.id === "math";
@@ -3324,9 +3751,9 @@ function HomeschoolApp() {
           ))}
         </div>
 
-        {mathSubTab === "examples" && sub.dayLessons && (<div style={urS}>
+        {mathSubTab === "examples" && adjustedDayLessons && (<div style={urS}>
           <h3 className="section-title" style={{color:"#38BDF8",marginBottom:12,direction:isUr?"rtl":"ltr",textAlign:isUr?"right":"left"}}>{sub.lessonLabel || (isUr?"📅 اسباق کے دن":"📅 Lesson Days")}</h3>
-          {sub.dayLessons.map((lessonDay, dayIdx) => (
+          {adjustedDayLessons.map((lessonDay, dayIdx) => (
             <div key={lessonDay.day || dayIdx} className="adverb-detail-section" style={urS}>
               <h3 style={{color:"#38BDF8",marginBottom:12,...urS}}>{isUr ? `📅 دن ${lessonDay.day}` : `📅 Day ${lessonDay.day}`}</h3>
               {lessonDay.words && lessonDay.words.map((w, i) => (
@@ -3374,7 +3801,12 @@ function HomeschoolApp() {
 
         {mathSubTab === "examples" && sub.sentencePairs && (<div className="adverb-detail-section">
           <h3 style={{color:"#38BDF8",marginBottom:10}}>{sub.examplesLabel || "🗣️ Sentences"}</h3>
-          {sub.sentencePairs.map((pair, i) => <SentencePairRow key={i} en={pair.en} ur={pair.ur} />)}
+          {regroupSentencePairs(sub.sentencePairs, daySectionSettings.sentences.itemsPerDay).map((group) => (
+            <div key={group.day} style={{ marginBottom: 14 }}>
+              <div style={{ color: "#94A3B8", fontSize: 12, fontWeight: 800, marginBottom: 8 }}>{language === "ur" ? `سیٹ ${group.day}` : `Set ${group.day}`}</div>
+              {group.sentencePairs.map((pair, i) => <SentencePairRow key={`${group.day}_${i}`} en={pair.en} ur={pair.ur} />)}
+            </div>
+          ))}
           <button className="play-all-btn" onClick={()=>playAll(sub.sentencePairs.map(pair => pair.en).join(" "))}>▶️ Play All English Sentences</button>
         </div>)}
 
@@ -3542,7 +3974,7 @@ function HomeschoolApp() {
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && !selectedVocabDay && (<>
         <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p></div>
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice | 55 Days of Vocabulary</div>
-        {VOCAB.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {pacedVocab.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && selectedVocabDay && (<>
@@ -3633,15 +4065,16 @@ function HomeschoolApp() {
       {tab === "tutor" && (<><div className="tutor-chat">{chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}{chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}<div ref={chatEndRef} /></div><div className="chat-input-area"><input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Ask your tutor anything..." /><button onClick={sendChat} disabled={chatLoading}>➤</button></div></>)}
 
       {tab === "settings" && (<>
-        <div className="settings-item"><span className="si-label">👤 Student Name</span><span className="si-value">{studentName || "Not set"}</span></div>
-        <div className="settings-item"><span className="si-label">📚 Current Grade</span><span className="si-value">Grade {grade}</span></div>
-        <h3 className="section-title" style={{ marginTop: 20 }}>Change Grade</h3>
+        <div className="settings-item"><span className="si-label">👤 {language === "ur" ? "طالب علم" : "Student Name"}</span><span className="si-value">{studentName || (language === "ur" ? "درج نہیں" : "Not set")}</span></div>
+        <div className="settings-item"><span className="si-label">📚 {ui.currentGrade}</span><span className="si-value">{ui.grade} {grade}</span></div>
+        <h3 className="section-title" style={{ marginTop: 20 }}>{ui.changeGrade}</h3>
         <div className="grade-grid">{GRADES.map(g => <button key={g.id} className={"grade-btn " + (g.id === grade ? "active" : "")} onClick={() => setGrade(g.id)}>{g.id}</button>)}</div>
         {SettingsPanel ? (
           <SettingsPanel
             currentVersion={currentVersion}
             updateAvailable={updateAvailable}
             storageLabel={storageLabel}
+            versionInfo={versionManagerRef.current?.getVersionInfo?.()}
             onCheckUpdates={handleCheckUpdates}
             onRefreshData={handleRefreshData}
             onExportProgress={handleExportProgress}
@@ -3652,11 +4085,14 @@ function HomeschoolApp() {
             ttsEnabled={ttsEnabled}
             language={language}
             onLanguageChange={setLanguage}
+            daySectionSettings={daySectionSettings}
+            onDaySectionChange={handleDaySectionChange}
+            labels={ui}
           />
         ) : null}
       </>)}
     </div>
-    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: "Home" }, { id: "progress", icon: "📊", label: "Progress" }, { id: "badges", icon: "🏆", label: "Badges" }, { id: "tutor", icon: "🤖", label: "Tutor" }, { id: "settings", icon: "⚙️", label: "Settings" }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); }}><span className="nav-icon">{item.icon}</span>{item.label}</button>)}</div>
+    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: ui.home }, { id: "progress", icon: "📊", label: ui.progress }, { id: "badges", icon: "🏆", label: ui.badges }, { id: "tutor", icon: "🤖", label: ui.tutor }, { id: "settings", icon: "⚙️", label: ui.settings }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); }}><span className="nav-icon">{item.icon}</span>{item.label}</button>)}</div>
   </div></></AppContext.Provider>);
 }
 
