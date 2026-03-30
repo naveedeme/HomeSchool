@@ -13159,14 +13159,14 @@ function MathPracticePlanSVG({ sub, lessonTitle }) {
   return (<div className="math-svg"><svg viewBox="0 0 640 280" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="280" rx="20" fill="#0F172A"/>
     <text x="34" y="40" fill={theme.accent} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Problem Plan</text>
-    <rect x="28" y="58" width="270" height="182" rx="18" fill={theme.soft} opacity="0.16" stroke={theme.accent} strokeWidth="1.2"/>
+    <rect x="28" y="58" width="270" height="194" rx="18" fill={theme.soft} opacity="0.16" stroke={theme.accent} strokeWidth="1.2"/>
     <text x="46" y="86" fill="#F8FAFC" fontSize="18" fontWeight="800" fontFamily="'Baloo 2'">Try This Question</text>
     <SvgTextBlock text={problem} x={46} y={110} maxChars={28} maxLines={6} lineHeight={18} fill="#E2E8F0" size={14} weight={600} />
-    <rect x="316" y="58" width="296" height="70" rx="18" fill={theme.accent} opacity="0.16" stroke={theme.accent} strokeWidth="1.2"/>
-    <text x="336" y="86" fill={theme.chip} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Quick Rule</text>
-    <SvgTextBlock text={getMathQuickRule(sub, lessonTitle)} x={336} y={110} maxChars={30} maxLines={2} lineHeight={17} fill="#F8FAFC" size={14} weight={700} />
+    <rect x="316" y="58" width="296" height="82" rx="18" fill={theme.accent} opacity="0.16" stroke={theme.accent} strokeWidth="1.2"/>
+    <text x="336" y="84" fill={theme.chip} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Quick Rule</text>
+    <SvgTextBlock text={getMathQuickRule(sub, lessonTitle)} x={336} y={106} maxChars={30} maxLines={2} lineHeight={17} fill="#F8FAFC" size={14} weight={700} />
     {checks.map((item, idx) => {
-      const y = 142 + idx * 28;
+      const y = 162 + idx * 28;
       return <g key={idx}>
         <rect x="334" y={y - 13} width="18" height="18" rx="4" fill={theme.soft} opacity="0.26" stroke={theme.chip} strokeWidth="1.1"/>
         <SvgTextBlock text={item} x={364} y={y} maxChars={28} maxLines={1} lineHeight={16} fill="#E2E8F0" size={13} weight={700} />
@@ -13299,6 +13299,112 @@ function ttsClean(text) {
     .replace(/\s+/g, ' ').trim();
 }
 
+function normalizeHighlightTerm(value) {
+  if (value == null) return "";
+  return String(value)
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[=:_]/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isAsciiLetter(char) {
+  return /^[A-Za-z]$/.test(char || "");
+}
+
+function getSingleWordHighlightBase(term) {
+  const cleaned = normalizeHighlightTerm(term);
+  return /^[a-z]+$/.test(cleaned) ? cleaned : "";
+}
+
+function buildWordFamilyForms(term) {
+  const base = getSingleWordHighlightBase(term);
+  const forms = new Set(base ? [base] : []);
+  if (!base || base.length < 4) return forms;
+  forms.add(base + "s");
+  forms.add(base + "es");
+  if (base.endsWith("y") && !/[aeiou]y$/.test(base)) forms.add(base.slice(0, -1) + "ies");
+  if (base.endsWith("e")) {
+    forms.add(base + "d");
+    forms.add(base.slice(0, -1) + "ing");
+  } else {
+    forms.add(base + "ed");
+    forms.add(base + "ing");
+  }
+  if (base.endsWith("c")) {
+    forms.add(base + "ked");
+    forms.add(base + "king");
+  }
+  if (/[aeiou][bcdfghjklmnpqrstvwxyz]$/.test(base) && !/[wxy]$/.test(base)) {
+    const last = base.slice(-1);
+    forms.add(base + last + "ed");
+    forms.add(base + last + "ing");
+  }
+  return forms;
+}
+
+function buildHighlightTerms(highlight) {
+  const source = Array.isArray(highlight) ? highlight : [highlight];
+  return [...new Set(source.map(normalizeHighlightTerm).filter(Boolean))].sort((a, b) => b.length - a.length);
+}
+
+function renderHighlightText(text, highlight, keyPrefix = "hl") {
+  const terms = buildHighlightTerms(highlight);
+  if (!terms.length) return text;
+  const lower = String(text).toLowerCase();
+  const matches = [];
+  terms.forEach(term => {
+    let from = 0;
+    while (from < lower.length) {
+      const idx = lower.indexOf(term, from);
+      if (idx === -1) break;
+      const before = idx === 0 ? "" : text[idx - 1];
+      const after = idx + term.length >= text.length ? "" : text[idx + term.length];
+      const needsBoundary = /^[a-z ]+$/.test(term);
+      if (!needsBoundary || (!isAsciiLetter(before) && !isAsciiLetter(after))) {
+        matches.push({ start: idx, end: idx + term.length });
+      }
+      from = idx + term.length;
+    }
+  });
+  const wordMatcher = /[A-Za-z]+(?:'[A-Za-z]+)?/g;
+  let wordMatch;
+  while ((wordMatch = wordMatcher.exec(text)) !== null) {
+    const token = wordMatch[0].toLowerCase();
+    if (terms.some(term => buildWordFamilyForms(term).has(token))) {
+      matches.push({ start: wordMatch.index, end: wordMatch.index + wordMatch[0].length });
+    }
+  }
+  if (!matches.length) return text;
+  matches.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+  const merged = [];
+  matches.forEach(match => {
+    const last = merged[merged.length - 1];
+    if (!last || match.start >= last.end) {
+      merged.push(match);
+    }
+  });
+  if (!merged.length) return text;
+  const parts = [];
+  let cursor = 0;
+  merged.forEach((match, index) => {
+    if (match.start > cursor) parts.push(text.slice(cursor, match.start));
+    parts.push(<span key={keyPrefix + "-" + index} style={{ color:"#38BDF8", fontWeight:700 }}>{text.slice(match.start, match.end)}</span>);
+    cursor = match.end;
+  });
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return <>{parts}</>;
+}
+
+function stripInlineUrduForKnownWords(text, words) {
+  const families = (words || []).map(word => buildWordFamilyForms(word.en)).filter(set => set.size > 0);
+  if (!families.length) return text;
+  return String(text).replace(/([A-Za-z]+(?:'[A-Za-z]+)?)\s*\(([^)]*[\u0600-\u06FF][^)]*)\)/g, (full, englishWord) => {
+    const token = englishWord.toLowerCase();
+    return families.some(set => set.has(token)) ? englishWord : full;
+  });
+}
+
 // ─── TTS Clickable Sentence ───
 function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null }) {
   const [speaking, setSpeaking] = useState(false);
@@ -13352,10 +13458,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
       lastIdx = m.index + m[0].length;
     }
     if (parts.length > 0) { if (lastIdx < t.length) parts.push(t.slice(lastIdx)); return <>{parts}</>; }
-    if (!highlight) return text;
-    const idx = text.toLowerCase().indexOf(highlight.toLowerCase());
-    if (idx === -1) return text;
-    return <>{text.slice(0,idx)}<span style={{color:"#38BDF8",fontWeight:700,textDecoration:"underline",textDecorationStyle:"wavy",textUnderlineOffset:"3px"}}>{text.slice(idx,idx+highlight.length)}</span>{text.slice(idx+highlight.length)}</>;
+    return renderHighlightText(text, highlight, "sentence");
   };
   return (
     <button onClick={handleClick} style={{ display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid rgba(148,163,184,0.15)", background: speaking ? "rgba(56,189,248,0.12)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "#F1F5F9", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : "none", position: "relative", ...buttonStyle }}>
@@ -13379,10 +13482,7 @@ function MixedUrduParagraphSentence({ text, highlight = null }) {
     window.speechSynthesis.speak(u);
   };
   const renderHighlighted = (segment, keyBase) => {
-    if (!highlight) return segment;
-    const idx = segment.toLowerCase().indexOf(String(highlight).toLowerCase());
-    if (idx === -1) return segment;
-    return <>{segment.slice(0, idx)}<span key={keyBase + "-hl"} style={{color:"#38BDF8",fontWeight:700,textDecoration:"underline",textDecorationStyle:"wavy",textUnderlineOffset:"3px"}}>{segment.slice(idx, idx + highlight.length)}</span>{segment.slice(idx + highlight.length)}</>;
+    return renderHighlightText(segment, highlight, keyBase + "-hl");
   };
   const renderText = () => {
     const parts = [];
@@ -14438,9 +14538,11 @@ export default function HomeschoolApp() {
                 {lessonDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => {
                   const found = (lessonDay.words || []).find(w => s.toLowerCase().includes((w.en || "").toLowerCase().split(" ")[0].replace("(", "")));
                   const hasOpposites = (lessonDay.words || []).some(w => "opposite" in w || "oppositeUr" in w);
+                  const sentenceHighlights = (lessonDay.words || []).map(w => w.en).filter(Boolean).filter(word => s.toLowerCase().includes(normalizeHighlightTerm(word)));
+                  const paragraphSentence = hasOpposites ? stripInlineUrduForKnownWords(s, lessonDay.words || []) : s;
                   return hasOpposites
-                    ? <MixedUrduParagraphSentence key={i} text={s} highlight={found?.en} />
-                    : <SpeakableSentence key={i} text={s} lang="en" highlight={found?.en} />;
+                    ? <MixedUrduParagraphSentence key={i} text={paragraphSentence} highlight={sentenceHighlights} />
+                    : <SpeakableSentence key={i} text={s} lang="en" highlight={sentenceHighlights} />;
                 })}
                 <button className="play-all-btn" onClick={() => playAll(lessonDay.paragraph)}>▶️ Play Entire Paragraph</button>
               </>)}
@@ -14636,7 +14738,10 @@ export default function HomeschoolApp() {
           ))}
         </div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedVocabDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const vw = selectedVocabDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0].replace("(",""))); return <SpeakableSentence key={i} text={s} lang="en" highlight={vw?.en} />; })}
+          {selectedVocabDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => {
+            const sentenceHighlights = selectedVocabDay.words.map(w => w.en).filter(Boolean).filter(word => s.toLowerCase().includes(normalizeHighlightTerm(word)));
+            return <SpeakableSentence key={i} text={s} lang="en" highlight={sentenceHighlights} />;
+          })}
           <button className="play-all-btn" onClick={() => playAll(selectedVocabDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
