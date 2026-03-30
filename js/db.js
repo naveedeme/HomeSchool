@@ -105,6 +105,35 @@
     return (await db.userStats.get("main")) || getStatsDefaults();
   }
 
+  async function getLatestCustomization(type) {
+    const rows = await db.customizations.where("type").equals(type).toArray();
+    if (!rows.length) return null;
+    return rows.sort((left, right) => (right.ts || 0) - (left.ts || 0))[0];
+  }
+
+  async function saveCustomization(type, data) {
+    const existing = await getLatestCustomization(type);
+    const record = {
+      ...(existing || {}),
+      type,
+      data,
+      ts: Date.now(),
+    };
+    await db.customizations.put(record);
+    return record;
+  }
+
+  async function getCustomizationsMap() {
+    const rows = await db.customizations.toArray();
+    return rows.reduce((acc, row) => {
+      if (!row?.type) return acc;
+      if (!acc[row.type] || (row.ts || 0) >= (acc[row.type].ts || 0)) {
+        acc[row.type] = row;
+      }
+      return acc;
+    }, {});
+  }
+
   function normalizeImportPayload(progressData) {
     return {
       progress: Array.isArray(progressData?.progress) ? progressData.progress : [],
@@ -151,6 +180,22 @@
       subjectsCompleted: Array.from(new Set([...(existing.subjectsCompleted || []), ...(incoming.subjectsCompleted || [])])),
       updatedAt,
     };
+  }
+
+  function mergeCustomizationRows(existingRows, incomingRows) {
+    const merged = new Map();
+    [...existingRows, ...incomingRows].forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      const key = row.type || row.id;
+      if (typeof key === "undefined" || key === null) return;
+      const previous = merged.get(key);
+      if (!previous) {
+        merged.set(key, row);
+        return;
+      }
+      merged.set(key, (row.ts || row.updatedAt || 0) >= (previous.ts || previous.updatedAt || 0) ? row : previous);
+    });
+    return Array.from(merged.values());
   }
 
   async function seedData(dataLoader, options = {}) {
@@ -449,6 +494,19 @@
       return getMainStats();
     },
 
+    async getCustomization(type) {
+      const record = await getLatestCustomization(type);
+      return record?.data ?? null;
+    },
+
+    async saveCustomization(type, data) {
+      return saveCustomization(type, data);
+    },
+
+    async getCustomizationsMap() {
+      return getCustomizationsMap();
+    },
+
     async getProgressMap() {
       const records = await db.progress.toArray();
       return records.reduce((acc, record) => {
@@ -508,7 +566,7 @@
         const existingCustomizations = await db.customizations.toArray();
 
         const mergedProgress = mergeUniqueRows(existingProgress, normalized.progress);
-        const mergedCustomizations = mergeUniqueRows(existingCustomizations, normalized.customizations, "id");
+        const mergedCustomizations = mergeCustomizationRows(existingCustomizations, normalized.customizations);
         const mergedMain = mergeMainStats(existingUserStats.find((row) => row.id === "main"), normalized.userStats.find((row) => row.id === "main"));
 
         await db.progress.clear();

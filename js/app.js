@@ -10,7 +10,7 @@ const {
   getLessons,
   getQuiz,
 } = window.HomeSchoolData;
-const { loadState, saveState, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport } = window.HomeSchoolUtils;
+const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport } = window.HomeSchoolUtils;
 const { SettingsPanel } = window.HomeSchoolSettings || {};
 const {
   adverbs: ADVERBS_DATA,
@@ -30,6 +30,8 @@ const UI_TEXT = {
     tagline: "Your personal learning companion",
     yourName: "YOUR NAME",
     enterName: "Enter your name...",
+    yourNameUr: "YOUR URDU NAME",
+    enterNameUr: "Enter your Urdu name...",
     selectGrade: "SELECT YOUR GRADE",
     lessons: "lessons",
     grade: "Grade",
@@ -90,6 +92,8 @@ const UI_TEXT = {
     tagline: "آپ کا ذاتی تعلیمی ساتھی",
     yourName: "آپ کا نام",
     enterName: "اپنا نام درج کریں...",
+    yourNameUr: "آپ کا اردو نام",
+    enterNameUr: "اپنا اردو نام درج کریں...",
     selectGrade: "اپنی جماعت منتخب کریں",
     lessons: "اسباق",
     grade: "جماعت",
@@ -161,23 +165,157 @@ const DAY_SECTION_META = {
   sentences: { labelEn: "Sentence Sections", labelUr: "جملوں والے سیکشن", unitEn: "sentences", unitUr: "جملے", defaultSize: 10, max: 20 },
 };
 
+function getLocalizedNamePair(studentName, studentNameUr) {
+  return {
+    en: String(studentName || studentNameUr || "").trim(),
+    ur: String(studentNameUr || studentName || "").trim(),
+  };
+}
+
+function joinLocalizedText(enText, urText, language) {
+  if (language === "ur") return urText;
+  if (language === "bilingual") return `${enText} / ${urText}`;
+  return enText;
+}
+
+function isUrduUi(language) {
+  return language === "ur";
+}
+
+function isBilingualUi(language) {
+  return language === "bilingual";
+}
+
 function getUiText(language) {
-  return language === "ur" ? UI_TEXT.ur : UI_TEXT.en;
+  if (!isBilingualUi(language)) return isUrduUi(language) ? UI_TEXT.ur : UI_TEXT.en;
+  return Object.keys(UI_TEXT.en).reduce((acc, key) => {
+    acc[key] = joinLocalizedText(UI_TEXT.en[key], UI_TEXT.ur[key] || UI_TEXT.en[key], language);
+    return acc;
+  }, {});
+}
+
+function getSubjectDisplayName(subject, language) {
+  if (!subject) return "";
+  return joinLocalizedText(subject.name, subject.nameUr || subject.name, language);
+}
+
+function getDayDisplayLabel(day, language) {
+  return joinLocalizedText(`Day ${day}`, `دن ${day}`, language);
+}
+
+function getScopedDayTitle(day, enTitle, urTitle, language) {
+  return joinLocalizedText(`Day ${day} - ${enTitle}`, `${urTitle} دن ${day}`, language);
+}
+
+function renderLocalizedTextNode(text, language, urStyle = {}) {
+  if (typeof text !== "string") return text;
+  if (language === "ur") {
+    return React.createElement("span", {
+      style: {
+        fontFamily: "var(--font-ur)",
+        direction: "rtl",
+        unicodeBidi: "isolate",
+        ...urStyle,
+      },
+    }, text);
+  }
+  if (language !== "bilingual" || !text.includes(" / ")) return text;
+  const [enText, ...rest] = text.split(" / ");
+  const urText = rest.join(" / ");
+  return React.createElement(React.Fragment, null,
+    React.createElement("span", {
+      style: {
+        direction: "ltr",
+        unicodeBidi: "isolate",
+      },
+    }, enText),
+    React.createElement("span", {
+      style: {
+        direction: "ltr",
+        unicodeBidi: "isolate",
+      },
+    }, " / "),
+    React.createElement("span", {
+      style: {
+        fontFamily: "var(--font-ur)",
+        direction: "rtl",
+        unicodeBidi: "isolate",
+        ...urStyle,
+      },
+    }, urText));
+}
+
+function renderDirectionalName(name, fallbackDirection = "ltr", extraStyle = {}) {
+  const trimmed = String(name || "").trim();
+  return React.createElement("span", {
+    style: {
+      direction: trimmed && isUrduText(trimmed) ? "rtl" : fallbackDirection,
+      unicodeBidi: "isolate",
+      ...extraStyle,
+    },
+  }, trimmed);
+}
+
+function renderWelcomeGreeting(namePair, language) {
+  const hasName = Boolean(namePair.en || namePair.ur);
+  if (!hasName) return renderLocalizedTextNode(joinLocalizedText("Welcome!", "خوش آمدید!", language), language);
+  if (language === "ur") {
+    return React.createElement("span", {
+      style: {
+        fontFamily: "var(--font-ur)",
+        direction: "rtl",
+        unicodeBidi: "isolate",
+      },
+    },
+    "خوش آمدید، ",
+    renderDirectionalName(namePair.ur, "rtl", { fontFamily: "inherit" }),
+    "!");
+  }
+  if (language === "bilingual") {
+    return React.createElement(React.Fragment, null,
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+        },
+      },
+      "Hi, ",
+      renderDirectionalName(namePair.en, "ltr"),
+      "!"),
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+        },
+      }, " / "),
+      React.createElement("span", {
+        style: {
+          fontFamily: "var(--font-ur)",
+          direction: "rtl",
+          unicodeBidi: "isolate",
+        },
+      },
+      "خوش آمدید، ",
+      renderDirectionalName(namePair.ur, "rtl", { fontFamily: "inherit" }),
+      "!"));
+  }
+  return React.createElement(React.Fragment, null, "Hi, ", renderDirectionalName(namePair.en, "ltr"), "!");
 }
 
 function buildDaySectionSettings(language, overrides = {}) {
-  const isUrdu = language === "ur";
   return Object.keys(DAY_SECTION_META).reduce((acc, key) => {
     const meta = DAY_SECTION_META[key];
     acc[key] = {
-      label: isUrdu ? meta.labelUr : meta.labelEn,
-      unitLabel: isUrdu ? meta.unitUr : meta.unitEn,
+      label: joinLocalizedText(meta.labelEn, meta.labelUr, language),
+      unitLabel: joinLocalizedText(meta.unitEn, meta.unitUr, language),
       itemsPerDay: Math.max(1, Math.min(meta.max, Number(overrides?.[key]?.itemsPerDay) || meta.defaultSize)),
       min: 1,
       max: meta.max,
-      helpText: isUrdu
-        ? `اس سیکشن میں ایک دن میں ${meta.unitUr} کی تعداد مقرر کریں۔`
-        : `Set how many ${meta.unitEn} appear in each study day for this section.`,
+      helpText: joinLocalizedText(
+        `Set how many ${meta.unitEn} appear in each study day for this section.`,
+        `اس سیکشن میں ایک دن میں ${meta.unitUr} کی تعداد مقرر کریں۔`,
+        language,
+      ),
     };
     return acc;
   }, {});
@@ -482,15 +620,15 @@ function BodySystemSVG({ system }) {
   
   const illustrations = {
     digestive: {
-      url: "img/digestive-system.jpg",
+      url: "img/grade-5/science/human-body-systems/digestive-system.jpg",
       desc: "Mouth → Esophagus → Stomach → Small Intestine → Large Intestine"
     },
     respiratory: {
-      urls: ["img/respiratory-system.png", "img/respiration-process-2-1.jpg"],
+      urls: ["img/grade-5/science/human-body-systems/respiratory-system.png", "img/grade-5/science/human-body-systems/respiration-process-2-1.jpg"],
       desc: "Nose → Trachea → Bronchi → Lungs → Alveoli (gas exchange)"
     },
     circulatory: {
-      urls: ["img/human-circulatory-system.jpg", "img/human-circulatory-system-detail.jpg"],
+      urls: ["img/grade-5/science/human-body-systems/human-circulatory-system.jpg", "img/grade-5/science/human-body-systems/human-circulatory-system-detail.jpg"],
       desc: "Heart → Arteries → Capillaries → Veins → Back to Heart"
     }
   };
@@ -3144,11 +3282,13 @@ function VerbWordRow({ en, ur, v2, v3 }) {
 function HomeschoolApp() {
   const stored = loadState();
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
+  const persistCustomizationRef = useRef(null);
   const [language, setLanguage] = useState(stored?.language || "bilingual");
   const ui = getUiText(language);
   const [daySectionOverrides, setDaySectionOverrides] = useState(stored?.daySectionOverrides || {});
   const [grade, setGrade] = useState(stored?.grade || null);
   const [studentName, setStudentName] = useState(stored?.studentName || "");
+  const [studentNameUr, setStudentNameUr] = useState(stored?.studentNameUr || "");
   const [tab, setTab] = useState("home");
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
@@ -3206,9 +3346,29 @@ function HomeschoolApp() {
     }
     const stats = await window.HomeSchoolDB.getStats();
     const quotaLabel = await getStorageEstimateLabel(`IndexedDB • ${stats.coreData || 0} lessons`);
-    const lessonCountLabel = language === "ur" ? `${stats.coreData || 0} اسباق` : `${stats.coreData || 0} lessons`;
+    const lessonCountLabel = joinLocalizedText(`${stats.coreData || 0} lessons`, `${stats.coreData || 0} اسباق`, language);
     setStorageLabel(`${quotaLabel} • ${lessonCountLabel}`);
   }, [language]);
+
+  if (!persistCustomizationRef.current) {
+    persistCustomizationRef.current = debounce(async (nextPayload) => {
+      if (!window.HomeSchoolDB) return;
+      try {
+        await window.HomeSchoolDB.saveCustomization("preferences", {
+          ttsEnabled: nextPayload.ttsEnabled,
+          language: nextPayload.language,
+        });
+        await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
+        await window.HomeSchoolDB.saveCustomization("studentProfile", {
+          grade: nextPayload.grade,
+          studentName: nextPayload.studentName,
+          studentNameUr: nextPayload.studentNameUr,
+        });
+      } catch (error) {
+        console.log("Unable to persist customizations:", error);
+      }
+    }, 250);
+  }
 
   // Load from IndexedDB on mount
   useEffect(() => {
@@ -3222,6 +3382,22 @@ function HomeschoolApp() {
         if (Object.keys(tens).length > 0) setDbTenses(tens);
         const voc = await window.HomeSchoolDB.getVocab();
         if (voc.length > 0) setDbVocab(voc);
+        const customizations = await window.HomeSchoolDB.getCustomizationsMap();
+        const storedPreferences = customizations.preferences?.data || null;
+        const storedPacing = customizations.daySectionPacing?.data || null;
+        const storedProfile = customizations.studentProfile?.data || null;
+        if (storedPreferences) {
+          if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
+          if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
+        }
+        if (storedPacing && typeof storedPacing === "object") {
+          setDaySectionOverrides(storedPacing);
+        }
+        if (storedProfile) {
+          if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
+          if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
+          if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
+        }
         const progressMap = await window.HomeSchoolDB.getProgressMap();
         if (Object.keys(progressMap).length > 0 && (!stored?.completedQuizzes || Object.keys(stored.completedQuizzes).length === 0)) {
           setCompletedQuizzes(progressMap);
@@ -3287,8 +3463,19 @@ function HomeschoolApp() {
     if (!ttsEnabled) window.speechSynthesis.cancel();
   }, [ttsEnabled, language]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides });
-  }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
+    if (!dbLoaded || !window.HomeSchoolDB) return;
+    persistCustomizationRef.current?.({
+      ttsEnabled,
+      language,
+      daySectionOverrides,
+      grade,
+      studentName,
+      studentNameUr,
+    });
+  }, [dbLoaded, ttsEnabled, language, daySectionOverrides, grade, studentName, studentNameUr]);
+  useEffect(() => {
+    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides });
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
   useEffect(() => {
     setSelectedAdverbDay(null);
@@ -3395,6 +3582,7 @@ function HomeschoolApp() {
       appState: {
         grade,
         studentName,
+        studentNameUr,
         completedQuizzes,
         totalScore,
         totalQuizzesDone,
@@ -3408,7 +3596,7 @@ function HomeschoolApp() {
       },
       dbProgress,
     });
-  }, [grade, studentName, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
@@ -3431,6 +3619,7 @@ function HomeschoolApp() {
       if (mode === "replace") {
         if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
         if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
+        if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr(nextState.studentNameUr);
         if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
         if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
         if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
@@ -3444,6 +3633,7 @@ function HomeschoolApp() {
       } else {
         if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
         if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
+        if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr((current) => current || nextState.studentNameUr);
         if (nextState.completedQuizzes) setCompletedQuizzes((current) => ({ ...current, ...nextState.completedQuizzes }));
         if (typeof nextState.totalScore !== "undefined") setTotalScore((current) => Math.max(current, nextState.totalScore));
         if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone((current) => Math.max(current, nextState.totalQuizzesDone));
@@ -3489,13 +3679,14 @@ function HomeschoolApp() {
     setXp(0);
     setNewBadges([]);
     if (window.HomeSchoolDB) await window.HomeSchoolDB.fullReset(window.HomeSchoolData, window.HomeSchoolData.VERSION);
+    localStorage.removeItem(window.HomeSchoolUtils.STORE_KEY);
     location.reload();
   }, [ui.fullResetConfirm]);
 
   // Show loading while DB initializes
   if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{ui.loadingHome}</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ui.loadingDb}</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
 
-  if (!grade) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: language === "ur" ? "rtl" : "ltr" }}><div style={{ textAlign: "center", marginBottom: 32 }}><div style={{ fontSize: 56, marginBottom: 12 }}>📚</div><h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>HomeSchool</h1><p style={{ color: "var(--text-secondary)", fontSize: 14 }}>{ui.tagline}</p>{language !== "ur" ? <p style={{ fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 }}>آپ کا ذاتی تعلیمی ساتھی</p> : null}</div><div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{ui.yourName}</label><input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder={ui.enterName} style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: language === "ur" ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" }} /></div><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" }}>{ui.selectGrade}</label><div className="grade-grid">{GRADES.map(g => <button key={g.id} className="grade-btn" onClick={() => setGrade(g.id)}>{g.id}</button>)}</div></div></div></>);
+  if (!grade) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: isUrduUi(language) ? "rtl" : "ltr" }}><div style={{ textAlign: "center", marginBottom: 32 }}><div style={{ fontSize: 56, marginBottom: 12 }}>📚</div><h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>HomeSchool</h1><p style={{ color: "var(--text-secondary)", fontSize: 14 }}>{renderLocalizedTextNode(ui.tagline, language)}</p>{language === "en" ? <p style={{ fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 }}>آپ کا ذاتی تعلیمی ساتھی</p> : null}</div><div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{renderLocalizedTextNode(ui.yourName, language)}</label><input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder={ui.enterName} style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" }} /></div>{language !== "en" && <div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{renderLocalizedTextNode(ui.yourNameUr, language)}</label><input value={studentNameUr} onChange={e => setStudentNameUr(e.target.value)} placeholder={ui.enterNameUr} style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font-ur)", fontSize: 15, outline: "none", direction: "rtl" }} /></div>}<label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" }}>{renderLocalizedTextNode(ui.selectGrade, language)}</label><div className="grade-grid">{GRADES.map(g => <button key={g.id} className="grade-btn" onClick={() => setGrade(g.id)}>{g.id}</button>)}</div></div></div></>);
 
   const goHome = () => {
     window.speechSynthesis.cancel();
@@ -3528,27 +3719,28 @@ function HomeschoolApp() {
   };
   const goBack = () => { window.speechSynthesis.cancel(); if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? "Day " + selectedAdverbDay.day + " — Adverbs" : selectedPrepDay ? "Day " + selectedPrepDay.day + " — Prepositions" : selectedAdjDay ? "Day " + selectedAdjDay.day + " — Adjectives" : selectedConjDay ? "Day " + selectedConjDay.day + " — Conjunctions" : selectedPronDay ? "Day " + selectedPronDay.day + " — Pronouns" : selectedNounDay ? "Day " + selectedNounDay.day + " — Nouns" : selectedVerbDay ? "Day " + selectedVerbDay.day + " — Verbs" : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? "Day " + selectedVocabDay.day + " — Vocabulary" : selectedLesson ? selectedLesson.title : selectedSubject ? ((selectedSubject.id==="urdu" || language === "ur")?selectedSubject.nameUr:selectedSubject.name) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
   const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
+  const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
 
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
 
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel }}><><div className="app-container">
-    <div className="app-header" style={(selectedSubject?.id==="urdu" || language === "ur")?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title={ui.home}>🏠</button><h1 style={(selectedSubject?.id==="urdu" || language === "ur")?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{headerTitle}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
+    <div className="app-header" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title={ui.home}>🏠</button><h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
     <div className="content">
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
-        <div className="welcome-card"><h2>{studentName ? (language === "ur" ? `${studentName}، خوش آمدید!` : "Hi, " + studentName + "!") : (language === "ur" ? "خوش آمدید!" : "Welcome!")} 👋</h2><p>{language === "ur" ? "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟" : "Ready to learn something amazing today?"}</p><span className="grade-tag">{ui.grade} {grade}</span></div>
-        {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{streak} Day Streak!</h4><p>Keep going — you're doing great!</p></div></div>}
-        <h3 className="section-title">{language === "ur" ? "مضامین" : "Subjects"}</h3>
+        <div className="welcome-card"><h2>{renderWelcomeGreeting(localizedNames, language)} 👋</h2><p>{renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟", language), language)}</p><span className="grade-tag">{renderLocalizedTextNode(ui.grade, language)} {grade}</span></div>
+        {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
+        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
         <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0; return (<button key={subj.id} className="subject-card" onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className="subj-name">{subj.name}</span><span className="subj-name-ur">{subj.nameUr}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
       </>)}
 
 
       {tab === "home" && selectedSubject && !selectedLesson && !quizActive && (<>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject?.id==="urdu" || language === "ur")?"rtl":"ltr" }}><span style={{ fontSize: 36 }}>{selectedSubject.icon}</span><div><h2 style={{ fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject?.id==="urdu" || language === "ur")?"'Noto Nastaliq Urdu',serif":"inherit" }}>{(selectedSubject?.id==="urdu" || language === "ur")?selectedSubject.nameUr:selectedSubject.name}</h2><p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject?.id==="urdu" || language === "ur")?"'Noto Nastaliq Urdu',serif":"inherit" }}>{language === "ur" ? (`${ui.grade} ${grade} • ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`) : (`${ui.grade} ${grade} • ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`)}</p></div></div>
-        <div className="lesson-list" style={(selectedSubject?.id==="urdu" || language === "ur")?{direction:"rtl"}:{}}>{getLessons(selectedSubject.id, grade).map((l, i) => { const d = completedQuizzes[l.id]; const isUr = selectedSubject?.id==="urdu" || language === "ur"; return (<button key={l.id} className="lesson-card" onClick={() => setSelectedLesson(l)} style={isUr?{direction:"rtl",textAlign:"right",fontFamily:"'Noto Nastaliq Urdu',serif"}:{}}><span className="lesson-num">{isUr?(`${ui.lesson} ${i+1}`):(`${ui.lesson} ${i+1}`)}</span><h3>{l.title}</h3><p style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif"}:{}}>{l.content.substring(0, 80)}...</p><div className="lesson-status" style={{ color: d ? "var(--success)" : "var(--text-muted)" }}>{d ? "✅" : "○"} {d ? `${ui.completed} — ${d.score}/4` : ui.notStarted}</div></button>); })}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject?.id==="urdu" || isUrduUi(language))?"rtl":"ltr" }}><span style={{ fontSize: 36 }}>{selectedSubject.icon}</span><div><h2 style={{ fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject?.id==="urdu" || isUrduUi(language))?"'Noto Nastaliq Urdu',serif":"inherit" }}>{renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)}</h2><p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject?.id==="urdu" || isUrduUi(language))?"'Noto Nastaliq Urdu',serif":"inherit" }}>{renderLocalizedTextNode(`${ui.grade} ${grade} • ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`, language)}</p></div></div>
+        <div className="lesson-list" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{getLessons(selectedSubject.id, grade).map((l, i) => { const d = completedQuizzes[l.id]; const isUr = selectedSubject?.id==="urdu" || isUrduUi(language); return (<button key={l.id} className="lesson-card" onClick={() => setSelectedLesson(l)} style={isUr?{direction:"rtl",textAlign:"right",fontFamily:"'Noto Nastaliq Urdu',serif"}:{}}><span className="lesson-num">{`${ui.lesson} ${i+1}`}</span><h3>{l.title}</h3><p style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif"}:{}}>{l.content.substring(0, 80)}...</p><div className="lesson-status" style={{ color: d ? "var(--success)" : "var(--text-muted)" }}>{d ? "✅" : "○"} {d ? `${ui.completed} - ${d.score}/4` : ui.notStarted}</div></button>); })}</div>
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
@@ -3564,19 +3756,19 @@ function HomeschoolApp() {
 
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice</div>
 
-        {posTab === "adverbs" && pacedPos.adverbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedAdverbDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "adverbs" && pacedPos.adverbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedAdverbDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "prepositions" && pacedPos.prepositions.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedPrepDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "prepositions" && pacedPos.prepositions.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedPrepDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "adjectives" && pacedPos.adjectives.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedAdjDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "adjectives" && pacedPos.adjectives.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedAdjDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "conjunctions" && pacedPos.conjunctions.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedConjDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "conjunctions" && pacedPos.conjunctions.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedConjDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "pronouns" && pacedPos.pronouns.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedPronDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "pronouns" && pacedPos.pronouns.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedPronDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "nouns" && pacedPos.collectiveNouns.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedNounDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "nouns" && pacedPos.collectiveNouns.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedNounDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
 
-        {posTab === "verbs" && pacedPos.verbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVerbDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {posTab === "verbs" && pacedPos.verbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVerbDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedAdverbDay && (<>
@@ -3974,7 +4166,7 @@ function HomeschoolApp() {
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && !selectedVocabDay && (<>
         <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p></div>
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice | 55 Days of Vocabulary</div>
-        {pacedVocab.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">Day {day.day}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
+        {pacedVocab.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && selectedVocabDay && (<>
@@ -4055,8 +4247,8 @@ function HomeschoolApp() {
       </div>)}
 
       {tab === "progress" && (<>
-        <div className="stat-grid"><div className="stat-card"><div className="stat-icon">📝</div><div className="stat-value">{totalQuizzesDone}</div><div className="stat-label">Quizzes Done</div></div><div className="stat-card"><div className="stat-icon">🎯</div><div className="stat-value">{totalQuizzesDone > 0 ? Math.round((totalScore / (totalQuizzesDone * 4)) * 100) : 0}%</div><div className="stat-label">Avg Score</div></div><div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{streak}</div><div className="stat-label">Day Streak</div></div><div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{xp}</div><div className="stat-label">Total XP</div></div></div>
-        <h3 className="section-title">Subject Progress</h3>
+        <div className="stat-grid"><div className="stat-card"><div className="stat-icon">📝</div><div className="stat-value">{totalQuizzesDone}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Quizzes Done", "مکمل کوئز", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🎯</div><div className="stat-value">{totalQuizzesDone > 0 ? Math.round((totalScore / (totalQuizzesDone * 4)) * 100) : 0}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Avg Score", "اوسط اسکور", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{streak}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Day Streak", "دنوں کا تسلسل", language), language)}</div></div><div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{xp}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Total XP", "کل ایکس پی", language), language)}</div></div></div>
+        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subject Progress", "مضامین کی پیش رفت", language), language)}</h3>
         {SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round((done / ls.length) * 100) : 0; return (<div key={subj.id} className="progress-bar-container"><div className="progress-bar-label"><span>{subj.icon} {subj.name}</span><span style={{ color: "var(--text-muted)" }}>{done}/{ls.length}</span></div><div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: pct + "%", background: subj.color }} /></div></div>); })}
       </>)}
 
@@ -4065,9 +4257,10 @@ function HomeschoolApp() {
       {tab === "tutor" && (<><div className="tutor-chat">{chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}{chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}<div ref={chatEndRef} /></div><div className="chat-input-area"><input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Ask your tutor anything..." /><button onClick={sendChat} disabled={chatLoading}>➤</button></div></>)}
 
       {tab === "settings" && (<>
-        <div className="settings-item"><span className="si-label">👤 {language === "ur" ? "طالب علم" : "Student Name"}</span><span className="si-value">{studentName || (language === "ur" ? "درج نہیں" : "Not set")}</span></div>
-        <div className="settings-item"><span className="si-label">📚 {ui.currentGrade}</span><span className="si-value">{ui.grade} {grade}</span></div>
-        <h3 className="section-title" style={{ marginTop: 20 }}>{ui.changeGrade}</h3>
+        <div className="settings-item"><span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Student Name", "طالب علم", language), language)}:</span><span className="si-value">{studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "درج نہیں", language), language)}</span></div>
+        {(studentNameUr || language !== "en") && <div className="settings-item"><span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Urdu Name", "اردو نام", language), language)}:</span><span className="si-value">{localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("درج نہیں", "ur")}</span></div>}
+        <div className="settings-item"><span className="si-label">📚 {renderLocalizedTextNode(ui.currentGrade, language)}</span><span className="si-value">{renderLocalizedTextNode(ui.grade, language)} {grade}</span></div>
+        <h3 className="section-title" style={{ marginTop: 20 }}>{renderLocalizedTextNode(ui.changeGrade, language)}</h3>
         <div className="grade-grid">{GRADES.map(g => <button key={g.id} className={"grade-btn " + (g.id === grade ? "active" : "")} onClick={() => setGrade(g.id)}>{g.id}</button>)}</div>
         {SettingsPanel ? (
           <SettingsPanel
@@ -4092,7 +4285,7 @@ function HomeschoolApp() {
         ) : null}
       </>)}
     </div>
-    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: ui.home }, { id: "progress", icon: "📊", label: ui.progress }, { id: "badges", icon: "🏆", label: ui.badges }, { id: "tutor", icon: "🤖", label: ui.tutor }, { id: "settings", icon: "⚙️", label: ui.settings }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); }}><span className="nav-icon">{item.icon}</span>{item.label}</button>)}</div>
+    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: ui.home }, { id: "progress", icon: "📊", label: ui.progress }, { id: "badges", icon: "🏆", label: ui.badges }, { id: "tutor", icon: "🤖", label: ui.tutor }, { id: "settings", icon: "⚙️", label: ui.settings }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); }}><span className="nav-icon">{item.icon}</span>{renderLocalizedTextNode(item.label, language)}</button>)}</div>
   </div></></AppContext.Provider>);
 }
 

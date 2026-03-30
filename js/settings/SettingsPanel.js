@@ -10,7 +10,7 @@
         border: `1px solid ${accent}55`,
         background: `${accent}1A`,
         color: accent,
-        fontFamily: "'Baloo 2',sans-serif",
+        fontFamily: "var(--font)",
         fontSize: 13,
         fontWeight: 700,
         cursor: "pointer",
@@ -24,7 +24,99 @@
     return React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, text);
   }
 
-  function renderPacingControl(sectionKey, sectionConfig, labels, onDaySectionChange) {
+  function renderLocalizedText(text, language) {
+    if (typeof text !== "string") return text;
+    if (language === "ur") {
+      return React.createElement("span", {
+        style: {
+          fontFamily: "var(--font-ur)",
+          direction: "rtl",
+          unicodeBidi: "isolate",
+        },
+      }, text);
+    }
+    if (language !== "bilingual" || !text.includes(" / ")) return text;
+    const [enText, ...rest] = text.split(" / ");
+    const urText = rest.join(" / ");
+    return React.createElement(React.Fragment, null,
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+        },
+      }, enText),
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+        },
+      }, " / "),
+      React.createElement("span", {
+        style: {
+          fontFamily: "var(--font-ur)",
+          direction: "rtl",
+          unicodeBidi: "isolate",
+        },
+      }, urText));
+  }
+
+  function renderLocalizedCount(count, unitLabel, language) {
+    const safeCount = Number.isFinite(Number(count)) ? Number(count) : count;
+    if (language === "ur") {
+      return React.createElement("span", {
+        style: {
+          fontFamily: "var(--font-ur)",
+          direction: "rtl",
+          unicodeBidi: "isolate",
+        },
+      },
+      unitLabel,
+      " ",
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+          fontFamily: "var(--font)",
+        },
+      }, String(safeCount)));
+    }
+    if (language !== "bilingual" || typeof unitLabel !== "string" || !unitLabel.includes(" / ")) {
+      return `${safeCount} ${unitLabel}`;
+    }
+    const [enUnit, ...rest] = unitLabel.split(" / ");
+    const urUnit = rest.join(" / ");
+    return React.createElement(React.Fragment, null,
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+        },
+      }, `${safeCount} ${enUnit}`),
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+        },
+      }, " / "),
+      React.createElement("span", {
+        style: {
+          fontFamily: "var(--font-ur)",
+          direction: "rtl",
+          unicodeBidi: "isolate",
+        },
+      },
+      urUnit,
+      " ",
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+          fontFamily: "var(--font)",
+        },
+      }, String(safeCount))));
+  }
+
+  function renderPacingControl(sectionKey, sectionConfig, labels, onDaySectionChange, language) {
     return React.createElement("div", {
       key: sectionKey,
       style: {
@@ -38,12 +130,12 @@
     React.createElement("div", {
       style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6 },
     },
-    React.createElement("strong", { style: { color: "var(--text-primary)", fontSize: 14 } }, sectionConfig.label),
-    React.createElement("span", { style: { color: "var(--text-muted)", fontSize: 12 } }, `${sectionConfig.itemsPerDay} ${sectionConfig.unitLabel}`)),
+    React.createElement("strong", { style: { color: "var(--text-primary)", fontSize: 14 } }, renderLocalizedText(sectionConfig.label, language)),
+    React.createElement("span", { style: { color: "var(--text-muted)", fontSize: 12 } }, renderLocalizedCount(sectionConfig.itemsPerDay, sectionConfig.unitLabel, language))),
     React.createElement("div", {
       style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
     },
-    React.createElement("span", { style: { color: "var(--text-secondary)", fontSize: 12 } }, labels.perDay),
+    React.createElement("span", { style: { color: "var(--text-secondary)", fontSize: 12 } }, renderLocalizedText(labels.perDay, language)),
     React.createElement("input", {
       type: "range",
       min: sectionConfig.min || 1,
@@ -69,7 +161,7 @@
         fontFamily: "var(--font)",
       },
     })),
-    React.createElement("div", { style: { marginTop: 6, color: "var(--text-muted)", fontSize: 12 } }, sectionConfig.helpText || labels.pacingHelp));
+    React.createElement("div", { style: { marginTop: 6, color: "var(--text-muted)", fontSize: 12 } }, renderLocalizedText(sectionConfig.helpText || labels.pacingHelp, language)));
   }
 
   function SettingsPanel({
@@ -111,13 +203,13 @@
     React.createElement("div", null, (entry.changes || []).join(" • "))))) : null;
 
     return React.createElement("div", null,
-      sectionTitle(ui.dataManagement || "Data Management"),
+      sectionTitle(renderLocalizedText(ui.dataManagement || "Data Management", language)),
       React.createElement("div", { className: "settings-item" },
-        React.createElement("span", { className: "si-label" }, ui.dataVersion || "Data Version"),
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.dataVersion || "Data Version", language)),
         React.createElement("span", { className: "si-value" }, `v${currentVersion}${updateAvailable ? " • Update" : ""}`)),
-      actionButton(ui.checkUpdates || "Check Updates", onCheckUpdates, "#38BDF8"),
-      actionButton(ui.refreshCurriculum || "Re-seed from Source", onRefreshData, "#F59E0B"),
-      actionButton(ui.exportProgress || "Export Progress", onExportProgress, "#22C55E"),
+      actionButton(renderLocalizedText(ui.checkUpdates || "Check Updates", language), onCheckUpdates, "#38BDF8"),
+      actionButton(renderLocalizedText(ui.refreshCurriculum || "Re-seed from Source", language), onRefreshData, "#F59E0B"),
+      actionButton(renderLocalizedText(ui.exportProgress || "Export Progress", language), onExportProgress, "#22C55E"),
       React.createElement("label", {
         style: {
           display: "block",
@@ -134,7 +226,7 @@
           marginBottom: 8,
           textAlign: "center",
         },
-      }, ui.importProgress || "Import Progress",
+      }, renderLocalizedText(ui.importProgress || "Import Progress", language),
       React.createElement("input", {
         type: "file",
         accept: ".json,application/json",
@@ -143,14 +235,14 @@
       })),
       versionHistoryBlock,
 
-      sectionTitle(ui.userData || "User Data"),
+      sectionTitle(renderLocalizedText(ui.userData || "User Data", language)),
       React.createElement("div", { className: "settings-item" },
-        React.createElement("span", { className: "si-label" }, ui.storageUsage || "Storage"),
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.storageUsage || "Storage", language)),
         React.createElement("span", { className: "si-value" }, storageLabel)),
-      actionButton(ui.resetProgress || "Reset Progress", onResetProgress, "#EF4444", { marginBottom: 8 }),
-      actionButton(ui.fullReset || "Full Reset", onFullReset, "#DC2626", { marginBottom: 0 }),
+      actionButton(renderLocalizedText(ui.resetProgress || "Reset Progress", language), onResetProgress, "#EF4444", { marginBottom: 8 }),
+      actionButton(renderLocalizedText(ui.fullReset || "Full Reset", language), onFullReset, "#DC2626", { marginBottom: 0 }),
 
-      sectionTitle(ui.dayBasedSections || "Day-Based English Sections"),
+      sectionTitle(renderLocalizedText(ui.dayBasedSections || "Day-Based English Sections", language)),
       React.createElement("div", {
         style: {
           padding: "12px 14px",
@@ -162,20 +254,20 @@
           fontSize: 12,
           lineHeight: 1.5,
         },
-      }, ui.dayBasedDescription || "Control how many words or sentences appear in each study day for every English subsection."),
-      Object.keys(daySectionSettings || {}).map((sectionKey) => renderPacingControl(sectionKey, daySectionSettings[sectionKey], ui, onDaySectionChange)),
+      }, renderLocalizedText(ui.dayBasedDescription || "Control how many words or sentences appear in each study day for every English subsection.", language)),
+      Object.keys(daySectionSettings || {}).map((sectionKey) => renderPacingControl(sectionKey, daySectionSettings[sectionKey], ui, onDaySectionChange, language)),
 
-      sectionTitle(ui.preferences || "Preferences"),
+      sectionTitle(renderLocalizedText(ui.preferences || "Preferences", language)),
       React.createElement("div", { className: "settings-item" },
-        React.createElement("span", { className: "si-label" }, ui.textToSpeech || "Text to Speech"),
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.textToSpeech || "Text to Speech", language)),
         React.createElement("button", {
           className: "grade-btn active",
           style: { width: 120 },
           onClick: onToggleTTS,
-        }, ttsEnabled ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled"))),
+        }, renderLocalizedText(ttsEnabled ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled"), language))),
       React.createElement("div", { className: "settings-item", style: { display: "block" } },
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } },
-          React.createElement("span", { className: "si-label" }, ui.interfaceLanguage || "Interface Language"),
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.interfaceLanguage || "Interface Language", language)),
           React.createElement("select", {
             value: language,
             onChange: (event) => onLanguageChange(event.target.value),
@@ -185,12 +277,12 @@
               border: "1px solid var(--border)",
               background: "var(--bg-elevated)",
               color: "var(--text-primary)",
-              fontFamily: "var(--font)",
+              fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
             },
           },
           React.createElement("option", { value: "en" }, ui.languageEnglish || "English"),
           React.createElement("option", { value: "ur" }, ui.languageUrdu || "اردو"),
-          React.createElement("option", { value: "bilingual" }, ui.languageBilingual || "Bilingual")))));
+          React.createElement("option", { value: "bilingual" }, renderLocalizedText(ui.languageBilingual || "Bilingual", "bilingual"))))));
   }
 
   window.HomeSchoolSettings = {
