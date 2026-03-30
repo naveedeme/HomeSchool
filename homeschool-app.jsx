@@ -11341,8 +11341,8 @@ function CompareTripleSVG() {
 
 function RoundingSVG({ number, place, result, direction }) {
   const col = direction === "up" ? "#22C55E" : "#F59E0B";
-  return (<div className="math-svg"><svg viewBox="0 0 520 110" xmlns="http://www.w3.org/2000/svg">
-    <rect width="520" height="110" rx="12" fill="#1E293B"/>
+  return (<div className="math-svg"><svg viewBox="0 0 600 110" xmlns="http://www.w3.org/2000/svg">
+    <rect width="600" height="110" rx="12" fill="#1E293B"/>
     <rect x="15" y="18" width="140" height="70" rx="12" fill="#38BDF822" stroke="#38BDF8" strokeWidth="2"/>
     <text x="85" y="44" textAnchor="middle" fill="#38BDF8" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Original</text>
     <text x="85" y="72" textAnchor="middle" fill="#F1F5F9" fontSize="24" fontWeight="800" fontFamily="'Baloo 2'">{number.toLocaleString()}</text>
@@ -11351,11 +11351,11 @@ function RoundingSVG({ number, place, result, direction }) {
     <rect x="240" y="18" width="130" height="36" rx="10" fill={col+"22"} stroke={col} strokeWidth="2"/>
     <text x="305" y="42" textAnchor="middle" fill={col} fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Round {direction === "up" ? "↑ UP" : "↓ DOWN"}</text>
     <text x="305" y="76" textAnchor="middle" fill="#94A3B8" fontSize="13" fontFamily="'Baloo 2'">nearest {place}</text>
-    <line x1="380" y1="53" x2="420" y2="53" stroke="#A855F7" strokeWidth="3" strokeLinecap="round"/>
-    <polygon points="420,48 430,53 420,58" fill="#A855F7"/>
-    <rect x="440" y="18" width="65" height="70" rx="12" fill="#A855F722" stroke="#A855F7" strokeWidth="2"/>
-    <text x="472" y="44" textAnchor="middle" fill="#A855F7" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Result</text>
-    <text x="472" y="72" textAnchor="middle" fill="#F1F5F9" fontSize="22" fontWeight="800" fontFamily="'Baloo 2'">{result.toLocaleString()}</text>
+    <line x1="390" y1="53" x2="430" y2="53" stroke="#A855F7" strokeWidth="3" strokeLinecap="round"/>
+    <polygon points="430,48 440,53 430,58" fill="#A855F7"/>
+    <rect x="445" y="18" width="140" height="70" rx="12" fill="#A855F722" stroke="#A855F7" strokeWidth="2"/>
+    <text x="515" y="44" textAnchor="middle" fill="#A855F7" fontSize="13" fontWeight="700" fontFamily="'Baloo 2'">Result</text>
+    <text x="515" y="72" textAnchor="middle" fill="#F1F5F9" fontSize="22" fontWeight="800" fontFamily="'Baloo 2'">{result.toLocaleString()}</text>
   </svg></div>);
 }
 
@@ -12657,7 +12657,6 @@ function MathWordProblemStrategySVG({ sub, lessonTitle }) {
   const pav = /perimeter|area|volume/.test(lessonTitle || "");
   return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="260" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#F59E0B" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <rect x="28" y="56" width="182" height="152" rx="16" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5"/>
     <text x="50" y="82" fill="#38BDF8" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">1. Read the Story</text>
     <SvgTextBlock text={multDiv ? "Circle equal groups, each, total, and share clues." : pav ? "Underline dimensions, units, cost, and what must be found." : "Circle numbers and clue words like total, left, or difference."} x={50} y={108} maxChars={22} maxLines={5} fill="#E2E8F0" size={13} weight={600} />
@@ -12689,51 +12688,92 @@ function MathWordProblemStrategySVG({ sub, lessonTitle }) {
 }
 
 function MathMultiplicationMethodSVG() {
-  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
-    <rect width="640" height="260" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
-    <text x="34" y="64" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Large Multiplication</text>
-    <rect x="34" y="84" width="220" height="136" rx="16" fill="#1E293B" stroke="#22C55E"/>
-    <text x="54" y="112" fill="#22C55E" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Area / Partial Products</text>
-    <rect x="70" y="132" width="90" height="58" fill="#38BDF822" stroke="#38BDF8"/>
-    <rect x="160" y="132" width="54" height="58" fill="#F59E0B22" stroke="#F59E0B"/>
-    <text x="115" y="124" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">20</text>
-    <text x="187" y="124" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">3</text>
-    <text x="54" y="166" textAnchor="middle" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">14</text>
-    <text x="115" y="166" textAnchor="middle" fill="#F8FAFC" fontSize="15" fontWeight="900" fontFamily="'Baloo 2'">280</text>
-    <text x="187" y="166" textAnchor="middle" fill="#F8FAFC" fontSize="15" fontWeight="900" fontFamily="'Baloo 2'">42</text>
-    <text x="54" y="208" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">14 × 23 = 280 + 42 = 322</text>
-    <rect x="278" y="84" width="332" height="136" rx="16" fill="#1E293B" stroke="#86EFAC"/>
-    <text x="300" y="112" fill="#86EFAC" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Column Method</text>
-    <text x="520" y="130" textAnchor="end" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">23</text>
-    <text x="520" y="160" textAnchor="end" fill="#22C55E" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">× 14</text>
-    <line x1="420" y1="168" x2="532" y2="168" stroke="#F59E0B" strokeWidth="3"/>
-    <text x="520" y="196" textAnchor="end" fill="#38BDF8" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">92</text>
-    <text x="520" y="220" textAnchor="end" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">230</text>
-    <text x="334" y="196" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">23 × 4</text>
-    <text x="326" y="220" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">23 × 10</text>
-  </svg></div>);
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"18px"}}>
+      <div>
+        <div className="math-visual-label" style={{marginBottom:8}}>Column Method with Carry</div>
+        <div className="math-svg"><svg viewBox="0 0 760 310" xmlns="http://www.w3.org/2000/svg">
+          <rect width="760" height="310" rx="20" fill="#0F172A"/>
+          <rect x="78" y="34" width="604" height="248" rx="18" fill="#1E293B" stroke="#86EFAC" strokeWidth="1.6"/>
+          <text x="118" y="64" fill="#86EFAC" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">Multiply ones first, then tens, then add the partial products</text>
+          <circle cx="568" cy="78" r="14" fill="#F59E0B22" stroke="#F59E0B" strokeWidth="1.5"/>
+          <text x="568" y="83" textAnchor="middle" fill="#F59E0B" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">1</text>
+          <path d="M582 98 Q576 66 575 76" fill="none" stroke="#F59E0B" strokeWidth="1.5" strokeDasharray="3" opacity="0.7"/>
+          <text x="590" y="120" textAnchor="end" fill="#F8FAFC" fontSize="30" fontWeight="900" fontFamily="'Baloo 2'">23</text>
+          <text x="590" y="156" textAnchor="end" fill="#22C55E" fontSize="30" fontWeight="900" fontFamily="'Baloo 2'">× 14</text>
+          <line x1="448" y1="168" x2="592" y2="168" stroke="#F59E0B" strokeWidth="3"/>
+          <text x="590" y="204" textAnchor="end" fill="#38BDF8" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">92</text>
+          <text x="590" y="236" textAnchor="end" fill="#A855F7" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">230</text>
+          <line x1="448" y1="246" x2="592" y2="246" stroke="#475569" strokeWidth="2.5"/>
+          <text x="590" y="274" textAnchor="end" fill="#F8FAFC" fontSize="30" fontWeight="900" fontFamily="'Baloo 2'">322</text>
+          <text x="140" y="122" fill="#94A3B8" fontSize="15" fontWeight="700" fontFamily="'Baloo 2'">3 × 4 = 12, write 2 and carry 1</text>
+          <text x="140" y="154" fill="#94A3B8" fontSize="15" fontWeight="700" fontFamily="'Baloo 2'">2 × 4 = 8, then add the carried 1 to make 9</text>
+          <text x="140" y="202" fill="#94A3B8" fontSize="15" fontWeight="700" fontFamily="'Baloo 2'">Now multiply by 1 ten, so the next line starts in the tens place</text>
+          <text x="140" y="234" fill="#94A3B8" fontSize="15" fontWeight="700" fontFamily="'Baloo 2'">23 × 10 = 230, then add 92 + 230</text>
+        </svg></div>
+      </div>
+      <div>
+        <div className="math-visual-label" style={{marginBottom:8}}>Area / Partial Products</div>
+        <div className="math-svg"><svg viewBox="0 0 760 286" xmlns="http://www.w3.org/2000/svg">
+          <rect width="760" height="286" rx="20" fill="#0F172A"/>
+          <rect x="34" y="30" width="692" height="226" rx="18" fill="#1E293B" stroke="#22C55E" strokeWidth="1.6"/>
+          <text x="76" y="66" fill="#22C55E" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">Split 23 into tens and ones, then add both products</text>
+          <text x="204" y="98" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="800" fontFamily="'Baloo 2'">20</text>
+          <text x="556" y="98" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="800" fontFamily="'Baloo 2'">3</text>
+          <text x="96" y="160" textAnchor="middle" fill="#F8FAFC" fontSize="18" fontWeight="800" fontFamily="'Baloo 2'">14</text>
+          <rect x="116" y="112" width="176" height="88" rx="14" fill="#38BDF822" stroke="#38BDF8" strokeWidth="2"/>
+          <rect x="292" y="112" width="176" height="88" rx="14" fill="#14B8A622" stroke="#14B8A6" strokeWidth="2"/>
+          <rect x="468" y="112" width="176" height="88" rx="14" fill="#F59E0B22" stroke="#F59E0B" strokeWidth="2"/>
+          <text x="204" y="136" textAnchor="middle" fill="#38BDF8" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">14 × 20</text>
+          <text x="204" y="174" textAnchor="middle" fill="#F8FAFC" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">280</text>
+          <text x="380" y="136" textAnchor="middle" fill="#14B8A6" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">Add the parts</text>
+          <text x="380" y="174" textAnchor="middle" fill="#F8FAFC" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">280 + 42</text>
+          <text x="556" y="136" textAnchor="middle" fill="#F59E0B" fontSize="16" fontWeight="800" fontFamily="'Baloo 2'">14 × 3</text>
+          <text x="556" y="174" textAnchor="middle" fill="#F8FAFC" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">42</text>
+          <path d="M214 150 C248 126, 300 126, 338 150" fill="none" stroke="#14B8A6" strokeWidth="3.2" strokeLinecap="round"/>
+          <polygon points="338,150 328,145 329,155" fill="#14B8A6"/>
+          <path d="M546 150 C512 126, 460 126, 422 150" fill="none" stroke="#14B8A6" strokeWidth="3.2" strokeLinecap="round"/>
+          <polygon points="422,150 432,145 431,155" fill="#14B8A6"/>
+          <line x1="116" y1="214" x2="644" y2="214" stroke="#334155" strokeWidth="2"/>
+          <text x="380" y="240" textAnchor="middle" fill="#E2E8F0" fontSize="18" fontWeight="800" fontFamily="'Baloo 2'">14 × 23 = 280 + 42 = 322</text>
+        </svg></div>
+      </div>
+    </div>
+  );
 }
 
 function MathLongDivisionMethodSVG() {
-  return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
-    <rect width="640" height="260" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#38BDF8" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
-    <text x="34" y="64" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Long Division House</text>
-    <path d="M90 118 h210 v92" fill="none" stroke="#38BDF8" strokeWidth="4"/>
-    <path d="M90 118 q18 -18 36 0" fill="none" stroke="#38BDF8" strokeWidth="4"/>
-    <text x="64" y="164" fill="#F8FAFC" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">4</text>
-    <text x="128" y="106" fill="#22C55E" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">24</text>
-    <text x="130" y="164" fill="#F8FAFC" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">96</text>
-    <text x="326" y="102" fill="#94A3B8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">D-M-S-B</text>
-    <rect x="326" y="116" width="274" height="104" rx="16" fill="#1E293B" stroke="#22C55E"/>
-    <text x="346" y="142" fill="#22C55E" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">1. Divide: 9 ÷ 4 = 2</text>
-    <text x="346" y="166" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">2. Multiply: 2 × 4 = 8</text>
-    <text x="346" y="190" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">3. Subtract: 9 − 8 = 1</text>
-    <text x="346" y="214" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">4. Bring down 6 and repeat</text>
-    <text x="130" y="198" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">− 8</text>
-    <line x1="124" y1="204" x2="198" y2="204" stroke="#F59E0B" strokeWidth="3"/>
-    <text x="130" y="232" fill="#F8FAFC" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">16</text>
+  return <MathLongDivisionWorkedSVG />;
+}
+
+function MathLongDivisionWorkedSVG() {
+  return (<div className="math-svg"><svg viewBox="0 0 640 320" xmlns="http://www.w3.org/2000/svg">
+    <rect width="640" height="320" rx="20" fill="#0F172A"/>
+    <path d="M296 112 h-228 v126" fill="none" stroke="#38BDF8" strokeWidth="4"/>
+    <path d="M296 112 q-18 -18 -36 0" fill="none" stroke="#38BDF8" strokeWidth="4"/>
+    <text x="44" y="164" textAnchor="middle" fill="#F8FAFC" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">5</text>
+    <text x="174" y="104" textAnchor="end" fill="#22C55E" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">27</text>
+    <text x="126" y="140" textAnchor="middle" fill="#F8FAFC" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">1</text>
+    <text x="150" y="140" textAnchor="middle" fill="#F8FAFC" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">3</text>
+    <text x="174" y="140" textAnchor="middle" fill="#F8FAFC" fontSize="28" fontWeight="900" fontFamily="'Baloo 2'">5</text>
+    <text x="108" y="162" textAnchor="middle" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">−</text>
+    <text x="126" y="162" textAnchor="middle" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">1</text>
+    <text x="150" y="162" textAnchor="middle" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">0</text>
+    <line x1="92" y1="168" x2="182" y2="168" stroke="#F59E0B" strokeWidth="3"/>
+    <text x="150" y="186" textAnchor="middle" fill="#F8FAFC" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">3</text>
+    <text x="174" y="186" textAnchor="middle" fill="#F8FAFC" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">5</text>
+    <text x="126" y="210" textAnchor="middle" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">−</text>
+    <text x="150" y="210" textAnchor="middle" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">3</text>
+    <text x="174" y="210" textAnchor="middle" fill="#A855F7" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">5</text>
+    <line x1="92" y1="216" x2="182" y2="216" stroke="#F59E0B" strokeWidth="3"/>
+    <text x="174" y="236" textAnchor="middle" fill="#F8FAFC" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">0</text>
+    <rect x="324" y="86" width="284" height="184" rx="16" fill="#1E293B" stroke="#22C55E"/>
+    <text x="344" y="114" fill="#94A3B8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Repeat the steps</text>
+    <text x="344" y="144" fill="#22C55E" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">1. Divide: 13 ÷ 5 = 2</text>
+    <text x="344" y="170" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">2. Multiply: 2 × 5 = 10</text>
+    <text x="344" y="196" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">3. Subtract: 13 − 10 = 3</text>
+    <text x="344" y="222" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">4. Bring down 5 to make 35</text>
+    <text x="344" y="246" fill="#F8FAFC" fontSize="14" fontWeight="800" fontFamily="'Baloo 2'">5. Divide again: 35 ÷ 5 = 7</text>
   </svg></div>);
 }
 
@@ -12741,7 +12781,6 @@ function MathFactorsToolkitSVG({ sub }) {
   const title = (sub?.t || "").toLowerCase();
   return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="260" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     {title.includes("lcm") ? <>
       <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Find the LCM</text>
       <text x="48" y="108" fill="#38BDF8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Multiples of 4</text>
@@ -12800,7 +12839,6 @@ function MathFractionsToolkitSVG({ sub }) {
   const title = (sub?.t || "").toLowerCase();
   return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="260" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#8B5CF6" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     {title.includes("mixed") ? <>
       <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Improper to Mixed Number</text>
       <text x="54" y="116" fill="#F8FAFC" fontSize="22" fontWeight="900" fontFamily="'Baloo 2'">11 ÷ 4 = 2 remainder 3</text>
@@ -12841,7 +12879,6 @@ function MathDecimalsToolkitSVG({ sub }) {
   const title = (sub?.t || "").toLowerCase();
   return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="260" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#8B5CF6" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     {title.includes("fractions") ? <>
       <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Fractions and Decimals</text>
       <text x="62" y="130" fill="#F8FAFC" fontSize="26" fontWeight="900" fontFamily="'Baloo 2'">3/4 = 0.75</text>
@@ -12874,7 +12911,6 @@ function MathRatioPercentToolkitSVG({ sub }) {
   const title = (sub?.t || "").toLowerCase();
   return (<div className="math-svg"><svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="260" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#EC4899" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     {title.includes("ratio to fraction") ? <>
       <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Ratio to Fraction</text>
       <rect x="56" y="104" width="72" height="52" rx="14" fill="#EC489922"/><text x="92" y="138" textAnchor="middle" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">2</text>
@@ -12896,7 +12932,6 @@ function MathRatioPercentToolkitSVG({ sub }) {
 function MathLinesAnglesToolkitSVG() {
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#38BDF8" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Lines and Angles</text>
     <rect x="34" y="88" width="250" height="146" rx="16" fill="#1E293B" stroke="#38BDF8"/>
     <text x="52" y="112" fill="#38BDF8" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Line, Ray, Segment</text>
@@ -12922,7 +12957,6 @@ function MathLinesAnglesToolkitSVG() {
 function MathParallelPerpendicularToolkitSVG() {
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Parallel and Perpendicular</text>
     <rect x="34" y="88" width="266" height="146" rx="16" fill="#1E293B" stroke="#22C55E"/>
     <text x="54" y="112" fill="#22C55E" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Parallel Lines</text>
@@ -12942,7 +12976,6 @@ function MathParallelPerpendicularToolkitSVG() {
 function Math2DShapesToolkitSVG() {
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#8B5CF6" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">2D Shapes</text>
     <rect x="34" y="88" width="572" height="146" rx="16" fill="#1E293B" stroke="#8B5CF6"/>
     <rect x="68" y="128" width="54" height="54" fill="#8B5CF622" stroke="#C4B5FD" strokeWidth="3"/><text x="95" y="204" textAnchor="middle" fill="#F8FAFC" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Square</text>
@@ -12958,7 +12991,6 @@ function Math2DShapesToolkitSVG() {
 function Math3DShapesToolkitSVG() {
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#F59E0B" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">3D Shapes</text>
     <rect x="34" y="88" width="572" height="146" rx="16" fill="#1E293B" stroke="#F59E0B"/>
     <g transform="translate(70 112)">
@@ -12992,7 +13024,6 @@ function MathGeometryToolkitSVG({ sub }) {
 function MathBarGraphToolkitSVG() {
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#38BDF8" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Bar Graphs</text>
     <line x1="86" y1="210" x2="292" y2="210" stroke="#F8FAFC" strokeWidth="4"/><line x1="86" y1="210" x2="86" y2="98" stroke="#F8FAFC" strokeWidth="4"/>
     {[0,10,20,30].map((n, i) => <g key={n}><line x1="78" y1={210 - i*34} x2="94" y2={210 - i*34} stroke="#94A3B8" strokeWidth="2"/><text x="64" y={214 - i*34} textAnchor="end" fill="#94A3B8" fontSize="12" fontWeight="700" fontFamily="'Baloo 2'">{n}</text></g>)}
@@ -13010,7 +13041,6 @@ function MathBarGraphToolkitSVG() {
 function MathPictographToolkitSVG() {
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#22C55E" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Pictographs</text>
     <rect x="34" y="88" width="262" height="146" rx="16" fill="#1E293B" stroke="#22C55E"/>
     <text x="54" y="114" fill="#22C55E" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Key</text>
@@ -13030,7 +13060,6 @@ function MathPictographToolkitSVG() {
 function MathLineGraphToolkitSVG() {
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#A855F7" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Line Graphs</text>
     <line x1="86" y1="212" x2="300" y2="212" stroke="#F8FAFC" strokeWidth="4"/><line x1="86" y1="212" x2="86" y2="96" stroke="#F8FAFC" strokeWidth="4"/>
     <polyline points="110,188 154,170 198,136 242,150 286,116" fill="none" stroke="#A855F7" strokeWidth="4"/>
@@ -13047,7 +13076,6 @@ function MathLineGraphToolkitSVG() {
 function MathDataInterpretationToolkitSVG() {
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill="#F59E0B" fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">Interpreting Data</text>
     <rect x="34" y="88" width="248" height="146" rx="16" fill="#1E293B" stroke="#F59E0B"/>
     <text x="54" y="114" fill="#F59E0B" fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Sample Table</text>
@@ -13079,7 +13107,6 @@ function MathTextbookStarterSVG({ sub, lessonTitle }) {
   const steps = getMathSolveSteps(sub, lessonTitle).slice(0, 3);
   return (<div className="math-svg"><svg viewBox="0 0 640 270" xmlns="http://www.w3.org/2000/svg">
     <rect width="640" height="270" rx="20" fill="#0F172A"/>
-    <text x="34" y="38" fill={theme.accent} fontSize="13" fontWeight="800" fontFamily="'Baloo 2'">Textbook Model</text>
     <text x="34" y="66" fill="#F8FAFC" fontSize="24" fontWeight="900" fontFamily="'Baloo 2'">{clipSvgText(sub?.t || "Math Method", 24)}</text>
     <rect x="32" y="86" width="242" height="152" rx="18" fill={theme.soft} opacity="0.18" stroke={theme.accent} strokeWidth="1.4"/>
     <text x="52" y="112" fill={theme.accent} fontSize="15" fontWeight="800" fontFamily="'Baloo 2'">Worked Pattern</text>
@@ -13102,16 +13129,20 @@ function MathTextbookStarterSVG({ sub, lessonTitle }) {
 
 function renderMathTextbookPrimarySVG(sub, lessonTitle) {
   const title = `${lessonTitle || ""} ${sub?.t || ""}`.toLowerCase();
+  const subTitle = (sub?.t || "").toLowerCase();
   const content = (sub?.c || "").toLowerCase();
   if ((lessonTitle || "").toLowerCase().includes("geometry")) return <MathGeometryToolkitSVG sub={sub} />;
   if ((lessonTitle || "").toLowerCase().includes("data handling")) return <MathDataHandlingToolkitSVG sub={sub} />;
+  if (subTitle === "long division") return <MathLongDivisionWorkedSVG />;
+  if (subTitle === "word problems") return <MathWordProblemStrategySVG sub={sub} lessonTitle={lessonTitle} />;
+  if (subTitle === "large multiplication") return <MathMultiplicationMethodSVG />;
   if (/word problem|story problem|problem solving/.test(title) || /shared equally|each|perimeter|area|volume|altogether|left/.test(content)) return <MathWordProblemStrategySVG sub={sub} lessonTitle={lessonTitle} />;
-  if (/multiplication|multiply|times/.test(title)) return <MathMultiplicationMethodSVG />;
-  if (/division|divide|quotient|remainder/.test(title)) return <MathLongDivisionMethodSVG />;
-  if (/prime|composite|factor|multiple|hcf|lcm/.test(title)) return <MathFactorsToolkitSVG sub={sub} />;
-  if (/fraction|numerator|denominator|mixed number|equivalent/.test(title)) return <MathFractionsToolkitSVG sub={sub} />;
-  if (/decimal/.test(title)) return <MathDecimalsToolkitSVG sub={sub} />;
-  if (/ratio|percent|percentage/.test(title)) return <MathRatioPercentToolkitSVG sub={sub} />;
+  if (/division|divide|quotient|remainder/.test(subTitle)) return <MathLongDivisionWorkedSVG />;
+  if (/multiplication|multiply|times/.test(subTitle)) return <MathMultiplicationMethodSVG />;
+  if (/prime|composite|factor|multiple|hcf|lcm/.test(subTitle)) return <MathFactorsToolkitSVG sub={sub} />;
+  if (/fraction|numerator|denominator|mixed number|equivalent/.test(subTitle)) return <MathFractionsToolkitSVG sub={sub} />;
+  if (/decimal/.test(subTitle)) return <MathDecimalsToolkitSVG sub={sub} />;
+  if (/ratio|percent|percentage/.test(subTitle)) return <MathRatioPercentToolkitSVG sub={sub} />;
   return <MathTextbookStarterSVG sub={sub} lessonTitle={lessonTitle} />;
 }
 
@@ -14138,7 +14169,7 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
   .content{padding:16px 40px;padding-bottom:80px}
 }
 .math-svg{width:100%;max-width:100%;border-radius:12px;margin:12px auto;overflow:hidden;display:flex;justify-content:center}
-.math-svg svg{width:100%;height:auto;display:block;max-width:720px}
+.math-svg svg{width:100%;height:auto;display:block;max-width:860px}
 .math-visual-stack{display:flex;flex-direction:column;gap:16px;margin-top:12px}
 .math-visual-panel{padding:14px;border-radius:18px;background:rgba(15,23,42,0.58);border:1px solid rgba(148,163,184,0.18);box-shadow:0 14px 30px rgba(2,6,23,0.22)}
 .math-visual-label{font-family:'Baloo 2',sans-serif;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#F59E0B;margin-bottom:4px}
