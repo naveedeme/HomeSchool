@@ -188,8 +188,6 @@
     installStatusLabel,
     offlineStatusLabel,
     networkStatusLabel,
-    canInstallApp,
-    onInstallApp,
     canReloadApp,
     onReloadApp,
     labels,
@@ -263,7 +261,6 @@
       React.createElement("div", { className: "settings-item" },
         React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.networkStatus || "Network", language)),
         React.createElement("span", { className: "si-value" }, renderLocalizedText(networkStatusLabel || (ui.online || "Online"), language))),
-      canInstallApp ? actionButton(renderLocalizedText(ui.installApp || "Install App", language), onInstallApp, "#6366F1") : null,
       canReloadApp ? actionButton(renderLocalizedText(ui.refreshToUpdate || "Refresh to Update", language), onReloadApp, "#0EA5E9") : null,
 
       sectionTitle(renderLocalizedText(ui.dayBasedSections || "Day-Based English Sections", language)),
