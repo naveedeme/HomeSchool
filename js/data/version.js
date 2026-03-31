@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const DATA_VERSION = 5;
+  const DATA_VERSION = 6;
 
   const DATA_MANIFEST = {
     math: { grades: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
@@ -12,6 +12,14 @@
   };
 
   const DATA_CHANGELOG = [
+    {
+      version: 6,
+      date: "2026-03-31",
+      changes: [
+        "Moved English tenses into Grade 5 Reading Comprehension as a subsection.",
+        "Added a new Grade 5 Urdu to English lesson with day-wise examples, exercises, quizzes, and pacing support.",
+      ],
+    },
     {
       version: 5,
       date: "2026-03-31",

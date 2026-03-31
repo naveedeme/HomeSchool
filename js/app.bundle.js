@@ -329,7 +329,8 @@
     wordMeanings: { labelEn: "Words Meanings", labelUr: "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0645\u0639\u0627\u0646\u06CC", unitEn: "words", unitUr: "\u0627\u0644\u0641\u0627\u0638", defaultSize: 5, max: 20 },
     wordOpposites: { labelEn: "Words Opposites", labelUr: "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0645\u062A\u0636\u0627\u062F", unitEn: "words", unitUr: "\u0627\u0644\u0641\u0627\u0638", defaultSize: 5, max: 20 },
     adverbPhrases: { labelEn: "Adverb Phrases", labelUr: "\u0641\u0642\u0631\u0627\u062A\u0650 \u062D\u0627\u0644", unitEn: "phrases", unitUr: "\u0641\u0642\u0631\u06D2", defaultSize: 5, max: 15 },
-    sentences: { labelEn: "Sentence Sections", labelUr: "\u062C\u0645\u0644\u0648\u06BA \u0648\u0627\u0644\u06D2 \u0633\u06CC\u06A9\u0634\u0646", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 10, max: 20 }
+    sentences: { labelEn: "Sentence Sections", labelUr: "\u062C\u0645\u0644\u0648\u06BA \u0648\u0627\u0644\u06D2 \u0633\u06CC\u06A9\u0634\u0646", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 10, max: 20 },
+    urduToEnglish: { labelEn: "Urdu to English", labelUr: "\u0627\u0631\u062F\u0648 \u0633\u06D2 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 5, max: 20 }
   };
   var AI_PROVIDER_ORDER = ["openai", "anthropic", "ollama"];
   var AI_PROVIDER_DEFS = {
@@ -875,6 +876,7 @@
   }
   function getSubsectionSettingKey(subtitle) {
     const value = String(subtitle || "").trim().toLowerCase();
+    if (value === "urdu to english") return "urduToEnglish";
     if (value === "adverb phrases") return "adverbPhrases";
     if (value === "words meanings") return "wordMeanings";
     if (value === "words opposites") return "wordOpposites";
@@ -2150,6 +2152,10 @@ ${marker} `);
     if (Array.isArray(dayEntry?.words)) {
       dayEntry.words.forEach((word) => {
         if (!word) return;
+        if (settingKey === "urduToEnglish") {
+          pushPair(word.ur, word.en);
+          return;
+        }
         if (settingKey === "wordOpposites") {
           pushPair(word.en, word.opposite || word.oppositeUr || word.ur);
           return;
@@ -2168,6 +2174,9 @@ ${marker} `);
   function buildDaySectionPrompt(kind, prompt2, answer, settingKey, isUrdu) {
     const normalizedPrompt = normalizeText(prompt2);
     const normalizedAnswer = normalizeText(answer);
+    if (settingKey === "urduToEnglish") {
+      return kind === "fill" ? `${normalizedPrompt} = ___` : kind === "tf" ? `${normalizedPrompt}: ${normalizedAnswer}` : normalizedPrompt;
+    }
     if (settingKey === "wordOpposites") {
       if (kind === "fill") return isUrdu ? `"${normalizedPrompt}" \u06A9\u0627 \u0645\u062A\u0636\u0627\u062F ___ \u06C1\u06D2` : `Opposite of "${normalizedPrompt}" is ___`;
       if (kind === "tf") return `${normalizedPrompt}: ${normalizedAnswer}`;
@@ -2177,6 +2186,9 @@ ${marker} `);
   }
   function buildDaySectionQuestion(prompt2, settingKey, isUrdu) {
     const normalizedPrompt = normalizeText(prompt2);
+    if (settingKey === "urduToEnglish") {
+      return isUrdu ? `"${normalizedPrompt}" \u06A9\u0627 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u062A\u0631\u062C\u0645\u06C1 \u06A9\u06CC\u0627 \u06C1\u06D2\u061F` : `What is the English translation of "${normalizedPrompt}"?`;
+    }
     if (settingKey === "wordOpposites") {
       return isUrdu ? `"${normalizedPrompt}" \u06A9\u0627 \u0645\u062A\u0636\u0627\u062F \u06A9\u06CC\u0627 \u06C1\u06D2\u061F` : `What is the opposite of "${normalizedPrompt}"?`;
     }
@@ -2251,6 +2263,9 @@ ${marker} `);
       exerciseGroups,
       quizGroups
     };
+  }
+  function getTenseSubsectionIndex(lesson) {
+    return Array.isArray(lesson?.subs) ? lesson.subs.findIndex((sub) => sub?.isTensesSub) : -1;
   }
   function buildDerivedSentenceSub(subs, itemsPerDay, subjectId) {
     const sentencePairs = [];
@@ -3081,7 +3096,7 @@ ${marker} `);
       } else if (selectedLesson?.hasVocab) {
         derived.lessonMode = "vocab";
         derived.day = selectedVocabDay?.day || null;
-      } else if (selectedLesson?.hasTenses) {
+      } else if (selectedLesson?.hasTenses || selectedLesson?.hasMathSub && activeSub?.isTensesSub) {
         derived.lessonMode = "tenses";
         derived.tenseMain = tenseMain;
         derived.tenseSub = tenseSub;
@@ -3793,7 +3808,7 @@ ${error.message || error}`);
       } else if (source?.lessonMode === "vocab") {
         lesson = lessons.find((entry) => entry.hasVocab) || null;
       } else if (source?.lessonMode === "tenses") {
-        lesson = lessons.find((entry) => entry.hasTenses) || null;
+        lesson = lessons.find((entry) => entry.hasTenses || getTenseSubsectionIndex(entry) >= 0) || null;
       } else if (source?.subTitle) {
         lesson = lessons.find((entry) => entry.hasMathSub && (entry.subs || []).some((sub) => sub.t === source.subTitle)) || null;
       } else if (source?.lessonTitle) {
@@ -3823,7 +3838,12 @@ ${error.message || error}`);
           const dayEntry = pacedVocab.find((entry) => entry.day === source.day) || null;
           setSelectedVocabDay(dayEntry);
         }
-      } else if (lesson?.hasTenses) {
+      } else if (lesson?.hasTenses || source?.lessonMode === "tenses" && lesson?.hasMathSub && getTenseSubsectionIndex(lesson) >= 0) {
+        const tensesSubIndex = lesson?.hasMathSub ? getTenseSubsectionIndex(lesson) : -1;
+        if (tensesSubIndex >= 0) {
+          setMathSubIdx(tensesSubIndex);
+          setMathSubTab("examples");
+        }
         const nextMain = source?.tenseMain || tenseMain;
         const nextSub = source?.tenseSub || tenseSub;
         setTenseMain(nextMain);
@@ -4195,6 +4215,7 @@ ${error.message || error}`);
       }));
     })()), tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx !== null && (() => {
       const sub = normalizeSubLesson(activeLessonSubs[mathSubIdx], selectedSubject?.id);
+      const isTensesSub = !!sub?.isTensesSub;
       const adjustedDayLessons = sub.dayLessons;
       const toggleReveal = (k) => setRevealedEx((p) => ({ ...p, [k]: !p[k] }));
       const isUr = selectedSubject?.id === "urdu";
@@ -4204,6 +4225,12 @@ ${error.message || error}`);
       const exercisesToRender = activeExerciseGroup ? activeExerciseGroup.exercises : sub.exerciseGroups ? null : sub.exercises;
       const quizToRender = activeQuizGroup ? activeQuizGroup.questions : sub.quizGroups ? null : sub.quiz;
       const urS = isUr ? { direction: "rtl", fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {};
+      if (isTensesSub) {
+        return /* @__PURE__ */ React.createElement(React.Fragment, null, !selectedTensePara ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "lesson-detail" }, /* @__PURE__ */ React.createElement("h2", null, sub.t), /* @__PURE__ */ React.createElement("p", null, sub.c), /* @__PURE__ */ React.createElement(StudyItemInlineToolbar, { studyItem: { prompt: sub.c, subject: "english", section: "tenses", sectionLabel: sub.t } })), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 8, marginBottom: 10 } }, [{ id: "present", label: "\u{1F550} Present", c: "#38BDF8" }, { id: "past", label: "\u{1F551} Past", c: "#F59E0B" }, { id: "future", label: "\u{1F552} Future", c: "#22C55E" }].map((t) => /* @__PURE__ */ React.createElement("button", { key: t.id, onClick: () => {
+          setTenseMain(t.id);
+          setTenseSub("simple");
+        }, style: { flex: 1, padding: "10px 6px", borderRadius: 10, border: tenseMain === t.id ? "2px solid " + t.c : "1px solid var(--border)", background: tenseMain === t.id ? t.c + "22" : "var(--bg-elevated)", color: tenseMain === t.id ? t.c : "var(--text-muted)", fontFamily: "'Baloo 2', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" } }, t.label))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 14 } }, [{ id: "simple", label: "Simple" }, { id: "continuous", label: "Continuous" }, { id: "perfect", label: "Perfect" }, { id: "perfectContinuous", label: "Perf. Cont." }].map((t) => /* @__PURE__ */ React.createElement("button", { key: t.id, onClick: () => setTenseSub(t.id), style: { flex: 1, padding: "8px 3px", borderRadius: 8, border: tenseSub === t.id ? "2px solid #E879F9" : "1px solid var(--border)", background: tenseSub === t.id ? "rgba(232,121,249,0.15)" : "var(--bg-elevated)", color: tenseSub === t.id ? "#E879F9" : "var(--text-muted)", fontFamily: "'Baloo 2', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer" } }, t.label))), TENSES[tenseMain] && TENSES[tenseMain][tenseSub] && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#E879F9" } }, TENSES[tenseMain][tenseSub].name), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", fontFamily: "var(--font-ur)", direction: "rtl", marginTop: 4 } }, TENSES[tenseMain][tenseSub].nameUr), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 12, color: "#38BDF8", marginTop: 8, fontWeight: 600, background: "rgba(56,189,248,0.08)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(56,189,248,0.2)" } }, "\u{1F4D0} ", TENSES[tenseMain][tenseSub].formula), /* @__PURE__ */ React.createElement(StudyItemInlineToolbar, { studyItem: { prompt: TENSES[tenseMain][tenseSub].formula, subject: "english", section: "tenseFormula", sectionLabel: TENSES[tenseMain][tenseSub].name, secondaryText: TENSES[tenseMain][tenseSub].nameUr } })), /* @__PURE__ */ React.createElement("div", { className: "tts-hint" }, "\u{1F50A} Tap any sentence to hear it read aloud!"), TENSES[tenseMain][tenseSub].items.map((item, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "adverb-day-card", onClick: () => setSelectedTensePara(item) }, /* @__PURE__ */ React.createElement("span", { className: "day-num" }, "Paragraph ", i + 1), /* @__PURE__ */ React.createElement("h3", null, item.title), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 12, color: "var(--text-secondary)", marginTop: 4 } }, item.para.substring(0, 80), "..."))))) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tts-hint" }, "\u{1F50A} Tap any sentence to hear it read aloud!"), /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section" }, /* @__PURE__ */ React.createElement("h3", null, "\u{1F4D6} ", selectedTensePara.title), selectedTensePara.para.split(/(?<=[.!?])\s+/).filter(Boolean).map((s2, i) => /* @__PURE__ */ React.createElement(SpeakableSentence, { key: i, text: s2, lang: "en", studyItem: { subject: "english", section: "tenseParagraphs", sectionLabel: selectedTensePara.title } })), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", onClick: () => playAll(selectedTensePara.para) }, "\u25B6\uFE0F Play Entire Paragraph")), selectedTensePara.qs && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section" }, /* @__PURE__ */ React.createElement("h3", null, "\u2753 Comprehension Questions"), selectedTensePara.qs.map((q, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" } }, /* @__PURE__ */ React.createElement("span", { style: { color: "#F59E0B", fontWeight: 700, marginRight: 8 } }, "Q", i + 1, "."), q, /* @__PURE__ */ React.createElement(StudyItemInlineToolbar, { studyItem: { prompt: q, subject: "english", section: "tenseQuestions", sectionLabel: selectedTensePara.title } }))))));
+      }
       return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 10, ...urS } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#FF6B35", ...urS } }, isUr ? "\u{1F4D6}" : "\u{1F4D0}", " ", sub.t), isMath ? /* @__PURE__ */ React.createElement(MathVisualDeck, { sub, lessonTitle: selectedLesson?.title }) : /* @__PURE__ */ React.createElement(React.Fragment, null, sub.svgType === "placeValue" && /* @__PURE__ */ React.createElement(PlaceValueChart, { number: sub.svgData.number }), sub.svgType === "expandedForm" && /* @__PURE__ */ React.createElement(ExpandedFormSVG, { number: sub.svgData.number, parts: sub.svgData.parts }), sub.svgType === "compare" && /* @__PURE__ */ React.createElement(CompareTripleSVG, null), sub.svgType === "rounding" && /* @__PURE__ */ React.createElement(RoundingDualSVG, null), sub.svgType === "columnAdd" && /* @__PURE__ */ React.createElement(ColumnAddSVG, { num1: sub.svgData.num1, num2: sub.svgData.num2, result: sub.svgData.result }), sub.svgType === "columnSub" && /* @__PURE__ */ React.createElement(ColumnSubSVG, { num1: sub.svgData.num1, num2: sub.svgData.num2, result: sub.svgData.result }), sub.svgType === "estimation" && /* @__PURE__ */ React.createElement(EstimationSVG, { num1: sub.svgData.num1, num2: sub.svgData.num2, op: sub.svgData.op, rounded1: sub.svgData.rounded1, rounded2: sub.svgData.rounded2, estimate: sub.svgData.estimate, exact: sub.svgData.exact }), sub.svgType === "statesOfMatter" && /* @__PURE__ */ React.createElement(StatesOfMatterSVG, null), sub.svgType === "materialProperties" && /* @__PURE__ */ React.createElement(MaterialPropertiesSVG, null), sub.svgType === "mixturesSolutions" && /* @__PURE__ */ React.createElement(MixturesSolutionsSVG, null), sub.svgType === "gravityForce" && /* @__PURE__ */ React.createElement(GravityForceSVG, null), sub.svgType === "frictionForce" && /* @__PURE__ */ React.createElement(FrictionForceSVG, null), sub.svgType === "foodChain" && /* @__PURE__ */ React.createElement(FoodChainSVG, null), sub.svgType === "solarSystem" && /* @__PURE__ */ React.createElement(SolarSystemSVG, null), sub.svgType === "earthLayers" && /* @__PURE__ */ React.createElement(EarthLayersSVG, null), sub.svgType === "bodySystem" && /* @__PURE__ */ React.createElement(BodySystemSVG, { system: sub.svgData.system }), sub.svgType === "moonPhases" && /* @__PURE__ */ React.createElement(MoonPhasesSVG, null), sub.svgType === "magnetPoles" && /* @__PURE__ */ React.createElement(MagnetPolesSVG, null), sub.svgType === "lightReflection" && /* @__PURE__ */ React.createElement(LightRefractionSVG, null), sub.svgType === "simpleMachines" && /* @__PURE__ */ React.createElement(SimpleMachinesSVG, null), sub.svgType === "energyTypes" && /* @__PURE__ */ React.createElement(EnergyTypesSVG, null), sub.svgType === "dayNight" && /* @__PURE__ */ React.createElement(DayNightSVG, null), sub.svgType === "seasonsCycle" && /* @__PURE__ */ React.createElement(SeasonsCycleSVG, null), sub.svgType === "nervousSystem" && /* @__PURE__ */ React.createElement(NervousSystemSVG, null), sub.svgType === "classificationGroups" && /* @__PURE__ */ React.createElement(ClassificationSVG, null), sub.svgType === "adaptationTraits" && /* @__PURE__ */ React.createElement(AdaptationSVG, null), sub.svgType === "soundWaves" && /* @__PURE__ */ React.createElement(SoundWavesSVG, null), sub.svgType === "skeleton" && /* @__PURE__ */ React.createElement(SkeletonSVG, null), sub.svgType === "waterCycle" && /* @__PURE__ */ React.createElement(WaterCycleSVG, null), sub.svgType === "photosynthesis" && /* @__PURE__ */ React.createElement(PhotosynthesisSVG, null), sub.svgType === "pakistanMap" && /* @__PURE__ */ React.createElement(PakistanMapSVG, null), sub.svgType === "indusValley" && /* @__PURE__ */ React.createElement(IndusValleySVG, null), sub.svgType === "pakFlag" && /* @__PURE__ */ React.createElement(PakFlagSVG, null), sub.svgType === "pakGov" && /* @__PURE__ */ React.createElement(PakGovSVG, null), sub.svgType === "presidentialSystem" && /* @__PURE__ */ React.createElement(PresidentialSystemSVG, null), sub.svgType === "federalParliamentry" && /* @__PURE__ */ React.createElement(FederalParliamentrySVG, null), sub.svgType === "pakRivers" && /* @__PURE__ */ React.createElement(PakRiversSVG, null), sub.svgType === "numberLine" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(NumberLineSVG, { min: sub.svgData.min, max: sub.svgData.max, marks: sub.svgData.marks, highlight: sub.svgData.highlight }), /* @__PURE__ */ React.createElement("div", { className: "math-svg" }, /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 620 100", xmlns: "http://www.w3.org/2000/svg" }, /* @__PURE__ */ React.createElement("rect", { width: "620", height: "100", rx: "12", fill: "#1E293B" }), /* @__PURE__ */ React.createElement("text", { x: "310", y: "18", textAnchor: "middle", fill: "#94A3B8", fontSize: "12", fontWeight: "700", fontFamily: "'Baloo 2'" }, "Positive & Negative Numbers"), /* @__PURE__ */ React.createElement("line", { x1: "30", y1: "52", x2: "590", y2: "52", stroke: "#475569", strokeWidth: "3", strokeLinecap: "round" }), /* @__PURE__ */ React.createElement("polygon", { points: "22,52 30,46 30,58", fill: "#475569" }), /* @__PURE__ */ React.createElement("polygon", { points: "598,52 590,46 590,58", fill: "#475569" }), [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map((n, i) => {
         const x = 310 + n * 52;
         const isZero = n === 0;
@@ -4215,7 +4242,7 @@ ${error.message || error}`);
         setSubExerciseGroupIdx(null);
         setSubQuizGroupIdx(null);
         setRevealedEx({});
-      }, style: { flex: 1, padding: "10px 6px", borderRadius: 10, border: mathSubTab === t.id ? "2px solid " + t.c : "1px solid var(--border)", background: mathSubTab === t.id ? t.c + "22" : "var(--bg-elevated)", color: mathSubTab === t.id ? t.c : "var(--text-muted)", fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", fontSize: isUr ? 14 : 13, fontWeight: 700, cursor: "pointer" } }, t.label))), mathSubTab === "examples" && adjustedDayLessons && /* @__PURE__ */ React.createElement("div", { style: urS }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#38BDF8", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, sub.lessonLabel || (isUr ? "\u{1F4C5} \u0627\u0633\u0628\u0627\u0642 \u06A9\u06D2 \u062F\u0646" : "\u{1F4C5} Lesson Days")), adjustedDayLessons.map((lessonDay, dayIdx) => /* @__PURE__ */ React.createElement("div", { key: lessonDay.day || dayIdx, className: "adverb-detail-section", style: urS }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 12, ...urS } }, isUr ? `\u{1F4C5} \u062F\u0646 ${lessonDay.day}` : `\u{1F4C5} Day ${lessonDay.day}`), lessonDay.words && lessonDay.words.map((w, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { marginBottom: 10 } }, "opposite" in w || "oppositeUr" in w ? /* @__PURE__ */ React.createElement(OppositeWordRow, { en: w.en, ur: w.ur, opposite: w.opposite, oppositeUr: w.oppositeUr }) : "comp" in w || "super" in w ? /* @__PURE__ */ React.createElement(AdjWordRow, { en: w.en, ur: w.ur, comp: w.comp, sup: w.super }) : "v2" in w || "v3" in w ? /* @__PURE__ */ React.createElement(VerbWordRow, { en: w.en, ur: w.ur, v2: w.v2, v3: w.v3 }) : /* @__PURE__ */ React.createElement(WordRow, { en: w.en, ur: w.ur }), !sub.showWordSentences && w.meaning && /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" } }, "\u2192 ", w.meaning), sub.showWordSentences && (w.sentence || w.meaning) && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, paddingLeft: 14, paddingRight: 14 } }, /* @__PURE__ */ React.createElement(
+      }, style: { flex: 1, padding: "10px 6px", borderRadius: 10, border: mathSubTab === t.id ? "2px solid " + t.c : "1px solid var(--border)", background: mathSubTab === t.id ? t.c + "22" : "var(--bg-elevated)", color: mathSubTab === t.id ? t.c : "var(--text-muted)", fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", fontSize: isUr ? 14 : 13, fontWeight: 700, cursor: "pointer" } }, t.label))), mathSubTab === "examples" && adjustedDayLessons && /* @__PURE__ */ React.createElement("div", { style: urS }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#38BDF8", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, sub.lessonLabel || (isUr ? "\u{1F4C5} \u0627\u0633\u0628\u0627\u0642 \u06A9\u06D2 \u062F\u0646" : "\u{1F4C5} Lesson Days")), adjustedDayLessons.map((lessonDay, dayIdx) => /* @__PURE__ */ React.createElement("div", { key: lessonDay.day || dayIdx, className: "adverb-detail-section", style: urS }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 12, ...urS } }, isUr ? `\u{1F4C5} \u062F\u0646 ${lessonDay.day}` : `\u{1F4C5} Day ${lessonDay.day}`), lessonDay.title && /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginBottom: 10, ...urS } }, lessonDay.title), lessonDay.words && lessonDay.words.map((w, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { marginBottom: 10 } }, "opposite" in w || "oppositeUr" in w ? /* @__PURE__ */ React.createElement(OppositeWordRow, { en: w.en, ur: w.ur, opposite: w.opposite, oppositeUr: w.oppositeUr }) : "comp" in w || "super" in w ? /* @__PURE__ */ React.createElement(AdjWordRow, { en: w.en, ur: w.ur, comp: w.comp, sup: w.super }) : "v2" in w || "v3" in w ? /* @__PURE__ */ React.createElement(VerbWordRow, { en: w.en, ur: w.ur, v2: w.v2, v3: w.v3 }) : /* @__PURE__ */ React.createElement(WordRow, { en: w.en, ur: w.ur }), !sub.showWordSentences && w.meaning && /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" } }, "\u2192 ", w.meaning), sub.showWordSentences && (w.sentence || w.meaning) && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, paddingLeft: 14, paddingRight: 14 } }, /* @__PURE__ */ React.createElement(
         SpeakableSentence,
         {
           text: w.sentence || w.meaning,

@@ -12,8 +12,16 @@
   },
   {
     "title": "Reading Comprehension",
-    "content": "Main idea, supporting details, author's purpose.",
+    "content": "Build reading strength through guided tense-based passages, supporting details, and comprehension questions.",
     "key": "reading",
+    "hasMathSub": true,
+    "subs": [
+      {
+        "t": "Tenses",
+        "c": "Learn all 12 English tenses through reading-style paragraphs, formulas, and comprehension questions. Tap any sentence to hear it read aloud!",
+        "isTensesSub": true
+      }
+    ],
     "id": "english_5_1"
   },
   {
@@ -17207,10 +17215,19 @@
     "id": "english_5_3"
   },
   {
-    "title": "Tenses",
-    "content": "Learn all 12 English tenses — Present, Past, and Future. Each tense has Simple, Continuous, Perfect, and Perfect Continuous forms with practice paragraphs and comprehension questions. Tap any sentence to hear it read aloud!",
-    "key": "tenses",
-    "hasTenses": true,
+    "title": "Urdu to English",
+    "content": "Practice translating Urdu sentences into English through day-wise tense groups, examples, exercises, and quizzes.",
+    "key": "urdu_to_english",
+    "hasMathSub": true,
+    "subs": [
+      {
+        "t": "Urdu to English",
+        "c": "Translate Urdu sentences into natural English through day-wise tense practice. Review the examples, solve exercises, and test yourself in the quiz.",
+        "lessonLabel": "📅 Days",
+        "showWordSentences": false,
+        "dayLessons": window.HomeSchoolEnglishModules.URDU_TO_ENGLISH_DATA || []
+      }
+    ],
     "id": "english_5_4"
   },
   {

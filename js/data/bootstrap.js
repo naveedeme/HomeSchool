@@ -11,6 +11,7 @@
   "./js/data/english/collective-nouns.js",
   "./js/data/english/verbs.js",
   "./js/data/english/tenses.js",
+  "./js/data/english/urdu-to-english.js",
   "./js/data/english/vocabulary.js",
   "./js/data/english/adverb-phrases.js",
   "./js/data/english/opposites.js",

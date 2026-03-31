@@ -331,6 +331,7 @@ const DAY_SECTION_META = {
   wordOpposites: { labelEn: "Words Opposites", labelUr: "الفاظ کے متضاد", unitEn: "words", unitUr: "الفاظ", defaultSize: 5, max: 20 },
   adverbPhrases: { labelEn: "Adverb Phrases", labelUr: "فقراتِ حال", unitEn: "phrases", unitUr: "فقرے", defaultSize: 5, max: 15 },
   sentences: { labelEn: "Sentence Sections", labelUr: "جملوں والے سیکشن", unitEn: "sentences", unitUr: "جملے", defaultSize: 10, max: 20 },
+  urduToEnglish: { labelEn: "Urdu to English", labelUr: "اردو سے انگریزی", unitEn: "sentences", unitUr: "جملے", defaultSize: 5, max: 20 },
 };
 
 const AI_PROVIDER_ORDER = ["openai", "anthropic", "ollama"];
@@ -899,6 +900,7 @@ function buildDaySectionSettings(language, overrides = {}) {
 
 function getSubsectionSettingKey(subtitle) {
   const value = String(subtitle || "").trim().toLowerCase();
+  if (value === "urdu to english") return "urduToEnglish";
   if (value === "adverb phrases") return "adverbPhrases";
   if (value === "words meanings") return "wordMeanings";
   if (value === "words opposites") return "wordOpposites";
@@ -3537,6 +3539,10 @@ function buildDaySectionPairs(dayEntry, settingKey) {
   if (Array.isArray(dayEntry?.words)) {
     dayEntry.words.forEach((word) => {
       if (!word) return;
+      if (settingKey === "urduToEnglish") {
+        pushPair(word.ur, word.en);
+        return;
+      }
       if (settingKey === "wordOpposites") {
         pushPair(word.en, word.opposite || word.oppositeUr || word.ur);
         return;
@@ -3559,6 +3565,13 @@ function buildDaySectionPairs(dayEntry, settingKey) {
 function buildDaySectionPrompt(kind, prompt, answer, settingKey, isUrdu) {
   const normalizedPrompt = normalizeText(prompt);
   const normalizedAnswer = normalizeText(answer);
+  if (settingKey === "urduToEnglish") {
+    return kind === "fill"
+      ? `${normalizedPrompt} = ___`
+      : kind === "tf"
+        ? `${normalizedPrompt}: ${normalizedAnswer}`
+        : normalizedPrompt;
+  }
   if (settingKey === "wordOpposites") {
     if (kind === "fill") return isUrdu ? `"${normalizedPrompt}" کا متضاد ___ ہے` : `Opposite of "${normalizedPrompt}" is ___`;
     if (kind === "tf") return `${normalizedPrompt}: ${normalizedAnswer}`;
@@ -3569,6 +3582,9 @@ function buildDaySectionPrompt(kind, prompt, answer, settingKey, isUrdu) {
 
 function buildDaySectionQuestion(prompt, settingKey, isUrdu) {
   const normalizedPrompt = normalizeText(prompt);
+  if (settingKey === "urduToEnglish") {
+    return isUrdu ? `"${normalizedPrompt}" کا انگریزی ترجمہ کیا ہے؟` : `What is the English translation of "${normalizedPrompt}"?`;
+  }
   if (settingKey === "wordOpposites") {
     return isUrdu ? `"${normalizedPrompt}" کا متضاد کیا ہے؟` : `What is the opposite of "${normalizedPrompt}"?`;
   }
@@ -3652,6 +3668,10 @@ function buildDerivedDayBasedSub(sub, settingKey, itemsPerDay, subjectId) {
     exerciseGroups,
     quizGroups,
   };
+}
+
+function getTenseSubsectionIndex(lesson) {
+  return Array.isArray(lesson?.subs) ? lesson.subs.findIndex((sub) => sub?.isTensesSub) : -1;
 }
 
 function buildDerivedSentenceSub(subs, itemsPerDay, subjectId) {
@@ -4601,7 +4621,7 @@ function HomeschoolApp() {
     } else if (selectedLesson?.hasVocab) {
       derived.lessonMode = "vocab";
       derived.day = selectedVocabDay?.day || null;
-    } else if (selectedLesson?.hasTenses) {
+    } else if (selectedLesson?.hasTenses || (selectedLesson?.hasMathSub && activeSub?.isTensesSub)) {
       derived.lessonMode = "tenses";
       derived.tenseMain = tenseMain;
       derived.tenseSub = tenseSub;
@@ -5317,7 +5337,7 @@ function HomeschoolApp() {
     } else if (source?.lessonMode === "vocab") {
       lesson = lessons.find((entry) => entry.hasVocab) || null;
     } else if (source?.lessonMode === "tenses") {
-      lesson = lessons.find((entry) => entry.hasTenses) || null;
+      lesson = lessons.find((entry) => entry.hasTenses || getTenseSubsectionIndex(entry) >= 0) || null;
     } else if (source?.subTitle) {
       lesson = lessons.find((entry) => entry.hasMathSub && (entry.subs || []).some((sub) => sub.t === source.subTitle)) || null;
     } else if (source?.lessonTitle) {
@@ -5349,7 +5369,12 @@ function HomeschoolApp() {
         const dayEntry = pacedVocab.find((entry) => entry.day === source.day) || null;
         setSelectedVocabDay(dayEntry);
       }
-    } else if (lesson?.hasTenses) {
+    } else if (lesson?.hasTenses || (source?.lessonMode === "tenses" && lesson?.hasMathSub && getTenseSubsectionIndex(lesson) >= 0)) {
+      const tensesSubIndex = lesson?.hasMathSub ? getTenseSubsectionIndex(lesson) : -1;
+      if (tensesSubIndex >= 0) {
+        setMathSubIdx(tensesSubIndex);
+        setMathSubTab("examples");
+      }
       const nextMain = source?.tenseMain || tenseMain;
       const nextSub = source?.tenseSub || tenseSub;
       setTenseMain(nextMain);
@@ -5789,6 +5814,7 @@ function HomeschoolApp() {
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx !== null && (() => {
         const sub = normalizeSubLesson(activeLessonSubs[mathSubIdx], selectedSubject?.id);
+        const isTensesSub = !!sub?.isTensesSub;
         const adjustedDayLessons = sub.dayLessons;
         const toggleReveal = (k) => setRevealedEx(p => ({...p,[k]:!p[k]}));
         const isUr = selectedSubject?.id === "urdu";
@@ -5798,6 +5824,51 @@ function HomeschoolApp() {
         const exercisesToRender = activeExerciseGroup ? activeExerciseGroup.exercises : (sub.exerciseGroups ? null : sub.exercises);
         const quizToRender = activeQuizGroup ? activeQuizGroup.questions : (sub.quizGroups ? null : sub.quiz);
         const urS = isUr ? {direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"} : {};
+        if (isTensesSub) {
+          return (<>
+            {!selectedTensePara ? (<>
+              <div className="lesson-detail"><h2>{sub.t}</h2><p>{sub.c}</p><StudyItemInlineToolbar studyItem={{ prompt: sub.c, subject: "english", section: "tenses", sectionLabel: sub.t }} /></div>
+
+              <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
+                {[{id:"present",label:"🕐 Present",c:"#38BDF8"},{id:"past",label:"🕑 Past",c:"#F59E0B"},{id:"future",label:"🕒 Future",c:"#22C55E"}].map(t => (
+                  <button key={t.id} onClick={() => { setTenseMain(t.id); setTenseSub("simple"); }} style={{ flex: 1, padding: "10px 6px", borderRadius: 10, border: tenseMain === t.id ? "2px solid "+t.c : "1px solid var(--border)", background: tenseMain === t.id ? t.c+"22" : "var(--bg-elevated)", color: tenseMain === t.id ? t.c : "var(--text-muted)", fontFamily: "'Baloo 2', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+                {[{id:"simple",label:"Simple"},{id:"continuous",label:"Continuous"},{id:"perfect",label:"Perfect"},{id:"perfectContinuous",label:"Perf. Cont."}].map(t => (
+                  <button key={t.id} onClick={() => setTenseSub(t.id)} style={{ flex: 1, padding: "8px 3px", borderRadius: 8, border: tenseSub === t.id ? "2px solid #E879F9" : "1px solid var(--border)", background: tenseSub === t.id ? "rgba(232,121,249,0.15)" : "var(--bg-elevated)", color: tenseSub === t.id ? "#E879F9" : "var(--text-muted)", fontFamily: "'Baloo 2', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
+                ))}
+              </div>
+
+              {TENSES[tenseMain] && TENSES[tenseMain][tenseSub] && (<>
+                <div className="adverb-detail-section" style={{ marginBottom: 12 }}>
+                  <h3 style={{ color: "#E879F9" }}>{TENSES[tenseMain][tenseSub].name}</h3>
+                  <p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: "var(--font-ur)", direction: "rtl", marginTop: 4 }}>{TENSES[tenseMain][tenseSub].nameUr}</p>
+                  <p style={{ fontSize: 12, color: "#38BDF8", marginTop: 8, fontWeight: 600, background: "rgba(56,189,248,0.08)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(56,189,248,0.2)" }}>📐 {TENSES[tenseMain][tenseSub].formula}</p>
+                  <StudyItemInlineToolbar studyItem={{ prompt: TENSES[tenseMain][tenseSub].formula, subject: "english", section: "tenseFormula", sectionLabel: TENSES[tenseMain][tenseSub].name, secondaryText: TENSES[tenseMain][tenseSub].nameUr }} />
+                </div>
+                <div className="tts-hint">🔊 Tap any sentence to hear it read aloud!</div>
+                {TENSES[tenseMain][tenseSub].items.map((item, i) => (
+                  <div key={i} className="adverb-day-card" onClick={() => setSelectedTensePara(item)}>
+                    <span className="day-num">Paragraph {i + 1}</span>
+                    <h3>{item.title}</h3>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>{item.para.substring(0, 80)}...</p>
+                  </div>
+                ))}
+              </>)}
+            </>) : (<>
+              <div className="tts-hint">🔊 Tap any sentence to hear it read aloud!</div>
+              <div className="adverb-detail-section"><h3>📖 {selectedTensePara.title}</h3>
+                {selectedTensePara.para.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => <SpeakableSentence key={i} text={s} lang="en" studyItem={{ subject: "english", section: "tenseParagraphs", sectionLabel: selectedTensePara.title }} />)}
+                <button className="play-all-btn" onClick={() => playAll(selectedTensePara.para)}>▶️ Play Entire Paragraph</button>
+              </div>
+              {selectedTensePara.qs && (<div className="adverb-detail-section"><h3>❓ Comprehension Questions</h3>
+                {selectedTensePara.qs.map((q, i) => (<div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}><span style={{ color: "#F59E0B", fontWeight: 700, marginRight: 8 }}>Q{i+1}.</span>{q}<StudyItemInlineToolbar studyItem={{ prompt: q, subject: "english", section: "tenseQuestions", sectionLabel: selectedTensePara.title }} /></div>))}
+              </div>)}
+            </>)}
+          </>);
+        }
         return (<>
         <div className="adverb-detail-section" style={{marginBottom:10,...urS}}>
           <h3 style={{color:"#FF6B35",...urS}}>{isUr?"📖":"📐"} {sub.t}</h3>
@@ -5878,6 +5949,7 @@ function HomeschoolApp() {
           {adjustedDayLessons.map((lessonDay, dayIdx) => (
             <div key={lessonDay.day || dayIdx} className="adverb-detail-section" style={urS}>
               <h3 style={{color:"#38BDF8",marginBottom:12,...urS}}>{isUr ? `📅 دن ${lessonDay.day}` : `📅 Day ${lessonDay.day}`}</h3>
+              {lessonDay.title && <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 10, ...urS }}>{lessonDay.title}</p>}
               {lessonDay.words && lessonDay.words.map((w, i) => (
                 <div key={i} style={{ marginBottom: 10 }}>
                   {"opposite" in w || "oppositeUr" in w ? <OppositeWordRow en={w.en} ur={w.ur} opposite={w.opposite} oppositeUr={w.oppositeUr} /> : "comp" in w || "super" in w ? <AdjWordRow en={w.en} ur={w.ur} comp={w.comp} sup={w.super} /> : "v2" in w || "v3" in w ? <VerbWordRow en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} /> : <WordRow en={w.en} ur={w.ur} />}

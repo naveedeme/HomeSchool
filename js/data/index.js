@@ -33,6 +33,7 @@
     BADGES,
     POS_DATA,
     TENSES_DATA: englishModules.TENSES_DATA || {},
+    URDU_TO_ENGLISH_DATA: englishModules.URDU_TO_ENGLISH_DATA || [],
     VOCABULARY_DATA: englishModules.VOCABULARY_DATA || [],
     ADVERB_PHRASES_DATA: englishModules.ADVERB_PHRASES_DATA || [],
     ENGLISH_OPPOSITES_DATA: englishModules.ENGLISH_OPPOSITES_DATA || [],
