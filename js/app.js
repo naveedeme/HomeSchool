@@ -4450,8 +4450,8 @@ function HomeschoolApp() {
   const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
   const persistCustomizationRef = useRef(null);
-  const [language, setLanguage] = useState(stored?.language || "bilingual");
-  const [themeMode, setThemeMode] = useState(stored?.themeMode || "system");
+  const [language, setLanguage] = useState(stored?.language || "en");
+  const [themeMode, setThemeMode] = useState(stored?.themeMode || "dark");
   const ui = getUiText(language);
   const [daySectionOverrides, setDaySectionOverrides] = useState(stored?.daySectionOverrides || {});
   const [dailyReviewCap, setDailyReviewCap] = useState(Math.max(5, Math.min(50, Number(stored?.dailyReviewCap) || 20)));
@@ -4533,10 +4533,10 @@ function HomeschoolApp() {
   const [focusTimerSettings, setFocusTimerSettings] = useState(stored?.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false });
   const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number(stored?.focusTimerSettings?.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
   const [reminderSettings, setReminderSettings] = useState(stored?.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
-  const [navPosition, setNavPosition] = useState(["bottom", "right", "left", "top"].includes(stored?.navPosition) ? stored.navPosition : "bottom");
-  const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "fade");
+  const [navPosition, setNavPosition] = useState(["bottom", "right", "left", "top"].includes(stored?.navPosition) ? stored.navPosition : "top");
+  const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
-  const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "system"));
+  const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "dark"));
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [installAvailability, setInstallAvailability] = useState(isStandaloneMode() ? "installed" : "unavailable");
   const [installBannerDismissed, setInstallBannerDismissed] = useState(Boolean(stored?.installBannerDismissed));
