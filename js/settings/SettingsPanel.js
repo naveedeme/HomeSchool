@@ -257,7 +257,7 @@
   function renderAiProviderCard(provider, labels, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider) {
     const statusColor = provider.statusLabel && /ready|تیار/i.test(provider.statusLabel)
       ? "var(--success)"
-      : provider.statusLabel && /authorization|اجازت|blocked|روکا/i.test(provider.statusLabel)
+      : provider.statusLabel && /authorization|اجازت|blocked|روکا|quota|billing|کوٹہ|بلنگ|review|جائزہ/i.test(provider.statusLabel)
         ? "var(--warning)"
         : "var(--text-secondary)";
     const modelSelect = Array.isArray(provider.modelOptions) && provider.modelOptions.length > 0

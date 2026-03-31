@@ -435,6 +435,37 @@
     error.status = status;
     return error;
   }
+  function getAiErrorCode(error) {
+    return String(error?.code || "unknown");
+  }
+  function getAiStatusFromError(error) {
+    const code = getAiErrorCode(error);
+    if (code === "auth") return "auth";
+    if (code === "blocked") return "blocked";
+    if (code === "rate_limit") return "quota";
+    return "error";
+  }
+  function getFriendlyAiErrorMessage(providerId, error, language) {
+    const provider = AI_PROVIDER_DEFS[providerId];
+    const providerName = joinLocalizedText(provider?.name || providerId, provider?.nameUr || provider?.name || providerId, language);
+    const code = getAiErrorCode(error);
+    if (code === "auth") {
+      return joinLocalizedText(`${providerName} key is invalid or no longer authorized.`, `${providerName} \u06A9\u06CC \u062F\u0631\u0633\u062A \u0646\u06C1\u06CC\u06BA \u06C1\u06D2 \u06CC\u0627 \u0627\u0628 \u0645\u062C\u0627\u0632 \u0646\u06C1\u06CC\u06BA \u0631\u06C1\u06CC\u06D4`, language);
+    }
+    if (code === "rate_limit") {
+      return providerId === "openai" ? joinLocalizedText("OpenAI API billing or quota is required for this key.", "\u0627\u0633 OpenAI \u06A9\u06CC \u06A9\u06D2 \u0644\u06CC\u06D2 API \u0628\u0644\u0646\u06AF \u06CC\u0627 \u06A9\u0648\u0679\u06C1 \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2\u06D4", language) : joinLocalizedText(`${providerName} quota or rate limit was reached.`, `${providerName} \u06A9\u0627 \u06A9\u0648\u0679\u06C1 \u06CC\u0627 \u0631\u06CC\u0679 \u0644\u0645\u0679 \u067E\u0648\u0631\u06CC \u06C1\u0648 \u06AF\u0626\u06CC \u06C1\u06D2\u06D4`, language);
+    }
+    if (code === "blocked") {
+      return providerId === "ollama" ? joinLocalizedText("Ollama Cloud is blocking direct browser access from this site.", "Ollama Cloud \u0627\u0633 \u0633\u0627\u0626\u0679 \u0633\u06D2 \u0628\u0631\u0627\u06C1\u0650 \u0631\u0627\u0633\u062A \u0628\u0631\u0627\u0624\u0632\u0631 \u0631\u0633\u0627\u0626\u06CC \u06A9\u0648 \u0628\u0644\u0627\u06A9 \u06A9\u0631 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText(`${providerName} is blocking direct browser access from this site.`, `${providerName} \u0627\u0633 \u0633\u0627\u0626\u0679 \u0633\u06D2 \u0628\u0631\u0627\u06C1\u0650 \u0631\u0627\u0633\u062A \u0628\u0631\u0627\u0624\u0632\u0631 \u0631\u0633\u0627\u0626\u06CC \u06A9\u0648 \u0628\u0644\u0627\u06A9 \u06A9\u0631 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4`, language);
+    }
+    if (code === "timeout") {
+      return joinLocalizedText(`${providerName} took too long to respond.`, `${providerName} \u0646\u06D2 \u062C\u0648\u0627\u0628 \u062F\u06CC\u0646\u06D2 \u0645\u06CC\u06BA \u0628\u06C1\u062A \u0648\u0642\u062A \u0644\u06CC\u0627\u06D4`, language);
+    }
+    return error?.message || joinLocalizedText(`${providerName} could not be reached right now.`, `${providerName} \u062A\u06A9 \u0627\u0633 \u0648\u0642\u062A \u0631\u0633\u0627\u0626\u06CC \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC\u06D4`, language);
+  }
+  function isAiProviderReady(config) {
+    return Boolean(String(config?.apiKey || "").trim()) && config?.status === "ready";
+  }
   async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 2e4) {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -3298,10 +3329,10 @@ ${marker} `);
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
     useEffect(() => {
-      const configuredProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
-      if (!configuredProviders.length) return;
-      if (!configuredProviders.includes(selectedAiProvider)) {
-        setSelectedAiProvider(configuredProviders[0]);
+      const readyProviders = AI_PROVIDER_ORDER.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
+      if (!readyProviders.length) return;
+      if (!readyProviders.includes(selectedAiProvider)) {
+        setSelectedAiProvider(readyProviders[0]);
       }
     }, [aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
@@ -3395,13 +3426,13 @@ ${marker} `);
         }
         return nextConfig;
       } catch (error) {
-        const nextStatus = error?.code === "auth" ? "auth" : error?.code === "blocked" ? "blocked" : "saved";
+        const nextStatus = getAiStatusFromError(error);
         const nextConfig = {
           apiKey,
           model: requestedModel,
           models: normalizeAiModelList(providerId, source.models, requestedModel),
           status: nextStatus,
-          lastError: error?.message || "Unable to validate this provider in the browser.",
+          lastError: getFriendlyAiErrorMessage(providerId, error, language),
           validatedAt: null
         };
         setAiProviderConfigs((current) => ({ ...current, [providerId]: nextConfig }));
@@ -3410,7 +3441,7 @@ ${marker} `);
       } finally {
         setAiProviderBusy((current) => ({ ...current, [providerId]: false }));
       }
-    }, [aiProviderConfigs, aiProviderDrafts, selectedAiProvider]);
+    }, [aiProviderConfigs, aiProviderDrafts, language, selectedAiProvider]);
     const handleSaveAiProvider = useCallback(async (providerId) => {
       await saveAiProviderConfiguration(providerId);
     }, [saveAiProviderConfiguration]);
@@ -3462,9 +3493,14 @@ ${marker} `);
     const sendChat = async () => {
       if (!chatInput.trim()) return;
       const msg = chatInput.trim();
-      const availableProviders = AI_PROVIDER_ORDER.filter((providerId2) => String(aiProviderConfigs[providerId2]?.apiKey || "").trim());
-      if (!availableProviders.length) {
+      const savedProviders = AI_PROVIDER_ORDER.filter((providerId2) => String(aiProviderConfigs[providerId2]?.apiKey || "").trim());
+      const availableProviders = savedProviders.filter((providerId2) => isAiProviderReady(aiProviderConfigs[providerId2]));
+      if (!savedProviders.length) {
         setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor." }]);
+        return;
+      }
+      if (!availableProviders.length) {
+        setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "\u0679\u06CC\u0648\u0679\u0631 \u0686\u06CC\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0622\u067E \u06A9\u06D2 \u0645\u062D\u0641\u0648\u0638 \u0627\u06D2 \u0622\u0626\u06CC \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06AF\u0627\u0646 \u06A9\u0648 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u062F\u0631\u0633\u062A \u06A9\u0631\u0646\u0627 \u06C1\u0648\u06AF\u0627\u06D4", language) }]);
         return;
       }
       const browserCapability = canUseDirectAiFromBrowser();
@@ -3485,6 +3521,25 @@ ${marker} `);
         const answer = await requestAiTutorResponse(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
         setChatMessages((messages) => [...messages, { role: "ai", text: answer, provider: providerId }]);
       } catch (error) {
+        const nextStatus = getAiStatusFromError(error);
+        const nextFriendlyMessage = getFriendlyAiErrorMessage(providerId, error, language);
+        setAiProviderConfigs((current) => ({
+          ...current,
+          [providerId]: {
+            ...current[providerId] || createDefaultAiProviderConfigs()[providerId],
+            status: nextStatus,
+            lastError: nextFriendlyMessage,
+            validatedAt: nextStatus === "ready" ? Date.now() : null
+          }
+        }));
+        setAiProviderDrafts((current) => ({
+          ...current,
+          [providerId]: {
+            ...current[providerId] || createDefaultAiProviderConfigs()[providerId],
+            status: nextStatus,
+            lastError: nextFriendlyMessage
+          }
+        }));
         if (error?.code === "auth") {
           const replacementKey = prompt(joinLocalizedText(`Your ${providerDefinition.name} key needs to be updated. Paste a new key to continue.`, `${providerDefinition.nameUr} \u06A9\u06CC \u06A9\u06CC \u062F\u0648\u0628\u0627\u0631\u06C1 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0686\u06CC\u0679 \u062C\u0627\u0631\u06CC \u0631\u06C1 \u0633\u06A9\u06D2\u06D4`, language), "");
           if (replacementKey && replacementKey.trim()) {
@@ -3509,14 +3564,32 @@ ${marker} `);
                 setChatLoading(false);
                 return;
               } catch (retryError) {
-                setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText(`${providerLabel} is still not authorized. ${retryError?.message || ""}`.trim(), `${providerLabel} \u0627\u0628\u06BE\u06CC \u0628\u06BE\u06CC \u0645\u062C\u0627\u0632 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4 ${retryError?.message || ""}`.trim(), language) }]);
+                const retryMessage = getFriendlyAiErrorMessage(providerId, retryError, language);
+                setAiProviderConfigs((current) => ({
+                  ...current,
+                  [providerId]: {
+                    ...current[providerId] || createDefaultAiProviderConfigs()[providerId],
+                    status: getAiStatusFromError(retryError),
+                    lastError: retryMessage,
+                    validatedAt: null
+                  }
+                }));
+                setAiProviderDrafts((current) => ({
+                  ...current,
+                  [providerId]: {
+                    ...current[providerId] || createDefaultAiProviderConfigs()[providerId],
+                    status: getAiStatusFromError(retryError),
+                    lastError: retryMessage
+                  }
+                }));
+                setChatMessages((messages) => [...messages, { role: "ai", text: `${providerLabel}: ${retryMessage}` }]);
                 setChatLoading(false);
                 return;
               }
             }
           }
         }
-        setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText(`${providerLabel}: ${error?.message || "Connection issue. Please try again."}`, `${providerLabel}: ${error?.message || "\u06A9\u0646\u06CC\u06A9\u0634\u0646 \u0645\u0633\u0626\u0644\u06C1 \u06C1\u06D2\u060C \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4"}`, language) }]);
+        setChatMessages((messages) => [...messages, { role: "ai", text: `${providerLabel}: ${nextFriendlyMessage}` }]);
       }
       setChatLoading(false);
     };
@@ -3998,14 +4071,15 @@ ${error.message || error}`);
     });
     const aiBrowserCapability = canUseDirectAiFromBrowser();
     const configuredAiProviderIds = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
-    const currentAiProviderId = configuredAiProviderIds.includes(selectedAiProvider) ? selectedAiProvider : configuredAiProviderIds[0] || "openai";
+    const readyAiProviderIds = configuredAiProviderIds.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
+    const currentAiProviderId = readyAiProviderIds.includes(selectedAiProvider) ? selectedAiProvider : readyAiProviderIds[0] || "openai";
     const currentAiProviderConfig = aiProviderConfigs[currentAiProviderId] || createDefaultAiProviderConfigs()[currentAiProviderId];
     const currentAiModelOptions = normalizeAiModelList(currentAiProviderId, currentAiProviderConfig.models, currentAiProviderConfig.model);
     const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
       const definition = AI_PROVIDER_DEFS[providerId];
       const saved = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
       const draft = aiProviderDrafts[providerId] || saved;
-      const statusLabel = saved.status === "ready" ? joinLocalizedText("Ready", "\u062A\u06CC\u0627\u0631", language) : saved.status === "auth" ? joinLocalizedText("Needs authorization", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u062C\u0627\u0632\u062A \u062F\u0631\u06A9\u0627\u0631", language) : saved.status === "blocked" ? joinLocalizedText("Browser blocked", "\u0628\u0631\u0627\u0624\u0632\u0631 \u0646\u06D2 \u0631\u0648\u06A9\u0627", language) : saved.apiKey ? joinLocalizedText("Saved locally", "\u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638", language) : joinLocalizedText("Not configured", "\u0627\u0628\u06BE\u06CC \u0634\u0627\u0645\u0644 \u0646\u06C1\u06CC\u06BA", language);
+      const statusLabel = saved.status === "ready" ? joinLocalizedText("Ready", "\u062A\u06CC\u0627\u0631", language) : saved.status === "auth" ? joinLocalizedText("Needs authorization", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u062C\u0627\u0632\u062A \u062F\u0631\u06A9\u0627\u0631", language) : saved.status === "quota" ? joinLocalizedText("Quota or billing needed", "\u06A9\u0648\u0679\u06C1 \u06CC\u0627 \u0628\u0644\u0646\u06AF \u062F\u0631\u06A9\u0627\u0631", language) : saved.status === "blocked" ? joinLocalizedText("Browser blocked", "\u0628\u0631\u0627\u0624\u0632\u0631 \u0646\u06D2 \u0631\u0648\u06A9\u0627", language) : saved.status === "error" ? joinLocalizedText("Needs review", "\u062C\u0627\u0626\u0632\u06C1 \u062F\u0631\u06A9\u0627\u0631", language) : saved.apiKey ? joinLocalizedText("Saved locally", "\u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638", language) : joinLocalizedText("Not configured", "\u0627\u0628\u06BE\u06CC \u0634\u0627\u0645\u0644 \u0646\u06C1\u06CC\u06BA", language);
       return {
         id: providerId,
         label: joinLocalizedText(definition.name, definition.nameUr, language),
@@ -4014,7 +4088,8 @@ ${error.message || error}`);
         modelOptions: normalizeAiModelList(providerId, saved.models, draft.model || saved.model || definition.defaultModel),
         statusLabel,
         helpText: saved.lastError || (saved.apiKey ? `${maskApiKey(saved.apiKey)}` : joinLocalizedText("Add a key to enable this provider in Tutor.", "\u0627\u0633 \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06C1 \u06A9\u0648 \u0641\u0639\u0627\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language)),
-        busy: Boolean(aiProviderBusy[providerId])
+        busy: Boolean(aiProviderBusy[providerId]),
+        availableInTutor: isAiProviderReady(saved)
       };
     });
     const playAll = (p) => {
@@ -4260,14 +4335,14 @@ ${error.message || error}`);
     } }, renderLocalizedTextNode(ui.home, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
       resetReviewSession();
       handleStartReview();
-    } }, renderLocalizedTextNode(ui.startReview, language))))), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Tutor Setup", "\u0627\u06D2 \u0622\u0626\u06CC \u0627\u0633\u062A\u0627\u062F \u0633\u06CC\u0679 \u0627\u067E", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)))), configuredAiProviderIds.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: { display: "block" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 } }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(ui.aiSelectProvider || "Provider", language)), /* @__PURE__ */ React.createElement(
+    } }, renderLocalizedTextNode(ui.startReview, language))))), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Tutor Setup", "\u0627\u06D2 \u0622\u0626\u06CC \u0627\u0633\u062A\u0627\u062F \u0633\u06CC\u0679 \u0627\u067E", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)))), readyAiProviderIds.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: { display: "block" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 } }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(ui.aiSelectProvider || "Provider", language)), /* @__PURE__ */ React.createElement(
       "select",
       {
         value: currentAiProviderId,
         onChange: (event) => setSelectedAiProvider(event.target.value),
         style: { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "var(--font-ur)" : "var(--font)" }
       },
-      configuredAiProviderIds.map((providerId) => /* @__PURE__ */ React.createElement("option", { key: providerId, value: providerId }, renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)))
+      readyAiProviderIds.map((providerId) => /* @__PURE__ */ React.createElement("option", { key: providerId, value: providerId }, renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)))
     )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(ui.aiSelectModel || "Model", language)), /* @__PURE__ */ React.createElement(
       "select",
       {
@@ -4276,16 +4351,16 @@ ${error.message || error}`);
         style: { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)", minWidth: 220 }
       },
       currentAiModelOptions.map((modelName) => /* @__PURE__ */ React.createElement("option", { key: modelName, value: modelName }, modelName))
-    ))), !aiBrowserCapability.ok ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)) : null) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 0 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor.", language)), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setTab("settings") }, renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)))), /* @__PURE__ */ React.createElement("div", { className: "tutor-shell" }, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement(
+    ))), !aiBrowserCapability.ok ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)) : null) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 0 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(configuredAiProviderIds.length > 0 ? joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "\u0679\u06CC\u0648\u0679\u0631 \u0686\u06CC\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0622\u067E \u06A9\u06D2 \u0645\u062D\u0641\u0648\u0638 \u0627\u06D2 \u0622\u0626\u06CC \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06AF\u0627\u0646 \u06A9\u0648 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u062F\u0631\u0633\u062A \u06A9\u0631\u0646\u0627 \u06C1\u0648\u06AF\u0627\u06D4", language) : ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor.", language)), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setTab("settings") }, renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)))), /* @__PURE__ */ React.createElement("div", { className: "tutor-shell" }, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         value: chatInput,
         onChange: (e) => setChatInput(e.target.value),
         onKeyDown: (e) => e.key === "Enter" && sendChat(),
-        placeholder: !aiBrowserCapability.ok ? language === "ur" ? "\u0627\u06D2 \u0622\u0626\u06CC \u0686\u06CC\u0679 \u06A9\u06D2 \u0644\u06CC\u06D2 HTTPS \u06CC\u0627 localhost \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA..." : "Use HTTPS or localhost for AI chat..." : configuredAiProviderIds.length > 0 ? language === "ur" ? "\u0627\u067E\u0646\u06D2 \u0627\u0633\u062A\u0627\u062F \u0633\u06D2 \u06A9\u0686\u06BE \u0628\u06BE\u06CC \u067E\u0648\u0686\u06BE\u06CC\u06BA..." : "Ask your tutor anything..." : language === "ur" ? "\u067E\u06C1\u0644\u06D2 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u0627\u06D2 \u0622\u0626\u06CC \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA..." : "Add an AI key in Settings first...",
-        disabled: chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok
+        placeholder: !aiBrowserCapability.ok ? language === "ur" ? "\u0627\u06D2 \u0622\u0626\u06CC \u0686\u06CC\u0679 \u06A9\u06D2 \u0644\u06CC\u06D2 HTTPS \u06CC\u0627 localhost \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA..." : "Use HTTPS or localhost for AI chat..." : readyAiProviderIds.length > 0 ? language === "ur" ? "\u0627\u067E\u0646\u06D2 \u0627\u0633\u062A\u0627\u062F \u0633\u06D2 \u06A9\u0686\u06BE \u0628\u06BE\u06CC \u067E\u0648\u0686\u06BE\u06CC\u06BA..." : "Ask your tutor anything..." : language === "ur" ? "\u067E\u06C1\u0644\u06D2 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u0627\u06D2 \u0622\u0626\u06CC \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA..." : "Fix or add an AI key in Settings first...",
+        disabled: chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok
       }
-    ), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok }, "\u27A4")))), tab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderGradeValueNode(ui.grade, grade, language))), /* @__PURE__ */ React.createElement("div", { className: "settings-profile-card", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 0, marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText("Edit Names", "\u0646\u0627\u0645 \u062A\u0628\u062F\u06CC\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("English Name", "\u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0646\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok }, "\u27A4")))), tab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderGradeValueNode(ui.grade, grade, language))), /* @__PURE__ */ React.createElement("div", { className: "settings-profile-card", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 0, marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText("Edit Names", "\u0646\u0627\u0645 \u062A\u0628\u062F\u06CC\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("English Name", "\u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0646\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement(
       "input",
       {
         className: "settings-text-input",

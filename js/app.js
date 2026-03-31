@@ -450,6 +450,45 @@ function buildAiError(code, message, status = null) {
   return error;
 }
 
+function getAiErrorCode(error) {
+  return String(error?.code || "unknown");
+}
+
+function getAiStatusFromError(error) {
+  const code = getAiErrorCode(error);
+  if (code === "auth") return "auth";
+  if (code === "blocked") return "blocked";
+  if (code === "rate_limit") return "quota";
+  return "error";
+}
+
+function getFriendlyAiErrorMessage(providerId, error, language) {
+  const provider = AI_PROVIDER_DEFS[providerId];
+  const providerName = joinLocalizedText(provider?.name || providerId, provider?.nameUr || provider?.name || providerId, language);
+  const code = getAiErrorCode(error);
+  if (code === "auth") {
+    return joinLocalizedText(`${providerName} key is invalid or no longer authorized.`, `${providerName} کی درست نہیں ہے یا اب مجاز نہیں رہی۔`, language);
+  }
+  if (code === "rate_limit") {
+    return providerId === "openai"
+      ? joinLocalizedText("OpenAI API billing or quota is required for this key.", "اس OpenAI کی کے لیے API بلنگ یا کوٹہ درکار ہے۔", language)
+      : joinLocalizedText(`${providerName} quota or rate limit was reached.`, `${providerName} کا کوٹہ یا ریٹ لمٹ پوری ہو گئی ہے۔`, language);
+  }
+  if (code === "blocked") {
+    return providerId === "ollama"
+      ? joinLocalizedText("Ollama Cloud is blocking direct browser access from this site.", "Ollama Cloud اس سائٹ سے براہِ راست براؤزر رسائی کو بلاک کر رہا ہے۔", language)
+      : joinLocalizedText(`${providerName} is blocking direct browser access from this site.`, `${providerName} اس سائٹ سے براہِ راست براؤزر رسائی کو بلاک کر رہا ہے۔`, language);
+  }
+  if (code === "timeout") {
+    return joinLocalizedText(`${providerName} took too long to respond.`, `${providerName} نے جواب دینے میں بہت وقت لیا۔`, language);
+  }
+  return error?.message || joinLocalizedText(`${providerName} could not be reached right now.`, `${providerName} تک اس وقت رسائی نہیں ہو سکی۔`, language);
+}
+
+function isAiProviderReady(config) {
+  return Boolean(String(config?.apiKey || "").trim()) && config?.status === "ready";
+}
+
 async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 20000) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -4809,10 +4848,10 @@ function HomeschoolApp() {
   }, [reviewStats.due]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
   useEffect(() => {
-    const configuredProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
-    if (!configuredProviders.length) return;
-    if (!configuredProviders.includes(selectedAiProvider)) {
-      setSelectedAiProvider(configuredProviders[0]);
+    const readyProviders = AI_PROVIDER_ORDER.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
+    if (!readyProviders.length) return;
+    if (!readyProviders.includes(selectedAiProvider)) {
+      setSelectedAiProvider(readyProviders[0]);
     }
   }, [aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
@@ -4901,13 +4940,13 @@ function HomeschoolApp() {
       }
       return nextConfig;
     } catch (error) {
-      const nextStatus = error?.code === "auth" ? "auth" : error?.code === "blocked" ? "blocked" : "saved";
+      const nextStatus = getAiStatusFromError(error);
       const nextConfig = {
         apiKey,
         model: requestedModel,
         models: normalizeAiModelList(providerId, source.models, requestedModel),
         status: nextStatus,
-        lastError: error?.message || "Unable to validate this provider in the browser.",
+        lastError: getFriendlyAiErrorMessage(providerId, error, language),
         validatedAt: null,
       };
       setAiProviderConfigs((current) => ({ ...current, [providerId]: nextConfig }));
@@ -4916,7 +4955,7 @@ function HomeschoolApp() {
     } finally {
       setAiProviderBusy((current) => ({ ...current, [providerId]: false }));
     }
-  }, [aiProviderConfigs, aiProviderDrafts, selectedAiProvider]);
+  }, [aiProviderConfigs, aiProviderDrafts, language, selectedAiProvider]);
 
   const handleSaveAiProvider = useCallback(async (providerId) => {
     await saveAiProviderConfiguration(providerId);
@@ -4970,9 +5009,14 @@ function HomeschoolApp() {
   const sendChat = async () => {
     if (!chatInput.trim()) return;
     const msg = chatInput.trim();
-    const availableProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
-    if (!availableProviders.length) {
+    const savedProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
+    const availableProviders = savedProviders.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
+    if (!savedProviders.length) {
       setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor." }]);
+      return;
+    }
+    if (!availableProviders.length) {
+      setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "ٹیوٹر چیٹ شروع کرنے سے پہلے آپ کے محفوظ اے آئی فراہم کنندگان کو ترتیبات میں درست کرنا ہوگا۔", language) }]);
       return;
     }
     const browserCapability = canUseDirectAiFromBrowser();
@@ -4993,6 +5037,25 @@ function HomeschoolApp() {
       const answer = await requestAiTutorResponse(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
       setChatMessages((messages) => [...messages, { role: "ai", text: answer, provider: providerId }]);
     } catch (error) {
+      const nextStatus = getAiStatusFromError(error);
+      const nextFriendlyMessage = getFriendlyAiErrorMessage(providerId, error, language);
+      setAiProviderConfigs((current) => ({
+        ...current,
+        [providerId]: {
+          ...(current[providerId] || createDefaultAiProviderConfigs()[providerId]),
+          status: nextStatus,
+          lastError: nextFriendlyMessage,
+          validatedAt: nextStatus === "ready" ? Date.now() : null,
+        },
+      }));
+      setAiProviderDrafts((current) => ({
+        ...current,
+        [providerId]: {
+          ...(current[providerId] || createDefaultAiProviderConfigs()[providerId]),
+          status: nextStatus,
+          lastError: nextFriendlyMessage,
+        },
+      }));
       if (error?.code === "auth") {
         const replacementKey = prompt(joinLocalizedText(`Your ${providerDefinition.name} key needs to be updated. Paste a new key to continue.`, `${providerDefinition.nameUr} کی کی دوبارہ درج کریں تاکہ چیٹ جاری رہ سکے۔`, language), "");
         if (replacementKey && replacementKey.trim()) {
@@ -5017,14 +5080,32 @@ function HomeschoolApp() {
               setChatLoading(false);
               return;
             } catch (retryError) {
-              setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText(`${providerLabel} is still not authorized. ${retryError?.message || ""}`.trim(), `${providerLabel} ابھی بھی مجاز نہیں ہے۔ ${retryError?.message || ""}`.trim(), language) }]);
+              const retryMessage = getFriendlyAiErrorMessage(providerId, retryError, language);
+              setAiProviderConfigs((current) => ({
+                ...current,
+                [providerId]: {
+                  ...(current[providerId] || createDefaultAiProviderConfigs()[providerId]),
+                  status: getAiStatusFromError(retryError),
+                  lastError: retryMessage,
+                  validatedAt: null,
+                },
+              }));
+              setAiProviderDrafts((current) => ({
+                ...current,
+                [providerId]: {
+                  ...(current[providerId] || createDefaultAiProviderConfigs()[providerId]),
+                  status: getAiStatusFromError(retryError),
+                  lastError: retryMessage,
+                },
+              }));
+              setChatMessages((messages) => [...messages, { role: "ai", text: `${providerLabel}: ${retryMessage}` }]);
               setChatLoading(false);
               return;
             }
           }
         }
       }
-      setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText(`${providerLabel}: ${error?.message || "Connection issue. Please try again."}`, `${providerLabel}: ${error?.message || "کنیکشن مسئلہ ہے، دوبارہ کوشش کریں۔"}`, language) }]);
+      setChatMessages((messages) => [...messages, { role: "ai", text: `${providerLabel}: ${nextFriendlyMessage}` }]);
     }
     setChatLoading(false);
   };
@@ -5501,7 +5582,8 @@ function HomeschoolApp() {
   });
   const aiBrowserCapability = canUseDirectAiFromBrowser();
   const configuredAiProviderIds = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
-  const currentAiProviderId = configuredAiProviderIds.includes(selectedAiProvider) ? selectedAiProvider : (configuredAiProviderIds[0] || "openai");
+  const readyAiProviderIds = configuredAiProviderIds.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
+  const currentAiProviderId = readyAiProviderIds.includes(selectedAiProvider) ? selectedAiProvider : (readyAiProviderIds[0] || "openai");
   const currentAiProviderConfig = aiProviderConfigs[currentAiProviderId] || createDefaultAiProviderConfigs()[currentAiProviderId];
   const currentAiModelOptions = normalizeAiModelList(currentAiProviderId, currentAiProviderConfig.models, currentAiProviderConfig.model);
   const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
@@ -5512,8 +5594,12 @@ function HomeschoolApp() {
       ? joinLocalizedText("Ready", "تیار", language)
       : saved.status === "auth"
         ? joinLocalizedText("Needs authorization", "دوبارہ اجازت درکار", language)
+        : saved.status === "quota"
+          ? joinLocalizedText("Quota or billing needed", "کوٹہ یا بلنگ درکار", language)
         : saved.status === "blocked"
           ? joinLocalizedText("Browser blocked", "براؤزر نے روکا", language)
+          : saved.status === "error"
+            ? joinLocalizedText("Needs review", "جائزہ درکار", language)
           : saved.apiKey
             ? joinLocalizedText("Saved locally", "مقامی طور پر محفوظ", language)
             : joinLocalizedText("Not configured", "ابھی شامل نہیں", language);
@@ -5528,6 +5614,7 @@ function HomeschoolApp() {
         ? `${maskApiKey(saved.apiKey)}`
         : joinLocalizedText("Add a key to enable this provider in Tutor.", "اس فراہم کنندہ کو فعال کرنے کے لیے کی شامل کریں۔", language)),
       busy: Boolean(aiProviderBusy[providerId]),
+      availableInTutor: isAiProviderReady(saved),
     };
   });
 
@@ -6256,7 +6343,7 @@ function HomeschoolApp() {
               <p>{renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)}</p>
             </div>
           </div>
-          {configuredAiProviderIds.length > 0 ? (
+          {readyAiProviderIds.length > 0 ? (
             <>
               <div className="settings-item" style={{ display: "block" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
@@ -6266,7 +6353,7 @@ function HomeschoolApp() {
                     onChange={(event) => setSelectedAiProvider(event.target.value)}
                     style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "var(--font-ur)" : "var(--font)" }}
                   >
-                    {configuredAiProviderIds.map((providerId) => <option key={providerId} value={providerId}>{renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)}</option>)}
+                    {readyAiProviderIds.map((providerId) => <option key={providerId} value={providerId}>{renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)}</option>)}
                   </select>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -6284,7 +6371,7 @@ function HomeschoolApp() {
             </>
           ) : (
             <div className="review-panel" style={{ marginBottom: 0 }}>
-              <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor.", language)}</p>
+              <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(configuredAiProviderIds.length > 0 ? joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "ٹیوٹر چیٹ شروع کرنے سے پہلے آپ کے محفوظ اے آئی فراہم کنندگان کو ترتیبات میں درست کرنا ہوگا۔", language) : (ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor."), language)}</p>
               <button className="ghost-cta" onClick={() => setTab("settings")}>{renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)}</button>
             </div>
           )}
@@ -6300,10 +6387,10 @@ function HomeschoolApp() {
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && sendChat()}
-              placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : configuredAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں..." : "Ask your tutor anything...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Add an AI key in Settings first...")}
-              disabled={chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok}
+              placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : readyAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں..." : "Ask your tutor anything...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Fix or add an AI key in Settings first...")}
+              disabled={chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok}
             />
-            <button onClick={sendChat} disabled={chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok}>➤</button>
+            <button onClick={sendChat} disabled={chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok}>➤</button>
           </div>
         </div>
       </>)}
