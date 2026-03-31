@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback, useContext } = React;
 
 const {
   SUBJECTS,
@@ -97,6 +97,30 @@ const UI_TEXT = {
     reviewExample: "Context",
     reviewReadyNow: "ready now",
     reviewTotalDue: "total due",
+    reviewHeatmap: "Review Heatmap",
+    reviewHeatmapHint: "See how consistently you reviewed over the last 12 weeks.",
+    weakWordsReport: "Weak Words Report",
+    weakWordsHint: "These words need extra attention because they are overdue, frequently missed, or still unstable.",
+    favoriteWords: "Favorite Words",
+    notedWords: "Notes Board",
+    studyCollections: "Study Collections",
+    customLists: "Custom Lists",
+    createList: "Create List",
+    createListPlaceholder: "Add a list name...",
+    noWeakWords: "No weak words right now. Keep your review streak going.",
+    noFavorites: "Star words from lessons or review cards to keep them handy here.",
+    noNotes: "Save notes on tricky words and they will collect here.",
+    noCustomLists: "Create a custom list to group words for focused practice.",
+    addNote: "Add Note",
+    saveNote: "Save Note",
+    notePlaceholder: "Write a quick reminder, trick, or sentence...",
+    accuracy: "Accuracy",
+    lapses: "Lapses",
+    overdue: "Overdue",
+    dueNow: "Due now",
+    listItems: "List items",
+    deleteList: "Delete List",
+    noListItems: "No words in this list yet.",
     importNow: "Import this backup now?",
     replacePrompt: "Press OK to replace your current saved progress.\nPress Cancel to merge this backup with your current progress.",
     importSuccessReplace: "Progress imported successfully and replaced your current saved progress.",
@@ -206,6 +230,30 @@ const UI_TEXT = {
     reviewExample: "مثال",
     reviewReadyNow: "ابھی تیار",
     reviewTotalDue: "کل باقی",
+    reviewHeatmap: "ریویو ہیٹ میپ",
+    reviewHeatmapHint: "گزشتہ 12 ہفتوں میں آپ نے کتنی باقاعدگی سے ریویو کیا، یہاں دیکھیں۔",
+    weakWordsReport: "کمزور الفاظ رپورٹ",
+    weakWordsHint: "یہ الفاظ زیادہ توجہ چاہتے ہیں کیونکہ یہ بار بار غلط ہوئے، باقی ہیں، یا ابھی مضبوط نہیں ہوئے۔",
+    favoriteWords: "پسندیدہ الفاظ",
+    notedWords: "نوٹس بورڈ",
+    studyCollections: "مطالعہ کلیکشنز",
+    customLists: "اپنی فہرستیں",
+    createList: "فہرست بنائیں",
+    createListPlaceholder: "فہرست کا نام لکھیں...",
+    noWeakWords: "اس وقت کوئی کمزور لفظ نہیں۔ اپنا ریویو تسلسل جاری رکھیں۔",
+    noFavorites: "اسباق یا ریویو کارڈز سے الفاظ کو ستارہ دیں، وہ یہاں جمع ہو جائیں گے۔",
+    noNotes: "مشکل الفاظ پر نوٹس لکھیں، وہ یہاں نظر آئیں گے۔",
+    noCustomLists: "مشقی الفاظ کو جمع کرنے کے لیے نئی فہرست بنائیں۔",
+    addNote: "نوٹ لکھیں",
+    saveNote: "نوٹ محفوظ کریں",
+    notePlaceholder: "یاد رکھنے کے لیے کوئی اشارہ، مثال یا چھوٹا نوٹ لکھیں...",
+    accuracy: "درستگی",
+    lapses: "غلطیاں",
+    overdue: "تاخیر",
+    dueNow: "ابھی واجب",
+    listItems: "فہرست کے الفاظ",
+    deleteList: "فہرست حذف کریں",
+    noListItems: "اس فہرست میں ابھی کوئی لفظ نہیں۔",
     importNow: "کیا یہ بیک اپ ابھی امپورٹ کرنا ہے؟",
     replacePrompt: "اوکے دبائیں تاکہ موجودہ پیش رفت بدل دی جائے۔\nکینسل دبائیں تاکہ بیک اپ کو موجودہ پیش رفت کے ساتھ ملا دیا جائے۔",
     importSuccessReplace: "پیش رفت کامیابی سے امپورٹ ہو گئی اور موجودہ ڈیٹا بدل دیا گیا۔",
@@ -2589,7 +2637,11 @@ function numToWords(n) {
 }
 
 function ttsClean(text) {
-  return text
+  const source = String(text || "");
+  const normalized = /[\u0600-\u06FF]/.test(source)
+    ? source.replace(/\s*\/\s*/g, ' ')
+    : source;
+  return normalized
     .replace(/\[(\d+)\]/g, '$1')
     .replace(/₹|Rs\.?\s*/g, 'Rupees ')
     .replace(/→/g, ' to ')
@@ -2719,8 +2771,19 @@ function stripInlineUrduForKnownWords(text, words) {
 }
 
 // ─── TTS Clickable Sentence ───
-function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null }) {
+function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null, studyItem = null }) {
+  const app = useContext(AppContext);
+  const studyCard = studyItem ? resolveStudyCard(app, {
+    prompt: text,
+    answer: studyItem.answer,
+    secondaryText: studyItem.secondaryText,
+    subject: studyItem.subject,
+    section: studyItem.section,
+    sectionLabel: studyItem.sectionLabel,
+  }) : null;
+  const focusProps = getStudyFocusProps(app, studyCard);
   const [speaking, setSpeaking] = useState(false);
+  const isLight = isLightUiTheme();
   const handleClick = () => {
     if (!isTtsEnabled()) return;
     window.speechSynthesis.cancel();
@@ -2775,15 +2838,29 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
     return renderHighlightText(text, highlight, "sentence");
   };
   return (
-    <button onClick={handleClick} style={{ display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid rgba(148,163,184,0.15)", background: speaking ? "rgba(56,189,248,0.12)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "#F1F5F9", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : "none", position: "relative", ...buttonStyle }}>
-      <span style={{ position: "absolute", right: lang === "ur" ? "auto" : 12, left: lang === "ur" ? 12 : "auto", top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
-      <span style={{ paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0, ...textStyle }}>{renderText()}</span>
-    </button>
+    <div {...focusProps} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%" }}>
+      <button onClick={handleClick} style={{ display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative", ...buttonStyle }}>
+        <span style={{ position: "absolute", right: lang === "ur" ? "auto" : 12, left: lang === "ur" ? 12 : "auto", top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
+        <span style={{ paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0, ...textStyle }}>{renderText()}</span>
+      </button>
+      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
+    </div>
   );
 }
 
-function MixedUrduParagraphSentence({ text, highlight = null }) {
+function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null }) {
+  const app = useContext(AppContext);
+  const studyCard = studyItem ? resolveStudyCard(app, {
+    prompt: text,
+    answer: studyItem.answer,
+    secondaryText: studyItem.secondaryText,
+    subject: studyItem.subject,
+    section: studyItem.section,
+    sectionLabel: studyItem.sectionLabel,
+  }) : null;
+  const focusProps = getStudyFocusProps(app, studyCard);
   const [speaking, setSpeaking] = useState(false);
+  const isLight = isLightUiTheme();
   const handleClick = () => {
     if (!isTtsEnabled()) return;
     window.speechSynthesis.cancel();
@@ -2825,10 +2902,13 @@ function MixedUrduParagraphSentence({ text, highlight = null }) {
     return parts.length ? <>{parts}</> : renderHighlighted(text, "full");
   };
   return (
-    <button onClick={handleClick} style={{ display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid rgba(148,163,184,0.15)", background: speaking ? "rgba(56,189,248,0.12)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "#F1F5F9", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : "none", position: "relative" }}>
-      <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
-      <span style={{ paddingRight: 28 }}>{renderText()}</span>
-    </button>
+    <div {...focusProps} style={{ width: "100%", maxWidth: "100%" }}>
+      <button onClick={handleClick} style={{ display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative" }}>
+        <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
+        <span style={{ paddingRight: 28 }}>{renderText()}</span>
+      </button>
+      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
+    </div>
   );
 }
 
@@ -2847,6 +2927,16 @@ function normalizeText(text) {
 
 function trimQuestionText(text) {
   return normalizeText(String(text || "").replace(/_{3,}/g, "").replace(/\s*:\s*$/, "").replace(/\s*[?؟]\s*$/, ""));
+}
+
+function simpleHash(input) {
+  const text = String(input || "");
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(index);
+    hash |= 0;
+  }
+  return `h${Math.abs(hash)}`;
 }
 
 function shortPromptLabel(text, isUrdu) {
@@ -3252,6 +3342,280 @@ function buildDerivedSentenceSub(subs, itemsPerDay, subjectId) {
   }));
 }
 
+function isLightUiTheme() {
+  return window.HomeSchoolPrefs?.resolvedTheme === "light";
+}
+
+function buildReviewStatsFallback(stats = {}, library = [], analytics = null) {
+  const now = Date.now();
+  const masteryThreshold = 5;
+  const todayKey = window.HomeSchoolUtils.getDayKey(now);
+  const safeLibrary = Array.isArray(library) ? library : [];
+  const safeAnalytics = analytics || {};
+  const todayHeatCell = Array.isArray(safeAnalytics.heatmap)
+    ? safeAnalytics.heatmap.find((cell) => cell?.dayKey === todayKey) || safeAnalytics.heatmap[0]
+    : null;
+  const derived = {
+    total: safeLibrary.length,
+    due: safeLibrary.filter((card) => (Number(card?.dueAt) || 0) <= now).length,
+    mastered: safeLibrary.filter((card) => (Number(card?.box) || 0) >= masteryThreshold).length,
+    learning: safeLibrary.filter((card) => ((Number(card?.totalReviews) || 0) > 0 || (Number(card?.box) || 0) > 0) && (Number(card?.box) || 0) < masteryThreshold).length,
+    newCards: safeLibrary.filter((card) => !card?.lastReviewedAt).length,
+    reviewedToday: safeLibrary.filter((card) => card?.lastReviewedAt && window.HomeSchoolUtils.getDayKey(card.lastReviewedAt) === todayKey).length,
+    favorites: safeLibrary.filter((card) => !!card?.favorite).length,
+    notedWords: safeLibrary.filter((card) => String(card?.note || "").trim().length > 0).length,
+    customLists: Array.isArray(safeAnalytics.customLists) ? safeAnalytics.customLists.length : 0,
+    retentionRate: todayHeatCell?.count ? Number(todayHeatCell.accuracy) || 0 : 0,
+  };
+  const nextStats = { ...(stats || {}) };
+  return {
+    ...nextStats,
+    total: Math.max(Number(nextStats.total) || 0, derived.total),
+    due: Math.max(Number(nextStats.due) || 0, derived.due),
+    mastered: Math.max(Number(nextStats.mastered) || 0, derived.mastered),
+    learning: Math.max(Number(nextStats.learning) || 0, derived.learning),
+    newCards: Math.max(Number(nextStats.newCards) || 0, derived.newCards),
+    reviewedToday: Math.max(Number(nextStats.reviewedToday) || 0, derived.reviewedToday, Number(todayHeatCell?.count) || 0),
+    favorites: Math.max(Number(nextStats.favorites) || 0, derived.favorites, Number(safeAnalytics?.totals?.favorites) || 0),
+    notedWords: Math.max(Number(nextStats.notedWords) || 0, derived.notedWords, Number(safeAnalytics?.totals?.notedWords) || 0),
+    customLists: Math.max(Number(nextStats.customLists) || 0, derived.customLists, Number(safeAnalytics?.totals?.customLists) || 0),
+    retentionRate: Math.max(Number(nextStats.retentionRate) || 0, derived.retentionRate),
+    reviewStreak: Number(nextStats.reviewStreak) || 0,
+  };
+}
+
+function getReviewWordLookupKey(prompt, answer) {
+  return `${normalizeText(prompt).toLowerCase()}|${normalizeText(answer).toLowerCase()}`;
+}
+
+function buildStandaloneStudyItemId(studyItem) {
+  return `study_item_${simpleHash([
+    normalizeText(studyItem?.subject || "english").toLowerCase(),
+    normalizeText(studyItem?.section || "general").toLowerCase(),
+    normalizeText(studyItem?.prompt || "").toLowerCase(),
+    normalizeText(studyItem?.answer || "").toLowerCase(),
+  ].join("|"))}`;
+}
+
+function buildStandaloneStudyMetaRecord(studyItem = {}, meta = null) {
+  return {
+    id: buildStandaloneStudyItemId(studyItem),
+    prompt: studyItem.prompt || "",
+    answer: studyItem.answer || studyItem.secondaryText || "",
+    subject: studyItem.subject || "english",
+    section: studyItem.section || "general",
+    sectionLabel: studyItem.sectionLabel || studyItem.section || "General",
+    source: meta?.source || studyItem.source || null,
+    favorite: Boolean(meta?.favorite),
+    note: String(meta?.note || ""),
+    listIds: [],
+    listNames: [],
+    studyUpdatedAt: meta?.updatedAt || 0,
+    reviewBacked: false,
+    standalone: true,
+  };
+}
+
+function applyStudyMetaToLookup(currentLookup, meta) {
+  if (!meta?.id) return currentLookup;
+  return {
+    ...(currentLookup || {}),
+    [meta.id]: {
+      ...(currentLookup?.[meta.id] || {}),
+      ...meta,
+    },
+  };
+}
+
+function resolveStudyCard(app, studyItem = {}) {
+  const prompt = String(studyItem?.prompt || "").trim();
+  const answer = String(studyItem?.answer || studyItem?.secondaryText || "").trim();
+  if (!prompt) return null;
+  const reviewCard = answer ? (app?.reviewWordLookup?.[getReviewWordLookupKey(prompt, answer)] || null) : null;
+  if (reviewCard) {
+    return {
+      ...reviewCard,
+      source: reviewCard.source || studyItem.source || app?.buildViewSource?.() || null,
+      reviewBacked: true,
+    };
+  }
+  const standaloneId = buildStandaloneStudyItemId(studyItem);
+  const meta = app?.studyMetaLookup?.[standaloneId] || null;
+  return buildStandaloneStudyMetaRecord({ ...studyItem, prompt, answer, source: studyItem.source || app?.buildViewSource?.() || null }, meta);
+}
+
+function getStudyFocusProps(app, studyCard, baseClassName = "") {
+  const className = [
+    baseClassName,
+    studyCard?.id ? "study-focus-target" : "",
+    studyCard?.id && app?.viewTargetId === studyCard.id ? "study-focus-active" : "",
+  ].filter(Boolean).join(" ");
+
+  return {
+    className,
+    "data-study-id": studyCard?.id || undefined,
+  };
+}
+
+function getReviewDueLabel(card, language) {
+  const now = Date.now();
+  const dueAt = Number(card?.dueAt) || now;
+  if (dueAt <= now) {
+    const overdueDays = Math.floor((now - dueAt) / (24 * 60 * 60 * 1000));
+    return overdueDays > 0
+      ? joinLocalizedText(`${overdueDays}d overdue`, `${overdueDays} دن ${UI_TEXT.ur.overdue}`, language)
+      : joinLocalizedText(UI_TEXT.en.dueNow, UI_TEXT.ur.dueNow, language);
+  }
+  const remainingDays = Math.max(1, Math.ceil((dueAt - now) / (24 * 60 * 60 * 1000)));
+  return joinLocalizedText(`Due in ${remainingDays}d`, `${remainingDays} دن بعد`, language);
+}
+
+function WordCollectionToolbar({ card, compact = false }) {
+  const app = useContext(AppContext);
+  const language = app?.language || "en";
+  const [showNoteEditor, setShowNoteEditor] = useState(false);
+  const [draftNote, setDraftNote] = useState(card?.note || "");
+
+  useEffect(() => {
+    setDraftNote(card?.note || "");
+  }, [card?.id, card?.note]);
+
+  if (!card || !app?.onToggleFavorite) return null;
+  const supportsLists = card.reviewBacked !== false;
+  const canViewSource = Boolean(app?.onViewStudyItem);
+
+  const buttonClass = `study-tool-btn${compact ? " compact" : ""}${card.favorite ? " active" : ""}`;
+
+  return (
+    <div className={`study-tools${compact ? " compact" : ""}`}>
+      <div className="study-tool-row">
+        <button
+          type="button"
+          className={buttonClass}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (card.reviewBacked === false) app.onToggleStudyFavorite?.(card);
+            else app.onToggleFavorite(card.id);
+          }}
+          title={card.favorite ? "Remove favorite" : "Add favorite"}
+        >
+          {card.favorite ? "★" : "☆"} {renderLocalizedTextNode(joinLocalizedText("Favorite", "پسندیدہ", language), language)}
+        </button>
+        <button
+          type="button"
+          className={`study-tool-btn${compact ? " compact" : ""}${showNoteEditor || card.note ? " active" : ""}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            setShowNoteEditor((value) => !value);
+          }}
+        >
+          📝 {renderLocalizedTextNode(joinLocalizedText(UI_TEXT.en.addNote, UI_TEXT.ur.addNote, language), language)}
+        </button>
+        {canViewSource ? (
+          <button
+            type="button"
+            className={`study-tool-btn${compact ? " compact" : ""}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              app.onViewStudyItem?.(card);
+            }}
+          >
+            👁️ {renderLocalizedTextNode(joinLocalizedText("View", "دیکھیں", language), language)}
+          </button>
+        ) : null}
+      </div>
+
+      {supportsLists && Array.isArray(app.customLists) && app.customLists.length > 0 && (
+        <div className="study-list-pills">
+          {app.customLists.map((list) => {
+            const included = (card.listIds || []).includes(list.id);
+            return (
+              <button
+                key={list.id}
+                type="button"
+                className={`study-list-chip${included ? " active" : ""}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  app.onToggleCardInList?.(card.id, list.id);
+                }}
+              >
+                {included ? "✓" : "+"} {list.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {showNoteEditor && (
+        <div className="study-note-editor">
+          <textarea
+            value={draftNote}
+            onChange={(event) => setDraftNote(event.target.value)}
+            placeholder={language === "ur" ? UI_TEXT.ur.notePlaceholder : UI_TEXT.en.notePlaceholder}
+            style={isUrduUi(language) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : {}}
+          />
+          <div className="study-note-actions">
+            <button
+              type="button"
+              className="study-tool-btn save"
+              onClick={async (event) => {
+                event.stopPropagation();
+                if (card.reviewBacked === false) {
+                  await app.onSaveStudyNote?.(card, draftNote);
+                } else {
+                  await app.onSaveWordNote?.(card.id, draftNote);
+                }
+                setShowNoteEditor(false);
+              }}
+            >
+              {renderLocalizedTextNode(joinLocalizedText(UI_TEXT.en.saveNote, UI_TEXT.ur.saveNote, language), language)}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudyWordCard({ card, showStats = true }) {
+  const app = useContext(AppContext);
+  const language = app?.language || "en";
+  const accuracy = card.totalReviews ? Math.round(((card.correctReviews || 0) / card.totalReviews) * 100) : 0;
+  return (
+    <div className="study-word-card">
+      <div className="study-word-head">
+        <div>
+          <div className="study-word-prompt">{card.prompt}</div>
+          {card.answer ? <div className="study-word-answer">{card.answer}</div> : null}
+        </div>
+        <span className="study-word-section">{card.sectionLabel || card.section}</span>
+      </div>
+      {card.meaning ? <div className="study-word-meaning">{card.meaning}</div> : null}
+      {card.note ? <div className="study-word-note">{card.note}</div> : null}
+      {showStats && (
+        <div className="study-word-stats">
+          <span>{renderLocalizedTextNode(joinLocalizedText(`${UI_TEXT.en.accuracy}: ${accuracy}%`, `${UI_TEXT.ur.accuracy}: ${accuracy}%`, language), language)}</span>
+          <span>{renderLocalizedTextNode(joinLocalizedText(`${UI_TEXT.en.lapses}: ${card.lapses || 0}`, `${UI_TEXT.ur.lapses}: ${card.lapses || 0}`, language), language)}</span>
+          <span>{renderLocalizedTextNode(getReviewDueLabel(card, language), language)}</span>
+        </div>
+      )}
+      <WordCollectionToolbar card={card} compact={showStats} />
+    </div>
+  );
+}
+
+function StudyItemInlineToolbar({ studyItem }) {
+  const app = useContext(AppContext);
+  const card = resolveStudyCard(app, studyItem);
+  const focusProps = getStudyFocusProps(app, card);
+  if (!card) return null;
+  return (
+    <div {...focusProps} style={{ marginTop: 8 }}>
+      <WordCollectionToolbar card={card} compact={true} />
+    </div>
+  );
+}
+
 function getSimpleMachinePromptVisual(sub, exercise, prompt) {
   if (!sub || sub.t !== "Simple Machines" || !exercise || exercise.q !== "Name the simple machine:") return null;
   const lower = (prompt || "").toLowerCase();
@@ -3293,6 +3657,9 @@ function getSimpleMachinePromptVisual(sub, exercise, prompt) {
 }
 
 function WordRow({ en, ur }) {
+  const app = useContext(AppContext);
+  const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "englishWords", sectionLabel: "English" });
+  const focusProps = getStudyFocusProps(app, studyCard, "word-row");
   const [sEn, setSEn] = useState(false);
   const [sUr, setSUr] = useState(false);
   const [sBoth, setSBoth] = useState(false);
@@ -3316,7 +3683,7 @@ function WordRow({ en, ur }) {
   const speakUr = (e) => {
     if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSUr(true);
-    const u = new SpeechSynthesisUtterance(ur); u.lang = "ur-PK"; u.rate = 0.8;
+    const u = new SpeechSynthesisUtterance(ttsClean(ur)); u.lang = "ur-PK"; u.rate = 0.8;
     const pref = getUrduVoice();
     if (pref) { u.voice = pref; u.lang = pref.lang; }
     u.onend = () => setSUr(false); u.onerror = () => setSUr(false);
@@ -3336,7 +3703,7 @@ function WordRow({ en, ur }) {
     enUtter.onend = () => {
       setSEn(false);
       setSUr(true);
-      const urUtter = new SpeechSynthesisUtterance(ur);
+      const urUtter = new SpeechSynthesisUtterance(ttsClean(ur));
       urUtter.lang = "ur-PK";
       urUtter.rate = 0.8;
       const urVoice = getUrduVoice();
@@ -3349,67 +3716,91 @@ function WordRow({ en, ur }) {
     window.speechSynthesis.speak(enUtter);
   };
   return (
-    <div className="word-row" onClick={speakBoth} style={{ cursor: "pointer", boxShadow: sBoth ? "0 0 0 1px rgba(56,189,248,0.22)" : "none", transition: "box-shadow 0.2s" }}>
-      <span className={"word-en" + (sEn ? " word-active" : "")} onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{en} {sEn ? "🔊" : "🔈"}</span>
-      <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+    <div {...focusProps} onClick={speakBoth} style={{ cursor: "pointer", boxShadow: sBoth ? "0 0 0 1px rgba(56,189,248,0.22)" : "none", transition: "box-shadow 0.2s", flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <span className={"word-en" + (sEn ? " word-active" : "")} onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{en} {sEn ? "🔊" : "🔈"}</span>
+        <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+      </div>
+      {studyCard ? (
+        <div className="word-study-row" onClick={(event) => event.stopPropagation()}>
+          <div style={{ width: "100%" }}>
+            <WordCollectionToolbar card={studyCard} compact={true} />
+            {studyCard.note ? <span className="word-study-note">{studyCard.note}</span> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 
 function OppositeWordRow({ en, ur, opposite, oppositeUr }) {
+  const app = useContext(AppContext);
+  const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "opposites", sectionLabel: "Opposites" });
+  const focusProps = getStudyFocusProps(app, studyCard, "word-row");
+  const isLight = isLightUiTheme();
   const cardStyle = {
-    background: "rgba(15,23,42,0.45)",
-    border: "1px solid rgba(148,163,184,0.18)",
+    background: isLight ? "rgba(255,255,255,0.82)" : "rgba(15,23,42,0.45)",
+    border: "1px solid var(--border)",
     borderRadius: 12,
     padding: "10px 12px",
     display: "flex",
     flexDirection: "column",
     gap: 6
   };
-  const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "#94A3B8", textTransform: "uppercase" };
+  const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--text-muted)", textTransform: "uppercase" };
   return (
-    <div className="word-row" style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+    <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, width: "100%" }}>
         <div style={cardStyle}>
           <span style={labelStyle}>Word</span>
-          <SpeakableSentence text={en} lang="en" fullWidth={false} buttonStyle={{ background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.28)", color: "#E0F2FE", justifyContent: "flex-start" }} />
-          <SpeakableSentence text={ur} lang="ur" fullWidth={false} buttonStyle={{ background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: "#DCFCE7", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+          <SpeakableSentence text={en} lang="en" fullWidth={false} buttonStyle={{ background: isLight ? "rgba(56,189,248,0.10)" : "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.28)", color: isLight ? "var(--text-primary)" : "#E0F2FE", justifyContent: "flex-start" }} />
+          <SpeakableSentence text={ur} lang="ur" fullWidth={false} buttonStyle={{ background: isLight ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: isLight ? "var(--text-primary)" : "#DCFCE7", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
         </div>
         <div style={cardStyle}>
           <span style={labelStyle}>Opposite</span>
-          <SpeakableSentence text={opposite} lang="en" fullWidth={false} buttonStyle={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", color: "#FEF3C7", justifyContent: "flex-start" }} />
-          <SpeakableSentence text={oppositeUr} lang="ur" fullWidth={false} buttonStyle={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.30)", color: "#F3E8FF", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+          <SpeakableSentence text={opposite} lang="en" fullWidth={false} buttonStyle={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", color: isLight ? "var(--text-primary)" : "#FEF3C7", justifyContent: "flex-start" }} />
+          <SpeakableSentence text={oppositeUr} lang="ur" fullWidth={false} buttonStyle={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.30)", color: isLight ? "var(--text-primary)" : "#F3E8FF", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
         </div>
       </div>
+      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
     </div>
   );
 }
 
 function SentencePairRow({ en, ur }) {
+  const app = useContext(AppContext);
+  const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "sentences", sectionLabel: "Sentences" });
+  const focusProps = getStudyFocusProps(app, studyCard, "word-row");
+  const isLight = isLightUiTheme();
   const cardStyle = {
-    background: "rgba(15,23,42,0.45)",
-    border: "1px solid rgba(148,163,184,0.18)",
+    background: isLight ? "rgba(255,255,255,0.82)" : "rgba(15,23,42,0.45)",
+    border: "1px solid var(--border)",
     borderRadius: 12,
     padding: "10px 12px",
     display: "flex",
     flexDirection: "column",
     gap: 8
   };
-  const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "#94A3B8", textTransform: "uppercase" };
+  const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--text-muted)", textTransform: "uppercase" };
   return (
-    <div className="word-row" style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+    <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
       <div style={cardStyle}>
         <span style={labelStyle}>English Sentence</span>
-        <SpeakableSentence text={en} lang="en" buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: "#E0F2FE", marginBottom: 0 }} />
+        <SpeakableSentence text={en} lang="en" buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLight ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0 }} />
         <span style={{ ...labelStyle, color: "#22C55E", marginTop: 2 }}>Urdu Translation</span>
-        <SpeakableSentence text={ur} lang="ur" buttonStyle={{ background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: "#DCFCE7", marginBottom: 0 }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+        <SpeakableSentence text={ur} lang="ur" buttonStyle={{ background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: isLight ? "var(--text-primary)" : "#DCFCE7", marginBottom: 0 }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
       </div>
+      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
     </div>
   );
 }
 
 function AdjWordRow({ en, ur, comp, sup }) {
+  const app = useContext(AppContext);
+  const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "adjectives", sectionLabel: "Adjectives" });
+  const focusProps = getStudyFocusProps(app, studyCard, "word-row");
+  const isLight = isLightUiTheme();
   const [sEn, setSEn] = useState(false);
   const [sUr, setSUr] = useState(false);
   const speakEn = (e) => {
@@ -3426,7 +3817,7 @@ function AdjWordRow({ en, ur, comp, sup }) {
   const speakUr = (e) => {
     if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSUr(true);
-    const u = new SpeechSynthesisUtterance(ur); u.lang = "ur-PK"; u.rate = 0.8;
+    const u = new SpeechSynthesisUtterance(ttsClean(ur)); u.lang = "ur-PK"; u.rate = 0.8;
     const voices = window.speechSynthesis.getVoices();
     const pref = voices.find(v => v.lang.startsWith("ur")) || voices.find(v => v.lang.startsWith("hi")) || voices.find(v => v.lang.includes("IN"));
     if (pref) { u.voice = pref; u.lang = pref.lang; }
@@ -3434,16 +3825,21 @@ function AdjWordRow({ en, ur, comp, sup }) {
     window.speechSynthesis.speak(u);
   };
   return (
-    <div className="word-row" style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+    <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "#F1F5F9", fontWeight: 700, fontSize: 15, transition: "color 0.2s" }}>{en} → {comp} → {sup} {sEn ? "🔊" : "🔈"}</span>
+        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s" }}>{en} → {comp} → {sup} {sEn ? "🔊" : "🔈"}</span>
         <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
       </div>
+      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
     </div>
   );
 }
 
 function VerbWordRow({ en, ur, v2, v3 }) {
+  const app = useContext(AppContext);
+  const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" });
+  const focusProps = getStudyFocusProps(app, studyCard, "word-row");
+  const isLight = isLightUiTheme();
   const [sEn, setSEn] = useState(false);
   const [sUr, setSUr] = useState(false);
   const speakEn = (e) => {
@@ -3460,7 +3856,7 @@ function VerbWordRow({ en, ur, v2, v3 }) {
   const speakUr = (e) => {
     if (!isTtsEnabled()) return;
     e.stopPropagation(); window.speechSynthesis.cancel(); setSUr(true);
-    const u = new SpeechSynthesisUtterance(ur); u.lang = "ur-PK"; u.rate = 0.8;
+    const u = new SpeechSynthesisUtterance(ttsClean(ur)); u.lang = "ur-PK"; u.rate = 0.8;
     const voices = window.speechSynthesis.getVoices();
     const pref = voices.find(v => v.lang.startsWith("ur")) || voices.find(v => v.lang.startsWith("hi")) || voices.find(v => v.lang.includes("IN"));
     if (pref) { u.voice = pref; u.lang = pref.lang; }
@@ -3468,11 +3864,12 @@ function VerbWordRow({ en, ur, v2, v3 }) {
     window.speechSynthesis.speak(u);
   };
   return (
-    <div className="word-row" style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+    <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "#F1F5F9", fontWeight: 700, fontSize: 15, transition: "color 0.2s" }}>{en} → {v2} → {v3} {sEn ? "🔊" : "🔈"}</span>
+        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s" }}>{en} → {v2} → {v3} {sEn ? "🔊" : "🔈"}</span>
         <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
       </div>
+      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
     </div>
   );
 }
@@ -3531,12 +3928,19 @@ function HomeschoolApp() {
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [storageLabel, setStorageLabel] = useState("IndexedDB + localStorage");
   const [reviewStats, setReviewStats] = useState({ due: 0, mastered: 0, learning: 0, reviewedToday: 0, retentionRate: 0, reviewStreak: 0 });
+  const [reviewLibrary, setReviewLibrary] = useState([]);
+  const [studyMetaLookup, setStudyMetaLookup] = useState({});
+  const [reviewAnalytics, setReviewAnalytics] = useState({ heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], totals: { reviewedLastPeriod: 0, favorites: 0, notedWords: 0, customLists: 0 } });
   const [reviewQueue, setReviewQueue] = useState([]);
   const [reviewIdx, setReviewIdx] = useState(0);
   const [reviewReveal, setReviewReveal] = useState(false);
   const [reviewSessionDone, setReviewSessionDone] = useState(false);
   const [reviewSessionXp, setReviewSessionXp] = useState(0);
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [viewTargetId, setViewTargetId] = useState(null);
+  const [pageFlashActive, setPageFlashActive] = useState(false);
+  const [heatmapExpanded, setHeatmapExpanded] = useState(false);
+  const [customListDraft, setCustomListDraft] = useState("");
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "system"));
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [installAvailability, setInstallAvailability] = useState(isStandaloneMode() ? "installed" : "unavailable");
@@ -3619,6 +4023,16 @@ function HomeschoolApp() {
     border: "1px solid var(--border)",
     color: "var(--text-secondary)",
   };
+  const dayGroupBackButtonStyle = {
+    width: "auto",
+    marginTop: 0,
+    padding: "10px 14px",
+    background: isLightTheme
+      ? "linear-gradient(135deg,rgba(226,232,240,0.96),rgba(241,245,249,0.98))"
+      : "linear-gradient(135deg,#475569,#334155)",
+    color: "var(--text-primary)",
+    border: "1px solid var(--border)",
+  };
 
   const refreshStorageLabel = useCallback(async () => {
     if (!window.HomeSchoolDB) {
@@ -3633,8 +4047,51 @@ function HomeschoolApp() {
 
   const refreshReviewStats = useCallback(async () => {
     if (!window.HomeSchoolDB) return;
-    const nextStats = await window.HomeSchoolDB.getReviewStats();
-    setReviewStats(nextStats);
+    const [nextStats, nextLibrary, nextAnalytics, nextMetaRows] = await Promise.all([
+      window.HomeSchoolDB.getReviewStats().catch(() => ({})),
+      window.HomeSchoolDB.getReviewLibrary().catch(() => []),
+      window.HomeSchoolDB.getReviewAnalytics().catch(() => null),
+      window.HomeSchoolDB.getAllStudyMeta().catch(() => []),
+    ]);
+    setStudyMetaLookup((nextMetaRows || []).reduce((acc, row) => {
+      if (row?.id) acc[row.id] = row;
+      return acc;
+    }, {}));
+    setReviewStats(buildReviewStatsFallback(nextStats, nextLibrary, nextAnalytics));
+  }, []);
+
+  const refreshReviewWorkspace = useCallback(async () => {
+    if (!window.HomeSchoolDB) return;
+    const [statsResult, libraryResult, analyticsResult, metaResult] = await Promise.allSettled([
+      window.HomeSchoolDB.getReviewStats(),
+      window.HomeSchoolDB.getReviewLibrary(),
+      window.HomeSchoolDB.getReviewAnalytics(),
+      window.HomeSchoolDB.getAllStudyMeta(),
+    ]);
+    const nextLibrary = libraryResult.status === "fulfilled" ? libraryResult.value : [];
+    const nextAnalytics = analyticsResult.status === "fulfilled"
+      ? analyticsResult.value
+      : { heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], totals: { reviewedLastPeriod: 0, favorites: 0, notedWords: 0, customLists: 0 } };
+    const nextMetaRows = metaResult.status === "fulfilled" ? metaResult.value : [];
+    if (libraryResult.status !== "fulfilled") {
+      console.log("Unable to refresh review library:", libraryResult.reason);
+    }
+    if (analyticsResult.status !== "fulfilled") {
+      console.log("Unable to refresh review analytics:", analyticsResult.reason);
+    }
+    if (statsResult.status !== "fulfilled") {
+      console.log("Unable to refresh review stats:", statsResult.reason);
+    }
+    if (metaResult.status !== "fulfilled") {
+      console.log("Unable to refresh study metadata:", metaResult.reason);
+    }
+    setReviewLibrary(nextLibrary);
+    setReviewAnalytics(nextAnalytics);
+    setStudyMetaLookup((nextMetaRows || []).reduce((acc, row) => {
+      if (row?.id) acc[row.id] = row;
+      return acc;
+    }, {}));
+    setReviewStats(buildReviewStatsFallback(statsResult.status === "fulfilled" ? statsResult.value : {}, nextLibrary, nextAnalytics));
   }, []);
 
   if (!persistCustomizationRef.current) {
@@ -3715,7 +4172,7 @@ function HomeschoolApp() {
           setCurrentVersion(versionState.newVersion || window.HomeSchoolData.VERSION);
           setUpdateAvailable(versionState.needsUpdate);
         }
-        await refreshReviewStats();
+        await refreshReviewWorkspace();
       } catch(e) { console.log("DB load fallback to inline:", e); }
       setDbLoaded(true);
     })();
@@ -3752,6 +4209,187 @@ function HomeschoolApp() {
         return buildDerivedDayBasedSub(sub, settingKey, daySectionSettings[settingKey]?.itemsPerDay || 5, selectedSubject?.id);
       }))
     : [];
+
+  const buildViewSource = useCallback((overrides = {}) => {
+    const currentPosDay = posTab === "adverbs"
+      ? selectedAdverbDay
+      : posTab === "prepositions"
+        ? selectedPrepDay
+        : posTab === "adjectives"
+          ? selectedAdjDay
+          : posTab === "conjunctions"
+            ? selectedConjDay
+            : posTab === "pronouns"
+              ? selectedPronDay
+              : posTab === "nouns"
+                ? selectedNounDay
+                : posTab === "verbs"
+                  ? selectedVerbDay
+                  : null;
+    const activeSub = mathSubIdx !== null ? (activeLessonSubs?.[mathSubIdx] || null) : null;
+    const activeExerciseGroup = activeSub?.exerciseGroups && subExerciseGroupIdx !== null ? activeSub.exerciseGroups[subExerciseGroupIdx] : null;
+    const activeQuizGroup = activeSub?.quizGroups && subQuizGroupIdx !== null ? activeSub.quizGroups[subQuizGroupIdx] : null;
+    const derived = {
+      subject: selectedSubject?.id || "english",
+      lessonKey: selectedLesson?.key || null,
+      lessonTitle: selectedLesson?.title || null,
+    };
+
+    if (selectedLesson?.hasAdverbs) {
+      derived.lessonMode = "adverbs";
+      derived.posTab = posTab;
+      derived.day = currentPosDay?.day || null;
+    } else if (selectedLesson?.hasVocab) {
+      derived.lessonMode = "vocab";
+      derived.day = selectedVocabDay?.day || null;
+    } else if (selectedLesson?.hasTenses) {
+      derived.lessonMode = "tenses";
+      derived.tenseMain = tenseMain;
+      derived.tenseSub = tenseSub;
+      derived.paragraphTitle = selectedTensePara?.title || null;
+    } else if (selectedLesson?.hasMathSub && activeSub) {
+      derived.subIndex = mathSubIdx;
+      derived.subTitle = activeSub.t;
+      derived.subTab = mathSubTab;
+      derived.groupLabel = activeExerciseGroup?.label || activeQuizGroup?.label || null;
+    }
+
+    return {
+      ...derived,
+      ...overrides,
+    };
+  }, [activeLessonSubs, mathSubIdx, mathSubTab, posTab, selectedAdverbDay, selectedAdjDay, selectedConjDay, selectedLesson, selectedNounDay, selectedPrepDay, selectedPronDay, selectedSubject, selectedTensePara, selectedVerbDay, selectedVocabDay, subExerciseGroupIdx, subQuizGroupIdx, tenseMain, tenseSub]);
+
+  const inferViewSource = useCallback((card) => {
+    if (!card) return null;
+    const rawSource = card.source || null;
+    const posSettingMap = {
+      adverbs: "adverbs",
+      prepositions: "prepositions",
+      adjectives: "adjectives",
+      conjunctions: "conjunctions",
+      pronouns: "pronouns",
+      nouns: "collectiveNouns",
+      collectiveNouns: "collectiveNouns",
+      verbs: "verbs",
+    };
+
+    if (rawSource?.subject === "english") {
+      if (rawSource.lessonMode === "adverbs" || ["adverbs", "prepositions", "adjectives", "conjunctions", "pronouns", "collectiveNouns", "verbs"].includes(card.section)) {
+        const posTabValue = rawSource.posTab || (card.section === "collectiveNouns" ? "nouns" : card.section) || "adverbs";
+        return {
+          subject: "english",
+          lessonKey: "parts_of_speech",
+          subSettingKey: posSettingMap[posTabValue] || posSettingMap[card.section] || "adverbs",
+          posTab: posTabValue,
+          day: rawSource.day ?? card.day ?? null,
+        };
+      }
+      if (rawSource.lessonMode === "vocab" || card.section === "vocabulary") {
+        return {
+          subject: "english",
+          lessonKey: "vocabulary",
+          subSettingKey: "wordsMeanings",
+          day: rawSource.day ?? card.day ?? null,
+        };
+      }
+      if ((rawSource.lessonKey === "sentences" && rawSource.subSettingKey === "adverbPhrases") || card.section === "adverbPhrases") {
+        return {
+          subject: "english",
+          lessonKey: "phrases",
+          subSettingKey: "adverbPhrases",
+          day: rawSource.day ?? card.day ?? null,
+        };
+      }
+      if ((rawSource.lessonKey === "sentences" && rawSource.subSettingKey === "opposites") || card.section === "opposites") {
+        return {
+          subject: "english",
+          lessonKey: "vocabulary",
+          subSettingKey: "wordsOpposites",
+          day: rawSource.day ?? card.day ?? null,
+        };
+      }
+      if ((rawSource.lessonKey === "sentences" && rawSource.subSettingKey === "sentences") || card.section === "sentences") {
+        return {
+          subject: "english",
+          lessonKey: "sentences",
+          day: rawSource.day ?? card.day ?? null,
+        };
+      }
+      if (rawSource.lessonKey || rawSource.lessonTitle || rawSource.subTitle) {
+        return rawSource;
+      }
+    }
+    if (card.subject === "english") {
+      if (["adverbs", "prepositions", "adjectives", "conjunctions", "pronouns", "collectiveNouns", "verbs"].includes(card.section)) {
+        return {
+          subject: "english",
+          lessonKey: "parts_of_speech",
+          subSettingKey: card.section === "collectiveNouns" ? "collectiveNouns" : card.section,
+          posTab: card.section === "collectiveNouns" ? "nouns" : card.section,
+          day: card.day || null,
+        };
+      }
+      if (card.section === "vocabulary") {
+        return {
+          subject: "english",
+          lessonKey: "vocabulary",
+          subSettingKey: "wordsMeanings",
+          day: card.day || null,
+        };
+      }
+      if (card.section === "adverbPhrases") {
+        return {
+          subject: "english",
+          lessonKey: "phrases",
+          subSettingKey: "adverbPhrases",
+          day: card.day || null,
+        };
+      }
+      if (card.section === "opposites") {
+        return {
+          subject: "english",
+          lessonKey: "vocabulary",
+          subSettingKey: "wordsOpposites",
+          day: card.day || null,
+        };
+      }
+      if (card.section === "sentences") {
+        return {
+          subject: "english",
+          lessonKey: "sentences",
+          day: card.day || null,
+        };
+      }
+      if (String(card.section || "").toLowerCase().includes("tense")) {
+        return {
+          subject: "english",
+          lessonMode: "tenses",
+        };
+      }
+    }
+    return card.source || null;
+  }, []);
+
+  const clearLessonSelections = useCallback(() => {
+    setSelectedAdverbDay(null);
+    setSelectedPrepDay(null);
+    setSelectedAdjDay(null);
+    setSelectedConjDay(null);
+    setSelectedPronDay(null);
+    setSelectedNounDay(null);
+    setSelectedVerbDay(null);
+    setSelectedTensePara(null);
+    setSelectedVocabDay(null);
+    setMathSubIdx(null);
+    setMathSubTab("examples");
+    setSubExerciseGroupIdx(null);
+    setSubQuizGroupIdx(null);
+    setRevealedEx({});
+    setPosTab("adverbs");
+    setTenseMain("present");
+    setTenseSub("simple");
+  }, []);
 
   useEffect(() => { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); return () => window.speechSynthesis.cancel(); }, []);
   useEffect(() => {
@@ -3938,13 +4576,13 @@ function HomeschoolApp() {
     setDbTenses(tens);
     setDbVocab(voc);
     await refreshStorageLabel();
-    await refreshReviewStats();
+    await refreshReviewWorkspace();
     setCurrentVersion(window.HomeSchoolData.VERSION);
     setUpdateAvailable(false);
     alert(result.refreshed
       ? `${ui.refreshSuccess} (${formatDate(Date.now())})${result.changedSubjects?.length ? `\n${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}`
       : ui.refreshNoChanges);
-  }, [refreshReviewStats, refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
+  }, [refreshReviewWorkspace, refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
 
   const handleExportProgress = useCallback(async () => {
     const dbProgress = window.HomeSchoolDB ? await window.HomeSchoolDB.exportProgress() : null;
@@ -4025,14 +4663,14 @@ function HomeschoolApp() {
       }
       if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress, { mode });
       await refreshStorageLabel();
-      await refreshReviewStats();
+      await refreshReviewWorkspace();
       alert(mode === "replace" ? ui.importSuccessReplace : ui.importSuccessMerge);
     } catch (error) {
       alert(`${ui.importInvalid}\n${error.message || error}`);
     } finally {
       event.target.value = "";
     }
-  }, [refreshReviewStats, refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
+  }, [refreshReviewWorkspace, refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
 
   const handleResetProgress = useCallback(async () => {
     if (!confirm(ui.resetConfirm)) return;
@@ -4045,8 +4683,8 @@ function HomeschoolApp() {
     setXp(0);
     setNewBadges([]);
     if (window.HomeSchoolDB) await window.HomeSchoolDB.resetProgress();
-    await refreshReviewStats();
-  }, [refreshReviewStats, ui.resetConfirm]);
+    await refreshReviewWorkspace();
+  }, [refreshReviewWorkspace, ui.resetConfirm]);
 
   const handleFullReset = useCallback(async () => {
     if (!confirm(ui.fullResetConfirm)) return;
@@ -4089,12 +4727,12 @@ function HomeschoolApp() {
     setReviewReveal(false);
     if (reviewIdx >= reviewQueue.length - 1) {
       setReviewSessionDone(true);
-      await refreshReviewStats();
+      await refreshReviewWorkspace();
       return;
     }
     setReviewIdx((current) => current + 1);
-    await refreshReviewStats();
-  }, [activeReviewCard, refreshReviewStats, reviewIdx, reviewQueue.length]);
+    await refreshReviewWorkspace();
+  }, [activeReviewCard, refreshReviewWorkspace, reviewIdx, reviewQueue.length]);
 
   const resetReviewSession = useCallback(() => {
     setReviewQueue([]);
@@ -4103,6 +4741,201 @@ function HomeschoolApp() {
     setReviewSessionDone(false);
     setReviewSessionXp(0);
   }, []);
+
+  const handleViewStudyItem = useCallback((card) => {
+    const source = inferViewSource(card);
+    const subjectId = source?.subject || card?.subject || "english";
+    const subject = (window.HomeSchoolData?.SUBJECTS || []).find((entry) => entry.id === subjectId) || null;
+    const lessons = window.HomeSchoolData?.getLessons ? window.HomeSchoolData.getLessons(subjectId, grade) : [];
+    let lesson = null;
+
+    if (source?.lessonKey) {
+      lesson = lessons.find((entry) => entry.key === source.lessonKey) || null;
+    } else if (source?.lessonMode === "adverbs") {
+      lesson = lessons.find((entry) => entry.hasAdverbs) || null;
+    } else if (source?.lessonMode === "vocab") {
+      lesson = lessons.find((entry) => entry.hasVocab) || null;
+    } else if (source?.lessonMode === "tenses") {
+      lesson = lessons.find((entry) => entry.hasTenses) || null;
+    } else if (source?.subTitle) {
+      lesson = lessons.find((entry) => entry.hasMathSub && (entry.subs || []).some((sub) => sub.t === source.subTitle)) || null;
+    } else if (source?.lessonTitle) {
+      lesson = lessons.find((entry) => entry.title === source.lessonTitle) || null;
+    }
+
+    resetReviewSession();
+    setTab("home");
+    setSelectedSubject(subject);
+    clearLessonSelections();
+    setSelectedLesson(lesson);
+
+    if (lesson?.hasAdverbs) {
+      const posTabValue = source?.posTab || (card?.section === "collectiveNouns" ? "nouns" : card?.section) || "adverbs";
+      setPosTab(posTabValue);
+      if (source?.day) {
+        const groups = pacedPos[posTabValue] || [];
+        const dayEntry = groups.find((entry) => entry.day === source.day) || null;
+        if (posTabValue === "adverbs") setSelectedAdverbDay(dayEntry);
+        if (posTabValue === "prepositions") setSelectedPrepDay(dayEntry);
+        if (posTabValue === "adjectives") setSelectedAdjDay(dayEntry);
+        if (posTabValue === "conjunctions") setSelectedConjDay(dayEntry);
+        if (posTabValue === "pronouns") setSelectedPronDay(dayEntry);
+        if (posTabValue === "nouns") setSelectedNounDay(dayEntry);
+        if (posTabValue === "verbs") setSelectedVerbDay(dayEntry);
+      }
+    } else if (lesson?.hasVocab) {
+      if (source?.day) {
+        const dayEntry = pacedVocab.find((entry) => entry.day === source.day) || null;
+        setSelectedVocabDay(dayEntry);
+      }
+    } else if (lesson?.hasTenses) {
+      const nextMain = source?.tenseMain || tenseMain;
+      const nextSub = source?.tenseSub || tenseSub;
+      setTenseMain(nextMain);
+      setTenseSub(nextSub);
+      const tenseItems = TENSES?.[nextMain]?.[nextSub]?.items || [];
+      const targetParagraph = tenseItems.find((item, index) => item.title === source?.paragraphTitle || index === source?.paragraphIndex) || null;
+      if (targetParagraph) setSelectedTensePara(targetParagraph);
+    } else if (lesson?.hasMathSub) {
+      const derivedSubs = lesson.key === "sentences"
+        ? buildDerivedSentenceSub(lesson.subs || [], daySectionSettings.sentences.itemsPerDay, subjectId)
+        : (lesson.subs || []).map((sub) => {
+          const settingKey = getSubsectionSettingKey(sub.t);
+          if (!settingKey) return sub;
+          return buildDerivedDayBasedSub(sub, settingKey, daySectionSettings[settingKey]?.itemsPerDay || 5, subjectId);
+        });
+      const subIndex = typeof source?.subIndex === "number"
+        ? source.subIndex
+        : derivedSubs.findIndex((sub) => sub.t === source?.subTitle || getSubsectionSettingKey(sub.t) === source?.subSettingKey);
+      if (subIndex >= 0) {
+        setMathSubIdx(subIndex);
+        setMathSubTab(source?.subTab || "examples");
+        if (source?.subTab === "exercises" && derivedSubs[subIndex]?.exerciseGroups && source?.groupLabel) {
+          const exerciseIndex = derivedSubs[subIndex].exerciseGroups.findIndex((group) => group.label === source.groupLabel);
+          if (exerciseIndex >= 0) setSubExerciseGroupIdx(exerciseIndex);
+        }
+        if (source?.subTab === "quiz" && derivedSubs[subIndex]?.quizGroups && source?.groupLabel) {
+          const quizIndex = derivedSubs[subIndex].quizGroups.findIndex((group) => group.label === source.groupLabel);
+          if (quizIndex >= 0) setSubQuizGroupIdx(quizIndex);
+        }
+      }
+    }
+
+    setViewTargetId(card?.id || null);
+    setPageFlashActive(true);
+    setTimeout(() => setPageFlashActive(false), 850);
+  }, [TENSES, clearLessonSelections, daySectionSettings, grade, inferViewSource, pacedPos, pacedVocab, resetReviewSession, tenseMain, tenseSub]);
+
+  useEffect(() => {
+    if (!viewTargetId) return undefined;
+    let activeHighlightNode = null;
+    const timeout = setTimeout(() => {
+      const safeId = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(String(viewTargetId)) : String(viewTargetId).replace(/"/g, '\\"');
+      const target = document.querySelector(`[data-study-id="${safeId}"]`);
+      if (target) {
+        const highlightNode = target.closest(".word-row, .lesson-detail, .adverb-detail-section, .study-word-card, .review-panel, .settings-item, .settings-profile-card") || target;
+        activeHighlightNode = highlightNode;
+        highlightNode.classList.add("study-focus-active-manual");
+        highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }
+    }, 280);
+    const cleanup = setTimeout(() => setViewTargetId(null), 1800);
+    return () => {
+      clearTimeout(timeout);
+      clearTimeout(cleanup);
+      if (activeHighlightNode) {
+        activeHighlightNode.classList.remove("study-focus-active-manual");
+      }
+    };
+  }, [mathSubIdx, selectedAdverbDay, selectedAdjDay, selectedConjDay, selectedLesson, selectedNounDay, selectedPrepDay, selectedPronDay, selectedSubject, selectedTensePara, selectedVerbDay, selectedVocabDay, subExerciseGroupIdx, subQuizGroupIdx, tab, tenseMain, tenseSub, viewTargetId]);
+
+  const handleToggleFavorite = useCallback(async (cardId) => {
+    if (!window.HomeSchoolDB || !cardId) return null;
+    const nextMeta = await window.HomeSchoolDB.toggleWordFavorite(cardId);
+    setReviewQueue((current) => current.map((card) => card.id === cardId ? { ...card, favorite: nextMeta?.favorite } : card));
+    if (nextMeta?.id) {
+      setStudyMetaLookup((current) => applyStudyMetaToLookup(current, nextMeta));
+    }
+    await refreshReviewWorkspace();
+    return nextMeta;
+  }, [refreshReviewWorkspace]);
+
+  const handleToggleStudyFavorite = useCallback(async (studyItem) => {
+    if (!window.HomeSchoolDB || !studyItem?.prompt) return null;
+    const nextMeta = await window.HomeSchoolDB.toggleWordFavorite(null, null, studyItem);
+    if (nextMeta?.id) {
+      setStudyMetaLookup((current) => applyStudyMetaToLookup(current, nextMeta));
+    }
+    await refreshReviewWorkspace();
+    return nextMeta;
+  }, [refreshReviewWorkspace]);
+
+  const handleSaveWordNote = useCallback(async (cardId, note) => {
+    if (!window.HomeSchoolDB || !cardId) return null;
+    const nextMeta = await window.HomeSchoolDB.saveWordNote(cardId, note);
+    setReviewQueue((current) => current.map((card) => card.id === cardId ? { ...card, note: nextMeta?.note || "" } : card));
+    if (nextMeta?.id) {
+      setStudyMetaLookup((current) => applyStudyMetaToLookup(current, nextMeta));
+    }
+    await refreshReviewWorkspace();
+    return nextMeta;
+  }, [refreshReviewWorkspace]);
+
+  const handleSaveStudyNote = useCallback(async (studyItem, note) => {
+    if (!window.HomeSchoolDB || !studyItem?.prompt) return null;
+    const nextMeta = await window.HomeSchoolDB.saveWordNote(null, note, studyItem);
+    if (nextMeta?.id) {
+      setStudyMetaLookup((current) => applyStudyMetaToLookup(current, nextMeta));
+    }
+    await refreshReviewWorkspace();
+    return nextMeta;
+  }, [refreshReviewWorkspace]);
+
+  const handleToggleCardInList = useCallback(async (cardId, listId) => {
+    if (!window.HomeSchoolDB || !cardId || !listId) return null;
+    const result = await window.HomeSchoolDB.toggleCardInCustomList(listId, cardId);
+    const listName = (reviewAnalytics.customLists || []).find((list) => list.id === listId)?.name || "";
+    setReviewQueue((current) => current.map((card) => {
+      if (card.id !== cardId) return card;
+      const currentIds = Array.isArray(card.listIds) ? card.listIds : [];
+      const currentNames = Array.isArray(card.listNames) ? card.listNames : [];
+      if (result) {
+        return {
+          ...card,
+          listIds: currentIds.includes(listId) ? currentIds : [...currentIds, listId],
+          listNames: listName && !currentNames.includes(listName) ? [...currentNames, listName] : currentNames,
+        };
+      }
+      return {
+        ...card,
+        listIds: currentIds.filter((id) => id !== listId),
+        listNames: currentNames.filter((name) => name !== listName),
+      };
+    }));
+    await refreshReviewWorkspace();
+    return result;
+  }, [refreshReviewWorkspace, reviewAnalytics.customLists]);
+
+  const handleCreateCustomList = useCallback(async () => {
+    const name = customListDraft.trim();
+    if (!window.HomeSchoolDB || !name) return;
+    await window.HomeSchoolDB.createCustomList(name);
+    setCustomListDraft("");
+    await refreshReviewWorkspace();
+  }, [customListDraft, refreshReviewWorkspace]);
+
+  const handleDeleteCustomList = useCallback(async (listId) => {
+    if (!window.HomeSchoolDB || !listId) return;
+    if (!confirm(joinLocalizedText("Delete this list?", "کیا یہ فہرست حذف کرنی ہے؟", language))) return;
+    const listName = (reviewAnalytics.customLists || []).find((list) => list.id === listId)?.name || "";
+    await window.HomeSchoolDB.deleteCustomList(listId);
+    setReviewQueue((current) => current.map((card) => ({
+      ...card,
+      listIds: (card.listIds || []).filter((id) => id !== listId),
+      listNames: (card.listNames || []).filter((name) => name !== listName),
+    })));
+    await refreshReviewWorkspace();
+  }, [language, refreshReviewWorkspace, reviewAnalytics.customLists]);
 
   // Show loading while DB initializes
   if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{ui.loadingHome}</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ui.loadingDb}</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
@@ -4171,6 +5004,12 @@ function HomeschoolApp() {
   const bannerLabelOptions = { gap: 1, enStyle: { fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }, urStyle: { fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700 } };
   const bannerValueOptions = { gap: 1, enStyle: { fontSize: 12.5, color: "var(--accent)", fontWeight: 800 }, urStyle: { fontSize: 12.5, color: "var(--text-primary)", fontWeight: 700 } };
   const bannerButtonOptions = { gap: 0, enStyle: { fontSize: 12, fontWeight: 700 }, urStyle: { fontSize: 11.5, fontWeight: 700 } };
+  const reviewWordLookup = reviewLibrary.reduce((acc, card) => {
+    if (!card?.prompt || !card?.answer) return acc;
+    const key = getReviewWordLookupKey(card.prompt, card.answer);
+    if (!acc[key]) acc[key] = card;
+    return acc;
+  }, {});
 
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
   const handleInstallApp = async () => {
@@ -4186,9 +5025,9 @@ function HomeschoolApp() {
     }
     setInstallPromptEvent(null);
   };
-  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel }}><><div className="app-container">
+  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className="app-container">
     <div className="app-header" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title={ui.home}>🏠</button><h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
-    <div className="content">
+    <div className={`content${pageFlashActive ? " page-focus-flash" : ""}`}>
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
         <div className="welcome-card"><h2>{renderWelcomeGreeting(localizedNames, language)} 👋</h2><p>{renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟", language), language)}</p><span className="grade-tag">{renderLocalizedTextNode(ui.grade, language)} {grade}</span></div>
         {canShowInstallBanner && <div className="app-status-card" data-ui-language={language}><div className="app-status-head"><h3>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerTitle, UI_TEXT.ur.installBannerTitle, language, bannerTitleOptions)}</h3><button className="banner-dismiss" onClick={() => setInstallBannerDismissed(true)} aria-label={ui.hideBanner}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.hideBanner, UI_TEXT.ur.hideBanner, language, bannerButtonOptions)}</button></div><p>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerText, UI_TEXT.ur.installBannerText, language, bannerBodyOptions)}</p>{(canInstallApp || installAvailability === "available") && <p className="install-browser-hint">{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBrowserHint, UI_TEXT.ur.installBrowserHint, language, bannerBodyOptions)}</p>}<div className="app-status-grid"><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installStatus, UI_TEXT.ur.installStatus, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(isInstalled || installAvailability === "installed" ? UI_TEXT.en.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.en.appInstallAvailable : UI_TEXT.en.appInstallUnavailable, isInstalled || installAvailability === "installed" ? UI_TEXT.ur.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.ur.appInstallAvailable : UI_TEXT.ur.appInstallUnavailable, language, bannerValueOptions)}</span></div><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.offlineAccess, UI_TEXT.ur.offlineAccess, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(serviceWorkerStatus === "ready" ? UI_TEXT.en.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.en.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.en.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.en.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.en.offlineUnsupported : UI_TEXT.en.offlineError, serviceWorkerStatus === "ready" ? UI_TEXT.ur.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.ur.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.ur.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.ur.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.ur.offlineUnsupported : UI_TEXT.ur.offlineError, language, bannerValueOptions)}</span></div><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.networkStatus, UI_TEXT.ur.networkStatus, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(isOnline ? UI_TEXT.en.online : UI_TEXT.en.offline, isOnline ? UI_TEXT.ur.online : UI_TEXT.ur.offline, language, bannerValueOptions)}</span></div></div><div className="app-status-actions">{canInstallApp && <button className="install-cta" onClick={handleInstallApp}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installApp, UI_TEXT.ur.installApp, language, bannerButtonOptions)}</button>}{serviceWorkerStatus === "update-ready" && <button className="ghost-cta" onClick={applyServiceWorkerUpdate}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.refreshToUpdate, UI_TEXT.ur.refreshToUpdate, language, bannerButtonOptions)}</button>}</div></div>}
@@ -4196,11 +5035,19 @@ function HomeschoolApp() {
           <div className="banner-icon">🧠</div>
           <div className="banner-text">
             <h3>{renderLocalizedTextNode(ui.reviewReady, language)}</h3>
-            <p>{renderLocalizedTextNode(language === "ur"
-              ? `${formatNumberLabel(reviewReadyNowCount)} ابھی تیار • ${formatNumberLabel(reviewStats.due || 0)} کل باقی`
-              : language === "bilingual"
-                ? `${formatNumberLabel(reviewReadyNowCount)} ready now • ${formatNumberLabel(reviewStats.due || 0)} total due / ${formatNumberLabel(reviewReadyNowCount)} ابھی تیار • ${formatNumberLabel(reviewStats.due || 0)} کل باقی`
-                : `${formatNumberLabel(reviewReadyNowCount)} ready now • ${formatNumberLabel(reviewStats.due || 0)} total due`, language)}</p>
+            <p>{renderLocalizedTextNode(
+              reviewStats.due > 0
+                ? (language === "ur"
+                  ? `${formatNumberLabel(reviewReadyNowCount)} ابھی تیار • ${formatNumberLabel(reviewStats.due || 0)} کل باقی`
+                  : language === "bilingual"
+                    ? `${formatNumberLabel(reviewReadyNowCount)} ready now • ${formatNumberLabel(reviewStats.due || 0)} total due / ${formatNumberLabel(reviewReadyNowCount)} ابھی تیار • ${formatNumberLabel(reviewStats.due || 0)} کل باقی`
+                    : `${formatNumberLabel(reviewReadyNowCount)} ready now • ${formatNumberLabel(reviewStats.due || 0)} total due`)
+                : (language === "ur"
+                  ? `${formatNumberLabel(reviewStats.reviewedToday || 0)} آج دہرائے گئے • ${formatNumberLabel(reviewStats.learning || 0)} سیکھنے میں`
+                  : language === "bilingual"
+                    ? `${formatNumberLabel(reviewStats.reviewedToday || 0)} reviewed today • ${formatNumberLabel(reviewStats.learning || 0)} learning / ${formatNumberLabel(reviewStats.reviewedToday || 0)} آج دہرائے گئے • ${formatNumberLabel(reviewStats.learning || 0)} سیکھنے میں`
+                    : `${formatNumberLabel(reviewStats.reviewedToday || 0)} reviewed today • ${formatNumberLabel(reviewStats.learning || 0)} learning`),
+              language)}</p>
           </div>
         </button>
         {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
@@ -4215,13 +5062,13 @@ function HomeschoolApp() {
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
-        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p>
+        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: selectedLesson.key || "english", sectionLabel: selectedLesson.title }} />
           <button className="start-quiz-btn" onClick={() => { setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizRevealed(false); setQuizDone(false); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 {ui.startQuiz}</button>
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, marginBottom: 14 }}>
           {[{id:"adverbs",label:"📖 Adverbs",c:"#38BDF8"},{id:"prepositions",label:"📍 Prepositions",c:"#22C55E"},{id:"adjectives",label:"🏷️ Adjectives",c:"#F59E0B"},{id:"conjunctions",label:"🔗 Conjunctions",c:"#A855F7"},{id:"pronouns",label:"👤 Pronouns",c:"#EC4899"},{id:"nouns",label:"📦 Col. Nouns",c:"#14B8A6"},{id:"verbs",label:"✏️ Verbs",c:"#F97316"}].map(t => (
-            <button key={t.id} onClick={() => setPosTab(t.id)} style={{ flex: "1 1 30%", padding: "8px 4px", borderRadius: 10, border: posTab === t.id ? "2px solid "+t.c : "1px solid rgba(148,163,184,0.15)", background: posTab === t.id ? t.c+"22" : "rgba(30,41,59,0.6)", color: posTab === t.id ? t.c : "#94A3B8", fontFamily: "'Baloo 2', sans-serif", fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>{t.label}</button>
+            <button key={t.id} onClick={() => setPosTab(t.id)} style={{ flex: "1 1 30%", padding: "8px 4px", borderRadius: 10, border: posTab === t.id ? "2px solid "+t.c : "1px solid var(--border)", background: posTab === t.id ? t.c+"22" : "var(--bg-elevated)", color: posTab === t.id ? t.c : "var(--text-muted)", fontFamily: "'Baloo 2', sans-serif", fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>{t.label}</button>
           ))}
         </div>
 
@@ -4246,7 +5093,7 @@ function HomeschoolApp() {
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📝 Day {selectedAdverbDay.day} — Vocabulary</h3>{selectedAdverbDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedAdverbDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const aw = selectedAdverbDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={aw?.en} />; })}
+          {selectedAdverbDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const aw = selectedAdverbDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={aw?.en} studyItem={{ subject: "english", section: "adverbsParagraphs", sectionLabel: "Adverb Paragraphs" }} />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedAdverbDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
@@ -4255,7 +5102,7 @@ function HomeschoolApp() {
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📍 Day {selectedPrepDay.day} — Prepositions</h3>{selectedPrepDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedPrepDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const pw = selectedPrepDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={pw?.en} />; })}
+          {selectedPrepDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const pw = selectedPrepDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={pw?.en} studyItem={{ subject: "english", section: "prepositionsParagraphs", sectionLabel: "Preposition Paragraphs" }} />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedPrepDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
         {selectedPrepDay.difficult && (<div className="adverb-detail-section"><h3>📚 Difficult Words</h3>{selectedPrepDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>)}
@@ -4265,7 +5112,7 @@ function HomeschoolApp() {
         <div className="tts-hint">🔊 Tap English forms → hear all 3 forms spoken | Tap Urdu → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>🏷️ Day {selectedAdjDay.day} — Adjective Forms</h3>{selectedAdjDay.words.map((w, i) => <AdjWordRow key={i} en={w.en} ur={w.ur} comp={w.comp} sup={w.super} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedAdjDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const aw = selectedAdjDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={aw?.en} />; })}
+          {selectedAdjDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const aw = selectedAdjDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={aw?.en} studyItem={{ subject: "english", section: "adjectivesParagraphs", sectionLabel: "Adjective Paragraphs" }} />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedAdjDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
@@ -4274,7 +5121,7 @@ function HomeschoolApp() {
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>🔗 Day {selectedConjDay.day} — Conjunctions</h3>{selectedConjDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedConjDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const cw = selectedConjDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split("...")[0].split(" ")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={cw?.en} />; })}
+          {selectedConjDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const cw = selectedConjDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split("...")[0].split(" ")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={cw?.en} studyItem={{ subject: "english", section: "conjunctionParagraphs", sectionLabel: "Conjunction Paragraphs" }} />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedConjDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
         {selectedConjDay.difficult && (<div className="adverb-detail-section"><h3>📚 Difficult Words</h3>{selectedConjDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>)}
@@ -4284,7 +5131,7 @@ function HomeschoolApp() {
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>👤 Day {selectedPronDay.day} — Pronouns</h3>{selectedPronDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedPronDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const pw = selectedPronDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0].split("/")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={pw?.en} />; })}
+          {selectedPronDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const pw = selectedPronDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0].split("/")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={pw?.en} studyItem={{ subject: "english", section: "pronounParagraphs", sectionLabel: "Pronoun Paragraphs" }} />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedPronDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
@@ -4293,7 +5140,7 @@ function HomeschoolApp() {
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📦 Day {selectedNounDay.day} — Collective Nouns</h3>{selectedNounDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedNounDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const nw = selectedNounDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={nw?.en} />; })}
+          {selectedNounDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const nw = selectedNounDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={nw?.en} studyItem={{ subject: "english", section: "collectiveNounParagraphs", sectionLabel: "Collective Noun Paragraphs" }} />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedNounDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
@@ -4302,16 +5149,16 @@ function HomeschoolApp() {
         <div className="tts-hint">🔊 Tap V1 → V2 → V3 forms spoken | Tap Urdu → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>✏️ Day {selectedVerbDay.day} — Verb Forms</h3>{selectedVerbDay.words.map((w, i) => <VerbWordRow key={i} en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedVerbDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const vw = selectedVerbDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={vw?.en} />; })}
+          {selectedVerbDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const vw = selectedVerbDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={vw?.en} studyItem={{ subject: "english", section: "verbParagraphs", sectionLabel: "Verb Paragraphs" }} />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedVerbDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && !selectedLesson.hasAdverbs && !selectedLesson.hasTenses && !selectedLesson.hasVocab && !selectedLesson.hasMathSub && (<div className="lesson-detail"><h2>{selectedLesson.title}</h2><p className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{selectedLesson.content}</p><button className="start-quiz-btn" onClick={() => { setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizRevealed(false); setQuizDone(false); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && !selectedLesson.hasAdverbs && !selectedLesson.hasTenses && !selectedLesson.hasVocab && !selectedLesson.hasMathSub && (<div className="lesson-detail"><h2>{selectedLesson.title}</h2><p className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: selectedSubject?.id || "general", section: selectedLesson.key || selectedLesson.title, sectionLabel: selectedLesson.title }} /><button className="start-quiz-btn" onClick={() => { setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizRevealed(false); setQuizDone(false); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx === null && (<>
         {(() => { const isUr = selectedSubject?.id === "urdu"; return (<>
-        <div className="lesson-detail" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p></div>
+        <div className="lesson-detail" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: selectedSubject?.id || "general", section: selectedLesson.key || selectedLesson.title, sectionLabel: selectedLesson.title }} /></div>
         <h3 className="section-title" style={{ marginTop: 8, direction: isUr?"rtl":"ltr", textAlign: isUr?"right":"left" }}>{isUr ? "📐 موضوعات" : "📐 Topics"}</h3>
         {activeLessonSubs.map((sub, i) => {
           const topicColors = ["#38BDF8","#22C55E","#F59E0B","#A855F7","#EC4899","#14B8A6","#F97316"];
@@ -4404,13 +5251,13 @@ function HomeschoolApp() {
             </svg></div>
           </>}
           </>}
-          {sub.c.split(/(?<=[.!?۔؟])\s+/).filter(Boolean).map((s,i) => <SpeakableSentence key={i} text={s} lang={isUr?"ur":"en"} />)}
+          {sub.c.split(/(?<=[.!?۔؟])\s+/).filter(Boolean).map((s,i) => <SpeakableSentence key={i} text={s} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: sub.t }} />)}
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={() => playAll(sub.c)}>{isUr?"▶️ سنیں":"▶️ Play Explanation"}</button>
         </div>
 
         <div style={{display:"flex",gap:6,marginBottom:14,direction:isUr?"rtl":"ltr"}}>
           {[{id:"examples",label:isUr?"💡 مثالیں":"💡 Examples",c:"#38BDF8"},{id:"exercises",label:isUr?"✏️ مشقیں":"✏️ Exercises",c:"#22C55E"},{id:"quiz",label:isUr?"🎯 امتحان":"🎯 Quiz",c:"#F59E0B"}].map(t=>(
-            <button key={t.id} onClick={()=>{setMathSubTab(t.id);setSubExerciseGroupIdx(null);setSubQuizGroupIdx(null);setRevealedEx({});}} style={{flex:1,padding:"10px 6px",borderRadius:10,border:mathSubTab===t.id?"2px solid "+t.c:"1px solid rgba(148,163,184,0.15)",background:mathSubTab===t.id?t.c+"22":"rgba(30,41,59,0.6)",color:mathSubTab===t.id?t.c:"#94A3B8",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",fontSize:isUr?14:13,fontWeight:700,cursor:"pointer"}}>{t.label}</button>
+            <button key={t.id} onClick={()=>{setMathSubTab(t.id);setSubExerciseGroupIdx(null);setSubQuizGroupIdx(null);setRevealedEx({});}} style={{flex:1,padding:"10px 6px",borderRadius:10,border:mathSubTab===t.id?"2px solid "+t.c:"1px solid var(--border)",background:mathSubTab===t.id?t.c+"22":"var(--bg-elevated)",color:mathSubTab===t.id?t.c:"var(--text-muted)",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",fontSize:isUr?14:13,fontWeight:700,cursor:"pointer"}}>{t.label}</button>
           ))}
         </div>
 
@@ -4428,17 +5275,21 @@ function HomeschoolApp() {
                       <SpeakableSentence
                         text={w.sentence || w.meaning}
                         lang="en"
-                        buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: "#E0F2FE", marginBottom: 0, justifyContent: "flex-start", width: "100%" }}
+                        studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: sub.t, answer: w.en }}
+                        buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLightTheme ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0, justifyContent: "flex-start", width: "100%" }}
                       />
                     </div>
                   )}
                 </div>
               ))}
               {lessonDay.pairs && lessonDay.pairs.map((pair, i) => (
-                <div key={i} className="word-row" style={{cursor:"default",gap:10}}>
-                  <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" /></div>
+                <div key={i} className="word-row" style={{cursor:"default",gap:10,flexDirection:"column",alignItems:"stretch"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
+                  <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right }} /></div>
                   <span style={{color:"var(--accent)",fontWeight:800}}>↔</span>
-                  <div style={{flex:1}}><SpeakableSentence text={pair.right} lang="en" /></div>
+                  <div style={{flex:1}}><SpeakableSentence text={pair.right} lang="en" studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.left }} /></div>
+                  </div>
+                  <StudyItemInlineToolbar studyItem={{ prompt: pair.left, answer: pair.right, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs` }} />
                 </div>
               ))}
               {lessonDay.paragraph && (<>
@@ -4449,8 +5300,8 @@ function HomeschoolApp() {
                   const sentenceHighlights = (lessonDay.words || []).map(w => w.en).filter(Boolean).filter(word => s.toLowerCase().includes(normalizeHighlightTerm(word)));
                   const paragraphSentence = hasOpposites ? stripInlineUrduForKnownWords(s, lessonDay.words || []) : s;
                   return hasOpposites
-                    ? <MixedUrduParagraphSentence key={i} text={paragraphSentence} highlight={sentenceHighlights} />
-                    : <SpeakableSentence key={i} text={s} lang="en" highlight={sentenceHighlights} />;
+                    ? <MixedUrduParagraphSentence key={i} text={paragraphSentence} highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} />
+                    : <SpeakableSentence key={i} text={s} lang="en" highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} />;
                 })}
                 <button className="play-all-btn" onClick={() => playAll(lessonDay.paragraph)}>▶️ Play Entire Paragraph</button>
               </>)}
@@ -4465,8 +5316,8 @@ function HomeschoolApp() {
         {mathSubTab === "examples" && sub.sentencePairs && (<div className="adverb-detail-section">
           <h3 style={{color:"#38BDF8",marginBottom:10}}>{sub.examplesLabel || "🗣️ Sentences"}</h3>
           {regroupSentencePairs(sub.sentencePairs, daySectionSettings.sentences.itemsPerDay).map((group) => (
-            <div key={group.day} style={{ marginBottom: 14 }}>
-              <div style={{ color: "#94A3B8", fontSize: 12, fontWeight: 800, marginBottom: 8 }}>{language === "ur" ? `سیٹ ${group.day}` : `Set ${group.day}`}</div>
+              <div key={group.day} style={{ marginBottom: 14 }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 800, marginBottom: 8 }}>{language === "ur" ? `سیٹ ${group.day}` : `Set ${group.day}`}</div>
               {group.sentencePairs.map((pair, i) => <SentencePairRow key={`${group.day}_${i}`} en={pair.en} ur={pair.ur} />)}
             </div>
           ))}
@@ -4475,7 +5326,7 @@ function HomeschoolApp() {
 
         {mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && (<div className="adverb-detail-section" style={urS}>
           <h3 style={{color:"#38BDF8",marginBottom:10,...urS}}>{sub.examplesLabel || (isUr?"💡 مثالیں":"💡 Examples")}</h3>
-          {sub.examples.map((ex,i) => <SpeakableSentence key={i} text={ex} lang={isUr?"ur":"en"} />)}
+          {sub.examples.map((ex,i) => <SpeakableSentence key={i} text={ex} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />)}
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={()=>playAll(sub.examples.join(". "))}>{isUr?"▶️ سب سنیں":"▶️ Play All Examples"}</button>
         </div>)}
 
@@ -4498,7 +5349,7 @@ function HomeschoolApp() {
               {activeExerciseGroup && <div className="adverb-detail-section" style={{marginBottom:14,...urS}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",direction:isUr?"rtl":"ltr"}}>
                   <h3 style={{color:"#22C55E",margin:0,...urS}}>{activeExerciseGroup.label}</h3>
-                  <button className="play-all-btn" style={{width:"auto",marginTop:0,padding:"10px 14px",background:"linear-gradient(135deg,#475569,#334155)"}} onClick={() => { setSubExerciseGroupIdx(null); setRevealedEx({}); }}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
+<button className="play-all-btn" style={dayGroupBackButtonStyle} onClick={() => { setSubExerciseGroupIdx(null); setRevealedEx({}); }}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
                 </div>
               </div>}
           {exercisesToRender && exercisesToRender.map((ex,ei) => {
@@ -4519,14 +5370,14 @@ function HomeschoolApp() {
             <div key={ei} className="adverb-detail-section" style={{marginBottom:14,...urS}}>
               <div style={{display:"flex",direction:isUr?"rtl":"ltr",alignItems:"center",gap:10,marginBottom:10}}>
                 <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:36,height:36,borderRadius:10,background:qc+"22",border:"2px solid "+qc,color:qc,fontSize:13,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?("س"+(ei+1)):("Q"+(ei+1))}</span>
-                <div style={{flex:1}}><SpeakableSentence text={ex.q} lang={isUr?"ur":"en"} /></div>
+                <div style={{flex:1}}><SpeakableSentence text={ex.q} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Questions` }} /></div>
               </div>
               {isColumnMatch ? (
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))",gap:14,direction:isUr?"rtl":"ltr"}}>
-                  <div style={{background:"rgba(15,23,42,0.55)",border:"1px solid rgba(56,189,248,0.25)",borderRadius:12,padding:12}}>
+                  <div style={{background:"var(--bg-elevated)",border:"1px solid rgba(56,189,248,0.25)",borderRadius:12,padding:12}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,gap:8}}>
                       <span style={{color:"#38BDF8",fontSize:12,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"کالم A":"Column A"}</span>
-                      <span style={{color:"#94A3B8",fontSize:11,fontWeight:700,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"صحیح جواب کالم B میں":"Show correct from Column B"}</span>
+                      <span style={{color:"var(--text-muted)",fontSize:11,fontWeight:700,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"صحیح جواب کالم B میں":"Show correct from Column B"}</span>
                     </div>
                     {ex.parts.map((p,pi) => {
                       const rk = ei+"_A_"+pi;
@@ -4534,16 +5385,16 @@ function HomeschoolApp() {
                       const displayP = p.replace(/(\d)̲/g, '[$1]').replace(/(\d)\u0332/g, '[$1]');
                       return (<div key={"A_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>A{pi+1}</span>
-                        <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} /></div>
+                        <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }} /></div>
                         <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))} /></div>}
+                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Answers` }} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))} /></div>}
                       </div>);
                     })}
                   </div>
-                  <div style={{background:"rgba(15,23,42,0.55)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:12}}>
+                  <div style={{background:"var(--bg-elevated)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:12,padding:12}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,gap:8}}>
                       <span style={{color:"#F59E0B",fontSize:12,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"کالم B":"Column B"}</span>
-                      <span style={{color:"#94A3B8",fontSize:11,fontWeight:700,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"صحیح جواب کالم A میں":"Show correct from Column A"}</span>
+                      <span style={{color:"var(--text-muted)",fontSize:11,fontWeight:700,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"صحیح جواب کالم A میں":"Show correct from Column A"}</span>
                     </div>
                     {ex.ans && matchOrder.map((originalIndex,pi) => {
                       const rk = ei+"_B_"+originalIndex;
@@ -4551,9 +5402,9 @@ function HomeschoolApp() {
                       const a = ex.ans[originalIndex];
                       return (<div key={"B_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>B{pi+1}</span>
-                        <div style={{flex:1}}><SpeakableSentence text={a} lang={isUrduText(a)?"ur":"en"} /></div>
+                        <div style={{flex:1}}><SpeakableSentence text={a} lang={isUrduText(a)?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Answers` }} /></div>
                         <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.parts[originalIndex])} lang={isUrduText(ex.parts[originalIndex])?"ur":"en"} fullWidth={false} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.parts[originalIndex]))} /></div>}
+                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.parts[originalIndex])} lang={isUrduText(ex.parts[originalIndex])?"ur":"en"} fullWidth={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Prompts` }} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.parts[originalIndex]))} /></div>}
                       </div>);
                     })}
                   </div>
@@ -4568,10 +5419,10 @@ function HomeschoolApp() {
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{String.fromCharCode(97+pi)}</span>
                   <div style={{flex:1,display:"flex",alignItems:"center",gap:8}}>
                     {promptVisual}
-                    <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} /></div>
+                    <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }} /></div>
                   </div>
                   <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))} /></div>}
+                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Answers` }} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))} /></div>}
                 </div>);
               })}
             </div>);
@@ -4586,12 +5437,12 @@ function HomeschoolApp() {
               <div key={wi} style={{marginBottom:12}}>
                 <div style={{display:"flex",direction:isUr?"rtl":"ltr",alignItems:"flex-start",gap:10}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:32,height:32,borderRadius:10,background:"#F59E0B22",border:"2px solid #F59E0B",color:"#F59E0B",fontSize:12,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",flexShrink:0}}>{isUr?("م"+(wi+1)):("W"+(wi+1))}</span>
-                  <div style={{flex:1}}><SpeakableSentence text={qText} lang={isUr?"ur":"en"} /></div>
+                  <div style={{flex:1}}><SpeakableSentence text={qText} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Word Problems` }} /></div>
                 </div>
                 {aText && <div style={{marginTop:6,marginLeft:isUr?0:42,marginRight:isUr?42:0,direction:isUr?"rtl":"ltr"}}>
                   <div style={wordProblemAnswerPanelStyle}>
                     <div style={wordProblemAnswerLabelStyle(isUr)}>{isUr?"✅ جواب":"✅ Answer"}</div>
-                    <SpeakableSentence text={formatListedAnswer(aText)} lang={isUr?"ur":"en"} buttonStyle={{...revealedAnswerButtonStyle, marginBottom:0}} textStyle={{...getRevealedAnswerTextStyle(isUr), lineHeight:1.55}} />
+                    <SpeakableSentence text={formatListedAnswer(aText)} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Word Problem Answers` }} buttonStyle={{...revealedAnswerButtonStyle, marginBottom:0}} textStyle={{...getRevealedAnswerTextStyle(isUr), lineHeight:1.55}} />
                   </div>
                 </div>}
               </div>);
@@ -4621,7 +5472,7 @@ function HomeschoolApp() {
                 {activeQuizGroup && <div className="adverb-detail-section" style={{marginBottom:14,...urS}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",direction:isUr?"rtl":"ltr"}}>
                     <h3 style={{color:"#F59E0B",margin:0,...urS}}>{activeQuizGroup.label}</h3>
-                    <button className="play-all-btn" style={{width:"auto",marginTop:0,padding:"10px 14px",background:"linear-gradient(135deg,#475569,#334155)"}} onClick={() => setSubQuizGroupIdx(null)}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
+<button className="play-all-btn" style={dayGroupBackButtonStyle} onClick={() => setSubQuizGroupIdx(null)}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
                   </div>
                 </div>}
                 {quizToRender && <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizGroupIdx} questions={quizToRender} isUrdu={selectedSubject?.id === "urdu"} />}
@@ -4635,7 +5486,7 @@ function HomeschoolApp() {
       })()}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && !selectedVocabDay && (<>
-        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p></div>
+        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: "vocabulary", sectionLabel: selectedLesson.title }} /></div>
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice | 55 Days of Vocabulary</div>
         {pacedVocab.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
@@ -4653,24 +5504,24 @@ function HomeschoolApp() {
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
           {selectedVocabDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => {
             const sentenceHighlights = selectedVocabDay.words.map(w => w.en).filter(Boolean).filter(word => s.toLowerCase().includes(normalizeHighlightTerm(word)));
-            return <SpeakableSentence key={i} text={s} lang="en" highlight={sentenceHighlights} />;
+            return <SpeakableSentence key={i} text={s} lang="en" highlight={sentenceHighlights} studyItem={{ subject: "english", section: "vocabularyParagraphs", sectionLabel: "Vocabulary Paragraphs" }} />;
           })}
           <button className="play-all-btn" onClick={() => playAll(selectedVocabDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasTenses && !selectedTensePara && (<>
-        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p></div>
+        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: "tenses", sectionLabel: selectedLesson.title }} /></div>
 
         <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
           {[{id:"present",label:"🕐 Present",c:"#38BDF8"},{id:"past",label:"🕑 Past",c:"#F59E0B"},{id:"future",label:"🕒 Future",c:"#22C55E"}].map(t => (
-            <button key={t.id} onClick={() => { setTenseMain(t.id); setTenseSub("simple"); }} style={{ flex: 1, padding: "10px 6px", borderRadius: 10, border: tenseMain === t.id ? "2px solid "+t.c : "1px solid rgba(148,163,184,0.15)", background: tenseMain === t.id ? t.c+"22" : "rgba(30,41,59,0.6)", color: tenseMain === t.id ? t.c : "#94A3B8", fontFamily: "'Baloo 2', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
+            <button key={t.id} onClick={() => { setTenseMain(t.id); setTenseSub("simple"); }} style={{ flex: 1, padding: "10px 6px", borderRadius: 10, border: tenseMain === t.id ? "2px solid "+t.c : "1px solid var(--border)", background: tenseMain === t.id ? t.c+"22" : "var(--bg-elevated)", color: tenseMain === t.id ? t.c : "var(--text-muted)", fontFamily: "'Baloo 2', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
           ))}
         </div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
           {[{id:"simple",label:"Simple"},{id:"continuous",label:"Continuous"},{id:"perfect",label:"Perfect"},{id:"perfectContinuous",label:"Perf. Cont."}].map(t => (
-            <button key={t.id} onClick={() => setTenseSub(t.id)} style={{ flex: 1, padding: "8px 3px", borderRadius: 8, border: tenseSub === t.id ? "2px solid #E879F9" : "1px solid rgba(148,163,184,0.15)", background: tenseSub === t.id ? "rgba(232,121,249,0.15)" : "rgba(30,41,59,0.6)", color: tenseSub === t.id ? "#E879F9" : "#64748B", fontFamily: "'Baloo 2', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
+            <button key={t.id} onClick={() => setTenseSub(t.id)} style={{ flex: 1, padding: "8px 3px", borderRadius: 8, border: tenseSub === t.id ? "2px solid #E879F9" : "1px solid var(--border)", background: tenseSub === t.id ? "rgba(232,121,249,0.15)" : "var(--bg-elevated)", color: tenseSub === t.id ? "#E879F9" : "var(--text-muted)", fontFamily: "'Baloo 2', sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>{t.label}</button>
           ))}
         </div>
 
@@ -4679,6 +5530,7 @@ function HomeschoolApp() {
             <h3 style={{ color: "#E879F9" }}>{TENSES[tenseMain][tenseSub].name}</h3>
             <p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: "var(--font-ur)", direction: "rtl", marginTop: 4 }}>{TENSES[tenseMain][tenseSub].nameUr}</p>
             <p style={{ fontSize: 12, color: "#38BDF8", marginTop: 8, fontWeight: 600, background: "rgba(56,189,248,0.08)", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(56,189,248,0.2)" }}>📐 {TENSES[tenseMain][tenseSub].formula}</p>
+            <StudyItemInlineToolbar studyItem={{ prompt: TENSES[tenseMain][tenseSub].formula, subject: "english", section: "tenseFormula", sectionLabel: TENSES[tenseMain][tenseSub].name, secondaryText: TENSES[tenseMain][tenseSub].nameUr }} />
           </div>
           <div className="tts-hint">🔊 Tap any sentence to hear it read aloud!</div>
           {TENSES[tenseMain][tenseSub].items.map((item, i) => (
@@ -4694,12 +5546,12 @@ function HomeschoolApp() {
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasTenses && selectedTensePara && (<>
         <div className="tts-hint">🔊 Tap any sentence to hear it read aloud!</div>
         <div className="adverb-detail-section"><h3>📖 {selectedTensePara.title}</h3>
-          {selectedTensePara.para.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => <SpeakableSentence key={i} text={s} lang="en" />)}
+          {selectedTensePara.para.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => <SpeakableSentence key={i} text={s} lang="en" studyItem={{ subject: "english", section: "tenseParagraphs", sectionLabel: selectedTensePara.title }} />)}
           <button className="play-all-btn" onClick={() => playAll(selectedTensePara.para)}>▶️ Play Entire Paragraph</button>
         </div>
-        {selectedTensePara.qs && (<div className="adverb-detail-section"><h3>❓ Comprehension Questions</h3>
-          {selectedTensePara.qs.map((q, i) => (<div key={i} style={{ padding: "10px 14px", marginBottom: 6, borderRadius: 10, border: "1px solid rgba(148,163,184,0.15)", background: "rgba(30,41,59,0.6)", fontSize: 14, color: "#F1F5F9" }}><span style={{ color: "#F59E0B", fontWeight: 700, marginRight: 8 }}>Q{i+1}.</span>{q}</div>))}
-        </div>)}
+          {selectedTensePara.qs && (<div className="adverb-detail-section"><h3>❓ Comprehension Questions</h3>
+            {selectedTensePara.qs.map((q, i) => (<div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}><span style={{ color: "#F59E0B", fontWeight: 700, marginRight: 8 }}>Q{i+1}.</span>{q}<StudyItemInlineToolbar studyItem={{ prompt: q, subject: "english", section: "tenseQuestions", sectionLabel: selectedTensePara.title }} /></div>))}
+          </div>)}
       </>)}
 
       {tab === "home" && quizActive && !quizDone && currentQuiz.length > 0 && (<div className="quiz-container">
@@ -4724,9 +5576,159 @@ function HomeschoolApp() {
       </>)}
 
       {tab === "review" && (<>
-        {!activeReviewCard && !reviewSessionDone && <><div className="stat-grid"><div className="stat-card"><div className="stat-icon">🕒</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.dueReviews, language)}</div></div><div className="stat-card"><div className="stat-icon">✅</div><div className="stat-value">{formatNumberLabel(reviewStats.reviewedToday || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.reviewedToday, language)}</div></div><div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{formatNumberLabel(reviewStats.learning || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.learningWords, language)}</div></div><div className="stat-card"><div className="stat-icon">🏆</div><div className="stat-value">{formatNumberLabel(reviewStats.retentionRate || 0)}%</div><div className="stat-label">{renderLocalizedTextNode(ui.retentionRate, language)}</div></div></div><div className="lesson-detail" style={{ textAlign: isUrduUi(language) ? "right" : "left", direction: isUrduUi(language) ? "rtl" : "ltr" }}><h2>{renderLocalizedTextNode(ui.reviewReady, language)}</h2><p>{renderLocalizedTextNode(ui.reviewHint, language)}</p><button className="start-quiz-btn" onClick={handleStartReview} disabled={reviewLoading}>{reviewLoading ? "..." : `🧠 ${ui.startReview}`}</button>{reviewStats.due === 0 && <p style={{ marginTop: 12, color: "var(--text-muted)" }}>{renderLocalizedTextNode(ui.noReviewsDue, language)}</p>}</div></>}
-        {activeReviewCard && !reviewSessionDone && <div className="lesson-detail" style={{ direction: isUrduUi(language) ? "rtl" : "ltr" }}><div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}><span className="lesson-num">{renderLocalizedTextNode(joinLocalizedText(`Card ${reviewIdx + 1} of ${reviewQueue.length}`, `کارڈ ${reviewIdx + 1} از ${reviewQueue.length}`, language), language)}</span><span className="grade-tag" style={{ marginTop: 0 }}>{activeReviewCard.sectionLabel}</span></div><h2 style={{ marginBottom: 18 }}>{activeReviewCard.prompt}</h2><div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}><button className="grade-btn active" style={{ minWidth: 130 }} onClick={() => window.HomeSchoolUtils.speakText(activeReviewCard.prompt, "en")}>🔊 {renderLocalizedTextNode(joinLocalizedText("Speak", "سنیں", language), language)}</button><button className="grade-btn" style={{ minWidth: 170 }} onClick={() => setReviewReveal((value) => !value)}>{renderLocalizedTextNode(ui.revealAnswer, language)}</button></div>{reviewReveal && <div style={reviewRevealCardStyle}><SpeakableSentence text={activeReviewCard.answer} lang="ur" fullWidth={true} buttonStyle={reviewAnswerButtonStyle} textStyle={{ fontSize: 24 }} />{activeReviewCard.meaning && <div style={{ color: "var(--text-secondary)", marginBottom: 8 }}>{activeReviewCard.meaning}</div>}{(activeReviewCard.opposite || activeReviewCard.oppositeUr) && <div style={{ color: "var(--text-secondary)", marginBottom: 8 }}>{renderLocalizedTextNode(joinLocalizedText(`Opposite: ${activeReviewCard.opposite} / ${activeReviewCard.oppositeUr}`, `متضاد: ${activeReviewCard.oppositeUr} / ${activeReviewCard.opposite}`, language), language)}</div>}{activeReviewCard.example && <div><div style={{ marginBottom: 6, color: "var(--text-secondary)", fontWeight: 700 }}><strong>{renderLocalizedTextNode(ui.reviewExample, language)}:</strong></div><SpeakableSentence text={activeReviewCard.example} lang="en" fullWidth={true} buttonStyle={reviewExampleButtonStyle} textStyle={{ fontSize: 16, lineHeight: 1.6 }} /></div>}</div>}<div className="result-actions"><button className="retry-btn" onClick={() => handleReviewResponse("again")}>{renderLocalizedTextNode(ui.reviewAgain, language)}</button><button className="retry-btn" style={{ borderColor: "#22C55E55", color: "#22C55E" }} onClick={() => handleReviewResponse("good")}>{renderLocalizedTextNode(ui.reviewGood, language)}</button><button className="next-btn" onClick={() => handleReviewResponse("easy")}>{renderLocalizedTextNode(ui.reviewEasy, language)}</button></div></div>}
-        {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">🧠</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" onClick={() => { resetReviewSession(); setTab("home"); }}>{renderLocalizedTextNode(ui.home, language)}</button><button className="next-btn" onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
+        {!activeReviewCard && !reviewSessionDone && <>
+          <div className="stat-grid">
+            <div className="stat-card"><div className="stat-icon">🕒</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.dueReviews, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">✅</div><div className="stat-value">{formatNumberLabel(reviewStats.reviewedToday || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.reviewedToday, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{formatNumberLabel(reviewStats.learning || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.learningWords, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">🏆</div><div className="stat-value">{formatNumberLabel(reviewStats.retentionRate || 0)}%</div><div className="stat-label">{renderLocalizedTextNode(ui.retentionRate, language)}</div></div>
+          </div>
+          <div className="stat-grid">
+            <div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{formatNumberLabel(reviewStats.favorites || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.favoriteWords, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📝</div><div className="stat-value">{formatNumberLabel(reviewStats.notedWords || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.notedWords, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">🗂️</div><div className="stat-value">{formatNumberLabel(reviewStats.customLists || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.customLists, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📅</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.totals.reviewedLastPeriod || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("12-week reviews", "12 ہفتے کے ریویوز", language), language)}</div></div>
+          </div>
+
+          <div className="lesson-detail" style={{ textAlign: isUrduUi(language) ? "right" : "left", direction: isUrduUi(language) ? "rtl" : "ltr" }}>
+            <h2>{renderLocalizedTextNode(ui.reviewReady, language)}</h2>
+            <p>{renderLocalizedTextNode(ui.reviewHint, language)}</p>
+            <button className="start-quiz-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={handleStartReview} disabled={reviewLoading}>{reviewLoading ? "..." : `🧠 ${ui.startReview}`}</button>
+            {reviewStats.due === 0 && <p style={{ marginTop: 12, color: "var(--text-muted)" }}>{renderLocalizedTextNode(ui.noReviewsDue, language)}</p>}
+          </div>
+
+          <div className="review-panel">
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(ui.reviewHeatmap, language)}</h3>
+                <p>{renderLocalizedTextNode(ui.reviewHeatmapHint, language)}</p>
+              </div>
+              <button className="study-tool-btn compact" onClick={() => setHeatmapExpanded((value) => !value)}>
+                {renderLocalizedTextNode(heatmapExpanded ? joinLocalizedText("Show Less", "کم دکھائیں", language) : joinLocalizedText("Show Heatmap", "ہیٹ میپ دکھائیں", language), language)}
+              </button>
+            </div>
+            {heatmapExpanded ? (
+              <>
+                <div className="review-heatmap-grid">
+                  {reviewAnalytics.heatmap.map((cell) => (
+                    <div
+                      key={cell.dayKey}
+                      className={`review-heat-cell level-${cell.level}`}
+                      title={`${cell.dateLabel}: ${cell.count} reviews`}
+                    />
+                  ))}
+                </div>
+                <div className="review-heat-legend">
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Less", "کم", language), language)}</span>
+                  {[0, 1, 2, 3, 4].map((level) => <span key={level} className={`review-heat-cell level-${level}`} />)}
+                  <span>{renderLocalizedTextNode(joinLocalizedText("More", "زیادہ", language), language)}</span>
+                </div>
+              </>
+            ) : (
+              <p className="empty-state" style={{ marginTop: 8 }}>{renderLocalizedTextNode(joinLocalizedText("Heatmap is hidden. Open it when you want a weekly review overview.", "ہیٹ میپ فی الحال بند ہے۔ ہفتہ وار جائزہ دیکھنے کے لیے اسے کھولیں۔", language), language)}</p>
+            )}
+          </div>
+
+          <div className="review-panel">
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(ui.weakWordsReport, language)}</h3>
+                <p>{renderLocalizedTextNode(ui.weakWordsHint, language)}</p>
+              </div>
+            </div>
+            {reviewAnalytics.weakWords.length > 0 ? (
+              <div className="study-word-grid">
+                {reviewAnalytics.weakWords.map((card) => <StudyWordCard key={card.id} card={card} />)}
+              </div>
+            ) : (
+              <p className="empty-state">{renderLocalizedTextNode(ui.noWeakWords, language)}</p>
+            )}
+          </div>
+
+          <div className="review-panel">
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(ui.studyCollections, language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Create focused word packs for revision, dictation, or tricky vocabulary.", "ریویژن، املا، یا مشکل الفاظ کے لیے اپنی الگ فہرستیں بنائیں۔", language), language)}</p>
+              </div>
+            </div>
+            <div className="review-list-creator">
+              <input
+                value={customListDraft}
+                onChange={(event) => setCustomListDraft(event.target.value)}
+                placeholder={language === "ur" ? ui.createListPlaceholder : ui.createListPlaceholder}
+                className="review-list-input"
+                style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : {}}
+              />
+              <button className="ghost-cta" onClick={handleCreateCustomList} disabled={!customListDraft.trim()}>{renderLocalizedTextNode(ui.createList, language)}</button>
+            </div>
+            {reviewAnalytics.customLists.length > 0 ? (
+              <div className="custom-list-grid">
+                {reviewAnalytics.customLists.map((list) => (
+                  <div key={list.id} className="custom-list-card">
+                    <div className="custom-list-head">
+                      <div>
+                        <h4>{list.name}</h4>
+                        <p>{renderLocalizedTextNode(joinLocalizedText(`${list.itemCount} items`, `${list.itemCount} الفاظ`, language), language)}</p>
+                      </div>
+                      <button className="study-tool-btn compact" onClick={() => handleDeleteCustomList(list.id)}>{renderLocalizedTextNode(ui.deleteList, language)}</button>
+                    </div>
+                    {list.items.length > 0 ? (
+                      <div className="custom-list-items">
+                        {list.items.slice(0, 6).map((item) => <span key={item.id} className="custom-list-item-pill">{item.prompt}</span>)}
+                        {list.items.length > 6 ? <span className="custom-list-item-pill muted">+{list.items.length - 6}</span> : null}
+                      </div>
+                    ) : (
+                      <p className="empty-state" style={{ marginTop: 10 }}>{renderLocalizedTextNode(ui.noListItems, language)}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">{renderLocalizedTextNode(ui.noCustomLists, language)}</p>
+            )}
+          </div>
+
+          <div className="study-word-columns">
+            <div className="review-panel">
+              <div className="review-panel-head"><div><h3>{renderLocalizedTextNode(ui.favoriteWords, language)}</h3></div></div>
+              {reviewAnalytics.favoriteWords.length > 0 ? reviewAnalytics.favoriteWords.slice(0, 6).map((card) => <StudyWordCard key={card.id} card={card} showStats={false} />) : <p className="empty-state">{renderLocalizedTextNode(ui.noFavorites, language)}</p>}
+            </div>
+            <div className="review-panel">
+              <div className="review-panel-head"><div><h3>{renderLocalizedTextNode(ui.notedWords, language)}</h3></div></div>
+              {reviewAnalytics.notedWords.length > 0 ? reviewAnalytics.notedWords.slice(0, 6).map((card) => <StudyWordCard key={card.id} card={card} showStats={false} />) : <p className="empty-state">{renderLocalizedTextNode(ui.noNotes, language)}</p>}
+            </div>
+          </div>
+        </>}
+        {activeReviewCard && !reviewSessionDone && <div className="lesson-detail" style={{ direction: isUrduUi(language) ? "rtl" : "ltr" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}>
+            <span className="lesson-num">{renderLocalizedTextNode(joinLocalizedText(`Card ${reviewIdx + 1} of ${reviewQueue.length}`, `کارڈ ${reviewIdx + 1} از ${reviewQueue.length}`, language), language)}</span>
+            <span className="grade-tag" style={{ marginTop: 0 }}>{activeReviewCard.sectionLabel}</span>
+          </div>
+          <h2 style={{ marginBottom: 10 }}>{activeReviewCard.prompt}</h2>
+          <div className="study-word-stats" style={{ marginBottom: 14 }}>
+            <span>{renderLocalizedTextNode(getReviewDueLabel(activeReviewCard, language), language)}</span>
+            <span>{renderLocalizedTextNode(joinLocalizedText(`${ui.lapses}: ${activeReviewCard.lapses || 0}`, `${ui.lapses}: ${activeReviewCard.lapses || 0}`, language), language)}</span>
+            <span>{renderLocalizedTextNode(joinLocalizedText(`${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round(((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews) * 100) : 0}%`, `${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round(((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews) * 100) : 0}%`, language), language)}</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+            <button className="grade-btn active" style={{ minWidth: 130 }} onClick={() => window.HomeSchoolUtils.speakText(activeReviewCard.prompt, "en")}>🔊 {renderLocalizedTextNode(joinLocalizedText("Speak", "سنیں", language), language)}</button>
+            <button className="grade-btn" style={{ minWidth: 170 }} onClick={() => setReviewReveal((value) => !value)}>{renderLocalizedTextNode(ui.revealAnswer, language)}</button>
+          </div>
+          <WordCollectionToolbar card={activeReviewCard} />
+          {reviewReveal && <div style={reviewRevealCardStyle}>
+            <SpeakableSentence text={activeReviewCard.answer} lang="ur" fullWidth={true} buttonStyle={reviewAnswerButtonStyle} textStyle={{ fontSize: 24 }} />
+            {activeReviewCard.meaning && <div style={{ color: "var(--text-secondary)", marginBottom: 8 }}>{activeReviewCard.meaning}</div>}
+            {(activeReviewCard.opposite || activeReviewCard.oppositeUr) && <div style={{ color: "var(--text-secondary)", marginBottom: 8 }}>{renderLocalizedTextNode(joinLocalizedText(`Opposite: ${activeReviewCard.opposite} / ${activeReviewCard.oppositeUr}`, `متضاد: ${activeReviewCard.oppositeUr} / ${activeReviewCard.opposite}`, language), language)}</div>}
+            {activeReviewCard.example && <div><div style={{ marginBottom: 6, color: "var(--text-secondary)", fontWeight: 700 }}><strong>{renderLocalizedTextNode(ui.reviewExample, language)}:</strong></div><SpeakableSentence text={activeReviewCard.example} lang="en" fullWidth={true} buttonStyle={reviewExampleButtonStyle} textStyle={{ fontSize: 16, lineHeight: 1.6 }} /></div>}
+          </div>}
+          <div className="result-actions">
+            <button className="retry-btn" onClick={() => handleReviewResponse("again")}>{renderLocalizedTextNode(ui.reviewAgain, language)}</button>
+            <button className="retry-btn" style={{ borderColor: "#22C55E55", color: "#22C55E" }} onClick={() => handleReviewResponse("good")}>{renderLocalizedTextNode(ui.reviewGood, language)}</button>
+            <button className="next-btn" onClick={() => handleReviewResponse("easy")}>{renderLocalizedTextNode(ui.reviewEasy, language)}</button>
+          </div>
+        </div>}
+      {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">🧠</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); setTab("home"); }}>{renderLocalizedTextNode(ui.home, language)}</button><button className="next-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
       </>)}
 
       {tab === "badges" && (<><div style={{ textAlign: "center", marginBottom: 20 }}><p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{earnedBadges.length} of {BADGES.length} badges earned</p></div><div className="badge-grid">{BADGES.map(b => <div key={b.id} className={"badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked")}><div className="badge-big-icon">{b.icon}</div><h4>{b.name}</h4><p>{b.desc}</p></div>)}</div></>)}

@@ -17,6 +17,24 @@
     customizations: "++id, type, ts",
   });
 
+  db.version(5).stores({
+    coreData: "id, type, subject, grade, lessonKey",
+    posData: "id, type, day",
+    tensesData: "id, main, sub",
+    vocabData: "id, day",
+    mathChapters: "id, key, grade",
+    quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt, prompt",
+    reviewHistory: "id, cardId, dayKey, reviewedAt, subject, section, rating",
+    wordMeta: "id, subject, section, favorite, updatedAt",
+    customLists: "id, updatedAt, name",
+    customListItems: "id, listId, cardId, updatedAt",
+    progress: "id, subject, lessonId, grade, completed, timestamp",
+    userStats: "id",
+    dataVersion: "id, version, lastUpdated",
+    customizations: "++id, type, ts",
+  });
+
   function getStatsDefaults() {
     return {
       id: "main",
@@ -152,6 +170,54 @@
     const reviewCards = [];
     const now = Date.now();
 
+    const buildReviewSource = (sectionId, dayValue = null) => {
+      if (["adverbs", "prepositions", "adjectives", "conjunctions", "pronouns", "collectiveNouns", "verbs"].includes(sectionId)) {
+        return {
+          subject: "english",
+          lessonKey: "parts_of_speech",
+          subSettingKey: sectionId === "collectiveNouns" ? "collectiveNouns" : sectionId,
+          posTab: sectionId === "collectiveNouns" ? "nouns" : sectionId,
+          day: dayValue,
+        };
+      }
+      if (sectionId === "vocabulary") {
+        return {
+          subject: "english",
+          lessonKey: "vocabulary",
+          subSettingKey: "wordsMeanings",
+          day: dayValue,
+        };
+      }
+      if (sectionId === "adverbPhrases") {
+        return {
+          subject: "english",
+          lessonKey: "phrases",
+          subSettingKey: "adverbPhrases",
+          day: dayValue,
+        };
+      }
+      if (sectionId === "opposites") {
+        return {
+          subject: "english",
+          lessonKey: "vocabulary",
+          subSettingKey: "wordsOpposites",
+          day: dayValue,
+        };
+      }
+      if (sectionId === "sentences") {
+        return {
+          subject: "english",
+          lessonKey: "sentences",
+          day: dayValue,
+        };
+      }
+      return {
+        subject: "english",
+        section: sectionId,
+        day: dayValue,
+      };
+    };
+
     const addWordEntries = (sectionId, sectionLabel, entries) => {
       (entries || []).forEach((entry) => {
         const paragraph = entry?.paragraph || "";
@@ -202,6 +268,7 @@
             correctReviews: 0,
             mastered: false,
             lapses: 0,
+            source: buildReviewSource(sectionId, entry?.day ?? null),
             lastReviewedAt: null,
             createdAt: now,
             updatedAt: now,
@@ -257,7 +324,11 @@
     return {
       progress: Array.isArray(progressData?.progress) ? progressData.progress : [],
       reviewCards: Array.isArray(progressData?.reviewCards) ? progressData.reviewCards : [],
+      reviewHistory: Array.isArray(progressData?.reviewHistory) ? progressData.reviewHistory : [],
       userStats: Array.isArray(progressData?.userStats) ? progressData.userStats : [],
+      wordMeta: Array.isArray(progressData?.wordMeta) ? progressData.wordMeta : [],
+      customLists: Array.isArray(progressData?.customLists) ? progressData.customLists : [],
+      customListItems: Array.isArray(progressData?.customListItems) ? progressData.customListItems : [],
       customizations: Array.isArray(progressData?.customizations) ? progressData.customizations : [],
       dataVersion: progressData?.dataVersion ?? null,
     };
@@ -323,6 +394,162 @@
       merged.set(key, (row.ts || row.updatedAt || 0) >= (previous.ts || previous.updatedAt || 0) ? row : previous);
     });
     return Array.from(merged.values());
+  }
+
+  function normalizeAnswerToken(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buildReviewEventId(cardId, reviewedAt, rating) {
+    return `review_event_${simpleHash([cardId, reviewedAt, rating].join("|"))}`;
+  }
+
+  function normalizeStudyToken(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buildStandaloneStudyItemId(studyItem) {
+    return `study_item_${simpleHash([
+      normalizeStudyToken(studyItem?.subject || "english"),
+      normalizeStudyToken(studyItem?.section || "general"),
+      normalizeStudyToken(studyItem?.prompt || ""),
+      normalizeStudyToken(studyItem?.answer || ""),
+    ].join("|"))}`;
+  }
+
+  function buildCustomListId(name) {
+    return `list_${simpleHash([name, Date.now(), Math.random()].join("|"))}`;
+  }
+
+  function buildCustomListItemId(listId, cardId) {
+    return `list_item_${simpleHash(`${listId}|${cardId}`)}`;
+  }
+
+  function buildReviewPriorityScore(card, now = Date.now()) {
+    const reviewed = Math.max(0, Number(card?.totalReviews) || 0);
+    const accuracy = reviewed > 0 ? (Number(card?.correctReviews) || 0) / reviewed : 0.55;
+    const overdueDays = Math.max(0, ((Number(now) || Date.now()) - (Number(card?.dueAt) || Number(now) || Date.now())) / (24 * 60 * 60 * 1000));
+    const lapseWeight = Math.max(0, Number(card?.lapses) || 0) * 2.4;
+    const lowAccuracyWeight = Math.max(0, 1 - accuracy) * 4.5;
+    const learningWeight = Math.max(0, 3 - Math.max(0, Number(card?.box) || 0));
+    const newCardWeight = card?.lastReviewedAt ? 0 : 1.35;
+    return overdueDays + lapseWeight + lowAccuracyWeight + learningWeight + newCardWeight;
+  }
+
+  function enrichReviewCards(cards, metaRows, lists, listItems) {
+    const safeCards = Array.isArray(cards) ? cards : [];
+    const metaMap = new Map((metaRows || []).map((row) => [row.id, row]));
+    const listMap = new Map((lists || []).map((row) => [row.id, row]));
+    const cardListsMap = new Map();
+
+    (listItems || []).forEach((item) => {
+      if (!item?.cardId || !item?.listId || !listMap.has(item.listId)) return;
+      const existing = cardListsMap.get(item.cardId) || [];
+      existing.push({
+        id: item.listId,
+        name: listMap.get(item.listId)?.name || item.listId,
+      });
+      cardListsMap.set(item.cardId, existing);
+    });
+
+    return safeCards.map((card) => {
+      const meta = metaMap.get(card.id) || null;
+      const listEntries = cardListsMap.get(card.id) || [];
+      return {
+        ...card,
+        source: card.source || null,
+        favorite: Boolean(meta?.favorite),
+        note: String(meta?.note || ""),
+        metaUpdatedAt: meta?.updatedAt || 0,
+        studyUpdatedAt: Math.max(Number(card?.updatedAt) || 0, Number(meta?.updatedAt) || 0),
+        listIds: listEntries.map((entry) => entry.id),
+        listNames: listEntries.map((entry) => entry.name),
+      };
+    });
+  }
+
+  async function getReviewCollectionsSnapshot() {
+    const [metaRows, lists, listItems] = await Promise.all([
+      db.wordMeta.toArray(),
+      db.customLists.toArray(),
+      db.customListItems.toArray(),
+    ]);
+    return { metaRows, lists, listItems };
+  }
+
+  async function getOrCreateWordMeta(cardId) {
+    const card = await db.reviewCards.get(cardId);
+    if (!card) return null;
+    const existing = await db.wordMeta.get(cardId);
+    if (existing) return existing;
+    const created = {
+      id: card.id,
+      subject: card.subject,
+      section: card.section,
+      sectionLabel: card.sectionLabel,
+      prompt: card.prompt,
+      answer: card.answer,
+      favorite: false,
+      note: "",
+      updatedAt: Date.now(),
+    };
+    await db.wordMeta.put(created);
+    return created;
+  }
+
+  async function getOrCreateStandaloneWordMeta(studyItem) {
+    if (!studyItem?.prompt) return null;
+    const id = studyItem.id || buildStandaloneStudyItemId(studyItem);
+    const existing = await db.wordMeta.get(id);
+    if (existing) {
+      if (!existing.source && studyItem.source) {
+        const next = {
+          ...existing,
+          source: studyItem.source,
+          updatedAt: Date.now(),
+        };
+        await db.wordMeta.put(next);
+        return next;
+      }
+      return existing;
+    }
+    const created = {
+      id,
+      subject: studyItem.subject || "english",
+      section: studyItem.section || "general",
+      sectionLabel: studyItem.sectionLabel || titleCase(studyItem.section || "general"),
+      prompt: String(studyItem.prompt || "").trim(),
+      answer: String(studyItem.answer || "").trim(),
+      source: studyItem.source || null,
+      favorite: false,
+      note: "",
+      standalone: true,
+      updatedAt: Date.now(),
+    };
+    await db.wordMeta.put(created);
+    return created;
+  }
+
+  async function getOrCreateStudyMeta(cardId, studyItem = null) {
+    if (studyItem) return getOrCreateStandaloneWordMeta(studyItem);
+    return getOrCreateWordMeta(cardId);
+  }
+
+  async function ensureReviewCardsSeeded(dataLoader) {
+    const currentCount = await db.reviewCards.count();
+    if (currentCount > 0) return { repaired: false, count: currentCount };
+    if (!dataLoader) return { repaired: false, count: 0 };
+    const reviewCards = buildReviewCards(dataLoader);
+    if (reviewCards.length > 0) {
+      await db.reviewCards.bulkPut(reviewCards);
+    }
+    return { repaired: reviewCards.length > 0, count: reviewCards.length };
   }
 
   async function seedData(dataLoader, options = {}) {
@@ -519,7 +746,9 @@
     },
 
     async ensureSeeded(dataLoader) {
-      await this.refreshData(dataLoader, dataLoader.VERSION);
+      const refreshResult = await this.refreshData(dataLoader, dataLoader.VERSION);
+      await ensureReviewCardsSeeded(dataLoader);
+      return refreshResult;
     },
 
     async refreshData(dataLoader, currentVersion) {
@@ -549,6 +778,12 @@
         return { refreshed: true, version: currentVersion, changedSubjects, mode: "partial" };
       }
 
+      const reviewCardCount = await db.reviewCards.count();
+      if (reviewCardCount === 0) {
+        await seedData(dataLoader, { subjects: ["english"], fingerprints: nextFingerprints });
+        return { refreshed: true, version: currentVersion, changedSubjects: ["english"], mode: "repair" };
+      }
+
       return { refreshed: false, version: currentVersion, changedSubjects: [], mode: "noop" };
     },
 
@@ -568,11 +803,19 @@
 
     async getDueReviewCards(limit = 20, now = Date.now()) {
       const max = Math.max(1, Number(limit) || 20);
-      return db.reviewCards
+      const rows = await db.reviewCards
         .where("dueAt")
         .belowOrEqual(now)
         .sortBy("dueAt")
-        .then((rows) => rows.slice(0, max));
+        .then((items) => items);
+      const collections = await getReviewCollectionsSnapshot();
+      return enrichReviewCards(rows, collections.metaRows, collections.lists, collections.listItems)
+        .sort((left, right) => {
+          const scoreDiff = buildReviewPriorityScore(right, now) - buildReviewPriorityScore(left, now);
+          if (scoreDiff !== 0) return scoreDiff;
+          return (left.dueAt || 0) - (right.dueAt || 0);
+        })
+        .slice(0, max);
     },
 
     async getReviewStats(options = {}) {
@@ -581,12 +824,23 @@
       const todayKey = window.HomeSchoolUtils.getDayKey(now);
       const cards = await db.reviewCards.toArray();
       const stats = await getMainStats();
+      const startOfToday = new Date(now);
+      startOfToday.setHours(0, 0, 0, 0);
+      const todayHistory = await db.reviewHistory.where("reviewedAt").aboveOrEqual(startOfToday.getTime()).toArray();
+      const favorites = await db.wordMeta.filter((row) => row?.favorite === true).count();
+      const notedWords = await db.wordMeta.filter((row) => String(row?.note || "").trim().length > 0).count();
+      const customLists = await db.customLists.count();
       const due = cards.filter((card) => (card.dueAt || 0) <= now).length;
       const mastered = cards.filter((card) => (card.box || 0) >= masteryThreshold).length;
-      const learning = cards.filter((card) => (card.box || 0) > 0 && (card.box || 0) < masteryThreshold).length;
+      const learning = cards.filter((card) => ((card.totalReviews || 0) > 0 || (card.box || 0) > 0) && (card.box || 0) < masteryThreshold).length;
       const newCards = cards.filter((card) => !card.lastReviewedAt).length;
-      const reviewedToday = cards.filter((card) => card.lastReviewedAt && window.HomeSchoolUtils.getDayKey(card.lastReviewedAt) === todayKey).length;
-      const retentionRate = stats.totalReviews ? Math.round(((stats.correctReviews || 0) / stats.totalReviews) * 100) : 0;
+      const reviewedToday = todayHistory.length || cards.filter((card) => card.lastReviewedAt && window.HomeSchoolUtils.getDayKey(card.lastReviewedAt) === todayKey).length;
+      const correctToday = todayHistory.filter((row) => row.correct).length;
+      const retentionRate = reviewedToday
+        ? Math.round((correctToday / reviewedToday) * 100)
+        : stats.totalReviews
+          ? Math.round(((stats.correctReviews || 0) / stats.totalReviews) * 100)
+          : 0;
 
       return {
         total: cards.length,
@@ -597,6 +851,162 @@
         reviewedToday,
         retentionRate,
         reviewStreak: stats.reviewStreak || 0,
+        favorites,
+        notedWords,
+        customLists,
+      };
+    },
+
+    async getReviewLibrary() {
+      const [cards, collections] = await Promise.all([
+        db.reviewCards.toArray(),
+        getReviewCollectionsSnapshot(),
+      ]);
+      return enrichReviewCards(cards, collections.metaRows, collections.lists, collections.listItems)
+        .sort((left, right) => {
+          const sectionDiff = String(left.sectionLabel || left.section || "").localeCompare(String(right.sectionLabel || right.section || ""));
+          if (sectionDiff !== 0) return sectionDiff;
+          const promptDiff = String(left.prompt || "").localeCompare(String(right.prompt || ""));
+          if (promptDiff !== 0) return promptDiff;
+          return String(left.answer || "").localeCompare(String(right.answer || ""));
+        });
+    },
+
+    async getReviewAnalytics(options = {}) {
+      const days = Math.max(28, Number(options.days) || 84);
+      const weakLimit = Math.max(6, Number(options.weakLimit) || 12);
+      const now = Number(options.now) || Date.now();
+      const today = new Date(now);
+      const since = new Date(today);
+      since.setHours(0, 0, 0, 0);
+      since.setDate(since.getDate() - (days - 1));
+
+      const [
+        cards,
+        historyRows,
+        metaRows,
+        lists,
+        listItems,
+      ] = await Promise.all([
+        db.reviewCards.toArray(),
+        db.reviewHistory.where("reviewedAt").aboveOrEqual(since.getTime()).toArray(),
+        db.wordMeta.toArray(),
+        db.customLists.toArray(),
+        db.customListItems.toArray(),
+      ]);
+
+      const enrichedCards = enrichReviewCards(cards, metaRows, lists, listItems);
+      const historyByDay = new Map();
+      historyRows.forEach((row) => {
+        const key = row.dayKey || window.HomeSchoolUtils.getDayKey(row.reviewedAt || now);
+        const current = historyByDay.get(key) || { count: 0, correct: 0 };
+        current.count += 1;
+        current.correct += row.correct ? 1 : 0;
+        historyByDay.set(key, current);
+      });
+
+      const heatmap = [];
+      let maxCount = 0;
+      for (let offset = 0; offset < days; offset += 1) {
+        const day = new Date(today);
+        day.setHours(0, 0, 0, 0);
+        day.setDate(day.getDate() - offset);
+        const dayKey = window.HomeSchoolUtils.getDayKey(day);
+        const stats = historyByDay.get(dayKey) || { count: 0, correct: 0 };
+        if (stats.count > maxCount) maxCount = stats.count;
+        heatmap.push({
+          dayKey,
+          dateLabel: day.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+          weekday: day.toLocaleDateString(undefined, { weekday: "short" }),
+          count: stats.count,
+          correct: stats.correct,
+          accuracy: stats.count ? Math.round((stats.correct / stats.count) * 100) : 0,
+          level: 0,
+        });
+      }
+      heatmap.forEach((cell) => {
+        if (!cell.count || !maxCount) {
+          cell.level = 0;
+          return;
+        }
+        const ratio = cell.count / maxCount;
+        cell.level = ratio >= 0.8 ? 4 : ratio >= 0.55 ? 3 : ratio >= 0.3 ? 2 : 1;
+      });
+
+      const weakWords = enrichedCards
+        .map((card) => {
+          const totalReviews = Math.max(0, Number(card.totalReviews) || 0);
+          const correctReviews = Math.max(0, Number(card.correctReviews) || 0);
+          const accuracy = totalReviews ? Math.round((correctReviews / totalReviews) * 100) : 0;
+          const overdueDays = Math.max(0, Math.round(((now - (card.dueAt || now)) / (24 * 60 * 60 * 1000)) * 10) / 10);
+          const weakScore = buildReviewPriorityScore(card, now) + Math.max(0, Number(card.lapses) || 0);
+          return {
+            ...card,
+            accuracy,
+            overdueDays,
+            weakScore,
+          };
+        })
+        .filter((card) => card.totalReviews > 0 || card.lapses > 0 || (card.dueAt || 0) <= now)
+        .sort((left, right) => right.weakScore - left.weakScore)
+        .slice(0, weakLimit);
+
+      const cardMap = new Map(enrichedCards.map((card) => [card.id, card]));
+      const standaloneStudyItems = (metaRows || [])
+        .filter((row) => row?.id && !cardMap.has(row.id))
+        .map((row) => ({
+          id: row.id,
+          subject: row.subject || "english",
+          section: row.section || "general",
+          sectionLabel: row.sectionLabel || titleCase(row.section || "general"),
+          prompt: row.prompt || "",
+          answer: row.answer || "",
+          source: row.source || null,
+          favorite: Boolean(row.favorite),
+          note: String(row.note || ""),
+          listIds: [],
+          listNames: [],
+          standalone: true,
+          reviewBacked: false,
+          studyUpdatedAt: row.updatedAt || 0,
+          totalReviews: 0,
+          correctReviews: 0,
+          lapses: 0,
+          dueAt: null,
+        }));
+
+      const favoriteWords = [...enrichedCards.filter((card) => card.favorite), ...standaloneStudyItems.filter((item) => item.favorite)]
+        .sort((left, right) => (right.studyUpdatedAt || 0) - (left.studyUpdatedAt || 0));
+
+      const notedWords = [...enrichedCards.filter((card) => String(card.note || "").trim().length > 0), ...standaloneStudyItems.filter((item) => String(item.note || "").trim().length > 0)]
+        .sort((left, right) => (right.studyUpdatedAt || 0) - (left.studyUpdatedAt || 0));
+
+      const customLists = (lists || [])
+        .map((list) => {
+          const items = (listItems || [])
+            .filter((item) => item.listId === list.id)
+            .map((item) => cardMap.get(item.cardId))
+            .filter(Boolean);
+          return {
+            ...list,
+            itemCount: items.length,
+            items,
+          };
+        })
+        .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+
+      return {
+        heatmap,
+        weakWords,
+        favoriteWords,
+        notedWords,
+        customLists,
+        totals: {
+          reviewedLastPeriod: historyRows.length,
+          favorites: favoriteWords.length,
+          notedWords: notedWords.length,
+          customLists: customLists.length,
+        },
       };
     },
 
@@ -708,6 +1118,23 @@
         correctReviews: (card.correctReviews || 0) + (scheduleUpdate.correct ? 1 : 0),
         updatedAt: Date.now(),
       };
+      const reviewedAt = nextCard.lastReviewedAt;
+      const reviewEvent = {
+        id: buildReviewEventId(cardId, reviewedAt, scheduleUpdate.rating),
+        cardId,
+        prompt: card.prompt,
+        answer: card.answer,
+        subject: card.subject,
+        section: card.section,
+        sectionLabel: card.sectionLabel,
+        rating: scheduleUpdate.rating,
+        correct: scheduleUpdate.correct,
+        box: scheduleUpdate.box,
+        intervalDays: scheduleUpdate.intervalDays,
+        reviewedAt,
+        dayKey: window.HomeSchoolUtils.getDayKey(reviewedAt),
+        xpGain: scheduleUpdate.xpGain,
+      };
 
       const xpGain = scheduleUpdate.xpGain + streakBonus;
       const nextStats = {
@@ -722,9 +1149,10 @@
         updatedAt: Date.now(),
       };
 
-      await db.transaction("rw", [db.reviewCards, db.userStats], async () => {
+      await db.transaction("rw", [db.reviewCards, db.userStats, db.reviewHistory], async () => {
         await db.reviewCards.put(nextCard);
         await db.userStats.put(nextStats);
+        await db.reviewHistory.put(reviewEvent);
       });
 
       return {
@@ -735,8 +1163,99 @@
       };
     },
 
+    async toggleWordFavorite(cardId, favorite = null, studyItem = null) {
+      const existing = await getOrCreateStudyMeta(cardId, studyItem);
+      if (!existing) return null;
+      const next = {
+        ...existing,
+        favorite: typeof favorite === "boolean" ? favorite : !existing.favorite,
+        updatedAt: Date.now(),
+      };
+      await db.wordMeta.put(next);
+      return next;
+    },
+
+    async saveWordNote(cardId, note, studyItem = null) {
+      const existing = await getOrCreateStudyMeta(cardId, studyItem);
+      if (!existing) return null;
+      const next = {
+        ...existing,
+        note: String(note || "").trim(),
+        updatedAt: Date.now(),
+      };
+      await db.wordMeta.put(next);
+      return next;
+    },
+
+    async createCustomList(name) {
+      const trimmed = String(name || "").trim();
+      if (!trimmed) return null;
+      const list = {
+        id: buildCustomListId(trimmed),
+        name: trimmed,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      await db.customLists.put(list);
+      return list;
+    },
+
+    async renameCustomList(listId, name) {
+      const list = await db.customLists.get(listId);
+      if (!list) return null;
+      const trimmed = String(name || "").trim();
+      if (!trimmed) return list;
+      const next = {
+        ...list,
+        name: trimmed,
+        updatedAt: Date.now(),
+      };
+      await db.customLists.put(next);
+      return next;
+    },
+
+    async deleteCustomList(listId) {
+      const relatedItems = await db.customListItems.where("listId").equals(listId).toArray();
+      await db.transaction("rw", [db.customLists, db.customListItems], async () => {
+        await db.customLists.delete(listId);
+        if (relatedItems.length > 0) {
+          await db.customListItems.bulkDelete(relatedItems.map((item) => item.id));
+        }
+      });
+      return true;
+    },
+
+    async toggleCardInCustomList(listId, cardId) {
+      const list = await db.customLists.get(listId);
+      const card = await db.reviewCards.get(cardId);
+      if (!list || !card) return null;
+      const itemId = buildCustomListItemId(listId, cardId);
+      const existing = await db.customListItems.get(itemId);
+      if (existing) {
+        await db.customListItems.delete(itemId);
+      } else {
+        await db.customListItems.put({
+          id: itemId,
+          listId,
+          cardId,
+          prompt: card.prompt,
+          answer: card.answer,
+          updatedAt: Date.now(),
+        });
+      }
+      await db.customLists.put({
+        ...list,
+        updatedAt: Date.now(),
+      });
+      return !existing;
+    },
+
     async getUserStats() {
       return getMainStats();
+    },
+
+    async getAllStudyMeta() {
+      return db.wordMeta.toArray();
     },
 
     async getCustomization(type) {
@@ -784,7 +1303,11 @@
         exportedAt: new Date().toISOString(),
         progress: await db.progress.toArray(),
         reviewCards: await db.reviewCards.toArray(),
+        reviewHistory: await db.reviewHistory.toArray(),
         userStats: await db.userStats.toArray(),
+        wordMeta: await db.wordMeta.toArray(),
+        customLists: await db.customLists.toArray(),
+        customListItems: await db.customListItems.toArray(),
         customizations: await db.customizations.toArray(),
         dataVersion: metadata?.version ?? null,
         changedSubjects: metadata?.changedSubjects || [],
@@ -795,37 +1318,61 @@
       const mode = options.mode === "merge" ? "merge" : "replace";
       const normalized = normalizeImportPayload(progressData);
 
-      await db.transaction("rw", [db.progress, db.reviewCards, db.userStats, db.customizations], async () => {
+      await db.transaction("rw", [db.progress, db.reviewCards, db.reviewHistory, db.userStats, db.wordMeta, db.customLists, db.customListItems, db.customizations], async () => {
         if (mode === "replace") {
           await db.progress.clear();
           await db.reviewCards.clear();
+          await db.reviewHistory.clear();
           await db.userStats.clear();
+          await db.wordMeta.clear();
+          await db.customLists.clear();
+          await db.customListItems.clear();
           await db.customizations.clear();
 
           if (normalized.progress.length > 0) await db.progress.bulkPut(normalized.progress);
           if (normalized.reviewCards.length > 0) await db.reviewCards.bulkPut(normalized.reviewCards);
+          if (normalized.reviewHistory.length > 0) await db.reviewHistory.bulkPut(normalized.reviewHistory);
           if (normalized.userStats.length > 0) await db.userStats.bulkPut(normalized.userStats);
+          if (normalized.wordMeta.length > 0) await db.wordMeta.bulkPut(normalized.wordMeta);
+          if (normalized.customLists.length > 0) await db.customLists.bulkPut(normalized.customLists);
+          if (normalized.customListItems.length > 0) await db.customListItems.bulkPut(normalized.customListItems);
           if (normalized.customizations.length > 0) await db.customizations.bulkPut(normalized.customizations);
           return;
         }
 
         const existingProgress = await db.progress.toArray();
         const existingReviewCards = await db.reviewCards.toArray();
+        const existingReviewHistory = await db.reviewHistory.toArray();
         const existingUserStats = await db.userStats.toArray();
+        const existingWordMeta = await db.wordMeta.toArray();
+        const existingCustomLists = await db.customLists.toArray();
+        const existingCustomListItems = await db.customListItems.toArray();
         const existingCustomizations = await db.customizations.toArray();
 
         const mergedProgress = mergeUniqueRows(existingProgress, normalized.progress);
         const mergedReviewCards = mergeUniqueRows(existingReviewCards, normalized.reviewCards);
+        const mergedReviewHistory = mergeUniqueRows(existingReviewHistory, normalized.reviewHistory);
+        const mergedWordMeta = mergeUniqueRows(existingWordMeta, normalized.wordMeta);
+        const mergedCustomLists = mergeUniqueRows(existingCustomLists, normalized.customLists);
+        const mergedCustomListItems = mergeUniqueRows(existingCustomListItems, normalized.customListItems);
         const mergedCustomizations = mergeCustomizationRows(existingCustomizations, normalized.customizations);
         const mergedMain = mergeMainStats(existingUserStats.find((row) => row.id === "main"), normalized.userStats.find((row) => row.id === "main"));
 
         await db.progress.clear();
         await db.reviewCards.clear();
+        await db.reviewHistory.clear();
         await db.userStats.clear();
+        await db.wordMeta.clear();
+        await db.customLists.clear();
+        await db.customListItems.clear();
         await db.customizations.clear();
 
         if (mergedProgress.length > 0) await db.progress.bulkPut(mergedProgress);
         if (mergedReviewCards.length > 0) await db.reviewCards.bulkPut(mergedReviewCards);
+        if (mergedReviewHistory.length > 0) await db.reviewHistory.bulkPut(mergedReviewHistory);
+        if (mergedWordMeta.length > 0) await db.wordMeta.bulkPut(mergedWordMeta);
+        if (mergedCustomLists.length > 0) await db.customLists.bulkPut(mergedCustomLists);
+        if (mergedCustomListItems.length > 0) await db.customListItems.bulkPut(mergedCustomListItems);
         if (mergedCustomizations.length > 0) await db.customizations.bulkPut(mergedCustomizations);
         if (mergedMain) await db.userStats.put(mergedMain);
       });
@@ -838,9 +1385,10 @@
     },
 
     async resetProgress() {
-      await db.transaction("rw", [db.progress, db.reviewCards, db.userStats], async () => {
+      await db.transaction("rw", [db.progress, db.reviewCards, db.reviewHistory, db.userStats], async () => {
         await db.progress.clear();
         await db.reviewCards.clear();
+        await db.reviewHistory.clear();
         await db.userStats.clear();
         if (window.HomeSchoolData) {
           const reviewCards = buildReviewCards(window.HomeSchoolData);
@@ -866,6 +1414,10 @@
         mathChapters: await db.mathChapters.toArray(),
         quizData: await db.quizData.toArray(),
         reviewCards: await db.reviewCards.toArray(),
+        reviewHistory: await db.reviewHistory.toArray(),
+        wordMeta: await db.wordMeta.toArray(),
+        customLists: await db.customLists.toArray(),
+        customListItems: await db.customListItems.toArray(),
         progress: await db.progress.toArray(),
         userStats: await db.userStats.toArray(),
         customizations: await db.customizations.toArray(),
@@ -882,6 +1434,10 @@
         mathChapters: await db.mathChapters.count(),
         quizData: await db.quizData.count(),
         reviewCards: await db.reviewCards.count(),
+        reviewHistory: await db.reviewHistory.count(),
+        wordMeta: await db.wordMeta.count(),
+        customLists: await db.customLists.count(),
+        customListItems: await db.customListItems.count(),
         progress: await db.progress.count(),
         customizations: await db.customizations.count(),
       };

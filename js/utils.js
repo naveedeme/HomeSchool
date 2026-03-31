@@ -108,7 +108,11 @@
   }
 
   function ttsClean(text) {
-    return String(text || "")
+    const source = String(text || "");
+    const normalized = /[\u0600-\u06FF]/.test(source)
+      ? source.replace(/\s*\/\s*/g, " ")
+      : source;
+    return normalized
       .replace(/\[(\d+)\]/g, "$1")
       .replace(/₹|Rs\.?\s*/g, "Rupees ")
       .replace(/→/g, " to ")
@@ -481,7 +485,11 @@
 
     const progress = payload.dbProgress?.progress;
     const reviewCards = payload.dbProgress?.reviewCards;
+    const reviewHistory = payload.dbProgress?.reviewHistory;
     const userStats = payload.dbProgress?.userStats;
+    const wordMeta = payload.dbProgress?.wordMeta;
+    const customLists = payload.dbProgress?.customLists;
+    const customListItems = payload.dbProgress?.customListItems;
     const customizations = payload.dbProgress?.customizations;
 
     if (typeof progress !== "undefined" && !Array.isArray(progress)) {
@@ -490,8 +498,20 @@
     if (typeof reviewCards !== "undefined" && !Array.isArray(reviewCards)) {
       errors.push("Review cards must be an array.");
     }
+    if (typeof reviewHistory !== "undefined" && !Array.isArray(reviewHistory)) {
+      errors.push("Review history must be an array.");
+    }
     if (typeof userStats !== "undefined" && !Array.isArray(userStats)) {
       errors.push("User stats rows must be an array.");
+    }
+    if (typeof wordMeta !== "undefined" && !Array.isArray(wordMeta)) {
+      errors.push("Word metadata must be an array.");
+    }
+    if (typeof customLists !== "undefined" && !Array.isArray(customLists)) {
+      errors.push("Custom lists must be an array.");
+    }
+    if (typeof customListItems !== "undefined" && !Array.isArray(customListItems)) {
+      errors.push("Custom list items must be an array.");
     }
     if (typeof customizations !== "undefined" && !Array.isArray(customizations)) {
       errors.push("Customizations rows must be an array.");

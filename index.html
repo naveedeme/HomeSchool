@@ -8,7 +8,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="HomeSchool">
   <title>HomeSchool</title>
-  <link rel="manifest" href="./manifest.webmanifest">
+  <script>
+    if (location.protocol !== "file:") {
+      const manifestLink = document.createElement("link");
+      manifestLink.rel = "manifest";
+      manifestLink.href = "./manifest.webmanifest";
+      document.head.appendChild(manifestLink);
+    }
+  </script>
   <link rel="icon" href="./img/pwa/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./img/pwa/icon.svg">
   <link rel="stylesheet" href="./css/app.css">
