@@ -1,4 +1,4 @@
-const CACHE_NAME = "homeschool-static-v2";
+const CACHE_NAME = "homeschool-static-v3";
 const APP_SHELL = [
   "./css/app.css",
   "./HomeSchool.html",
@@ -95,11 +95,26 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const failures = [];
+
+    await Promise.all(APP_SHELL.map(async (path) => {
+      try {
+        const response = await fetch(path, { cache: "no-cache" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        await cache.put(path, response);
+      } catch (error) {
+        failures.push({ path, error: String(error?.message || error) });
+      }
+    }));
+
+    if (failures.length) {
+      console.warn("[HomeSchool SW] Some assets were not precached.", failures);
+    }
+
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (event) => {
