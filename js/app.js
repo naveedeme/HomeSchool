@@ -101,6 +101,7 @@ const UI_TEXT = {
     reviewHeatmapHint: "See how consistently you reviewed over the last 12 weeks.",
     weakWordsReport: "Weak Words Report",
     weakWordsHint: "These words need extra attention because they are overdue, frequently missed, or still unstable.",
+    favorites: "Favorites",
     favoriteWords: "Favorite Words",
     notedWords: "Notes Board",
     studyCollections: "Study Collections",
@@ -234,6 +235,7 @@ const UI_TEXT = {
     reviewHeatmapHint: "گزشتہ 12 ہفتوں میں آپ نے کتنی باقاعدگی سے ریویو کیا، یہاں دیکھیں۔",
     weakWordsReport: "کمزور الفاظ رپورٹ",
     weakWordsHint: "یہ الفاظ زیادہ توجہ چاہتے ہیں کیونکہ یہ بار بار غلط ہوئے، باقی ہیں، یا ابھی مضبوط نہیں ہوئے۔",
+    favorites: "پسندیدہ",
     favoriteWords: "پسندیدہ الفاظ",
     notedWords: "نوٹس بورڈ",
     studyCollections: "مطالعہ کلیکشنز",
@@ -3470,7 +3472,7 @@ function getReviewDueLabel(card, language) {
   return joinLocalizedText(`Due in ${remainingDays}d`, `${remainingDays} دن بعد`, language);
 }
 
-function WordCollectionToolbar({ card, compact = false }) {
+function WordCollectionToolbar({ card, compact = false, allowView = false }) {
   const app = useContext(AppContext);
   const language = app?.language || "en";
   const [showNoteEditor, setShowNoteEditor] = useState(false);
@@ -3482,7 +3484,7 @@ function WordCollectionToolbar({ card, compact = false }) {
 
   if (!card || !app?.onToggleFavorite) return null;
   const supportsLists = card.reviewBacked !== false;
-  const canViewSource = Boolean(app?.onViewStudyItem);
+  const canViewSource = allowView && Boolean(app?.onViewStudyItem);
 
   const buttonClass = `study-tool-btn${compact ? " compact" : ""}${card.favorite ? " active" : ""}`;
 
@@ -3577,7 +3579,7 @@ function WordCollectionToolbar({ card, compact = false }) {
   );
 }
 
-function StudyWordCard({ card, showStats = true }) {
+function StudyWordCard({ card, showStats = true, allowView = false }) {
   const app = useContext(AppContext);
   const language = app?.language || "en";
   const accuracy = card.totalReviews ? Math.round(((card.correctReviews || 0) / card.totalReviews) * 100) : 0;
@@ -3599,7 +3601,7 @@ function StudyWordCard({ card, showStats = true }) {
           <span>{renderLocalizedTextNode(getReviewDueLabel(card, language), language)}</span>
         </div>
       )}
-      <WordCollectionToolbar card={card} compact={showStats} />
+      <WordCollectionToolbar card={card} compact={showStats} allowView={allowView} />
     </div>
   );
 }
@@ -4974,7 +4976,7 @@ function HomeschoolApp() {
   };
   const goBack = () => { window.speechSynthesis.cancel(); if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
   const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
@@ -5010,6 +5012,20 @@ function HomeschoolApp() {
     if (!acc[key]) acc[key] = card;
     return acc;
   }, {});
+  const groupedFavoriteWords = (reviewAnalytics.favoriteWords || []).reduce((groups, card) => {
+    const subjectId = card?.subject || card?.source?.subject || "general";
+    if (!groups[subjectId]) {
+      const subject = SUBJECTS.find((entry) => entry.id === subjectId) || null;
+      groups[subjectId] = { subjectId, subject, cards: [] };
+    }
+    groups[subjectId].cards.push(card);
+    return groups;
+  }, {});
+  const favoriteSubjectGroups = Object.values(groupedFavoriteWords).sort((left, right) => {
+    const leftName = (left.subject?.name || left.subjectId || "").toLowerCase();
+    const rightName = (right.subject?.name || right.subjectId || "").toLowerCase();
+    return leftName.localeCompare(rightName);
+  });
 
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
   const handleInstallApp = async () => {
@@ -5584,7 +5600,6 @@ function HomeschoolApp() {
             <div className="stat-card"><div className="stat-icon">🏆</div><div className="stat-value">{formatNumberLabel(reviewStats.retentionRate || 0)}%</div><div className="stat-label">{renderLocalizedTextNode(ui.retentionRate, language)}</div></div>
           </div>
           <div className="stat-grid">
-            <div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{formatNumberLabel(reviewStats.favorites || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.favoriteWords, language)}</div></div>
             <div className="stat-card"><div className="stat-icon">📝</div><div className="stat-value">{formatNumberLabel(reviewStats.notedWords || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.notedWords, language)}</div></div>
             <div className="stat-card"><div className="stat-icon">🗂️</div><div className="stat-value">{formatNumberLabel(reviewStats.customLists || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.customLists, language)}</div></div>
             <div className="stat-card"><div className="stat-icon">📅</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.totals.reviewedLastPeriod || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("12-week reviews", "12 ہفتے کے ریویوز", language), language)}</div></div>
@@ -5691,10 +5706,6 @@ function HomeschoolApp() {
 
           <div className="study-word-columns">
             <div className="review-panel">
-              <div className="review-panel-head"><div><h3>{renderLocalizedTextNode(ui.favoriteWords, language)}</h3></div></div>
-              {reviewAnalytics.favoriteWords.length > 0 ? reviewAnalytics.favoriteWords.slice(0, 6).map((card) => <StudyWordCard key={card.id} card={card} showStats={false} />) : <p className="empty-state">{renderLocalizedTextNode(ui.noFavorites, language)}</p>}
-            </div>
-            <div className="review-panel">
               <div className="review-panel-head"><div><h3>{renderLocalizedTextNode(ui.notedWords, language)}</h3></div></div>
               {reviewAnalytics.notedWords.length > 0 ? reviewAnalytics.notedWords.slice(0, 6).map((card) => <StudyWordCard key={card.id} card={card} showStats={false} />) : <p className="empty-state">{renderLocalizedTextNode(ui.noNotes, language)}</p>}
             </div>
@@ -5735,6 +5746,37 @@ function HomeschoolApp() {
 
       {tab === "tutor" && (<><div className="tutor-chat">{chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}{chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}<div ref={chatEndRef} /></div><div className="chat-input-area"><input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Ask your tutor anything..." /><button onClick={sendChat} disabled={chatLoading}>➤</button></div></>)}
 
+      {tab === "favorites" && (<>
+        <div className="review-panel" style={{ marginBottom: 18 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(ui.favoriteWords, language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "آپ کے ستارہ لگائے گئے آئٹمز یہاں مضمون وار ترتیب سے رکھے گئے ہیں تاکہ آپ فوراً واپس جا سکیں۔", language), language)}</p>
+            </div>
+          </div>
+          <div className="stat-grid">
+            <div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.favoriteWords, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📘</div><div className="stat-value">{formatNumberLabel(favoriteSubjectGroups.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</div></div>
+          </div>
+        </div>
+        {favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => (
+          <div key={group.subjectId} className="review-panel" style={{ marginBottom: 18 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "عمومی", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} محفوظ پسندیدہ آئٹمز`, language), language)}</p>
+              </div>
+            </div>
+            <div className="study-word-grid">
+              {group.cards.map((card) => <StudyWordCard key={card.id} card={card} showStats={false} allowView={true} />)}
+            </div>
+          </div>
+        )) : (
+          <div className="review-panel">
+            <p className="empty-state">{renderLocalizedTextNode(ui.noFavorites, language)}</p>
+          </div>
+        )}
+      </>)}
       {tab === "settings" && (<>
         <div className="settings-item" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {}}>
           <span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Student Name", "طالب علم", language), language)}:</span>
@@ -5807,7 +5849,7 @@ function HomeschoolApp() {
         ) : null}
       </>)}
     </div>
-    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: ui.home }, { id: "progress", icon: "📊", label: ui.progress }, { id: "review", icon: "🧠", label: ui.review }, { id: "badges", icon: "🏆", label: ui.badges }, { id: "tutor", icon: "🤖", label: ui.tutor }, { id: "settings", icon: "⚙️", label: ui.settings }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); if (item.id !== "review") resetReviewSession(); }}><span className="nav-icon">{item.icon}</span>{renderLocalizedTextNode(item.label, language)}</button>)}</div>
+    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: ui.home }, { id: "progress", icon: "📊", label: ui.progress }, { id: "review", icon: "🧠", label: ui.review }, { id: "favorites", icon: "⭐", label: ui.favorites }, { id: "badges", icon: "🏆", label: ui.badges }, { id: "tutor", icon: "🤖", label: ui.tutor }, { id: "settings", icon: "⚙️", label: ui.settings }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); if (item.id !== "review") resetReviewSession(); }}><span className="nav-icon">{item.icon}</span>{renderLocalizedTextNode(item.label, language)}</button>)}</div>
   </div></></AppContext.Provider>);
 }
 
