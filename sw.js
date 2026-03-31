@@ -1,4 +1,4 @@
-const CACHE_NAME = "homeschool-static-v1";
+const CACHE_NAME = "homeschool-static-v2";
 const APP_SHELL = [
   "./css/app.css",
   "./HomeSchool.html",
@@ -131,7 +131,7 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(async () => {
           const cached = await caches.match(event.request);
-          return cached || caches.match("./HomeSchool.html");
+          return cached || caches.match("./index.html");
         })
     );
     return;
