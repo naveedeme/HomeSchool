@@ -251,6 +251,98 @@
     return resolvedTheme;
   }
 
+  function isStandaloneMode() {
+    try {
+      return Boolean(
+        window.matchMedia?.("(display-mode: standalone)").matches ||
+        window.navigator.standalone === true
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function hideLaunchSplash() {
+    const splash = document.getElementById("app-splash");
+    if (!splash) return;
+    splash.classList.add("is-hidden");
+    setTimeout(() => {
+      if (splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 320);
+  }
+
+  function canRegisterServiceWorker() {
+    if (!("serviceWorker" in navigator)) return { ok: false, reason: "unsupported" };
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    if (protocol === "https:" || hostname === "localhost" || hostname === "127.0.0.1") {
+      return { ok: true };
+    }
+    return { ok: false, reason: protocol === "file:" ? "file" : "insecure" };
+  }
+
+  async function registerServiceWorker(options = {}) {
+    const support = canRegisterServiceWorker();
+    if (!support.ok) return { registered: false, reason: support.reason };
+    try {
+      const registration = await navigator.serviceWorker.register("./sw.js");
+      window.__HOME_SCHOOL_SW_REG__ = registration;
+      options.onStatus?.("checking");
+
+      if (registration.waiting) {
+        options.onStatus?.("update-ready");
+      }
+
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        if (!worker) return;
+        options.onStatus?.("caching");
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "installed") {
+            options.onStatus?.(navigator.serviceWorker.controller ? "update-ready" : "ready");
+          } else if (worker.state === "redundant") {
+            options.onStatus?.("error");
+          }
+        });
+      });
+
+      navigator.serviceWorker.ready
+        .then(() => options.onStatus?.("ready"))
+        .catch(() => options.onStatus?.("error"));
+
+      return { registered: true, registration };
+    } catch (error) {
+      options.onError?.(error);
+      options.onStatus?.("error");
+      return { registered: false, reason: "error", error };
+    }
+  }
+
+  async function applyServiceWorkerUpdate() {
+    try {
+      const registration = window.__HOME_SCHOOL_SW_REG__ || await navigator.serviceWorker?.getRegistration?.();
+      if (registration?.waiting) {
+        registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+    } catch {
+      // Fall back to reload below.
+    }
+    window.location.reload();
+  }
+
+  async function setPendingReviewBadge(count) {
+    try {
+      const safeCount = Math.max(0, Number(count) || 0);
+      if (safeCount > 0 && navigator.setAppBadge) {
+        await navigator.setAppBadge(safeCount);
+      } else if (safeCount === 0 && navigator.clearAppBadge) {
+        await navigator.clearAppBadge();
+      }
+    } catch {
+      // Ignore unsupported badge APIs.
+    }
+  }
+
   function getDayKey(value = Date.now()) {
     const date = value instanceof Date ? value : new Date(value);
     return date.toDateString();
@@ -440,6 +532,11 @@
     formatBytes,
     getResolvedTheme,
     applyThemeMode,
+    isStandaloneMode,
+    hideLaunchSplash,
+    registerServiceWorker,
+    applyServiceWorkerUpdate,
+    setPendingReviewBadge,
     getDayKey,
     getReviewScheduleUpdate,
     getStorageEstimateLabel,

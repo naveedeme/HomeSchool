@@ -10,7 +10,7 @@
     getLessons,
     getQuiz
   } = window.HomeSchoolData;
-  const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme } = window.HomeSchoolUtils;
+  const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, applyServiceWorkerUpdate, setPendingReviewBadge } = window.HomeSchoolUtils;
   const { SettingsPanel } = window.HomeSchoolSettings || {};
   const {
     adverbs: ADVERBS_DATA,
@@ -109,7 +109,26 @@
       fullResetConfirm: "Full reset will clear the database, progress, and reseed the curriculum. Continue?",
       updateAvailableTitle: "An update is available.",
       upToDateTitle: "Curriculum is up to date.",
-      changedSubjects: "Changed subjects"
+      changedSubjects: "Changed subjects",
+      appExperience: "App Experience",
+      installStatus: "Install Status",
+      offlineAccess: "Offline Access",
+      networkStatus: "Network",
+      installApp: "Install App",
+      appInstalled: "Installed",
+      appInstallAvailable: "Ready to install",
+      appInstallUnavailable: "Browser install not available",
+      offlineReady: "Offline cache ready",
+      offlineCaching: "Preparing offline cache",
+      offlineLocalStatic: "Direct local file mode",
+      offlineUnsupported: "Offline worker not available here",
+      offlineError: "Offline setup failed",
+      updateReady: "Update ready after refresh",
+      refreshToUpdate: "Refresh to Update",
+      online: "Online",
+      offline: "Offline",
+      installBannerTitle: "Install and study offline",
+      installBannerText: "Pin HomeSchool to your device and keep your lessons ready even without internet."
     },
     ur: {
       loadingHome: "\u06C1\u0648\u0645 \u0627\u0633\u06A9\u0648\u0644 \u0644\u0648\u0688 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...",
@@ -197,7 +216,26 @@
       fullResetConfirm: "\u0645\u06A9\u0645\u0644 \u0631\u06CC \u0633\u06CC\u0679 \u0688\u06CC\u0679\u0627 \u0628\u06CC\u0633 \u0627\u0648\u0631 \u067E\u06CC\u0634 \u0631\u0641\u062A \u062F\u0648\u0646\u0648\u06BA \u0635\u0627\u0641 \u06A9\u0631 \u062F\u06D2 \u06AF\u0627\u06D4 \u06A9\u06CC\u0627 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u0646\u0627 \u06C1\u06D2\u061F",
       updateAvailableTitle: "\u0646\u0626\u06CC \u0627\u067E \u0688\u06CC\u0679 \u062F\u0633\u062A\u06CC\u0627\u0628 \u06C1\u06D2\u06D4",
       upToDateTitle: "\u0646\u0635\u0627\u0628 \u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u062A\u0627\u0632\u06C1 \u062A\u0631\u06CC\u0646 \u06C1\u06D2\u06D4",
-      changedSubjects: "\u0628\u062F\u0644\u06D2 \u06AF\u0626\u06D2 \u0645\u0636\u0627\u0645\u06CC\u0646"
+      changedSubjects: "\u0628\u062F\u0644\u06D2 \u06AF\u0626\u06D2 \u0645\u0636\u0627\u0645\u06CC\u0646",
+      appExperience: "\u0627\u06CC\u067E \u062A\u062C\u0631\u0628\u06C1",
+      installStatus: "\u0627\u0646\u0633\u0679\u0627\u0644 \u062D\u0627\u0644\u062A",
+      offlineAccess: "\u0622\u0641 \u0644\u0627\u0626\u0646 \u0631\u0633\u0627\u0626\u06CC",
+      networkStatus: "\u0646\u06CC\u0679 \u0648\u0631\u06A9",
+      installApp: "\u0627\u06CC\u067E \u0627\u0646\u0633\u0679\u0627\u0644 \u06A9\u0631\u06CC\u06BA",
+      appInstalled: "\u0627\u0646\u0633\u0679\u0627\u0644 \u0634\u062F\u06C1",
+      appInstallAvailable: "\u0627\u0646\u0633\u0679\u0627\u0644 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631",
+      appInstallUnavailable: "\u0627\u0633 \u0628\u0631\u0627\u0624\u0632\u0631 \u0645\u06CC\u06BA \u0627\u0646\u0633\u0679\u0627\u0644 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA",
+      offlineReady: "\u0622\u0641 \u0644\u0627\u0626\u0646 \u06A9\u06CC\u0634 \u062A\u06CC\u0627\u0631",
+      offlineCaching: "\u0622\u0641 \u0644\u0627\u0626\u0646 \u06A9\u06CC\u0634 \u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2",
+      offlineLocalStatic: "\u0628\u0631\u0627\u06C1 \u0631\u0627\u0633\u062A \u0644\u0648\u06A9\u0644 \u0641\u0627\u0626\u0644 \u0645\u0648\u0688",
+      offlineUnsupported: "\u06CC\u06C1\u0627\u06BA \u0622\u0641 \u0644\u0627\u0626\u0646 \u0648\u0631\u06A9\u0631 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA",
+      offlineError: "\u0622\u0641 \u0644\u0627\u0626\u0646 \u0633\u06CC\u0679 \u0627\u067E \u0646\u0627\u06A9\u0627\u0645",
+      updateReady: "\u0631\u06CC\u0641\u0631\u06CC\u0634 \u06A9\u06D2 \u0628\u0639\u062F \u0627\u067E \u0688\u06CC\u0679 \u062A\u06CC\u0627\u0631",
+      refreshToUpdate: "\u0627\u067E \u0688\u06CC\u0679 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0631\u06CC\u0641\u0631\u06CC\u0634 \u06A9\u0631\u06CC\u06BA",
+      online: "\u0622\u0646 \u0644\u0627\u0626\u0646",
+      offline: "\u0622\u0641 \u0644\u0627\u0626\u0646",
+      installBannerTitle: "\u0627\u06CC\u067E \u0627\u0646\u0633\u0679\u0627\u0644 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0622\u0641 \u0644\u0627\u0626\u0646 \u067E\u0691\u06BE\u06CC\u06BA",
+      installBannerText: "HomeSchool \u06A9\u0648 \u0627\u067E\u0646\u06D2 \u0688\u06CC\u0648\u0627\u0626\u0633 \u067E\u0631 \u0631\u06A9\u06BE\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0627\u0646\u0679\u0631\u0646\u06CC\u0679 \u06A9\u06D2 \u0628\u063A\u06CC\u0631 \u0628\u06BE\u06CC \u0627\u0633\u0628\u0627\u0642 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0631\u06C1\u06CC\u06BA\u06D4"
     }
   };
   const DAY_SECTION_META = {
@@ -2007,6 +2045,10 @@ ${marker} `);
     const [reviewSessionXp, setReviewSessionXp] = useState(0);
     const [reviewLoading, setReviewLoading] = useState(false);
     const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "system"));
+    const [installPromptEvent, setInstallPromptEvent] = useState(null);
+    const [isInstalled, setIsInstalled] = useState(isStandaloneMode());
+    const [serviceWorkerStatus, setServiceWorkerStatus] = useState(window.location.protocol === "file:" ? "local-static" : "checking");
+    const [isOnline, setIsOnline] = useState(navigator.onLine !== false);
     const chatEndRef = useRef(null);
     const [dbLoaded, setDbLoaded] = useState(false);
     const [dbPos, setDbPos] = useState({});
@@ -2213,8 +2255,48 @@ ${marker} `);
       return () => window.speechSynthesis.cancel();
     }, []);
     useEffect(() => {
+      const handleBeforeInstallPrompt = (event) => {
+        event.preventDefault();
+        setInstallPromptEvent(event);
+      };
+      const handleInstalled = () => {
+        setInstallPromptEvent(null);
+        setIsInstalled(true);
+      };
+      const handleOnline = () => setIsOnline(true);
+      const handleOffline = () => setIsOnline(false);
+      const standaloneMedia = window.matchMedia ? window.matchMedia("(display-mode: standalone)") : null;
+      const syncStandalone = () => setIsInstalled(isStandaloneMode());
+      window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.addEventListener("appinstalled", handleInstalled);
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+      if (standaloneMedia?.addEventListener) standaloneMedia.addEventListener("change", syncStandalone);
+      else if (standaloneMedia?.addListener) standaloneMedia.addListener(syncStandalone);
+      registerServiceWorker({
+        onStatus: (status) => setServiceWorkerStatus(status),
+        onError: () => setServiceWorkerStatus("error")
+      }).then((result) => {
+        if (!result?.registered) {
+          if (result?.reason === "file") setServiceWorkerStatus("local-static");
+          else if (result?.reason === "unsupported" || result?.reason === "insecure") setServiceWorkerStatus("unsupported");
+        }
+      });
+      return () => {
+        window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+        window.removeEventListener("appinstalled", handleInstalled);
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+        if (standaloneMedia?.removeEventListener) standaloneMedia.removeEventListener("change", syncStandalone);
+        else if (standaloneMedia?.removeListener) standaloneMedia.removeListener(syncStandalone);
+      };
+    }, []);
+    useEffect(() => {
       if (dbLoaded) refreshStorageLabel();
     }, [dbLoaded, language]);
+    useEffect(() => {
+      if (dbLoaded) hideLaunchSplash();
+    }, [dbLoaded]);
     useEffect(() => {
       const applyTheme = () => {
         const nextResolvedTheme = applyThemeMode(themeMode);
@@ -2251,6 +2333,9 @@ ${marker} `);
     useEffect(() => {
       if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides });
     }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides]);
+    useEffect(() => {
+      setPendingReviewBadge(reviewStats.due || 0);
+    }, [reviewStats.due]);
     useEffect(() => {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
@@ -2603,6 +2688,10 @@ ${error.message || error}`);
     const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
     const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
     const reviewReadyNowCount = Math.min(Number(reviewStats.due || 0), Number(dailyReviewCap || 20));
+    const canInstallApp = Boolean(installPromptEvent) && !isInstalled;
+    const installStatusLabel = isInstalled ? ui.appInstalled : canInstallApp ? ui.appInstallAvailable : ui.appInstallUnavailable;
+    const offlineStatusLabel = serviceWorkerStatus === "ready" ? ui.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? ui.offlineCaching : serviceWorkerStatus === "local-static" ? ui.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? ui.updateReady : serviceWorkerStatus === "unsupported" ? ui.offlineUnsupported : ui.offlineError;
+    const networkStatusLabel = isOnline ? ui.online : ui.offline;
     const playAll = (p) => {
       if (!isTtsEnabled()) return;
       window.speechSynthesis.cancel();
@@ -2626,7 +2715,17 @@ ${error.message || error}`);
       };
       next();
     };
-    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "app-header", style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, showBack && /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190"), /* @__PURE__ */ React.createElement("button", { className: "home-btn", onClick: goHome, title: ui.home }, "\u{1F3E0}"), /* @__PURE__ */ React.createElement("h1", { style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement("div", { className: "header-badge" }, /* @__PURE__ */ React.createElement("span", null, "\u2B50"), /* @__PURE__ */ React.createElement("span", null, xp, " XP"))), /* @__PURE__ */ React.createElement("div", { className: "content" }, tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "welcome-card" }, /* @__PURE__ */ React.createElement("h2", null, renderWelcomeGreeting(localizedNames, language), " \u{1F44B}"), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "\u0622\u062C \u06A9\u0686\u06BE \u0634\u0627\u0646\u062F\u0627\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u061F", language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag" }, renderLocalizedTextNode(ui.grade, language), " ", grade)), /* @__PURE__ */ React.createElement("button", { className: "adverb-home-banner", style: { width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }, onClick: handleStartReview }, /* @__PURE__ */ React.createElement("div", { className: "banner-icon" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("div", { className: "banner-text" }, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewReady, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(language === "ur" ? `${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : language === "bilingual" ? `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due / ${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due`, language)))), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} \u062F\u0646 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644!`, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "\u0627\u0633\u06CC \u0637\u0631\u062D \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u0622\u067E \u0628\u06C1\u062A \u0627\u0686\u06BE\u0627 \u06A9\u0631 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA!", language), language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("div", { className: "subject-grid" }, SUBJECTS.map((subj) => {
+    const handleInstallApp = async () => {
+      if (!installPromptEvent) return;
+      try {
+        await installPromptEvent.prompt();
+        await installPromptEvent.userChoice;
+      } catch (error) {
+        console.log("Install prompt failed:", error);
+      }
+      setInstallPromptEvent(null);
+    };
+    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "app-header", style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, showBack && /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190"), /* @__PURE__ */ React.createElement("button", { className: "home-btn", onClick: goHome, title: ui.home }, "\u{1F3E0}"), /* @__PURE__ */ React.createElement("h1", { style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement("div", { className: "header-badge" }, /* @__PURE__ */ React.createElement("span", null, "\u2B50"), /* @__PURE__ */ React.createElement("span", null, xp, " XP"))), /* @__PURE__ */ React.createElement("div", { className: "content" }, tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "welcome-card" }, /* @__PURE__ */ React.createElement("h2", null, renderWelcomeGreeting(localizedNames, language), " \u{1F44B}"), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "\u0622\u062C \u06A9\u0686\u06BE \u0634\u0627\u0646\u062F\u0627\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u061F", language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag" }, renderLocalizedTextNode(ui.grade, language), " ", grade)), (canInstallApp || isInstalled || serviceWorkerStatus !== "unsupported") && /* @__PURE__ */ React.createElement("div", { className: "app-status-card" }, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.installBannerTitle, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.installBannerText, language)), /* @__PURE__ */ React.createElement("div", { className: "app-status-grid" }, /* @__PURE__ */ React.createElement("div", { className: "status-pill" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.installStatus, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(installStatusLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "status-pill" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.offlineAccess, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(offlineStatusLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "status-pill" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.networkStatus, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(networkStatusLabel, language)))), /* @__PURE__ */ React.createElement("div", { className: "app-status-actions" }, canInstallApp && /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: handleInstallApp }, renderLocalizedTextNode(ui.installApp, language)), serviceWorkerStatus === "update-ready" && /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: applyServiceWorkerUpdate }, renderLocalizedTextNode(ui.refreshToUpdate, language)))), /* @__PURE__ */ React.createElement("button", { className: "adverb-home-banner", style: { width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }, onClick: handleStartReview }, /* @__PURE__ */ React.createElement("div", { className: "banner-icon" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("div", { className: "banner-text" }, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewReady, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(language === "ur" ? `${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : language === "bilingual" ? `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due / ${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due`, language)))), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} \u062F\u0646 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644!`, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "\u0627\u0633\u06CC \u0637\u0631\u062D \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u0622\u067E \u0628\u06C1\u062A \u0627\u0686\u06BE\u0627 \u06A9\u0631 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA!", language), language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("div", { className: "subject-grid" }, SUBJECTS.map((subj) => {
       const ls = getLessons(subj.id, grade), done = ls.filter((l) => completedQuizzes[l.id]).length, pct = ls.length > 0 ? done / ls.length * 100 : 0;
       return /* @__PURE__ */ React.createElement("button", { key: subj.id, className: "subject-card", onClick: () => setSelectedSubject(subj) }, /* @__PURE__ */ React.createElement("span", { className: "subj-icon" }, subj.icon), /* @__PURE__ */ React.createElement("span", { className: "subj-name" }, subj.name), /* @__PURE__ */ React.createElement("span", { className: "subj-name-ur" }, subj.nameUr), /* @__PURE__ */ React.createElement("div", { className: "subj-progress" }, /* @__PURE__ */ React.createElement("div", { className: "subj-progress-fill", style: { width: pct + "%", background: subj.color } })));
     }))), tab === "home" && selectedSubject && !selectedLesson && !quizActive && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: selectedSubject?.id === "urdu" || isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 36 } }, selectedSubject.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, fontFamily: selectedSubject?.id === "urdu" || isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", fontFamily: selectedSubject?.id === "urdu" || isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, renderLocalizedTextNode(`${ui.grade} ${grade} \u2022 ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`, language)))), /* @__PURE__ */ React.createElement("div", { className: "lesson-list", style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, getLessons(selectedSubject.id, grade).map((l, i) => {
@@ -2836,6 +2935,13 @@ ${error.message || error}`);
         onDailyReviewCapChange: setDailyReviewCap,
         daySectionSettings,
         onDaySectionChange: handleDaySectionChange,
+        installStatusLabel,
+        offlineStatusLabel,
+        networkStatusLabel,
+        canInstallApp,
+        onInstallApp: handleInstallApp,
+        canReloadApp: serviceWorkerStatus === "update-ready",
+        onReloadApp: applyServiceWorkerUpdate,
         labels: ui
       }
     ) : null)), /* @__PURE__ */ React.createElement("div", { className: "bottom-nav" }, [{ id: "home", icon: "\u{1F3E0}", label: ui.home }, { id: "progress", icon: "\u{1F4CA}", label: ui.progress }, { id: "review", icon: "\u{1F9E0}", label: ui.review }, { id: "badges", icon: "\u{1F3C6}", label: ui.badges }, { id: "tutor", icon: "\u{1F916}", label: ui.tutor }, { id: "settings", icon: "\u2699\uFE0F", label: ui.settings }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, className: "nav-item " + (tab === item.id ? "active" : ""), style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {

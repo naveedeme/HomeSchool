@@ -185,6 +185,13 @@
     onDailyReviewCapChange,
     daySectionSettings,
     onDaySectionChange,
+    installStatusLabel,
+    offlineStatusLabel,
+    networkStatusLabel,
+    canInstallApp,
+    onInstallApp,
+    canReloadApp,
+    onReloadApp,
     labels,
   }) {
     const ui = labels || {};
@@ -245,6 +252,19 @@
         React.createElement("span", { className: "si-value" }, storageLabel)),
       actionButton(renderLocalizedText(ui.resetProgress || "Reset Progress", language), onResetProgress, "#EF4444", { marginBottom: 8 }),
       actionButton(renderLocalizedText(ui.fullReset || "Full Reset", language), onFullReset, "#DC2626", { marginBottom: 0 }),
+
+      sectionTitle(renderLocalizedText(ui.appExperience || "App Experience", language)),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.installStatus || "Install Status", language)),
+        React.createElement("span", { className: "si-value" }, renderLocalizedText(installStatusLabel || (ui.appInstallUnavailable || "Browser install not available"), language))),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.offlineAccess || "Offline Access", language)),
+        React.createElement("span", { className: "si-value" }, renderLocalizedText(offlineStatusLabel || (ui.offlineCaching || "Preparing offline cache"), language))),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.networkStatus || "Network", language)),
+        React.createElement("span", { className: "si-value" }, renderLocalizedText(networkStatusLabel || (ui.online || "Online"), language))),
+      canInstallApp ? actionButton(renderLocalizedText(ui.installApp || "Install App", language), onInstallApp, "#6366F1") : null,
+      canReloadApp ? actionButton(renderLocalizedText(ui.refreshToUpdate || "Refresh to Update", language), onReloadApp, "#0EA5E9") : null,
 
       sectionTitle(renderLocalizedText(ui.dayBasedSections || "Day-Based English Sections", language)),
       React.createElement("div", {

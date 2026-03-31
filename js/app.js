@@ -10,7 +10,7 @@ const {
   getLessons,
   getQuiz,
 } = window.HomeSchoolData;
-const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme } = window.HomeSchoolUtils;
+const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, applyServiceWorkerUpdate, setPendingReviewBadge } = window.HomeSchoolUtils;
 const { SettingsPanel } = window.HomeSchoolSettings || {};
 const {
   adverbs: ADVERBS_DATA,
@@ -111,6 +111,25 @@ const UI_TEXT = {
     updateAvailableTitle: "An update is available.",
     upToDateTitle: "Curriculum is up to date.",
     changedSubjects: "Changed subjects",
+    appExperience: "App Experience",
+    installStatus: "Install Status",
+    offlineAccess: "Offline Access",
+    networkStatus: "Network",
+    installApp: "Install App",
+    appInstalled: "Installed",
+    appInstallAvailable: "Ready to install",
+    appInstallUnavailable: "Browser install not available",
+    offlineReady: "Offline cache ready",
+    offlineCaching: "Preparing offline cache",
+    offlineLocalStatic: "Direct local file mode",
+    offlineUnsupported: "Offline worker not available here",
+    offlineError: "Offline setup failed",
+    updateReady: "Update ready after refresh",
+    refreshToUpdate: "Refresh to Update",
+    online: "Online",
+    offline: "Offline",
+    installBannerTitle: "Install and study offline",
+    installBannerText: "Pin HomeSchool to your device and keep your lessons ready even without internet.",
   },
   ur: {
     loadingHome: "ہوم اسکول لوڈ ہو رہا ہے...",
@@ -199,6 +218,25 @@ const UI_TEXT = {
     updateAvailableTitle: "نئی اپ ڈیٹ دستیاب ہے۔",
     upToDateTitle: "نصاب پہلے ہی تازہ ترین ہے۔",
     changedSubjects: "بدلے گئے مضامین",
+    appExperience: "ایپ تجربہ",
+    installStatus: "انسٹال حالت",
+    offlineAccess: "آف لائن رسائی",
+    networkStatus: "نیٹ ورک",
+    installApp: "ایپ انسٹال کریں",
+    appInstalled: "انسٹال شدہ",
+    appInstallAvailable: "انسٹال کے لیے تیار",
+    appInstallUnavailable: "اس براؤزر میں انسٹال دستیاب نہیں",
+    offlineReady: "آف لائن کیش تیار",
+    offlineCaching: "آف لائن کیش تیار ہو رہی ہے",
+    offlineLocalStatic: "براہ راست لوکل فائل موڈ",
+    offlineUnsupported: "یہاں آف لائن ورکر دستیاب نہیں",
+    offlineError: "آف لائن سیٹ اپ ناکام",
+    updateReady: "ریفریش کے بعد اپ ڈیٹ تیار",
+    refreshToUpdate: "اپ ڈیٹ کے لیے ریفریش کریں",
+    online: "آن لائن",
+    offline: "آف لائن",
+    installBannerTitle: "ایپ انسٹال کریں اور آف لائن پڑھیں",
+    installBannerText: "HomeSchool کو اپنے ڈیوائس پر رکھیں تاکہ انٹرنیٹ کے بغیر بھی اسباق دستیاب رہیں۔",
   },
 };
 
@@ -3396,6 +3434,10 @@ function HomeschoolApp() {
   const [reviewSessionXp, setReviewSessionXp] = useState(0);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "system"));
+  const [installPromptEvent, setInstallPromptEvent] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(isStandaloneMode());
+  const [serviceWorkerStatus, setServiceWorkerStatus] = useState(window.location.protocol === "file:" ? "local-static" : "checking");
+  const [isOnline, setIsOnline] = useState(navigator.onLine !== false);
   const chatEndRef = useRef(null);
 
   // ─── DB-backed data state ───
@@ -3607,8 +3649,48 @@ function HomeschoolApp() {
 
   useEffect(() => { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); return () => window.speechSynthesis.cancel(); }, []);
   useEffect(() => {
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event);
+    };
+    const handleInstalled = () => {
+      setInstallPromptEvent(null);
+      setIsInstalled(true);
+    };
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const standaloneMedia = window.matchMedia ? window.matchMedia("(display-mode: standalone)") : null;
+    const syncStandalone = () => setIsInstalled(isStandaloneMode());
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    if (standaloneMedia?.addEventListener) standaloneMedia.addEventListener("change", syncStandalone);
+    else if (standaloneMedia?.addListener) standaloneMedia.addListener(syncStandalone);
+    registerServiceWorker({
+      onStatus: (status) => setServiceWorkerStatus(status),
+      onError: () => setServiceWorkerStatus("error"),
+    }).then((result) => {
+      if (!result?.registered) {
+        if (result?.reason === "file") setServiceWorkerStatus("local-static");
+        else if (result?.reason === "unsupported" || result?.reason === "insecure") setServiceWorkerStatus("unsupported");
+      }
+    });
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      if (standaloneMedia?.removeEventListener) standaloneMedia.removeEventListener("change", syncStandalone);
+      else if (standaloneMedia?.removeListener) standaloneMedia.removeListener(syncStandalone);
+    };
+  }, []);
+  useEffect(() => {
     if (dbLoaded) refreshStorageLabel();
   }, [dbLoaded, language]);
+  useEffect(() => {
+    if (dbLoaded) hideLaunchSplash();
+  }, [dbLoaded]);
   useEffect(() => {
     const applyTheme = () => {
       const nextResolvedTheme = applyThemeMode(themeMode);
@@ -3645,6 +3727,9 @@ function HomeschoolApp() {
   useEffect(() => {
     if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides });
   }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides]);
+  useEffect(() => {
+    setPendingReviewBadge(reviewStats.due || 0);
+  }, [reviewStats.due]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
   useEffect(() => {
     setSelectedAdverbDay(null);
@@ -3945,14 +4030,43 @@ function HomeschoolApp() {
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
   const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
   const reviewReadyNowCount = Math.min(Number(reviewStats.due || 0), Number(dailyReviewCap || 20));
+  const canInstallApp = Boolean(installPromptEvent) && !isInstalled;
+  const installStatusLabel = isInstalled
+    ? ui.appInstalled
+    : canInstallApp
+      ? ui.appInstallAvailable
+      : ui.appInstallUnavailable;
+  const offlineStatusLabel = serviceWorkerStatus === "ready"
+    ? ui.offlineReady
+    : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking"
+      ? ui.offlineCaching
+      : serviceWorkerStatus === "local-static"
+        ? ui.offlineLocalStatic
+        : serviceWorkerStatus === "update-ready"
+          ? ui.updateReady
+          : serviceWorkerStatus === "unsupported"
+            ? ui.offlineUnsupported
+            : ui.offlineError;
+  const networkStatusLabel = isOnline ? ui.online : ui.offline;
 
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
+  const handleInstallApp = async () => {
+    if (!installPromptEvent) return;
+    try {
+      await installPromptEvent.prompt();
+      await installPromptEvent.userChoice;
+    } catch (error) {
+      console.log("Install prompt failed:", error);
+    }
+    setInstallPromptEvent(null);
+  };
 
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel }}><><div className="app-container">
     <div className="app-header" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title={ui.home}>🏠</button><h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
     <div className="content">
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
         <div className="welcome-card"><h2>{renderWelcomeGreeting(localizedNames, language)} 👋</h2><p>{renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟", language), language)}</p><span className="grade-tag">{renderLocalizedTextNode(ui.grade, language)} {grade}</span></div>
+        {(canInstallApp || isInstalled || serviceWorkerStatus !== "unsupported") && <div className="app-status-card"><h3>{renderLocalizedTextNode(ui.installBannerTitle, language)}</h3><p>{renderLocalizedTextNode(ui.installBannerText, language)}</p><div className="app-status-grid"><div className="status-pill"><strong>{renderLocalizedTextNode(ui.installStatus, language)}</strong><span>{renderLocalizedTextNode(installStatusLabel, language)}</span></div><div className="status-pill"><strong>{renderLocalizedTextNode(ui.offlineAccess, language)}</strong><span>{renderLocalizedTextNode(offlineStatusLabel, language)}</span></div><div className="status-pill"><strong>{renderLocalizedTextNode(ui.networkStatus, language)}</strong><span>{renderLocalizedTextNode(networkStatusLabel, language)}</span></div></div><div className="app-status-actions">{canInstallApp && <button className="install-cta" onClick={handleInstallApp}>{renderLocalizedTextNode(ui.installApp, language)}</button>}{serviceWorkerStatus === "update-ready" && <button className="ghost-cta" onClick={applyServiceWorkerUpdate}>{renderLocalizedTextNode(ui.refreshToUpdate, language)}</button>}</div></div>}
         <button className="adverb-home-banner" style={{ width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }} onClick={handleStartReview}>
           <div className="banner-icon">🧠</div>
           <div className="banner-text">
@@ -4522,6 +4636,13 @@ function HomeschoolApp() {
             onDailyReviewCapChange={setDailyReviewCap}
             daySectionSettings={daySectionSettings}
             onDaySectionChange={handleDaySectionChange}
+            installStatusLabel={installStatusLabel}
+            offlineStatusLabel={offlineStatusLabel}
+            networkStatusLabel={networkStatusLabel}
+            canInstallApp={canInstallApp}
+            onInstallApp={handleInstallApp}
+            canReloadApp={serviceWorkerStatus === "update-ready"}
+            onReloadApp={applyServiceWorkerUpdate}
             labels={ui}
           />
         ) : null}

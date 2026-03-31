@@ -12,3 +12,7 @@
 !/js/**
 !/css/
 !/css/**
+!/vendor/
+!/vendor/**
+!/manifest.webmanifest
+!/sw.js
