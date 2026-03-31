@@ -201,10 +201,29 @@
       }, renderLocalizedText(labels.aiClearConnection || "Clear Connection", language))));
   }
 
-  function disclosureSection(title, language, children) {
-    return React.createElement("details", { className: "settings-disclosure" },
-      React.createElement("summary", null, renderLocalizedText(title, language)),
-      React.createElement("div", { className: "settings-disclosure-body" }, ...children));
+  function DisclosureSection({ title, language, children, transitionMode }) {
+    const [open, setOpen] = React.useState(false);
+
+    return React.createElement("div", {
+      className: `settings-disclosure${open ? " open" : ""}`,
+      "data-transition-mode": transitionMode || "fade",
+    },
+      React.createElement("button", {
+        type: "button",
+        className: "settings-disclosure-toggle",
+        onClick: () => setOpen((value) => !value),
+        "aria-expanded": open ? "true" : "false",
+        style: language === "ur"
+          ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" }
+          : language === "bilingual"
+            ? { textAlign: "left" }
+            : null,
+      },
+        React.createElement("span", { className: "settings-disclosure-label" }, renderLocalizedText(title, language)),
+        React.createElement("span", { className: "settings-disclosure-icon", "aria-hidden": "true" }, open ? "−" : "+")),
+      React.createElement("div", { className: "settings-disclosure-body-wrap" },
+        React.createElement("div", { className: "settings-disclosure-body-clip" },
+          React.createElement("div", { className: "settings-disclosure-body" }, ...children))));
   }
 
   function getNoticeText(entry, key, language) {
@@ -543,14 +562,14 @@
     } else {
       notificationChildren.push(React.createElement("p", { key: "notice-empty", className: "empty-state" }, renderLocalizedText(ui.noNotificationsYet || "No notifications yet.", language)));
     }
-    children.push(disclosureSection(ui.dataManagement || "Data Management", language, dataChildren));
-    children.push(disclosureSection(ui.userData || "User Data", language, userDataChildren));
-    children.push(disclosureSection(ui.appExperience || "App Experience", language, experienceChildren));
-    children.push(disclosureSection(ui.aiConnections || "AI Tutor Connections", language, aiChildren));
-    children.push(disclosureSection(ui.dayBasedSections || "Day-Based English Sections", language, pacingChildren));
-    children.push(disclosureSection(ui.preferences || "Preferences", language, preferencesChildren));
-    children.push(disclosureSection(ui.studyPlanning || "Study Planning", language, planningChildren));
-    children.push(disclosureSection(ui.notificationHistory || "Notification History", language, notificationChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-data", title: ui.dataManagement || "Data Management", language, transitionMode }, ...dataChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-user", title: ui.userData || "User Data", language, transitionMode }, ...userDataChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-experience", title: ui.appExperience || "App Experience", language, transitionMode }, ...experienceChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-ai", title: ui.aiConnections || "AI Tutor Connections", language, transitionMode }, ...aiChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-pacing", title: ui.dayBasedSections || "Day-Based English Sections", language, transitionMode }, ...pacingChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-preferences", title: ui.preferences || "Preferences", language, transitionMode }, ...preferencesChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-planning", title: ui.studyPlanning || "Study Planning", language, transitionMode }, ...planningChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-notices", title: ui.notificationHistory || "Notification History", language, transitionMode }, ...notificationChildren));
 
     return React.createElement("div", null, ...children);
   }
