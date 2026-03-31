@@ -27,6 +27,12 @@ jobs:
           rm -rf .deploy
           mkdir -p .deploy
           cp HomeSchool.html .deploy/index.html
+          if [ -f manifest.webmanifest ]; then
+            cp manifest.webmanifest .deploy/manifest.webmanifest
+          fi
+          if [ -f sw.js ]; then
+            cp sw.js .deploy/sw.js
+          fi
           if [ -d js ]; then
             cp -R js .deploy/js
           fi
@@ -35,6 +41,9 @@ jobs:
           fi
           if [ -d img ]; then
             cp -R img .deploy/img
+          fi
+          if [ -d vendor ]; then
+            cp -R vendor .deploy/vendor
           fi
           touch .deploy/.nojekyll
 
