@@ -75,14 +75,14 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .badge-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;text-align:center;transition:all .2s}
 .badge-card.earned{border-color:#F59E0B55;background:linear-gradient(135deg,#F59E0B08,#F59E0B15)}.badge-card.locked{opacity:0.4;filter:grayscale(1)}
 .badge-card .badge-big-icon{font-size:36px;margin-bottom:8px}.badge-card h4{font-size:13px;font-weight:700}.badge-card p{font-size:11px;color:var(--text-secondary);margin-top:2px}
-.tutor-chat{display:flex;flex-direction:column;gap:12px;margin-bottom:16px}
-.chat-bubble{max-width:85%;padding:14px 18px;border-radius:16px;font-size:14px;line-height:1.6;animation:fadeSlide .3s ease}
-.chat-bubble.ai{align-self:flex-start;background:var(--bg-card);border:1px solid var(--border);border-bottom-left-radius:4px}
+.tutor-chat{display:flex;flex-direction:column;gap:12px;margin-bottom:10px;padding:16px 16px 132px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);min-height:280px;box-shadow:var(--shadow)}
+.chat-bubble{max-width:min(88%,560px);padding:14px 18px;border-radius:16px;font-size:14px;line-height:1.7;animation:fadeSlide .3s ease;white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-bubble.ai{align-self:flex-start;background:var(--bg-elevated);border:1px solid var(--border);border-bottom-left-radius:4px}
 .chat-bubble.user{align-self:flex-end;background:linear-gradient(135deg,var(--accent),#0EA5E9);color:#0F172A;border-bottom-right-radius:4px;font-weight:600}
-.chat-input-area{display:flex;gap:10px;position:sticky;bottom:80px;background:var(--bg-primary);padding:12px 0}
+.chat-input-area{display:flex;gap:10px;position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));z-index:16;background:var(--bg-card);padding:12px;border:1px solid var(--border);border-radius:18px;box-shadow:0 18px 36px rgba(2,6,23,.16);backdrop-filter:blur(10px);margin-top:-112px}
 .chat-input-area input{flex:1;padding:14px 18px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-family:var(--font);font-size:14px;outline:none}
 .chat-input-area input:focus{border-color:var(--accent)}
-.chat-input-area button{width:48px;height:48px;border-radius:var(--radius-sm);border:none;background:linear-gradient(135deg,var(--accent),#0EA5E9);color:#0F172A;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.chat-input-area button{width:48px;height:48px;border-radius:var(--radius-sm);border:none;background:linear-gradient(135deg,var(--accent),#0EA5E9);color:#0F172A;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .grade-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
 .grade-btn{padding:14px 8px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;transition:all .2s}
 .grade-btn:hover,.grade-btn.active{border-color:var(--accent);background:rgba(56,189,248,0.12);color:var(--accent)}
