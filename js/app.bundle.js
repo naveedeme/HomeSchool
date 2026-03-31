@@ -3336,6 +3336,11 @@ ${marker} `);
       }
     }, [aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
+      if (tab === "tutor" && !AI_PROVIDER_ORDER.some((providerId) => isAiProviderReady(aiProviderConfigs[providerId]))) {
+        setTab("settings");
+      }
+    }, [aiProviderConfigs, tab]);
+    useEffect(() => {
       setSelectedAdverbDay(null);
       setSelectedPrepDay(null);
       setSelectedAdjDay(null);
@@ -4415,7 +4420,15 @@ ${error.message || error}`);
         aiBrowserBlocked: !aiBrowserCapability.ok,
         labels: ui
       }
-    ) : null)), /* @__PURE__ */ React.createElement("div", { className: "bottom-nav" }, [{ id: "home", icon: "\u{1F3E0}", label: ui.home }, { id: "progress", icon: "\u{1F4CA}", label: ui.progress }, { id: "review", icon: "\u{1F9E0}", label: ui.review }, { id: "favorites", icon: "\u2B50", label: ui.favorites }, { id: "badges", icon: "\u{1F3C6}", label: ui.badges }, { id: "tutor", icon: "\u{1F916}", label: ui.tutor }, { id: "settings", icon: "\u2699\uFE0F", label: ui.settings }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, className: "nav-item " + (tab === item.id ? "active" : ""), style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
+    ) : null)), /* @__PURE__ */ React.createElement("div", { className: "bottom-nav" }, [
+      { id: "home", icon: "\u{1F3E0}", label: ui.home },
+      { id: "progress", icon: "\u{1F4CA}", label: ui.progress },
+      { id: "review", icon: "\u{1F9E0}", label: ui.review },
+      { id: "favorites", icon: "\u2B50", label: ui.favorites },
+      { id: "badges", icon: "\u{1F3C6}", label: ui.badges },
+      ...readyAiProviderIds.length > 0 ? [{ id: "tutor", icon: "\u{1F916}", label: ui.tutor }] : [],
+      { id: "settings", icon: "\u2699\uFE0F", label: ui.settings }
+    ].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, className: "nav-item " + (tab === item.id ? "active" : ""), style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
       if (item.id === "home") {
         goHome();
         return;

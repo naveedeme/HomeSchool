@@ -4855,6 +4855,11 @@ function HomeschoolApp() {
     }
   }, [aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
+    if (tab === "tutor" && !AI_PROVIDER_ORDER.some((providerId) => isAiProviderReady(aiProviderConfigs[providerId]))) {
+      setTab("settings");
+    }
+  }, [aiProviderConfigs, tab]);
+  useEffect(() => {
     setSelectedAdverbDay(null);
     setSelectedPrepDay(null);
     setSelectedAdjDay(null);
@@ -6503,7 +6508,15 @@ function HomeschoolApp() {
         ) : null}
       </>)}
     </div>
-    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: ui.home }, { id: "progress", icon: "📊", label: ui.progress }, { id: "review", icon: "🧠", label: ui.review }, { id: "favorites", icon: "⭐", label: ui.favorites }, { id: "badges", icon: "🏆", label: ui.badges }, { id: "tutor", icon: "🤖", label: ui.tutor }, { id: "settings", icon: "⚙️", label: ui.settings }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); if (item.id !== "review") resetReviewSession(); }}><span className="nav-icon">{item.icon}</span>{renderLocalizedTextNode(item.label, language)}</button>)}</div>
+    <div className="bottom-nav">{[
+      { id: "home", icon: "🏠", label: ui.home },
+      { id: "progress", icon: "📊", label: ui.progress },
+      { id: "review", icon: "🧠", label: ui.review },
+      { id: "favorites", icon: "⭐", label: ui.favorites },
+      { id: "badges", icon: "🏆", label: ui.badges },
+      ...(readyAiProviderIds.length > 0 ? [{ id: "tutor", icon: "🤖", label: ui.tutor }] : []),
+      { id: "settings", icon: "⚙️", label: ui.settings }
+    ].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); if (item.id !== "review") resetReviewSession(); }}><span className="nav-icon">{item.icon}</span>{renderLocalizedTextNode(item.label, language)}</button>)}</div>
   </div></></AppContext.Provider>);
 }
 
