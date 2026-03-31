@@ -3187,7 +3187,7 @@ function stripInlineUrduForKnownWords(text, words) {
 }
 
 // ─── TTS Clickable Sentence ───
-function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null, studyItem = null }) {
+function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null, studyItem = null, showStudyToolbar = true }) {
   const app = useContext(AppContext);
   const studyCard = studyItem ? resolveStudyCard(app, {
     prompt: text,
@@ -3219,7 +3219,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
     let lastIdx = 0;
     const symColors = {'>':'#22C55E','<':'#EF4444','=':'#38BDF8','≥':'#22C55E','≤':'#EF4444','≈':'#A855F7','+':'#F59E0B','×':'#EC4899','÷':'#14B8A6','→':'#38BDF8','←':'#38BDF8','↑':'#22C55E','↓':'#EF4444'};
     // Regex: [X] boxed | digit-symbol-digit math ops | standalone comparison symbols | arrows | blanks
-    const re = /\[(\d+)\]|(\d\s*[><=≥≤≈+\-×÷]\s*\d)|(\s[><=≥≤≈]\s)|([→←↑↓])|(___)/g;
+    const re = /\[(\d+)\]|(\d\s*[><=≥≤≈+\-×÷]\s*\d)|([><=≥≤≈])|([→←↑↓])|(___)/g;
     let m;
     while ((m = re.exec(t)) !== null) {
       if (m.index > lastIdx) parts.push(t.slice(lastIdx, m.index));
@@ -3237,9 +3237,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
       } else if (m[3]) {
         const sym = m[3].trim();
         const sc = symColors[sym]||'#F59E0B';
-        parts.push(" ");
         parts.push(<span key={"c"+m.index} style={{background:sc+"18",borderRadius:4,padding:"0 4px",color:sc,fontWeight:800,margin:"0 2px"}}>{sym}</span>);
-        parts.push(" ");
       } else if (m[4]) {
         const sym = m[4];
         const sc = symColors[sym]||'#38BDF8';
@@ -3252,18 +3250,21 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
     if (parts.length > 0) { if (lastIdx < t.length) parts.push(t.slice(lastIdx)); return <>{parts}</>; }
     return renderHighlightText(text, highlight, "sentence");
   };
+  const inlineTools = showStudyToolbar && studyCard;
   return (
-    <div {...focusProps} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%" }}>
-      <button onClick={handleClick} style={{ display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative", ...buttonStyle }}>
+    <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%" }}>
+      <div style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" }}>
+      <button onClick={handleClick} style={{ display: fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative", ...buttonStyle }}>
         <span style={{ position: "absolute", right: lang === "ur" ? "auto" : 12, left: lang === "ur" ? 12 : "auto", top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
         <span style={{ paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0, ...textStyle }}>{renderText()}</span>
       </button>
-      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
+      </div>
+      {inlineTools ? <WordCollectionToolbar card={studyCard} compact={true} iconOnly={true} inline={true} showLists={false} /> : null}
     </div>
   );
 }
 
-function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null }) {
+function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, showStudyToolbar = true }) {
   const app = useContext(AppContext);
   const studyCard = studyItem ? resolveStudyCard(app, {
     prompt: text,
@@ -3316,13 +3317,16 @@ function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null }
     }
     return parts.length ? <>{parts}</> : renderHighlighted(text, "full");
   };
+  const inlineTools = showStudyToolbar && studyCard;
   return (
-    <div {...focusProps} style={{ width: "100%", maxWidth: "100%" }}>
-      <button onClick={handleClick} style={{ display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 6, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative" }}>
+    <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: "100%", maxWidth: "100%" }}>
+      <div style={{ flex: inlineTools ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" }}>
+      <button onClick={handleClick} style={{ display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative" }}>
         <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
         <span style={{ paddingRight: 28 }}>{renderText()}</span>
       </button>
-      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
+      </div>
+      {inlineTools ? <WordCollectionToolbar card={studyCard} compact={true} iconOnly={true} inline={true} showLists={false} /> : null}
     </div>
   );
 }
@@ -3991,7 +3995,7 @@ function getReviewDueLabel(card, language) {
   return joinLocalizedText(`Due in ${remainingDays}d`, `${remainingDays} دن بعد`, language);
 }
 
-function WordCollectionToolbar({ card, compact = false, allowView = false }) {
+function WordCollectionToolbar({ card, compact = false, allowView = false, iconOnly = false, inline = false, showLists = true }) {
   const app = useContext(AppContext);
   const language = app?.language || "en";
   const [showNoteEditor, setShowNoteEditor] = useState(false);
@@ -4005,10 +4009,11 @@ function WordCollectionToolbar({ card, compact = false, allowView = false }) {
   const supportsLists = card.reviewBacked !== false;
   const canViewSource = allowView && Boolean(app?.onViewStudyItem);
 
-  const buttonClass = `study-tool-btn${compact ? " compact" : ""}${card.favorite ? " active" : ""}`;
+  const buttonClass = `study-tool-btn${compact ? " compact" : ""}${card.favorite ? " active" : ""}${iconOnly ? " icon-only" : ""}`;
+  const wrapperClass = `study-tools${compact ? " compact" : ""}${inline ? " inline" : ""}`;
 
   return (
-    <div className={`study-tools${compact ? " compact" : ""}`}>
+    <div className={wrapperClass}>
       <div className="study-tool-row">
         <button
           type="button"
@@ -4019,34 +4024,39 @@ function WordCollectionToolbar({ card, compact = false, allowView = false }) {
             else app.onToggleFavorite(card.id);
           }}
           title={card.favorite ? "Remove favorite" : "Add favorite"}
+          aria-label={card.favorite ? "Remove favorite" : "Add favorite"}
         >
-          {card.favorite ? "★" : "☆"} {renderLocalizedTextNode(joinLocalizedText("Favorite", "پسندیدہ", language), language)}
+          {iconOnly ? (card.favorite ? "★" : "☆") : <>{card.favorite ? "★" : "☆"} {renderLocalizedTextNode(joinLocalizedText("Favorite", "پسندیدہ", language), language)}</>}
         </button>
         <button
           type="button"
-          className={`study-tool-btn${compact ? " compact" : ""}${showNoteEditor || card.note ? " active" : ""}`}
+          className={`study-tool-btn${compact ? " compact" : ""}${showNoteEditor || card.note ? " active" : ""}${iconOnly ? " icon-only" : ""}`}
           onClick={(event) => {
             event.stopPropagation();
             setShowNoteEditor((value) => !value);
           }}
+          title={language === "ur" ? UI_TEXT.ur.addNote : UI_TEXT.en.addNote}
+          aria-label={language === "ur" ? UI_TEXT.ur.addNote : UI_TEXT.en.addNote}
         >
-          📝 {renderLocalizedTextNode(joinLocalizedText(UI_TEXT.en.addNote, UI_TEXT.ur.addNote, language), language)}
+          {iconOnly ? "📝" : <>📝 {renderLocalizedTextNode(joinLocalizedText(UI_TEXT.en.addNote, UI_TEXT.ur.addNote, language), language)}</>}
         </button>
         {canViewSource ? (
           <button
             type="button"
-            className={`study-tool-btn${compact ? " compact" : ""}`}
+            className={`study-tool-btn${compact ? " compact" : ""}${iconOnly ? " icon-only" : ""}`}
             onClick={(event) => {
               event.stopPropagation();
               app.onViewStudyItem?.(card);
             }}
+            title={language === "ur" ? "دیکھیں" : "View"}
+            aria-label={language === "ur" ? "دیکھیں" : "View"}
           >
-            👁️ {renderLocalizedTextNode(joinLocalizedText("View", "دیکھیں", language), language)}
+            {iconOnly ? "👁️" : <>👁️ {renderLocalizedTextNode(joinLocalizedText("View", "دیکھیں", language), language)}</>}
           </button>
         ) : null}
       </div>
 
-      {supportsLists && Array.isArray(app.customLists) && app.customLists.length > 0 && (
+      {showLists && supportsLists && Array.isArray(app.customLists) && app.customLists.length > 0 && (
         <div className="study-list-pills">
           {app.customLists.map((list) => {
             const included = (card.listIds || []).includes(list.id);
@@ -4098,6 +4108,51 @@ function WordCollectionToolbar({ card, compact = false, allowView = false }) {
   );
 }
 
+function QuestionActionBar({ studyItem, revealed, onToggleReveal, showLabel, buttonStyle }) {
+  const app = useContext(AppContext);
+  const card = resolveStudyCard(app, studyItem);
+  const label = revealed ? "Hide answer" : "Show answer";
+
+  return (
+    <div className="question-actions">
+      <button
+        type="button"
+        onClick={onToggleReveal}
+        className="question-show-btn study-tool-btn compact icon-only"
+        style={buttonStyle}
+        title={label}
+        aria-label={label}
+      >
+        {revealed ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+            <path d="M10.6 10.7a2 2 0 0 0 2.7 2.7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9.9 5.2A10.9 10.9 0 0 1 12 5c5.6 0 9.4 5.1 10 6-.3.5-1.5 2.2-3.5 3.8" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M6.2 6.3C3.9 8 2.4 10.1 2 11c.6 1 4.4 6 10 6 1.3 0 2.5-.2 3.6-.6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7-10-7-10-7Z" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.9" />
+          </svg>
+        )}
+      </button>
+      {card ? <WordCollectionToolbar card={card} compact={true} iconOnly={true} inline={true} showLists={false} /> : null}
+    </div>
+  );
+}
+
+function InlineStudyActionBar({ studyItem }) {
+  const app = useContext(AppContext);
+  const card = resolveStudyCard(app, studyItem);
+  if (!card) return null;
+  return (
+    <div className="question-actions">
+      <WordCollectionToolbar card={card} compact={true} iconOnly={true} inline={true} showLists={false} />
+    </div>
+  );
+}
+
 function StudyWordCard({ card, showStats = true, allowView = false }) {
   const app = useContext(AppContext);
   const language = app?.language || "en";
@@ -4131,8 +4186,8 @@ function StudyItemInlineToolbar({ studyItem }) {
   const focusProps = getStudyFocusProps(app, card);
   if (!card) return null;
   return (
-    <div {...focusProps} style={{ marginTop: 8, marginBottom: 10 }}>
-      <WordCollectionToolbar card={card} compact={true} />
+    <div {...focusProps} style={{ marginTop: 8, marginBottom: 8, display: "flex", justifyContent: "flex-end" }}>
+      <WordCollectionToolbar card={card} compact={true} iconOnly={true} inline={true} showLists={false} />
     </div>
   );
 }
@@ -4235,17 +4290,11 @@ function WordRow({ en, ur }) {
   return (
     <div {...focusProps} onClick={speakBoth} style={{ cursor: "pointer", boxShadow: sBoth ? "0 0 0 1px rgba(56,189,248,0.22)" : "none", transition: "box-shadow 0.2s", flexDirection: "column", alignItems: "stretch", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <span className={"word-en" + (sEn ? " word-active" : "")} onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{en} {sEn ? "🔊" : "🔈"}</span>
-        <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+        <span className={"word-en" + (sEn ? " word-active" : "")} onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : undefined, transition: "color 0.2s", flex: 1 }}>{en} {sEn ? "🔊" : "🔈"}</span>
+        <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+        <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "englishWords", sectionLabel: "English" }} />
       </div>
-      {studyCard ? (
-        <div className="word-study-row" onClick={(event) => event.stopPropagation()}>
-          <div style={{ width: "100%" }}>
-            <WordCollectionToolbar card={studyCard} compact={true} />
-            {studyCard.note ? <span className="word-study-note">{studyCard.note}</span> : null}
-          </div>
-        </div>
-      ) : null}
+      {studyCard?.note ? <div className="word-study-row" onClick={(event) => event.stopPropagation()}><div style={{ width: "100%" }}><span className="word-study-note">{studyCard.note}</span></div></div> : null}
     </div>
   );
 }
@@ -4268,7 +4317,8 @@ function OppositeWordRow({ en, ur, opposite, oppositeUr }) {
   const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--text-muted)", textTransform: "uppercase" };
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, width: "100%" }}>
+      <div style={{ display: "flex", alignItems: "stretch", gap: 8, width: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, width: "100%", flex: 1 }}>
         <div style={cardStyle}>
           <span style={labelStyle}>Word</span>
           <SpeakableSentence text={en} lang="en" fullWidth={false} buttonStyle={{ background: isLight ? "rgba(56,189,248,0.10)" : "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.28)", color: isLight ? "var(--text-primary)" : "#E0F2FE", justifyContent: "flex-start" }} />
@@ -4280,7 +4330,8 @@ function OppositeWordRow({ en, ur, opposite, oppositeUr }) {
           <SpeakableSentence text={oppositeUr} lang="ur" fullWidth={false} buttonStyle={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.30)", color: isLight ? "var(--text-primary)" : "#F3E8FF", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
         </div>
       </div>
-      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
+      <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "opposites", sectionLabel: "Opposites" }} />
+      </div>
     </div>
   );
 }
@@ -4302,13 +4353,15 @@ function SentencePairRow({ en, ur }) {
   const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--text-muted)", textTransform: "uppercase" };
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-      <div style={cardStyle}>
-        <span style={labelStyle}>English Sentence</span>
-        <SpeakableSentence text={en} lang="en" buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLight ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0 }} />
-        <span style={{ ...labelStyle, color: "#22C55E", marginTop: 2 }}>Urdu Translation</span>
-        <SpeakableSentence text={ur} lang="ur" buttonStyle={{ background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: isLight ? "var(--text-primary)" : "#DCFCE7", marginBottom: 0 }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+      <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+        <div style={{ ...cardStyle, flex: 1 }}>
+          <span style={labelStyle}>English Sentence</span>
+          <SpeakableSentence text={en} lang="en" showStudyToolbar={false} buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLight ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0 }} />
+          <span style={{ ...labelStyle, color: "#22C55E", marginTop: 2 }}>Urdu Translation</span>
+          <SpeakableSentence text={ur} lang="ur" showStudyToolbar={false} buttonStyle={{ background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: isLight ? "var(--text-primary)" : "#DCFCE7", marginBottom: 0 }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+        </div>
+        <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "sentences", sectionLabel: "Sentences" }} />
       </div>
-      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
     </div>
   );
 }
@@ -4343,11 +4396,11 @@ function AdjWordRow({ en, ur, comp, sup }) {
   };
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s" }}>{en} → {comp} → {sup} {sEn ? "🔊" : "🔈"}</span>
-        <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 }}>{en} → {comp} → {sup} {sEn ? "🔊" : "🔈"}</span>
+        <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+        <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "adjectives", sectionLabel: "Adjectives" }} />
       </div>
-      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
     </div>
   );
 }
@@ -4382,11 +4435,11 @@ function VerbWordRow({ en, ur, v2, v3 }) {
   };
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s" }}>{en} → {v2} → {v3} {sEn ? "🔊" : "🔈"}</span>
-        <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s" }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 }}>{en} → {v2} → {v3} {sEn ? "🔊" : "🔈"}</span>
+        <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+        <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" }} />
       </div>
-      {studyCard ? <WordCollectionToolbar card={studyCard} compact={true} /> : null}
     </div>
   );
 }
@@ -6313,10 +6366,10 @@ function HomeschoolApp() {
     </div>
   );
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}`}>
-    <div className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
+    <div className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`}>
       <div className="header-leading">
         <span className="back-btn-slot">{showBack ? <button className="back-btn" onClick={goBack}>←</button> : null}</span>
-        <button className="home-btn" onClick={goHome} title={ui.home}>🏠</button>
+        <span className="header-mark" title="HomeSchool">HomeSchool</span>
       </div>
       {navPosition === "top"
         ? renderNavBar("top", true)
@@ -6599,7 +6652,17 @@ function HomeschoolApp() {
                 <button className="play-all-btn" onClick={() => playAll(selectedTensePara.para)}>▶️ Play Entire Paragraph</button>
               </div>
               {selectedTensePara.qs && (<div className="adverb-detail-section"><h3>❓ Comprehension Questions</h3>
-                {selectedTensePara.qs.map((q, i) => (<div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}><span style={{ color: "#F59E0B", fontWeight: 700, marginRight: 8 }}>Q{i+1}.</span>{q}<StudyItemInlineToolbar studyItem={{ prompt: q, subject: "english", section: "tenseQuestions", sectionLabel: selectedTensePara.title }} /></div>))}
+                {selectedTensePara.qs.map((q, i) => (
+                  <div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}>
+                    <div className="inline-study-row">
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ color: "#F59E0B", fontWeight: 700, flexShrink: 0 }}>Q{i+1}.</span>
+                        <span>{q}</span>
+                      </div>
+                      <InlineStudyActionBar studyItem={{ prompt: q, subject: "english", section: "tenseQuestions", sectionLabel: selectedTensePara.title }} />
+                    </div>
+                  </div>
+                ))}
               </div>)}
             </>)}
           </>);
@@ -6703,12 +6766,12 @@ function HomeschoolApp() {
               ))}
               {lessonDay.pairs && lessonDay.pairs.map((pair, i) => (
                 <div key={i} className="word-row" style={{cursor:"default",gap:10,flexDirection:"column",alignItems:"stretch"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,width:"100%"}}>
-                  <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right }} /></div>
+                  <div style={{display:"flex",alignItems:"stretch",gap:10,width:"100%"}}>
+                  <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right }} /></div>
                   <span style={{color:"var(--accent)",fontWeight:800}}>↔</span>
-                  <div style={{flex:1}}><SpeakableSentence text={pair.right} lang="en" studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.left }} /></div>
+                  <div style={{flex:1}}><SpeakableSentence text={pair.right} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.left }} /></div>
+                  <InlineStudyActionBar studyItem={{ prompt: pair.left, answer: pair.right, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs` }} />
                   </div>
-                  <StudyItemInlineToolbar studyItem={{ prompt: pair.left, answer: pair.right, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs` }} />
                 </div>
               ))}
               {lessonDay.paragraph && (<>
@@ -6745,7 +6808,20 @@ function HomeschoolApp() {
 
         {mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && (<div className="adverb-detail-section" style={urS}>
           <h3 style={{color:"#38BDF8",marginBottom:10,...urS}}>{sub.examplesLabel || (isUr?"💡 مثالیں":"💡 Examples")}</h3>
-          {sub.examples.map((ex,i) => <SpeakableSentence key={i} text={ex} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />)}
+          {sub.examples.map((ex,i) => (
+            <div key={i} className="inline-study-row" style={{ direction: isUr ? "rtl" : "ltr" }}>
+              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
+                <SpeakableSentence
+                  text={ex}
+                  lang={isUr?"ur":"en"}
+                  studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
+                  showStudyToolbar={false}
+                  buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                />
+              </div>
+              <InlineStudyActionBar studyItem={{ prompt: ex, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />
+            </div>
+          ))}
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={()=>playAll(sub.examples.join(". "))}>{isUr?"▶️ سب سنیں":"▶️ Play All Examples"}</button>
         </div>)}
 
@@ -6789,7 +6865,7 @@ function HomeschoolApp() {
             <div key={ei} className="adverb-detail-section" style={{marginBottom:14,...urS}}>
               <div style={{display:"flex",direction:isUr?"rtl":"ltr",alignItems:"center",gap:10,marginBottom:10}}>
                 <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:36,height:36,borderRadius:10,background:qc+"22",border:"2px solid "+qc,color:qc,fontSize:13,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?("س"+(ei+1)):("Q"+(ei+1))}</span>
-                <div style={{flex:1}}><SpeakableSentence text={ex.q} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Questions` }} /></div>
+                <div style={{flex:1}}><SpeakableSentence text={ex.q} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Questions` }} showStudyToolbar={false} /></div>
               </div>
               {isColumnMatch ? (
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))",gap:14,direction:isUr?"rtl":"ltr"}}>
@@ -6802,11 +6878,37 @@ function HomeschoolApp() {
                       const rk = ei+"_A_"+pi;
                       const pc = qColors[(ei+pi+1) % qColors.length];
                       const displayP = p.replace(/(\d)̲/g, '[$1]').replace(/(\d)\u0332/g, '[$1]');
-                      return (<div key={"A_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
+                      return (<div key={"A_"+pi} style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>A{pi+1}</span>
-                        <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }} /></div>
-                        <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Answers` }} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))} /></div>}
+                        <div style={{flex:1,minWidth:0,display:"flex"}}>
+                          <SpeakableSentence
+                            text={displayP}
+                            lang={isUrduText(displayP)?"ur":"en"}
+                            studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
+                            showStudyToolbar={false}
+                            buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                          />
+                        </div>
+                        {revealedEx[rk] && ex.ans && ex.ans[pi] && (
+                          <div style={{flex:"0 1 auto",width:"fit-content",maxWidth:"50%",minWidth:0,display:"flex",alignSelf:"stretch"}}>
+                            <SpeakableSentence
+                              text={formatListedAnswer(ex.ans[pi])}
+                              lang={isUrduText(ex.ans[pi])?"ur":"en"}
+                              fullWidth={false}
+                              studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Answers` }}
+                              showStudyToolbar={false}
+                              buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, height: "100%", display: "flex", alignItems: "center", maxWidth: "100%" }}
+                              textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))}
+                            />
+                          </div>
+                        )}
+                        <QuestionActionBar
+                          studyItem={{ prompt: displayP, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
+                          revealed={revealedEx[rk]}
+                          onToggleReveal={() => toggleReveal(rk)}
+                          showLabel={revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}
+                          buttonStyle={getRevealToggleStyle(revealedEx[rk], isUr)}
+                        />
                       </div>);
                     })}
                   </div>
@@ -6819,11 +6921,37 @@ function HomeschoolApp() {
                       const rk = ei+"_B_"+originalIndex;
                       const pc = qColors[(ei+pi+3) % qColors.length];
                       const a = ex.ans[originalIndex];
-                      return (<div key={"B_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
+                      return (<div key={"B_"+pi} style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>B{pi+1}</span>
-                        <div style={{flex:1}}><SpeakableSentence text={a} lang={isUrduText(a)?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Answers` }} /></div>
-                        <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.parts[originalIndex])} lang={isUrduText(ex.parts[originalIndex])?"ur":"en"} fullWidth={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Prompts` }} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.parts[originalIndex]))} /></div>}
+                        <div style={{flex:1,minWidth:0,display:"flex"}}>
+                          <SpeakableSentence
+                            text={a}
+                            lang={isUrduText(a)?"ur":"en"}
+                            studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Answers` }}
+                            showStudyToolbar={false}
+                            buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                          />
+                        </div>
+                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && (
+                          <div style={{flex:"0 1 auto",width:"fit-content",maxWidth:"50%",minWidth:0,display:"flex",alignSelf:"stretch"}}>
+                            <SpeakableSentence
+                              text={formatListedAnswer(ex.parts[originalIndex])}
+                              lang={isUrduText(ex.parts[originalIndex])?"ur":"en"}
+                              fullWidth={false}
+                              studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Prompts` }}
+                              showStudyToolbar={false}
+                              buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, height: "100%", display: "flex", alignItems: "center", maxWidth: "100%" }}
+                              textStyle={getRevealedAnswerTextStyle(isUrduText(ex.parts[originalIndex]))}
+                            />
+                          </div>
+                        )}
+                        <QuestionActionBar
+                          studyItem={{ prompt: a, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Answers` }}
+                          revealed={revealedEx[rk]}
+                          onToggleReveal={() => toggleReveal(rk)}
+                          showLabel={revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}
+                          buttonStyle={getRevealToggleStyle(revealedEx[rk], isUr)}
+                        />
                       </div>);
                     })}
                   </div>
@@ -6834,14 +6962,40 @@ function HomeschoolApp() {
                 // Replace underlined chars (like 4̲) with boxed display
                 const displayP = p.replace(/(\d)̲/g, '[$1]').replace(/(\d)\u0332/g, '[$1]');
                 const promptVisual = getSimpleMachinePromptVisual(sub, ex, displayP);
-                return (<div key={pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:8,paddingRight:isUr?8:0,direction:isUr?"rtl":"ltr"}}>
+                return (<div key={pi} style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:8,paddingRight:isUr?8:0,direction:isUr?"rtl":"ltr"}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{String.fromCharCode(97+pi)}</span>
-                  <div style={{flex:1,display:"flex",alignItems:"center",gap:8}}>
-                    {promptVisual}
-                    <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }} /></div>
+                  <div style={{flex:1,minWidth:0,display:"flex",alignItems:"stretch",gap:8}}>
+                    {promptVisual ? <span style={{alignSelf:"center",display:"inline-flex"}}>{promptVisual}</span> : null}
+                    <div style={{flex:1,minWidth:0,display:"flex"}}>
+                      <SpeakableSentence
+                        text={displayP}
+                        lang={isUrduText(displayP)?"ur":"en"}
+                        studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
+                        showStudyToolbar={false}
+                        buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                      />
+                    </div>
                   </div>
-                  <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Answers` }} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))} /></div>}
+                  {revealedEx[rk] && ex.ans && ex.ans[pi] && (
+                    <div style={{flex:"0 1 auto",width:"fit-content",maxWidth:"50%",minWidth:0,display:"flex",alignSelf:"stretch"}}>
+                      <SpeakableSentence
+                        text={formatListedAnswer(ex.ans[pi])}
+                        lang={isUrduText(ex.ans[pi])?"ur":"en"}
+                        fullWidth={false}
+                        studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Answers` }}
+                        showStudyToolbar={false}
+                        buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, height: "100%", display: "flex", alignItems: "center", maxWidth: "100%" }}
+                        textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))}
+                      />
+                    </div>
+                  )}
+                  <QuestionActionBar
+                    studyItem={{ prompt: displayP, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
+                    revealed={revealedEx[rk]}
+                    onToggleReveal={() => toggleReveal(rk)}
+                    showLabel={revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}
+                    buttonStyle={getRevealToggleStyle(revealedEx[rk], isUr)}
+                  />
                 </div>);
               })}
             </div>);
@@ -6969,7 +7123,17 @@ function HomeschoolApp() {
           <button className="play-all-btn" onClick={() => playAll(selectedTensePara.para)}>▶️ Play Entire Paragraph</button>
         </div>
           {selectedTensePara.qs && (<div className="adverb-detail-section"><h3>❓ Comprehension Questions</h3>
-            {selectedTensePara.qs.map((q, i) => (<div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}><span style={{ color: "#F59E0B", fontWeight: 700, marginRight: 8 }}>Q{i+1}.</span>{q}<StudyItemInlineToolbar studyItem={{ prompt: q, subject: "english", section: "tenseQuestions", sectionLabel: selectedTensePara.title }} /></div>))}
+            {selectedTensePara.qs.map((q, i) => (
+              <div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}>
+                <div className="inline-study-row">
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: "#F59E0B", fontWeight: 700, flexShrink: 0 }}>Q{i+1}.</span>
+                    <span>{q}</span>
+                  </div>
+                  <InlineStudyActionBar studyItem={{ prompt: q, subject: "english", section: "tenseQuestions", sectionLabel: selectedTensePara.title }} />
+                </div>
+              </div>
+            ))}
           </div>)}
       </>)}
 
