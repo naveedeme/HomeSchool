@@ -403,6 +403,50 @@
       }
     }, trimmed);
   }
+  function renderGradeValueNode(gradeLabel, gradeValue, language) {
+    const safeGrade = String(gradeValue || "").trim();
+    if (language === "ur") {
+      return React.createElement(
+        "span",
+        {
+          style: {
+            display: "inline-flex",
+            alignItems: "baseline",
+            gap: 6,
+            fontFamily: "var(--font-ur)",
+            direction: "rtl",
+            unicodeBidi: "isolate"
+          }
+        },
+        gradeLabel,
+        React.createElement("span", {
+          style: {
+            direction: "ltr",
+            unicodeBidi: "isolate",
+            fontFamily: "var(--font)"
+          }
+        }, safeGrade)
+      );
+    }
+    if (language === "bilingual") {
+      return renderSeparatedLocalizedTextNode(
+        `Grade ${safeGrade}`,
+        `${gradeLabel} ${safeGrade}`,
+        language,
+        {
+          gap: 1,
+          enStyle: { fontSize: 14, fontWeight: 700 },
+          urStyle: { fontSize: 14, fontWeight: 700 }
+        }
+      );
+    }
+    return React.createElement("span", {
+      style: {
+        direction: "ltr",
+        unicodeBidi: "isolate"
+      }
+    }, `Grade ${safeGrade}`);
+  }
   function renderWelcomeGreeting(namePair, language) {
     const hasName = Boolean(namePair.en || namePair.ur);
     if (!hasName) return renderLocalizedTextNode(joinLocalizedText("Welcome!", "\u062E\u0648\u0634 \u0622\u0645\u062F\u06CC\u062F!", language), language);
@@ -2998,7 +3042,7 @@ ${error.message || error}`);
     } }, renderLocalizedTextNode(ui.home, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => {
       resetReviewSession();
       handleStartReview();
-    } }, renderLocalizedTextNode(ui.startReview, language))))), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("input", { value: chatInput, onChange: (e) => setChatInput(e.target.value), onKeyDown: (e) => e.key === "Enter" && sendChat(), placeholder: "Ask your tutor anything..." }), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading }, "\u27A4"))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderLocalizedTextNode(ui.grade, language), " ", grade)), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, renderLocalizedTextNode(ui.changeGrade, language)), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn " + (g.id === grade ? "active" : ""), onClick: () => setGrade(g.id) }, g.id))), SettingsPanel ? /* @__PURE__ */ React.createElement(
+    } }, renderLocalizedTextNode(ui.startReview, language))))), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("input", { value: chatInput, onChange: (e) => setChatInput(e.target.value), onKeyDown: (e) => e.key === "Enter" && sendChat(), placeholder: "Ask your tutor anything..." }), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading }, "\u27A4"))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderGradeValueNode(ui.grade, grade, language))), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, renderLocalizedTextNode(ui.changeGrade, language)), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn " + (g.id === grade ? "active" : ""), onClick: () => setGrade(g.id) }, g.id))), SettingsPanel ? /* @__PURE__ */ React.createElement(
       SettingsPanel,
       {
         currentVersion,

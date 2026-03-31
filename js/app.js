@@ -412,6 +412,48 @@ function renderDirectionalName(name, fallbackDirection = "ltr", extraStyle = {})
   }, trimmed);
 }
 
+function renderGradeValueNode(gradeLabel, gradeValue, language) {
+  const safeGrade = String(gradeValue || "").trim();
+  if (language === "ur") {
+    return React.createElement("span", {
+      style: {
+        display: "inline-flex",
+        alignItems: "baseline",
+        gap: 6,
+        fontFamily: "var(--font-ur)",
+        direction: "rtl",
+        unicodeBidi: "isolate",
+      },
+    },
+    gradeLabel,
+    React.createElement("span", {
+      style: {
+        direction: "ltr",
+        unicodeBidi: "isolate",
+        fontFamily: "var(--font)",
+      },
+    }, safeGrade));
+  }
+  if (language === "bilingual") {
+    return renderSeparatedLocalizedTextNode(
+      `Grade ${safeGrade}`,
+      `${gradeLabel} ${safeGrade}`,
+      language,
+      {
+        gap: 1,
+        enStyle: { fontSize: 14, fontWeight: 700 },
+        urStyle: { fontSize: 14, fontWeight: 700 },
+      },
+    );
+  }
+  return React.createElement("span", {
+    style: {
+      direction: "ltr",
+      unicodeBidi: "isolate",
+    },
+  }, `Grade ${safeGrade}`);
+}
+
 function renderWelcomeGreeting(namePair, language) {
   const hasName = Boolean(namePair.en || namePair.ur);
   if (!hasName) return renderLocalizedTextNode(joinLocalizedText("Welcome!", "خوش آمدید!", language), language);
@@ -4694,7 +4736,7 @@ function HomeschoolApp() {
       {tab === "settings" && (<>
         <div className="settings-item"><span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Student Name", "طالب علم", language), language)}:</span><span className="si-value">{studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "درج نہیں", language), language)}</span></div>
         {(studentNameUr || language !== "en") && <div className="settings-item"><span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Urdu Name", "اردو نام", language), language)}:</span><span className="si-value">{localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("درج نہیں", "ur")}</span></div>}
-        <div className="settings-item"><span className="si-label">📚 {renderLocalizedTextNode(ui.currentGrade, language)}</span><span className="si-value">{renderLocalizedTextNode(ui.grade, language)} {grade}</span></div>
+        <div className="settings-item"><span className="si-label">📚 {renderLocalizedTextNode(ui.currentGrade, language)}</span><span className="si-value">{renderGradeValueNode(ui.grade, grade, language)}</span></div>
         <h3 className="section-title" style={{ marginTop: 20 }}>{renderLocalizedTextNode(ui.changeGrade, language)}</h3>
         <div className="grade-grid">{GRADES.map(g => <button key={g.id} className={"grade-btn " + (g.id === grade ? "active" : "")} onClick={() => setGrade(g.id)}>{g.id}</button>)}</div>
         {SettingsPanel ? (

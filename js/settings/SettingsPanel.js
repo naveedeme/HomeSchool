@@ -116,6 +116,96 @@
       }, String(safeCount))));
   }
 
+  function renderStorageValue(storageLabel, language) {
+    if (typeof storageLabel !== "string") return storageLabel;
+    const parts = storageLabel.split(" • ");
+    if (parts.length < 2) return renderLocalizedText(storageLabel, language);
+    const quotaLabel = parts[0];
+    const lessonLabel = parts.slice(1).join(" • ");
+
+    const renderQuota = () => React.createElement("span", {
+      style: {
+        direction: "ltr",
+        unicodeBidi: "isolate",
+        fontFamily: "var(--font)",
+      },
+    }, quotaLabel);
+
+    const renderUrduLessonLabel = (value) => {
+      const match = String(value || "").match(/^(\d+)\s+(.+)$/);
+      if (!match) {
+        return React.createElement("span", {
+          style: {
+            fontFamily: "var(--font-ur)",
+            direction: "rtl",
+            unicodeBidi: "isolate",
+          },
+        }, value);
+      }
+      return React.createElement("span", {
+        style: {
+          display: "inline-flex",
+          alignItems: "baseline",
+          gap: 4,
+          fontFamily: "var(--font-ur)",
+          direction: "rtl",
+          unicodeBidi: "isolate",
+        },
+      },
+      match[2],
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+          fontFamily: "var(--font)",
+        },
+      }, match[1]));
+    };
+
+    if (language === "ur") {
+      return React.createElement("span", {
+        style: {
+          display: "inline-flex",
+          flexWrap: "wrap",
+          gap: 6,
+          alignItems: "baseline",
+          justifyContent: "flex-end",
+        },
+      },
+      renderQuota(),
+      React.createElement("span", { style: { color: "var(--text-muted)" } }, "•"),
+      renderUrduLessonLabel(lessonLabel));
+    }
+
+    if (language === "bilingual" && lessonLabel.includes(" / ")) {
+      const [enLesson, urLesson] = lessonLabel.split(" / ");
+      return React.createElement("span", {
+        style: {
+          display: "inline-flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 4,
+        },
+      },
+      React.createElement("span", {
+        style: {
+          direction: "ltr",
+          unicodeBidi: "isolate",
+          fontFamily: "var(--font)",
+        },
+      }, `${quotaLabel} • ${enLesson}`),
+      renderUrduLessonLabel(urLesson));
+    }
+
+    return React.createElement("span", {
+      style: {
+        direction: "ltr",
+        unicodeBidi: "isolate",
+        fontFamily: "var(--font)",
+      },
+    }, storageLabel);
+  }
+
   function renderPacingControl(sectionKey, sectionConfig, labels, onDaySectionChange, language) {
     return React.createElement("div", {
       key: sectionKey,
@@ -205,7 +295,7 @@
         marginBottom: 8,
       },
     },
-    React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 6 } }, ui.versionHistory || "Version History"),
+    React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 6 } }, renderLocalizedText(ui.versionHistory || "Version History", language)),
     ...history.slice(0, 2).map((entry) => React.createElement("div", {
       key: `${entry.version}`,
       style: { marginBottom: 8, color: "var(--text-secondary)", fontSize: 12 },
@@ -249,7 +339,7 @@
       sectionTitle(renderLocalizedText(ui.userData || "User Data", language)),
       React.createElement("div", { className: "settings-item" },
         React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.storageUsage || "Storage", language)),
-        React.createElement("span", { className: "si-value" }, storageLabel)),
+        React.createElement("span", { className: "si-value" }, renderStorageValue(storageLabel, language))),
       actionButton(renderLocalizedText(ui.resetProgress || "Reset Progress", language), onResetProgress, "#EF4444", { marginBottom: 8 }),
       actionButton(renderLocalizedText(ui.fullReset || "Full Reset", language), onFullReset, "#DC2626", { marginBottom: 0 }),
 
