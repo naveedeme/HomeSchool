@@ -4734,9 +4734,41 @@ function HomeschoolApp() {
       {tab === "tutor" && (<><div className="tutor-chat">{chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}{chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}<div ref={chatEndRef} /></div><div className="chat-input-area"><input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Ask your tutor anything..." /><button onClick={sendChat} disabled={chatLoading}>➤</button></div></>)}
 
       {tab === "settings" && (<>
-        <div className="settings-item"><span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Student Name", "طالب علم", language), language)}:</span><span className="si-value">{studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "درج نہیں", language), language)}</span></div>
-        {(studentNameUr || language !== "en") && <div className="settings-item"><span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Urdu Name", "اردو نام", language), language)}:</span><span className="si-value">{localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("درج نہیں", "ur")}</span></div>}
-        <div className="settings-item"><span className="si-label">📚 {renderLocalizedTextNode(ui.currentGrade, language)}</span><span className="si-value">{renderGradeValueNode(ui.grade, grade, language)}</span></div>
+        <div className="settings-item" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row-reverse" } : {}}>
+          <span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Student Name", "طالب علم", language), language)}:</span>
+          <span className="si-value">{studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "درج نہیں", language), language)}</span>
+        </div>
+        {(studentNameUr || language !== "en") && <div className="settings-item" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row-reverse" } : {}}>
+          <span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Urdu Name", "اردو نام", language), language)}:</span>
+          <span className="si-value">{localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("درج نہیں", "ur")}</span>
+        </div>}
+        <div className="settings-item" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row-reverse" } : {}}>
+          <span className="si-label">📚 {renderLocalizedTextNode(ui.currentGrade, language)}</span>
+          <span className="si-value">{renderGradeValueNode(ui.grade, grade, language)}</span>
+        </div>
+        <div className="settings-profile-card" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {}}>
+          <h3 className="section-title" style={{ marginTop: 0, marginBottom: 12 }}>{renderLocalizedTextNode(joinLocalizedText("Edit Names", "نام تبدیل کریں", language), language)}</h3>
+          <div style={{ marginBottom: 12 }}>
+            <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("English Name", "انگریزی نام", language), language)}</label>
+            <input
+              className="settings-text-input"
+              value={studentName}
+              onChange={(event) => setStudentName(event.target.value)}
+              placeholder={language === "ur" ? "انگریزی نام درج کریں..." : "Enter English name..."}
+              style={{ direction: "ltr", textAlign: "left", fontFamily: "var(--font)" }}
+            />
+          </div>
+          <div>
+            <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("Urdu Name", "اردو نام", language), language)}</label>
+            <input
+              className="settings-text-input"
+              value={studentNameUr}
+              onChange={(event) => setStudentNameUr(event.target.value)}
+              placeholder={language === "en" ? "Enter Urdu name..." : "اپنا اردو نام درج کریں..."}
+              style={{ direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" }}
+            />
+          </div>
+        </div>
         <h3 className="section-title" style={{ marginTop: 20 }}>{renderLocalizedTextNode(ui.changeGrade, language)}</h3>
         <div className="grade-grid">{GRADES.map(g => <button key={g.id} className={"grade-btn " + (g.id === grade ? "active" : "")} onClick={() => setGrade(g.id)}>{g.id}</button>)}</div>
         {SettingsPanel ? (
