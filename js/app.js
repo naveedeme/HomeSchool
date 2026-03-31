@@ -10,7 +10,7 @@ const {
   getLessons,
   getQuiz,
 } = window.HomeSchoolData;
-const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, applyServiceWorkerUpdate, setPendingReviewBadge } = window.HomeSchoolUtils;
+const { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, applyServiceWorkerUpdate, setPendingReviewBadge } = window.HomeSchoolUtils;
 const { SettingsPanel } = window.HomeSchoolSettings || {};
 const {
   adverbs: ADVERBS_DATA,
@@ -64,6 +64,18 @@ const UI_TEXT = {
     perDay: "Items per day",
     pacingHelp: "These pacing controls change the study-day grouping without changing the source curriculum files.",
     preferences: "Preferences",
+    aiConnections: "AI Tutor Connections",
+    aiConnectionsHelp: "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.",
+    aiApiKey: "API Key",
+    aiDefaultModel: "Default Model",
+    aiSaveConnection: "Save Connection",
+    aiClearConnection: "Clear Connection",
+    aiOpenSettings: "Open Settings",
+    aiConfigureFirst: "Add at least one AI provider key in Settings to use the tutor.",
+    aiSelectProvider: "Provider",
+    aiSelectModel: "Model",
+    aiBrowserBlocked: "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
+    aiUpdateKey: "Update Key",
     textToSpeech: "Text to Speech",
     enabled: "Enabled",
     disabled: "Disabled",
@@ -198,6 +210,18 @@ const UI_TEXT = {
     perDay: "فی دن",
     pacingHelp: "یہ سیٹنگز صرف مطالعے کی دن وار گروپنگ بدلتی ہیں، اصل ڈیٹا فائلیں نہیں۔",
     preferences: "ترجیحات",
+    aiConnections: "اے آئی استاد کنیکشنز",
+    aiConnectionsHelp: "یہ کیز صرف اسی براؤزر میں محفوظ رہیں گی اور بیک اپ ایکسپورٹ میں شامل نہیں ہوں گی۔ پھر بھی فائل موڈ یا کسی فراہم کنندہ کی پالیسی سے براؤزر کالز بلاک ہو سکتی ہیں۔",
+    aiApiKey: "اے آئی کی",
+    aiDefaultModel: "ڈیفالٹ ماڈل",
+    aiSaveConnection: "کنیکشن محفوظ کریں",
+    aiClearConnection: "کنیکشن حذف کریں",
+    aiOpenSettings: "ترتیبات کھولیں",
+    aiConfigureFirst: "اے آئی استاد استعمال کرنے کے لیے پہلے ترتیبات میں کم از کم ایک فراہم کنندہ کی کی شامل کریں۔",
+    aiSelectProvider: "فراہم کنندہ",
+    aiSelectModel: "ماڈل",
+    aiBrowserBlocked: "براہِ راست براؤزر اے آئی رسائی شائع شدہ HTTPS سائٹ یا localhost پر بہتر چلتی ہے، فائل موڈ میں نہیں۔",
+    aiUpdateKey: "کی تبدیل کریں",
     textToSpeech: "آواز میں پڑھنا",
     enabled: "آن",
     disabled: "آف",
@@ -308,6 +332,271 @@ const DAY_SECTION_META = {
   adverbPhrases: { labelEn: "Adverb Phrases", labelUr: "فقراتِ حال", unitEn: "phrases", unitUr: "فقرے", defaultSize: 5, max: 15 },
   sentences: { labelEn: "Sentence Sections", labelUr: "جملوں والے سیکشن", unitEn: "sentences", unitUr: "جملے", defaultSize: 10, max: 20 },
 };
+
+const AI_PROVIDER_ORDER = ["openai", "anthropic", "ollama"];
+const AI_PROVIDER_DEFS = {
+  openai: {
+    id: "openai",
+    name: "ChatGPT",
+    nameUr: "چیٹ جی پی ٹی",
+    defaultModel: "gpt-4.1-mini",
+    keyPlaceholder: "sk-...",
+    modelHints: ["gpt-4.1-mini", "gpt-4o-mini", "gpt-5-mini"],
+  },
+  anthropic: {
+    id: "anthropic",
+    name: "Claude AI",
+    nameUr: "کلاڈ اے آئی",
+    defaultModel: "claude-sonnet-4-20250514",
+    keyPlaceholder: "sk-ant-...",
+    modelHints: ["claude-sonnet-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"],
+  },
+  ollama: {
+    id: "ollama",
+    name: "Ollama Cloud",
+    nameUr: "اولا ما کلاوڈ",
+    defaultModel: "gpt-oss:20b",
+    keyPlaceholder: "ollama_...",
+    modelHints: ["gpt-oss:20b", "gpt-oss:120b", "llama3.2:latest"],
+  },
+};
+
+function createDefaultAiProviderConfigs() {
+  return AI_PROVIDER_ORDER.reduce((acc, providerId) => {
+    const definition = AI_PROVIDER_DEFS[providerId];
+    acc[providerId] = {
+      apiKey: "",
+      model: definition.defaultModel,
+      models: definition.modelHints.slice(),
+      status: "empty",
+      lastError: "",
+      validatedAt: null,
+    };
+    return acc;
+  }, {});
+}
+
+function sanitizeAiProviderConfigs(rawConfigs) {
+  const defaults = createDefaultAiProviderConfigs();
+  const source = rawConfigs && typeof rawConfigs === "object" ? rawConfigs : {};
+  AI_PROVIDER_ORDER.forEach((providerId) => {
+    const fallback = defaults[providerId];
+    const raw = source[providerId] && typeof source[providerId] === "object" ? source[providerId] : {};
+    defaults[providerId] = {
+      apiKey: String(raw.apiKey || ""),
+      model: String(raw.model || fallback.model),
+      models: Array.isArray(raw.models) && raw.models.length > 0 ? raw.models.map((entry) => String(entry || "").trim()).filter(Boolean) : fallback.models.slice(),
+      status: String(raw.status || (raw.apiKey ? "saved" : "empty")),
+      lastError: String(raw.lastError || ""),
+      validatedAt: raw.validatedAt || null,
+    };
+    if (!defaults[providerId].models.includes(defaults[providerId].model)) {
+      defaults[providerId].models.unshift(defaults[providerId].model);
+    }
+  });
+  return defaults;
+}
+
+function maskApiKey(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  if (trimmed.length <= 8) return "••••••••";
+  return `${trimmed.slice(0, 4)}••••••${trimmed.slice(-4)}`;
+}
+
+function canUseDirectAiFromBrowser() {
+  if (window.location.protocol === "file:") {
+    return { ok: false, reason: "file" };
+  }
+  const hostname = window.location.hostname || "";
+  const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
+  if (window.location.protocol !== "https:" && !isLocal) {
+    return { ok: false, reason: "insecure" };
+  }
+  return { ok: true, reason: null };
+}
+
+function buildTutorSystemPrompt(grade, language) {
+  const replyHint = language === "ur"
+    ? "Reply in Urdu."
+    : language === "bilingual"
+      ? "Use mostly English with Urdu support when helpful."
+      : "Reply in English unless the student clearly asks for Urdu.";
+  return `You are a friendly AI tutor named Ustaad for a Grade ${grade || 5} student in Pakistan. Explain simply, use Pakistani examples, keep responses concise (2-4 short paragraphs), and focus on helping the student understand the lesson. ${replyHint}`;
+}
+
+function normalizeAiModelList(providerId, models, preferredModel) {
+  const definition = AI_PROVIDER_DEFS[providerId];
+  const merged = new Set([...(definition?.modelHints || []), ...(Array.isArray(models) ? models : []), preferredModel || definition?.defaultModel]);
+  return Array.from(merged).map((entry) => String(entry || "").trim()).filter(Boolean);
+}
+
+function extractOpenAiText(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((entry) => {
+      if (typeof entry === "string") return entry;
+      if (typeof entry?.text === "string") return entry.text;
+      return "";
+    }).join("").trim();
+  }
+  return "";
+}
+
+function buildAiError(code, message, status = null) {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 20000) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller ? controller.signal : options.signal,
+    });
+    const text = await response.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
+    if (!response.ok) {
+      const message = data?.error?.message || data?.message || data?.raw || `Request failed with status ${response.status}.`;
+      if (response.status === 401 || response.status === 403) throw buildAiError("auth", message, response.status);
+      if (response.status === 429) throw buildAiError("rate_limit", message, response.status);
+      throw buildAiError("provider", message, response.status);
+    }
+    return data;
+  } catch (error) {
+    if (error?.name === "AbortError") throw buildAiError("timeout", "The request timed out.");
+    if (error?.code) throw error;
+    if (error instanceof TypeError) throw buildAiError("blocked", "The browser blocked the request or the provider did not allow this origin.");
+    throw buildAiError("unknown", error?.message || "Unknown AI request error.");
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function validateAiProviderConfig(providerId, apiKey, preferredModel) {
+  const browserCapability = canUseDirectAiFromBrowser();
+  if (!browserCapability.ok) {
+    throw buildAiError("blocked", browserCapability.reason === "file"
+      ? "Browser AI access is blocked in direct file mode. Use the published HTTPS site or localhost."
+      : "Browser AI access needs HTTPS or localhost.");
+  }
+  if (providerId === "openai") {
+    const data = await fetchJsonWithTimeout("https://api.openai.com/v1/models", {
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+      },
+    });
+    const models = normalizeAiModelList(providerId, (data?.data || []).map((entry) => entry.id).filter((id) => /^gpt|^o\d|^chatgpt/i.test(id)), preferredModel);
+    return {
+      model: preferredModel || AI_PROVIDER_DEFS.openai.defaultModel,
+      models,
+      status: "ready",
+    };
+  }
+  if (providerId === "anthropic") {
+    await fetchJsonWithTimeout("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: preferredModel || AI_PROVIDER_DEFS.anthropic.defaultModel,
+        max_tokens: 4,
+        system: "Reply with ok.",
+        messages: [{ role: "user", content: "ok" }],
+      }),
+    });
+    return {
+      model: preferredModel || AI_PROVIDER_DEFS.anthropic.defaultModel,
+      models: normalizeAiModelList(providerId, AI_PROVIDER_DEFS.anthropic.modelHints, preferredModel),
+      status: "ready",
+    };
+  }
+  const data = await fetchJsonWithTimeout("https://ollama.com/api/tags", {
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+    },
+  });
+  return {
+    model: preferredModel || AI_PROVIDER_DEFS.ollama.defaultModel,
+    models: normalizeAiModelList(providerId, (data?.models || []).map((entry) => entry.name || entry.model), preferredModel),
+    status: "ready",
+  };
+}
+
+async function requestAiTutorResponse(providerId, apiKey, model, conversation, systemPrompt) {
+  const browserCapability = canUseDirectAiFromBrowser();
+  if (!browserCapability.ok) {
+    throw buildAiError("blocked", browserCapability.reason === "file"
+      ? "Browser AI access is blocked in direct file mode. Open the HTTPS published site or localhost."
+      : "Browser AI access needs HTTPS or localhost.");
+  }
+  const messages = conversation.map((entry) => ({
+    role: entry.role === "ai" ? "assistant" : "user",
+    content: entry.text,
+  }));
+  if (providerId === "openai") {
+    const data = await fetchJsonWithTimeout("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.4,
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
+      }),
+    });
+    return extractOpenAiText(data?.choices?.[0]?.message?.content) || "Sorry, I could not generate a reply.";
+  }
+  if (providerId === "anthropic") {
+    const data = await fetchJsonWithTimeout("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 800,
+        system: systemPrompt,
+        messages: messages.map((entry) => ({
+          role: entry.role === "assistant" ? "assistant" : "user",
+          content: entry.content,
+        })),
+      }),
+    });
+    return (data?.content || []).map((entry) => entry?.text || "").join("").trim() || "Sorry, I could not generate a reply.";
+  }
+  const data = await fetchJsonWithTimeout("https://ollama.com/api/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+    }),
+  });
+  return data?.message?.content || data?.response || "Sorry, I could not generate a reply.";
+}
 
 function getLocalizedNamePair(studentName, studentNameUr) {
   return {
@@ -3878,6 +4167,8 @@ function VerbWordRow({ en, ur, v2, v3 }) {
 
 function HomeschoolApp() {
   const stored = loadState();
+  const storedAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
+  const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
   const persistCustomizationRef = useRef(null);
   const [language, setLanguage] = useState(stored?.language || "bilingual");
@@ -3925,6 +4216,10 @@ function HomeschoolApp() {
   const [chatMessages, setChatMessages] = useState([{ role: "ai", text: "Assalam-o-Alaikum! 👋 I'm your AI tutor. Ask me anything about your lessons — I'll explain it in a way that's easy to understand!" }]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [aiProviderConfigs, setAiProviderConfigs] = useState(storedAiConfigs);
+  const [aiProviderDrafts, setAiProviderDrafts] = useState(storedAiConfigs);
+  const [aiProviderBusy, setAiProviderBusy] = useState({});
+  const [selectedAiProvider, setSelectedAiProvider] = useState(storedAiTutorPreferences?.providerId || "openai");
   const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
@@ -4098,22 +4393,32 @@ function HomeschoolApp() {
 
   if (!persistCustomizationRef.current) {
     persistCustomizationRef.current = debounce(async (nextPayload) => {
-      if (!window.HomeSchoolDB) return;
       try {
-        await window.HomeSchoolDB.saveCustomization("preferences", {
-          ttsEnabled: nextPayload.ttsEnabled,
-          language: nextPayload.language,
-          themeMode: nextPayload.themeMode,
-        });
-        await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
-          dailyReviewCap: nextPayload.dailyReviewCap,
-        });
-        await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
-        await window.HomeSchoolDB.saveCustomization("studentProfile", {
-          grade: nextPayload.grade,
-          studentName: nextPayload.studentName,
-          studentNameUr: nextPayload.studentNameUr,
-        });
+        if (window.HomeSchoolDB) {
+          await window.HomeSchoolDB.saveCustomization("preferences", {
+            ttsEnabled: nextPayload.ttsEnabled,
+            language: nextPayload.language,
+            themeMode: nextPayload.themeMode,
+          });
+          await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
+            dailyReviewCap: nextPayload.dailyReviewCap,
+          });
+          await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
+          await window.HomeSchoolDB.saveCustomization("studentProfile", {
+            grade: nextPayload.grade,
+            studentName: nextPayload.studentName,
+            studentNameUr: nextPayload.studentNameUr,
+          });
+          await window.HomeSchoolDB.saveCustomization("aiProviderConfigs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
+          await window.HomeSchoolDB.saveCustomization("aiTutorPreferences", {
+            providerId: nextPayload.selectedAiProvider || "openai",
+          });
+        } else {
+          localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
+          localStorageFallback("hs_ai_tutor_preferences", {
+            providerId: nextPayload.selectedAiProvider || "openai",
+          });
+        }
       } catch (error) {
         console.log("Unable to persist customizations:", error);
       }
@@ -4122,7 +4427,15 @@ function HomeschoolApp() {
 
   // Load from IndexedDB on mount
   useEffect(() => {
-    if (!window.HomeSchoolDB) { setDbLoaded(true); return; }
+    if (!window.HomeSchoolDB) {
+      const fallbackAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
+      const fallbackAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
+      setAiProviderConfigs(fallbackAiConfigs);
+      setAiProviderDrafts(fallbackAiConfigs);
+      if (fallbackAiTutorPreferences?.providerId) setSelectedAiProvider(fallbackAiTutorPreferences.providerId);
+      setDbLoaded(true);
+      return;
+    }
     (async () => {
       try {
         await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
@@ -4137,6 +4450,8 @@ function HomeschoolApp() {
         const storedReviewPreferences = customizations.reviewPreferences?.data || null;
         const storedPacing = customizations.daySectionPacing?.data || null;
         const storedProfile = customizations.studentProfile?.data || null;
+        const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
+        const storedAiTutor = customizations.aiTutorPreferences?.data || null;
         if (storedPreferences) {
           if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
           if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
@@ -4155,6 +4470,9 @@ function HomeschoolApp() {
           if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
           if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
         }
+        setAiProviderConfigs(storedAiProviders);
+        setAiProviderDrafts(storedAiProviders);
+        if (storedAiTutor?.providerId) setSelectedAiProvider(storedAiTutor.providerId);
         const progressMap = await window.HomeSchoolDB.getProgressMap();
         if (Object.keys(progressMap).length > 0 && (!stored?.completedQuizzes || Object.keys(stored.completedQuizzes).length === 0)) {
           setCompletedQuizzes(progressMap);
@@ -4469,7 +4787,7 @@ function HomeschoolApp() {
     if (!ttsEnabled) window.speechSynthesis.cancel();
   }, [ttsEnabled, language, themeMode, resolvedTheme]);
   useEffect(() => {
-    if (!dbLoaded || !window.HomeSchoolDB) return;
+    if (!dbLoaded) return;
     persistCustomizationRef.current?.({
       ttsEnabled,
       language,
@@ -4479,8 +4797,10 @@ function HomeschoolApp() {
       grade,
       studentName,
       studentNameUr,
+      aiProviderConfigs,
+      selectedAiProvider,
     });
-  }, [dbLoaded, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, grade, studentName, studentNameUr]);
+  }, [dbLoaded, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
     if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, installBannerDismissed });
   }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, installBannerDismissed]);
@@ -4488,6 +4808,13 @@ function HomeschoolApp() {
     setPendingReviewBadge(reviewStats.due || 0);
   }, [reviewStats.due]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
+  useEffect(() => {
+    const configuredProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
+    if (!configuredProviders.length) return;
+    if (!configuredProviders.includes(selectedAiProvider)) {
+      setSelectedAiProvider(configuredProviders[0]);
+    }
+  }, [aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
     setSelectedAdverbDay(null);
     setSelectedPrepDay(null);
@@ -4525,6 +4852,101 @@ function HomeschoolApp() {
     }));
   }, []);
 
+  const handleAiProviderDraftChange = useCallback((providerId, field, value) => {
+    setAiProviderDrafts((current) => ({
+      ...current,
+      [providerId]: {
+        ...(current[providerId] || createDefaultAiProviderConfigs()[providerId]),
+        [field]: value,
+      },
+    }));
+  }, []);
+
+  const saveAiProviderConfiguration = useCallback(async (providerId, overrides = null) => {
+    const definition = AI_PROVIDER_DEFS[providerId];
+    if (!definition) return null;
+    const source = overrides || aiProviderDrafts[providerId] || aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
+    const apiKey = String(source.apiKey || "").trim();
+    const requestedModel = String(source.model || definition.defaultModel).trim() || definition.defaultModel;
+    if (!apiKey) {
+      setAiProviderConfigs((current) => ({
+        ...current,
+        [providerId]: {
+          ...(current[providerId] || createDefaultAiProviderConfigs()[providerId]),
+          apiKey: "",
+          status: "empty",
+          lastError: "",
+          validatedAt: null,
+          model: requestedModel,
+        },
+      }));
+      return null;
+    }
+
+    setAiProviderBusy((current) => ({ ...current, [providerId]: true }));
+    try {
+      const validation = await validateAiProviderConfig(providerId, apiKey, requestedModel);
+      const nextConfig = {
+        apiKey,
+        model: validation.model || requestedModel,
+        models: normalizeAiModelList(providerId, validation.models, validation.model || requestedModel),
+        status: validation.status || "ready",
+        lastError: "",
+        validatedAt: Date.now(),
+      };
+      setAiProviderConfigs((current) => ({ ...current, [providerId]: nextConfig }));
+      setAiProviderDrafts((current) => ({ ...current, [providerId]: { ...nextConfig } }));
+      if (!String(aiProviderConfigs[selectedAiProvider]?.apiKey || "").trim()) {
+        setSelectedAiProvider(providerId);
+      }
+      return nextConfig;
+    } catch (error) {
+      const nextStatus = error?.code === "auth" ? "auth" : error?.code === "blocked" ? "blocked" : "saved";
+      const nextConfig = {
+        apiKey,
+        model: requestedModel,
+        models: normalizeAiModelList(providerId, source.models, requestedModel),
+        status: nextStatus,
+        lastError: error?.message || "Unable to validate this provider in the browser.",
+        validatedAt: null,
+      };
+      setAiProviderConfigs((current) => ({ ...current, [providerId]: nextConfig }));
+      setAiProviderDrafts((current) => ({ ...current, [providerId]: { ...nextConfig } }));
+      return nextConfig;
+    } finally {
+      setAiProviderBusy((current) => ({ ...current, [providerId]: false }));
+    }
+  }, [aiProviderConfigs, aiProviderDrafts, selectedAiProvider]);
+
+  const handleSaveAiProvider = useCallback(async (providerId) => {
+    await saveAiProviderConfiguration(providerId);
+  }, [saveAiProviderConfiguration]);
+
+  const handleClearAiProvider = useCallback((providerId) => {
+    const fallback = createDefaultAiProviderConfigs()[providerId];
+    setAiProviderConfigs((current) => ({ ...current, [providerId]: fallback }));
+    setAiProviderDrafts((current) => ({ ...current, [providerId]: fallback }));
+  }, []);
+
+  const handleAiTutorModelChange = useCallback((providerId, model) => {
+    if (!providerId) return;
+    setAiProviderConfigs((current) => ({
+      ...current,
+      [providerId]: {
+        ...(current[providerId] || createDefaultAiProviderConfigs()[providerId]),
+        model,
+        models: normalizeAiModelList(providerId, current[providerId]?.models, model),
+      },
+    }));
+    setAiProviderDrafts((current) => ({
+      ...current,
+      [providerId]: {
+        ...(current[providerId] || createDefaultAiProviderConfigs()[providerId]),
+        model,
+      },
+    }));
+  }, []);
+
   const finishQuiz = async (ans, qs) => {
     const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
     const el = (Date.now() - quizStartTime) / 1000, today = new Date().toDateString();
@@ -4547,12 +4969,63 @@ function HomeschoolApp() {
 
   const sendChat = async () => {
     if (!chatInput.trim()) return;
-    const msg = chatInput.trim(); setChatInput(""); setChatMessages(m => [...m, { role: "user", text: msg }]); setChatLoading(true);
+    const msg = chatInput.trim();
+    const availableProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
+    if (!availableProviders.length) {
+      setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor." }]);
+      return;
+    }
+    const browserCapability = canUseDirectAiFromBrowser();
+    if (!browserCapability.ok) {
+      setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode." }]);
+      return;
+    }
+    const providerId = availableProviders.includes(selectedAiProvider) ? selectedAiProvider : availableProviders[0];
+    const providerConfig = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
+    const providerDefinition = AI_PROVIDER_DEFS[providerId];
+    const providerLabel = joinLocalizedText(providerDefinition.name, providerDefinition.nameUr, language);
+    const model = providerConfig.model || providerDefinition.defaultModel;
+    const conversation = [...chatMessages, { role: "user", text: msg }];
+    setChatInput("");
+    setChatMessages((messages) => [...messages, { role: "user", text: msg }]);
+    setChatLoading(true);
     try {
-      const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: "You are a friendly AI tutor named Ustaad for a Grade " + grade + " student in Pakistan. Explain simply, use Pakistani examples, respond in English or Urdu. Keep responses concise (2-4 paragraphs). Use emojis occasionally.", messages: [...chatMessages.filter((m, i) => i > 0 || m.role !== "ai").map(m => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })), { role: "user", content: msg }] }) });
-      const d = await r.json();
-      setChatMessages(m => [...m, { role: "ai", text: d.content?.map(c => c.text || "").join("") || "Sorry, please try again!" }]);
-    } catch { setChatMessages(m => [...m, { role: "ai", text: "Oops! Connection issue. Please try again. 🙏" }]); }
+      const answer = await requestAiTutorResponse(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
+      setChatMessages((messages) => [...messages, { role: "ai", text: answer, provider: providerId }]);
+    } catch (error) {
+      if (error?.code === "auth") {
+        const replacementKey = prompt(joinLocalizedText(`Your ${providerDefinition.name} key needs to be updated. Paste a new key to continue.`, `${providerDefinition.nameUr} کی کی دوبارہ درج کریں تاکہ چیٹ جاری رہ سکے۔`, language), "");
+        if (replacementKey && replacementKey.trim()) {
+          const nextDraft = {
+            ...(aiProviderDrafts[providerId] || providerConfig),
+            apiKey: replacementKey.trim(),
+            model,
+          };
+          setAiProviderDrafts((current) => ({
+            ...current,
+            [providerId]: {
+              ...(current[providerId] || providerConfig),
+              apiKey: replacementKey.trim(),
+              model,
+            },
+          }));
+          const updatedConfig = await saveAiProviderConfiguration(providerId, nextDraft);
+          if (updatedConfig?.apiKey) {
+            try {
+              const retryAnswer = await requestAiTutorResponse(providerId, updatedConfig.apiKey, updatedConfig.model || model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
+              setChatMessages((messages) => [...messages, { role: "ai", text: retryAnswer, provider: providerId }]);
+              setChatLoading(false);
+              return;
+            } catch (retryError) {
+              setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText(`${providerLabel} is still not authorized. ${retryError?.message || ""}`.trim(), `${providerLabel} ابھی بھی مجاز نہیں ہے۔ ${retryError?.message || ""}`.trim(), language) }]);
+              setChatLoading(false);
+              return;
+            }
+          }
+        }
+      }
+      setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText(`${providerLabel}: ${error?.message || "Connection issue. Please try again."}`, `${providerLabel}: ${error?.message || "کنیکشن مسئلہ ہے، دوبارہ کوشش کریں۔"}`, language) }]);
+    }
     setChatLoading(false);
   };
 
@@ -5025,6 +5498,37 @@ function HomeschoolApp() {
     const leftName = (left.subject?.name || left.subjectId || "").toLowerCase();
     const rightName = (right.subject?.name || right.subjectId || "").toLowerCase();
     return leftName.localeCompare(rightName);
+  });
+  const aiBrowserCapability = canUseDirectAiFromBrowser();
+  const configuredAiProviderIds = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
+  const currentAiProviderId = configuredAiProviderIds.includes(selectedAiProvider) ? selectedAiProvider : (configuredAiProviderIds[0] || "openai");
+  const currentAiProviderConfig = aiProviderConfigs[currentAiProviderId] || createDefaultAiProviderConfigs()[currentAiProviderId];
+  const currentAiModelOptions = normalizeAiModelList(currentAiProviderId, currentAiProviderConfig.models, currentAiProviderConfig.model);
+  const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
+    const definition = AI_PROVIDER_DEFS[providerId];
+    const saved = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
+    const draft = aiProviderDrafts[providerId] || saved;
+    const statusLabel = saved.status === "ready"
+      ? joinLocalizedText("Ready", "تیار", language)
+      : saved.status === "auth"
+        ? joinLocalizedText("Needs authorization", "دوبارہ اجازت درکار", language)
+        : saved.status === "blocked"
+          ? joinLocalizedText("Browser blocked", "براؤزر نے روکا", language)
+          : saved.apiKey
+            ? joinLocalizedText("Saved locally", "مقامی طور پر محفوظ", language)
+            : joinLocalizedText("Not configured", "ابھی شامل نہیں", language);
+    return {
+      id: providerId,
+      label: joinLocalizedText(definition.name, definition.nameUr, language),
+      apiKey: draft.apiKey || "",
+      model: draft.model || definition.defaultModel,
+      modelOptions: normalizeAiModelList(providerId, saved.models, draft.model || saved.model || definition.defaultModel),
+      statusLabel,
+      helpText: saved.lastError || (saved.apiKey
+        ? `${maskApiKey(saved.apiKey)}`
+        : joinLocalizedText("Add a key to enable this provider in Tutor.", "اس فراہم کنندہ کو فعال کرنے کے لیے کی شامل کریں۔", language)),
+      busy: Boolean(aiProviderBusy[providerId]),
+    };
   });
 
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
@@ -5744,7 +6248,63 @@ function HomeschoolApp() {
 
       {tab === "badges" && (<><div style={{ textAlign: "center", marginBottom: 20 }}><p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{earnedBadges.length} of {BADGES.length} badges earned</p></div><div className="badge-grid">{BADGES.map(b => <div key={b.id} className={"badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked")}><div className="badge-big-icon">{b.icon}</div><h4>{b.name}</h4><p>{b.desc}</p></div>)}</div></>)}
 
-      {tab === "tutor" && (<><div className="tutor-chat">{chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}{chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}<div ref={chatEndRef} /></div><div className="chat-input-area"><input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Ask your tutor anything..." /><button onClick={sendChat} disabled={chatLoading}>➤</button></div></>)}
+      {tab === "tutor" && (<>
+        <div className="review-panel">
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Tutor Setup", "اے آئی استاد سیٹ اپ", language), language)}</h3>
+              <p>{renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)}</p>
+            </div>
+          </div>
+          {configuredAiProviderIds.length > 0 ? (
+            <>
+              <div className="settings-item" style={{ display: "block" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                  <span className="si-label">{renderLocalizedTextNode(ui.aiSelectProvider || "Provider", language)}</span>
+                  <select
+                    value={currentAiProviderId}
+                    onChange={(event) => setSelectedAiProvider(event.target.value)}
+                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "var(--font-ur)" : "var(--font)" }}
+                  >
+                    {configuredAiProviderIds.map((providerId) => <option key={providerId} value={providerId}>{renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <span className="si-label">{renderLocalizedTextNode(ui.aiSelectModel || "Model", language)}</span>
+                  <select
+                    value={currentAiProviderConfig.model || AI_PROVIDER_DEFS[currentAiProviderId].defaultModel}
+                    onChange={(event) => handleAiTutorModelChange(currentAiProviderId, event.target.value)}
+                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)", minWidth: 220 }}
+                  >
+                    {currentAiModelOptions.map((modelName) => <option key={modelName} value={modelName}>{modelName}</option>)}
+                  </select>
+                </div>
+              </div>
+              {!aiBrowserCapability.ok ? <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)}</p> : null}
+            </>
+          ) : (
+            <div className="review-panel" style={{ marginBottom: 0 }}>
+              <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor.", language)}</p>
+              <button className="ghost-cta" onClick={() => setTab("settings")}>{renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)}</button>
+            </div>
+          )}
+        </div>
+        <div className="tutor-chat">
+          {chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}
+          {chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}
+          <div ref={chatEndRef} />
+        </div>
+        <div className="chat-input-area">
+          <input
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && sendChat()}
+            placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : configuredAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں..." : "Ask your tutor anything...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Add an AI key in Settings first...")}
+            disabled={chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok}
+          />
+          <button onClick={sendChat} disabled={chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok}>➤</button>
+        </div>
+      </>)}
 
       {tab === "favorites" && (<>
         <div className="review-panel" style={{ marginBottom: 18 }}>
@@ -5844,6 +6404,11 @@ function HomeschoolApp() {
             onInstallApp={handleInstallApp}
             canReloadApp={serviceWorkerStatus === "update-ready"}
             onReloadApp={applyServiceWorkerUpdate}
+            aiProviders={aiSettingsProviders}
+            onAiProviderDraftChange={handleAiProviderDraftChange}
+            onSaveAiProvider={handleSaveAiProvider}
+            onClearAiProvider={handleClearAiProvider}
+            aiBrowserBlocked={!aiBrowserCapability.ok}
             labels={ui}
           />
         ) : null}

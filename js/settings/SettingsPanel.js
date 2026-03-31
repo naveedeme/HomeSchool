@@ -254,6 +254,84 @@
     React.createElement("div", { style: { marginTop: 6, color: "var(--text-muted)", fontSize: 12 } }, renderLocalizedText(sectionConfig.helpText || labels.pacingHelp, language)));
   }
 
+  function renderAiProviderCard(provider, labels, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider) {
+    const statusColor = provider.statusLabel && /ready|تیار/i.test(provider.statusLabel)
+      ? "var(--success)"
+      : provider.statusLabel && /authorization|اجازت|blocked|روکا/i.test(provider.statusLabel)
+        ? "var(--warning)"
+        : "var(--text-secondary)";
+    const modelSelect = Array.isArray(provider.modelOptions) && provider.modelOptions.length > 0
+      ? React.createElement("select", {
+        value: provider.model,
+        onChange: (event) => onAiProviderDraftChange(provider.id, "model", event.target.value),
+        style: {
+          width: "100%",
+          padding: "10px 12px",
+          borderRadius: 10,
+          border: "1px solid var(--border)",
+          background: "var(--bg-elevated)",
+          color: "var(--text-primary)",
+          fontFamily: "var(--font)",
+        },
+      }, provider.modelOptions.map((modelName) => React.createElement("option", { key: modelName, value: modelName }, modelName)))
+      : React.createElement("input", {
+        className: "settings-text-input",
+        value: provider.model,
+        onChange: (event) => onAiProviderDraftChange(provider.id, "model", event.target.value),
+      });
+
+    return React.createElement("div", {
+      key: provider.id,
+      style: {
+        padding: "14px 16px",
+        borderRadius: 14,
+        border: "1px solid var(--border)",
+        background: "var(--bg-elevated)",
+        marginBottom: 12,
+      },
+    },
+    React.createElement("div", {
+      style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10 },
+    },
+    React.createElement("div", null,
+      React.createElement("strong", { style: { color: "var(--text-primary)", fontSize: 14 } }, renderLocalizedText(provider.label, language)),
+      React.createElement("div", { style: { color: statusColor, fontSize: 12, fontWeight: 700, marginTop: 4 } }, renderLocalizedText(provider.statusLabel, language))),
+    provider.helpText ? React.createElement("span", {
+      style: {
+        display: "inline-block",
+        maxWidth: 220,
+        color: "var(--text-muted)",
+        fontSize: 11,
+        textAlign: language === "ur" ? "right" : "left",
+        fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+      },
+    }, provider.helpText) : null),
+    React.createElement("div", { style: { marginBottom: 10 } },
+      React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(labels.aiApiKey || "API Key", language)),
+      React.createElement("input", {
+        className: "settings-text-input",
+        type: "password",
+        autoComplete: "off",
+        spellCheck: false,
+        value: provider.apiKey,
+        onChange: (event) => onAiProviderDraftChange(provider.id, "apiKey", event.target.value),
+        placeholder: provider.id === "openai" ? "sk-..." : provider.id === "anthropic" ? "sk-ant-..." : "ollama_...",
+      })),
+    React.createElement("div", { style: { marginBottom: 12 } },
+      React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(labels.aiDefaultModel || "Default Model", language)),
+      modelSelect),
+    React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
+      React.createElement("button", {
+        className: "ghost-cta",
+        onClick: () => onSaveAiProvider(provider.id),
+        disabled: provider.busy,
+      }, provider.busy ? renderLocalizedText(language === "ur" ? "محفوظ ہو رہا ہے..." : "Saving...", language) : renderLocalizedText(labels.aiSaveConnection || "Save Connection", language)),
+      React.createElement("button", {
+        className: "study-tool-btn",
+        onClick: () => onClearAiProvider(provider.id),
+      }, renderLocalizedText(labels.aiClearConnection || "Clear Connection", language))));
+  }
+
   function SettingsPanel({
     currentVersion,
     updateAvailable,
@@ -282,6 +360,11 @@
     onInstallApp,
     canReloadApp,
     onReloadApp,
+    aiProviders,
+    onAiProviderDraftChange,
+    onSaveAiProvider,
+    onClearAiProvider,
+    aiBrowserBlocked,
     labels,
   }) {
     const ui = labels || {};
@@ -355,6 +438,37 @@
         React.createElement("span", { className: "si-value" }, renderLocalizedText(networkStatusLabel || (ui.online || "Online"), language))),
       canInstallApp ? actionButton(renderLocalizedText(ui.installApp || "Install App", language), onInstallApp, "#6366F1") : null,
       canReloadApp ? actionButton(renderLocalizedText(ui.refreshToUpdate || "Refresh to Update", language), onReloadApp, "#0EA5E9") : null,
+
+      sectionTitle(renderLocalizedText(ui.aiConnections || "AI Tutor Connections", language)),
+      React.createElement("div", {
+        style: {
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border)",
+          marginBottom: 10,
+          color: "var(--text-secondary)",
+          fontSize: 12,
+          lineHeight: 1.5,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+          direction: language === "ur" ? "rtl" : "ltr",
+          textAlign: language === "ur" ? "right" : "left",
+        },
+      }, renderLocalizedText(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)),
+      aiBrowserBlocked ? React.createElement("div", {
+        style: {
+          padding: "10px 12px",
+          borderRadius: 12,
+          background: "rgba(245,158,11,0.12)",
+          border: "1px solid rgba(245,158,11,0.25)",
+          color: "var(--warning)",
+          marginBottom: 10,
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+        },
+      }, renderLocalizedText(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)) : null,
+      ...(Array.isArray(aiProviders) ? aiProviders : []).map((provider) => renderAiProviderCard(provider, ui, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider)),
 
       sectionTitle(renderLocalizedText(ui.dayBasedSections || "Day-Based English Sections", language)),
       React.createElement("div", {

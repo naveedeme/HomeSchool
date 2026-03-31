@@ -11,7 +11,7 @@
     getLessons,
     getQuiz
   } = window.HomeSchoolData;
-  var { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, applyServiceWorkerUpdate, setPendingReviewBadge } = window.HomeSchoolUtils;
+  var { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, applyServiceWorkerUpdate, setPendingReviewBadge } = window.HomeSchoolUtils;
   var { SettingsPanel } = window.HomeSchoolSettings || {};
   var {
     adverbs: ADVERBS_DATA,
@@ -64,6 +64,18 @@
       perDay: "Items per day",
       pacingHelp: "These pacing controls change the study-day grouping without changing the source curriculum files.",
       preferences: "Preferences",
+      aiConnections: "AI Tutor Connections",
+      aiConnectionsHelp: "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.",
+      aiApiKey: "API Key",
+      aiDefaultModel: "Default Model",
+      aiSaveConnection: "Save Connection",
+      aiClearConnection: "Clear Connection",
+      aiOpenSettings: "Open Settings",
+      aiConfigureFirst: "Add at least one AI provider key in Settings to use the tutor.",
+      aiSelectProvider: "Provider",
+      aiSelectModel: "Model",
+      aiBrowserBlocked: "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
+      aiUpdateKey: "Update Key",
       textToSpeech: "Text to Speech",
       enabled: "Enabled",
       disabled: "Disabled",
@@ -198,6 +210,18 @@
       perDay: "\u0641\u06CC \u062F\u0646",
       pacingHelp: "\u06CC\u06C1 \u0633\u06CC\u0679\u0646\u06AF\u0632 \u0635\u0631\u0641 \u0645\u0637\u0627\u0644\u0639\u06D2 \u06A9\u06CC \u062F\u0646 \u0648\u0627\u0631 \u06AF\u0631\u0648\u067E\u0646\u06AF \u0628\u062F\u0644\u062A\u06CC \u06C1\u06CC\u06BA\u060C \u0627\u0635\u0644 \u0688\u06CC\u0679\u0627 \u0641\u0627\u0626\u0644\u06CC\u06BA \u0646\u06C1\u06CC\u06BA\u06D4",
       preferences: "\u062A\u0631\u062C\u06CC\u062D\u0627\u062A",
+      aiConnections: "\u0627\u06D2 \u0622\u0626\u06CC \u0627\u0633\u062A\u0627\u062F \u06A9\u0646\u06CC\u06A9\u0634\u0646\u0632",
+      aiConnectionsHelp: "\u06CC\u06C1 \u06A9\u06CC\u0632 \u0635\u0631\u0641 \u0627\u0633\u06CC \u0628\u0631\u0627\u0624\u0632\u0631 \u0645\u06CC\u06BA \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u06CC\u06BA \u06AF\u06CC \u0627\u0648\u0631 \u0628\u06CC\u06A9 \u0627\u067E \u0627\u06CC\u06A9\u0633\u067E\u0648\u0631\u0679 \u0645\u06CC\u06BA \u0634\u0627\u0645\u0644 \u0646\u06C1\u06CC\u06BA \u06C1\u0648\u06BA \u06AF\u06CC\u06D4 \u067E\u06BE\u0631 \u0628\u06BE\u06CC \u0641\u0627\u0626\u0644 \u0645\u0648\u0688 \u06CC\u0627 \u06A9\u0633\u06CC \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06C1 \u06A9\u06CC \u067E\u0627\u0644\u06CC\u0633\u06CC \u0633\u06D2 \u0628\u0631\u0627\u0624\u0632\u0631 \u06A9\u0627\u0644\u0632 \u0628\u0644\u0627\u06A9 \u06C1\u0648 \u0633\u06A9\u062A\u06CC \u06C1\u06CC\u06BA\u06D4",
+      aiApiKey: "\u0627\u06D2 \u0622\u0626\u06CC \u06A9\u06CC",
+      aiDefaultModel: "\u0688\u06CC\u0641\u0627\u0644\u0679 \u0645\u0627\u0688\u0644",
+      aiSaveConnection: "\u06A9\u0646\u06CC\u06A9\u0634\u0646 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA",
+      aiClearConnection: "\u06A9\u0646\u06CC\u06A9\u0634\u0646 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA",
+      aiOpenSettings: "\u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u06A9\u06BE\u0648\u0644\u06CC\u06BA",
+      aiConfigureFirst: "\u0627\u06D2 \u0622\u0626\u06CC \u0627\u0633\u062A\u0627\u062F \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06C1 \u06A9\u06CC \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4",
+      aiSelectProvider: "\u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06C1",
+      aiSelectModel: "\u0645\u0627\u0688\u0644",
+      aiBrowserBlocked: "\u0628\u0631\u0627\u06C1\u0650 \u0631\u0627\u0633\u062A \u0628\u0631\u0627\u0624\u0632\u0631 \u0627\u06D2 \u0622\u0626\u06CC \u0631\u0633\u0627\u0626\u06CC \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 HTTPS \u0633\u0627\u0626\u0679 \u06CC\u0627 localhost \u067E\u0631 \u0628\u06C1\u062A\u0631 \u0686\u0644\u062A\u06CC \u06C1\u06D2\u060C \u0641\u0627\u0626\u0644 \u0645\u0648\u0688 \u0645\u06CC\u06BA \u0646\u06C1\u06CC\u06BA\u06D4",
+      aiUpdateKey: "\u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644 \u06A9\u0631\u06CC\u06BA",
       textToSpeech: "\u0622\u0648\u0627\u0632 \u0645\u06CC\u06BA \u067E\u0691\u06BE\u0646\u0627",
       enabled: "\u0622\u0646",
       disabled: "\u0622\u0641",
@@ -307,6 +331,251 @@
     adverbPhrases: { labelEn: "Adverb Phrases", labelUr: "\u0641\u0642\u0631\u0627\u062A\u0650 \u062D\u0627\u0644", unitEn: "phrases", unitUr: "\u0641\u0642\u0631\u06D2", defaultSize: 5, max: 15 },
     sentences: { labelEn: "Sentence Sections", labelUr: "\u062C\u0645\u0644\u0648\u06BA \u0648\u0627\u0644\u06D2 \u0633\u06CC\u06A9\u0634\u0646", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 10, max: 20 }
   };
+  var AI_PROVIDER_ORDER = ["openai", "anthropic", "ollama"];
+  var AI_PROVIDER_DEFS = {
+    openai: {
+      id: "openai",
+      name: "ChatGPT",
+      nameUr: "\u0686\u06CC\u0679 \u062C\u06CC \u067E\u06CC \u0679\u06CC",
+      defaultModel: "gpt-4.1-mini",
+      keyPlaceholder: "sk-...",
+      modelHints: ["gpt-4.1-mini", "gpt-4o-mini", "gpt-5-mini"]
+    },
+    anthropic: {
+      id: "anthropic",
+      name: "Claude AI",
+      nameUr: "\u06A9\u0644\u0627\u0688 \u0627\u06D2 \u0622\u0626\u06CC",
+      defaultModel: "claude-sonnet-4-20250514",
+      keyPlaceholder: "sk-ant-...",
+      modelHints: ["claude-sonnet-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"]
+    },
+    ollama: {
+      id: "ollama",
+      name: "Ollama Cloud",
+      nameUr: "\u0627\u0648\u0644\u0627 \u0645\u0627 \u06A9\u0644\u0627\u0648\u0688",
+      defaultModel: "gpt-oss:20b",
+      keyPlaceholder: "ollama_...",
+      modelHints: ["gpt-oss:20b", "gpt-oss:120b", "llama3.2:latest"]
+    }
+  };
+  function createDefaultAiProviderConfigs() {
+    return AI_PROVIDER_ORDER.reduce((acc, providerId) => {
+      const definition = AI_PROVIDER_DEFS[providerId];
+      acc[providerId] = {
+        apiKey: "",
+        model: definition.defaultModel,
+        models: definition.modelHints.slice(),
+        status: "empty",
+        lastError: "",
+        validatedAt: null
+      };
+      return acc;
+    }, {});
+  }
+  function sanitizeAiProviderConfigs(rawConfigs) {
+    const defaults = createDefaultAiProviderConfigs();
+    const source = rawConfigs && typeof rawConfigs === "object" ? rawConfigs : {};
+    AI_PROVIDER_ORDER.forEach((providerId) => {
+      const fallback = defaults[providerId];
+      const raw = source[providerId] && typeof source[providerId] === "object" ? source[providerId] : {};
+      defaults[providerId] = {
+        apiKey: String(raw.apiKey || ""),
+        model: String(raw.model || fallback.model),
+        models: Array.isArray(raw.models) && raw.models.length > 0 ? raw.models.map((entry) => String(entry || "").trim()).filter(Boolean) : fallback.models.slice(),
+        status: String(raw.status || (raw.apiKey ? "saved" : "empty")),
+        lastError: String(raw.lastError || ""),
+        validatedAt: raw.validatedAt || null
+      };
+      if (!defaults[providerId].models.includes(defaults[providerId].model)) {
+        defaults[providerId].models.unshift(defaults[providerId].model);
+      }
+    });
+    return defaults;
+  }
+  function maskApiKey(value) {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "";
+    if (trimmed.length <= 8) return "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+    return `${trimmed.slice(0, 4)}\u2022\u2022\u2022\u2022\u2022\u2022${trimmed.slice(-4)}`;
+  }
+  function canUseDirectAiFromBrowser() {
+    if (window.location.protocol === "file:") {
+      return { ok: false, reason: "file" };
+    }
+    const hostname = window.location.hostname || "";
+    const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
+    if (window.location.protocol !== "https:" && !isLocal) {
+      return { ok: false, reason: "insecure" };
+    }
+    return { ok: true, reason: null };
+  }
+  function buildTutorSystemPrompt(grade, language) {
+    const replyHint = language === "ur" ? "Reply in Urdu." : language === "bilingual" ? "Use mostly English with Urdu support when helpful." : "Reply in English unless the student clearly asks for Urdu.";
+    return `You are a friendly AI tutor named Ustaad for a Grade ${grade || 5} student in Pakistan. Explain simply, use Pakistani examples, keep responses concise (2-4 short paragraphs), and focus on helping the student understand the lesson. ${replyHint}`;
+  }
+  function normalizeAiModelList(providerId, models, preferredModel) {
+    const definition = AI_PROVIDER_DEFS[providerId];
+    const merged = /* @__PURE__ */ new Set([...definition?.modelHints || [], ...Array.isArray(models) ? models : [], preferredModel || definition?.defaultModel]);
+    return Array.from(merged).map((entry) => String(entry || "").trim()).filter(Boolean);
+  }
+  function extractOpenAiText(content) {
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content.map((entry) => {
+        if (typeof entry === "string") return entry;
+        if (typeof entry?.text === "string") return entry.text;
+        return "";
+      }).join("").trim();
+    }
+    return "";
+  }
+  function buildAiError(code, message, status = null) {
+    const error = new Error(message);
+    error.code = code;
+    error.status = status;
+    return error;
+  }
+  async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 2e4) {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller ? controller.signal : options.signal
+      });
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = { raw: text };
+      }
+      if (!response.ok) {
+        const message = data?.error?.message || data?.message || data?.raw || `Request failed with status ${response.status}.`;
+        if (response.status === 401 || response.status === 403) throw buildAiError("auth", message, response.status);
+        if (response.status === 429) throw buildAiError("rate_limit", message, response.status);
+        throw buildAiError("provider", message, response.status);
+      }
+      return data;
+    } catch (error) {
+      if (error?.name === "AbortError") throw buildAiError("timeout", "The request timed out.");
+      if (error?.code) throw error;
+      if (error instanceof TypeError) throw buildAiError("blocked", "The browser blocked the request or the provider did not allow this origin.");
+      throw buildAiError("unknown", error?.message || "Unknown AI request error.");
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  }
+  async function validateAiProviderConfig(providerId, apiKey, preferredModel) {
+    const browserCapability = canUseDirectAiFromBrowser();
+    if (!browserCapability.ok) {
+      throw buildAiError("blocked", browserCapability.reason === "file" ? "Browser AI access is blocked in direct file mode. Use the published HTTPS site or localhost." : "Browser AI access needs HTTPS or localhost.");
+    }
+    if (providerId === "openai") {
+      const data2 = await fetchJsonWithTimeout("https://api.openai.com/v1/models", {
+        headers: {
+          "Authorization": `Bearer ${apiKey}`
+        }
+      });
+      const models = normalizeAiModelList(providerId, (data2?.data || []).map((entry) => entry.id).filter((id) => /^gpt|^o\d|^chatgpt/i.test(id)), preferredModel);
+      return {
+        model: preferredModel || AI_PROVIDER_DEFS.openai.defaultModel,
+        models,
+        status: "ready"
+      };
+    }
+    if (providerId === "anthropic") {
+      await fetchJsonWithTimeout("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: preferredModel || AI_PROVIDER_DEFS.anthropic.defaultModel,
+          max_tokens: 4,
+          system: "Reply with ok.",
+          messages: [{ role: "user", content: "ok" }]
+        })
+      });
+      return {
+        model: preferredModel || AI_PROVIDER_DEFS.anthropic.defaultModel,
+        models: normalizeAiModelList(providerId, AI_PROVIDER_DEFS.anthropic.modelHints, preferredModel),
+        status: "ready"
+      };
+    }
+    const data = await fetchJsonWithTimeout("https://ollama.com/api/tags", {
+      headers: {
+        "Authorization": `Bearer ${apiKey}`
+      }
+    });
+    return {
+      model: preferredModel || AI_PROVIDER_DEFS.ollama.defaultModel,
+      models: normalizeAiModelList(providerId, (data?.models || []).map((entry) => entry.name || entry.model), preferredModel),
+      status: "ready"
+    };
+  }
+  async function requestAiTutorResponse(providerId, apiKey, model, conversation, systemPrompt) {
+    const browserCapability = canUseDirectAiFromBrowser();
+    if (!browserCapability.ok) {
+      throw buildAiError("blocked", browserCapability.reason === "file" ? "Browser AI access is blocked in direct file mode. Open the HTTPS published site or localhost." : "Browser AI access needs HTTPS or localhost.");
+    }
+    const messages = conversation.map((entry) => ({
+      role: entry.role === "ai" ? "assistant" : "user",
+      content: entry.text
+    }));
+    if (providerId === "openai") {
+      const data2 = await fetchJsonWithTimeout("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.4,
+          messages: [{ role: "system", content: systemPrompt }, ...messages]
+        })
+      });
+      return extractOpenAiText(data2?.choices?.[0]?.message?.content) || "Sorry, I could not generate a reply.";
+    }
+    if (providerId === "anthropic") {
+      const data2 = await fetchJsonWithTimeout("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 800,
+          system: systemPrompt,
+          messages: messages.map((entry) => ({
+            role: entry.role === "assistant" ? "assistant" : "user",
+            content: entry.content
+          }))
+        })
+      });
+      return (data2?.content || []).map((entry) => entry?.text || "").join("").trim() || "Sorry, I could not generate a reply.";
+    }
+    const data = await fetchJsonWithTimeout("https://ollama.com/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        messages: [{ role: "system", content: systemPrompt }, ...messages]
+      })
+    });
+    return data?.message?.content || data?.response || "Sorry, I could not generate a reply.";
+  }
   function getLocalizedNamePair(studentName, studentNameUr) {
     return {
       en: String(studentName || studentNameUr || "").trim(),
@@ -1649,8 +1918,8 @@ ${marker} `);
     }
     return clean.replace(/^(what|which|who|where|when|why|how many|how much|name|list|identify|define|write)\s+/i, "").trim();
   }
-  function buildEnglishAnswerSentence(prompt, valueText) {
-    const clean = trimQuestionText(prompt);
+  function buildEnglishAnswerSentence(prompt2, valueText) {
+    const clean = trimQuestionText(prompt2);
     let match;
     if (match = clean.match(/^What is (.+)$/i)) return `${capitalizeFirst(match[1])} is ${valueText}.`;
     if (match = clean.match(/^What are (.+)$/i)) return `${capitalizeFirst(match[1])} are ${valueText}.`;
@@ -1668,8 +1937,8 @@ ${marker} `);
     if (match = clean.match(/^(Name|List|Identify|Write) (.+)$/i)) return `${capitalizeFirst(match[2])}: ${valueText}.`;
     return `${shortPromptLabel(buildPromptCue(clean, false) || clean, false)}: ${valueText}`;
   }
-  function buildUrduAnswerSentence(prompt, valueText) {
-    const clean = trimQuestionText(prompt);
+  function buildUrduAnswerSentence(prompt2, valueText) {
+    const clean = trimQuestionText(prompt2);
     let match;
     if (match = clean.match(/^(.+)\s+کیا ہے$/u)) return `${match[1]} ${valueText} \u06C1\u06D2\u06D4`;
     if (match = clean.match(/^(.+)\s+کون ہے$/u)) return `${match[1]} ${valueText} \u06C1\u06D2\u06D4`;
@@ -1690,8 +1959,8 @@ ${marker} `);
   }
   function buildSeedPairs(sub) {
     const pairs = [];
-    const pushPair = (prompt, answer) => {
-      const cleanPrompt = trimQuestionText(prompt);
+    const pushPair = (prompt2, answer) => {
+      const cleanPrompt = trimQuestionText(prompt2);
       const cleanAnswer = normalizeText(answer);
       if (!cleanPrompt || !cleanAnswer) return;
       const key = cleanPrompt + "||" + cleanAnswer;
@@ -1840,8 +2109,8 @@ ${marker} `);
   }
   function buildDaySectionPairs(dayEntry, settingKey) {
     const pairs = [];
-    const pushPair = (prompt, answer) => {
-      const cleanPrompt = normalizeText(prompt);
+    const pushPair = (prompt2, answer) => {
+      const cleanPrompt = normalizeText(prompt2);
       const cleanAnswer = normalizeText(answer);
       if (!cleanPrompt || !cleanAnswer) return;
       const key = `${cleanPrompt}||${cleanAnswer}`;
@@ -1865,8 +2134,8 @@ ${marker} `);
     }
     return pairs;
   }
-  function buildDaySectionPrompt(kind, prompt, answer, settingKey, isUrdu) {
-    const normalizedPrompt = normalizeText(prompt);
+  function buildDaySectionPrompt(kind, prompt2, answer, settingKey, isUrdu) {
+    const normalizedPrompt = normalizeText(prompt2);
     const normalizedAnswer = normalizeText(answer);
     if (settingKey === "wordOpposites") {
       if (kind === "fill") return isUrdu ? `"${normalizedPrompt}" \u06A9\u0627 \u0645\u062A\u0636\u0627\u062F ___ \u06C1\u06D2` : `Opposite of "${normalizedPrompt}" is ___`;
@@ -1875,8 +2144,8 @@ ${marker} `);
     }
     return kind === "fill" ? `${normalizedPrompt} = ___` : kind === "tf" ? `${normalizedPrompt}: ${normalizedAnswer}` : normalizedPrompt;
   }
-  function buildDaySectionQuestion(prompt, settingKey, isUrdu) {
-    const normalizedPrompt = normalizeText(prompt);
+  function buildDaySectionQuestion(prompt2, settingKey, isUrdu) {
+    const normalizedPrompt = normalizeText(prompt2);
     if (settingKey === "wordOpposites") {
       return isUrdu ? `"${normalizedPrompt}" \u06A9\u0627 \u0645\u062A\u0636\u0627\u062F \u06A9\u06CC\u0627 \u06C1\u06D2\u061F` : `What is the opposite of "${normalizedPrompt}"?`;
     }
@@ -2005,8 +2274,8 @@ ${marker} `);
       reviewStreak: Number(nextStats.reviewStreak) || 0
     };
   }
-  function getReviewWordLookupKey(prompt, answer) {
-    return `${normalizeText(prompt).toLowerCase()}|${normalizeText(answer).toLowerCase()}`;
+  function getReviewWordLookupKey(prompt2, answer) {
+    return `${normalizeText(prompt2).toLowerCase()}|${normalizeText(answer).toLowerCase()}`;
   }
   function buildStandaloneStudyItemId(studyItem) {
     return `study_item_${simpleHash([
@@ -2045,10 +2314,10 @@ ${marker} `);
     };
   }
   function resolveStudyCard(app, studyItem = {}) {
-    const prompt = String(studyItem?.prompt || "").trim();
+    const prompt2 = String(studyItem?.prompt || "").trim();
     const answer = String(studyItem?.answer || studyItem?.secondaryText || "").trim();
-    if (!prompt) return null;
-    const reviewCard = answer ? app?.reviewWordLookup?.[getReviewWordLookupKey(prompt, answer)] || null : null;
+    if (!prompt2) return null;
+    const reviewCard = answer ? app?.reviewWordLookup?.[getReviewWordLookupKey(prompt2, answer)] || null : null;
     if (reviewCard) {
       return {
         ...reviewCard,
@@ -2058,7 +2327,7 @@ ${marker} `);
     }
     const standaloneId = buildStandaloneStudyItemId(studyItem);
     const meta = app?.studyMetaLookup?.[standaloneId] || null;
-    return buildStandaloneStudyMetaRecord({ ...studyItem, prompt, answer, source: studyItem.source || app?.buildViewSource?.() || null }, meta);
+    return buildStandaloneStudyMetaRecord({ ...studyItem, prompt: prompt2, answer, source: studyItem.source || app?.buildViewSource?.() || null }, meta);
   }
   function getStudyFocusProps(app, studyCard, baseClassName = "") {
     const className = [
@@ -2188,9 +2457,9 @@ ${marker} `);
     if (!card) return null;
     return /* @__PURE__ */ React.createElement("div", { ...focusProps, style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card, compact: true }));
   }
-  function getSimpleMachinePromptVisual(sub, exercise, prompt) {
+  function getSimpleMachinePromptVisual(sub, exercise, prompt2) {
     if (!sub || sub.t !== "Simple Machines" || !exercise || exercise.q !== "Name the simple machine:") return null;
-    const lower = (prompt || "").toLowerCase();
+    const lower = (prompt2 || "").toLowerCase();
     const badgeStyle = {
       display: "inline-flex",
       alignItems: "center",
@@ -2418,6 +2687,8 @@ ${marker} `);
   }
   function HomeschoolApp() {
     const stored = loadState();
+    const storedAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
+    const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
     const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
     const persistCustomizationRef = useRef(null);
     const [language, setLanguage] = useState(stored?.language || "bilingual");
@@ -2465,6 +2736,10 @@ ${marker} `);
     const [chatMessages, setChatMessages] = useState([{ role: "ai", text: "Assalam-o-Alaikum! \u{1F44B} I'm your AI tutor. Ask me anything about your lessons \u2014 I'll explain it in a way that's easy to understand!" }]);
     const [chatInput, setChatInput] = useState("");
     const [chatLoading, setChatLoading] = useState(false);
+    const [aiProviderConfigs, setAiProviderConfigs] = useState(storedAiConfigs);
+    const [aiProviderDrafts, setAiProviderDrafts] = useState(storedAiConfigs);
+    const [aiProviderBusy, setAiProviderBusy] = useState({});
+    const [selectedAiProvider, setSelectedAiProvider] = useState(storedAiTutorPreferences?.providerId || "openai");
     const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
     const [updateAvailable, setUpdateAvailable] = useState(false);
     const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
@@ -2628,22 +2903,32 @@ ${marker} `);
     }, []);
     if (!persistCustomizationRef.current) {
       persistCustomizationRef.current = debounce(async (nextPayload) => {
-        if (!window.HomeSchoolDB) return;
         try {
-          await window.HomeSchoolDB.saveCustomization("preferences", {
-            ttsEnabled: nextPayload.ttsEnabled,
-            language: nextPayload.language,
-            themeMode: nextPayload.themeMode
-          });
-          await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
-            dailyReviewCap: nextPayload.dailyReviewCap
-          });
-          await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
-          await window.HomeSchoolDB.saveCustomization("studentProfile", {
-            grade: nextPayload.grade,
-            studentName: nextPayload.studentName,
-            studentNameUr: nextPayload.studentNameUr
-          });
+          if (window.HomeSchoolDB) {
+            await window.HomeSchoolDB.saveCustomization("preferences", {
+              ttsEnabled: nextPayload.ttsEnabled,
+              language: nextPayload.language,
+              themeMode: nextPayload.themeMode
+            });
+            await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
+              dailyReviewCap: nextPayload.dailyReviewCap
+            });
+            await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
+            await window.HomeSchoolDB.saveCustomization("studentProfile", {
+              grade: nextPayload.grade,
+              studentName: nextPayload.studentName,
+              studentNameUr: nextPayload.studentNameUr
+            });
+            await window.HomeSchoolDB.saveCustomization("aiProviderConfigs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
+            await window.HomeSchoolDB.saveCustomization("aiTutorPreferences", {
+              providerId: nextPayload.selectedAiProvider || "openai"
+            });
+          } else {
+            localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
+            localStorageFallback("hs_ai_tutor_preferences", {
+              providerId: nextPayload.selectedAiProvider || "openai"
+            });
+          }
         } catch (error) {
           console.log("Unable to persist customizations:", error);
         }
@@ -2651,6 +2936,11 @@ ${marker} `);
     }
     useEffect(() => {
       if (!window.HomeSchoolDB) {
+        const fallbackAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
+        const fallbackAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
+        setAiProviderConfigs(fallbackAiConfigs);
+        setAiProviderDrafts(fallbackAiConfigs);
+        if (fallbackAiTutorPreferences?.providerId) setSelectedAiProvider(fallbackAiTutorPreferences.providerId);
         setDbLoaded(true);
         return;
       }
@@ -2668,6 +2958,8 @@ ${marker} `);
           const storedReviewPreferences = customizations.reviewPreferences?.data || null;
           const storedPacing = customizations.daySectionPacing?.data || null;
           const storedProfile = customizations.studentProfile?.data || null;
+          const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
+          const storedAiTutor = customizations.aiTutorPreferences?.data || null;
           if (storedPreferences) {
             if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
             if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
@@ -2686,6 +2978,9 @@ ${marker} `);
             if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
             if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
           }
+          setAiProviderConfigs(storedAiProviders);
+          setAiProviderDrafts(storedAiProviders);
+          if (storedAiTutor?.providerId) setSelectedAiProvider(storedAiTutor.providerId);
           const progressMap = await window.HomeSchoolDB.getProgressMap();
           if (Object.keys(progressMap).length > 0 && (!stored?.completedQuizzes || Object.keys(stored.completedQuizzes).length === 0)) {
             setCompletedQuizzes(progressMap);
@@ -2979,7 +3274,7 @@ ${marker} `);
       if (!ttsEnabled) window.speechSynthesis.cancel();
     }, [ttsEnabled, language, themeMode, resolvedTheme]);
     useEffect(() => {
-      if (!dbLoaded || !window.HomeSchoolDB) return;
+      if (!dbLoaded) return;
       persistCustomizationRef.current?.({
         ttsEnabled,
         language,
@@ -2988,9 +3283,11 @@ ${marker} `);
         daySectionOverrides,
         grade,
         studentName,
-        studentNameUr
+        studentNameUr,
+        aiProviderConfigs,
+        selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, grade, studentName, studentNameUr]);
+    }, [dbLoaded, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
       if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, installBannerDismissed });
     }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, installBannerDismissed]);
@@ -3000,6 +3297,13 @@ ${marker} `);
     useEffect(() => {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
+    useEffect(() => {
+      const configuredProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
+      if (!configuredProviders.length) return;
+      if (!configuredProviders.includes(selectedAiProvider)) {
+        setSelectedAiProvider(configuredProviders[0]);
+      }
+    }, [aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
       setSelectedAdverbDay(null);
       setSelectedPrepDay(null);
@@ -3044,6 +3348,95 @@ ${marker} `);
         [sectionKey]: { itemsPerDay: nextValue }
       }));
     }, []);
+    const handleAiProviderDraftChange = useCallback((providerId, field, value) => {
+      setAiProviderDrafts((current) => ({
+        ...current,
+        [providerId]: {
+          ...current[providerId] || createDefaultAiProviderConfigs()[providerId],
+          [field]: value
+        }
+      }));
+    }, []);
+    const saveAiProviderConfiguration = useCallback(async (providerId, overrides = null) => {
+      const definition = AI_PROVIDER_DEFS[providerId];
+      if (!definition) return null;
+      const source = overrides || aiProviderDrafts[providerId] || aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
+      const apiKey = String(source.apiKey || "").trim();
+      const requestedModel = String(source.model || definition.defaultModel).trim() || definition.defaultModel;
+      if (!apiKey) {
+        setAiProviderConfigs((current) => ({
+          ...current,
+          [providerId]: {
+            ...current[providerId] || createDefaultAiProviderConfigs()[providerId],
+            apiKey: "",
+            status: "empty",
+            lastError: "",
+            validatedAt: null,
+            model: requestedModel
+          }
+        }));
+        return null;
+      }
+      setAiProviderBusy((current) => ({ ...current, [providerId]: true }));
+      try {
+        const validation = await validateAiProviderConfig(providerId, apiKey, requestedModel);
+        const nextConfig = {
+          apiKey,
+          model: validation.model || requestedModel,
+          models: normalizeAiModelList(providerId, validation.models, validation.model || requestedModel),
+          status: validation.status || "ready",
+          lastError: "",
+          validatedAt: Date.now()
+        };
+        setAiProviderConfigs((current) => ({ ...current, [providerId]: nextConfig }));
+        setAiProviderDrafts((current) => ({ ...current, [providerId]: { ...nextConfig } }));
+        if (!String(aiProviderConfigs[selectedAiProvider]?.apiKey || "").trim()) {
+          setSelectedAiProvider(providerId);
+        }
+        return nextConfig;
+      } catch (error) {
+        const nextStatus = error?.code === "auth" ? "auth" : error?.code === "blocked" ? "blocked" : "saved";
+        const nextConfig = {
+          apiKey,
+          model: requestedModel,
+          models: normalizeAiModelList(providerId, source.models, requestedModel),
+          status: nextStatus,
+          lastError: error?.message || "Unable to validate this provider in the browser.",
+          validatedAt: null
+        };
+        setAiProviderConfigs((current) => ({ ...current, [providerId]: nextConfig }));
+        setAiProviderDrafts((current) => ({ ...current, [providerId]: { ...nextConfig } }));
+        return nextConfig;
+      } finally {
+        setAiProviderBusy((current) => ({ ...current, [providerId]: false }));
+      }
+    }, [aiProviderConfigs, aiProviderDrafts, selectedAiProvider]);
+    const handleSaveAiProvider = useCallback(async (providerId) => {
+      await saveAiProviderConfiguration(providerId);
+    }, [saveAiProviderConfiguration]);
+    const handleClearAiProvider = useCallback((providerId) => {
+      const fallback = createDefaultAiProviderConfigs()[providerId];
+      setAiProviderConfigs((current) => ({ ...current, [providerId]: fallback }));
+      setAiProviderDrafts((current) => ({ ...current, [providerId]: fallback }));
+    }, []);
+    const handleAiTutorModelChange = useCallback((providerId, model) => {
+      if (!providerId) return;
+      setAiProviderConfigs((current) => ({
+        ...current,
+        [providerId]: {
+          ...current[providerId] || createDefaultAiProviderConfigs()[providerId],
+          model,
+          models: normalizeAiModelList(providerId, current[providerId]?.models, model)
+        }
+      }));
+      setAiProviderDrafts((current) => ({
+        ...current,
+        [providerId]: {
+          ...current[providerId] || createDefaultAiProviderConfigs()[providerId],
+          model
+        }
+      }));
+    }, []);
     const finishQuiz = async (ans, qs) => {
       const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
       const el = (Date.now() - quizStartTime) / 1e3, today = (/* @__PURE__ */ new Date()).toDateString();
@@ -3069,15 +3462,61 @@ ${marker} `);
     const sendChat = async () => {
       if (!chatInput.trim()) return;
       const msg = chatInput.trim();
+      const availableProviders = AI_PROVIDER_ORDER.filter((providerId2) => String(aiProviderConfigs[providerId2]?.apiKey || "").trim());
+      if (!availableProviders.length) {
+        setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor." }]);
+        return;
+      }
+      const browserCapability = canUseDirectAiFromBrowser();
+      if (!browserCapability.ok) {
+        setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode." }]);
+        return;
+      }
+      const providerId = availableProviders.includes(selectedAiProvider) ? selectedAiProvider : availableProviders[0];
+      const providerConfig = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
+      const providerDefinition = AI_PROVIDER_DEFS[providerId];
+      const providerLabel = joinLocalizedText(providerDefinition.name, providerDefinition.nameUr, language);
+      const model = providerConfig.model || providerDefinition.defaultModel;
+      const conversation = [...chatMessages, { role: "user", text: msg }];
       setChatInput("");
-      setChatMessages((m) => [...m, { role: "user", text: msg }]);
+      setChatMessages((messages) => [...messages, { role: "user", text: msg }]);
       setChatLoading(true);
       try {
-        const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1e3, system: "You are a friendly AI tutor named Ustaad for a Grade " + grade + " student in Pakistan. Explain simply, use Pakistani examples, respond in English or Urdu. Keep responses concise (2-4 paragraphs). Use emojis occasionally.", messages: [...chatMessages.filter((m, i) => i > 0 || m.role !== "ai").map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.text })), { role: "user", content: msg }] }) });
-        const d = await r.json();
-        setChatMessages((m) => [...m, { role: "ai", text: d.content?.map((c) => c.text || "").join("") || "Sorry, please try again!" }]);
-      } catch {
-        setChatMessages((m) => [...m, { role: "ai", text: "Oops! Connection issue. Please try again. \u{1F64F}" }]);
+        const answer = await requestAiTutorResponse(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
+        setChatMessages((messages) => [...messages, { role: "ai", text: answer, provider: providerId }]);
+      } catch (error) {
+        if (error?.code === "auth") {
+          const replacementKey = prompt(joinLocalizedText(`Your ${providerDefinition.name} key needs to be updated. Paste a new key to continue.`, `${providerDefinition.nameUr} \u06A9\u06CC \u06A9\u06CC \u062F\u0648\u0628\u0627\u0631\u06C1 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0686\u06CC\u0679 \u062C\u0627\u0631\u06CC \u0631\u06C1 \u0633\u06A9\u06D2\u06D4`, language), "");
+          if (replacementKey && replacementKey.trim()) {
+            const nextDraft = {
+              ...aiProviderDrafts[providerId] || providerConfig,
+              apiKey: replacementKey.trim(),
+              model
+            };
+            setAiProviderDrafts((current) => ({
+              ...current,
+              [providerId]: {
+                ...current[providerId] || providerConfig,
+                apiKey: replacementKey.trim(),
+                model
+              }
+            }));
+            const updatedConfig = await saveAiProviderConfiguration(providerId, nextDraft);
+            if (updatedConfig?.apiKey) {
+              try {
+                const retryAnswer = await requestAiTutorResponse(providerId, updatedConfig.apiKey, updatedConfig.model || model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
+                setChatMessages((messages) => [...messages, { role: "ai", text: retryAnswer, provider: providerId }]);
+                setChatLoading(false);
+                return;
+              } catch (retryError) {
+                setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText(`${providerLabel} is still not authorized. ${retryError?.message || ""}`.trim(), `${providerLabel} \u0627\u0628\u06BE\u06CC \u0628\u06BE\u06CC \u0645\u062C\u0627\u0632 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4 ${retryError?.message || ""}`.trim(), language) }]);
+                setChatLoading(false);
+                return;
+              }
+            }
+          }
+        }
+        setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText(`${providerLabel}: ${error?.message || "Connection issue. Please try again."}`, `${providerLabel}: ${error?.message || "\u06A9\u0646\u06CC\u06A9\u0634\u0646 \u0645\u0633\u0626\u0644\u06C1 \u06C1\u06D2\u060C \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4"}`, language) }]);
       }
       setChatLoading(false);
     };
@@ -3557,6 +3996,27 @@ ${error.message || error}`);
       const rightName = (right.subject?.name || right.subjectId || "").toLowerCase();
       return leftName.localeCompare(rightName);
     });
+    const aiBrowserCapability = canUseDirectAiFromBrowser();
+    const configuredAiProviderIds = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
+    const currentAiProviderId = configuredAiProviderIds.includes(selectedAiProvider) ? selectedAiProvider : configuredAiProviderIds[0] || "openai";
+    const currentAiProviderConfig = aiProviderConfigs[currentAiProviderId] || createDefaultAiProviderConfigs()[currentAiProviderId];
+    const currentAiModelOptions = normalizeAiModelList(currentAiProviderId, currentAiProviderConfig.models, currentAiProviderConfig.model);
+    const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
+      const definition = AI_PROVIDER_DEFS[providerId];
+      const saved = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
+      const draft = aiProviderDrafts[providerId] || saved;
+      const statusLabel = saved.status === "ready" ? joinLocalizedText("Ready", "\u062A\u06CC\u0627\u0631", language) : saved.status === "auth" ? joinLocalizedText("Needs authorization", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u062C\u0627\u0632\u062A \u062F\u0631\u06A9\u0627\u0631", language) : saved.status === "blocked" ? joinLocalizedText("Browser blocked", "\u0628\u0631\u0627\u0624\u0632\u0631 \u0646\u06D2 \u0631\u0648\u06A9\u0627", language) : saved.apiKey ? joinLocalizedText("Saved locally", "\u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638", language) : joinLocalizedText("Not configured", "\u0627\u0628\u06BE\u06CC \u0634\u0627\u0645\u0644 \u0646\u06C1\u06CC\u06BA", language);
+      return {
+        id: providerId,
+        label: joinLocalizedText(definition.name, definition.nameUr, language),
+        apiKey: draft.apiKey || "",
+        model: draft.model || definition.defaultModel,
+        modelOptions: normalizeAiModelList(providerId, saved.models, draft.model || saved.model || definition.defaultModel),
+        statusLabel,
+        helpText: saved.lastError || (saved.apiKey ? `${maskApiKey(saved.apiKey)}` : joinLocalizedText("Add a key to enable this provider in Tutor.", "\u0627\u0633 \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06C1 \u06A9\u0648 \u0641\u0639\u0627\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language)),
+        busy: Boolean(aiProviderBusy[providerId])
+      };
+    });
     const playAll = (p) => {
       if (!isTtsEnabled()) return;
       window.speechSynthesis.cancel();
@@ -3800,7 +4260,32 @@ ${error.message || error}`);
     } }, renderLocalizedTextNode(ui.home, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
       resetReviewSession();
       handleStartReview();
-    } }, renderLocalizedTextNode(ui.startReview, language))))), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("input", { value: chatInput, onChange: (e) => setChatInput(e.target.value), onKeyDown: (e) => e.key === "Enter" && sendChat(), placeholder: "Ask your tutor anything..." }), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading }, "\u27A4"))), tab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderGradeValueNode(ui.grade, grade, language))), /* @__PURE__ */ React.createElement("div", { className: "settings-profile-card", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 0, marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText("Edit Names", "\u0646\u0627\u0645 \u062A\u0628\u062F\u06CC\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("English Name", "\u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0646\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement(
+    } }, renderLocalizedTextNode(ui.startReview, language))))), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Tutor Setup", "\u0627\u06D2 \u0622\u0626\u06CC \u0627\u0633\u062A\u0627\u062F \u0633\u06CC\u0679 \u0627\u067E", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)))), configuredAiProviderIds.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: { display: "block" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 } }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(ui.aiSelectProvider || "Provider", language)), /* @__PURE__ */ React.createElement(
+      "select",
+      {
+        value: currentAiProviderId,
+        onChange: (event) => setSelectedAiProvider(event.target.value),
+        style: { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "var(--font-ur)" : "var(--font)" }
+      },
+      configuredAiProviderIds.map((providerId) => /* @__PURE__ */ React.createElement("option", { key: providerId, value: providerId }, renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)))
+    )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(ui.aiSelectModel || "Model", language)), /* @__PURE__ */ React.createElement(
+      "select",
+      {
+        value: currentAiProviderConfig.model || AI_PROVIDER_DEFS[currentAiProviderId].defaultModel,
+        onChange: (event) => handleAiTutorModelChange(currentAiProviderId, event.target.value),
+        style: { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)", minWidth: 220 }
+      },
+      currentAiModelOptions.map((modelName) => /* @__PURE__ */ React.createElement("option", { key: modelName, value: modelName }, modelName))
+    ))), !aiBrowserCapability.ok ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)) : null) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 0 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor.", language)), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setTab("settings") }, renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)))), /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        value: chatInput,
+        onChange: (e) => setChatInput(e.target.value),
+        onKeyDown: (e) => e.key === "Enter" && sendChat(),
+        placeholder: !aiBrowserCapability.ok ? language === "ur" ? "\u0627\u06D2 \u0622\u0626\u06CC \u0686\u06CC\u0679 \u06A9\u06D2 \u0644\u06CC\u06D2 HTTPS \u06CC\u0627 localhost \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA..." : "Use HTTPS or localhost for AI chat..." : configuredAiProviderIds.length > 0 ? language === "ur" ? "\u0627\u067E\u0646\u06D2 \u0627\u0633\u062A\u0627\u062F \u0633\u06D2 \u06A9\u0686\u06BE \u0628\u06BE\u06CC \u067E\u0648\u0686\u06BE\u06CC\u06BA..." : "Ask your tutor anything..." : language === "ur" ? "\u067E\u06C1\u0644\u06D2 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u0627\u06D2 \u0622\u0626\u06CC \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA..." : "Add an AI key in Settings first...",
+        disabled: chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok
+      }
+    ), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok }, "\u27A4"))), tab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderGradeValueNode(ui.grade, grade, language))), /* @__PURE__ */ React.createElement("div", { className: "settings-profile-card", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 0, marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText("Edit Names", "\u0646\u0627\u0645 \u062A\u0628\u062F\u06CC\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("English Name", "\u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0646\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement(
       "input",
       {
         className: "settings-text-input",
@@ -3848,6 +4333,11 @@ ${error.message || error}`);
         onInstallApp: handleInstallApp,
         canReloadApp: serviceWorkerStatus === "update-ready",
         onReloadApp: applyServiceWorkerUpdate,
+        aiProviders: aiSettingsProviders,
+        onAiProviderDraftChange: handleAiProviderDraftChange,
+        onSaveAiProvider: handleSaveAiProvider,
+        onClearAiProvider: handleClearAiProvider,
+        aiBrowserBlocked: !aiBrowserCapability.ok,
         labels: ui
       }
     ) : null)), /* @__PURE__ */ React.createElement("div", { className: "bottom-nav" }, [{ id: "home", icon: "\u{1F3E0}", label: ui.home }, { id: "progress", icon: "\u{1F4CA}", label: ui.progress }, { id: "review", icon: "\u{1F9E0}", label: ui.review }, { id: "favorites", icon: "\u2B50", label: ui.favorites }, { id: "badges", icon: "\u{1F3C6}", label: ui.badges }, { id: "tutor", icon: "\u{1F916}", label: ui.tutor }, { id: "settings", icon: "\u2699\uFE0F", label: ui.settings }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, className: "nav-item " + (tab === item.id ? "active" : ""), style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {

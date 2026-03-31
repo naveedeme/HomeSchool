@@ -329,9 +329,13 @@
       wordMeta: Array.isArray(progressData?.wordMeta) ? progressData.wordMeta : [],
       customLists: Array.isArray(progressData?.customLists) ? progressData.customLists : [],
       customListItems: Array.isArray(progressData?.customListItems) ? progressData.customListItems : [],
-      customizations: Array.isArray(progressData?.customizations) ? progressData.customizations : [],
+      customizations: Array.isArray(progressData?.customizations) ? progressData.customizations.filter((row) => !isSensitiveCustomizationType(row?.type)) : [],
       dataVersion: progressData?.dataVersion ?? null,
     };
+  }
+
+  function isSensitiveCustomizationType(type) {
+    return /^ai/i.test(String(type || ""));
   }
 
   function mergeUniqueRows(existingRows, incomingRows, keyField = "id") {
@@ -1308,7 +1312,7 @@
         wordMeta: await db.wordMeta.toArray(),
         customLists: await db.customLists.toArray(),
         customListItems: await db.customListItems.toArray(),
-        customizations: await db.customizations.toArray(),
+        customizations: (await db.customizations.toArray()).filter((row) => !isSensitiveCustomizationType(row?.type)),
         dataVersion: metadata?.version ?? null,
         changedSubjects: metadata?.changedSubjects || [],
       };
@@ -1420,7 +1424,7 @@
         customListItems: await db.customListItems.toArray(),
         progress: await db.progress.toArray(),
         userStats: await db.userStats.toArray(),
-        customizations: await db.customizations.toArray(),
+        customizations: (await db.customizations.toArray()).filter((row) => !isSensitiveCustomizationType(row?.type)),
         dataVersion: await db.dataVersion.toArray(),
       };
     },
