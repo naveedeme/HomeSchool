@@ -35,6 +35,24 @@
     customizations: "++id, type, ts",
   });
 
+  db.version(7).stores({
+    coreData: "id, type, subject, grade, lessonKey",
+    posData: "id, type, day",
+    tensesData: "id, main, sub",
+    vocabData: "id, day",
+    mathChapters: "id, key, grade",
+    quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt, prompt",
+    reviewHistory: "id, cardId, dayKey, reviewedAt, subject, section, rating",
+    wordMeta: "id, subject, section, favorite, updatedAt",
+    customLists: "id, updatedAt, name",
+    customListItems: "id, listId, cardId, updatedAt",
+    progress: "id, subject, lessonId, grade, completed, timestamp",
+    userStats: "id",
+    dataVersion: "id, version, lastUpdated",
+    customizations: "++id, type, ts",
+  });
+
   function getStatsDefaults() {
     return {
       id: "main",

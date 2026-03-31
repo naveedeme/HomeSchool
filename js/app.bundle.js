@@ -2907,6 +2907,7 @@ ${marker} `);
     const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
     const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
     const persistCustomizationRef = useRef(null);
+    const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
     const [language, setLanguage] = useState((stored == null ? void 0 : stored.language) || "en");
     const [themeMode, setThemeMode] = useState((stored == null ? void 0 : stored.themeMode) || "dark");
     const ui = getUiText(language);
@@ -3098,10 +3099,15 @@ ${marker} `);
         setStorageLabel(await getStorageEstimateLabel("localStorage"));
         return;
       }
-      const stats = await window.HomeSchoolDB.getStats();
-      const quotaLabel = await getStorageEstimateLabel(`IndexedDB \u2022 ${stats.coreData || 0} lessons`);
-      const lessonCountLabel = joinLocalizedText(`${stats.coreData || 0} lessons`, `${stats.coreData || 0} \u0627\u0633\u0628\u0627\u0642`, language);
-      setStorageLabel(`${quotaLabel} \u2022 ${lessonCountLabel}`);
+      try {
+        const stats = await window.HomeSchoolDB.getStats();
+        const quotaLabel = await getStorageEstimateLabel(`IndexedDB \u2022 ${stats.coreData || 0} lessons`);
+        const lessonCountLabel = joinLocalizedText(`${stats.coreData || 0} lessons`, `${stats.coreData || 0} \u0627\u0633\u0628\u0627\u0642`, language);
+        setStorageLabel(`${quotaLabel} \u2022 ${lessonCountLabel}`);
+      } catch (error) {
+        console.log("Unable to read storage stats:", error);
+        setStorageLabel(await getStorageEstimateLabel("localStorage"));
+      }
     }, [language]);
     const refreshReviewStats = useCallback(async () => {
       if (!window.HomeSchoolDB) return;
@@ -3172,7 +3178,7 @@ ${marker} `);
     if (!persistCustomizationRef.current) {
       persistCustomizationRef.current = debounce(async (nextPayload) => {
         try {
-          if (window.HomeSchoolDB) {
+          if (window.HomeSchoolDB && customizationDbEnabledRef.current) {
             await window.HomeSchoolDB.saveCustomization("preferences", {
               ttsEnabled: nextPayload.ttsEnabled,
               language: nextPayload.language,
@@ -3204,12 +3210,73 @@ ${marker} `);
               providerId: nextPayload.selectedAiProvider || "openai"
             });
           } else {
+            localStorageFallback("hs_db_customization_fallback", {
+              preferences: {
+                ttsEnabled: nextPayload.ttsEnabled,
+                language: nextPayload.language,
+                themeMode: nextPayload.themeMode,
+                navPosition: nextPayload.navPosition,
+                navAutoHide: nextPayload.navAutoHide,
+                navBarAutoHide: nextPayload.navBarAutoHide,
+                transitionMode: nextPayload.transitionMode
+              },
+              audioPreferences: {
+                ttsRate: nextPayload.ttsRate,
+                ttsVoiceSelections: nextPayload.ttsVoiceSelections || { en: "", ur: "" }
+              },
+              reviewPreferences: {
+                dailyReviewCap: nextPayload.dailyReviewCap
+              },
+              daySectionPacing: nextPayload.daySectionOverrides || {},
+              studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
+              focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
+              reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
+              notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
+              studentProfile: {
+                grade: nextPayload.grade,
+                studentName: nextPayload.studentName,
+                studentNameUr: nextPayload.studentNameUr
+              }
+            });
             localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
             localStorageFallback("hs_ai_tutor_preferences", {
               providerId: nextPayload.selectedAiProvider || "openai"
             });
           }
         } catch (error) {
+          customizationDbEnabledRef.current = false;
+          localStorageFallback("hs_db_customization_fallback", {
+            preferences: {
+              ttsEnabled: nextPayload.ttsEnabled,
+              language: nextPayload.language,
+              themeMode: nextPayload.themeMode,
+              navPosition: nextPayload.navPosition,
+              navAutoHide: nextPayload.navAutoHide,
+              navBarAutoHide: nextPayload.navBarAutoHide,
+              transitionMode: nextPayload.transitionMode
+            },
+            audioPreferences: {
+              ttsRate: nextPayload.ttsRate,
+              ttsVoiceSelections: nextPayload.ttsVoiceSelections || { en: "", ur: "" }
+            },
+            reviewPreferences: {
+              dailyReviewCap: nextPayload.dailyReviewCap
+            },
+            daySectionPacing: nextPayload.daySectionOverrides || {},
+            studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
+            focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
+            reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
+            notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
+            studentProfile: {
+              grade: nextPayload.grade,
+              studentName: nextPayload.studentName,
+              studentNameUr: nextPayload.studentNameUr
+            }
+          });
+          localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
+          localStorageFallback("hs_ai_tutor_preferences", {
+            providerId: nextPayload.selectedAiProvider || "openai"
+          });
           console.log("Unable to persist customizations:", error);
         }
       }, 250);
@@ -3331,6 +3398,7 @@ ${marker} `);
           }
           await refreshReviewWorkspace();
         } catch (e) {
+          customizationDbEnabledRef.current = false;
           console.log("DB load fallback to inline:", e);
         }
         setDbLoaded(true);
@@ -4129,20 +4197,39 @@ ${marker} `);
     };
     const handleCheckUpdates = useCallback(async () => {
       var _a2;
-      if (!versionManagerRef.current) return;
-      const swResult = await checkServiceWorkerForUpdates({ onStatus: (status) => setServiceWorkerStatus(status) });
-      const result = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION, window.HomeSchoolData);
-      setCurrentVersion(result.newVersion || window.HomeSchoolData.VERSION);
-      setUpdateAvailable(result.needsUpdate);
-      const changedSubjects = (result.changedSubjects || []).length > 0 ? `
+      try {
+        const swResult = await checkServiceWorkerForUpdates({ onStatus: (status) => setServiceWorkerStatus(status) });
+        let result = null;
+        if (versionManagerRef.current) {
+          result = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION, window.HomeSchoolData);
+          setCurrentVersion(result.newVersion || window.HomeSchoolData.VERSION);
+          setUpdateAvailable(result.needsUpdate);
+        }
+        const changedSubjects = ((result == null ? void 0 : result.changedSubjects) || []).length > 0 ? `
 ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : "";
-      const appShellMessage = (swResult == null ? void 0 : swResult.updateReady) ? `
+        const appShellMessage = (swResult == null ? void 0 : swResult.updateReady) ? `
 
 ${ui.appShellUpdateReady}` : "";
-      alert(result.needsUpdate ? `${ui.updateAvailableTitle}
+        if (result) {
+          alert(result.needsUpdate ? `${ui.updateAvailableTitle}
 Current DB version: ${(_a2 = result.currentVersion) != null ? _a2 : "not seeded"}
 New version: ${result.newVersion}${changedSubjects}${appShellMessage}` : `${ui.upToDateTitle}
 Version: ${result.newVersion}${appShellMessage}`);
+          return;
+        }
+        alert(`${ui.upToDateTitle}
+Version: ${window.HomeSchoolData.VERSION}${appShellMessage}`);
+      } catch (error) {
+        console.log("Unable to check updates:", error);
+        const swResult = await checkServiceWorkerForUpdates({ onStatus: (status) => setServiceWorkerStatus(status) }).catch(() => ({ updateReady: false }));
+        const appShellMessage = (swResult == null ? void 0 : swResult.updateReady) ? `
+
+${ui.appShellUpdateReady}` : "";
+        alert(`${ui.upToDateTitle}
+Version: ${window.HomeSchoolData.VERSION}${appShellMessage}
+
+Update check fell back to inline mode.`);
+      }
     }, [ui.appShellUpdateReady, ui.changedSubjects, ui.updateAvailableTitle, ui.upToDateTitle]);
     const handleRefreshData = useCallback(async () => {
       var _a2;
