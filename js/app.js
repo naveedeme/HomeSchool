@@ -6370,7 +6370,7 @@ function HomeschoolApp() {
     <div className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`}>
       <div className="header-leading">
         <span className="back-btn-slot">{showBack ? <button className="back-btn" onClick={goBack}>←</button> : null}</span>
-        <span className="header-mark" title="HomeSchool">HomeSchool</span>
+        <button type="button" className="header-mark" title="HomeSchool" aria-label="Go home" onClick={goHome}>HomeSchool</button>
       </div>
       {navPosition === "top"
         ? renderNavBar("top", true)
