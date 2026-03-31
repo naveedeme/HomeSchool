@@ -298,6 +298,24 @@
     return { ok: false, reason: protocol === "file:" ? "file" : "insecure" };
   }
 
+  async function syncServiceWorkerStatus(registration, onStatus) {
+    const activeRegistration = registration || window.__HOME_SCHOOL_SW_REG__ || await navigator.serviceWorker?.getRegistration?.();
+    if (!activeRegistration) {
+      onStatus?.("error");
+      return { ok: false, reason: "missing" };
+    }
+    if (activeRegistration.waiting) {
+      onStatus?.("update-ready");
+      return { ok: true, registration: activeRegistration, updateReady: true };
+    }
+    if (activeRegistration.installing) {
+      onStatus?.("caching");
+      return { ok: true, registration: activeRegistration, updateReady: false, installing: true };
+    }
+    onStatus?.("ready");
+    return { ok: true, registration: activeRegistration, updateReady: false };
+  }
+
   async function registerServiceWorker(options = {}) {
     const support = canRegisterServiceWorker();
     if (!support.ok) return { registered: false, reason: support.reason };
@@ -324,14 +342,31 @@
       });
 
       navigator.serviceWorker.ready
-        .then(() => options.onStatus?.("ready"))
+        .then(() => syncServiceWorkerStatus(registration, options.onStatus))
         .catch(() => options.onStatus?.("error"));
+
+      registration.update().catch(() => null);
 
       return { registered: true, registration };
     } catch (error) {
       options.onError?.(error);
       options.onStatus?.("error");
       return { registered: false, reason: "error", error };
+    }
+  }
+
+  async function checkServiceWorkerForUpdates(options = {}) {
+    const support = canRegisterServiceWorker();
+    if (!support.ok) return { ok: false, reason: support.reason, updateReady: false };
+    try {
+      const registration = window.__HOME_SCHOOL_SW_REG__ || await navigator.serviceWorker?.getRegistration?.();
+      if (!registration) return { ok: false, reason: "missing", updateReady: false };
+      options.onStatus?.("checking");
+      await registration.update().catch(() => null);
+      return await syncServiceWorkerStatus(registration, options.onStatus);
+    } catch (error) {
+      options.onStatus?.("error");
+      return { ok: false, reason: "error", error, updateReady: false };
     }
   }
 
@@ -568,6 +603,7 @@
     isStandaloneMode,
     hideLaunchSplash,
     registerServiceWorker,
+    checkServiceWorkerForUpdates,
     applyServiceWorkerUpdate,
     setPendingReviewBadge,
     getDayKey,

@@ -10,7 +10,7 @@ const {
   getLessons,
   getQuiz,
 } = window.HomeSchoolData;
-const { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, applyServiceWorkerUpdate, setPendingReviewBadge, getSpeechConfig } = window.HomeSchoolUtils;
+const { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, checkServiceWorkerForUpdates, applyServiceWorkerUpdate, setPendingReviewBadge, getSpeechConfig } = window.HomeSchoolUtils;
 const { SettingsPanel } = window.HomeSchoolSettings || {};
 const {
   adverbs: ADVERBS_DATA,
@@ -197,6 +197,7 @@ const UI_TEXT = {
     offlineUnsupported: "Offline worker not available here",
     offlineError: "Offline setup failed",
     updateReady: "Update ready after refresh",
+    appShellUpdateReady: "A newer app version is ready. Press Refresh to Update to apply it.",
     refreshToUpdate: "Refresh to Update",
     online: "Online",
     offline: "Offline",
@@ -378,6 +379,7 @@ const UI_TEXT = {
     offlineUnsupported: "یہاں آف لائن ورکر دستیاب نہیں",
     offlineError: "آف لائن سیٹ اپ ناکام",
     updateReady: "ریفریش کے بعد اپ ڈیٹ تیار",
+    appShellUpdateReady: "ایپ کا نیا ورژن تیار ہے۔ اسے لاگو کرنے کے لیے ریفریش ٹو اپ ڈیٹ دبائیں۔",
     refreshToUpdate: "اپ ڈیٹ کے لیے ریفریش کریں",
     online: "آن لائن",
     offline: "آف لائن",
@@ -5705,14 +5707,16 @@ function HomeschoolApp() {
 
   const handleCheckUpdates = useCallback(async () => {
     if (!versionManagerRef.current) return;
+    const swResult = await checkServiceWorkerForUpdates({ onStatus: (status) => setServiceWorkerStatus(status) });
     const result = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION, window.HomeSchoolData);
     setCurrentVersion(result.newVersion || window.HomeSchoolData.VERSION);
     setUpdateAvailable(result.needsUpdate);
     const changedSubjects = (result.changedSubjects || []).length > 0 ? `\n${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : "";
+    const appShellMessage = swResult?.updateReady ? `\n\n${ui.appShellUpdateReady}` : "";
     alert(result.needsUpdate
-      ? `${ui.updateAvailableTitle}\nCurrent DB version: ${result.currentVersion ?? "not seeded"}\nNew version: ${result.newVersion}${changedSubjects}`
-      : `${ui.upToDateTitle}\nVersion: ${result.newVersion}`);
-  }, [ui.changedSubjects, ui.updateAvailableTitle, ui.upToDateTitle]);
+      ? `${ui.updateAvailableTitle}\nCurrent DB version: ${result.currentVersion ?? "not seeded"}\nNew version: ${result.newVersion}${changedSubjects}${appShellMessage}`
+      : `${ui.upToDateTitle}\nVersion: ${result.newVersion}${appShellMessage}`);
+  }, [ui.appShellUpdateReady, ui.changedSubjects, ui.updateAvailableTitle, ui.upToDateTitle]);
 
   const handleRefreshData = useCallback(async () => {
     if (!window.HomeSchoolDB) return;

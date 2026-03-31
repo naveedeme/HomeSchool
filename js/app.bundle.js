@@ -10,7 +10,7 @@
     getLessons,
     getQuiz
   } = window.HomeSchoolData;
-  const { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, applyServiceWorkerUpdate, setPendingReviewBadge, getSpeechConfig } = window.HomeSchoolUtils;
+  const { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, checkServiceWorkerForUpdates, applyServiceWorkerUpdate, setPendingReviewBadge, getSpeechConfig } = window.HomeSchoolUtils;
   const { SettingsPanel } = window.HomeSchoolSettings || {};
   const {
     adverbs: ADVERBS_DATA,
@@ -196,6 +196,7 @@
       offlineUnsupported: "Offline worker not available here",
       offlineError: "Offline setup failed",
       updateReady: "Update ready after refresh",
+      appShellUpdateReady: "A newer app version is ready. Press Refresh to Update to apply it.",
       refreshToUpdate: "Refresh to Update",
       online: "Online",
       offline: "Offline",
@@ -377,6 +378,7 @@
       offlineUnsupported: "\u06CC\u06C1\u0627\u06BA \u0622\u0641 \u0644\u0627\u0626\u0646 \u0648\u0631\u06A9\u0631 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA",
       offlineError: "\u0622\u0641 \u0644\u0627\u0626\u0646 \u0633\u06CC\u0679 \u0627\u067E \u0646\u0627\u06A9\u0627\u0645",
       updateReady: "\u0631\u06CC\u0641\u0631\u06CC\u0634 \u06A9\u06D2 \u0628\u0639\u062F \u0627\u067E \u0688\u06CC\u0679 \u062A\u06CC\u0627\u0631",
+      appShellUpdateReady: "\u0627\u06CC\u067E \u06A9\u0627 \u0646\u06CC\u0627 \u0648\u0631\u0698\u0646 \u062A\u06CC\u0627\u0631 \u06C1\u06D2\u06D4 \u0627\u0633\u06D2 \u0644\u0627\u06AF\u0648 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0631\u06CC\u0641\u0631\u06CC\u0634 \u0679\u0648 \u0627\u067E \u0688\u06CC\u0679 \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4",
       refreshToUpdate: "\u0627\u067E \u0688\u06CC\u0679 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0631\u06CC\u0641\u0631\u06CC\u0634 \u06A9\u0631\u06CC\u06BA",
       online: "\u0622\u0646 \u0644\u0627\u0626\u0646",
       offline: "\u0622\u0641 \u0644\u0627\u0626\u0646",
@@ -4128,16 +4130,20 @@ ${marker} `);
     const handleCheckUpdates = useCallback(async () => {
       var _a2;
       if (!versionManagerRef.current) return;
+      const swResult = await checkServiceWorkerForUpdates({ onStatus: (status) => setServiceWorkerStatus(status) });
       const result = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION, window.HomeSchoolData);
       setCurrentVersion(result.newVersion || window.HomeSchoolData.VERSION);
       setUpdateAvailable(result.needsUpdate);
       const changedSubjects = (result.changedSubjects || []).length > 0 ? `
 ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : "";
+      const appShellMessage = (swResult == null ? void 0 : swResult.updateReady) ? `
+
+${ui.appShellUpdateReady}` : "";
       alert(result.needsUpdate ? `${ui.updateAvailableTitle}
 Current DB version: ${(_a2 = result.currentVersion) != null ? _a2 : "not seeded"}
-New version: ${result.newVersion}${changedSubjects}` : `${ui.upToDateTitle}
-Version: ${result.newVersion}`);
-    }, [ui.changedSubjects, ui.updateAvailableTitle, ui.upToDateTitle]);
+New version: ${result.newVersion}${changedSubjects}${appShellMessage}` : `${ui.upToDateTitle}
+Version: ${result.newVersion}${appShellMessage}`);
+    }, [ui.appShellUpdateReady, ui.changedSubjects, ui.updateAvailableTitle, ui.upToDateTitle]);
     const handleRefreshData = useCallback(async () => {
       var _a2;
       if (!window.HomeSchoolDB) return;

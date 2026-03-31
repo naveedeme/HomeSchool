@@ -1,4 +1,4 @@
-const CACHE_NAME = "homeschool-static-v3";
+const CACHE_NAME = "homeschool-static-v4";
 const APP_SHELL = [
   "./css/app.css",
   "./HomeSchool.html",
@@ -136,17 +136,21 @@ self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
 
-  if (event.request.mode === "navigate") {
+  const isAppShellAsset = event.request.mode === "navigate"
+    || /\.(?:js|css|html|webmanifest)$/i.test(requestUrl.pathname);
+
+  if (isAppShellAsset) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
+          if (!response || !response.ok) throw new Error(`HTTP ${response?.status || "network"}`);
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           return response;
         })
         .catch(async () => {
           const cached = await caches.match(event.request);
-          return cached || caches.match("./index.html");
+          return cached || (event.request.mode === "navigate" ? caches.match("./index.html") : null);
         })
     );
     return;
