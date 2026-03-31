@@ -109,6 +109,8 @@ const UI_TEXT = {
     profileSection: "Profile & Names",
     gradeSection: "Grade Selection",
     navPlacement: "Navigation Placement",
+    navAutoHide: "Auto-hide Top Header",
+    navBarAutoHide: "Auto-hide Navigation Bar",
     navBottom: "Bottom",
     navRight: "Right",
     navLeft: "Left",
@@ -288,6 +290,8 @@ const UI_TEXT = {
     profileSection: "پروفائل اور نام",
     gradeSection: "جماعت کا انتخاب",
     navPlacement: "نیویگیشن کی جگہ",
+    navAutoHide: "اوپر والا ہیڈر خودکار چھپائیں",
+    navBarAutoHide: "نیویگیشن بار خودکار چھپائیں",
     navBottom: "نیچے",
     navRight: "دائیں",
     navLeft: "بائیں",
@@ -716,6 +720,10 @@ function sanitizeUrduInput(value) {
     .replace(/[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s\u060C\u061B\u061F\u0640\u0660-\u0669\u06F0-\u06F9]/g, "")
     .replace(/\s{2,}/g, " ")
     .trimStart();
+}
+
+function containsUrduText(value) {
+  return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(String(value || ""));
 }
 
 function joinLocalizedText(enText, urText, language) {
@@ -4534,6 +4542,10 @@ function HomeschoolApp() {
   const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number(stored?.focusTimerSettings?.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
   const [reminderSettings, setReminderSettings] = useState(stored?.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
   const [navPosition, setNavPosition] = useState(["bottom", "right", "left", "top"].includes(stored?.navPosition) ? stored.navPosition : "top");
+  const [navAutoHide, setNavAutoHide] = useState(Boolean(stored?.navAutoHide));
+  const [navHidden, setNavHidden] = useState(false);
+  const [navBarAutoHide, setNavBarAutoHide] = useState(Boolean(stored?.navBarAutoHide));
+  const [navBarHidden, setNavBarHidden] = useState(false);
   const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
@@ -4546,6 +4558,12 @@ function HomeschoolApp() {
   const [serviceWorkerStatus, setServiceWorkerStatus] = useState(window.location.protocol === "file:" ? "local-static" : "checking");
   const [isOnline, setIsOnline] = useState(navigator.onLine !== false);
   const chatEndRef = useRef(null);
+  const headerRef = useRef(null);
+  const headerHideTimerRef = useRef(null);
+  const navBarRef = useRef(null);
+  const navBarHideTimerRef = useRef(null);
+  const [headerHideOffset, setHeaderHideOffset] = useState(0);
+  const [navBarOffset, setNavBarOffset] = useState(0);
 
   // ─── DB-backed data state ───
   const [dbLoaded, setDbLoaded] = useState(false);
@@ -4723,6 +4741,8 @@ function HomeschoolApp() {
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
             navPosition: nextPayload.navPosition,
+            navAutoHide: nextPayload.navAutoHide,
+            navBarAutoHide: nextPayload.navBarAutoHide,
             transitionMode: nextPayload.transitionMode,
           });
           await window.HomeSchoolDB.saveCustomization("audioPreferences", {
@@ -4795,6 +4815,8 @@ function HomeschoolApp() {
           if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
           if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
           if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
+          if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
+          if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
           if (typeof storedPreferences.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(storedPreferences.transitionMode)) setTransitionMode(storedPreferences.transitionMode);
         }
         if (storedAudioPreferences) {
@@ -5174,6 +5196,8 @@ function HomeschoolApp() {
       language,
       themeMode,
       navPosition,
+      navAutoHide,
+      navBarAutoHide,
       transitionMode,
       dailyReviewCap,
       daySectionOverrides,
@@ -5187,10 +5211,88 @@ function HomeschoolApp() {
       aiProviderConfigs,
       selectedAiProvider,
     });
-  }, [dbLoaded, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+  }, [dbLoaded, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, installBannerDismissed });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, installBannerDismissed]);
+    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, installBannerDismissed });
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, installBannerDismissed]);
+  useEffect(() => {
+    setNavHidden(Boolean(navAutoHide));
+  }, [navPosition, navAutoHide]);
+  useEffect(() => {
+    setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
+  }, [navPosition, navBarAutoHide]);
+  useEffect(() => {
+    const headerNode = headerRef.current;
+    if (!headerNode) return undefined;
+    const updateOffset = () => setHeaderHideOffset(headerNode.offsetHeight || 0);
+    updateOffset();
+    if (window.ResizeObserver) {
+      const observer = new window.ResizeObserver(() => updateOffset());
+      observer.observe(headerNode);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", updateOffset);
+    return () => window.removeEventListener("resize", updateOffset);
+  }, [navPosition]);
+  useEffect(() => {
+    const navBarNode = navBarRef.current;
+    if (!navBarNode) return undefined;
+    const updateOffset = () => setNavBarOffset(navPosition === "bottom" ? (navBarNode.offsetHeight || 0) : (navBarNode.offsetWidth || 0));
+    updateOffset();
+    if (window.ResizeObserver) {
+      const observer = new window.ResizeObserver(() => updateOffset());
+      observer.observe(navBarNode);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", updateOffset);
+    return () => window.removeEventListener("resize", updateOffset);
+  }, [navPosition, navBarHidden]);
+  const revealAutoHideHeader = useCallback(() => {
+    if (!navAutoHide) return;
+    if (headerHideTimerRef.current) {
+      window.clearTimeout(headerHideTimerRef.current);
+      headerHideTimerRef.current = null;
+    }
+    setNavHidden(false);
+  }, [navAutoHide]);
+  const concealAutoHideHeader = useCallback(() => {
+    if (!navAutoHide) return;
+    if (headerHideTimerRef.current) window.clearTimeout(headerHideTimerRef.current);
+    headerHideTimerRef.current = window.setTimeout(() => {
+      setNavHidden(true);
+      headerHideTimerRef.current = null;
+    }, 140);
+  }, [navAutoHide]);
+  const revealAutoHideNavBar = useCallback(() => {
+    if (!navBarAutoHide || navPosition === "top") return;
+    if (navBarHideTimerRef.current) {
+      window.clearTimeout(navBarHideTimerRef.current);
+      navBarHideTimerRef.current = null;
+    }
+    setNavBarHidden(false);
+  }, [navBarAutoHide, navPosition]);
+  const concealAutoHideNavBar = useCallback(() => {
+    if (!navBarAutoHide || navPosition === "top") return;
+    if (navBarHideTimerRef.current) window.clearTimeout(navBarHideTimerRef.current);
+    navBarHideTimerRef.current = window.setTimeout(() => {
+      setNavBarHidden(true);
+      navBarHideTimerRef.current = null;
+    }, 140);
+  }, [navBarAutoHide, navPosition]);
+  useEffect(() => {
+    setNavHidden(Boolean(navAutoHide));
+    setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
+  }, [tab, selectedSubject, selectedLesson, selectedAdverbDay, selectedPrepDay, selectedAdjDay, selectedConjDay, selectedPronDay, selectedNounDay, selectedVerbDay, selectedTensePara, selectedVocabDay, quizActive, quizDone, subExerciseGroupIdx, subQuizGroupIdx, mathSubIdx, practiceMode, reviewIdx, reviewSessionDone, navAutoHide, navBarAutoHide, navPosition]);
+  useEffect(() => () => {
+    if (headerHideTimerRef.current) {
+      window.clearTimeout(headerHideTimerRef.current);
+      headerHideTimerRef.current = null;
+    }
+    if (navBarHideTimerRef.current) {
+      window.clearTimeout(navBarHideTimerRef.current);
+      navBarHideTimerRef.current = null;
+    }
+  }, []);
   useEffect(() => {
     if (!window.speechSynthesis) return undefined;
     const loadVoices = () => {
@@ -5653,6 +5755,8 @@ function HomeschoolApp() {
         language,
         themeMode,
         navPosition,
+        navAutoHide,
+        navBarAutoHide,
         transitionMode,
         dailyReviewCap,
         daySectionOverrides,
@@ -5663,7 +5767,7 @@ function HomeschoolApp() {
       },
       dbProgress,
     });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory]);
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
@@ -5700,6 +5804,8 @@ function HomeschoolApp() {
         if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
         if (typeof nextState.themeMode !== "undefined") setThemeMode(nextState.themeMode);
         if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition(nextState.navPosition);
+        if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
+        if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
         if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
         if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
         setDaySectionOverrides(nextState.daySectionOverrides || {});
@@ -5735,6 +5841,8 @@ function HomeschoolApp() {
         if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
         if (typeof nextState.themeMode !== "undefined") setThemeMode((current) => current || nextState.themeMode);
         if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition((current) => current || nextState.navPosition);
+        if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
+        if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
         if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
         if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
         if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
@@ -6143,6 +6251,8 @@ function HomeschoolApp() {
 
   const goHome = () => {
     window.speechSynthesis.cancel();
+    setNavHidden(Boolean(navAutoHide));
+    setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
     setTab("home");
     setSelectedSubject(null);
     setSelectedLesson(null);
@@ -6172,7 +6282,7 @@ function HomeschoolApp() {
     resetReviewSession();
     resetPracticeSession();
   };
-  const goBack = () => { window.speechSynthesis.cancel(); if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
+  const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { resetPracticeSession(); setTab("review"); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
   const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
@@ -6324,6 +6434,8 @@ function HomeschoolApp() {
       return;
     }
     window.speechSynthesis.cancel();
+    setNavHidden(Boolean(navAutoHide));
+    setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
     setTab(nextTab);
     setSelectedSubject(null);
     setSelectedLesson(null);
@@ -6352,7 +6464,13 @@ function HomeschoolApp() {
     }
   };
   const renderNavBar = (position, inline = false) => (
-    <div className={inline ? "header-top-nav" : `bottom-nav nav-position-${position}`} data-nav-position={position}>
+    <div
+      ref={!inline ? navBarRef : null}
+      className={inline ? "header-top-nav" : `bottom-nav nav-position-${position}`}
+      data-nav-position={position}
+      onMouseEnter={!inline && navBarAutoHide && position !== "top" ? revealAutoHideNavBar : undefined}
+      onMouseLeave={!inline && navBarAutoHide && position !== "top" ? concealAutoHideNavBar : undefined}
+    >
       {navItems.map((item) => (
         <button
           key={item.id}
@@ -6366,18 +6484,31 @@ function HomeschoolApp() {
       ))}
     </div>
   );
-  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}`}>
-    <div className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`}>
+  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""}`} style={{ ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
+    {navAutoHide ? <div className="header-reveal-hotspot" onMouseEnter={revealAutoHideHeader} onMouseMove={revealAutoHideHeader} onPointerDown={revealAutoHideHeader} /> : null}
+    <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
       <div className="header-leading">
         <span className="back-btn-slot">{showBack ? <button className="back-btn" onClick={goBack}>←</button> : null}</span>
-        <button type="button" className="header-mark" title="HomeSchool" aria-label="Go home" onClick={goHome}>HomeSchool</button>
+        <button type="button" className="header-mark" title="HomeSchool" aria-label="Go home" onClick={goHome}>
+          <img src="img/ui/header-hs.png" alt="HomeSchool" className="header-mark-img" />
+        </button>
       </div>
       {navPosition === "top"
         ? renderNavBar("top", true)
         : <h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1>}
-      <div className="header-badge"><span>⭐</span><span>{xp} XP</span></div>
+      <button
+        type="button"
+        className="header-badge"
+        title="Open progress"
+        aria-label="Open progress"
+        onClick={(event) => {
+          event.stopPropagation();
+          handleNavItemSelect("progress");
+        }}
+      ><span>⭐</span><span>{xp} XP</span></button>
     </div>
     <div className="app-body">
+      {navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
       {navPosition === "left" ? renderNavBar("left") : null}
       <div key={`${transitionMode}:${routeTransitionKey}`} className={`content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}`} data-transition-mode={transitionMode}>
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
@@ -7393,14 +7524,27 @@ function HomeschoolApp() {
             {practiceMode === "matching" && practiceMatchRound && (
               <div className="practice-card-shell">
                 <div className="match-grid">
-                  <div>
+                  <div className="match-column">
                     {practiceMatchRound.prompts.map((card) => (
-                      <button key={`prompt_${card.id}`} className={`match-chip ${practiceMatchSelection?.item?.id === card.id && practiceMatchSelection?.type === "prompt" ? "selected" : ""}${practiceMatchRound.matches?.[card.id] === true ? " matched" : practiceMatchRound.matches?.[card.id] === false ? " wrong" : ""}`} onClick={() => handleMatchSelection("prompt", card)}>{card.prompt}</button>
+                      <button
+                        key={`prompt_${card.id}`}
+                        className={`match-chip match-chip-prompt ${practiceMatchSelection?.item?.id === card.id && practiceMatchSelection?.type === "prompt" ? "selected" : ""}${practiceMatchRound.matches?.[card.id] === true ? " matched" : practiceMatchRound.matches?.[card.id] === false ? " wrong" : ""}`}
+                        onClick={() => handleMatchSelection("prompt", card)}
+                      >
+                        {card.prompt}
+                      </button>
                     ))}
                   </div>
-                  <div>
+                  <div className="match-column">
                     {practiceMatchRound.answers.map((answer) => (
-                      <button key={`answer_${answer.id}`} className={`match-chip ${practiceMatchSelection?.item?.id === answer.id && practiceMatchSelection?.type === "answer" ? "selected" : ""}`} onClick={() => handleMatchSelection("answer", answer)}>{answer.text}</button>
+                      <button
+                        key={`answer_${answer.id}`}
+                        className={`match-chip match-chip-answer ${practiceMatchSelection?.item?.id === answer.id && practiceMatchSelection?.type === "answer" ? "selected" : ""}`}
+                        onClick={() => handleMatchSelection("answer", answer)}
+                        style={containsUrduText(answer.text) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", fontSize: 15, lineHeight: 1.8 } : null}
+                      >
+                        {answer.text}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -7632,10 +7776,14 @@ function HomeschoolApp() {
             onLanguageChange={setLanguage}
             themeMode={themeMode}
             onThemeModeChange={setThemeMode}
-            navPosition={navPosition}
-            onNavPositionChange={setNavPosition}
-            transitionMode={transitionMode}
-            onTransitionModeChange={setTransitionMode}
+      navPosition={navPosition}
+      onNavPositionChange={setNavPosition}
+      navAutoHide={navAutoHide}
+      onNavAutoHideChange={setNavAutoHide}
+      navBarAutoHide={navBarAutoHide}
+      onNavBarAutoHideChange={setNavBarAutoHide}
+      transitionMode={transitionMode}
+      onTransitionModeChange={setTransitionMode}
             dailyReviewCap={dailyReviewCap}
             onDailyReviewCapChange={setDailyReviewCap}
             daySectionSettings={daySectionSettings}
@@ -7667,8 +7815,10 @@ function HomeschoolApp() {
         ) : null}
       </>)}
       </div>
+      {navBarAutoHide && navPosition === "right" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-right" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
       {navPosition === "right" ? renderNavBar("right") : null}
     </div>
+    {navBarAutoHide && navPosition === "bottom" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-bottom" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
     {navPosition === "bottom" ? renderNavBar("bottom") : null}
   </div></></AppContext.Provider>);
 }
