@@ -4536,6 +4536,8 @@ function HomeschoolApp() {
   const [navPosition, setNavPosition] = useState(["bottom", "right", "left", "top"].includes(stored?.navPosition) ? stored.navPosition : "top");
   const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
+  const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
+  const [gradeDisclosureOpen, setGradeDisclosureOpen] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "dark"));
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [installAvailability, setInstallAvailability] = useState(isStandaloneMode() ? "installed" : "unavailable");
@@ -7535,8 +7537,19 @@ function HomeschoolApp() {
         )}
       </>)}
       {tab === "settings" && (<>
-        <details className="settings-disclosure">
-          <summary>{renderLocalizedTextNode(ui.profileSection, language)}</summary>
+        <div className={`settings-disclosure${profileDisclosureOpen ? " open" : ""}`} data-transition-mode={transitionMode}>
+          <button
+            type="button"
+            className="settings-disclosure-toggle"
+            onClick={() => setProfileDisclosureOpen((value) => !value)}
+            aria-expanded={profileDisclosureOpen ? "true" : "false"}
+            style={language === "ur" ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
+          >
+            <span className="settings-disclosure-label">{renderLocalizedTextNode(ui.profileSection, language)}</span>
+            <span className="settings-disclosure-icon" aria-hidden="true">{profileDisclosureOpen ? "−" : "+"}</span>
+          </button>
+          <div className="settings-disclosure-body-wrap">
+            <div className="settings-disclosure-body-clip">
           <div className="settings-disclosure-body">
             <div className="settings-item" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {}}>
               <span className="si-label">{renderLocalizedTextNode(joinLocalizedText("Student Name", "طالب علم", language), language)}:</span>
@@ -7569,9 +7582,22 @@ function HomeschoolApp() {
               </div>
             </div>
           </div>
-        </details>
-        <details className="settings-disclosure">
-          <summary>{renderLocalizedTextNode(ui.gradeSection, language)}</summary>
+            </div>
+          </div>
+        </div>
+        <div className={`settings-disclosure${gradeDisclosureOpen ? " open" : ""}`} data-transition-mode={transitionMode}>
+          <button
+            type="button"
+            className="settings-disclosure-toggle"
+            onClick={() => setGradeDisclosureOpen((value) => !value)}
+            aria-expanded={gradeDisclosureOpen ? "true" : "false"}
+            style={language === "ur" ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
+          >
+            <span className="settings-disclosure-label">{renderLocalizedTextNode(ui.gradeSection, language)}</span>
+            <span className="settings-disclosure-icon" aria-hidden="true">{gradeDisclosureOpen ? "−" : "+"}</span>
+          </button>
+          <div className="settings-disclosure-body-wrap">
+            <div className="settings-disclosure-body-clip">
           <div className="settings-disclosure-body">
             <div className="settings-item" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {}}>
               <span className="si-label">📚 {renderLocalizedTextNode(ui.currentGrade, language)}</span>
@@ -7579,7 +7605,9 @@ function HomeschoolApp() {
             </div>
             <div className="grade-grid">{GRADES.map(g => <button key={g.id} className={"grade-btn " + (g.id === grade ? "active" : "")} onClick={() => setGrade(g.id)}>{g.id}</button>)}</div>
           </div>
-        </details>
+            </div>
+          </div>
+        </div>
         {SettingsPanel ? (
           <SettingsPanel
             currentVersion={currentVersion}
