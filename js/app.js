@@ -6289,20 +6289,22 @@ function HomeschoolApp() {
             </div>
           )}
         </div>
-        <div className="tutor-chat">
-          {chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}
-          {chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}
-          <div ref={chatEndRef} />
-        </div>
-        <div className="chat-input-area">
-          <input
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && sendChat()}
-            placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : configuredAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں..." : "Ask your tutor anything...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Add an AI key in Settings first...")}
-            disabled={chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok}
-          />
-          <button onClick={sendChat} disabled={chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok}>➤</button>
+        <div className="tutor-shell">
+          <div className="tutor-chat">
+            {chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}
+            {chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="chat-input-area">
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && sendChat()}
+              placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : configuredAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں..." : "Ask your tutor anything...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Add an AI key in Settings first...")}
+              disabled={chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok}
+            />
+            <button onClick={sendChat} disabled={chatLoading || configuredAiProviderIds.length === 0 || !aiBrowserCapability.ok}>➤</button>
+          </div>
         </div>
       </>)}
 
