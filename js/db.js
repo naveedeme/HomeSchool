@@ -999,14 +999,87 @@
         })
         .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
 
+      const weeklyBuckets = new Map();
+      const categoryMap = new Map();
+      const sinceLast7 = new Date(today);
+      sinceLast7.setHours(0, 0, 0, 0);
+      sinceLast7.setDate(sinceLast7.getDate() - 6);
+      const recentHistory = historyRows.filter((row) => (row.reviewedAt || 0) >= sinceLast7.getTime());
+      const uniqueReviewedLast7 = new Set(recentHistory.map((row) => row.cardId)).size;
+
+      historyRows.forEach((row) => {
+        const reviewedAt = Number(row.reviewedAt) || now;
+        const weekStart = new Date(reviewedAt);
+        weekStart.setHours(0, 0, 0, 0);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        const weekKey = weekStart.toISOString().slice(0, 10);
+        const weekRow = weeklyBuckets.get(weekKey) || {
+          weekKey,
+          label: weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+          reviews: 0,
+          correct: 0,
+          cards: new Set(),
+        };
+        weekRow.reviews += 1;
+        weekRow.correct += row.correct ? 1 : 0;
+        if (row.cardId) weekRow.cards.add(row.cardId);
+        weeklyBuckets.set(weekKey, weekRow);
+
+        const categoryKey = `${row.subject || "general"}__${row.section || "general"}`;
+        const categoryRow = categoryMap.get(categoryKey) || {
+          id: categoryKey,
+          subject: row.subject || "general",
+          section: row.section || "general",
+          sectionLabel: row.sectionLabel || titleCase(row.section || "general"),
+          reviews: 0,
+          correct: 0,
+          cards: new Set(),
+        };
+        categoryRow.reviews += 1;
+        categoryRow.correct += row.correct ? 1 : 0;
+        if (row.cardId) categoryRow.cards.add(row.cardId);
+        categoryMap.set(categoryKey, categoryRow);
+      });
+
+      const wordGrowth = Array.from(weeklyBuckets.values())
+        .sort((left, right) => String(left.weekKey).localeCompare(String(right.weekKey)))
+        .slice(-8)
+        .map((bucket) => ({
+          weekKey: bucket.weekKey,
+          label: bucket.label,
+          reviews: bucket.reviews,
+          uniqueCards: bucket.cards.size,
+          accuracy: bucket.reviews ? Math.round((bucket.correct / bucket.reviews) * 100) : 0,
+        }));
+
+      const categoryPerformance = Array.from(categoryMap.values())
+        .map((entry) => ({
+          id: entry.id,
+          subject: entry.subject,
+          section: entry.section,
+          sectionLabel: entry.sectionLabel,
+          reviews: entry.reviews,
+          uniqueCards: entry.cards.size,
+          accuracy: entry.reviews ? Math.round((entry.correct / entry.reviews) * 100) : 0,
+        }))
+        .sort((left, right) => {
+          if (right.reviews !== left.reviews) return right.reviews - left.reviews;
+          return left.sectionLabel.localeCompare(right.sectionLabel);
+        })
+        .slice(0, 10);
+
       return {
         heatmap,
         weakWords,
         favoriteWords,
         notedWords,
         customLists,
+        wordGrowth,
+        categoryPerformance,
         totals: {
           reviewedLastPeriod: historyRows.length,
+          reviewedLast7: recentHistory.length,
+          uniqueReviewedLast7,
           favorites: favoriteWords.length,
           notedWords: notedWords.length,
           customLists: customLists.length,

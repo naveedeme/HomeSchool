@@ -132,20 +132,33 @@
     return window.HomeSchoolPrefs?.ttsEnabled !== false;
   }
 
+  function getSpeechConfig(lang = "en", voices = window.speechSynthesis?.getVoices?.() || []) {
+    const prefs = window.HomeSchoolPrefs || {};
+    const langKey = lang === "ur" ? "ur" : "en";
+    const defaultRate = langKey === "ur" ? 0.8 : 0.85;
+    const configuredRate = Number(prefs.ttsRate?.[langKey]);
+    const rate = Number.isFinite(configuredRate) && configuredRate > 0 ? configuredRate : defaultRate;
+    const configuredVoice = String(prefs.ttsVoiceSelections?.[langKey] || "").trim();
+    const fallbackVoice = langKey === "ur"
+      ? voices.find((voice) => voice.lang.startsWith("ur")) || voices.find((voice) => voice.lang.startsWith("hi")) || voices.find((voice) => voice.lang.includes("IN"))
+      : voices.find((voice) => voice.lang.startsWith("en") && voice.localService) || voices.find((voice) => voice.lang.startsWith("en"));
+    const voice = configuredVoice
+      ? voices.find((entry) => (entry.voiceURI || entry.name) === configuredVoice) || fallbackVoice
+      : fallbackVoice;
+    return {
+      lang: voice?.lang || (langKey === "ur" ? "ur-PK" : "en-US"),
+      rate,
+      voice: voice || null,
+    };
+  }
+
   function speakText(text, lang = "en") {
     if (!isTtsEnabled()) return null;
     const utterance = new SpeechSynthesisUtterance(ttsClean(text));
-    const voices = window.speechSynthesis.getVoices();
-    const isUrdu = lang === "ur";
-    utterance.lang = isUrdu ? "ur-PK" : "en-US";
-    utterance.rate = isUrdu ? 0.8 : 0.85;
-    const preferredVoice = isUrdu
-      ? voices.find((voice) => voice.lang.startsWith("ur")) || voices.find((voice) => voice.lang.startsWith("hi")) || voices.find((voice) => voice.lang.includes("IN"))
-      : voices.find((voice) => voice.lang.startsWith("en") && voice.localService) || voices.find((voice) => voice.lang.startsWith("en"));
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
-      utterance.lang = preferredVoice.lang;
-    }
+    const speechConfig = getSpeechConfig(lang, window.speechSynthesis.getVoices());
+    utterance.lang = speechConfig.lang;
+    utterance.rate = speechConfig.rate;
+    if (speechConfig.voice) utterance.voice = speechConfig.voice;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
     return utterance;
@@ -565,5 +578,6 @@
     validateProgressImport,
     downloadJson,
     isTtsEnabled,
+    getSpeechConfig,
   };
 })();
