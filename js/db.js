@@ -3,13 +3,14 @@
 
   const db = new Dexie("HomeSchoolDB");
 
-  db.version(3).stores({
+  db.version(4).stores({
     coreData: "id, type, subject, grade, lessonKey",
     posData: "id, type, day",
     tensesData: "id, main, sub",
     vocabData: "id, day",
     mathChapters: "id, key, grade",
     quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt",
     progress: "id, subject, lessonId, grade, completed, timestamp",
     userStats: "id",
     dataVersion: "id, version, lastUpdated",
@@ -30,6 +31,11 @@
       lastScore: 0,
       lastTotal: 0,
       lastTimeSpent: null,
+      totalReviews: 0,
+      correctReviews: 0,
+      retentionRate: 0,
+      reviewStreak: 0,
+      lastReviewDate: null,
       updatedAt: Date.now(),
     };
   }
@@ -101,6 +107,119 @@
     return fingerprints;
   }
 
+  function titleCase(value) {
+    return String(value || "")
+      .replace(/([A-Z])/g, " $1")
+      .replace(/[-_]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+  }
+
+  function looksLikeSentence(value) {
+    const text = String(value || "").trim();
+    return text.length > 12 && /\s/.test(text) && /[.!?۔؟]$/.test(text);
+  }
+
+  function normalizeWordToken(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/[^a-z\s-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function getContextKeywords(prompt, word = {}) {
+    const baseTokens = normalizeWordToken(prompt)
+      .split(" ")
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 4);
+    const extraTokens = [word.comp, word.super, word.opposite]
+      .flatMap((value) => normalizeWordToken(value).split(" "))
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 4);
+    return Array.from(new Set([...baseTokens, ...extraTokens]));
+  }
+
+  function isRelevantContext(example, keywords) {
+    const text = normalizeWordToken(example);
+    if (!text || !keywords.length) return false;
+    return keywords.some((keyword) => text.includes(keyword));
+  }
+
+  function buildReviewCards(dataLoader) {
+    const reviewCards = [];
+    const now = Date.now();
+
+    const addWordEntries = (sectionId, sectionLabel, entries) => {
+      (entries || []).forEach((entry) => {
+        const paragraph = entry?.paragraph || "";
+        const words = entry?.words || [];
+        const sentenceGroups = window.HomeSchoolUtils.mapSentencesToWords(
+          window.HomeSchoolUtils.splitIntoSentences(paragraph),
+          words.length,
+        );
+
+        words.forEach((word, index) => {
+          const prompt = String(word?.en || "").trim();
+          const answer = String(word?.ur || "").trim();
+          if (!prompt || !answer) return;
+          const rawMeaning = String(word?.meaning || "").trim();
+          const directExample = String(word?.example || (looksLikeSentence(rawMeaning) ? rawMeaning : "")).trim();
+          const mappedExample = (sentenceGroups[index] || []).join(" ").trim();
+          const keywords = getContextKeywords(prompt, word);
+          const contextExample = isRelevantContext(directExample, keywords)
+            ? directExample
+            : isRelevantContext(mappedExample, keywords)
+              ? mappedExample
+              : "";
+          const idSeed = [
+            sectionId,
+            entry?.day ?? "",
+            prompt.toLowerCase(),
+            answer,
+            rawMeaning,
+            word?.opposite || "",
+            index,
+          ].join("|");
+          reviewCards.push({
+            id: `review_${sectionId}_${simpleHash(idSeed)}`,
+            subject: "english",
+            section: sectionId,
+            sectionLabel,
+            prompt,
+            answer,
+            meaning: contextExample === directExample && directExample ? "" : rawMeaning,
+            opposite: word?.opposite || "",
+            oppositeUr: word?.oppositeUr || "",
+            example: contextExample,
+            day: entry?.day ?? null,
+            box: 0,
+            intervalDays: 0,
+            dueAt: now,
+            totalReviews: 0,
+            correctReviews: 0,
+            mastered: false,
+            lapses: 0,
+            lastReviewedAt: null,
+            createdAt: now,
+            updatedAt: now,
+          });
+        });
+      });
+    };
+
+    Object.entries(dataLoader.POS_DATA || {}).forEach(([sectionId, entries]) => {
+      addWordEntries(sectionId, titleCase(sectionId), entries);
+    });
+    addWordEntries("vocabulary", "Vocabulary", dataLoader.VOCABULARY_DATA || []);
+    addWordEntries("adverbPhrases", "Adverb Phrases", dataLoader.ADVERB_PHRASES_DATA || []);
+    addWordEntries("opposites", "Opposites", dataLoader.ENGLISH_OPPOSITES_DATA || []);
+
+    return reviewCards;
+  }
+
   async function getMainStats() {
     return (await db.userStats.get("main")) || getStatsDefaults();
   }
@@ -137,6 +256,7 @@
   function normalizeImportPayload(progressData) {
     return {
       progress: Array.isArray(progressData?.progress) ? progressData.progress : [],
+      reviewCards: Array.isArray(progressData?.reviewCards) ? progressData.reviewCards : [],
       userStats: Array.isArray(progressData?.userStats) ? progressData.userStats : [],
       customizations: Array.isArray(progressData?.customizations) ? progressData.customizations : [],
       dataVersion: progressData?.dataVersion ?? null,
@@ -165,6 +285,8 @@
     const incoming = incomingStats || getStatsDefaults();
     const totalQuizzes = Math.max(existing.totalQuizzes || 0, incoming.totalQuizzes || 0);
     const totalScore = Math.max(existing.totalScore || 0, incoming.totalScore || 0);
+    const totalReviews = Math.max(existing.totalReviews || 0, incoming.totalReviews || 0);
+    const correctReviews = Math.max(existing.correctReviews || 0, incoming.correctReviews || 0);
     const updatedAt = Math.max(existing.updatedAt || 0, incoming.updatedAt || 0);
     const latest = (incoming.updatedAt || 0) >= (existing.updatedAt || 0) ? incoming : existing;
     return {
@@ -176,6 +298,11 @@
       totalQuizzes,
       totalScore,
       averageScore: totalQuizzes ? totalScore / totalQuizzes : 0,
+      totalReviews,
+      correctReviews,
+      retentionRate: totalReviews ? Math.round((correctReviews / totalReviews) * 100) : 0,
+      reviewStreak: Math.max(existing.reviewStreak || 0, incoming.reviewStreak || 0),
+      lastReviewDate: latest.lastReviewDate || existing.lastReviewDate || incoming.lastReviewDate || null,
       badges: Array.from(new Set([...(existing.badges || []), ...(incoming.badges || [])])),
       subjectsCompleted: Array.from(new Set([...(existing.subjectsCompleted || []), ...(incoming.subjectsCompleted || [])])),
       updatedAt,
@@ -245,9 +372,14 @@
         db.vocabData,
         db.mathChapters,
         db.quizData,
+        db.reviewCards,
         db.dataVersion,
       ],
       async () => {
+        const existingReviewCards = targetSubjects.includes("english")
+          ? await db.reviewCards.toArray()
+          : [];
+
         if (!options.subjects) {
           await db.coreData.clear();
           await db.posData.clear();
@@ -255,6 +387,7 @@
           await db.vocabData.clear();
           await db.mathChapters.clear();
           await db.quizData.clear();
+          await db.reviewCards.clear();
           await db.dataVersion.clear();
         } else {
           await db.coreData.where("subject").anyOf(targetSubjects).delete();
@@ -263,6 +396,7 @@
             await db.posData.clear();
             await db.tensesData.clear();
             await db.vocabData.clear();
+            await db.reviewCards.clear();
           }
           if (targetSubjects.includes("math")) {
             await db.mathChapters.clear();
@@ -304,6 +438,27 @@
               ...item,
               id: `vocab_${item.day}`,
             })));
+          }
+
+          const reviewCards = buildReviewCards(dataLoader);
+          if (reviewCards.length > 0) {
+            const existingReviewMap = new Map(existingReviewCards.map((card) => [card.id, card]));
+            await db.reviewCards.bulkPut(reviewCards.map((card) => {
+              const existing = existingReviewMap.get(card.id);
+              return existing ? {
+                ...card,
+                box: existing.box || 0,
+                intervalDays: existing.intervalDays || 0,
+                dueAt: existing.dueAt || card.dueAt,
+                totalReviews: existing.totalReviews || 0,
+                correctReviews: existing.correctReviews || 0,
+                mastered: existing.mastered || false,
+                lapses: existing.lapses || 0,
+                lastReviewedAt: existing.lastReviewedAt || null,
+                createdAt: existing.createdAt || card.createdAt,
+                updatedAt: Date.now(),
+              } : card;
+            }));
           }
         }
 
@@ -411,6 +566,40 @@
       return records[0]?.questions || [];
     },
 
+    async getDueReviewCards(limit = 20, now = Date.now()) {
+      const max = Math.max(1, Number(limit) || 20);
+      return db.reviewCards
+        .where("dueAt")
+        .belowOrEqual(now)
+        .sortBy("dueAt")
+        .then((rows) => rows.slice(0, max));
+    },
+
+    async getReviewStats(options = {}) {
+      const masteryThreshold = Math.max(3, Number(options.masteryThreshold) || 5);
+      const now = Number(options.now) || Date.now();
+      const todayKey = window.HomeSchoolUtils.getDayKey(now);
+      const cards = await db.reviewCards.toArray();
+      const stats = await getMainStats();
+      const due = cards.filter((card) => (card.dueAt || 0) <= now).length;
+      const mastered = cards.filter((card) => (card.box || 0) >= masteryThreshold).length;
+      const learning = cards.filter((card) => (card.box || 0) > 0 && (card.box || 0) < masteryThreshold).length;
+      const newCards = cards.filter((card) => !card.lastReviewedAt).length;
+      const reviewedToday = cards.filter((card) => card.lastReviewedAt && window.HomeSchoolUtils.getDayKey(card.lastReviewedAt) === todayKey).length;
+      const retentionRate = stats.totalReviews ? Math.round(((stats.correctReviews || 0) / stats.totalReviews) * 100) : 0;
+
+      return {
+        total: cards.length,
+        due,
+        mastered,
+        learning,
+        newCards,
+        reviewedToday,
+        retentionRate,
+        reviewStreak: stats.reviewStreak || 0,
+      };
+    },
+
     async getPosData(type) {
       return db.posData.where("type").equals(type).sortBy("day");
     },
@@ -490,6 +679,62 @@
       return nextStats;
     },
 
+    async saveReviewResult(cardId, rating, options = {}) {
+      const card = await db.reviewCards.get(cardId);
+      if (!card) return null;
+
+      const scheduleUpdate = window.HomeSchoolUtils.getReviewScheduleUpdate(card, rating, options);
+      const today = new Date().toDateString();
+      const stats = await getMainStats();
+      const reviewStreakMode = window.HomeSchoolUtils.calculateStreak(stats.lastReviewDate, today);
+      const nextReviewStreak = reviewStreakMode === "increment"
+        ? (stats.reviewStreak || 0) + 1
+        : reviewStreakMode === null
+          ? (stats.reviewStreak || 0)
+          : 1;
+      const streakBonus = reviewStreakMode === "increment" ? 8 : 0;
+      const totalReviews = (stats.totalReviews || 0) + 1;
+      const correctReviews = (stats.correctReviews || 0) + (scheduleUpdate.correct ? 1 : 0);
+
+      const nextCard = {
+        ...card,
+        box: scheduleUpdate.box,
+        intervalDays: scheduleUpdate.intervalDays,
+        dueAt: scheduleUpdate.dueAt,
+        mastered: scheduleUpdate.mastered,
+        lapses: scheduleUpdate.lapses,
+        lastReviewedAt: Date.now(),
+        totalReviews: (card.totalReviews || 0) + 1,
+        correctReviews: (card.correctReviews || 0) + (scheduleUpdate.correct ? 1 : 0),
+        updatedAt: Date.now(),
+      };
+
+      const xpGain = scheduleUpdate.xpGain + streakBonus;
+      const nextStats = {
+        ...stats,
+        id: "main",
+        xp: (stats.xp || 0) + xpGain,
+        totalReviews,
+        correctReviews,
+        retentionRate: totalReviews ? Math.round((correctReviews / totalReviews) * 100) : 0,
+        reviewStreak: nextReviewStreak,
+        lastReviewDate: today,
+        updatedAt: Date.now(),
+      };
+
+      await db.transaction("rw", [db.reviewCards, db.userStats], async () => {
+        await db.reviewCards.put(nextCard);
+        await db.userStats.put(nextStats);
+      });
+
+      return {
+        card: nextCard,
+        stats: nextStats,
+        xpGain,
+        streakBonus,
+      };
+    },
+
     async getUserStats() {
       return getMainStats();
     },
@@ -538,6 +783,7 @@
       return {
         exportedAt: new Date().toISOString(),
         progress: await db.progress.toArray(),
+        reviewCards: await db.reviewCards.toArray(),
         userStats: await db.userStats.toArray(),
         customizations: await db.customizations.toArray(),
         dataVersion: metadata?.version ?? null,
@@ -549,31 +795,37 @@
       const mode = options.mode === "merge" ? "merge" : "replace";
       const normalized = normalizeImportPayload(progressData);
 
-      await db.transaction("rw", [db.progress, db.userStats, db.customizations], async () => {
+      await db.transaction("rw", [db.progress, db.reviewCards, db.userStats, db.customizations], async () => {
         if (mode === "replace") {
           await db.progress.clear();
+          await db.reviewCards.clear();
           await db.userStats.clear();
           await db.customizations.clear();
 
           if (normalized.progress.length > 0) await db.progress.bulkPut(normalized.progress);
+          if (normalized.reviewCards.length > 0) await db.reviewCards.bulkPut(normalized.reviewCards);
           if (normalized.userStats.length > 0) await db.userStats.bulkPut(normalized.userStats);
           if (normalized.customizations.length > 0) await db.customizations.bulkPut(normalized.customizations);
           return;
         }
 
         const existingProgress = await db.progress.toArray();
+        const existingReviewCards = await db.reviewCards.toArray();
         const existingUserStats = await db.userStats.toArray();
         const existingCustomizations = await db.customizations.toArray();
 
         const mergedProgress = mergeUniqueRows(existingProgress, normalized.progress);
+        const mergedReviewCards = mergeUniqueRows(existingReviewCards, normalized.reviewCards);
         const mergedCustomizations = mergeCustomizationRows(existingCustomizations, normalized.customizations);
         const mergedMain = mergeMainStats(existingUserStats.find((row) => row.id === "main"), normalized.userStats.find((row) => row.id === "main"));
 
         await db.progress.clear();
+        await db.reviewCards.clear();
         await db.userStats.clear();
         await db.customizations.clear();
 
         if (mergedProgress.length > 0) await db.progress.bulkPut(mergedProgress);
+        if (mergedReviewCards.length > 0) await db.reviewCards.bulkPut(mergedReviewCards);
         if (mergedCustomizations.length > 0) await db.customizations.bulkPut(mergedCustomizations);
         if (mergedMain) await db.userStats.put(mergedMain);
       });
@@ -586,9 +838,14 @@
     },
 
     async resetProgress() {
-      await db.transaction("rw", [db.progress, db.userStats], async () => {
+      await db.transaction("rw", [db.progress, db.reviewCards, db.userStats], async () => {
         await db.progress.clear();
+        await db.reviewCards.clear();
         await db.userStats.clear();
+        if (window.HomeSchoolData) {
+          const reviewCards = buildReviewCards(window.HomeSchoolData);
+          if (reviewCards.length > 0) await db.reviewCards.bulkPut(reviewCards);
+        }
       });
     },
 
@@ -608,6 +865,7 @@
         vocabData: await db.vocabData.toArray(),
         mathChapters: await db.mathChapters.toArray(),
         quizData: await db.quizData.toArray(),
+        reviewCards: await db.reviewCards.toArray(),
         progress: await db.progress.toArray(),
         userStats: await db.userStats.toArray(),
         customizations: await db.customizations.toArray(),
@@ -623,6 +881,7 @@
         vocabData: await db.vocabData.count(),
         mathChapters: await db.mathChapters.count(),
         quizData: await db.quizData.count(),
+        reviewCards: await db.reviewCards.count(),
         progress: await db.progress.count(),
         customizations: await db.customizations.count(),
       };

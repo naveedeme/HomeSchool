@@ -10,7 +10,7 @@
     getLessons,
     getQuiz
   } = window.HomeSchoolData;
-  const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport } = window.HomeSchoolUtils;
+  const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme } = window.HomeSchoolUtils;
   const { SettingsPanel } = window.HomeSchoolSettings || {};
   const {
     adverbs: ADVERBS_DATA,
@@ -66,10 +66,36 @@
       textToSpeech: "Text to Speech",
       enabled: "Enabled",
       disabled: "Disabled",
+      themeMode: "Theme Mode",
+      themeSystem: "System",
+      themeDark: "Dark",
+      themeLight: "Light",
+      dailyReviewCap: "Daily Review Cap",
+      dailyReviewCapHelp: "Limits how many review cards appear in one study session.",
       interfaceLanguage: "Interface Language",
       languageEnglish: "English",
       languageUrdu: "\u0627\u0631\u062F\u0648",
       languageBilingual: "Bilingual",
+      review: "Review",
+      reviewReady: "Review Queue",
+      dueReviews: "Due Reviews",
+      reviewedToday: "Reviewed Today",
+      learningWords: "Learning Words",
+      masteredWords: "Mastered Words",
+      retentionRate: "Retention Rate",
+      startReview: "Start Review",
+      noReviewsDue: "No reviews are due right now.",
+      revealAnswer: "Reveal Answer",
+      reviewAgain: "Again",
+      reviewGood: "Good",
+      reviewEasy: "Easy",
+      reviewComplete: "Review session complete",
+      reviewEarnedXp: "Review XP earned",
+      reviewHint: "Use spaced repetition to keep tricky words fresh.",
+      reviewSection: "Section",
+      reviewExample: "Context",
+      reviewReadyNow: "ready now",
+      reviewTotalDue: "total due",
       importNow: "Import this backup now?",
       replacePrompt: "Press OK to replace your current saved progress.\nPress Cancel to merge this backup with your current progress.",
       importSuccessReplace: "Progress imported successfully and replaced your current saved progress.",
@@ -128,10 +154,36 @@
       textToSpeech: "\u0622\u0648\u0627\u0632 \u0645\u06CC\u06BA \u067E\u0691\u06BE\u0646\u0627",
       enabled: "\u0622\u0646",
       disabled: "\u0622\u0641",
+      themeMode: "\u062A\u06BE\u06CC\u0645 \u0645\u0648\u0688",
+      themeSystem: "\u0633\u0633\u0679\u0645",
+      themeDark: "\u06AF\u06C1\u0631\u0627",
+      themeLight: "\u06C1\u0644\u06A9\u0627",
+      dailyReviewCap: "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u062D\u062F",
+      dailyReviewCapHelp: "\u0627\u06CC\u06A9 \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06CC\u06BA \u0632\u06CC\u0627\u062F\u06C1 \u0633\u06D2 \u0632\u06CC\u0627\u062F\u06C1 \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F \u0637\u06D2 \u06A9\u0631\u06CC\u06BA\u06D4",
       interfaceLanguage: "\u0627\u0646\u0679\u0631\u0641\u06CC\u0633 \u0632\u0628\u0627\u0646",
       languageEnglish: "English",
       languageUrdu: "\u0627\u0631\u062F\u0648",
       languageBilingual: "Bilingual",
+      review: "\u0631\u06CC\u0648\u06CC\u0648",
+      reviewReady: "\u0631\u06CC\u0648\u06CC\u0648 \u0642\u0637\u0627\u0631",
+      dueReviews: "\u0628\u0627\u0642\u06CC \u0631\u06CC\u0648\u06CC\u0648\u0632",
+      reviewedToday: "\u0622\u062C \u062F\u06C1\u0631\u0627\u0626\u06D2 \u06AF\u0626\u06D2",
+      learningWords: "\u0633\u06CC\u06A9\u06BE\u06D2 \u062C\u0627 \u0631\u06C1\u06D2 \u0627\u0644\u0641\u0627\u0638",
+      masteredWords: "\u0645\u06C1\u0627\u0631\u062A \u06CC\u0627\u0641\u062A\u06C1 \u0627\u0644\u0641\u0627\u0638",
+      retentionRate: "\u06CC\u0627\u062F \u0631\u06A9\u06BE\u0646\u06D2 \u06A9\u06CC \u0634\u0631\u062D",
+      startReview: "\u0631\u06CC\u0648\u06CC\u0648 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA",
+      noReviewsDue: "\u0627\u0633 \u0648\u0642\u062A \u06A9\u0648\u0626\u06CC \u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u0642\u06CC \u0646\u06C1\u06CC\u06BA\u06D4",
+      revealAnswer: "\u062C\u0648\u0627\u0628 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA",
+      reviewAgain: "\u062F\u0648\u0628\u0627\u0631\u06C1",
+      reviewGood: "\u0627\u0686\u06BE\u0627",
+      reviewEasy: "\u0622\u0633\u0627\u0646",
+      reviewComplete: "\u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644",
+      reviewEarnedXp: "\u062D\u0627\u0635\u0644 \u0634\u062F\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u0627\u06CC\u06A9\u0633 \u067E\u06CC",
+      reviewHint: "\u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638 \u06A9\u0648 \u06CC\u0627\u062F \u0631\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u067E\u06CC\u0633\u0688 \u0631\u06CC\u067E\u06CC\u0679\u06CC\u0634\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4",
+      reviewSection: "\u0633\u06CC\u06A9\u0634\u0646",
+      reviewExample: "\u0645\u062B\u0627\u0644",
+      reviewReadyNow: "\u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631",
+      reviewTotalDue: "\u06A9\u0644 \u0628\u0627\u0642\u06CC",
       importNow: "\u06A9\u06CC\u0627 \u06CC\u06C1 \u0628\u06CC\u06A9 \u0627\u067E \u0627\u0628\u06BE\u06CC \u0627\u0645\u067E\u0648\u0631\u0679 \u06A9\u0631\u0646\u0627 \u06C1\u06D2\u061F",
       replacePrompt: "\u0627\u0648\u06A9\u06D2 \u062F\u0628\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0645\u0648\u062C\u0648\u062F\u06C1 \u067E\u06CC\u0634 \u0631\u0641\u062A \u0628\u062F\u0644 \u062F\u06CC \u062C\u0627\u0626\u06D2\u06D4\n\u06A9\u06CC\u0646\u0633\u0644 \u062F\u0628\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u06CC\u06A9 \u0627\u067E \u06A9\u0648 \u0645\u0648\u062C\u0648\u062F\u06C1 \u067E\u06CC\u0634 \u0631\u0641\u062A \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0645\u0644\u0627 \u062F\u06CC\u0627 \u062C\u0627\u0626\u06D2\u06D4",
       importSuccessReplace: "\u067E\u06CC\u0634 \u0631\u0641\u062A \u06A9\u0627\u0645\u06CC\u0627\u0628\u06CC \u0633\u06D2 \u0627\u0645\u067E\u0648\u0631\u0679 \u06C1\u0648 \u06AF\u0626\u06CC \u0627\u0648\u0631 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0688\u06CC\u0679\u0627 \u0628\u062F\u0644 \u062F\u06CC\u0627 \u06AF\u06CC\u0627\u06D4",
@@ -195,6 +247,9 @@
   }
   function getScopedDayTitle(day, enTitle, urTitle, language) {
     return joinLocalizedText(`Day ${day} - ${enTitle}`, `${urTitle} \u062F\u0646 ${day}`, language);
+  }
+  function formatNumberLabel(value) {
+    return Number(value || 0).toLocaleString();
   }
   function renderLocalizedTextNode(text, language, urStyle = {}) {
     if (typeof text !== "string") return text;
@@ -1896,8 +1951,10 @@ ${marker} `);
     const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
     const persistCustomizationRef = useRef(null);
     const [language, setLanguage] = useState(stored?.language || "bilingual");
+    const [themeMode, setThemeMode] = useState(stored?.themeMode || "system");
     const ui = getUiText(language);
     const [daySectionOverrides, setDaySectionOverrides] = useState(stored?.daySectionOverrides || {});
+    const [dailyReviewCap, setDailyReviewCap] = useState(Math.max(5, Math.min(50, Number(stored?.dailyReviewCap) || 20)));
     const [grade, setGrade] = useState(stored?.grade || null);
     const [studentName, setStudentName] = useState(stored?.studentName || "");
     const [studentNameUr, setStudentNameUr] = useState(stored?.studentNameUr || "");
@@ -1942,12 +1999,87 @@ ${marker} `);
     const [updateAvailable, setUpdateAvailable] = useState(false);
     const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
     const [storageLabel, setStorageLabel] = useState("IndexedDB + localStorage");
+    const [reviewStats, setReviewStats] = useState({ due: 0, mastered: 0, learning: 0, reviewedToday: 0, retentionRate: 0, reviewStreak: 0 });
+    const [reviewQueue, setReviewQueue] = useState([]);
+    const [reviewIdx, setReviewIdx] = useState(0);
+    const [reviewReveal, setReviewReveal] = useState(false);
+    const [reviewSessionDone, setReviewSessionDone] = useState(false);
+    const [reviewSessionXp, setReviewSessionXp] = useState(0);
+    const [reviewLoading, setReviewLoading] = useState(false);
+    const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "system"));
     const chatEndRef = useRef(null);
     const [dbLoaded, setDbLoaded] = useState(false);
     const [dbPos, setDbPos] = useState({});
     const [dbTenses, setDbTenses] = useState({});
     const [dbVocab, setDbVocab] = useState([]);
     const daySectionSettings = buildDaySectionSettings(language, daySectionOverrides);
+    const activeReviewCard = reviewQueue[reviewIdx] || null;
+    const isLightTheme = resolvedTheme === "light";
+    const revealToggleBaseStyle = {
+      padding: "6px 14px",
+      borderRadius: 8,
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: "pointer",
+      minWidth: 56,
+      transition: "all 0.2s"
+    };
+    const getRevealToggleStyle = (revealed, isUr) => ({
+      ...revealToggleBaseStyle,
+      border: `1.5px solid ${revealed ? "#22C55E55" : "var(--border)"}`,
+      background: revealed ? isLightTheme ? "rgba(34,197,94,0.14)" : "rgba(34,197,94,0.12)" : "var(--bg-elevated)",
+      color: revealed ? isLightTheme ? "#166534" : "#22C55E" : "var(--text-secondary)",
+      fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif"
+    });
+    const revealedAnswerButtonStyle = {
+      background: isLightTheme ? "rgba(34,197,94,0.16)" : "rgba(34,197,94,0.14)",
+      border: "1px solid rgba(34,197,94,0.35)",
+      color: isLightTheme ? "#14532D" : "#ECFDF5",
+      padding: "8px 14px"
+    };
+    const getRevealedAnswerTextStyle = (isUrdu) => ({
+      fontSize: 16,
+      lineHeight: 1.5,
+      whiteSpace: "pre-line",
+      fontFamily: isUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit",
+      direction: isUrdu ? "rtl" : "ltr",
+      textAlign: isUrdu ? "right" : "left",
+      color: isLightTheme ? "#14532D" : void 0
+    });
+    const wordProblemAnswerPanelStyle = {
+      background: isLightTheme ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.08)",
+      border: "1px solid rgba(34,197,94,0.28)",
+      borderRadius: 12,
+      padding: "10px 10px 6px"
+    };
+    const wordProblemAnswerLabelStyle = (isUr) => ({
+      color: isLightTheme ? "#166534" : "#86EFAC",
+      fontSize: 12,
+      fontWeight: 800,
+      letterSpacing: 0.4,
+      textTransform: "uppercase",
+      marginBottom: 6,
+      fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif"
+    });
+    const reviewRevealCardStyle = {
+      padding: "16px 18px",
+      borderRadius: 16,
+      background: "var(--bg-elevated)",
+      border: "1px solid var(--border)",
+      marginBottom: 16
+    };
+    const reviewAnswerButtonStyle = {
+      marginBottom: 8,
+      background: isLightTheme ? "rgba(34,197,94,0.14)" : "rgba(51,65,85,0.5)",
+      border: "1px solid var(--border)",
+      color: "var(--text-primary)"
+    };
+    const reviewExampleButtonStyle = {
+      marginBottom: 0,
+      background: isLightTheme ? "rgba(2,132,199,0.08)" : "rgba(30,41,59,0.42)",
+      border: "1px solid var(--border)",
+      color: "var(--text-secondary)"
+    };
     const refreshStorageLabel = useCallback(async () => {
       if (!window.HomeSchoolDB) {
         setStorageLabel(await getStorageEstimateLabel("localStorage"));
@@ -1958,13 +2090,22 @@ ${marker} `);
       const lessonCountLabel = joinLocalizedText(`${stats.coreData || 0} lessons`, `${stats.coreData || 0} \u0627\u0633\u0628\u0627\u0642`, language);
       setStorageLabel(`${quotaLabel} \u2022 ${lessonCountLabel}`);
     }, [language]);
+    const refreshReviewStats = useCallback(async () => {
+      if (!window.HomeSchoolDB) return;
+      const nextStats = await window.HomeSchoolDB.getReviewStats();
+      setReviewStats(nextStats);
+    }, []);
     if (!persistCustomizationRef.current) {
       persistCustomizationRef.current = debounce(async (nextPayload) => {
         if (!window.HomeSchoolDB) return;
         try {
           await window.HomeSchoolDB.saveCustomization("preferences", {
             ttsEnabled: nextPayload.ttsEnabled,
-            language: nextPayload.language
+            language: nextPayload.language,
+            themeMode: nextPayload.themeMode
+          });
+          await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
+            dailyReviewCap: nextPayload.dailyReviewCap
           });
           await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
           await window.HomeSchoolDB.saveCustomization("studentProfile", {
@@ -1993,11 +2134,18 @@ ${marker} `);
           if (voc.length > 0) setDbVocab(voc);
           const customizations = await window.HomeSchoolDB.getCustomizationsMap();
           const storedPreferences = customizations.preferences?.data || null;
+          const storedReviewPreferences = customizations.reviewPreferences?.data || null;
           const storedPacing = customizations.daySectionPacing?.data || null;
           const storedProfile = customizations.studentProfile?.data || null;
           if (storedPreferences) {
             if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
             if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
+            if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
+          }
+          if (storedReviewPreferences) {
+            if (typeof storedReviewPreferences.dailyReviewCap !== "undefined") {
+              setDailyReviewCap(Math.max(5, Math.min(50, Number(storedReviewPreferences.dailyReviewCap) || 20)));
+            }
           }
           if (storedPacing && typeof storedPacing === "object") {
             setDaySectionOverrides(storedPacing);
@@ -2026,6 +2174,7 @@ ${marker} `);
             setCurrentVersion(versionState.newVersion || window.HomeSchoolData.VERSION);
             setUpdateAvailable(versionState.needsUpdate);
           }
+          await refreshReviewStats();
         } catch (e) {
           console.log("DB load fallback to inline:", e);
         }
@@ -2067,23 +2216,41 @@ ${marker} `);
       if (dbLoaded) refreshStorageLabel();
     }, [dbLoaded, language]);
     useEffect(() => {
-      window.HomeSchoolPrefs = { ttsEnabled, language };
+      const applyTheme = () => {
+        const nextResolvedTheme = applyThemeMode(themeMode);
+        setResolvedTheme(nextResolvedTheme);
+      };
+      applyTheme();
+      if (themeMode !== "system" || !window.matchMedia) return void 0;
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
+      const handleChange = () => applyTheme();
+      if (mediaQuery.addEventListener) mediaQuery.addEventListener("change", handleChange);
+      else if (mediaQuery.addListener) mediaQuery.addListener(handleChange);
+      return () => {
+        if (mediaQuery.removeEventListener) mediaQuery.removeEventListener("change", handleChange);
+        else if (mediaQuery.removeListener) mediaQuery.removeListener(handleChange);
+      };
+    }, [themeMode]);
+    useEffect(() => {
+      window.HomeSchoolPrefs = { ttsEnabled, language, themeMode, resolvedTheme };
       if (!ttsEnabled) window.speechSynthesis.cancel();
-    }, [ttsEnabled, language]);
+    }, [ttsEnabled, language, themeMode, resolvedTheme]);
     useEffect(() => {
       if (!dbLoaded || !window.HomeSchoolDB) return;
       persistCustomizationRef.current?.({
         ttsEnabled,
         language,
+        themeMode,
+        dailyReviewCap,
         daySectionOverrides,
         grade,
         studentName,
         studentNameUr
       });
-    }, [dbLoaded, ttsEnabled, language, daySectionOverrides, grade, studentName, studentNameUr]);
+    }, [dbLoaded, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, grade, studentName, studentNameUr]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides });
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
+      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides });
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides]);
     useEffect(() => {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
@@ -2191,11 +2358,12 @@ Version: ${result.newVersion}`);
       setDbTenses(tens);
       setDbVocab(voc);
       await refreshStorageLabel();
+      await refreshReviewStats();
       setCurrentVersion(window.HomeSchoolData.VERSION);
       setUpdateAvailable(false);
       alert(result.refreshed ? `${ui.refreshSuccess} (${formatDate(Date.now())})${result.changedSubjects?.length ? `
 ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refreshNoChanges);
-    }, [refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
+    }, [refreshReviewStats, refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
     const handleExportProgress = useCallback(async () => {
       const dbProgress = window.HomeSchoolDB ? await window.HomeSchoolDB.exportProgress() : null;
       downloadJson(`homeschool-progress-${Date.now()}.json`, {
@@ -2214,11 +2382,13 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           xp,
           ttsEnabled,
           language,
+          themeMode,
+          dailyReviewCap,
           daySectionOverrides
         },
         dbProgress
       });
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides]);
     const handleImportProgress = useCallback(async (event) => {
       const file = event?.target?.files?.[0];
       if (!file) return;
@@ -2251,6 +2421,8 @@ ${validation.errors.join("\n")}`);
           if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
           if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
           if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
+          if (typeof nextState.themeMode !== "undefined") setThemeMode(nextState.themeMode);
+          if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
           setDaySectionOverrides(nextState.daySectionOverrides || {});
         } else {
           if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
@@ -2265,10 +2437,13 @@ ${validation.errors.join("\n")}`);
           if (typeof nextState.xp !== "undefined") setXp((current) => Math.max(current, nextState.xp));
           if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
           if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
+          if (typeof nextState.themeMode !== "undefined") setThemeMode((current) => current || nextState.themeMode);
+          if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
           if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
         }
         if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress, { mode });
         await refreshStorageLabel();
+        await refreshReviewStats();
         alert(mode === "replace" ? ui.importSuccessReplace : ui.importSuccessMerge);
       } catch (error) {
         alert(`${ui.importInvalid}
@@ -2276,7 +2451,7 @@ ${error.message || error}`);
       } finally {
         event.target.value = "";
       }
-    }, [refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
+    }, [refreshReviewStats, refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
     const handleResetProgress = useCallback(async () => {
       if (!confirm(ui.resetConfirm)) return;
       setCompletedQuizzes({});
@@ -2288,7 +2463,8 @@ ${error.message || error}`);
       setXp(0);
       setNewBadges([]);
       if (window.HomeSchoolDB) await window.HomeSchoolDB.resetProgress();
-    }, [ui.resetConfirm]);
+      await refreshReviewStats();
+    }, [refreshReviewStats, ui.resetConfirm]);
     const handleFullReset = useCallback(async () => {
       if (!confirm(ui.fullResetConfirm)) return;
       setCompletedQuizzes({});
@@ -2303,6 +2479,44 @@ ${error.message || error}`);
       localStorage.removeItem(window.HomeSchoolUtils.STORE_KEY);
       location.reload();
     }, [ui.fullResetConfirm]);
+    const handleStartReview = useCallback(async () => {
+      if (!window.HomeSchoolDB) return;
+      setReviewLoading(true);
+      try {
+        const queue = await window.HomeSchoolDB.getDueReviewCards(dailyReviewCap);
+        setReviewQueue(queue);
+        setReviewIdx(0);
+        setReviewReveal(false);
+        setReviewSessionDone(false);
+        setReviewSessionXp(0);
+        setTab("review");
+      } finally {
+        setReviewLoading(false);
+      }
+    }, [dailyReviewCap]);
+    const handleReviewResponse = useCallback(async (rating) => {
+      if (!window.HomeSchoolDB || !activeReviewCard) return;
+      const result = await window.HomeSchoolDB.saveReviewResult(activeReviewCard.id, rating);
+      if (result?.stats) {
+        setXp(result.stats.xp || 0);
+      }
+      setReviewSessionXp((current) => current + (result?.xpGain || 0));
+      setReviewReveal(false);
+      if (reviewIdx >= reviewQueue.length - 1) {
+        setReviewSessionDone(true);
+        await refreshReviewStats();
+        return;
+      }
+      setReviewIdx((current) => current + 1);
+      await refreshReviewStats();
+    }, [activeReviewCard, refreshReviewStats, reviewIdx, reviewQueue.length]);
+    const resetReviewSession = useCallback(() => {
+      setReviewQueue([]);
+      setReviewIdx(0);
+      setReviewReveal(false);
+      setReviewSessionDone(false);
+      setReviewSessionXp(0);
+    }, []);
     if (!dbLoaded) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 16 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 700, marginBottom: 8 } }, ui.loadingHome), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 13 } }, ui.loadingDb), /* @__PURE__ */ React.createElement("div", { style: { width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" } })))));
     if (!grade) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 32 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 12 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h1", { style: { fontSize: 28, fontWeight: 800, marginBottom: 4 } }, "HomeSchool"), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 14 } }, renderLocalizedTextNode(ui.tagline, language)), language === "en" ? /* @__PURE__ */ React.createElement("p", { style: { fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 } }, "\u0622\u067E \u06A9\u0627 \u0630\u0627\u062A\u06CC \u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u062A\u06BE\u06CC") : null), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, renderLocalizedTextNode(ui.yourName, language)), /* @__PURE__ */ React.createElement("input", { value: studentName, onChange: (e) => setStudentName(e.target.value), placeholder: ui.enterName, style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" } })), language !== "en" && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, renderLocalizedTextNode(ui.yourNameUr, language)), /* @__PURE__ */ React.createElement("input", { value: studentNameUr, onChange: (e) => setStudentNameUr(e.target.value), placeholder: ui.enterNameUr, style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font-ur)", fontSize: 15, outline: "none", direction: "rtl" } })), /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" } }, renderLocalizedTextNode(ui.selectGrade, language)), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn", onClick: () => setGrade(g.id) }, g.id))))));
     const goHome = () => {
@@ -2333,6 +2547,7 @@ ${error.message || error}`);
       setTenseMain("present");
       setTenseSub("simple");
       setNewBadges([]);
+      resetReviewSession();
     };
     const goBack = () => {
       window.speechSynthesis.cancel();
@@ -2376,14 +2591,18 @@ ${error.message || error}`);
         setTenseMain("present");
         setTenseSub("simple");
       } else if (selectedSubject) setSelectedSubject(null);
-      else setTab("home");
+      else if (tab === "review") {
+        resetReviewSession();
+        setTab("home");
+      } else setTab("home");
     };
     const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || mathSubIdx !== null;
-    const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "\u0642\u06CC\u062F", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "\u062D\u0631\u0648\u0641 \u062C\u0627\u0631", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "\u0635\u0641\u0627\u062A", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "\u062D\u0631\u0648\u0641 \u0639\u0637\u0641", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "\u0636\u0645\u0627\u0626\u0631", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "\u0627\u0633\u0645 \u062C\u0645\u0639", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "\u0627\u0641\u0639\u0627\u0644", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "\u0630\u062E\u06CC\u0631\u06C1 \u0627\u0644\u0641\u0627\u0638", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+    const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "\u0642\u06CC\u062F", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "\u062D\u0631\u0648\u0641 \u062C\u0627\u0631", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "\u0635\u0641\u0627\u062A", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "\u062D\u0631\u0648\u0641 \u0639\u0637\u0641", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "\u0636\u0645\u0627\u0626\u0631", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "\u0627\u0633\u0645 \u062C\u0645\u0639", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "\u0627\u0641\u0639\u0627\u0644", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "\u0630\u062E\u06CC\u0631\u06C1 \u0627\u0644\u0641\u0627\u0638", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
     const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
     const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
     const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
     const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
+    const reviewReadyNowCount = Math.min(Number(reviewStats.due || 0), Number(dailyReviewCap || 20));
     const playAll = (p) => {
       if (!isTtsEnabled()) return;
       window.speechSynthesis.cancel();
@@ -2407,7 +2626,7 @@ ${error.message || error}`);
       };
       next();
     };
-    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "app-header", style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, showBack && /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190"), /* @__PURE__ */ React.createElement("button", { className: "home-btn", onClick: goHome, title: ui.home }, "\u{1F3E0}"), /* @__PURE__ */ React.createElement("h1", { style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement("div", { className: "header-badge" }, /* @__PURE__ */ React.createElement("span", null, "\u2B50"), /* @__PURE__ */ React.createElement("span", null, xp, " XP"))), /* @__PURE__ */ React.createElement("div", { className: "content" }, tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "welcome-card" }, /* @__PURE__ */ React.createElement("h2", null, renderWelcomeGreeting(localizedNames, language), " \u{1F44B}"), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "\u0622\u062C \u06A9\u0686\u06BE \u0634\u0627\u0646\u062F\u0627\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u061F", language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag" }, renderLocalizedTextNode(ui.grade, language), " ", grade)), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} \u062F\u0646 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644!`, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "\u0627\u0633\u06CC \u0637\u0631\u062D \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u0622\u067E \u0628\u06C1\u062A \u0627\u0686\u06BE\u0627 \u06A9\u0631 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA!", language), language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("div", { className: "subject-grid" }, SUBJECTS.map((subj) => {
+    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "app-header", style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, showBack && /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190"), /* @__PURE__ */ React.createElement("button", { className: "home-btn", onClick: goHome, title: ui.home }, "\u{1F3E0}"), /* @__PURE__ */ React.createElement("h1", { style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement("div", { className: "header-badge" }, /* @__PURE__ */ React.createElement("span", null, "\u2B50"), /* @__PURE__ */ React.createElement("span", null, xp, " XP"))), /* @__PURE__ */ React.createElement("div", { className: "content" }, tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "welcome-card" }, /* @__PURE__ */ React.createElement("h2", null, renderWelcomeGreeting(localizedNames, language), " \u{1F44B}"), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "\u0622\u062C \u06A9\u0686\u06BE \u0634\u0627\u0646\u062F\u0627\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u061F", language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag" }, renderLocalizedTextNode(ui.grade, language), " ", grade)), /* @__PURE__ */ React.createElement("button", { className: "adverb-home-banner", style: { width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }, onClick: handleStartReview }, /* @__PURE__ */ React.createElement("div", { className: "banner-icon" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("div", { className: "banner-text" }, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewReady, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(language === "ur" ? `${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : language === "bilingual" ? `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due / ${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due`, language)))), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} \u062F\u0646 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644!`, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "\u0627\u0633\u06CC \u0637\u0631\u062D \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u0622\u067E \u0628\u06C1\u062A \u0627\u0686\u06BE\u0627 \u06A9\u0631 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA!", language), language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("div", { className: "subject-grid" }, SUBJECTS.map((subj) => {
       const ls = getLessons(subj.id, grade), done = ls.filter((l) => completedQuizzes[l.id]).length, pct = ls.length > 0 ? done / ls.length * 100 : 0;
       return /* @__PURE__ */ React.createElement("button", { key: subj.id, className: "subject-card", onClick: () => setSelectedSubject(subj) }, /* @__PURE__ */ React.createElement("span", { className: "subj-icon" }, subj.icon), /* @__PURE__ */ React.createElement("span", { className: "subj-name" }, subj.name), /* @__PURE__ */ React.createElement("span", { className: "subj-name-ur" }, subj.nameUr), /* @__PURE__ */ React.createElement("div", { className: "subj-progress" }, /* @__PURE__ */ React.createElement("div", { className: "subj-progress-fill", style: { width: pct + "%", background: subj.color } })));
     }))), tab === "home" && selectedSubject && !selectedLesson && !quizActive && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: selectedSubject?.id === "urdu" || isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 36 } }, selectedSubject.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, fontFamily: selectedSubject?.id === "urdu" || isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", fontFamily: selectedSubject?.id === "urdu" || isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, renderLocalizedTextNode(`${ui.grade} ${grade} \u2022 ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`, language)))), /* @__PURE__ */ React.createElement("div", { className: "lesson-list", style: selectedSubject?.id === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, getLessons(selectedSubject.id, grade).map((l, i) => {
@@ -2523,24 +2742,24 @@ ${error.message || error}`);
           const rk = ei + "_A_" + pi;
           const pc = qColors[(ei + pi + 1) % qColors.length];
           const displayP = p.replace(/(\d)̲/g, "[$1]").replace(/(\d)\u0332/g, "[$1]");
-          return /* @__PURE__ */ React.createElement("div", { key: "A_" + pi, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: isUr ? 0 : 4, paddingRight: isUr ? 4 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 28, height: 28, borderRadius: 8, background: pc + "18", border: "1.5px solid " + pc + "66", color: pc, fontSize: 11, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, "A", pi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: displayP, lang: isUrduText(displayP) ? "ur" : "en" })), /* @__PURE__ */ React.createElement("button", { onClick: () => toggleReveal(rk), style: { padding: "6px 12px", borderRadius: 8, border: "1.5px solid " + (revealedEx[rk] ? "#22C55E55" : "rgba(148,163,184,0.2)"), background: revealedEx[rk] ? "rgba(34,197,94,0.12)" : "rgba(30,41,59,0.8)", color: revealedEx[rk] ? "#22C55E" : "#94A3B8", fontSize: 11, fontWeight: 700, cursor: "pointer", minWidth: 56, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", transition: "all 0.2s" } }, revealedEx[rk] ? isUr ? "\u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA" : "Hide" : isUr ? "\u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA" : "Show"), revealedEx[rk] && ex.ans && ex.ans[pi] && /* @__PURE__ */ React.createElement("div", { style: { maxWidth: "100%" } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(ex.ans[pi]), lang: isUrduText(ex.ans[pi]) ? "ur" : "en", fullWidth: false, buttonStyle: { background: "rgba(34,197,94,0.14)", border: "1px solid rgba(34,197,94,0.35)", color: "#DCFCE7", padding: "8px 14px" }, textStyle: { fontSize: 16, lineHeight: 1.5, whiteSpace: "pre-line", fontFamily: isUrduText(ex.ans[pi]) ? "'Noto Nastaliq Urdu',serif" : "inherit", direction: isUrduText(ex.ans[pi]) ? "rtl" : "ltr", textAlign: isUrduText(ex.ans[pi]) ? "right" : "left" } })));
+          return /* @__PURE__ */ React.createElement("div", { key: "A_" + pi, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: isUr ? 0 : 4, paddingRight: isUr ? 4 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 28, height: 28, borderRadius: 8, background: pc + "18", border: "1.5px solid " + pc + "66", color: pc, fontSize: 11, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, "A", pi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: displayP, lang: isUrduText(displayP) ? "ur" : "en" })), /* @__PURE__ */ React.createElement("button", { onClick: () => toggleReveal(rk), style: getRevealToggleStyle(revealedEx[rk], isUr) }, revealedEx[rk] ? isUr ? "\u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA" : "Hide" : isUr ? "\u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA" : "Show"), revealedEx[rk] && ex.ans && ex.ans[pi] && /* @__PURE__ */ React.createElement("div", { style: { maxWidth: "100%" } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(ex.ans[pi]), lang: isUrduText(ex.ans[pi]) ? "ur" : "en", fullWidth: false, buttonStyle: revealedAnswerButtonStyle, textStyle: getRevealedAnswerTextStyle(isUrduText(ex.ans[pi])) })));
         })), /* @__PURE__ */ React.createElement("div", { style: { background: "rgba(15,23,42,0.55)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 12, padding: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { color: "#F59E0B", fontSize: 12, fontWeight: 800, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif" } }, isUr ? "\u06A9\u0627\u0644\u0645 B" : "Column B"), /* @__PURE__ */ React.createElement("span", { style: { color: "#94A3B8", fontSize: 11, fontWeight: 700, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif" } }, isUr ? "\u0635\u062D\u06CC\u062D \u062C\u0648\u0627\u0628 \u06A9\u0627\u0644\u0645 A \u0645\u06CC\u06BA" : "Show correct from Column A")), ex.ans && matchOrder.map((originalIndex, pi) => {
           const rk = ei + "_B_" + originalIndex;
           const pc = qColors[(ei + pi + 3) % qColors.length];
           const a = ex.ans[originalIndex];
-          return /* @__PURE__ */ React.createElement("div", { key: "B_" + pi, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: isUr ? 0 : 4, paddingRight: isUr ? 4 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 28, height: 28, borderRadius: 8, background: pc + "18", border: "1.5px solid " + pc + "66", color: pc, fontSize: 11, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, "B", pi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: a, lang: isUrduText(a) ? "ur" : "en" })), /* @__PURE__ */ React.createElement("button", { onClick: () => toggleReveal(rk), style: { padding: "6px 12px", borderRadius: 8, border: "1.5px solid " + (revealedEx[rk] ? "#22C55E55" : "rgba(148,163,184,0.2)"), background: revealedEx[rk] ? "rgba(34,197,94,0.12)" : "rgba(30,41,59,0.8)", color: revealedEx[rk] ? "#22C55E" : "#94A3B8", fontSize: 11, fontWeight: 700, cursor: "pointer", minWidth: 56, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", transition: "all 0.2s" } }, revealedEx[rk] ? isUr ? "\u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA" : "Hide" : isUr ? "\u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA" : "Show"), revealedEx[rk] && ex.parts && ex.parts[originalIndex] && /* @__PURE__ */ React.createElement("div", { style: { maxWidth: "100%" } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(ex.parts[originalIndex]), lang: isUrduText(ex.parts[originalIndex]) ? "ur" : "en", fullWidth: false, buttonStyle: { background: "rgba(34,197,94,0.14)", border: "1px solid rgba(34,197,94,0.35)", color: "#DCFCE7", padding: "8px 14px" }, textStyle: { fontSize: 16, lineHeight: 1.5, whiteSpace: "pre-line", fontFamily: isUrduText(ex.parts[originalIndex]) ? "'Noto Nastaliq Urdu',serif" : "inherit", direction: isUrduText(ex.parts[originalIndex]) ? "rtl" : "ltr", textAlign: isUrduText(ex.parts[originalIndex]) ? "right" : "left" } })));
+          return /* @__PURE__ */ React.createElement("div", { key: "B_" + pi, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: isUr ? 0 : 4, paddingRight: isUr ? 4 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 28, height: 28, borderRadius: 8, background: pc + "18", border: "1.5px solid " + pc + "66", color: pc, fontSize: 11, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, "B", pi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: a, lang: isUrduText(a) ? "ur" : "en" })), /* @__PURE__ */ React.createElement("button", { onClick: () => toggleReveal(rk), style: getRevealToggleStyle(revealedEx[rk], isUr) }, revealedEx[rk] ? isUr ? "\u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA" : "Hide" : isUr ? "\u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA" : "Show"), revealedEx[rk] && ex.parts && ex.parts[originalIndex] && /* @__PURE__ */ React.createElement("div", { style: { maxWidth: "100%" } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(ex.parts[originalIndex]), lang: isUrduText(ex.parts[originalIndex]) ? "ur" : "en", fullWidth: false, buttonStyle: revealedAnswerButtonStyle, textStyle: getRevealedAnswerTextStyle(isUrduText(ex.parts[originalIndex])) })));
         }))) : ex.parts.map((p, pi) => {
           const rk = ei + "_" + pi;
           const pc = qColors[(ei + pi + 1) % qColors.length];
           const displayP = p.replace(/(\d)̲/g, "[$1]").replace(/(\d)\u0332/g, "[$1]");
           const promptVisual = getSimpleMachinePromptVisual(sub, ex, displayP);
-          return /* @__PURE__ */ React.createElement("div", { key: pi, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: isUr ? 0 : 8, paddingRight: isUr ? 8 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 28, height: 28, borderRadius: 8, background: pc + "18", border: "1.5px solid " + pc + "66", color: pc, fontSize: 11, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, String.fromCharCode(97 + pi)), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, display: "flex", alignItems: "center", gap: 8 } }, promptVisual, /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: displayP, lang: isUrduText(displayP) ? "ur" : "en" }))), /* @__PURE__ */ React.createElement("button", { onClick: () => toggleReveal(rk), style: { padding: "6px 14px", borderRadius: 8, border: "1.5px solid " + (revealedEx[rk] ? "#22C55E55" : "rgba(148,163,184,0.2)"), background: revealedEx[rk] ? "rgba(34,197,94,0.12)" : "rgba(30,41,59,0.8)", color: revealedEx[rk] ? "#22C55E" : "#94A3B8", fontSize: 11, fontWeight: 700, cursor: "pointer", minWidth: 56, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", transition: "all 0.2s" } }, revealedEx[rk] ? isUr ? "\u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA" : "Hide" : isUr ? "\u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA" : "Show"), revealedEx[rk] && ex.ans && ex.ans[pi] && /* @__PURE__ */ React.createElement("div", { style: { maxWidth: "100%" } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(ex.ans[pi]), lang: isUrduText(ex.ans[pi]) ? "ur" : "en", fullWidth: false, buttonStyle: { background: "rgba(34,197,94,0.14)", border: "1px solid rgba(34,197,94,0.35)", color: "#DCFCE7", padding: "8px 14px" }, textStyle: { fontSize: 16, lineHeight: 1.5, whiteSpace: "pre-line", fontFamily: isUrduText(ex.ans[pi]) ? "'Noto Nastaliq Urdu',serif" : "inherit", direction: isUrduText(ex.ans[pi]) ? "rtl" : "ltr", textAlign: isUrduText(ex.ans[pi]) ? "right" : "left" } })));
+          return /* @__PURE__ */ React.createElement("div", { key: pi, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, paddingLeft: isUr ? 0 : 8, paddingRight: isUr ? 8 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 28, height: 28, borderRadius: 8, background: pc + "18", border: "1.5px solid " + pc + "66", color: pc, fontSize: 11, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, String.fromCharCode(97 + pi)), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, display: "flex", alignItems: "center", gap: 8 } }, promptVisual, /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: displayP, lang: isUrduText(displayP) ? "ur" : "en" }))), /* @__PURE__ */ React.createElement("button", { onClick: () => toggleReveal(rk), style: getRevealToggleStyle(revealedEx[rk], isUr) }, revealedEx[rk] ? isUr ? "\u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA" : "Hide" : isUr ? "\u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA" : "Show"), revealedEx[rk] && ex.ans && ex.ans[pi] && /* @__PURE__ */ React.createElement("div", { style: { maxWidth: "100%" } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(ex.ans[pi]), lang: isUrduText(ex.ans[pi]) ? "ur" : "en", fullWidth: false, buttonStyle: revealedAnswerButtonStyle, textStyle: getRevealedAnswerTextStyle(isUrduText(ex.ans[pi])) })));
         }));
       }), sub.wordProblems && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 14, ...urS } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#F59E0B", fontSize: 14, marginBottom: 10, ...urS } }, isUr ? "\u{1F30D} \u0639\u0645\u0644\u06CC \u0633\u0648\u0627\u0644\u0627\u062A" : "\u{1F30D} Word Problems"), sub.wordProblems.map((wp, wi) => {
         const isObj = typeof wp === "object";
         const qText = isObj ? wp.q : wp;
         const aText = isObj ? wp.a : null;
-        return /* @__PURE__ */ React.createElement("div", { key: wi, style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", direction: isUr ? "rtl" : "ltr", alignItems: "flex-start", gap: 10 } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 32, height: 32, borderRadius: 10, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 12, fontWeight: 800, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", flexShrink: 0 } }, isUr ? "\u0645" + (wi + 1) : "W" + (wi + 1)), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: qText, lang: isUr ? "ur" : "en" }))), aText && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, marginLeft: isUr ? 0 : 42, marginRight: isUr ? 42 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.28)", borderRadius: 12, padding: "10px 10px 6px" } }, /* @__PURE__ */ React.createElement("div", { style: { color: "#86EFAC", fontSize: 12, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif" } }, isUr ? "\u2705 \u062C\u0648\u0627\u0628" : "\u2705 Answer"), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(aText), lang: isUr ? "ur" : "en", buttonStyle: { background: "rgba(34,197,94,0.16)", border: "1px solid rgba(34,197,94,0.38)", color: "#ECFDF5", marginBottom: 0 }, textStyle: { fontSize: 16, lineHeight: 1.55, whiteSpace: "pre-line" } }))));
+        return /* @__PURE__ */ React.createElement("div", { key: wi, style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", direction: isUr ? "rtl" : "ltr", alignItems: "flex-start", gap: 10 } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 32, height: 32, borderRadius: 10, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 12, fontWeight: 800, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", flexShrink: 0 } }, isUr ? "\u0645" + (wi + 1) : "W" + (wi + 1)), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: qText, lang: isUr ? "ur" : "en" }))), aText && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, marginLeft: isUr ? 0 : 42, marginRight: isUr ? 42 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: wordProblemAnswerPanelStyle }, /* @__PURE__ */ React.createElement("div", { style: wordProblemAnswerLabelStyle(isUr) }, isUr ? "\u2705 \u062C\u0648\u0627\u0628" : "\u2705 Answer"), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(aText), lang: isUr ? "ur" : "en", buttonStyle: { ...revealedAnswerButtonStyle, marginBottom: 0 }, textStyle: { ...getRevealedAnswerTextStyle(isUr), lineHeight: 1.55 } }))));
       })))), mathSubTab === "quiz" && (sub.quizGroups || sub.quiz) && (sub.quizGroups ? subQuizGroupIdx === null ? /* @__PURE__ */ React.createElement("div", { style: urS }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#F59E0B", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, isUr ? "\u{1F3AF} \u06A9\u0648\u0626\u0632 \u06A9\u06D2 \u062F\u0646" : "\u{1F3AF} Quiz Days"), sub.quizGroups.map((group, gi) => /* @__PURE__ */ React.createElement("div", { key: group.label, className: "adverb-day-card", onClick: () => setSubQuizGroupIdx(gi), style: { display: "flex", alignItems: "center", gap: 14, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 40, height: 40, borderRadius: 12, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 16, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, gi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, textAlign: isUr ? "right" : "left" } }, /* @__PURE__ */ React.createElement("h3", { style: { fontSize: 16, fontWeight: 700, margin: 0, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, group.label), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, isUr ? "\u0627\u0646 \u062F\u0646\u0648\u06BA \u06A9\u06D2 \u0633\u0648\u0627\u0644\u0627\u062A" : "Quiz questions for these days"))))) : /* @__PURE__ */ React.createElement("div", { style: urS }, activeQuizGroup && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 14, ...urS } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#F59E0B", margin: 0, ...urS } }, activeQuizGroup.label), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: { width: "auto", marginTop: 0, padding: "10px 14px", background: "linear-gradient(135deg,#475569,#334155)" }, onClick: () => setSubQuizGroupIdx(null) }, isUr ? "\u2190 \u062F\u0646\u0648\u06BA \u06A9\u06CC \u0641\u06C1\u0631\u0633\u062A" : "\u2190 Back to Day Groups"))), quizToRender && /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx + "_" + subQuizGroupIdx, questions: quizToRender, isUrdu: selectedSubject?.id === "urdu" })) : /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx, questions: sub.quiz, isUrdu: selectedSubject?.id === "urdu" })));
     })(), tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && !selectedVocabDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "lesson-detail" }, /* @__PURE__ */ React.createElement("h2", null, selectedLesson.title), /* @__PURE__ */ React.createElement("p", null, selectedLesson.content)), /* @__PURE__ */ React.createElement("div", { className: "tts-hint" }, "\u{1F50A} Tap English \u2192 English voice | Tap Urdu \u2192 Urdu voice | 55 Days of Vocabulary"), pacedVocab.map((day) => /* @__PURE__ */ React.createElement("div", { key: day.day, className: "adverb-day-card", onClick: () => setSelectedVocabDay(day) }, /* @__PURE__ */ React.createElement("span", { className: "day-num" }, getDayDisplayLabel(day.day, language)), /* @__PURE__ */ React.createElement("h3", null, day.words.map((w) => w.en).join(" \u2022 ")), /* @__PURE__ */ React.createElement("div", { className: "word-preview" }, day.words.map((w, i) => /* @__PURE__ */ React.createElement("span", { key: i, className: "word-chip" }, w.ur)))))), tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && selectedVocabDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tts-hint" }, "\u{1F50A} Tap English word \u2192 English voice | Tap Urdu \u2192 Urdu voice | Tap sentence \u2192 hear it!"), /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section" }, /* @__PURE__ */ React.createElement("h3", null, "\u{1F4DD} Day ", selectedVocabDay.day, " \u2014 Words"), selectedVocabDay.words.map((w, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { marginBottom: 10 } }, /* @__PURE__ */ React.createElement(WordRow, { en: w.en, ur: w.ur }), /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" } }, "\u2192 ", w.meaning)))), /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section" }, /* @__PURE__ */ React.createElement("h3", null, "\u{1F4D6} Practice Paragraph"), selectedVocabDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s2, i) => {
       const sentenceHighlights = selectedVocabDay.words.map((w) => w.en).filter(Boolean).filter((word) => s2.toLowerCase().includes(normalizeHighlightTerm(word)));
@@ -2588,7 +2807,13 @@ ${error.message || error}`);
     } }, "\u{1F4DA} More Lessons"))), tab === "progress" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DD}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, totalQuizzesDone), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Quizzes Done", "\u0645\u06A9\u0645\u0644 \u06A9\u0648\u0626\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3AF}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, totalQuizzesDone > 0 ? Math.round(totalScore / (totalQuizzesDone * 4) * 100) : 0, "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Avg Score", "\u0627\u0648\u0633\u0637 \u0627\u0633\u06A9\u0648\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, streak), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Day Streak", "\u062F\u0646\u0648\u06BA \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, xp), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Total XP", "\u06A9\u0644 \u0627\u06CC\u06A9\u0633 \u067E\u06CC", language), language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subject Progress", "\u0645\u0636\u0627\u0645\u06CC\u0646 \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A", language), language)), SUBJECTS.map((subj) => {
       const ls = getLessons(subj.id, grade), done = ls.filter((l) => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round(done / ls.length * 100) : 0;
       return /* @__PURE__ */ React.createElement("div", { key: subj.id, className: "progress-bar-container" }, /* @__PURE__ */ React.createElement("div", { className: "progress-bar-label" }, /* @__PURE__ */ React.createElement("span", null, subj.icon, " ", subj.name), /* @__PURE__ */ React.createElement("span", { style: { color: "var(--text-muted)" } }, done, "/", ls.length)), /* @__PURE__ */ React.createElement("div", { className: "progress-bar-track" }, /* @__PURE__ */ React.createElement("div", { className: "progress-bar-fill", style: { width: pct + "%", background: subj.color } })));
-    })), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("input", { value: chatInput, onChange: (e) => setChatInput(e.target.value), onKeyDown: (e) => e.key === "Enter" && sendChat(), placeholder: "Ask your tutor anything..." }), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading }, "\u27A4"))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderLocalizedTextNode(ui.grade, language), " ", grade)), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, renderLocalizedTextNode(ui.changeGrade, language)), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn " + (g.id === grade ? "active" : ""), onClick: () => setGrade(g.id) }, g.id))), SettingsPanel ? /* @__PURE__ */ React.createElement(
+    })), tab === "review" && /* @__PURE__ */ React.createElement(React.Fragment, null, !activeReviewCard && !reviewSessionDone && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F552}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.due || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.dueReviews, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2705"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.reviewedToday || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.reviewedToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.learning || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.learningWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.retentionRate || 0), "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.retentionRate, language)))), /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { textAlign: isUrduUi(language) ? "right" : "left", direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h2", null, renderLocalizedTextNode(ui.reviewReady, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHint, language)), /* @__PURE__ */ React.createElement("button", { className: "start-quiz-btn", onClick: handleStartReview, disabled: reviewLoading }, reviewLoading ? "..." : `\u{1F9E0} ${ui.startReview}`), reviewStats.due === 0 && /* @__PURE__ */ React.createElement("p", { style: { marginTop: 12, color: "var(--text-muted)" } }, renderLocalizedTextNode(ui.noReviewsDue, language)))), activeReviewCard && !reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(joinLocalizedText(`Card ${reviewIdx + 1} of ${reviewQueue.length}`, `\u06A9\u0627\u0631\u0688 ${reviewIdx + 1} \u0627\u0632 ${reviewQueue.length}`, language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activeReviewCard.sectionLabel)), /* @__PURE__ */ React.createElement("h2", { style: { marginBottom: 18 } }, activeReviewCard.prompt), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "grade-btn active", style: { minWidth: 130 }, onClick: () => window.HomeSchoolUtils.speakText(activeReviewCard.prompt, "en") }, "\u{1F50A} ", renderLocalizedTextNode(joinLocalizedText("Speak", "\u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "grade-btn", style: { minWidth: 170 }, onClick: () => setReviewReveal((value) => !value) }, renderLocalizedTextNode(ui.revealAnswer, language))), reviewReveal && /* @__PURE__ */ React.createElement("div", { style: reviewRevealCardStyle }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.answer, lang: "ur", fullWidth: true, buttonStyle: reviewAnswerButtonStyle, textStyle: { fontSize: 24 } }), activeReviewCard.meaning && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, activeReviewCard.meaning), (activeReviewCard.opposite || activeReviewCard.oppositeUr) && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, renderLocalizedTextNode(joinLocalizedText(`Opposite: ${activeReviewCard.opposite} / ${activeReviewCard.oppositeUr}`, `\u0645\u062A\u0636\u0627\u062F: ${activeReviewCard.oppositeUr} / ${activeReviewCard.opposite}`, language), language)), activeReviewCard.example && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 6, color: "var(--text-secondary)", fontWeight: 700 } }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.reviewExample, language), ":")), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.example, lang: "en", fullWidth: true, buttonStyle: reviewExampleButtonStyle, textStyle: { fontSize: 16, lineHeight: 1.6 } }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => handleReviewResponse("again") }, renderLocalizedTextNode(ui.reviewAgain, language)), /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: { borderColor: "#22C55E55", color: "#22C55E" }, onClick: () => handleReviewResponse("good") }, renderLocalizedTextNode(ui.reviewGood, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => handleReviewResponse("easy") }, renderLocalizedTextNode(ui.reviewEasy, language)))), reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "quiz-result" }, /* @__PURE__ */ React.createElement("div", { className: "result-emoji" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("h2", null, renderLocalizedTextNode(ui.reviewComplete, language)), /* @__PURE__ */ React.createElement("p", { className: "score-text" }, renderLocalizedTextNode(ui.reviewEarnedXp, language)), /* @__PURE__ */ React.createElement("div", { className: "score-big high" }, "+", reviewSessionXp), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => {
+      resetReviewSession();
+      setTab("home");
+    } }, renderLocalizedTextNode(ui.home, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => {
+      resetReviewSession();
+      handleStartReview();
+    } }, renderLocalizedTextNode(ui.startReview, language))))), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("input", { value: chatInput, onChange: (e) => setChatInput(e.target.value), onKeyDown: (e) => e.key === "Enter" && sendChat(), placeholder: "Ask your tutor anything..." }), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading }, "\u27A4"))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-item" }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderLocalizedTextNode(ui.grade, language), " ", grade)), /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { marginTop: 20 } }, renderLocalizedTextNode(ui.changeGrade, language)), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn " + (g.id === grade ? "active" : ""), onClick: () => setGrade(g.id) }, g.id))), SettingsPanel ? /* @__PURE__ */ React.createElement(
       SettingsPanel,
       {
         currentVersion,
@@ -2605,11 +2830,15 @@ ${error.message || error}`);
         ttsEnabled,
         language,
         onLanguageChange: setLanguage,
+        themeMode,
+        onThemeModeChange: setThemeMode,
+        dailyReviewCap,
+        onDailyReviewCapChange: setDailyReviewCap,
         daySectionSettings,
         onDaySectionChange: handleDaySectionChange,
         labels: ui
       }
-    ) : null)), /* @__PURE__ */ React.createElement("div", { className: "bottom-nav" }, [{ id: "home", icon: "\u{1F3E0}", label: ui.home }, { id: "progress", icon: "\u{1F4CA}", label: ui.progress }, { id: "badges", icon: "\u{1F3C6}", label: ui.badges }, { id: "tutor", icon: "\u{1F916}", label: ui.tutor }, { id: "settings", icon: "\u2699\uFE0F", label: ui.settings }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, className: "nav-item " + (tab === item.id ? "active" : ""), style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
+    ) : null)), /* @__PURE__ */ React.createElement("div", { className: "bottom-nav" }, [{ id: "home", icon: "\u{1F3E0}", label: ui.home }, { id: "progress", icon: "\u{1F4CA}", label: ui.progress }, { id: "review", icon: "\u{1F9E0}", label: ui.review }, { id: "badges", icon: "\u{1F3C6}", label: ui.badges }, { id: "tutor", icon: "\u{1F916}", label: ui.tutor }, { id: "settings", icon: "\u2699\uFE0F", label: ui.settings }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, className: "nav-item " + (tab === item.id ? "active" : ""), style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
       if (item.id === "home") {
         goHome();
         return;
@@ -2637,6 +2866,7 @@ ${error.message || error}`);
       setPosTab("adverbs");
       setTenseMain("present");
       setTenseSub("simple");
+      if (item.id !== "review") resetReviewSession();
     } }, /* @__PURE__ */ React.createElement("span", { className: "nav-icon" }, item.icon), renderLocalizedTextNode(item.label, language)))))));
   }
   window.HomeSchoolAppModule = { HomeschoolApp };

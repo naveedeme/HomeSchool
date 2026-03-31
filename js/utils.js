@@ -230,6 +230,77 @@
     }
   }
 
+  function getResolvedTheme(preference = "system") {
+    if (preference === "light" || preference === "dark") return preference;
+    try {
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  }
+
+  function applyThemeMode(preference = "system") {
+    const resolvedTheme = getResolvedTheme(preference);
+    const root = document.documentElement;
+    root.setAttribute("data-theme", resolvedTheme);
+    root.style.colorScheme = resolvedTheme;
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) {
+      themeMeta.setAttribute("content", resolvedTheme === "light" ? "#F8FAFC" : "#0F172A");
+    }
+    return resolvedTheme;
+  }
+
+  function getDayKey(value = Date.now()) {
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toDateString();
+  }
+
+  const REVIEW_INTERVALS = [0, 1, 2, 4, 7, 14, 30, 60, 120];
+
+  function getReviewScheduleUpdate(card, rating, options = {}) {
+    const now = Number(options.now) || Date.now();
+    const masteryThreshold = Math.max(3, Number(options.masteryThreshold) || 5);
+    const currentBox = Math.max(0, Number(card?.box) || 0);
+    const normalizedRating = ["again", "good", "easy"].includes(rating) ? rating : "good";
+
+    let nextBox = currentBox;
+    let intervalDays = 0;
+    let dueAt = now;
+    let xpGain = 10;
+    let correct = false;
+
+    if (normalizedRating === "again") {
+      nextBox = Math.max(0, currentBox - 1);
+      intervalDays = 0;
+      dueAt = now + (10 * 60 * 1000);
+      xpGain = 5;
+    } else if (normalizedRating === "easy") {
+      nextBox = Math.min(masteryThreshold, Math.max(2, currentBox + 2));
+      intervalDays = REVIEW_INTERVALS[Math.min(nextBox, REVIEW_INTERVALS.length - 1)] || 30;
+      dueAt = now + (intervalDays * 24 * 60 * 60 * 1000);
+      xpGain = 20;
+      correct = true;
+    } else {
+      nextBox = Math.min(masteryThreshold, Math.max(1, currentBox + 1));
+      intervalDays = REVIEW_INTERVALS[Math.min(nextBox, REVIEW_INTERVALS.length - 1)] || 14;
+      dueAt = now + (intervalDays * 24 * 60 * 60 * 1000);
+      xpGain = 12;
+      correct = true;
+    }
+
+    return {
+      rating: normalizedRating,
+      box: nextBox,
+      intervalDays,
+      dueAt,
+      mastered: nextBox >= masteryThreshold,
+      xpGain,
+      correct,
+      lapses: normalizedRating === "again" ? (Number(card?.lapses) || 0) + 1 : (Number(card?.lapses) || 0),
+    };
+  }
+
   function regroupDayEntries(entries, itemsPerDay) {
     const list = Array.isArray(entries) ? entries : [];
     if (!list.length) return [];
@@ -317,11 +388,15 @@
     }
 
     const progress = payload.dbProgress?.progress;
+    const reviewCards = payload.dbProgress?.reviewCards;
     const userStats = payload.dbProgress?.userStats;
     const customizations = payload.dbProgress?.customizations;
 
     if (typeof progress !== "undefined" && !Array.isArray(progress)) {
       errors.push("Progress rows must be an array.");
+    }
+    if (typeof reviewCards !== "undefined" && !Array.isArray(reviewCards)) {
+      errors.push("Review cards must be an array.");
     }
     if (typeof userStats !== "undefined" && !Array.isArray(userStats)) {
       errors.push("User stats rows must be an array.");
@@ -355,6 +430,7 @@
     debounce,
     chunkArray,
     splitIntoSentences,
+    mapSentencesToWords,
     ttsClean,
     speakText,
     calculateXP,
@@ -362,6 +438,10 @@
     checkBadges,
     formatDate,
     formatBytes,
+    getResolvedTheme,
+    applyThemeMode,
+    getDayKey,
+    getReviewScheduleUpdate,
     getStorageEstimateLabel,
     regroupDayEntries,
     regroupSentencePairs,

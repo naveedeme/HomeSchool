@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const DATA_VERSION = 3;
+  const DATA_VERSION = 5;
 
   const DATA_MANIFEST = {
     math: { grades: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
@@ -12,6 +12,22 @@
   };
 
   const DATA_CHANGELOG = [
+    {
+      version: 5,
+      date: "2026-03-31",
+      changes: [
+        "Stopped review cards from showing unrelated fallback context when source day paragraphs do not match the current word.",
+        "Clarified review due counts so they read as counts instead of looking like times.",
+      ],
+    },
+    {
+      version: 4,
+      date: "2026-03-31",
+      changes: [
+        "Fixed spaced-repetition review examples so each word keeps its own aligned context sentence.",
+        "Added theme mode preferences and review queue controls to settings.",
+      ],
+    },
     {
       version: 3,
       date: "2026-03-31",

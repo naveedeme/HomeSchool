@@ -10,7 +10,7 @@ const {
   getLessons,
   getQuiz,
 } = window.HomeSchoolData;
-const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport } = window.HomeSchoolUtils;
+const { loadState, saveState, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme } = window.HomeSchoolUtils;
 const { SettingsPanel } = window.HomeSchoolSettings || {};
 const {
   adverbs: ADVERBS_DATA,
@@ -67,10 +67,36 @@ const UI_TEXT = {
     textToSpeech: "Text to Speech",
     enabled: "Enabled",
     disabled: "Disabled",
+    themeMode: "Theme Mode",
+    themeSystem: "System",
+    themeDark: "Dark",
+    themeLight: "Light",
+    dailyReviewCap: "Daily Review Cap",
+    dailyReviewCapHelp: "Limits how many review cards appear in one study session.",
     interfaceLanguage: "Interface Language",
     languageEnglish: "English",
     languageUrdu: "اردو",
     languageBilingual: "Bilingual",
+    review: "Review",
+    reviewReady: "Review Queue",
+    dueReviews: "Due Reviews",
+    reviewedToday: "Reviewed Today",
+    learningWords: "Learning Words",
+    masteredWords: "Mastered Words",
+    retentionRate: "Retention Rate",
+    startReview: "Start Review",
+    noReviewsDue: "No reviews are due right now.",
+    revealAnswer: "Reveal Answer",
+    reviewAgain: "Again",
+    reviewGood: "Good",
+    reviewEasy: "Easy",
+    reviewComplete: "Review session complete",
+    reviewEarnedXp: "Review XP earned",
+    reviewHint: "Use spaced repetition to keep tricky words fresh.",
+    reviewSection: "Section",
+    reviewExample: "Context",
+    reviewReadyNow: "ready now",
+    reviewTotalDue: "total due",
     importNow: "Import this backup now?",
     replacePrompt: "Press OK to replace your current saved progress.\nPress Cancel to merge this backup with your current progress.",
     importSuccessReplace: "Progress imported successfully and replaced your current saved progress.",
@@ -129,10 +155,36 @@ const UI_TEXT = {
     textToSpeech: "آواز میں پڑھنا",
     enabled: "آن",
     disabled: "آف",
+    themeMode: "تھیم موڈ",
+    themeSystem: "سسٹم",
+    themeDark: "گہرا",
+    themeLight: "ہلکا",
+    dailyReviewCap: "روزانہ ریویو حد",
+    dailyReviewCapHelp: "ایک ریویو سیشن میں زیادہ سے زیادہ کارڈز کی تعداد طے کریں۔",
     interfaceLanguage: "انٹرفیس زبان",
     languageEnglish: "English",
     languageUrdu: "اردو",
     languageBilingual: "Bilingual",
+    review: "ریویو",
+    reviewReady: "ریویو قطار",
+    dueReviews: "باقی ریویوز",
+    reviewedToday: "آج دہرائے گئے",
+    learningWords: "سیکھے جا رہے الفاظ",
+    masteredWords: "مہارت یافتہ الفاظ",
+    retentionRate: "یاد رکھنے کی شرح",
+    startReview: "ریویو شروع کریں",
+    noReviewsDue: "اس وقت کوئی ریویو باقی نہیں۔",
+    revealAnswer: "جواب دکھائیں",
+    reviewAgain: "دوبارہ",
+    reviewGood: "اچھا",
+    reviewEasy: "آسان",
+    reviewComplete: "ریویو سیشن مکمل",
+    reviewEarnedXp: "حاصل شدہ ریویو ایکس پی",
+    reviewHint: "مشکل الفاظ کو یاد رکھنے کے لیے اسپیسڈ ریپیٹیشن استعمال کریں۔",
+    reviewSection: "سیکشن",
+    reviewExample: "مثال",
+    reviewReadyNow: "ابھی تیار",
+    reviewTotalDue: "کل باقی",
     importNow: "کیا یہ بیک اپ ابھی امپورٹ کرنا ہے؟",
     replacePrompt: "اوکے دبائیں تاکہ موجودہ پیش رفت بدل دی جائے۔\nکینسل دبائیں تاکہ بیک اپ کو موجودہ پیش رفت کے ساتھ ملا دیا جائے۔",
     importSuccessReplace: "پیش رفت کامیابی سے امپورٹ ہو گئی اور موجودہ ڈیٹا بدل دیا گیا۔",
@@ -205,6 +257,10 @@ function getDayDisplayLabel(day, language) {
 
 function getScopedDayTitle(day, enTitle, urTitle, language) {
   return joinLocalizedText(`Day ${day} - ${enTitle}`, `${urTitle} دن ${day}`, language);
+}
+
+function formatNumberLabel(value) {
+  return Number(value || 0).toLocaleString();
 }
 
 function renderLocalizedTextNode(text, language, urStyle = {}) {
@@ -3284,8 +3340,10 @@ function HomeschoolApp() {
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
   const persistCustomizationRef = useRef(null);
   const [language, setLanguage] = useState(stored?.language || "bilingual");
+  const [themeMode, setThemeMode] = useState(stored?.themeMode || "system");
   const ui = getUiText(language);
   const [daySectionOverrides, setDaySectionOverrides] = useState(stored?.daySectionOverrides || {});
+  const [dailyReviewCap, setDailyReviewCap] = useState(Math.max(5, Math.min(50, Number(stored?.dailyReviewCap) || 20)));
   const [grade, setGrade] = useState(stored?.grade || null);
   const [studentName, setStudentName] = useState(stored?.studentName || "");
   const [studentNameUr, setStudentNameUr] = useState(stored?.studentNameUr || "");
@@ -3330,6 +3388,14 @@ function HomeschoolApp() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [storageLabel, setStorageLabel] = useState("IndexedDB + localStorage");
+  const [reviewStats, setReviewStats] = useState({ due: 0, mastered: 0, learning: 0, reviewedToday: 0, retentionRate: 0, reviewStreak: 0 });
+  const [reviewQueue, setReviewQueue] = useState([]);
+  const [reviewIdx, setReviewIdx] = useState(0);
+  const [reviewReveal, setReviewReveal] = useState(false);
+  const [reviewSessionDone, setReviewSessionDone] = useState(false);
+  const [reviewSessionXp, setReviewSessionXp] = useState(0);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "system"));
   const chatEndRef = useRef(null);
 
   // ─── DB-backed data state ───
@@ -3338,6 +3404,73 @@ function HomeschoolApp() {
   const [dbTenses, setDbTenses] = useState({});
   const [dbVocab, setDbVocab] = useState([]);
   const daySectionSettings = buildDaySectionSettings(language, daySectionOverrides);
+  const activeReviewCard = reviewQueue[reviewIdx] || null;
+  const isLightTheme = resolvedTheme === "light";
+  const revealToggleBaseStyle = {
+    padding: "6px 14px",
+    borderRadius: 8,
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer",
+    minWidth: 56,
+    transition: "all 0.2s",
+  };
+  const getRevealToggleStyle = (revealed, isUr) => ({
+    ...revealToggleBaseStyle,
+    border: `1.5px solid ${revealed ? "#22C55E55" : "var(--border)"}`,
+    background: revealed ? (isLightTheme ? "rgba(34,197,94,0.14)" : "rgba(34,197,94,0.12)") : "var(--bg-elevated)",
+    color: revealed ? (isLightTheme ? "#166534" : "#22C55E") : "var(--text-secondary)",
+    fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif",
+  });
+  const revealedAnswerButtonStyle = {
+    background: isLightTheme ? "rgba(34,197,94,0.16)" : "rgba(34,197,94,0.14)",
+    border: "1px solid rgba(34,197,94,0.35)",
+    color: isLightTheme ? "#14532D" : "#ECFDF5",
+    padding: "8px 14px",
+  };
+  const getRevealedAnswerTextStyle = (isUrdu) => ({
+    fontSize: 16,
+    lineHeight: 1.5,
+    whiteSpace: "pre-line",
+    fontFamily: isUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit",
+    direction: isUrdu ? "rtl" : "ltr",
+    textAlign: isUrdu ? "right" : "left",
+    color: isLightTheme ? "#14532D" : undefined,
+  });
+  const wordProblemAnswerPanelStyle = {
+    background: isLightTheme ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.08)",
+    border: "1px solid rgba(34,197,94,0.28)",
+    borderRadius: 12,
+    padding: "10px 10px 6px",
+  };
+  const wordProblemAnswerLabelStyle = (isUr) => ({
+    color: isLightTheme ? "#166534" : "#86EFAC",
+    fontSize: 12,
+    fontWeight: 800,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginBottom: 6,
+    fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif",
+  });
+  const reviewRevealCardStyle = {
+    padding: "16px 18px",
+    borderRadius: 16,
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    marginBottom: 16,
+  };
+  const reviewAnswerButtonStyle = {
+    marginBottom: 8,
+    background: isLightTheme ? "rgba(34,197,94,0.14)" : "rgba(51,65,85,0.5)",
+    border: "1px solid var(--border)",
+    color: "var(--text-primary)",
+  };
+  const reviewExampleButtonStyle = {
+    marginBottom: 0,
+    background: isLightTheme ? "rgba(2,132,199,0.08)" : "rgba(30,41,59,0.42)",
+    border: "1px solid var(--border)",
+    color: "var(--text-secondary)",
+  };
 
   const refreshStorageLabel = useCallback(async () => {
     if (!window.HomeSchoolDB) {
@@ -3350,6 +3483,12 @@ function HomeschoolApp() {
     setStorageLabel(`${quotaLabel} • ${lessonCountLabel}`);
   }, [language]);
 
+  const refreshReviewStats = useCallback(async () => {
+    if (!window.HomeSchoolDB) return;
+    const nextStats = await window.HomeSchoolDB.getReviewStats();
+    setReviewStats(nextStats);
+  }, []);
+
   if (!persistCustomizationRef.current) {
     persistCustomizationRef.current = debounce(async (nextPayload) => {
       if (!window.HomeSchoolDB) return;
@@ -3357,6 +3496,10 @@ function HomeschoolApp() {
         await window.HomeSchoolDB.saveCustomization("preferences", {
           ttsEnabled: nextPayload.ttsEnabled,
           language: nextPayload.language,
+          themeMode: nextPayload.themeMode,
+        });
+        await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
+          dailyReviewCap: nextPayload.dailyReviewCap,
         });
         await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
         await window.HomeSchoolDB.saveCustomization("studentProfile", {
@@ -3384,11 +3527,18 @@ function HomeschoolApp() {
         if (voc.length > 0) setDbVocab(voc);
         const customizations = await window.HomeSchoolDB.getCustomizationsMap();
         const storedPreferences = customizations.preferences?.data || null;
+        const storedReviewPreferences = customizations.reviewPreferences?.data || null;
         const storedPacing = customizations.daySectionPacing?.data || null;
         const storedProfile = customizations.studentProfile?.data || null;
         if (storedPreferences) {
           if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
           if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
+          if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
+        }
+        if (storedReviewPreferences) {
+          if (typeof storedReviewPreferences.dailyReviewCap !== "undefined") {
+            setDailyReviewCap(Math.max(5, Math.min(50, Number(storedReviewPreferences.dailyReviewCap) || 20)));
+          }
         }
         if (storedPacing && typeof storedPacing === "object") {
           setDaySectionOverrides(storedPacing);
@@ -3417,6 +3567,7 @@ function HomeschoolApp() {
           setCurrentVersion(versionState.newVersion || window.HomeSchoolData.VERSION);
           setUpdateAvailable(versionState.needsUpdate);
         }
+        await refreshReviewStats();
       } catch(e) { console.log("DB load fallback to inline:", e); }
       setDbLoaded(true);
     })();
@@ -3459,23 +3610,41 @@ function HomeschoolApp() {
     if (dbLoaded) refreshStorageLabel();
   }, [dbLoaded, language]);
   useEffect(() => {
-    window.HomeSchoolPrefs = { ttsEnabled, language };
+    const applyTheme = () => {
+      const nextResolvedTheme = applyThemeMode(themeMode);
+      setResolvedTheme(nextResolvedTheme);
+    };
+    applyTheme();
+    if (themeMode !== "system" || !window.matchMedia) return undefined;
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
+    const handleChange = () => applyTheme();
+    if (mediaQuery.addEventListener) mediaQuery.addEventListener("change", handleChange);
+    else if (mediaQuery.addListener) mediaQuery.addListener(handleChange);
+    return () => {
+      if (mediaQuery.removeEventListener) mediaQuery.removeEventListener("change", handleChange);
+      else if (mediaQuery.removeListener) mediaQuery.removeListener(handleChange);
+    };
+  }, [themeMode]);
+  useEffect(() => {
+    window.HomeSchoolPrefs = { ttsEnabled, language, themeMode, resolvedTheme };
     if (!ttsEnabled) window.speechSynthesis.cancel();
-  }, [ttsEnabled, language]);
+  }, [ttsEnabled, language, themeMode, resolvedTheme]);
   useEffect(() => {
     if (!dbLoaded || !window.HomeSchoolDB) return;
     persistCustomizationRef.current?.({
       ttsEnabled,
       language,
+      themeMode,
+      dailyReviewCap,
       daySectionOverrides,
       grade,
       studentName,
       studentNameUr,
     });
-  }, [dbLoaded, ttsEnabled, language, daySectionOverrides, grade, studentName, studentNameUr]);
+  }, [dbLoaded, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides, grade, studentName, studentNameUr]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
+    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides });
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
   useEffect(() => {
     setSelectedAdverbDay(null);
@@ -3567,12 +3736,13 @@ function HomeschoolApp() {
     setDbTenses(tens);
     setDbVocab(voc);
     await refreshStorageLabel();
+    await refreshReviewStats();
     setCurrentVersion(window.HomeSchoolData.VERSION);
     setUpdateAvailable(false);
     alert(result.refreshed
       ? `${ui.refreshSuccess} (${formatDate(Date.now())})${result.changedSubjects?.length ? `\n${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}`
       : ui.refreshNoChanges);
-  }, [refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
+  }, [refreshReviewStats, refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
 
   const handleExportProgress = useCallback(async () => {
     const dbProgress = window.HomeSchoolDB ? await window.HomeSchoolDB.exportProgress() : null;
@@ -3592,11 +3762,13 @@ function HomeschoolApp() {
         xp,
         ttsEnabled,
         language,
+        themeMode,
+        dailyReviewCap,
         daySectionOverrides,
       },
       dbProgress,
     });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, daySectionOverrides]);
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, language, themeMode, dailyReviewCap, daySectionOverrides]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
@@ -3629,6 +3801,8 @@ function HomeschoolApp() {
         if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
         if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
         if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
+        if (typeof nextState.themeMode !== "undefined") setThemeMode(nextState.themeMode);
+        if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
         setDaySectionOverrides(nextState.daySectionOverrides || {});
       } else {
         if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
@@ -3643,17 +3817,20 @@ function HomeschoolApp() {
         if (typeof nextState.xp !== "undefined") setXp((current) => Math.max(current, nextState.xp));
         if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
         if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
+        if (typeof nextState.themeMode !== "undefined") setThemeMode((current) => current || nextState.themeMode);
+        if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
         if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
       }
       if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress, { mode });
       await refreshStorageLabel();
+      await refreshReviewStats();
       alert(mode === "replace" ? ui.importSuccessReplace : ui.importSuccessMerge);
     } catch (error) {
       alert(`${ui.importInvalid}\n${error.message || error}`);
     } finally {
       event.target.value = "";
     }
-  }, [refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
+  }, [refreshReviewStats, refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
 
   const handleResetProgress = useCallback(async () => {
     if (!confirm(ui.resetConfirm)) return;
@@ -3666,7 +3843,8 @@ function HomeschoolApp() {
     setXp(0);
     setNewBadges([]);
     if (window.HomeSchoolDB) await window.HomeSchoolDB.resetProgress();
-  }, [ui.resetConfirm]);
+    await refreshReviewStats();
+  }, [refreshReviewStats, ui.resetConfirm]);
 
   const handleFullReset = useCallback(async () => {
     if (!confirm(ui.fullResetConfirm)) return;
@@ -3682,6 +3860,47 @@ function HomeschoolApp() {
     localStorage.removeItem(window.HomeSchoolUtils.STORE_KEY);
     location.reload();
   }, [ui.fullResetConfirm]);
+
+  const handleStartReview = useCallback(async () => {
+    if (!window.HomeSchoolDB) return;
+    setReviewLoading(true);
+    try {
+      const queue = await window.HomeSchoolDB.getDueReviewCards(dailyReviewCap);
+      setReviewQueue(queue);
+      setReviewIdx(0);
+      setReviewReveal(false);
+      setReviewSessionDone(false);
+      setReviewSessionXp(0);
+      setTab("review");
+    } finally {
+      setReviewLoading(false);
+    }
+  }, [dailyReviewCap]);
+
+  const handleReviewResponse = useCallback(async (rating) => {
+    if (!window.HomeSchoolDB || !activeReviewCard) return;
+    const result = await window.HomeSchoolDB.saveReviewResult(activeReviewCard.id, rating);
+    if (result?.stats) {
+      setXp(result.stats.xp || 0);
+    }
+    setReviewSessionXp((current) => current + (result?.xpGain || 0));
+    setReviewReveal(false);
+    if (reviewIdx >= reviewQueue.length - 1) {
+      setReviewSessionDone(true);
+      await refreshReviewStats();
+      return;
+    }
+    setReviewIdx((current) => current + 1);
+    await refreshReviewStats();
+  }, [activeReviewCard, refreshReviewStats, reviewIdx, reviewQueue.length]);
+
+  const resetReviewSession = useCallback(() => {
+    setReviewQueue([]);
+    setReviewIdx(0);
+    setReviewReveal(false);
+    setReviewSessionDone(false);
+    setReviewSessionXp(0);
+  }, []);
 
   // Show loading while DB initializes
   if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{ui.loadingHome}</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ui.loadingDb}</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
@@ -3716,14 +3935,16 @@ function HomeschoolApp() {
     setTenseMain("present");
     setTenseSub("simple");
     setNewBadges([]);
+    resetReviewSession();
   };
-  const goBack = () => { window.speechSynthesis.cancel(); if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else setTab("home"); };
+  const goBack = () => { window.speechSynthesis.cancel(); if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
   const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
   const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
+  const reviewReadyNowCount = Math.min(Number(reviewStats.due || 0), Number(dailyReviewCap || 20));
 
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
 
@@ -3732,6 +3953,17 @@ function HomeschoolApp() {
     <div className="content">
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
         <div className="welcome-card"><h2>{renderWelcomeGreeting(localizedNames, language)} 👋</h2><p>{renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟", language), language)}</p><span className="grade-tag">{renderLocalizedTextNode(ui.grade, language)} {grade}</span></div>
+        <button className="adverb-home-banner" style={{ width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }} onClick={handleStartReview}>
+          <div className="banner-icon">🧠</div>
+          <div className="banner-text">
+            <h3>{renderLocalizedTextNode(ui.reviewReady, language)}</h3>
+            <p>{renderLocalizedTextNode(language === "ur"
+              ? `${formatNumberLabel(reviewReadyNowCount)} ابھی تیار • ${formatNumberLabel(reviewStats.due || 0)} کل باقی`
+              : language === "bilingual"
+                ? `${formatNumberLabel(reviewReadyNowCount)} ready now • ${formatNumberLabel(reviewStats.due || 0)} total due / ${formatNumberLabel(reviewReadyNowCount)} ابھی تیار • ${formatNumberLabel(reviewStats.due || 0)} کل باقی`
+                : `${formatNumberLabel(reviewReadyNowCount)} ready now • ${formatNumberLabel(reviewStats.due || 0)} total due`, language)}</p>
+          </div>
+        </button>
         {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
         <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
         <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0; return (<button key={subj.id} className="subject-card" onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className="subj-name">{subj.name}</span><span className="subj-name-ur">{subj.nameUr}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
@@ -4064,8 +4296,8 @@ function HomeschoolApp() {
                       return (<div key={"A_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>A{pi+1}</span>
                         <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} /></div>
-                        <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line",fontFamily:isUrduText(ex.ans[pi])?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUrduText(ex.ans[pi])?"rtl":"ltr",textAlign:isUrduText(ex.ans[pi])?"right":"left"}} /></div>}
+                        <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
+                        {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))} /></div>}
                       </div>);
                     })}
                   </div>
@@ -4081,8 +4313,8 @@ function HomeschoolApp() {
                       return (<div key={"B_"+pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>B{pi+1}</span>
                         <div style={{flex:1}}><SpeakableSentence text={a} lang={isUrduText(a)?"ur":"en"} /></div>
-                        <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 12px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.parts[originalIndex])} lang={isUrduText(ex.parts[originalIndex])?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line",fontFamily:isUrduText(ex.parts[originalIndex])?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUrduText(ex.parts[originalIndex])?"rtl":"ltr",textAlign:isUrduText(ex.parts[originalIndex])?"right":"left"}} /></div>}
+                        <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
+                        {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.parts[originalIndex])} lang={isUrduText(ex.parts[originalIndex])?"ur":"en"} fullWidth={false} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.parts[originalIndex]))} /></div>}
                       </div>);
                     })}
                   </div>
@@ -4099,8 +4331,8 @@ function HomeschoolApp() {
                     {promptVisual}
                     <div style={{flex:1}}><SpeakableSentence text={displayP} lang={isUrduText(displayP)?"ur":"en"} /></div>
                   </div>
-                  <button onClick={()=>toggleReveal(rk)} style={{padding:"6px 14px",borderRadius:8,border:"1.5px solid "+(revealedEx[rk]?"#22C55E55":"rgba(148,163,184,0.2)"),background:revealedEx[rk]?"rgba(34,197,94,0.12)":"rgba(30,41,59,0.8)",color:revealedEx[rk]?"#22C55E":"#94A3B8",fontSize:11,fontWeight:700,cursor:"pointer",minWidth:56,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",transition:"all 0.2s"}}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
-                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} buttonStyle={{background:"rgba(34,197,94,0.14)",border:"1px solid rgba(34,197,94,0.35)",color:"#DCFCE7",padding:"8px 14px"}} textStyle={{fontSize:16,lineHeight:1.5,whiteSpace:"pre-line",fontFamily:isUrduText(ex.ans[pi])?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUrduText(ex.ans[pi])?"rtl":"ltr",textAlign:isUrduText(ex.ans[pi])?"right":"left"}} /></div>}
+                  <button onClick={()=>toggleReveal(rk)} style={getRevealToggleStyle(revealedEx[rk], isUr)}>{revealedEx[rk]?(isUr?"چھپائیں":"Hide"):(isUr?"دکھائیں":"Show")}</button>
+                  {revealedEx[rk] && ex.ans && ex.ans[pi] && <div style={{maxWidth:"100%"}}><SpeakableSentence text={formatListedAnswer(ex.ans[pi])} lang={isUrduText(ex.ans[pi])?"ur":"en"} fullWidth={false} buttonStyle={revealedAnswerButtonStyle} textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))} /></div>}
                 </div>);
               })}
             </div>);
@@ -4118,9 +4350,9 @@ function HomeschoolApp() {
                   <div style={{flex:1}}><SpeakableSentence text={qText} lang={isUr?"ur":"en"} /></div>
                 </div>
                 {aText && <div style={{marginTop:6,marginLeft:isUr?0:42,marginRight:isUr?42:0,direction:isUr?"rtl":"ltr"}}>
-                  <div style={{background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.28)",borderRadius:12,padding:"10px 10px 6px"}}>
-                    <div style={{color:"#86EFAC",fontSize:12,fontWeight:800,letterSpacing:0.4,textTransform:"uppercase",marginBottom:6,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?"✅ جواب":"✅ Answer"}</div>
-                    <SpeakableSentence text={formatListedAnswer(aText)} lang={isUr?"ur":"en"} buttonStyle={{background:"rgba(34,197,94,0.16)",border:"1px solid rgba(34,197,94,0.38)",color:"#ECFDF5",marginBottom:0}} textStyle={{fontSize:16,lineHeight:1.55,whiteSpace:"pre-line"}} />
+                  <div style={wordProblemAnswerPanelStyle}>
+                    <div style={wordProblemAnswerLabelStyle(isUr)}>{isUr?"✅ جواب":"✅ Answer"}</div>
+                    <SpeakableSentence text={formatListedAnswer(aText)} lang={isUr?"ur":"en"} buttonStyle={{...revealedAnswerButtonStyle, marginBottom:0}} textStyle={{...getRevealedAnswerTextStyle(isUr), lineHeight:1.55}} />
                   </div>
                 </div>}
               </div>);
@@ -4252,6 +4484,12 @@ function HomeschoolApp() {
         {SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round((done / ls.length) * 100) : 0; return (<div key={subj.id} className="progress-bar-container"><div className="progress-bar-label"><span>{subj.icon} {subj.name}</span><span style={{ color: "var(--text-muted)" }}>{done}/{ls.length}</span></div><div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: pct + "%", background: subj.color }} /></div></div>); })}
       </>)}
 
+      {tab === "review" && (<>
+        {!activeReviewCard && !reviewSessionDone && <><div className="stat-grid"><div className="stat-card"><div className="stat-icon">🕒</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.dueReviews, language)}</div></div><div className="stat-card"><div className="stat-icon">✅</div><div className="stat-value">{formatNumberLabel(reviewStats.reviewedToday || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.reviewedToday, language)}</div></div><div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{formatNumberLabel(reviewStats.learning || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.learningWords, language)}</div></div><div className="stat-card"><div className="stat-icon">🏆</div><div className="stat-value">{formatNumberLabel(reviewStats.retentionRate || 0)}%</div><div className="stat-label">{renderLocalizedTextNode(ui.retentionRate, language)}</div></div></div><div className="lesson-detail" style={{ textAlign: isUrduUi(language) ? "right" : "left", direction: isUrduUi(language) ? "rtl" : "ltr" }}><h2>{renderLocalizedTextNode(ui.reviewReady, language)}</h2><p>{renderLocalizedTextNode(ui.reviewHint, language)}</p><button className="start-quiz-btn" onClick={handleStartReview} disabled={reviewLoading}>{reviewLoading ? "..." : `🧠 ${ui.startReview}`}</button>{reviewStats.due === 0 && <p style={{ marginTop: 12, color: "var(--text-muted)" }}>{renderLocalizedTextNode(ui.noReviewsDue, language)}</p>}</div></>}
+        {activeReviewCard && !reviewSessionDone && <div className="lesson-detail" style={{ direction: isUrduUi(language) ? "rtl" : "ltr" }}><div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 }}><span className="lesson-num">{renderLocalizedTextNode(joinLocalizedText(`Card ${reviewIdx + 1} of ${reviewQueue.length}`, `کارڈ ${reviewIdx + 1} از ${reviewQueue.length}`, language), language)}</span><span className="grade-tag" style={{ marginTop: 0 }}>{activeReviewCard.sectionLabel}</span></div><h2 style={{ marginBottom: 18 }}>{activeReviewCard.prompt}</h2><div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}><button className="grade-btn active" style={{ minWidth: 130 }} onClick={() => window.HomeSchoolUtils.speakText(activeReviewCard.prompt, "en")}>🔊 {renderLocalizedTextNode(joinLocalizedText("Speak", "سنیں", language), language)}</button><button className="grade-btn" style={{ minWidth: 170 }} onClick={() => setReviewReveal((value) => !value)}>{renderLocalizedTextNode(ui.revealAnswer, language)}</button></div>{reviewReveal && <div style={reviewRevealCardStyle}><SpeakableSentence text={activeReviewCard.answer} lang="ur" fullWidth={true} buttonStyle={reviewAnswerButtonStyle} textStyle={{ fontSize: 24 }} />{activeReviewCard.meaning && <div style={{ color: "var(--text-secondary)", marginBottom: 8 }}>{activeReviewCard.meaning}</div>}{(activeReviewCard.opposite || activeReviewCard.oppositeUr) && <div style={{ color: "var(--text-secondary)", marginBottom: 8 }}>{renderLocalizedTextNode(joinLocalizedText(`Opposite: ${activeReviewCard.opposite} / ${activeReviewCard.oppositeUr}`, `متضاد: ${activeReviewCard.oppositeUr} / ${activeReviewCard.opposite}`, language), language)}</div>}{activeReviewCard.example && <div><div style={{ marginBottom: 6, color: "var(--text-secondary)", fontWeight: 700 }}><strong>{renderLocalizedTextNode(ui.reviewExample, language)}:</strong></div><SpeakableSentence text={activeReviewCard.example} lang="en" fullWidth={true} buttonStyle={reviewExampleButtonStyle} textStyle={{ fontSize: 16, lineHeight: 1.6 }} /></div>}</div>}<div className="result-actions"><button className="retry-btn" onClick={() => handleReviewResponse("again")}>{renderLocalizedTextNode(ui.reviewAgain, language)}</button><button className="retry-btn" style={{ borderColor: "#22C55E55", color: "#22C55E" }} onClick={() => handleReviewResponse("good")}>{renderLocalizedTextNode(ui.reviewGood, language)}</button><button className="next-btn" onClick={() => handleReviewResponse("easy")}>{renderLocalizedTextNode(ui.reviewEasy, language)}</button></div></div>}
+        {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">🧠</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" onClick={() => { resetReviewSession(); setTab("home"); }}>{renderLocalizedTextNode(ui.home, language)}</button><button className="next-btn" onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
+      </>)}
+
       {tab === "badges" && (<><div style={{ textAlign: "center", marginBottom: 20 }}><p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{earnedBadges.length} of {BADGES.length} badges earned</p></div><div className="badge-grid">{BADGES.map(b => <div key={b.id} className={"badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked")}><div className="badge-big-icon">{b.icon}</div><h4>{b.name}</h4><p>{b.desc}</p></div>)}</div></>)}
 
       {tab === "tutor" && (<><div className="tutor-chat">{chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}{chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}<div ref={chatEndRef} /></div><div className="chat-input-area"><input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Ask your tutor anything..." /><button onClick={sendChat} disabled={chatLoading}>➤</button></div></>)}
@@ -4278,6 +4516,10 @@ function HomeschoolApp() {
             ttsEnabled={ttsEnabled}
             language={language}
             onLanguageChange={setLanguage}
+            themeMode={themeMode}
+            onThemeModeChange={setThemeMode}
+            dailyReviewCap={dailyReviewCap}
+            onDailyReviewCapChange={setDailyReviewCap}
             daySectionSettings={daySectionSettings}
             onDaySectionChange={handleDaySectionChange}
             labels={ui}
@@ -4285,7 +4527,7 @@ function HomeschoolApp() {
         ) : null}
       </>)}
     </div>
-    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: ui.home }, { id: "progress", icon: "📊", label: ui.progress }, { id: "badges", icon: "🏆", label: ui.badges }, { id: "tutor", icon: "🤖", label: ui.tutor }, { id: "settings", icon: "⚙️", label: ui.settings }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); }}><span className="nav-icon">{item.icon}</span>{renderLocalizedTextNode(item.label, language)}</button>)}</div>
+    <div className="bottom-nav">{[{ id: "home", icon: "🏠", label: ui.home }, { id: "progress", icon: "📊", label: ui.progress }, { id: "review", icon: "🧠", label: ui.review }, { id: "badges", icon: "🏆", label: ui.badges }, { id: "tutor", icon: "🤖", label: ui.tutor }, { id: "settings", icon: "⚙️", label: ui.settings }].map(item => <button key={item.id} className={"nav-item " + (tab === item.id ? "active" : "")} style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { if (item.id === "home") { goHome(); return; } window.speechSynthesis.cancel(); setTab(item.id); setSelectedSubject(null); setSelectedLesson(null); setQuizActive(false); setQuizDone(false); setSelectedAdverbDay(null); setSelectedPrepDay(null); setSelectedAdjDay(null); setSelectedConjDay(null); setSelectedPronDay(null); setSelectedNounDay(null); setSelectedVerbDay(null); setSelectedTensePara(null); setSelectedVocabDay(null); setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); if (item.id !== "review") resetReviewSession(); }}><span className="nav-icon">{item.icon}</span>{renderLocalizedTextNode(item.label, language)}</button>)}</div>
   </div></></AppContext.Provider>);
 }
 
