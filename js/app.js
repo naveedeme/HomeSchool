@@ -343,6 +343,64 @@ function renderLocalizedTextNode(text, language, urStyle = {}) {
     }, urText));
 }
 
+function renderSeparatedLocalizedTextNode(enText, urText, language, options = {}) {
+  const {
+    gap = 4,
+    asBlock = false,
+    align = "flex-start",
+    enStyle = {},
+    urStyle = {},
+  } = options;
+  if (language === "ur") {
+    return React.createElement(asBlock ? "div" : "span", {
+      style: {
+        display: asBlock ? "block" : "inline-block",
+        fontFamily: "var(--font-ur)",
+        direction: "rtl",
+        unicodeBidi: "isolate",
+        textAlign: "right",
+        ...urStyle,
+      },
+    }, urText);
+  }
+  if (language !== "bilingual") {
+    return React.createElement(asBlock ? "div" : "span", {
+      style: {
+        display: asBlock ? "block" : "inline-block",
+        direction: "ltr",
+        unicodeBidi: "isolate",
+        textAlign: "left",
+        ...enStyle,
+      },
+    }, enText);
+  }
+  return React.createElement(asBlock ? "div" : "span", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: align,
+      gap,
+    },
+  },
+  React.createElement("span", {
+    style: {
+      direction: "ltr",
+      unicodeBidi: "isolate",
+      textAlign: "left",
+      ...enStyle,
+    },
+  }, enText),
+  React.createElement("span", {
+    style: {
+      fontFamily: "var(--font-ur)",
+      direction: "rtl",
+      unicodeBidi: "isolate",
+      textAlign: "right",
+      ...urStyle,
+    },
+  }, urText));
+}
+
 function renderDirectionalName(name, fallbackDirection = "ltr", extraStyle = {}) {
   const trimmed = String(name || "").trim();
   return React.createElement("span", {
@@ -3438,6 +3496,7 @@ function HomeschoolApp() {
   const [reviewSessionXp, setReviewSessionXp] = useState(0);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "system"));
+  const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [installAvailability, setInstallAvailability] = useState(isStandaloneMode() ? "installed" : "unavailable");
   const [installBannerDismissed, setInstallBannerDismissed] = useState(Boolean(stored?.installBannerDismissed));
   const [isInstalled, setIsInstalled] = useState(isStandaloneMode());
@@ -3654,9 +3713,15 @@ function HomeschoolApp() {
 
   useEffect(() => { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); return () => window.speechSynthesis.cancel(); }, []);
   useEffect(() => {
-    const handleBeforeInstallPrompt = () => setInstallAvailability("available");
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event);
+      setInstallAvailability("available");
+      setInstallBannerDismissed(false);
+    };
     const handleInstalled = () => {
       setIsInstalled(true);
+      setInstallPromptEvent(null);
       setInstallAvailability("installed");
       setInstallBannerDismissed(false);
     };
@@ -3667,6 +3732,7 @@ function HomeschoolApp() {
       const standalone = isStandaloneMode();
       setIsInstalled(standalone);
       if (standalone) {
+        setInstallPromptEvent(null);
         setInstallAvailability("installed");
       }
     };
@@ -4039,10 +4105,11 @@ function HomeschoolApp() {
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
   const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
   const reviewReadyNowCount = Math.min(Number(reviewStats.due || 0), Number(dailyReviewCap || 20));
+  const canInstallApp = Boolean(installPromptEvent) && !isInstalled;
   const canShowInstallBanner = !installBannerDismissed && !isInstalled && serviceWorkerStatus !== "unsupported" && serviceWorkerStatus !== "local-static";
   const installStatusLabel = isInstalled || installAvailability === "installed"
     ? ui.appInstalled
-    : installAvailability === "available"
+    : canInstallApp || installAvailability === "available"
       ? ui.appInstallAvailable
       : ui.appInstallUnavailable;
   const offlineStatusLabel = serviceWorkerStatus === "ready"
@@ -4059,12 +4126,25 @@ function HomeschoolApp() {
   const networkStatusLabel = isOnline ? ui.online : ui.offline;
 
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05; const v = window.speechSynthesis.getVoices(); const pr = v.find(x => x.lang.startsWith("en") && x.localService) || v.find(x => x.lang.startsWith("en")); if (pr) u.voice = pr; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
+  const handleInstallApp = async () => {
+    if (!installPromptEvent) return;
+    try {
+      await installPromptEvent.prompt();
+      const choice = await installPromptEvent.userChoice;
+      if (choice?.outcome === "dismissed") {
+        setInstallBannerDismissed(false);
+      }
+    } catch (error) {
+      console.log("Install prompt failed:", error);
+    }
+    setInstallPromptEvent(null);
+  };
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel }}><><div className="app-container">
     <div className="app-header" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title={ui.home}>🏠</button><h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
     <div className="content">
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
         <div className="welcome-card"><h2>{renderWelcomeGreeting(localizedNames, language)} 👋</h2><p>{renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟", language), language)}</p><span className="grade-tag">{renderLocalizedTextNode(ui.grade, language)} {grade}</span></div>
-        {canShowInstallBanner && <div className="app-status-card"><div className="app-status-head"><h3>{renderLocalizedTextNode(ui.installBannerTitle, language)}</h3><button className="banner-dismiss" onClick={() => setInstallBannerDismissed(true)} aria-label={ui.hideBanner}>{renderLocalizedTextNode(ui.hideBanner, language)}</button></div><p>{renderLocalizedTextNode(ui.installBannerText, language)}</p>{installAvailability === "available" && <p className="install-browser-hint">{renderLocalizedTextNode(ui.installBrowserHint, language)}</p>}<div className="app-status-grid"><div className="status-pill"><strong>{renderLocalizedTextNode(ui.installStatus, language)}</strong><span>{renderLocalizedTextNode(installStatusLabel, language)}</span></div><div className="status-pill"><strong>{renderLocalizedTextNode(ui.offlineAccess, language)}</strong><span>{renderLocalizedTextNode(offlineStatusLabel, language)}</span></div><div className="status-pill"><strong>{renderLocalizedTextNode(ui.networkStatus, language)}</strong><span>{renderLocalizedTextNode(networkStatusLabel, language)}</span></div></div><div className="app-status-actions">{serviceWorkerStatus === "update-ready" && <button className="ghost-cta" onClick={applyServiceWorkerUpdate}>{renderLocalizedTextNode(ui.refreshToUpdate, language)}</button>}</div></div>}
+        {canShowInstallBanner && <div className="app-status-card" data-ui-language={language}><div className="app-status-head"><h3>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerTitle, UI_TEXT.ur.installBannerTitle, language, { gap: 2 })}</h3><button className="banner-dismiss" onClick={() => setInstallBannerDismissed(true)} aria-label={ui.hideBanner}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.hideBanner, UI_TEXT.ur.hideBanner, language, { gap: 1 })}</button></div><p>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerText, UI_TEXT.ur.installBannerText, language, { gap: 4 })}</p>{(canInstallApp || installAvailability === "available") && <p className="install-browser-hint">{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBrowserHint, UI_TEXT.ur.installBrowserHint, language, { gap: 2 })}</p>}<div className="app-status-grid"><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installStatus, UI_TEXT.ur.installStatus, language, { gap: 2 })}</strong><span>{renderSeparatedLocalizedTextNode(isInstalled || installAvailability === "installed" ? UI_TEXT.en.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.en.appInstallAvailable : UI_TEXT.en.appInstallUnavailable, isInstalled || installAvailability === "installed" ? UI_TEXT.ur.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.ur.appInstallAvailable : UI_TEXT.ur.appInstallUnavailable, language, { gap: 1 })}</span></div><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.offlineAccess, UI_TEXT.ur.offlineAccess, language, { gap: 2 })}</strong><span>{renderSeparatedLocalizedTextNode(serviceWorkerStatus === "ready" ? UI_TEXT.en.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.en.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.en.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.en.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.en.offlineUnsupported : UI_TEXT.en.offlineError, serviceWorkerStatus === "ready" ? UI_TEXT.ur.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.ur.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.ur.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.ur.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.ur.offlineUnsupported : UI_TEXT.ur.offlineError, language, { gap: 1 })}</span></div><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.networkStatus, UI_TEXT.ur.networkStatus, language, { gap: 2 })}</strong><span>{renderSeparatedLocalizedTextNode(isOnline ? UI_TEXT.en.online : UI_TEXT.en.offline, isOnline ? UI_TEXT.ur.online : UI_TEXT.ur.offline, language, { gap: 1 })}</span></div></div><div className="app-status-actions">{canInstallApp && <button className="install-cta" onClick={handleInstallApp}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installApp, UI_TEXT.ur.installApp, language, { gap: 1 })}</button>}{serviceWorkerStatus === "update-ready" && <button className="ghost-cta" onClick={applyServiceWorkerUpdate}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.refreshToUpdate, UI_TEXT.ur.refreshToUpdate, language, { gap: 1 })}</button>}</div></div>}
         <button className="adverb-home-banner" style={{ width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }} onClick={handleStartReview}>
           <div className="banner-icon">🧠</div>
           <div className="banner-text">
@@ -4637,6 +4717,8 @@ function HomeschoolApp() {
             installStatusLabel={installStatusLabel}
             offlineStatusLabel={offlineStatusLabel}
             networkStatusLabel={networkStatusLabel}
+            canInstallApp={canInstallApp}
+            onInstallApp={handleInstallApp}
             canReloadApp={serviceWorkerStatus === "update-ready"}
             onReloadApp={applyServiceWorkerUpdate}
             labels={ui}
