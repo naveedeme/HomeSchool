@@ -6297,8 +6297,8 @@ function HomeschoolApp() {
       resetPracticeSession();
     }
   };
-  const renderNavBar = (position) => (
-    <div className={`bottom-nav nav-position-${position}`} data-nav-position={position}>
+  const renderNavBar = (position, inline = false) => (
+    <div className={inline ? "header-top-nav" : `bottom-nav nav-position-${position}`} data-nav-position={position}>
       {navItems.map((item) => (
         <button
           key={item.id}
@@ -6313,8 +6313,16 @@ function HomeschoolApp() {
     </div>
   );
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}`}>
-    <div className="app-header" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{showBack && <button className="back-btn" onClick={goBack}>←</button>}<button className="home-btn" onClick={goHome} title={ui.home}>🏠</button><h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1><div className="header-badge"><span>⭐</span><span>{xp} XP</span></div></div>
-    {navPosition === "top" ? renderNavBar("top") : null}
+    <div className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
+      <div className="header-leading">
+        <span className="back-btn-slot">{showBack ? <button className="back-btn" onClick={goBack}>←</button> : null}</span>
+        <button className="home-btn" onClick={goHome} title={ui.home}>🏠</button>
+      </div>
+      {navPosition === "top"
+        ? renderNavBar("top", true)
+        : <h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1>}
+      <div className="header-badge"><span>⭐</span><span>{xp} XP</span></div>
+    </div>
     <div className="app-body">
       {navPosition === "left" ? renderNavBar("left") : null}
       <div className={`content${pageFlashActive ? " page-focus-flash" : ""}${contentTransitioning ? " is-transitioning" : ""}`} data-transition-mode={transitionMode}>
