@@ -9274,7 +9274,23 @@ function HomeschoolApp() {
 {sub.svgType === "skeleton" && <SkeletonSVG />}
           {sub.svgType === "waterCycle" && <WaterCycleSVG />}
           {sub.svgType === "photosynthesis" && <PhotosynthesisSVG />}
-          {sub.svgType === "pakistanMap" && <PakistanMapSVG />}
+          {sub.svgType === "pakistanMap" && (
+            <div style={{ marginTop: 12, textAlign: "center" }}>
+              <img
+                src="img/grade-5/social-studies/map of pakistan.jpg"
+                alt="Map of Pakistan"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "520px",
+                  borderRadius: "10px",
+                  border: "1px solid #475569",
+                  boxShadow: "0 4px 10px rgba(0,0,0,0.28)",
+                  objectFit: "contain",
+                  background: "#0F172A"
+                }}
+              />
+            </div>
+          )}
           {sub.svgType === "indusValley" && <IndusValleySVG />}
           {sub.svgType === "pakFlag" && <PakFlagSVG />}
           {sub.svgType === "pakGov" && <PakGovSVG />}
