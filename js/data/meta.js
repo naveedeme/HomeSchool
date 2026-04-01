@@ -139,6 +139,24 @@
     "name": "Speed Demon",
     "icon": "🚀",
     "desc": "Finish a quiz in under 30s"
+  },
+  {
+    "id": "punctual_3",
+    "name": "On Time Starter",
+    "icon": "⏰",
+    "desc": "Start class on time for 3 days"
+  },
+  {
+    "id": "punctual_7",
+    "name": "Always Ready",
+    "icon": "🕘",
+    "desc": "Start class on time for 7 days"
+  },
+  {
+    "id": "time_keeper",
+    "name": "Time Keeper",
+    "icon": "⌛",
+    "desc": "Spend your full scheduled class time in the app"
   }
 ],
   };

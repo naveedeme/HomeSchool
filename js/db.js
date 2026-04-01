@@ -897,6 +897,9 @@
     async getReviewAnalytics(options = {}) {
       const days = Math.max(28, Number(options.days) || 84);
       const weakLimit = Math.max(6, Number(options.weakLimit) || 12);
+      const masteryThreshold = Math.max(3, Number(options.masteryThreshold) || 5);
+      const intervalScale = Math.max(0.5, Math.min(3, Number(options.intervalScale) || 1));
+      const upcomingDays = Math.max(7, Math.min(30, Number(options.upcomingDays) || 14));
       const now = Number(options.now) || Date.now();
       const today = new Date(now);
       const since = new Date(today);
@@ -1086,6 +1089,94 @@
         })
         .slice(0, 10);
 
+      const leitnerBoxes = Array.from({ length: masteryThreshold + 1 }, (_, boxIndex) => {
+        const count = enrichedCards.filter((card) => Math.max(0, Number(card.box) || 0) === boxIndex).length;
+        return {
+          box: boxIndex,
+          label: boxIndex >= masteryThreshold ? "Mastered" : `Box ${boxIndex}`,
+          count,
+        };
+      });
+
+      const forgettingBuckets = [
+        { id: "same_day", label: "Same day", min: 0, max: 0.99 },
+        { id: "day_1", label: "1 day", min: 1, max: 1.99 },
+        { id: "days_2_3", label: "2-3 days", min: 2, max: 3.99 },
+        { id: "days_4_7", label: "4-7 days", min: 4, max: 7.99 },
+        { id: "days_8_14", label: "8-14 days", min: 8, max: 14.99 },
+        { id: "days_15_plus", label: "15+ days", min: 15, max: Number.POSITIVE_INFINITY },
+      ].map((bucket) => ({ ...bucket, reviews: 0, correct: 0 }));
+
+      historyRows.forEach((row) => {
+        const delay = Math.max(0, Number(row.intervalDays) || 0);
+        const bucket = forgettingBuckets.find((entry) => delay >= entry.min && delay <= entry.max);
+        if (!bucket) return;
+        bucket.reviews += 1;
+        bucket.correct += row.correct ? 1 : 0;
+      });
+
+      const forgettingCurve = forgettingBuckets.map((bucket) => ({
+        id: bucket.id,
+        label: bucket.label,
+        reviews: bucket.reviews,
+        accuracy: bucket.reviews ? Math.round((bucket.correct / bucket.reviews) * 100) : 0,
+      }));
+
+      const upcomingCalendar = Array.from({ length: upcomingDays }, (_, offset) => {
+        const date = new Date(now);
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + offset);
+        const nextDate = new Date(date);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const dueCount = enrichedCards.filter((card) => {
+          const dueAt = Number(card.dueAt) || 0;
+          return dueAt >= date.getTime() && dueAt < nextDate.getTime();
+        }).length;
+        return {
+          dayKey: window.HomeSchoolUtils.getDayKey(date),
+          label: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+          weekday: date.toLocaleDateString(undefined, { weekday: "short" }),
+          dueCount,
+          isToday: offset === 0,
+        };
+      });
+
+      const REVIEW_INTERVALS = [0, 1, 2, 4, 7, 14, 30, 60, 120];
+      const estimateMasteryAt = (card) => {
+        const currentBox = Math.max(0, Number(card?.box) || 0);
+        if (currentBox >= masteryThreshold) return Number(card?.lastReviewedAt) || now;
+        let projectedAt = Math.max(now, Number(card?.dueAt) || now);
+        for (let nextBox = currentBox + 1; nextBox <= masteryThreshold; nextBox += 1) {
+          const baseInterval = REVIEW_INTERVALS[Math.min(nextBox, REVIEW_INTERVALS.length - 1)] || 120;
+          projectedAt += Math.max(1, Math.round((baseInterval * intervalScale) * 24 * 60 * 60 * 1000));
+        }
+        return projectedAt;
+      };
+
+      const unmasteredCards = enrichedCards.filter((card) => Math.max(0, Number(card.box) || 0) < masteryThreshold);
+      const sectionPredictionMap = new Map();
+      unmasteredCards.forEach((card) => {
+        const key = `${card.subject || "general"}__${card.section || "general"}`;
+        const current = sectionPredictionMap.get(key) || {
+          id: key,
+          subject: card.subject || "general",
+          section: card.section || "general",
+          sectionLabel: card.sectionLabel || titleCase(card.section || "general"),
+          cardsRemaining: 0,
+          projectedAt: 0,
+        };
+        current.cardsRemaining += 1;
+        current.projectedAt = Math.max(current.projectedAt, estimateMasteryAt(card));
+        sectionPredictionMap.set(key, current);
+      });
+      const predictedMastery = {
+        cardsRemaining: unmasteredCards.length,
+        projectedAt: unmasteredCards.length ? Math.max(...unmasteredCards.map((card) => estimateMasteryAt(card))) : now,
+        sections: Array.from(sectionPredictionMap.values())
+          .sort((left, right) => left.projectedAt - right.projectedAt)
+          .slice(0, 8),
+      };
+
       return {
         heatmap,
         weakWords,
@@ -1094,6 +1185,10 @@
         customLists,
         wordGrowth,
         categoryPerformance,
+        leitnerBoxes,
+        forgettingCurve,
+        upcomingCalendar,
+        predictedMastery,
         totals: {
           reviewedLastPeriod: historyRows.length,
           reviewedLast7: recentHistory.length,
@@ -1490,6 +1585,50 @@
           if (reviewCards.length > 0) await db.reviewCards.bulkPut(reviewCards);
         }
       });
+    },
+
+    async resetReviewSystem(dataLoader = null) {
+      await db.transaction("rw", [db.reviewCards, db.reviewHistory], async () => {
+        await db.reviewCards.clear();
+        await db.reviewHistory.clear();
+        const source = dataLoader || window.HomeSchoolData || null;
+        if (source) {
+          const reviewCards = buildReviewCards(source);
+          if (reviewCards.length > 0) await db.reviewCards.bulkPut(reviewCards);
+        }
+      });
+    },
+
+    async clearStudyCollections() {
+      await db.transaction("rw", [db.wordMeta, db.customLists, db.customListItems], async () => {
+        await db.wordMeta.clear();
+        await db.customLists.clear();
+        await db.customListItems.clear();
+      });
+    },
+
+    async clearCustomizationTypes(types = []) {
+      const safeTypes = Array.isArray(types) ? types.filter(Boolean) : [];
+      if (!safeTypes.length) return 0;
+      const rows = await db.customizations.where("type").anyOf(safeTypes).toArray();
+      const ids = rows
+        .map((row) => row?.id)
+        .filter((id) => typeof id !== "undefined" && id !== null);
+      if (!ids.length) return 0;
+      await db.customizations.bulkDelete(ids);
+      return ids.length;
+    },
+
+    async resetPlanningData() {
+      return this.clearCustomizationTypes([
+        "studyGoals",
+        "focusTimerSettings",
+        "reminderSettings",
+        "classScheduleSettings",
+        "timeTrackingData",
+        "notificationHistory",
+        "backupReminderSettings",
+      ]);
     },
 
     async fullReset(dataLoader, version = null) {

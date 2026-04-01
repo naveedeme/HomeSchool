@@ -164,6 +164,41 @@
     return utterance;
   }
 
+  function playFeedbackSound(kind = "correct") {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const context = new AudioCtx();
+      const now = context.currentTime;
+      const createTone = (frequency, start, duration, gainValue, type = "sine") => {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(gainValue, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(start);
+        oscillator.stop(start + duration);
+      };
+      if (kind === "correct") {
+        createTone(392, now, 0.28, 0.05, "triangle");
+        createTone(523.25, now + 0.08, 0.34, 0.045, "triangle");
+        createTone(659.25, now + 0.16, 0.42, 0.04, "triangle");
+      } else {
+        createTone(220, now, 0.22, 0.03, "sine");
+        createTone(196, now + 0.08, 0.26, 0.028, "sine");
+      }
+      window.setTimeout(() => {
+        context.close?.();
+      }, 900);
+    } catch {
+      // Ignore audio feedback failures in unsupported or locked-down environments.
+    }
+  }
+
   function calculateXP(score, total, timeBonus = false) {
     if (!total) return 0;
     const baseXp = Math.round((score / total) * 100);
@@ -405,6 +440,8 @@
   function getReviewScheduleUpdate(card, rating, options = {}) {
     const now = Number(options.now) || Date.now();
     const masteryThreshold = Math.max(3, Number(options.masteryThreshold) || 5);
+    const intervalScale = Math.max(0.5, Math.min(3, Number(options.intervalScale) || 1));
+    const againMinutes = Math.max(5, Math.min(180, Number(options.againMinutes) || 10));
     const currentBox = Math.max(0, Number(card?.box) || 0);
     const normalizedRating = ["again", "good", "easy"].includes(rating) ? rating : "good";
 
@@ -417,17 +454,17 @@
     if (normalizedRating === "again") {
       nextBox = Math.max(0, currentBox - 1);
       intervalDays = 0;
-      dueAt = now + (10 * 60 * 1000);
+      dueAt = now + (againMinutes * 60 * 1000);
       xpGain = 5;
     } else if (normalizedRating === "easy") {
       nextBox = Math.min(masteryThreshold, Math.max(2, currentBox + 2));
-      intervalDays = REVIEW_INTERVALS[Math.min(nextBox, REVIEW_INTERVALS.length - 1)] || 30;
+      intervalDays = Math.max(1, Math.round(((REVIEW_INTERVALS[Math.min(nextBox, REVIEW_INTERVALS.length - 1)] || 30) * intervalScale) * 10) / 10);
       dueAt = now + (intervalDays * 24 * 60 * 60 * 1000);
       xpGain = 20;
       correct = true;
     } else {
       nextBox = Math.min(masteryThreshold, Math.max(1, currentBox + 1));
-      intervalDays = REVIEW_INTERVALS[Math.min(nextBox, REVIEW_INTERVALS.length - 1)] || 14;
+      intervalDays = Math.max(1, Math.round(((REVIEW_INTERVALS[Math.min(nextBox, REVIEW_INTERVALS.length - 1)] || 14) * intervalScale) * 10) / 10);
       dueAt = now + (intervalDays * 24 * 60 * 60 * 1000);
       xpGain = 12;
       correct = true;
@@ -593,6 +630,7 @@
     mapSentencesToWords,
     ttsClean,
     speakText,
+    playFeedbackSound,
     calculateXP,
     calculateStreak,
     checkBadges,

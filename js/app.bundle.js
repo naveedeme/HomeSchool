@@ -1,5 +1,5 @@
 (() => {
-  const { useState, useEffect, useRef, useCallback, useContext } = React;
+  const { useState, useEffect, useRef, useCallback, useContext, useMemo } = React;
   const {
     SUBJECTS,
     GRADES,
@@ -58,6 +58,36 @@
       storageUsage: "Storage",
       resetProgress: "Reset Progress",
       fullReset: "Full Reset",
+      adminTools: "Admin Tools",
+      selectiveReset: "Selective Reset",
+      selectiveResetHelp: "Clear only the part you want without wiping the whole app.",
+      resetReviewSystem: "Reset Review System",
+      clearStudyCollections: "Clear Favorites, Notes & Lists",
+      resetPlanningData: "Reset Time & Reminders",
+      backupReminders: "Backup Reminders",
+      backupReminderEnabled: "Backup Reminder",
+      backupReminderInterval: "Backup Interval",
+      backupReminderStatus: "Backup Status",
+      backupReminderOff: "Backup reminders are off.",
+      backupNeverExported: "No backup exported yet.",
+      backupDueNow: "A fresh backup is recommended now.",
+      backupRecent: "Last backup",
+      backupInterval7: "Every 7 days",
+      backupInterval14: "Every 14 days",
+      backupInterval30: "Every 30 days",
+      backupReminderNotice: "Export a fresh backup to keep your latest progress safe.",
+      importReviewTitle: "Review Backup Import",
+      importReviewSummary: "Backup Summary",
+      importReviewConflicts: "Possible Conflicts",
+      importConflictProfile: "Profile and grade differ from your current app.",
+      importConflictProgress: "Quiz or review progress overlaps with your current records.",
+      importConflictPreferences: "Preferences and pacing settings differ from your current setup.",
+      importConflictTime: "Time tracking or reminders differ from your current schedule.",
+      importConflictCollections: "Favorites, notes, or custom lists overlap with current data.",
+      importModeReplace: "Replace Current Data",
+      importModeMerge: "Merge with Current Data",
+      importCancel: "Cancel Import",
+      importVersionWarning: "This backup was created from a newer curriculum version.",
       dayBasedSections: "Day-Based English Sections",
       dayBasedDescription: "Adjust how many words appear in each study day for every English subsection independently.",
       perDay: "Items per day",
@@ -95,6 +125,44 @@
       languageUrdu: "\u0627\u0631\u062F\u0648",
       languageBilingual: "Bilingual",
       studyPlanning: "Study Planning",
+      timeManagement: "Time Management",
+      classSchedule: "Class Schedule",
+      classStartTime: "Class Start Time",
+      classEndTime: "Class End Time",
+      classDuration: "Class Duration",
+      classTracking: "Class Tracking",
+      timeSpentToday: "Time Spent Today",
+      totalStudyTime: "Total Study Time",
+      latenessToday: "Lateness Today",
+      totalLateTime: "Total Late Time",
+      punctualityStreak: "Punctuality Streak",
+      classSessionsMet: "Class Sessions Met",
+      timeTrackingHelp: "Track class timing, study minutes, lateness, and punctuality rewards from the same schedule.",
+      classTrackingDisabled: "Class-time tracking is off right now.",
+      classStatusOnTime: "On time",
+      classStatusLate: "Late",
+      classStatusNotStarted: "Not started yet",
+      classStatusOff: "Schedule off",
+      wordOfDay: "Word of the Day",
+      contentDiscovery: "Content Discovery",
+      contentSearch: "Search lessons, topics, prompts...",
+      discoveryType: "Discovery Type",
+      discoveryDifficulty: "Difficulty",
+      discoveryAllSubjects: "All Subjects",
+      discoveryAllTypes: "All Types",
+      discoveryAllLevels: "All Levels",
+      discoveryTypeLesson: "Lesson",
+      discoveryTypeInteractive: "Interactive",
+      discoveryTypePractice: "Practice",
+      discoveryDifficultyStarter: "Starter",
+      discoveryDifficultyCore: "Core",
+      discoveryDifficultyStretch: "Stretch",
+      noDiscoveryResults: "No content matches these filters yet.",
+      openLesson: "Open Lesson",
+      recentTimeHistory: "Recent Class Days",
+      lateBy: "Late by",
+      onTimeReward: "On-time bonus",
+      classTimeReward: "Class-time bonus",
       dailyGoal: "Daily Review Goal",
       weeklyGoal: "Weekly Word Goal",
       focusTimer: "Focus Timer",
@@ -240,6 +308,36 @@
       storageUsage: "\u0627\u0633\u0679\u0648\u0631\u06CC\u062C",
       resetProgress: "\u067E\u06CC\u0634 \u0631\u0641\u062A \u0631\u06CC \u0633\u06CC\u0679 \u06A9\u0631\u06CC\u06BA",
       fullReset: "\u0645\u06A9\u0645\u0644 \u0631\u06CC \u0633\u06CC\u0679",
+      adminTools: "\u0627\u06CC\u0688\u0645\u0646 \u0679\u0648\u0644\u0632",
+      selectiveReset: "\u0645\u0646\u062A\u062E\u0628 \u0631\u06CC \u0633\u06CC\u0679",
+      selectiveResetHelp: "\u0635\u0631\u0641 \u0648\u06C1 \u062D\u0635\u06C1 \u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA \u062C\u0648 \u0622\u067E \u0686\u0627\u06C1\u062A\u06D2 \u06C1\u06CC\u06BA\u060C \u067E\u0648\u0631\u06CC \u0627\u06CC\u067E \u0646\u06C1\u06CC\u06BA\u06D4",
+      resetReviewSystem: "\u0631\u06CC\u0648\u06CC\u0648 \u0633\u0633\u0679\u0645 \u0631\u06CC \u0633\u06CC\u0679 \u06A9\u0631\u06CC\u06BA",
+      clearStudyCollections: "\u067E\u0633\u0646\u062F\u06CC\u062F\u06C1\u060C \u0646\u0648\u0679\u0633 \u0627\u0648\u0631 \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA",
+      resetPlanningData: "\u0648\u0642\u062A \u0627\u0648\u0631 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA \u0631\u06CC \u0633\u06CC\u0679 \u06A9\u0631\u06CC\u06BA",
+      backupReminders: "\u0628\u06CC\u06A9 \u0627\u067E \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA",
+      backupReminderEnabled: "\u0628\u06CC\u06A9 \u0627\u067E \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC",
+      backupReminderInterval: "\u0628\u06CC\u06A9 \u0627\u067E \u0648\u0642\u0641\u06C1",
+      backupReminderStatus: "\u0628\u06CC\u06A9 \u0627\u067E \u062D\u0627\u0644\u062A",
+      backupReminderOff: "\u0628\u06CC\u06A9 \u0627\u067E \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA \u0628\u0646\u062F \u06C1\u06CC\u06BA\u06D4",
+      backupNeverExported: "\u0627\u0628\u06BE\u06CC \u062A\u06A9 \u06A9\u0648\u0626\u06CC \u0628\u06CC\u06A9 \u0627\u067E \u0627\u06CC\u06A9\u0633\u067E\u0648\u0631\u0679 \u0646\u06C1\u06CC\u06BA \u06C1\u0648\u0627\u06D4",
+      backupDueNow: "\u0627\u0628 \u0646\u06CC\u0627 \u0628\u06CC\u06A9 \u0627\u067E \u0644\u06CC\u0646\u0627 \u0628\u06C1\u062A\u0631 \u06C1\u06D2\u06D4",
+      backupRecent: "\u0622\u062E\u0631\u06CC \u0628\u06CC\u06A9 \u0627\u067E",
+      backupInterval7: "\u06C1\u0631 7 \u062F\u0646 \u0628\u0639\u062F",
+      backupInterval14: "\u06C1\u0631 14 \u062F\u0646 \u0628\u0639\u062F",
+      backupInterval30: "\u06C1\u0631 30 \u062F\u0646 \u0628\u0639\u062F",
+      backupReminderNotice: "\u0627\u067E\u0646\u06CC \u062A\u0627\u0632\u06C1 \u067E\u06CC\u0634 \u0631\u0641\u062A \u0645\u062D\u0641\u0648\u0638 \u0631\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u06CC\u0627 \u0628\u06CC\u06A9 \u0627\u067E \u0627\u06CC\u06A9\u0633\u067E\u0648\u0631\u0679 \u06A9\u0631\u06CC\u06BA\u06D4",
+      importReviewTitle: "\u0628\u06CC\u06A9 \u0627\u067E \u0627\u0645\u067E\u0648\u0631\u0679 \u062C\u0627\u0626\u0632\u06C1",
+      importReviewSummary: "\u0628\u06CC\u06A9 \u0627\u067E \u062E\u0644\u0627\u0635\u06C1",
+      importReviewConflicts: "\u0645\u0645\u06A9\u0646\u06C1 \u0641\u0631\u0642",
+      importConflictProfile: "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u06CC\u0627 \u062C\u0645\u0627\u0639\u062A \u0645\u0648\u062C\u0648\u062F\u06C1 \u0627\u06CC\u067E \u0633\u06D2 \u0645\u062E\u062A\u0644\u0641 \u06C1\u06D2\u06D4",
+      importConflictProgress: "\u0627\u0645\u062A\u062D\u0627\u0646 \u06CC\u0627 \u0631\u06CC\u0648\u06CC\u0648 \u067E\u06CC\u0634 \u0631\u0641\u062A \u0645\u0648\u062C\u0648\u062F\u06C1 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0633\u06D2 \u0679\u06A9\u0631\u0627 \u0633\u06A9\u062A\u06CC \u06C1\u06D2\u06D4",
+      importConflictPreferences: "\u062A\u0631\u062C\u06CC\u062D\u0627\u062A \u0627\u0648\u0631 \u0631\u0641\u062A\u0627\u0631 \u06A9\u06CC \u0633\u06CC\u0679\u0646\u06AF\u0632 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0633\u06CC\u0679 \u0627\u067E \u0633\u06D2 \u0645\u062E\u062A\u0644\u0641 \u06C1\u06CC\u06BA\u06D4",
+      importConflictTime: "\u0648\u0642\u062A \u0679\u0631\u06CC\u06A9\u0646\u06AF \u06CC\u0627 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA \u0645\u0648\u062C\u0648\u062F\u06C1 \u0634\u06CC\u0688\u0648\u0644 \u0633\u06D2 \u0645\u062E\u062A\u0644\u0641 \u06C1\u06CC\u06BA\u06D4",
+      importConflictCollections: "\u067E\u0633\u0646\u062F\u06CC\u062F\u06C1\u060C \u0646\u0648\u0679\u0633 \u06CC\u0627 \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0645\u0648\u062C\u0648\u062F\u06C1 \u0688\u06CC\u0679\u0627 \u0633\u06D2 \u0645\u0644\u062A\u06CC \u062C\u0644\u062A\u06CC \u06C1\u06CC\u06BA\u06D4",
+      importModeReplace: "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0688\u06CC\u0679\u0627 \u0628\u062F\u0644 \u062F\u06CC\u06BA",
+      importModeMerge: "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0688\u06CC\u0679\u0627 \u0645\u06CC\u06BA \u0645\u0644\u0627 \u062F\u06CC\u06BA",
+      importCancel: "\u0627\u0645\u067E\u0648\u0631\u0679 \u0645\u0646\u0633\u0648\u062E \u06A9\u0631\u06CC\u06BA",
+      importVersionWarning: "\u06CC\u06C1 \u0628\u06CC\u06A9 \u0627\u067E \u0646\u0626\u06D2 \u0646\u0635\u0627\u0628 \u0648\u0631\u0698\u0646 \u0633\u06D2 \u0628\u0646\u0627\u06CC\u0627 \u06AF\u06CC\u0627 \u062A\u06BE\u0627\u06D4",
       dayBasedSections: "\u062F\u0646 \u06A9\u06D2 \u062D\u0633\u0627\u0628 \u0633\u06D2 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0633\u06CC\u06A9\u0634\u0646\u0632",
       dayBasedDescription: "\u06C1\u0631 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0630\u06CC\u0644\u06CC \u0633\u06CC\u06A9\u0634\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0644\u06AF \u0627\u0644\u06AF \u0637\u06D2 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0627\u06CC\u06A9 \u062F\u0646 \u0645\u06CC\u06BA \u06A9\u062A\u0646\u06D2 \u0627\u0644\u0641\u0627\u0638 \u06CC\u0627 \u062C\u0645\u0644\u06D2 \u062F\u06A9\u06BE\u0627\u0626\u06D2 \u062C\u0627\u0626\u06CC\u06BA\u06D4",
       perDay: "\u0641\u06CC \u062F\u0646",
@@ -277,6 +375,44 @@
       languageUrdu: "\u0627\u0631\u062F\u0648",
       languageBilingual: "Bilingual",
       studyPlanning: "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0645\u0646\u0635\u0648\u0628\u06C1 \u0628\u0646\u062F\u06CC",
+      timeManagement: "\u0648\u0642\u062A \u06A9\u0627 \u0646\u0638\u0645",
+      classSchedule: "\u06A9\u0644\u0627\u0633 \u0634\u06CC\u0688\u0648\u0644",
+      classStartTime: "\u06A9\u0644\u0627\u0633 \u0634\u0631\u0648\u0639 \u06C1\u0648\u0646\u06D2 \u06A9\u0627 \u0648\u0642\u062A",
+      classEndTime: "\u06A9\u0644\u0627\u0633 \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u06A9\u0627 \u0648\u0642\u062A",
+      classDuration: "\u06A9\u0644\u0627\u0633 \u062F\u0648\u0631\u0627\u0646\u06CC\u06C1",
+      classTracking: "\u06A9\u0644\u0627\u0633 \u0679\u0631\u06CC\u06A9\u0646\u06AF",
+      timeSpentToday: "\u0622\u062C \u06A9\u0627 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0648\u0642\u062A",
+      totalStudyTime: "\u06A9\u0644 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0648\u0642\u062A",
+      latenessToday: "\u0622\u062C \u06A9\u06CC \u062A\u0627\u062E\u06CC\u0631",
+      totalLateTime: "\u06A9\u0644 \u062A\u0627\u062E\u06CC\u0631",
+      punctualityStreak: "\u0648\u0642\u062A \u067E\u0631 \u0622\u0646\u06D2 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644",
+      classSessionsMet: "\u0645\u06A9\u0645\u0644 \u06A9\u0644\u0627\u0633 \u0633\u06CC\u0634\u0646\u0632",
+      timeTrackingHelp: "\u0627\u0633\u06CC \u0634\u06CC\u0688\u0648\u0644 \u0633\u06D2 \u06A9\u0644\u0627\u0633 \u06A9\u0627 \u0648\u0642\u062A\u060C \u0645\u0637\u0627\u0644\u0639\u06C1 \u0645\u0646\u0679\u0633\u060C \u062A\u0627\u062E\u06CC\u0631\u060C \u0627\u0648\u0631 \u0648\u0642\u062A \u06A9\u06CC \u067E\u0627\u0628\u0646\u062F\u06CC \u06A9\u06D2 \u0627\u0646\u0639\u0627\u0645\u0627\u062A \u0679\u0631\u06CC\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4",
+      classTrackingDisabled: "\u06A9\u0644\u0627\u0633 \u0679\u0631\u06CC\u06A9\u0646\u06AF \u0627\u0633 \u0648\u0642\u062A \u0628\u0646\u062F \u06C1\u06D2\u06D4",
+      classStatusOnTime: "\u0648\u0642\u062A \u067E\u0631",
+      classStatusLate: "\u062A\u0627\u062E\u06CC\u0631 \u0633\u06D2",
+      classStatusNotStarted: "\u0627\u0628\u06BE\u06CC \u0634\u0631\u0648\u0639 \u0646\u06C1\u06CC\u06BA \u06C1\u0648\u0626\u06CC",
+      classStatusOff: "\u0634\u06CC\u0688\u0648\u0644 \u0628\u0646\u062F",
+      wordOfDay: "\u0622\u062C \u06A9\u0627 \u0644\u0641\u0638",
+      contentDiscovery: "\u0645\u0648\u0627\u062F \u06A9\u06CC \u062A\u0644\u0627\u0634",
+      contentSearch: "\u0627\u0633\u0628\u0627\u0642\u060C \u0645\u0648\u0636\u0648\u0639\u0627\u062A\u060C \u0633\u0648\u0627\u0644\u0627\u062A \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA...",
+      discoveryType: "\u0642\u0633\u0645",
+      discoveryDifficulty: "\u062F\u0631\u062C\u06C1",
+      discoveryAllSubjects: "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646",
+      discoveryAllTypes: "\u062A\u0645\u0627\u0645 \u0627\u0642\u0633\u0627\u0645",
+      discoveryAllLevels: "\u062A\u0645\u0627\u0645 \u062F\u0631\u062C\u0627\u062A",
+      discoveryTypeLesson: "\u0633\u0628\u0642",
+      discoveryTypeInteractive: "\u0627\u0646\u0679\u0631\u0627\u06CC\u06A9\u0679\u0648",
+      discoveryTypePractice: "\u0645\u0634\u0642",
+      discoveryDifficultyStarter: "\u0622\u0633\u0627\u0646",
+      discoveryDifficultyCore: "\u062F\u0631\u0645\u06CC\u0627\u0646\u06CC",
+      discoveryDifficultyStretch: "\u0627\u0639\u0644\u06CC\u0670",
+      noDiscoveryResults: "\u0627\u0628\u06BE\u06CC \u0627\u0646 \u0641\u0644\u0679\u0631\u0632 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u06A9\u0648\u0626\u06CC \u0645\u0648\u0627\u062F \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4",
+      openLesson: "\u0633\u0628\u0642 \u06A9\u06BE\u0648\u0644\u06CC\u06BA",
+      recentTimeHistory: "\u062D\u0627\u0644\u06CC\u06C1 \u06A9\u0644\u0627\u0633 \u062F\u0646",
+      lateBy: "\u0627\u062A\u0646\u06CC \u062A\u0627\u062E\u06CC\u0631",
+      onTimeReward: "\u0648\u0642\u062A \u067E\u0631 \u0622\u0646\u06D2 \u06A9\u0627 \u0628\u0648\u0646\u0633",
+      classTimeReward: "\u06A9\u0644\u0627\u0633 \u0648\u0642\u062A \u0628\u0648\u0646\u0633",
       dailyGoal: "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u062F\u0641",
       weeklyGoal: "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0644\u0641\u0638\u06CC \u06C1\u062F\u0641",
       focusTimer: "\u0641\u0648\u06A9\u0633 \u0679\u0627\u0626\u0645\u0631",
@@ -2365,10 +2501,10 @@ ${marker} `);
     var _a;
     return ((_a = window.HomeSchoolPrefs) == null ? void 0 : _a.resolvedTheme) === "light";
   }
-  function buildReviewStatsFallback(stats = {}, library = [], analytics = null) {
+  function buildReviewStatsFallback(stats = {}, library = [], analytics = null, options = {}) {
     var _a, _b, _c;
     const now = Date.now();
-    const masteryThreshold = 5;
+    const masteryThreshold = Math.max(3, Number(options.masteryThreshold) || 5);
     const todayKey = window.HomeSchoolUtils.getDayKey(now);
     const safeLibrary = Array.isArray(library) ? library : [];
     const safeAnalytics = analytics || {};
@@ -2409,8 +2545,562 @@ ${marker} `);
     }
     return next;
   }
-  function buildPracticeDeck(library = [], limit = 12) {
-    return shuffleArray((library || []).filter((card) => (card == null ? void 0 : card.prompt) && ((card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning)))).slice(0, Math.max(4, Number(limit) || 12));
+  function getPracticeFlashFront(card) {
+    return normalizeText((card == null ? void 0 : card.practiceFront) || (card == null ? void 0 : card.prompt));
+  }
+  function getPracticeFlashBack(card) {
+    return normalizeText((card == null ? void 0 : card.practiceBack) || (card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning));
+  }
+  function getPracticeTypingClue(card) {
+    return normalizeText((card == null ? void 0 : card.typingClue) || (card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning));
+  }
+  function getPracticeTypingTarget(card) {
+    return normalizeText((card == null ? void 0 : card.typingTarget) || (card == null ? void 0 : card.prompt));
+  }
+  function getPracticeMatchPrompt(card) {
+    return normalizeText((card == null ? void 0 : card.matchPrompt) || (card == null ? void 0 : card.prompt));
+  }
+  function getPracticeMatchAnswer(card) {
+    return normalizeText((card == null ? void 0 : card.matchAnswer) || (card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning));
+  }
+  function getPracticeTextStyle(text, baseStyle = {}, fallbackLang = "en") {
+    const content = String(text || "").trim();
+    const isUrdu = content ? containsUrduText(content) : fallbackLang === "ur";
+    return {
+      fontFamily: isUrdu ? "var(--font-ur)" : "var(--font)",
+      direction: isUrdu ? "rtl" : "ltr",
+      textAlign: isUrdu ? "right" : "left",
+      lineHeight: isUrdu ? 1.9 : 1.6,
+      ...baseStyle
+    };
+  }
+  function getPracticeModeInstructions(mode, language = "en") {
+    const entries = {
+      flashcards: joinLocalizedText(
+        "Read the prompt, think of the answer first, then press Reveal Answer. Use Next Card to continue.",
+        "\u067E\u06C1\u0644\u06D2 \u0633\u0648\u0627\u0644 \u067E\u0691\u06BE\u06CC\u06BA \u0627\u0648\u0631 \u062C\u0648\u0627\u0628 \u062E\u0648\u062F \u0633\u0648\u0686\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062C\u0648\u0627\u0628 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06AF\u0644\u0627 \u06A9\u0627\u0631\u0688 \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4",
+        language
+      ),
+      dictation: joinLocalizedText(
+        "Press Play Again, listen carefully, type exactly what you hear, then press Check.",
+        "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0633\u0646\u06CC\u06BA \u062F\u0628\u0627\u0626\u06CC\u06BA\u060C \u063A\u0648\u0631 \u0633\u06D2 \u0633\u0646\u06CC\u06BA\u060C \u062C\u0648 \u0633\u0646\u06CC\u06BA \u0648\u06C1\u06CC \u0644\u06A9\u06BE\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062C\u0627\u0646\u0686\u06CC\u06BA \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4",
+        language
+      ),
+      typing: joinLocalizedText(
+        "Read the clue, type the exact matching answer, then press Check.",
+        "\u0627\u0634\u0627\u0631\u06C1 \u067E\u0691\u06BE\u06CC\u06BA\u060C \u0627\u0633 \u06A9\u0627 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062C\u0627\u0646\u0686\u06CC\u06BA \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4",
+        language
+      ),
+      fillblanks: joinLocalizedText(
+        "Read the sentence and choose the word that completes the blank correctly.",
+        "\u062C\u0645\u0644\u06C1 \u067E\u0691\u06BE\u06CC\u06BA \u0627\u0648\u0631 \u0648\u06C1 \u0644\u0641\u0638 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u062C\u0648 \u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u06A9\u0648 \u062F\u0631\u0633\u062A \u0637\u0648\u0631 \u067E\u0631 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06D2\u06D4",
+        language
+      ),
+      sentencebuilder: joinLocalizedText(
+        "Tap the word pieces in the correct order. Tap a chosen piece again to remove it.",
+        "\u0644\u0641\u0638\u0648\u06BA \u06A9\u06D2 \u0679\u06A9\u0691\u06D2 \u062F\u0631\u0633\u062A \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4 \u06A9\u0633\u06CC \u0645\u0646\u062A\u062E\u0628 \u0679\u06A9\u0691\u06D2 \u06A9\u0648 \u06C1\u0679\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u06D2 \u062F\u0648\u0628\u0627\u0631\u06C1 \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4",
+        language
+      ),
+      timedchallenge: joinLocalizedText(
+        "Choose the correct answer before the timer ends. If you are unsure, skip and keep moving.",
+        "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4 \u0627\u06AF\u0631 \u06CC\u0642\u06CC\u0646 \u0646\u06C1 \u06C1\u0648 \u062A\u0648 \u0686\u06BE\u0648\u0691 \u062F\u06CC\u06BA \u0627\u0648\u0631 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u06CC\u06BA\u06D4",
+        language
+      ),
+      timedquiz: joinLocalizedText(
+        "Read the question, choose the best answer before the timer ends, then move to the next one.",
+        "\u0633\u0648\u0627\u0644 \u067E\u0691\u06BE\u06CC\u06BA\u060C \u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0628\u06C1\u062A\u0631\u06CC\u0646 \u062C\u0648\u0627\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u06AF\u0644\u06D2 \u0633\u0648\u0627\u0644 \u067E\u0631 \u062C\u0627\u0626\u06CC\u06BA\u06D4",
+        language
+      ),
+      timedtruefalse: joinLocalizedText(
+        "Read the statement and decide whether it is true or false before time runs out.",
+        "\u0633\u0648\u0627\u0644 \u067E\u0691\u06BE\u06CC\u06BA \u0627\u0648\u0631 \u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0641\u06CC\u0635\u0644\u06C1 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u06CC\u06C1 \u062F\u0631\u0633\u062A \u06C1\u06D2 \u06CC\u0627 \u063A\u0644\u0637\u06D4",
+        language
+      ),
+      timedmatching: joinLocalizedText(
+        "Match as many pairs as you can before the set timer ends.",
+        "\u0633\u06CC\u0679 \u06A9\u0627 \u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u062C\u062A\u0646\u06CC \u06C1\u0648 \u0633\u06A9\u06CC\u06BA \u062F\u0631\u0633\u062A \u062C\u0648\u0691\u06CC\u0627\u06BA \u0645\u0644\u0627 \u062F\u06CC\u06BA\u06D4",
+        language
+      ),
+      interleaved: joinLocalizedText(
+        "This mode mixes card types. Stay alert and answer each card using the instruction shown above it.",
+        "\u0627\u0633 \u0645\u0648\u0688 \u0645\u06CC\u06BA \u0645\u062E\u062A\u0644\u0641 \u0627\u0642\u0633\u0627\u0645 \u06A9\u06CC \u0645\u0634\u0642\u06CC\u06BA \u0645\u0644\u062A\u06CC \u06C1\u06CC\u06BA\u06D4 \u0627\u0648\u067E\u0631 \u062F\u06CC \u06AF\u0626\u06CC \u06C1\u062F\u0627\u06CC\u062A \u062F\u06CC\u06A9\u06BE\u062A\u06D2 \u0631\u06C1\u06CC\u06BA \u0627\u0648\u0631 \u0627\u0633\u06CC \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u062C\u0648\u0627\u0628 \u062F\u06CC\u06BA\u06D4",
+        language
+      ),
+      matching: joinLocalizedText(
+        "Select one item from the left, then tap its matching pair on the right. Finish the round, then go next.",
+        "\u0628\u0627\u0626\u06CC\u06BA \u0637\u0631\u0641 \u0633\u06D2 \u0627\u06CC\u06A9 \u0686\u06CC\u0632 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062F\u0627\u0626\u06CC\u06BA \u0637\u0631\u0641 \u0627\u0633 \u06A9\u06CC \u062F\u0631\u0633\u062A \u062C\u0648\u0691\u06CC \u067E\u0631 \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4 \u0631\u0627\u0624\u0646\u0688 \u0645\u06A9\u0645\u0644 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u0627\u06AF\u0644\u0627 \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4",
+        language
+      )
+    };
+    return entries[mode] || joinLocalizedText("Complete the activity step by step.", "\u0633\u0631\u06AF\u0631\u0645\u06CC \u06A9\u0648 \u0645\u0631\u062D\u0644\u06C1 \u0648\u0627\u0631 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language);
+  }
+  function getPracticeQuestionPrompt(card, mode, language = "en") {
+    const subject = String((card == null ? void 0 : card.subject) || "english");
+    const stem = normalizeText(card == null ? void 0 : card.practiceQuestionStem);
+    const flashFront = getPracticeFlashFront(card);
+    const flashBack = getPracticeFlashBack(card);
+    const typingTarget = getPracticeTypingTarget(card);
+    const sectionLabel = normalizeAnswerText((card == null ? void 0 : card.sectionLabel) || "");
+    const isSentence = /\s/.test(flashFront || typingTarget);
+    const stemKey = normalizeAnswerText(stem);
+    const generic = {
+      flashcards: language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC \u06AF\u0626\u06CC \u0686\u06CC\u0632 \u06A9\u0627 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u0628\u062A\u0627\u0626\u06CC\u06BA\u06D4" : "Give the correct answer for the item below.",
+      typing: language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u06A9\u0627 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA\u06D4" : "Type the correct answer for the clue below.",
+      matching: language === "ur" ? "\u0628\u0627\u0626\u06CC\u06BA \u0637\u0631\u0641 \u062F\u06CC \u06AF\u0626\u06CC \u0686\u06CC\u0632\u0648\u06BA \u06A9\u0648 \u062F\u0627\u0626\u06CC\u06BA \u0637\u0631\u0641 \u0627\u0646 \u06A9\u06CC \u062F\u0631\u0633\u062A \u062C\u0648\u0691\u06CC \u0633\u06D2 \u0645\u0644\u0627\u0626\u06CC\u06BA\u06D4" : "Match each item on the left with its correct answer on the right.",
+      dictation: language === "ur" ? (card == null ? void 0 : card.practiceLang) === "ur" ? "\u062C\u0648 \u0627\u0631\u062F\u0648 \u0645\u062A\u0646 \u0622\u067E \u0633\u0646\u06CC\u06BA\u060C \u0627\u0633\u06D2 \u0679\u06BE\u06CC\u06A9 \u0627\u0633\u06CC \u0637\u0631\u062D \u0644\u06A9\u06BE\u06CC\u06BA\u06D4" : "\u062C\u0648 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0644\u0641\u0638 \u06CC\u0627 \u062C\u0645\u0644\u06C1 \u0622\u067E \u0633\u0646\u06CC\u06BA\u060C \u0627\u0633\u06D2 \u0679\u06BE\u06CC\u06A9 \u0627\u0633\u06CC \u0637\u0631\u062D \u0644\u06A9\u06BE\u06CC\u06BA\u06D4" : (card == null ? void 0 : card.practiceLang) === "ur" ? "Type the Urdu text exactly as you hear it." : "Type the English word or sentence exactly as you hear it.",
+      fillblanks: language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u062C\u0645\u0644\u06D2 \u06A9\u06CC \u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u062F\u0631\u0633\u062A \u0644\u0641\u0638 \u0633\u06D2 \u067E\u064F\u0631 \u06A9\u0631\u06CC\u06BA\u06D4" : "Fill the blank in the sentence below with the correct word.",
+      sentencebuilder: language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0644\u0641\u0638\u0648\u06BA \u06A9\u0648 \u062F\u0631\u0633\u062A \u062A\u0631\u062A\u06CC\u0628 \u0645\u06CC\u06BA \u0631\u06A9\u06BE \u06A9\u0631 \u062C\u0645\u0644\u06C1 \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4" : "Arrange the words below in the correct order to build the sentence.",
+      timedchallenge: language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0633\u0648\u0627\u0644 \u06A9\u0627 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u062C\u0644\u062F\u06CC \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4" : "Choose the correct answer for the question below before time runs out."
+    };
+    if (mode === "matching" || mode === "timedmatching" || mode === "dictation" || mode === "fillblanks" || mode === "sentencebuilder" || mode === "timedchallenge" || mode === "timedquiz" || mode === "timedtruefalse") {
+      if (stem && language !== "ur") return stem;
+      if (stemKey.includes("solid liquid gas") || stemKey.includes("state of matter")) return language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC \u06AF\u0626\u06CC \u0686\u06CC\u0632 \u06A9\u06CC \u062D\u0627\u0644\u062A\u0650 \u0645\u0627\u062F\u06C1 \u0628\u062A\u0627\u0626\u06CC\u06BA\u06D4" : "Tell the state of matter of the item below.";
+      if (stemKey.includes("fraction") && stemKey.includes("decimal")) return language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC \u06AF\u0626\u06CC \u0627\u0639\u0634\u0627\u0631\u06CC \u0635\u0648\u0631\u062A \u06A9\u0648 \u06A9\u0633\u0631 \u06CC\u0627 \u06A9\u0633\u0631 \u06A9\u0648 \u0627\u0639\u0634\u0627\u0631\u06CC \u0635\u0648\u0631\u062A \u0645\u06CC\u06BA \u0644\u06A9\u06BE\u06CC\u06BA\u06D4" : "Convert the item below between fraction and decimal form.";
+      return generic[mode];
+    }
+    if (stem) {
+      if (language !== "ur") return stem;
+      if (stemKey.includes("translate") && stemKey.includes("urdu")) return isSentence ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u062C\u0645\u0644\u06D2 \u06A9\u0627 \u0627\u0631\u062F\u0648 \u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4" : "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0644\u0641\u0638 \u06A9\u0627 \u0627\u0631\u062F\u0648 \u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4";
+      if (stemKey.includes("translate") && stemKey.includes("english")) return isSentence ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u062C\u0645\u0644\u06D2 \u06A9\u0627 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4" : "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0644\u0641\u0638 \u06A9\u0627 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4";
+      if (stemKey.includes("opposite")) return isSentence ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u062C\u0645\u0644\u06D2 \u06CC\u0627 \u0644\u0641\u0638 \u06A9\u0627 \u0645\u062A\u0636\u0627\u062F \u0628\u062A\u0627\u0626\u06CC\u06BA\u06D4" : "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0644\u0641\u0638 \u06A9\u0627 \u0645\u062A\u0636\u0627\u062F \u0628\u062A\u0627\u0626\u06CC\u06BA\u06D4";
+      if (stemKey.includes("solid liquid gas") || stemKey.includes("state of matter")) return "\u0646\u06CC\u0686\u06D2 \u062F\u06CC \u06AF\u0626\u06CC \u0686\u06CC\u0632 \u06A9\u06CC \u062D\u0627\u0644\u062A\u0650 \u0645\u0627\u062F\u06C1 \u0628\u062A\u0627\u0626\u06CC\u06BA\u06D4";
+      if (stemKey.includes("true or false")) return "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0633\u0648\u0627\u0644 \u06A9\u06D2 \u062F\u0631\u0633\u062A \u06CC\u0627 \u063A\u0644\u0637 \u06C1\u0648\u0646\u06D2 \u06A9\u0627 \u062C\u0648\u0627\u0628 \u062F\u06CC\u06BA\u06D4";
+      if (stemKey.includes("place value")) return "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u06C1\u0646\u062F\u0633\u06D2 \u06CC\u0627 \u0639\u062F\u062F \u06A9\u06CC \u062C\u06AF\u06C1 \u06A9\u06CC \u0642\u062F\u0631 \u0628\u062A\u0627\u0626\u06CC\u06BA\u06D4";
+      if (stemKey.includes("expanded form")) return "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0639\u062F\u062F \u06A9\u0648 \u0628\u0633\u06CC\u0637 \u0634\u06A9\u0644 \u0645\u06CC\u06BA \u0644\u06A9\u06BE\u06CC\u06BA\u06D4";
+      if (stemKey.includes("standard form")) return "\u0646\u06CC\u0686\u06D2 \u062F\u06CC \u06AF\u0626\u06CC \u0628\u0633\u06CC\u0637 \u0634\u06A9\u0644 \u06A9\u0648 \u0639\u062F\u062F\u06CC \u0635\u0648\u0631\u062A \u0645\u06CC\u06BA \u0644\u06A9\u06BE\u06CC\u06BA\u06D4";
+      if (stemKey.includes("fraction") && stemKey.includes("decimal")) return "\u0646\u06CC\u0686\u06D2 \u062F\u06CC \u06AF\u0626\u06CC \u0627\u0639\u0634\u0627\u0631\u06CC \u0635\u0648\u0631\u062A \u06A9\u0648 \u06A9\u0633\u0631 \u06CC\u0627 \u06A9\u0633\u0631 \u06A9\u0648 \u0627\u0639\u0634\u0627\u0631\u06CC \u0635\u0648\u0631\u062A \u0645\u06CC\u06BA \u0644\u06A9\u06BE\u06CC\u06BA\u06D4";
+      if (stemKey.includes("classify")) return "\u0646\u06CC\u0686\u06D2 \u062F\u06CC \u06AF\u0626\u06CC \u0686\u06CC\u0632 \u06A9\u06CC \u062F\u0631\u0633\u062A \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC \u06A9\u0631\u06CC\u06BA\u06D4";
+      return generic[mode];
+    }
+    if (subject === "english") {
+      if ((card == null ? void 0 : card.opposite) || (card == null ? void 0 : card.oppositeUr) || sectionLabel.includes("opposite")) return language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0644\u0641\u0638 \u06A9\u0627 \u0645\u062A\u0636\u0627\u062F \u0628\u062A\u0627\u0626\u06CC\u06BA\u06D4" : "Tell the opposite of the word below.";
+      if (containsUrduText(flashFront) && !containsUrduText(flashBack)) return language === "ur" ? isSentence ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u062C\u0645\u0644\u06D2 \u06A9\u0627 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4" : "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0644\u0641\u0638 \u06A9\u0627 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4" : isSentence ? "Translate this sentence into English." : "Translate this word into English.";
+      if (!containsUrduText(flashFront) && containsUrduText(flashBack)) return language === "ur" ? isSentence ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u062C\u0645\u0644\u06D2 \u06A9\u0627 \u0627\u0631\u062F\u0648 \u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4" : "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0644\u0641\u0638 \u06A9\u0627 \u0627\u0631\u062F\u0648 \u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4" : isSentence ? "Translate this sentence into Urdu." : "Translate this word into Urdu.";
+    }
+    if (subject === "science") return language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0633\u0627\u0626\u0646\u0633\u06CC \u0633\u0648\u0627\u0644 \u06A9\u0627 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u062F\u06CC\u06BA\u06D4" : "Give the correct science answer for the item below.";
+    if (subject === "math") return language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0631\u06CC\u0627\u0636\u06CC \u06A9\u06D2 \u0633\u0648\u0627\u0644 \u06A9\u0648 \u062D\u0644 \u06A9\u0631\u06CC\u06BA\u06D4" : "Solve the math question below.";
+    if (subject === "urdu") return language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0627\u0631\u062F\u0648 \u0633\u0648\u0627\u0644 \u06A9\u0627 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u062F\u06CC\u06BA\u06D4" : "Give the correct Urdu answer for the item below.";
+    if (subject === "social") return language === "ur" ? "\u0646\u06CC\u0686\u06D2 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0633\u0648\u0627\u0644 \u06A9\u0627 \u062F\u0631\u0633\u062A \u0633\u0645\u0627\u062C\u06CC \u0639\u0644\u0648\u0645 \u062C\u0648\u0627\u0628 \u062F\u06CC\u06BA\u06D4" : "Give the correct social studies answer for the item below.";
+    return generic[mode];
+  }
+  function isUsefulPracticePair(card, mode = "flashcards") {
+    const prompt2 = mode === "matching" ? getPracticeMatchPrompt(card) : mode === "typing" ? getPracticeTypingTarget(card) : getPracticeFlashFront(card);
+    const answer = mode === "matching" ? getPracticeMatchAnswer(card) : mode === "typing" ? getPracticeTypingClue(card) : getPracticeFlashBack(card);
+    const sectionLabel = normalizeText(card == null ? void 0 : card.sectionLabel);
+    if (!prompt2 || !answer) return false;
+    if ((card == null ? void 0 : card.supplementalType) === "example") return false;
+    if (normalizeAnswerText(prompt2) === normalizeAnswerText(answer)) return false;
+    if (sectionLabel && normalizeAnswerText(answer) === normalizeAnswerText(sectionLabel) && !(card == null ? void 0 : card.blankSentence) && !(card == null ? void 0 : card.example)) return false;
+    return true;
+  }
+  function buildPracticeDeck(library = [], limit = 12, mode = "flashcards") {
+    return shuffleArray((library || []).filter((card) => isUsefulPracticePair(card, mode))).slice(0, Math.max(4, Number(limit) || 12));
+  }
+  function escapeRegExp(value) {
+    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  function buildPromptPattern(prompt2) {
+    const normalizedPrompt = String(prompt2 || "").trim();
+    if (!normalizedPrompt) return null;
+    const escaped = escapeRegExp(normalizedPrompt);
+    const canUseWordBoundary = /^[\p{L}\p{N}_'-]+$/u.test(normalizedPrompt);
+    return new RegExp(canUseWordBoundary ? `\\b${escaped}\\b` : escaped, "i");
+  }
+  function buildFillBlankSentence(card) {
+    if ((card == null ? void 0 : card.quizQuestion) || (card == null ? void 0 : card.supplementalType) === "quiz") return "";
+    const prompt2 = String((card == null ? void 0 : card.prompt) || "").trim();
+    const example = String((card == null ? void 0 : card.example) || "").trim();
+    if (prompt2 && example) {
+      const pattern = buildPromptPattern(prompt2);
+      if (pattern == null ? void 0 : pattern.test(example)) {
+        return example.replace(pattern, "_____");
+      }
+    }
+    const clue = String((card == null ? void 0 : card.answer) || "").trim();
+    if (clue && !/[?؟]$/.test(clue) && clue.split(/\s+/).length <= 8) return `${clue} _____`;
+    const meaning = String((card == null ? void 0 : card.meaning) || "").trim();
+    if (meaning) return `${meaning} _____.`;
+    return "";
+  }
+  function buildFillBlankDeck(library = [], limit = 10, optionCount = 4) {
+    const pool = shuffleArray((library || []).filter((card) => (card == null ? void 0 : card.prompt) && ((card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning))));
+    const selected = [];
+    pool.forEach((card) => {
+      if (selected.length >= Math.max(4, Number(limit) || 10)) return;
+      const blankSentence = buildFillBlankSentence(card);
+      if (!blankSentence || !blankSentence.includes("_____")) return;
+      const distractorPool = shuffleArray(
+        pool.filter((entry) => (entry == null ? void 0 : entry.id) !== card.id && (entry == null ? void 0 : entry.prompt) && normalizeAnswerText(entry.prompt) !== normalizeAnswerText(card.prompt)).map((entry) => entry.prompt)
+      );
+      const uniqueOptions = [];
+      const seen = /* @__PURE__ */ new Set();
+      [...distractorPool.slice(0, Math.max(1, optionCount - 1)), card.prompt].forEach((entry) => {
+        const key = normalizeAnswerText(entry);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        uniqueOptions.push(entry);
+      });
+      if (uniqueOptions.length < 2) return;
+      selected.push({
+        ...card,
+        blankSentence,
+        blankOptions: shuffleArray(uniqueOptions).slice(0, Math.max(2, optionCount))
+      });
+    });
+    return selected;
+  }
+  function stripPracticeMarkers(value) {
+    return String(value || "").replace(/\[([^\]]+)\]/g, "$1").replace(/\s+/g, " ").trim();
+  }
+  function buildExerciseBlankSentence(part) {
+    const cleaned = stripPracticeMarkers(part);
+    if (!cleaned) return "";
+    if (/_+/.test(cleaned)) return cleaned.replace(/_+/g, "_____");
+    if (/\?/.test(cleaned)) return cleaned.replace(/\?+/g, "_____");
+    if (/→\s*$/.test(cleaned)) return cleaned.replace(/→\s*$/, "\u2192 _____");
+    if (/:\s*$/.test(cleaned)) return `${cleaned} _____`;
+    if (/[.؟?!]$/.test(cleaned)) return `${cleaned} _____`;
+    return `${cleaned} \u2192 _____`;
+  }
+  function getLessonKeyValue(lesson) {
+    return (lesson == null ? void 0 : lesson.key) || (lesson == null ? void 0 : lesson.id) || (lesson == null ? void 0 : lesson.title) || null;
+  }
+  function estimatePracticeDifficulty(prompt2, answer, stem = "", type = "exercise") {
+    const promptWords = String(prompt2 || "").trim().split(/\s+/).filter(Boolean).length;
+    const answerWords = String(answer || "").trim().split(/\s+/).filter(Boolean).length;
+    const stemText = normalizeAnswerText(stem);
+    const totalWords = promptWords + answerWords;
+    if (type === "pair") return totalWords <= 4 ? "beginner" : totalWords <= 10 ? "medium" : "advanced";
+    if (type === "quiz") return totalWords <= 8 && stemText.length <= 60 ? "medium" : "advanced";
+    if (type === "review") return totalWords <= 4 ? "beginner" : totalWords <= 10 ? "medium" : "advanced";
+    if (stemText.includes("true or false") || stemText.includes("classify") || stemText.includes("place value") || stemText.includes("expanded form") || stemText.includes("standard form")) {
+      return totalWords <= 8 ? "beginner" : "medium";
+    }
+    if (totalWords <= 5) return "beginner";
+    if (totalWords <= 12) return "medium";
+    return "advanced";
+  }
+  function getPracticeItemLessonKey(card) {
+    var _a;
+    return (card == null ? void 0 : card.lessonKey) || ((_a = card == null ? void 0 : card.source) == null ? void 0 : _a.lessonKey) || null;
+  }
+  function getPracticeItemDifficulty(card) {
+    if (["beginner", "medium", "advanced"].includes(card == null ? void 0 : card.practiceDifficulty)) return card.practiceDifficulty;
+    return estimatePracticeDifficulty(
+      (card == null ? void 0 : card.practiceFront) || (card == null ? void 0 : card.prompt),
+      (card == null ? void 0 : card.practiceBack) || (card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning),
+      (card == null ? void 0 : card.practiceQuestionStem) || "",
+      (card == null ? void 0 : card.supplementalType) || "review"
+    );
+  }
+  function getPracticeDifficultyMarks(difficulty = "beginner") {
+    if (difficulty === "advanced") return 30;
+    if (difficulty === "medium") return 20;
+    return 10;
+  }
+  function parseTrueFalseAnswer(answer) {
+    const text = String(answer || "").trim();
+    if (!text) return null;
+    if (/^true\b/i.test(text)) return { correct: true, explanation: text.replace(/^true\b\s*[-—–:]*\s*/i, "").trim() };
+    if (/^false\b/i.test(text)) return { correct: false, explanation: text.replace(/^false\b\s*[-—–:]*\s*/i, "").trim() };
+    return null;
+  }
+  function buildDerivedTrueFalseFromPracticeCard(card, alternateAnswer = "", index = 0) {
+    const question = stripPracticeMarkers((card == null ? void 0 : card.trueFalseStatement) || (card == null ? void 0 : card.quizQuestion) || (card == null ? void 0 : card.practiceQuestionStem) || (card == null ? void 0 : card.answer) || "");
+    const correctAnswer = stripPracticeMarkers((card == null ? void 0 : card.practiceBack) || (card == null ? void 0 : card.answer) || (card == null ? void 0 : card.prompt) || "");
+    const wrongOption = stripPracticeMarkers(alternateAnswer);
+    if (!question || !correctAnswer) return null;
+    const useCorrect = index % 2 === 0 || !wrongOption;
+    const proposedAnswer = useCorrect ? correctAnswer : wrongOption;
+    if (!proposedAnswer || normalizeAnswerText(proposedAnswer) === normalizeAnswerText(question)) return null;
+    const statement = containsUrduText(question) || containsUrduText(proposedAnswer) ? `\u0633\u0648\u0627\u0644: ${question} \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 "${proposedAnswer}" \u06C1\u06D2\u06D4` : `For the question "${question}", the correct answer is "${proposedAnswer}".`;
+    return {
+      ...card,
+      trueFalseStatement: statement,
+      trueFalseAnswer: useCorrect,
+      trueFalseExplanation: correctAnswer
+    };
+  }
+  function buildGradePracticeItems(dataLoader, grade) {
+    const items = [];
+    const subjects = Array.isArray(dataLoader == null ? void 0 : dataLoader.SUBJECTS) ? dataLoader.SUBJECTS : [];
+    subjects.forEach((subject) => {
+      var _a;
+      const lessons = ((_a = dataLoader == null ? void 0 : dataLoader.getLessons) == null ? void 0 : _a.call(dataLoader, subject.id, grade)) || [];
+      const defaultLang = subject.id === "urdu" ? "ur" : "en";
+      lessons.forEach((lesson, lessonIndex) => {
+        var _a2;
+        const lessonKey = (lesson == null ? void 0 : lesson.key) || (lesson == null ? void 0 : lesson.id) || (lesson == null ? void 0 : lesson.title) || null;
+        const sharedQuizItems = Array.isArray((_a2 = dataLoader == null ? void 0 : dataLoader.getQuiz) == null ? void 0 : _a2.call(dataLoader, subject.id, grade, lessonKey)) ? dataLoader.getQuiz(subject.id, grade, lessonKey) : [];
+        const sections = (lesson == null ? void 0 : lesson.hasMathSub) ? (lesson.subs || []).map((sub) => ({
+          title: (sub == null ? void 0 : sub.t) || lesson.title,
+          examples: (sub == null ? void 0 : sub.examples) || [],
+          sentencePairs: (sub == null ? void 0 : sub.sentencePairs) || [],
+          exercises: (sub == null ? void 0 : sub.exerciseGroups) ? sub.exerciseGroups.flatMap((group) => (group == null ? void 0 : group.exercises) || []) : (sub == null ? void 0 : sub.exercises) || [],
+          quiz: (sub == null ? void 0 : sub.quiz) || [],
+          wordProblems: (sub == null ? void 0 : sub.wordProblems) || []
+        })) : [{
+          title: (lesson == null ? void 0 : lesson.title) || "",
+          examples: (lesson == null ? void 0 : lesson.examples) || [],
+          sentencePairs: (lesson == null ? void 0 : lesson.sentencePairs) || [],
+          exercises: (lesson == null ? void 0 : lesson.exerciseGroups) ? lesson.exerciseGroups.flatMap((group) => (group == null ? void 0 : group.exercises) || []) : (lesson == null ? void 0 : lesson.exercises) || [],
+          quiz: (lesson == null ? void 0 : lesson.quiz) || [],
+          wordProblems: (lesson == null ? void 0 : lesson.wordProblems) || []
+        }];
+        sections.forEach((section, sectionIndex) => {
+          const sectionTitle = (section == null ? void 0 : section.title) || (lesson == null ? void 0 : lesson.title) || subject.name || "Practice";
+          const sectionLabel = `${subject.name} \u2022 ${sectionTitle}`;
+          const examples = Array.isArray(section == null ? void 0 : section.examples) ? section.examples : [];
+          examples.forEach((example, exampleIndex) => {
+            const text = stripPracticeMarkers(example);
+            if (!text || text.length < 3) return;
+            items.push({
+              id: `supplemental_example_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, exampleIndex, text].join("|"))}`,
+              subject: subject.id,
+              section: lesson.key || lesson.title || subject.id,
+              sectionLabel,
+              prompt: text,
+              answer: "",
+              meaning: "",
+              supplementalType: "example",
+              lessonKey: lesson.key || lesson.title || null,
+              lessonIndex,
+              practiceDifficulty: estimatePracticeDifficulty(text, "", sectionTitle, "example"),
+              practiceLang: containsUrduText(text) ? "ur" : defaultLang,
+              source: {
+                subject: subject.id,
+                lessonKey: lesson.key || null,
+                lessonTitle: lesson.title || null,
+                subTitle: sectionTitle,
+                subIndex: (lesson == null ? void 0 : lesson.hasMathSub) ? sectionIndex : null,
+                subTab: "examples"
+              }
+            });
+          });
+          const sentencePairs = Array.isArray(section == null ? void 0 : section.sentencePairs) ? section.sentencePairs : [];
+          sentencePairs.forEach((pair, pairIndex) => {
+            const left = stripPracticeMarkers((pair == null ? void 0 : pair.en) || (pair == null ? void 0 : pair.left));
+            const right = stripPracticeMarkers((pair == null ? void 0 : pair.ur) || (pair == null ? void 0 : pair.right));
+            if (!left || !right) return;
+            items.push({
+              id: `supplemental_pair_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, pairIndex, left, right].join("|"))}`,
+              subject: subject.id,
+              section: lesson.key || lesson.title || subject.id,
+              sectionLabel,
+              prompt: left,
+              answer: right,
+              meaning: "",
+              supplementalType: "pair",
+              lessonKey: lesson.key || lesson.title || null,
+              lessonIndex,
+              practiceQuestionStem: subject.id === "english" ? containsUrduText(left) ? "Translate this into English:" : "Translate this into Urdu:" : subject.id === "urdu" ? "\u062A\u0631\u062C\u0645\u06C1 \u06A9\u0631\u06CC\u06BA:" : "Match the correct meaning:",
+              practiceFront: left,
+              practiceBack: right,
+              typingClue: right,
+              typingTarget: left,
+              matchPrompt: left,
+              matchAnswer: right,
+              practiceDifficulty: estimatePracticeDifficulty(left, right, sectionTitle, "pair"),
+              practiceLang: containsUrduText(left) ? "ur" : defaultLang,
+              source: {
+                subject: subject.id,
+                lessonKey: lesson.key || null,
+                lessonTitle: lesson.title || null,
+                subTitle: sectionTitle,
+                subIndex: (lesson == null ? void 0 : lesson.hasMathSub) ? sectionIndex : null,
+                subTab: "examples"
+              }
+            });
+          });
+          const exercises = Array.isArray(section == null ? void 0 : section.exercises) ? section.exercises : [];
+          exercises.forEach((exercise, exerciseIndex) => {
+            const parts = Array.isArray(exercise == null ? void 0 : exercise.parts) ? exercise.parts : [];
+            const answers = Array.isArray(exercise == null ? void 0 : exercise.ans) ? exercise.ans : [];
+            parts.forEach((part, partIndex) => {
+              var _a3, _b;
+              const clue = stripPracticeMarkers(part);
+              const solution = stripPracticeMarkers(answers[partIndex]);
+              if (!clue || !solution) return;
+              items.push({
+                id: `supplemental_exercise_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, exerciseIndex, partIndex, clue, solution].join("|"))}`,
+                subject: subject.id,
+                section: lesson.key || lesson.title || subject.id,
+                sectionLabel,
+                prompt: solution,
+                answer: clue,
+                meaning: "",
+                supplementalType: "exercise",
+                lessonKey: lesson.key || lesson.title || null,
+                lessonIndex,
+                practiceQuestionStem: (exercise == null ? void 0 : exercise.q) || "",
+                practiceFront: clue,
+                practiceBack: solution,
+                typingClue: clue,
+                typingTarget: solution,
+                matchPrompt: clue,
+                matchAnswer: solution,
+                practiceDifficulty: estimatePracticeDifficulty(clue, solution, (exercise == null ? void 0 : exercise.q) || "", "exercise"),
+                trueFalseStatement: /^true\s+or\s+false/i.test(String((exercise == null ? void 0 : exercise.q) || "").trim()) ? clue : "",
+                trueFalseAnswer: (_a3 = parseTrueFalseAnswer(solution)) == null ? void 0 : _a3.correct,
+                trueFalseExplanation: ((_b = parseTrueFalseAnswer(solution)) == null ? void 0 : _b.explanation) || "",
+                blankSentence: buildExerciseBlankSentence(part),
+                practiceLang: containsUrduText(solution) ? "ur" : defaultLang,
+                source: {
+                  subject: subject.id,
+                  lessonKey: lesson.key || null,
+                  lessonTitle: lesson.title || null,
+                  subTitle: sectionTitle,
+                  subIndex: (lesson == null ? void 0 : lesson.hasMathSub) ? sectionIndex : null,
+                  subTab: "exercises"
+                }
+              });
+            });
+          });
+          const wordProblems = Array.isArray(section == null ? void 0 : section.wordProblems) ? section.wordProblems : [];
+          wordProblems.forEach((problem, problemIndex) => {
+            const problemQuestion = stripPracticeMarkers(typeof problem === "string" ? problem : (problem == null ? void 0 : problem.q) || "");
+            const problemAnswer = stripPracticeMarkers((problem == null ? void 0 : problem.a) || "");
+            if (!problemQuestion || !problemAnswer) return;
+            items.push({
+              id: `supplemental_wordproblem_${simpleHash([subject.id, lessonKey || "", sectionIndex, problemIndex, problemQuestion, problemAnswer].join("|"))}`,
+              subject: subject.id,
+              section: lessonKey || subject.id,
+              sectionLabel,
+              prompt: problemAnswer,
+              answer: problemQuestion,
+              meaning: "",
+              supplementalType: "wordproblem",
+              lessonKey,
+              lessonIndex,
+              practiceQuestionStem: problemQuestion,
+              practiceFront: problemQuestion,
+              practiceBack: problemAnswer,
+              typingClue: problemQuestion,
+              typingTarget: problemAnswer,
+              matchPrompt: problemQuestion,
+              matchAnswer: problemAnswer,
+              practiceDifficulty: estimatePracticeDifficulty(problemQuestion, problemAnswer, sectionTitle, "quiz"),
+              blankSentence: "",
+              practiceLang: containsUrduText(problemAnswer) ? "ur" : defaultLang,
+              source: {
+                subject: subject.id,
+                lessonKey: (lesson == null ? void 0 : lesson.key) || lessonKey,
+                lessonTitle: lesson.title || null,
+                subTitle: sectionTitle,
+                subIndex: (lesson == null ? void 0 : lesson.hasMathSub) ? sectionIndex : null,
+                subTab: "wordProblems"
+              }
+            });
+          });
+          const sectionQuizItems = Array.isArray(section == null ? void 0 : section.quiz) ? section.quiz : [];
+          const quizItems = sectionIndex === 0 ? [...sectionQuizItems, ...sharedQuizItems] : sectionQuizItems;
+          quizItems.forEach((question, quizIndex) => {
+            const clue = stripPracticeMarkers(question == null ? void 0 : question.q);
+            const options = Array.isArray(question == null ? void 0 : question.a) ? question.a : [];
+            const correctAnswer = stripPracticeMarkers(options[Number(question == null ? void 0 : question.c)] || "");
+            if (!clue || !correctAnswer) return;
+            items.push({
+              id: `supplemental_quiz_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, quizIndex, clue, correctAnswer].join("|"))}`,
+              subject: subject.id,
+              section: lessonKey || subject.id,
+              sectionLabel,
+              prompt: correctAnswer,
+              answer: clue,
+              meaning: "",
+              supplementalType: "quiz",
+              lessonKey,
+              lessonIndex,
+              practiceQuestionStem: (question == null ? void 0 : question.q) || "",
+              practiceFront: clue,
+              practiceBack: correctAnswer,
+              typingClue: clue,
+              typingTarget: correctAnswer,
+              matchPrompt: clue,
+              matchAnswer: correctAnswer,
+              practiceDifficulty: estimatePracticeDifficulty(clue, correctAnswer, (question == null ? void 0 : question.q) || "", "quiz"),
+              quizQuestion: clue,
+              quizOptions: options.map((option) => stripPracticeMarkers(option)),
+              quizCorrectIndex: Number(question == null ? void 0 : question.c),
+              practiceLang: containsUrduText(correctAnswer) ? "ur" : defaultLang,
+              source: {
+                subject: subject.id,
+                lessonKey: (lesson == null ? void 0 : lesson.key) || lessonKey,
+                lessonTitle: lesson.title || null,
+                subTitle: sectionTitle,
+                subIndex: (lesson == null ? void 0 : lesson.hasMathSub) ? sectionIndex : null,
+                subTab: "quiz"
+              }
+            });
+          });
+        });
+      });
+    });
+    return items;
+  }
+  function buildTimedQuizDeck(library = [], limit = 12) {
+    return shuffleArray((library || []).filter((card) => (card == null ? void 0 : card.quizQuestion) && Array.isArray(card == null ? void 0 : card.quizOptions) && card.quizOptions.length >= 2)).slice(0, Math.max(4, Number(limit) || 12));
+  }
+  function buildTrueFalseDeck(library = [], limit = 12) {
+    const pool = shuffleArray(library || []);
+    const selected = [];
+    pool.forEach((card, index) => {
+      var _a, _b;
+      if (selected.length >= Math.max(4, Number(limit) || 12)) return;
+      if ((card == null ? void 0 : card.trueFalseStatement) && typeof (card == null ? void 0 : card.trueFalseAnswer) === "boolean") {
+        selected.push(card);
+        return;
+      }
+      const alternateAnswer = ((_a = pool.find((entry) => (entry == null ? void 0 : entry.id) !== (card == null ? void 0 : card.id) && ((entry == null ? void 0 : entry.subject) || "english") === ((card == null ? void 0 : card.subject) || "english") && getPracticeItemLessonKey(entry) === getPracticeItemLessonKey(card) && normalizeAnswerText((entry == null ? void 0 : entry.practiceBack) || (entry == null ? void 0 : entry.answer) || (entry == null ? void 0 : entry.prompt) || "") !== normalizeAnswerText((card == null ? void 0 : card.practiceBack) || (card == null ? void 0 : card.answer) || (card == null ? void 0 : card.prompt) || ""))) == null ? void 0 : _a.practiceBack) || ((_b = pool.find((entry) => normalizeAnswerText((entry == null ? void 0 : entry.practiceBack) || (entry == null ? void 0 : entry.answer) || (entry == null ? void 0 : entry.prompt) || "") !== normalizeAnswerText((card == null ? void 0 : card.practiceBack) || (card == null ? void 0 : card.answer) || (card == null ? void 0 : card.prompt) || ""))) == null ? void 0 : _b.practiceBack) || "";
+      if ((card == null ? void 0 : card.quizQuestion) && Array.isArray(card == null ? void 0 : card.quizOptions) && card.quizOptions.length >= 2 || (card == null ? void 0 : card.practiceQuestionStem) || (card == null ? void 0 : card.supplementalType) === "exercise" || (card == null ? void 0 : card.supplementalType) === "wordproblem") {
+        const derived = buildDerivedTrueFalseFromPracticeCard(card, alternateAnswer, index);
+        if (derived) selected.push(derived);
+      }
+    });
+    return selected;
+  }
+  function buildInterleavedDeck(library = [], limit = 12) {
+    const deck = [];
+    const flashcards = buildPracticeDeck(library, limit, "flashcards").map((card) => ({ ...card, interleavedType: "flashcards" }));
+    const typing = buildPracticeDeck(library, limit, "typing").map((card) => ({ ...card, interleavedType: "typing" }));
+    const blanks = buildFillBlankDeck(library, limit, 4).map((card) => ({ ...card, interleavedType: "fillblanks" }));
+    const queues = [flashcards, typing, blanks].filter((items) => items.length);
+    let guard = 0;
+    while (deck.length < Math.max(4, Number(limit) || 12) && queues.some((items) => items.length) && guard < 120) {
+      queues.forEach((items) => {
+        if (items.length && deck.length < Math.max(4, Number(limit) || 12)) deck.push(items.shift());
+      });
+      guard += 1;
+    }
+    return deck;
+  }
+  function getPracticeFeedbackText(card, mode, correct, language = "en") {
+    if (!card) return "";
+    const answer = getPracticeFlashBack(card) || (card == null ? void 0 : card.prompt) || "";
+    const clue = (card == null ? void 0 : card.quizQuestion) || (card == null ? void 0 : card.trueFalseStatement) || getPracticeFlashFront(card);
+    if (correct) {
+      return joinLocalizedText(`Nice work. ${answer}`, `\u0628\u06C1\u062A \u062E\u0648\u0628\u06D4 ${answer}`, language);
+    }
+    if (mode === "timedtruefalse") {
+      const verdict = (card == null ? void 0 : card.trueFalseAnswer) ? joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("False", "\u063A\u0644\u0637", language);
+      const explanation = (card == null ? void 0 : card.trueFalseExplanation) ? ` ${card.trueFalseExplanation}` : "";
+      return joinLocalizedText(`Correct answer: ${verdict}.${explanation}`, `\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628: ${verdict}.${explanation}`, language);
+    }
+    if (mode === "timedquiz" || mode === "timedchallenge") {
+      return joinLocalizedText(`Correct answer: ${answer}`, `\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628: ${answer}`, language);
+    }
+    if (mode === "matching" || mode === "timedmatching") {
+      return joinLocalizedText(`Correct match: ${clue} \u2192 ${answer}`, `\u062F\u0631\u0633\u062A \u062C\u0648\u0691: ${clue} \u2190 ${answer}`, language);
+    }
+    return joinLocalizedText(`Correct answer: ${answer}`, `\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628: ${answer}`, language);
+  }
+  function getPracticeMasteryMeta(card, lessonProgress = null, language = "en") {
+    if (card == null ? void 0 : card.mastered) return { tone: "mastered", label: joinLocalizedText("Mastered", "\u0645\u06C1\u0627\u0631\u062A \u062D\u0627\u0635\u0644", language) };
+    if ((Number(card == null ? void 0 : card.box) || 0) >= 3) return { tone: "strong", label: joinLocalizedText("Strong", "\u0645\u0636\u0628\u0648\u0637", language) };
+    if ((Number(card == null ? void 0 : card.totalReviews) || 0) > 0 || ((lessonProgress == null ? void 0 : lessonProgress.attempted) || 0) > 0) return { tone: "learning", label: joinLocalizedText("Learning", "\u0633\u06CC\u06A9\u06BE \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA", language) };
+    return { tone: "starting", label: joinLocalizedText("Starting", "\u0627\u0628\u062A\u062F\u0627\u0626\u06CC \u0645\u0631\u062D\u0644\u06C1", language) };
+  }
+  function getPracticeRoundNumber(mode, index) {
+    return mode === "matching" ? Math.floor(index / 4) + 1 : index + 1;
   }
   function normalizeAnswerText(value) {
     return normalizeText(String(value || "")).replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim().toLowerCase();
@@ -2419,6 +3109,7 @@ ${marker} `);
     const guess = normalizeAnswerText(input);
     if (!guess) return false;
     const acceptable = [
+      card == null ? void 0 : card.typingTarget,
       card == null ? void 0 : card.prompt,
       card == null ? void 0 : card.answer,
       card == null ? void 0 : card.meaning,
@@ -2433,11 +3124,64 @@ ${marker} `);
       prompts: selected,
       answers: shuffleArray(selected.map((card) => ({
         id: card.id,
-        text: card.answer || card.meaning || ""
+        text: getPracticeMatchAnswer(card)
       }))),
       matches: {},
       completed: false
     };
+  }
+  function splitSentenceTokens(sentence) {
+    return String(sentence || "").match(/[\p{L}\p{N}'’-]+|[.,!?;:()]/gu) || [];
+  }
+  function normalizeSentenceSpacing(sentence) {
+    return String(sentence || "").replace(/\s+([.,!?;:])/g, "$1").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")").replace(/\s+/g, " ").trim();
+  }
+  function buildSentenceBuilderDeck(library = [], limit = 10) {
+    const pool = shuffleArray(library || []);
+    const selected = [];
+    const seen = /* @__PURE__ */ new Set();
+    pool.forEach((card) => {
+      var _a, _b;
+      if (selected.length >= Math.max(4, Number(limit) || 10)) return;
+      const baseSentence = normalizeSentenceSpacing((card == null ? void 0 : card.example) || ((_b = (_a = card == null ? void 0 : card.blankSentence) == null ? void 0 : _a.replace) == null ? void 0 : _b.call(_a, "_____", (card == null ? void 0 : card.prompt) || "")) || (card == null ? void 0 : card.prompt) || "");
+      const tokens = splitSentenceTokens(baseSentence);
+      if (tokens.length < 3 || tokens.length > 10) return;
+      const normalizedSentence = normalizeAnswerText(baseSentence);
+      if (!normalizedSentence || seen.has(normalizedSentence)) return;
+      seen.add(normalizedSentence);
+      selected.push({
+        ...card,
+        sentenceBuilderSentence: baseSentence,
+        sentenceBuilderTokens: tokens,
+        sentenceBuilderOptions: shuffleArray(tokens.map((token, index) => ({ id: `${card.id || "sentence"}_${index}_${token}`, text: token }))),
+        sentenceBuilderLang: containsUrduText(baseSentence) ? "ur" : (card == null ? void 0 : card.practiceLang) || "en"
+      });
+    });
+    return selected;
+  }
+  function buildTimedChallengeDeck(library = [], limit = 12, optionCount = 4) {
+    const pool = shuffleArray((library || []).filter((card) => (card == null ? void 0 : card.prompt) && ((card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning))));
+    const selected = [];
+    pool.forEach((card) => {
+      if (selected.length >= Math.max(6, Number(limit) || 12)) return;
+      const distractorPool = shuffleArray(
+        pool.filter((entry) => (entry == null ? void 0 : entry.id) !== card.id && (entry == null ? void 0 : entry.prompt) && normalizeAnswerText(entry.prompt) !== normalizeAnswerText(card.prompt)).map((entry) => entry.prompt)
+      );
+      const uniqueOptions = [];
+      const seen = /* @__PURE__ */ new Set();
+      [...distractorPool.slice(0, Math.max(1, optionCount - 1)), card.prompt].forEach((entry) => {
+        const key = normalizeAnswerText(entry);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        uniqueOptions.push(entry);
+      });
+      if (uniqueOptions.length < 2) return;
+      selected.push({
+        ...card,
+        timedOptions: shuffleArray(uniqueOptions).slice(0, Math.max(2, optionCount))
+      });
+    });
+    return selected;
   }
   function formatClockTime(totalSeconds) {
     const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
@@ -2445,9 +3189,265 @@ ${marker} `);
     const seconds = safeSeconds % 60;
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
+  function formatProjectedDateLabel(value, language = "en") {
+    if (!value) return joinLocalizedText("Not enough data yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0627\u0641\u06CC \u0688\u06CC\u0679\u0627 \u0646\u06C1\u06CC\u06BA", language);
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return joinLocalizedText("Not enough data yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0627\u0641\u06CC \u0688\u06CC\u0679\u0627 \u0646\u06C1\u06CC\u06BA", language);
+    return date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function getForgettingCurveLabel(bucketId, language = "en") {
+    const labels = {
+      same_day: joinLocalizedText("Same day", "\u0627\u0633\u06CC \u062F\u0646", language),
+      day_1: joinLocalizedText("1 day", "1 \u062F\u0646", language),
+      days_2_3: joinLocalizedText("2-3 days", "2-3 \u062F\u0646", language),
+      days_4_7: joinLocalizedText("4-7 days", "4-7 \u062F\u0646", language),
+      days_8_14: joinLocalizedText("8-14 days", "8-14 \u062F\u0646", language),
+      days_15_plus: joinLocalizedText("15+ days", "15+ \u062F\u0646", language)
+    };
+    return labels[bucketId] || joinLocalizedText("Review gap", "\u0631\u06CC\u0648\u06CC\u0648 \u0648\u0642\u0641\u06C1", language);
+  }
   function getReminderStatus(reminderSettings = {}, language = "en") {
     if (!(reminderSettings == null ? void 0 : reminderSettings.enabled)) return joinLocalizedText("Off", "\u0622\u0641", language);
     return joinLocalizedText(`Daily at ${reminderSettings.time || "18:00"}`, `\u0631\u0648\u0632\u0627\u0646\u06C1 ${reminderSettings.time || "18:00"} \u067E\u0631`, language);
+  }
+  function getLocalDayKey(value = Date.now()) {
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toDateString();
+  }
+  function parseClockMinutes(value) {
+    const [hours, minutes] = String(value || "00:00").split(":").map((part) => Number(part) || 0);
+    return hours * 60 + minutes;
+  }
+  function getScheduleDurationMinutes(settings = {}) {
+    const start = parseClockMinutes(settings.startTime || "08:00");
+    const end = parseClockMinutes(settings.endTime || "13:00");
+    return Math.max(0, end - start);
+  }
+  function normalizeTimeTrackingData(value = {}) {
+    return {
+      history: Array.isArray(value.history) ? value.history.slice(0, 45).map((entry) => ({
+        dayKey: (entry == null ? void 0 : entry.dayKey) || getLocalDayKey(),
+        firstSeenAt: Number(entry == null ? void 0 : entry.firstSeenAt) || null,
+        lastSeenAt: Number(entry == null ? void 0 : entry.lastSeenAt) || null,
+        msSpent: Math.max(0, Number(entry == null ? void 0 : entry.msSpent) || 0),
+        latenessMinutes: Math.max(0, Number(entry == null ? void 0 : entry.latenessMinutes) || 0),
+        status: (entry == null ? void 0 : entry.status) || "tracked",
+        onTimeAwarded: Boolean(entry == null ? void 0 : entry.onTimeAwarded),
+        durationAwarded: Boolean(entry == null ? void 0 : entry.durationAwarded),
+        classStartTime: (entry == null ? void 0 : entry.classStartTime) || null,
+        classEndTime: (entry == null ? void 0 : entry.classEndTime) || null
+      })) : [],
+      totalMsSpent: Math.max(0, Number(value.totalMsSpent) || 0),
+      totalLateMinutes: Math.max(0, Number(value.totalLateMinutes) || 0),
+      onTimeStarts: Math.max(0, Number(value.onTimeStarts) || 0),
+      lateStarts: Math.max(0, Number(value.lateStarts) || 0),
+      punctualityStreak: Math.max(0, Number(value.punctualityStreak) || 0),
+      bestPunctualityStreak: Math.max(0, Number(value.bestPunctualityStreak) || 0),
+      classSessionsMet: Math.max(0, Number(value.classSessionsMet) || 0)
+    };
+  }
+  function mergeTimeTrackingData(currentValue = {}, incomingValue = {}) {
+    const current = normalizeTimeTrackingData(currentValue);
+    const incoming = normalizeTimeTrackingData(incomingValue);
+    const historyMap = /* @__PURE__ */ new Map();
+    [...current.history, ...incoming.history].forEach((entry) => {
+      if (!(entry == null ? void 0 : entry.dayKey)) return;
+      const previous = historyMap.get(entry.dayKey);
+      if (!previous || (entry.lastSeenAt || 0) >= (previous.lastSeenAt || 0)) {
+        historyMap.set(entry.dayKey, entry);
+      }
+    });
+    return {
+      history: Array.from(historyMap.values()).sort((a, b) => (b.firstSeenAt || 0) - (a.firstSeenAt || 0)).slice(0, 45),
+      totalMsSpent: Math.max(current.totalMsSpent, incoming.totalMsSpent),
+      totalLateMinutes: Math.max(current.totalLateMinutes, incoming.totalLateMinutes),
+      onTimeStarts: Math.max(current.onTimeStarts, incoming.onTimeStarts),
+      lateStarts: Math.max(current.lateStarts, incoming.lateStarts),
+      punctualityStreak: Math.max(current.punctualityStreak, incoming.punctualityStreak),
+      bestPunctualityStreak: Math.max(current.bestPunctualityStreak, incoming.bestPunctualityStreak),
+      classSessionsMet: Math.max(current.classSessionsMet, incoming.classSessionsMet)
+    };
+  }
+  function normalizeBackupReminderSettings(value = {}) {
+    return {
+      enabled: typeof value.enabled === "boolean" ? value.enabled : true,
+      intervalDays: [7, 14, 30].includes(Number(value.intervalDays)) ? Number(value.intervalDays) : 14,
+      lastBackupAt: Number(value.lastBackupAt) || null,
+      lastPromptDay: value.lastPromptDay || null
+    };
+  }
+  function getBackupReminderSummary(settings = {}, hasProgress = false, language = "en", now = Date.now()) {
+    const safe = normalizeBackupReminderSettings(settings);
+    if (!safe.enabled) return { due: false, label: UI_TEXT[language === "ur" ? "ur" : "en"].backupReminderOff };
+    if (!safe.lastBackupAt) {
+      const label = UI_TEXT[language === "ur" ? "ur" : "en"].backupNeverExported;
+      return { due: hasProgress, label };
+    }
+    const daysSince = Math.max(0, Math.floor((now - safe.lastBackupAt) / 864e5));
+    if (daysSince >= safe.intervalDays) {
+      return { due: true, label: UI_TEXT[language === "ur" ? "ur" : "en"].backupDueNow, daysSince };
+    }
+    const prefix = UI_TEXT[language === "ur" ? "ur" : "en"].backupRecent;
+    return {
+      due: false,
+      daysSince,
+      label: language === "ur" ? `${prefix}: ${daysSince} \u062F\u0646 \u067E\u06C1\u0644\u06D2` : `${prefix}: ${daysSince} day${daysSince === 1 ? "" : "s"} ago`
+    };
+  }
+  function summarizeImportPreview(parsed = {}, currentSnapshot = {}, currentVersion = 0) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    const appState = (parsed == null ? void 0 : parsed.appState) || {};
+    const dbProgress = (parsed == null ? void 0 : parsed.dbProgress) || {};
+    const summaryRows = [
+      { label: "App State", value: appState ? "Included" : "Missing" },
+      { label: "Quiz Records", value: Object.keys(appState.completedQuizzes || {}).length || ((_a = dbProgress.progress) == null ? void 0 : _a.length) || 0 },
+      { label: "Review Cards", value: ((_b = dbProgress.reviewCards) == null ? void 0 : _b.length) || 0 },
+      { label: "Review History", value: ((_c = dbProgress.reviewHistory) == null ? void 0 : _c.length) || 0 },
+      { label: "Favorites & Notes", value: (((_d = dbProgress.wordMeta) == null ? void 0 : _d.length) || 0) + (((_e = dbProgress.customListItems) == null ? void 0 : _e.length) || 0) },
+      { label: "Custom Lists", value: ((_f = dbProgress.customLists) == null ? void 0 : _f.length) || 0 }
+    ];
+    const conflicts = [];
+    if (appState.grade && currentSnapshot.grade && appState.grade !== currentSnapshot.grade || appState.studentName && currentSnapshot.studentName && appState.studentName !== currentSnapshot.studentName) {
+      conflicts.push("profile");
+    }
+    if (Object.keys(appState.completedQuizzes || {}).length > 0 && Object.keys(currentSnapshot.completedQuizzes || {}).length > 0 || ((_g = dbProgress.reviewHistory) == null ? void 0 : _g.length) > 0 && (currentSnapshot.reviewHistoryCount || 0) > 0) {
+      conflicts.push("progress");
+    }
+    if (appState.language && currentSnapshot.language && appState.language !== currentSnapshot.language || appState.themeMode && currentSnapshot.themeMode && appState.themeMode !== currentSnapshot.themeMode || appState.transitionMode && currentSnapshot.transitionMode && appState.transitionMode !== currentSnapshot.transitionMode) {
+      conflicts.push("preferences");
+    }
+    if (appState.classScheduleSettings && currentSnapshot.classScheduleSettings || appState.timeTrackingData && (currentSnapshot.timeTrackingHistoryCount || 0) > 0 || appState.reminderSettings && currentSnapshot.reminderSettings) {
+      conflicts.push("time");
+    }
+    if ((((_h = dbProgress.wordMeta) == null ? void 0 : _h.length) || 0) > 0 || (((_i = dbProgress.customLists) == null ? void 0 : _i.length) || 0) > 0 || (((_j = dbProgress.customListItems) == null ? void 0 : _j.length) || 0) > 0) {
+      conflicts.push("collections");
+    }
+    return {
+      parsed,
+      summaryRows,
+      conflicts: Array.from(new Set(conflicts)),
+      newerVersion: Number(dbProgress.dataVersion) > Number(currentVersion || 0)
+    };
+  }
+  function formatMinutesLabel(totalMinutes, language = "en") {
+    const safeMinutes = Math.max(0, Math.round(Number(totalMinutes) || 0));
+    const hours = Math.floor(safeMinutes / 60);
+    const minutes = safeMinutes % 60;
+    if (language === "ur") {
+      if (hours && minutes) return `${hours} \u06AF\u06BE\u0646\u0679\u06D2 ${minutes} \u0645\u0646\u0679`;
+      if (hours) return `${hours} \u06AF\u06BE\u0646\u0679\u06D2`;
+      return `${minutes} \u0645\u0646\u0679`;
+    }
+    if (language === "bilingual") {
+      const english = hours && minutes ? `${hours}h ${minutes}m` : hours ? `${hours}h` : `${minutes}m`;
+      const urdu = hours && minutes ? `${hours} \u06AF\u06BE\u0646\u0679\u06D2 ${minutes} \u0645\u0646\u0679` : hours ? `${hours} \u06AF\u06BE\u0646\u0679\u06D2` : `${minutes} \u0645\u0646\u0679`;
+      return `${english} / ${urdu}`;
+    }
+    if (hours && minutes) return `${hours}h ${minutes}m`;
+    if (hours) return `${hours}h`;
+    return `${minutes}m`;
+  }
+  function applyTimeTrackingMutation(currentValue = {}, settings = {}, action = {}) {
+    const current = normalizeTimeTrackingData(currentValue);
+    const now = Number(action.now) || Date.now();
+    const dayKey = action.dayKey || getLocalDayKey(now);
+    const history = [...current.history];
+    const entryIndex = history.findIndex((entry2) => entry2.dayKey === dayKey);
+    const entry = entryIndex >= 0 ? { ...history[entryIndex] } : {
+      dayKey,
+      firstSeenAt: null,
+      lastSeenAt: null,
+      msSpent: 0,
+      latenessMinutes: 0,
+      status: (settings == null ? void 0 : settings.enabled) ? "pending" : "tracked",
+      onTimeAwarded: false,
+      durationAwarded: false,
+      classStartTime: (settings == null ? void 0 : settings.startTime) || "08:00",
+      classEndTime: (settings == null ? void 0 : settings.endTime) || "13:00"
+    };
+    const reward = { xpGain: 0, badgeIds: [], notice: null };
+    const durationMinutes = getScheduleDurationMinutes(settings);
+    if (action.type === "mark-visit") {
+      entry.lastSeenAt = now;
+      if (!entry.firstSeenAt) {
+        entry.firstSeenAt = now;
+        entry.classStartTime = (settings == null ? void 0 : settings.startTime) || entry.classStartTime;
+        entry.classEndTime = (settings == null ? void 0 : settings.endTime) || entry.classEndTime;
+        if (settings == null ? void 0 : settings.enabled) {
+          const date = new Date(now);
+          const currentMinutes = date.getHours() * 60 + date.getMinutes();
+          const startMinutes = parseClockMinutes(settings.startTime || "08:00");
+          const lateMinutes = durationMinutes > 0 ? Math.min(Math.max(0, currentMinutes - startMinutes), durationMinutes) : Math.max(0, currentMinutes - startMinutes);
+          entry.latenessMinutes = lateMinutes;
+          if (lateMinutes > 0) {
+            entry.status = "late";
+            current.lateStarts += 1;
+            current.totalLateMinutes += lateMinutes;
+            current.punctualityStreak = 0;
+          } else {
+            entry.status = "on-time";
+            entry.onTimeAwarded = true;
+            current.onTimeStarts += 1;
+            current.punctualityStreak += 1;
+            current.bestPunctualityStreak = Math.max(current.bestPunctualityStreak, current.punctualityStreak);
+            reward.xpGain += 25;
+            reward.notice = "on-time";
+            if (current.punctualityStreak >= 3) reward.badgeIds.push("punctual_3");
+            if (current.punctualityStreak >= 7) reward.badgeIds.push("punctual_7");
+          }
+        } else {
+          entry.status = "tracked";
+        }
+      }
+    }
+    if (action.type === "add-usage") {
+      const deltaMs = Math.max(0, Number(action.deltaMs) || 0);
+      if (deltaMs > 0) {
+        entry.lastSeenAt = now;
+        if (!entry.firstSeenAt) entry.firstSeenAt = now - deltaMs;
+        entry.msSpent += deltaMs;
+        current.totalMsSpent += deltaMs;
+        if ((settings == null ? void 0 : settings.enabled) && durationMinutes > 0 && !entry.durationAwarded && entry.msSpent >= durationMinutes * 60 * 1e3) {
+          entry.durationAwarded = true;
+          current.classSessionsMet += 1;
+          reward.xpGain += 40;
+          reward.badgeIds.push("time_keeper");
+          reward.notice = reward.notice || "class-time";
+        }
+      }
+    }
+    const nextHistory = history.filter((item) => item.dayKey !== dayKey);
+    nextHistory.push(entry);
+    nextHistory.sort((a, b) => (b.firstSeenAt || 0) - (a.firstSeenAt || 0));
+    return {
+      next: {
+        ...current,
+        history: nextHistory.slice(0, 45)
+      },
+      reward: reward.xpGain || reward.badgeIds.length ? reward : null
+    };
+  }
+  function inferDiscoveryType(lesson = {}) {
+    if ((lesson == null ? void 0 : lesson.hasMathSub) || (lesson == null ? void 0 : lesson.hasAdverbs) || (lesson == null ? void 0 : lesson.hasTenses) || (lesson == null ? void 0 : lesson.hasVocab)) return "interactive";
+    if ((lesson == null ? void 0 : lesson.wordProblems) || (lesson == null ? void 0 : lesson.quiz) || (lesson == null ? void 0 : lesson.exercises)) return "practice";
+    return "lesson";
+  }
+  function inferDiscoveryDifficulty(lesson = {}) {
+    const complexity = [
+      lesson == null ? void 0 : lesson.hasMathSub,
+      lesson == null ? void 0 : lesson.hasAdverbs,
+      lesson == null ? void 0 : lesson.hasTenses,
+      lesson == null ? void 0 : lesson.hasVocab,
+      Array.isArray(lesson == null ? void 0 : lesson.subs) ? lesson.subs.length >= 4 : false,
+      String((lesson == null ? void 0 : lesson.content) || "").length > 180
+    ].filter(Boolean).length;
+    if (complexity >= 4) return "stretch";
+    if (complexity >= 2) return "core";
+    return "starter";
+  }
+  function buildDiscoveryTags(subject, lesson = {}) {
+    const titleWords = String(lesson.title || "").split(/\s+/).map((word) => word.replace(/[^\w\u0600-\u06FF-]/g, "")).filter((word) => word.length >= 3).slice(0, 3);
+    return Array.from(new Set([subject == null ? void 0 : subject.name, subject == null ? void 0 : subject.nameUr, ...titleWords].filter(Boolean)));
   }
   function createNotificationEntry(type, titleEn, titleUr, bodyEn, bodyUr, createdAt = Date.now(), extra = {}) {
     return {
@@ -2901,7 +3901,7 @@ ${marker} `);
     return /* @__PURE__ */ React.createElement("div", { ...focusProps, style: { cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } }, /* @__PURE__ */ React.createElement("span", { onClick: speakEn, style: { cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 } }, en, " \u2192 ", v2, " \u2192 ", v3, " ", sEn ? "\u{1F50A}" : "\u{1F508}"), /* @__PURE__ */ React.createElement("span", { onClick: speakUr, style: { cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 } }, sUr ? "\u{1F50A}" : "\u{1F508}", " ", ur), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" } })));
   }
   function HomeschoolApp() {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q;
     const stored = loadState();
     const storedAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
     const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
@@ -2910,9 +3910,18 @@ ${marker} `);
     const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
     const [language, setLanguage] = useState((stored == null ? void 0 : stored.language) || "en");
     const [themeMode, setThemeMode] = useState((stored == null ? void 0 : stored.themeMode) || "dark");
+    const [fontSizeMode, setFontSizeMode] = useState(["small", "normal", "large", "xlarge"].includes(stored == null ? void 0 : stored.fontSizeMode) ? stored.fontSizeMode : "normal");
+    const [reducedMotion, setReducedMotion] = useState(Boolean(stored == null ? void 0 : stored.reducedMotion));
+    const [highContrast, setHighContrast] = useState(Boolean(stored == null ? void 0 : stored.highContrast));
+    const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState((stored == null ? void 0 : stored.keyboardShortcutsEnabled) !== false);
     const ui = getUiText(language);
     const [daySectionOverrides, setDaySectionOverrides] = useState((stored == null ? void 0 : stored.daySectionOverrides) || {});
     const [dailyReviewCap, setDailyReviewCap] = useState(Math.max(5, Math.min(50, Number(stored == null ? void 0 : stored.dailyReviewCap) || 20)));
+    const [reviewSrsSettings, setReviewSrsSettings] = useState({
+      masteryThreshold: Math.max(3, Math.min(7, Number((_a = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _a.masteryThreshold) || 5)),
+      intervalScale: Math.max(0.5, Math.min(2.5, Number((_b = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _b.intervalScale) || 1)),
+      againMinutes: Math.max(5, Math.min(180, Number((_c = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _c.againMinutes) || 10))
+    });
     const [grade, setGrade] = useState((stored == null ? void 0 : stored.grade) || null);
     const [studentName, setStudentName] = useState((stored == null ? void 0 : stored.studentName) || "");
     const [studentNameUr, setStudentNameUr] = useState((stored == null ? void 0 : stored.studentNameUr) || "");
@@ -2959,7 +3968,7 @@ ${marker} `);
     const [selectedAiProvider, setSelectedAiProvider] = useState((storedAiTutorPreferences == null ? void 0 : storedAiTutorPreferences.providerId) || "openai");
     const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
     const [updateAvailable, setUpdateAvailable] = useState(false);
-    const [ttsEnabled, setTtsEnabled] = useState((_a = stored == null ? void 0 : stored.ttsEnabled) != null ? _a : true);
+    const [ttsEnabled, setTtsEnabled] = useState((_d = stored == null ? void 0 : stored.ttsEnabled) != null ? _d : true);
     const [ttsRate, setTtsRate] = useState(Math.max(0.6, Math.min(1.3, Number(stored == null ? void 0 : stored.ttsRate) || 0.85)));
     const [availableVoices, setAvailableVoices] = useState([]);
     const [ttsVoiceSelections, setTtsVoiceSelections] = useState((stored == null ? void 0 : stored.ttsVoiceSelections) || { en: "", ur: "" });
@@ -2967,7 +3976,7 @@ ${marker} `);
     const [reviewStats, setReviewStats] = useState({ due: 0, mastered: 0, learning: 0, reviewedToday: 0, retentionRate: 0, reviewStreak: 0 });
     const [reviewLibrary, setReviewLibrary] = useState([]);
     const [studyMetaLookup, setStudyMetaLookup] = useState({});
-    const [reviewAnalytics, setReviewAnalytics] = useState({ heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], wordGrowth: [], categoryPerformance: [], totals: { reviewedLastPeriod: 0, reviewedLast7: 0, uniqueReviewedLast7: 0, favorites: 0, notedWords: 0, customLists: 0 } });
+    const [reviewAnalytics, setReviewAnalytics] = useState({ heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], wordGrowth: [], categoryPerformance: [], leitnerBoxes: [], forgettingCurve: [], upcomingCalendar: [], predictedMastery: { cardsRemaining: 0, projectedAt: Date.now(), sections: [] }, totals: { reviewedLastPeriod: 0, reviewedLast7: 0, uniqueReviewedLast7: 0, favorites: 0, notedWords: 0, customLists: 0 } });
     const [reviewQueue, setReviewQueue] = useState([]);
     const [reviewIdx, setReviewIdx] = useState(0);
     const [reviewReveal, setReviewReveal] = useState(false);
@@ -2975,22 +3984,46 @@ ${marker} `);
     const [reviewSessionXp, setReviewSessionXp] = useState(0);
     const [reviewLoading, setReviewLoading] = useState(false);
     const [practiceMode, setPracticeMode] = useState(null);
+    const [practiceSubjectId, setPracticeSubjectId] = useState((stored == null ? void 0 : stored.practiceSubjectId) || "english");
+    const [practiceFiltersBySubject, setPracticeFiltersBySubject] = useState((stored == null ? void 0 : stored.practiceFiltersBySubject) || {});
+    const [practiceTimedSettings, setPracticeTimedSettings] = useState((stored == null ? void 0 : stored.practiceTimedSettings) || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 });
+    const [practiceLessonProgress, setPracticeLessonProgress] = useState((stored == null ? void 0 : stored.practiceLessonProgress) || {});
     const [practiceDeck, setPracticeDeck] = useState([]);
     const [practiceIdx, setPracticeIdx] = useState(0);
     const [practiceReveal, setPracticeReveal] = useState(false);
     const [practiceTypingInput, setPracticeTypingInput] = useState("");
     const [practiceTypingResult, setPracticeTypingResult] = useState(null);
+    const [practiceDictationInput, setPracticeDictationInput] = useState("");
+    const [practiceDictationResult, setPracticeDictationResult] = useState(null);
     const [practiceMatchRound, setPracticeMatchRound] = useState(null);
     const [practiceMatchSelection, setPracticeMatchSelection] = useState(null);
-    const [practiceSessionStats, setPracticeSessionStats] = useState({ attempted: 0, correct: 0 });
+    const [practiceBlankChoice, setPracticeBlankChoice] = useState(null);
+    const [practiceBlankResult, setPracticeBlankResult] = useState(null);
+    const [practiceSentenceSelection, setPracticeSentenceSelection] = useState([]);
+    const [practiceSentenceResult, setPracticeSentenceResult] = useState(null);
+    const [practiceTimedChoice, setPracticeTimedChoice] = useState(null);
+    const [practiceTimedResult, setPracticeTimedResult] = useState(null);
+    const [practiceTimerRemaining, setPracticeTimerRemaining] = useState(60);
+    const [practiceTimerFinished, setPracticeTimerFinished] = useState(false);
+    const [practiceSessionStats, setPracticeSessionStats] = useState({ attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, confidence: { low: 0, medium: 0, high: 0 } });
+    const [practiceConfidenceChoice, setPracticeConfidenceChoice] = useState(null);
+    const [practiceFeedbackText, setPracticeFeedbackText] = useState("");
+    const [practiceReflectionDraft, setPracticeReflectionDraft] = useState("");
+    const [practiceReflectionLog, setPracticeReflectionLog] = useState([]);
+    const [practiceBreakDismissedAt, setPracticeBreakDismissedAt] = useState(0);
+    const [practiceCelebrationSeed, setPracticeCelebrationSeed] = useState(0);
+    const [practiceLabReturnPending, setPracticeLabReturnPending] = useState(false);
     const [viewTargetId, setViewTargetId] = useState(null);
     const [pageFlashActive, setPageFlashActive] = useState(false);
     const [heatmapExpanded, setHeatmapExpanded] = useState(false);
     const [customListDraft, setCustomListDraft] = useState("");
     const [studyGoals, setStudyGoals] = useState((stored == null ? void 0 : stored.studyGoals) || { dailyReviews: 20, weeklyWords: 40 });
     const [focusTimerSettings, setFocusTimerSettings] = useState((stored == null ? void 0 : stored.focusTimerSettings) || { durationMinutes: 20, autoStartBreak: false });
-    const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number((_b = stored == null ? void 0 : stored.focusTimerSettings) == null ? void 0 : _b.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
+    const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number((_e = stored == null ? void 0 : stored.focusTimerSettings) == null ? void 0 : _e.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
     const [reminderSettings, setReminderSettings] = useState((stored == null ? void 0 : stored.reminderSettings) || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
+    const [classScheduleSettings, setClassScheduleSettings] = useState((stored == null ? void 0 : stored.classScheduleSettings) || { enabled: false, startTime: "08:00", endTime: "13:00" });
+    const [timeTrackingData, setTimeTrackingData] = useState(normalizeTimeTrackingData((stored == null ? void 0 : stored.timeTrackingData) || {}));
+    const [backupReminderSettings, setBackupReminderSettings] = useState(normalizeBackupReminderSettings((stored == null ? void 0 : stored.backupReminderSettings) || {}));
     const [navPosition, setNavPosition] = useState(["bottom", "right", "left", "top"].includes(stored == null ? void 0 : stored.navPosition) ? stored.navPosition : "top");
     const [navAutoHide, setNavAutoHide] = useState(Boolean(stored == null ? void 0 : stored.navAutoHide));
     const [navHidden, setNavHidden] = useState(false);
@@ -2998,6 +4031,11 @@ ${marker} `);
     const [navBarHidden, setNavBarHidden] = useState(false);
     const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored == null ? void 0 : stored.transitionMode) ? stored.transitionMode : "slide");
     const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored == null ? void 0 : stored.notificationHistory) ? stored.notificationHistory : []);
+    const [importReviewState, setImportReviewState] = useState(null);
+    const [contentSearch, setContentSearch] = useState("");
+    const [discoverySubjectFilter, setDiscoverySubjectFilter] = useState("all");
+    const [discoveryTypeFilter, setDiscoveryTypeFilter] = useState("all");
+    const [discoveryDifficultyFilter, setDiscoveryDifficultyFilter] = useState("all");
     const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
     const [gradeDisclosureOpen, setGradeDisclosureOpen] = useState(false);
     const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme((stored == null ? void 0 : stored.themeMode) || "dark"));
@@ -3012,6 +4050,9 @@ ${marker} `);
     const headerHideTimerRef = useRef(null);
     const navBarRef = useRef(null);
     const navBarHideTimerRef = useRef(null);
+    const practiceAdvanceTimerRef = useRef(null);
+    const usageTrackingRef = useRef({ startedAt: 0 });
+    const timeTrackingRef = useRef(normalizeTimeTrackingData((stored == null ? void 0 : stored.timeTrackingData) || {}));
     const [headerHideOffset, setHeaderHideOffset] = useState(0);
     const [navBarOffset, setNavBarOffset] = useState(0);
     const [dbLoaded, setDbLoaded] = useState(false);
@@ -3020,6 +4061,10 @@ ${marker} `);
     const [dbVocab, setDbVocab] = useState([]);
     const daySectionSettings = buildDaySectionSettings(language, daySectionOverrides);
     const activeReviewCard = reviewQueue[reviewIdx] || null;
+    const activePracticeCard = practiceDeck[practiceIdx] || null;
+    const effectivePracticeMode = practiceMode === "interleaved" ? (activePracticeCard == null ? void 0 : activePracticeCard.interleavedType) || "flashcards" : practiceMode;
+    const practiceQuestionPrompt = activePracticeCard ? getPracticeQuestionPrompt(activePracticeCard, effectivePracticeMode, language) : "";
+    const practiceQuestionPromptUrdu = activePracticeCard ? getPracticeQuestionPrompt(activePracticeCard, effectivePracticeMode, "ur") : "";
     const isLightTheme = resolvedTheme === "light";
     const revealToggleBaseStyle = {
       padding: "6px 14px",
@@ -3094,6 +4139,328 @@ ${marker} `);
       color: "var(--text-primary)",
       border: "1px solid var(--border)"
     };
+    const gradePracticeItems = useMemo(() => grade ? buildGradePracticeItems(window.HomeSchoolData, grade) : [], [grade]);
+    const availablePracticeSubjects = useMemo(() => SUBJECTS.filter((subject) => {
+      const hasReviewItems = reviewLibrary.some((card) => ((card == null ? void 0 : card.subject) || "english") === subject.id && (card == null ? void 0 : card.prompt) && ((card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning)));
+      const hasSupplementalItems = gradePracticeItems.some((item) => (item == null ? void 0 : item.subject) === subject.id && (item == null ? void 0 : item.prompt) && ((item == null ? void 0 : item.answer) || (item == null ? void 0 : item.meaning)));
+      return hasReviewItems || hasSupplementalItems;
+    }), [gradePracticeItems, reviewLibrary]);
+    const activePracticeSubject = availablePracticeSubjects.find((subject) => subject.id === practiceSubjectId) || SUBJECTS.find((subject) => subject.id === practiceSubjectId) || availablePracticeSubjects[0] || SUBJECTS[0] || null;
+    const activePracticeSubjectId = (activePracticeSubject == null ? void 0 : activePracticeSubject.id) || "english";
+    const practiceSubjectLessons = useMemo(
+      () => {
+        var _a2, _b2;
+        return grade && activePracticeSubjectId ? ((_b2 = (_a2 = window.HomeSchoolData) == null ? void 0 : _a2.getLessons) == null ? void 0 : _b2.call(_a2, activePracticeSubjectId, grade)) || [] : [];
+      },
+      [activePracticeSubjectId, grade]
+    );
+    const practiceSubjectLessonMap = useMemo(
+      () => new Map(practiceSubjectLessons.map((lesson, index) => [getLessonKeyValue(lesson), index])),
+      [practiceSubjectLessons]
+    );
+    const activePracticeFilter = useMemo(() => {
+      const subjectFilters = (practiceFiltersBySubject == null ? void 0 : practiceFiltersBySubject[activePracticeSubjectId]) || {};
+      const lessonKeys = practiceSubjectLessons.map((lesson) => getLessonKeyValue(lesson)).filter(Boolean);
+      const defaultStart = lessonKeys[0] || null;
+      const defaultEnd = lessonKeys[lessonKeys.length - 1] || defaultStart;
+      const startLessonKey = lessonKeys.includes(subjectFilters.startLessonKey) ? subjectFilters.startLessonKey : defaultStart;
+      const endLessonKey = lessonKeys.includes(subjectFilters.endLessonKey) ? subjectFilters.endLessonKey : defaultEnd;
+      const startIndex = practiceSubjectLessonMap.get(startLessonKey);
+      const endIndex = practiceSubjectLessonMap.get(endLessonKey);
+      const orderedStartIndex = Number.isFinite(startIndex) && Number.isFinite(endIndex) ? Math.min(startIndex, endIndex) : 0;
+      const orderedEndIndex = Number.isFinite(startIndex) && Number.isFinite(endIndex) ? Math.max(startIndex, endIndex) : Math.max(0, lessonKeys.length - 1);
+      return {
+        startLessonKey,
+        endLessonKey,
+        startIndex: orderedStartIndex,
+        endIndex: orderedEndIndex,
+        difficulty: ["beginner", "medium", "advanced"].includes(subjectFilters.difficulty) ? subjectFilters.difficulty : "beginner"
+      };
+    }, [activePracticeSubjectId, practiceFiltersBySubject, practiceSubjectLessonMap, practiceSubjectLessons]);
+    const practiceFilterSummary = useMemo(() => {
+      const startLesson = practiceSubjectLessons[activePracticeFilter.startIndex];
+      const endLesson = practiceSubjectLessons[activePracticeFilter.endIndex];
+      return {
+        startLabel: startLesson ? `${ui.lesson} ${activePracticeFilter.startIndex + 1}` : ui.lesson,
+        endLabel: endLesson ? `${ui.lesson} ${activePracticeFilter.endIndex + 1}` : ui.lesson,
+        isSingle: activePracticeFilter.startIndex === activePracticeFilter.endIndex
+      };
+    }, [activePracticeFilter.endIndex, activePracticeFilter.startIndex, practiceSubjectLessons, ui.lesson]);
+    const practiceDifficultyLabel = useMemo(() => ({
+      beginner: joinLocalizedText("Beginner", "\u0622\u0633\u0627\u0646", language),
+      medium: joinLocalizedText("Medium", "\u062F\u0631\u0645\u06CC\u0627\u0646\u06C1", language),
+      advanced: joinLocalizedText("Advance", "\u0627\u0639\u0644\u06CC\u0670", language)
+    })[activePracticeFilter.difficulty] || joinLocalizedText("Beginner", "\u0622\u0633\u0627\u0646", language), [activePracticeFilter.difficulty, language]);
+    const practiceMatchesFilters = useCallback((card) => {
+      if (!card || ((card == null ? void 0 : card.subject) || "english") !== activePracticeSubjectId) return false;
+      const lessonKey = getPracticeItemLessonKey(card);
+      const lessonIndex = Number.isFinite(card == null ? void 0 : card.lessonIndex) ? Number(card.lessonIndex) : practiceSubjectLessonMap.get(lessonKey);
+      if (!Number.isFinite(lessonIndex)) return false;
+      if (lessonIndex < activePracticeFilter.startIndex || lessonIndex > activePracticeFilter.endIndex) return false;
+      return getPracticeItemDifficulty(card) === activePracticeFilter.difficulty;
+    }, [activePracticeFilter.difficulty, activePracticeFilter.endIndex, activePracticeFilter.startIndex, activePracticeSubjectId, practiceSubjectLessonMap]);
+    const practiceQuestionMarks = getPracticeDifficultyMarks(activePracticeFilter.difficulty);
+    const activePracticeTimeLimit = Math.max(10, Math.min(180, Number((practiceTimedSettings == null ? void 0 : practiceTimedSettings[practiceMode]) || (practiceMode === "timedchallenge" ? 60 : 30)) || (practiceMode === "timedchallenge" ? 60 : 30)));
+    const activePracticeLessonKey = getPracticeItemLessonKey(activePracticeCard);
+    const activePracticeLessonProgress = activePracticeLessonKey ? (practiceLessonProgress == null ? void 0 : practiceLessonProgress[`${activePracticeSubjectId}|${activePracticeLessonKey}`]) || null : null;
+    const activePracticeMastery = getPracticeMasteryMeta(activePracticeCard, activePracticeLessonProgress, language);
+    const showPracticeBreakNudge = practiceSessionStats.attempted > 0 && practiceSessionStats.attempted % 8 === 0 && practiceBreakDismissedAt !== practiceSessionStats.attempted;
+    const practiceRangeProgress = useMemo(() => {
+      let attempted = 0;
+      let correct = 0;
+      let marksEarned = 0;
+      let marksPossible = 0;
+      practiceSubjectLessons.forEach((lesson, index) => {
+        if (index < activePracticeFilter.startIndex || index > activePracticeFilter.endIndex) return;
+        const lessonKey = getLessonKeyValue(lesson);
+        const row = practiceLessonProgress == null ? void 0 : practiceLessonProgress[`${activePracticeSubjectId}|${lessonKey}`];
+        if (!row) return;
+        attempted += Number(row.attempted) || 0;
+        correct += Number(row.correct) || 0;
+        marksEarned += Number(row.marksEarned) || 0;
+        marksPossible += Number(row.marksPossible) || 0;
+      });
+      return { attempted, correct, marksEarned, marksPossible };
+    }, [activePracticeFilter.endIndex, activePracticeFilter.startIndex, activePracticeSubjectId, practiceLessonProgress, practiceSubjectLessons]);
+    const practiceSubjectReviewLibrary = useMemo(
+      () => reviewLibrary.filter((card) => practiceMatchesFilters(card)),
+      [practiceMatchesFilters, reviewLibrary]
+    );
+    const practiceSubjectSupplementalItems = useMemo(
+      () => gradePracticeItems.filter((item) => practiceMatchesFilters(item)),
+      [gradePracticeItems, practiceMatchesFilters]
+    );
+    const practiceSubjectSourcePool = useMemo(
+      () => [...practiceSubjectReviewLibrary, ...practiceSubjectSupplementalItems],
+      [practiceSubjectReviewLibrary, practiceSubjectSupplementalItems]
+    );
+    const practiceCoreModePool = useMemo(() => {
+      const hasReviewPairs = practiceSubjectReviewLibrary.some((card) => isUsefulPracticePair(card, "flashcards"));
+      return hasReviewPairs ? practiceSubjectReviewLibrary : practiceSubjectSourcePool;
+    }, [practiceSubjectReviewLibrary, practiceSubjectSourcePool]);
+    const practiceSourceReadyCount = useMemo(
+      () => practiceSubjectSourcePool.filter((card) => (card == null ? void 0 : card.prompt) && ((card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning))).length,
+      [practiceSubjectSourcePool]
+    );
+    const practiceFlashcardReadyCount = useMemo(
+      () => buildPracticeDeck(practiceCoreModePool, 4, "flashcards").length,
+      [practiceCoreModePool]
+    );
+    const practiceTypingReadyCount = useMemo(
+      () => buildPracticeDeck(practiceCoreModePool, 4, "typing").length,
+      [practiceCoreModePool]
+    );
+    const practiceMatchingReadyCount = useMemo(
+      () => buildPracticeDeck(practiceCoreModePool, 4, "matching").length,
+      [practiceCoreModePool]
+    );
+    const practiceFillBlankReadyCount = useMemo(
+      () => buildFillBlankDeck(practiceSubjectSourcePool, 4, 4).length,
+      [practiceSubjectSourcePool]
+    );
+    const practiceSentenceBuilderReadyCount = useMemo(
+      () => buildSentenceBuilderDeck(practiceSubjectSourcePool, 4).length,
+      [practiceSubjectSourcePool]
+    );
+    const practiceTimedChallengeReadyCount = useMemo(
+      () => buildTimedChallengeDeck(practiceSubjectSourcePool, 6, 4).length,
+      [practiceSubjectSourcePool]
+    );
+    const practiceTimedQuizReadyCount = useMemo(
+      () => buildTimedQuizDeck(practiceSubjectSourcePool, 4).length,
+      [practiceSubjectSourcePool]
+    );
+    const practiceTimedTrueFalseReadyCount = useMemo(
+      () => buildTrueFalseDeck(practiceSubjectSourcePool, 4).length,
+      [practiceSubjectSourcePool]
+    );
+    const practiceInterleavedReadyCount = useMemo(
+      () => buildInterleavedDeck(practiceSubjectSourcePool, 6).length,
+      [practiceSubjectSourcePool]
+    );
+    const practiceModeAvailability = {
+      flashcards: practiceFlashcardReadyCount > 0,
+      typing: practiceTypingReadyCount > 0,
+      matching: practiceMatchingReadyCount >= 4,
+      dictation: practiceSourceReadyCount > 0,
+      fillblanks: practiceFillBlankReadyCount > 0,
+      sentencebuilder: practiceSentenceBuilderReadyCount > 0,
+      timedchallenge: practiceTimedChallengeReadyCount > 0,
+      timedquiz: practiceTimedQuizReadyCount > 0,
+      timedtruefalse: practiceTimedTrueFalseReadyCount > 0,
+      timedmatching: practiceMatchingReadyCount >= 4,
+      interleaved: practiceInterleavedReadyCount > 0
+    };
+    const practiceModeReadyCounts = {
+      flashcards: practiceFlashcardReadyCount,
+      typing: practiceTypingReadyCount,
+      matching: practiceMatchingReadyCount,
+      dictation: practiceSourceReadyCount,
+      fillblanks: practiceFillBlankReadyCount,
+      sentencebuilder: practiceSentenceBuilderReadyCount,
+      timedchallenge: practiceTimedChallengeReadyCount,
+      timedquiz: practiceTimedQuizReadyCount,
+      timedtruefalse: practiceTimedTrueFalseReadyCount,
+      timedmatching: practiceMatchingReadyCount,
+      interleaved: practiceInterleavedReadyCount
+    };
+    const getPracticeModeMeta = useCallback((modeId, enabledTextEn, enabledTextUr, minimumRequired = 1) => {
+      const readyCount = Number((practiceModeReadyCounts == null ? void 0 : practiceModeReadyCounts[modeId]) || 0);
+      if (readyCount >= minimumRequired) {
+        return joinLocalizedText(
+          `${enabledTextEn} \u2022 ${readyCount} ready`,
+          `${enabledTextUr} \u2022 ${readyCount} \u062A\u06CC\u0627\u0631`,
+          language
+        );
+      }
+      if (practiceSubjectLessons.length === 0) {
+        return joinLocalizedText(
+          "No lessons found in this subject yet",
+          "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u0645\u06CC\u06BA \u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0633\u0628\u0642 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA",
+          language
+        );
+      }
+      if (modeId === "matching" || modeId === "timedmatching") {
+        return joinLocalizedText(
+          "Need at least 4 valid pairs in this lesson range and difficulty",
+          "\u0627\u0633 \u0633\u0628\u0642 \u06A9\u06CC \u062D\u062F \u0627\u0648\u0631 \u0645\u0634\u06A9\u0644 \u0645\u06CC\u06BA \u06A9\u0645 \u0627\u0632 \u06A9\u0645 4 \u062F\u0631\u0633\u062A \u062C\u0648\u0691\u06CC\u0627\u06BA \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06CC\u06BA",
+          language
+        );
+      }
+      return joinLocalizedText(
+        "No matching practice items in this lesson range and difficulty yet",
+        "\u0627\u0633 \u0633\u0628\u0642 \u06A9\u06CC \u062D\u062F \u0627\u0648\u0631 \u0645\u0634\u06A9\u0644 \u0645\u06CC\u06BA \u0627\u0628\u06BE\u06CC \u0645\u0646\u0627\u0633\u0628 \u067E\u0631\u06CC\u06A9\u0679\u0633 \u0645\u0648\u0627\u062F \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA",
+        language
+      );
+    }, [language, practiceModeReadyCounts, practiceSubjectLessons.length]);
+    const scheduleDurationMinutes = useMemo(() => getScheduleDurationMinutes(classScheduleSettings), [classScheduleSettings]);
+    const todayTimeEntry = useMemo(
+      () => (timeTrackingData.history || []).find((entry) => entry.dayKey === getLocalDayKey()) || null,
+      [timeTrackingData]
+    );
+    const todaySpentMinutes = Math.round(((todayTimeEntry == null ? void 0 : todayTimeEntry.msSpent) || 0) / 6e4);
+    const totalStudyMinutes = Math.round((timeTrackingData.totalMsSpent || 0) / 6e4);
+    const todayLatenessMinutes = Math.max(0, Number(todayTimeEntry == null ? void 0 : todayTimeEntry.latenessMinutes) || 0);
+    const weeklyStudyMinutes = useMemo(
+      () => (timeTrackingData.history || []).slice(0, 7).reduce((sum, entry) => sum + Math.round(((entry == null ? void 0 : entry.msSpent) || 0) / 6e4), 0),
+      [timeTrackingData]
+    );
+    const timeGoalProgress = scheduleDurationMinutes > 0 ? Math.min(100, Math.round(todaySpentMinutes / scheduleDurationMinutes * 100)) : 0;
+    const timeTrackingStatusLabel = classScheduleSettings.enabled ? (todayTimeEntry == null ? void 0 : todayTimeEntry.status) === "on-time" ? ui.classStatusOnTime : (todayTimeEntry == null ? void 0 : todayTimeEntry.status) === "late" ? ui.classStatusLate : ui.classStatusNotStarted : ui.classStatusOff;
+    const recentTimeHistory = useMemo(() => (timeTrackingData.history || []).slice(0, 7), [timeTrackingData]);
+    const hasBackupWorthData = Object.keys(completedQuizzes || {}).length > 0 || totalQuizzesDone > 0 || xp > 0 || (timeTrackingData.history || []).length > 0 || (reviewAnalytics.favoriteWords || []).length > 0 || (reviewAnalytics.notedWords || []).length > 0;
+    const backupReminderSummary = useMemo(
+      () => getBackupReminderSummary(backupReminderSettings, hasBackupWorthData, language),
+      [backupReminderSettings, hasBackupWorthData, language]
+    );
+    const discoveryLessonIndex = useMemo(() => {
+      if (!grade) return [];
+      return SUBJECTS.flatMap((subject) => {
+        const lessons = getLessons(subject.id, grade) || [];
+        return lessons.map((lesson, lessonIndex) => ({
+          id: `discover_${subject.id}_${lesson.key || lesson.id || lessonIndex}`,
+          subjectId: subject.id,
+          subjectName: subject.name,
+          subjectNameUr: subject.nameUr,
+          subjectIcon: subject.icon,
+          lessonKey: lesson.key || lesson.id || `${subject.id}_${lessonIndex}`,
+          lessonTitle: lesson.title,
+          lessonContent: lesson.content || "",
+          type: inferDiscoveryType(lesson),
+          difficulty: inferDiscoveryDifficulty(lesson),
+          tags: buildDiscoveryTags(subject, lesson),
+          completed: Boolean(completedQuizzes[lesson.id])
+        }));
+      });
+    }, [completedQuizzes, grade]);
+    const filteredDiscoveryLessons = useMemo(() => {
+      const searchNeedle = normalizeText(contentSearch).toLowerCase();
+      return discoveryLessonIndex.filter((item) => {
+        if (discoverySubjectFilter !== "all" && item.subjectId !== discoverySubjectFilter) return false;
+        if (discoveryTypeFilter !== "all" && item.type !== discoveryTypeFilter) return false;
+        if (discoveryDifficultyFilter !== "all" && item.difficulty !== discoveryDifficultyFilter) return false;
+        if (!searchNeedle) return true;
+        const haystack = [item.lessonTitle, item.lessonContent, item.subjectName, item.subjectNameUr, ...item.tags || []].join(" ").toLowerCase();
+        return haystack.includes(searchNeedle);
+      }).slice(0, 8);
+    }, [contentSearch, discoveryDifficultyFilter, discoveryLessonIndex, discoverySubjectFilter, discoveryTypeFilter]);
+    const discoveryWordPool = useMemo(() => {
+      const reviewPool = reviewLibrary.filter((card) => {
+        const prompt2 = normalizeText((card == null ? void 0 : card.prompt) || "");
+        return prompt2 && prompt2.split(/\s+/).length <= 4 && normalizeText((card == null ? void 0 : card.answer) || "");
+      });
+      if (reviewPool.length > 0) return reviewPool;
+      return gradePracticeItems.filter((item) => {
+        const prompt2 = normalizeText((item == null ? void 0 : item.prompt) || "");
+        return prompt2 && prompt2.split(/\s+/).length <= 4 && normalizeText((item == null ? void 0 : item.answer) || (item == null ? void 0 : item.meaning) || "");
+      });
+    }, [gradePracticeItems, reviewLibrary]);
+    const wordOfDayCard = useMemo(() => {
+      if (!discoveryWordPool.length) return null;
+      const todayKey = getLocalDayKey();
+      const seed = Math.abs(simpleHash(todayKey).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0));
+      return discoveryWordPool[seed % discoveryWordPool.length];
+    }, [discoveryWordPool]);
+    useEffect(() => {
+      timeTrackingRef.current = timeTrackingData;
+    }, [timeTrackingData]);
+    useEffect(() => {
+      if (practiceMode !== "dictation" || !(activePracticeCard == null ? void 0 : activePracticeCard.prompt)) return void 0;
+      const timeoutId = setTimeout(() => {
+        var _a2, _b2;
+        (_b2 = (_a2 = window.HomeSchoolUtils) == null ? void 0 : _a2.speakText) == null ? void 0 : _b2.call(_a2, activePracticeCard.prompt, activePracticeCard.practiceLang || "en");
+      }, 180);
+      return () => clearTimeout(timeoutId);
+    }, [practiceMode, activePracticeCard == null ? void 0 : activePracticeCard.id]);
+    useEffect(() => {
+      if (!availablePracticeSubjects.length) return;
+      if (!availablePracticeSubjects.some((subject) => subject.id === practiceSubjectId)) {
+        setPracticeSubjectId(availablePracticeSubjects[0].id);
+      }
+    }, [availablePracticeSubjects, practiceSubjectId]);
+    useEffect(() => {
+      if (!activePracticeSubjectId || !practiceSubjectLessons.length) return;
+      setPracticeFiltersBySubject((current) => {
+        const currentEntry = (current == null ? void 0 : current[activePracticeSubjectId]) || {};
+        const lessonKeys = practiceSubjectLessons.map((lesson) => getLessonKeyValue(lesson)).filter(Boolean);
+        const startLessonKey = lessonKeys.includes(currentEntry.startLessonKey) ? currentEntry.startLessonKey : lessonKeys[0];
+        const endLessonKey = lessonKeys.includes(currentEntry.endLessonKey) ? currentEntry.endLessonKey : lessonKeys[lessonKeys.length - 1];
+        const difficulty = ["beginner", "medium", "advanced"].includes(currentEntry.difficulty) ? currentEntry.difficulty : "beginner";
+        if (currentEntry.startLessonKey === startLessonKey && currentEntry.endLessonKey === endLessonKey && currentEntry.difficulty === difficulty) {
+          return current;
+        }
+        return {
+          ...current,
+          [activePracticeSubjectId]: {
+            startLessonKey,
+            endLessonKey,
+            difficulty
+          }
+        };
+      });
+    }, [activePracticeSubjectId, practiceSubjectLessons]);
+    const updatePracticeFilters = useCallback((updates) => {
+      setPracticeFiltersBySubject((current) => {
+        const currentEntry = (current == null ? void 0 : current[activePracticeSubjectId]) || {};
+        const nextEntry = {
+          ...currentEntry,
+          ...updates
+        };
+        return {
+          ...current,
+          [activePracticeSubjectId]: nextEntry
+        };
+      });
+    }, [activePracticeSubjectId]);
+    useEffect(() => {
+      if (tab !== "review" || practiceMode || !practiceLabReturnPending) return void 0;
+      const timer = window.setTimeout(() => {
+        var _a2;
+        (_a2 = document.getElementById("practice-lab-panel")) == null ? void 0 : _a2.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+        setPracticeLabReturnPending(false);
+      }, 40);
+      return () => window.clearTimeout(timer);
+    }, [practiceLabReturnPending, practiceMode, reducedMotion, tab]);
     const refreshStorageLabel = useCallback(async () => {
       if (!window.HomeSchoolDB) {
         setStorageLabel(await getStorageEstimateLabel("localStorage"));
@@ -3112,27 +4479,27 @@ ${marker} `);
     const refreshReviewStats = useCallback(async () => {
       if (!window.HomeSchoolDB) return;
       const [nextStats, nextLibrary, nextAnalytics, nextMetaRows] = await Promise.all([
-        window.HomeSchoolDB.getReviewStats().catch(() => ({})),
+        window.HomeSchoolDB.getReviewStats({ masteryThreshold: reviewSrsSettings.masteryThreshold }).catch(() => ({})),
         window.HomeSchoolDB.getReviewLibrary().catch(() => []),
-        window.HomeSchoolDB.getReviewAnalytics().catch(() => null),
+        window.HomeSchoolDB.getReviewAnalytics({ masteryThreshold: reviewSrsSettings.masteryThreshold, intervalScale: reviewSrsSettings.intervalScale }).catch(() => null),
         window.HomeSchoolDB.getAllStudyMeta().catch(() => [])
       ]);
       setStudyMetaLookup((nextMetaRows || []).reduce((acc, row) => {
         if (row == null ? void 0 : row.id) acc[row.id] = row;
         return acc;
       }, {}));
-      setReviewStats(buildReviewStatsFallback(nextStats, nextLibrary, nextAnalytics));
-    }, []);
+      setReviewStats(buildReviewStatsFallback(nextStats, nextLibrary, nextAnalytics, { masteryThreshold: reviewSrsSettings.masteryThreshold }));
+    }, [reviewSrsSettings.intervalScale, reviewSrsSettings.masteryThreshold]);
     const refreshReviewWorkspace = useCallback(async () => {
       if (!window.HomeSchoolDB) return;
       const [statsResult, libraryResult, analyticsResult, metaResult] = await Promise.allSettled([
-        window.HomeSchoolDB.getReviewStats(),
+        window.HomeSchoolDB.getReviewStats({ masteryThreshold: reviewSrsSettings.masteryThreshold }),
         window.HomeSchoolDB.getReviewLibrary(),
-        window.HomeSchoolDB.getReviewAnalytics(),
+        window.HomeSchoolDB.getReviewAnalytics({ masteryThreshold: reviewSrsSettings.masteryThreshold, intervalScale: reviewSrsSettings.intervalScale }),
         window.HomeSchoolDB.getAllStudyMeta()
       ]);
       const nextLibrary = libraryResult.status === "fulfilled" ? libraryResult.value : [];
-      const nextAnalytics = analyticsResult.status === "fulfilled" ? analyticsResult.value : { heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], wordGrowth: [], categoryPerformance: [], totals: { reviewedLastPeriod: 0, reviewedLast7: 0, uniqueReviewedLast7: 0, favorites: 0, notedWords: 0, customLists: 0 } };
+      const nextAnalytics = analyticsResult.status === "fulfilled" ? analyticsResult.value : { heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], wordGrowth: [], categoryPerformance: [], leitnerBoxes: [], forgettingCurve: [], upcomingCalendar: [], predictedMastery: { cardsRemaining: 0, projectedAt: Date.now(), sections: [] }, totals: { reviewedLastPeriod: 0, reviewedLast7: 0, uniqueReviewedLast7: 0, favorites: 0, notedWords: 0, customLists: 0 } };
       const nextMetaRows = metaResult.status === "fulfilled" ? metaResult.value : [];
       if (libraryResult.status !== "fulfilled") {
         console.log("Unable to refresh review library:", libraryResult.reason);
@@ -3152,8 +4519,8 @@ ${marker} `);
         if (row == null ? void 0 : row.id) acc[row.id] = row;
         return acc;
       }, {}));
-      setReviewStats(buildReviewStatsFallback(statsResult.status === "fulfilled" ? statsResult.value : {}, nextLibrary, nextAnalytics));
-    }, []);
+      setReviewStats(buildReviewStatsFallback(statsResult.status === "fulfilled" ? statsResult.value : {}, nextLibrary, nextAnalytics, { masteryThreshold: reviewSrsSettings.masteryThreshold }));
+    }, [reviewSrsSettings.intervalScale, reviewSrsSettings.masteryThreshold]);
     const pushNotificationHistoryEntry = useCallback((entry) => {
       if (!entry) return;
       setNotificationHistory((current) => {
@@ -3175,6 +4542,10 @@ ${marker} `);
     const clearNotificationHistory = useCallback(() => {
       setNotificationHistory([]);
     }, []);
+    useEffect(() => {
+      if (!dbLoaded) return;
+      refreshReviewWorkspace();
+    }, [dbLoaded, refreshReviewWorkspace]);
     if (!persistCustomizationRef.current) {
       persistCustomizationRef.current = debounce(async (nextPayload) => {
         try {
@@ -3183,6 +4554,10 @@ ${marker} `);
               ttsEnabled: nextPayload.ttsEnabled,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
+              fontSizeMode: nextPayload.fontSizeMode,
+              reducedMotion: nextPayload.reducedMotion,
+              highContrast: nextPayload.highContrast,
+              keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
               navPosition: nextPayload.navPosition,
               navAutoHide: nextPayload.navAutoHide,
               navBarAutoHide: nextPayload.navBarAutoHide,
@@ -3193,12 +4568,20 @@ ${marker} `);
               ttsVoiceSelections: nextPayload.ttsVoiceSelections || { en: "", ur: "" }
             });
             await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
-              dailyReviewCap: nextPayload.dailyReviewCap
+              dailyReviewCap: nextPayload.dailyReviewCap,
+              reviewSrsSettings: nextPayload.reviewSrsSettings || { masteryThreshold: 5, intervalScale: 1, againMinutes: 10 },
+              practiceSubjectId: nextPayload.practiceSubjectId || "english",
+              practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
+              practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 }
             });
+            await window.HomeSchoolDB.saveCustomization("practiceProgress", nextPayload.practiceLessonProgress || {});
             await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
             await window.HomeSchoolDB.saveCustomization("studyGoals", nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 });
             await window.HomeSchoolDB.saveCustomization("focusTimerSettings", nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false });
             await window.HomeSchoolDB.saveCustomization("reminderSettings", nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
+            await window.HomeSchoolDB.saveCustomization("backupReminderSettings", normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}));
+            await window.HomeSchoolDB.saveCustomization("classScheduleSettings", nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" });
+            await window.HomeSchoolDB.saveCustomization("timeTrackingData", normalizeTimeTrackingData(nextPayload.timeTrackingData || {}));
             await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40));
             await window.HomeSchoolDB.saveCustomization("studentProfile", {
               grade: nextPayload.grade,
@@ -3215,6 +4598,10 @@ ${marker} `);
                 ttsEnabled: nextPayload.ttsEnabled,
                 language: nextPayload.language,
                 themeMode: nextPayload.themeMode,
+                fontSizeMode: nextPayload.fontSizeMode,
+                reducedMotion: nextPayload.reducedMotion,
+                highContrast: nextPayload.highContrast,
+                keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
                 navPosition: nextPayload.navPosition,
                 navAutoHide: nextPayload.navAutoHide,
                 navBarAutoHide: nextPayload.navBarAutoHide,
@@ -3225,12 +4612,20 @@ ${marker} `);
                 ttsVoiceSelections: nextPayload.ttsVoiceSelections || { en: "", ur: "" }
               },
               reviewPreferences: {
-                dailyReviewCap: nextPayload.dailyReviewCap
+                dailyReviewCap: nextPayload.dailyReviewCap,
+                reviewSrsSettings: nextPayload.reviewSrsSettings || { masteryThreshold: 5, intervalScale: 1, againMinutes: 10 },
+                practiceSubjectId: nextPayload.practiceSubjectId || "english",
+                practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
+                practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 }
               },
+              practiceProgress: nextPayload.practiceLessonProgress || {},
               daySectionPacing: nextPayload.daySectionOverrides || {},
               studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
               focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
               reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
+              backupReminderSettings: normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}),
+              classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
+              timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
               notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
               studentProfile: {
                 grade: nextPayload.grade,
@@ -3250,6 +4645,10 @@ ${marker} `);
               ttsEnabled: nextPayload.ttsEnabled,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
+              fontSizeMode: nextPayload.fontSizeMode,
+              reducedMotion: nextPayload.reducedMotion,
+              highContrast: nextPayload.highContrast,
+              keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
               navPosition: nextPayload.navPosition,
               navAutoHide: nextPayload.navAutoHide,
               navBarAutoHide: nextPayload.navBarAutoHide,
@@ -3260,12 +4659,20 @@ ${marker} `);
               ttsVoiceSelections: nextPayload.ttsVoiceSelections || { en: "", ur: "" }
             },
             reviewPreferences: {
-              dailyReviewCap: nextPayload.dailyReviewCap
+              dailyReviewCap: nextPayload.dailyReviewCap,
+              reviewSrsSettings: nextPayload.reviewSrsSettings || { masteryThreshold: 5, intervalScale: 1, againMinutes: 10 },
+              practiceSubjectId: nextPayload.practiceSubjectId || "english",
+              practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
+              practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 }
             },
+            practiceProgress: nextPayload.practiceLessonProgress || {},
             daySectionPacing: nextPayload.daySectionOverrides || {},
             studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
             focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
             reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
+            backupReminderSettings: normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}),
+            classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
+            timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
             notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
             studentProfile: {
               grade: nextPayload.grade,
@@ -3292,7 +4699,7 @@ ${marker} `);
         return;
       }
       (async () => {
-        var _a2, _b2, _c2, _d2, _e2, _f2, _g, _h, _i, _j, _k;
+        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2;
         try {
           await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
           const pos = await window.HomeSchoolDB.getAllPosTypes();
@@ -3308,15 +4715,23 @@ ${marker} `);
           const storedPacing = ((_d2 = customizations.daySectionPacing) == null ? void 0 : _d2.data) || null;
           const storedGoals = ((_e2 = customizations.studyGoals) == null ? void 0 : _e2.data) || null;
           const storedFocusTimer = ((_f2 = customizations.focusTimerSettings) == null ? void 0 : _f2.data) || null;
-          const storedReminderSettings = ((_g = customizations.reminderSettings) == null ? void 0 : _g.data) || null;
-          const storedNotificationHistory = ((_h = customizations.notificationHistory) == null ? void 0 : _h.data) || null;
-          const storedProfile = ((_i = customizations.studentProfile) == null ? void 0 : _i.data) || null;
-          const storedAiProviders = sanitizeAiProviderConfigs(((_j = customizations.aiProviderConfigs) == null ? void 0 : _j.data) || {});
-          const storedAiTutor = ((_k = customizations.aiTutorPreferences) == null ? void 0 : _k.data) || null;
+          const storedReminderSettings = ((_g2 = customizations.reminderSettings) == null ? void 0 : _g2.data) || null;
+          const storedBackupReminderSettings = ((_h2 = customizations.backupReminderSettings) == null ? void 0 : _h2.data) || null;
+          const storedClassSchedule = ((_i2 = customizations.classScheduleSettings) == null ? void 0 : _i2.data) || null;
+          const storedTimeTracking = ((_j2 = customizations.timeTrackingData) == null ? void 0 : _j2.data) || null;
+          const storedNotificationHistory = ((_k2 = customizations.notificationHistory) == null ? void 0 : _k2.data) || null;
+          const storedProfile = ((_l2 = customizations.studentProfile) == null ? void 0 : _l2.data) || null;
+          const storedPracticeProgress = ((_m2 = customizations.practiceProgress) == null ? void 0 : _m2.data) || null;
+          const storedAiProviders = sanitizeAiProviderConfigs(((_n2 = customizations.aiProviderConfigs) == null ? void 0 : _n2.data) || {});
+          const storedAiTutor = ((_o2 = customizations.aiTutorPreferences) == null ? void 0 : _o2.data) || null;
           if (storedPreferences) {
             if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
             if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
             if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
+            if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
+            if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
+            if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
+            if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
             if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
             if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
             if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
@@ -3337,9 +4752,28 @@ ${marker} `);
             if (typeof storedReviewPreferences.dailyReviewCap !== "undefined") {
               setDailyReviewCap(Math.max(5, Math.min(50, Number(storedReviewPreferences.dailyReviewCap) || 20)));
             }
+            if (typeof storedReviewPreferences.practiceSubjectId !== "undefined") {
+              setPracticeSubjectId(storedReviewPreferences.practiceSubjectId || "english");
+            }
+            if (storedReviewPreferences.practiceFiltersBySubject && typeof storedReviewPreferences.practiceFiltersBySubject === "object") {
+              setPracticeFiltersBySubject(storedReviewPreferences.practiceFiltersBySubject);
+            }
+            if (storedReviewPreferences.practiceTimedSettings && typeof storedReviewPreferences.practiceTimedSettings === "object") {
+              setPracticeTimedSettings((current) => ({ ...current, ...storedReviewPreferences.practiceTimedSettings }));
+            }
+            if (storedReviewPreferences.reviewSrsSettings && typeof storedReviewPreferences.reviewSrsSettings === "object") {
+              setReviewSrsSettings({
+                masteryThreshold: Math.max(3, Math.min(7, Number(storedReviewPreferences.reviewSrsSettings.masteryThreshold) || 5)),
+                intervalScale: Math.max(0.5, Math.min(2.5, Number(storedReviewPreferences.reviewSrsSettings.intervalScale) || 1)),
+                againMinutes: Math.max(5, Math.min(180, Number(storedReviewPreferences.reviewSrsSettings.againMinutes) || 10))
+              });
+            }
           }
           if (storedPacing && typeof storedPacing === "object") {
             setDaySectionOverrides(storedPacing);
+          }
+          if (storedPracticeProgress && typeof storedPracticeProgress === "object") {
+            setPracticeLessonProgress(storedPracticeProgress);
           }
           if (storedGoals && typeof storedGoals === "object") {
             setStudyGoals({
@@ -3366,6 +4800,21 @@ ${marker} `);
               lastShownDay: storedReminderSettings.lastShownDay || null
             });
           }
+          if (storedBackupReminderSettings && typeof storedBackupReminderSettings === "object") {
+            setBackupReminderSettings(normalizeBackupReminderSettings(storedBackupReminderSettings));
+          }
+          if (storedClassSchedule && typeof storedClassSchedule === "object") {
+            setClassScheduleSettings({
+              enabled: Boolean(storedClassSchedule.enabled),
+              startTime: storedClassSchedule.startTime || "08:00",
+              endTime: storedClassSchedule.endTime || "13:00"
+            });
+          }
+          if (storedTimeTracking && typeof storedTimeTracking === "object") {
+            const normalizedTracking = normalizeTimeTrackingData(storedTimeTracking);
+            timeTrackingRef.current = normalizedTracking;
+            setTimeTrackingData(normalizedTracking);
+          }
           if (Array.isArray(storedNotificationHistory)) {
             setNotificationHistory(storedNotificationHistory.slice(0, 40));
           }
@@ -3382,13 +4831,13 @@ ${marker} `);
             setCompletedQuizzes(progressMap);
           }
           const persistedStats = await window.HomeSchoolDB.getUserStats();
-          if (persistedStats && persistedStats.totalQuizzes > 0 && !(stored == null ? void 0 : stored.totalQuizzesDone)) {
-            setTotalQuizzesDone(persistedStats.totalQuizzes || 0);
-            setTotalScore(persistedStats.totalScore || 0);
-            setStreak(persistedStats.streak || 0);
-            setLastQuizDate(persistedStats.lastQuizDate || null);
-            setEarnedBadges(persistedStats.badges || []);
-            setXp(persistedStats.xp || 0);
+          if (persistedStats) {
+            setTotalQuizzesDone((current) => Math.max(current || 0, persistedStats.totalQuizzes || 0));
+            setTotalScore((current) => Math.max(current || 0, persistedStats.totalScore || 0));
+            setStreak((current) => Math.max(current || 0, persistedStats.streak || 0));
+            setLastQuizDate((current) => current || persistedStats.lastQuizDate || null);
+            setEarnedBadges((current) => Array.from(/* @__PURE__ */ new Set([...current || [], ...persistedStats.badges || []])));
+            setXp((current) => Math.max(current || 0, persistedStats.xp || 0));
           }
           await refreshStorageLabel();
           if (versionManagerRef.current) {
@@ -3465,7 +4914,7 @@ ${marker} `);
       };
     }, [activeLessonSubs, mathSubIdx, mathSubTab, posTab, selectedAdverbDay, selectedAdjDay, selectedConjDay, selectedLesson, selectedNounDay, selectedPrepDay, selectedPronDay, selectedSubject, selectedTensePara, selectedVerbDay, selectedVocabDay, subExerciseGroupIdx, subQuizGroupIdx, tenseMain, tenseSub]);
     const inferViewSource = useCallback((card) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g, _h, _i, _j;
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2;
       if (!card) return null;
       const rawSource = card.source || null;
       const posSettingMap = {
@@ -3510,14 +4959,14 @@ ${marker} `);
             subject: "english",
             lessonKey: "vocabulary",
             subSettingKey: "wordsOpposites",
-            day: (_h = (_g = rawSource.day) != null ? _g : card.day) != null ? _h : null
+            day: (_h2 = (_g2 = rawSource.day) != null ? _g2 : card.day) != null ? _h2 : null
           };
         }
         if (rawSource.lessonKey === "sentences" && rawSource.subSettingKey === "sentences" || card.section === "sentences") {
           return {
             subject: "english",
             lessonKey: "sentences",
-            day: (_j = (_i = rawSource.day) != null ? _i : card.day) != null ? _j : null
+            day: (_j2 = (_i2 = rawSource.day) != null ? _i2 : card.day) != null ? _j2 : null
           };
         }
         if (rawSource.lessonKey || rawSource.lessonTitle || rawSource.subTitle) {
@@ -3669,9 +5118,15 @@ ${marker} `);
       };
     }, [themeMode]);
     useEffect(() => {
-      window.HomeSchoolPrefs = { ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections };
+      window.HomeSchoolPrefs = { ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled };
       if (!ttsEnabled) window.speechSynthesis.cancel();
-    }, [ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections]);
+    }, [ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled]);
+    useEffect(() => {
+      const root = document.documentElement;
+      if (!root) return;
+      root.dataset.motion = reducedMotion ? "reduced" : "full";
+      root.dataset.contrast = highContrast ? "high" : "normal";
+    }, [highContrast, reducedMotion]);
     useEffect(() => {
       var _a2;
       if (!dbLoaded) return;
@@ -3681,15 +5136,27 @@ ${marker} `);
         ttsVoiceSelections,
         language,
         themeMode,
+        fontSizeMode,
+        reducedMotion,
+        highContrast,
+        keyboardShortcutsEnabled,
         navPosition,
         navAutoHide,
         navBarAutoHide,
         transitionMode,
         dailyReviewCap,
+        reviewSrsSettings,
+        practiceSubjectId,
+        practiceFiltersBySubject,
+        practiceTimedSettings,
+        practiceLessonProgress,
         daySectionOverrides,
         studyGoals,
         focusTimerSettings,
         reminderSettings,
+        backupReminderSettings,
+        classScheduleSettings,
+        timeTrackingData,
         notificationHistory,
         grade,
         studentName,
@@ -3697,10 +5164,10 @@ ${marker} `);
         aiProviderConfigs,
         selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+    }, [dbLoaded, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, installBannerDismissed });
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, installBannerDismissed]);
+      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed });
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed]);
     useEffect(() => {
       setNavHidden(Boolean(navAutoHide));
     }, [navPosition, navAutoHide]);
@@ -3876,6 +5343,107 @@ ${marker} `);
       return () => window.clearInterval(timerId);
     }, [reminderSettings, pushNotificationHistoryEntry]);
     useEffect(() => {
+      if (!dbLoaded || !backupReminderSettings.enabled || !hasBackupWorthData || !backupReminderSummary.due) return;
+      const todayKey = getLocalDayKey();
+      if (backupReminderSettings.lastPromptDay === todayKey) return;
+      pushNotificationHistoryEntry({
+        type: "reminder",
+        titleEn: "Backup reminder",
+        titleUr: "\u0628\u06CC\u06A9 \u0627\u067E \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC",
+        bodyEn: "Export a fresh backup so your latest progress stays safe.",
+        bodyUr: "\u0646\u06CC\u0627 \u0628\u06CC\u06A9 \u0627\u067E \u0627\u06CC\u06A9\u0633\u067E\u0648\u0631\u0679 \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u06A9\u06CC \u062A\u0627\u0632\u06C1 \u067E\u06CC\u0634 \u0631\u0641\u062A \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u06D2\u06D4",
+        dedupeKey: `backup_${todayKey}`
+      });
+      setBackupReminderSettings((current) => ({
+        ...normalizeBackupReminderSettings(current),
+        lastPromptDay: todayKey
+      }));
+    }, [backupReminderSettings, backupReminderSummary.due, dbLoaded, hasBackupWorthData, pushNotificationHistoryEntry]);
+    const awardTimeManagementReward = useCallback((reward) => {
+      if (!reward) return;
+      const badgeIds = Array.from(new Set(reward.badgeIds || []));
+      if (reward.xpGain) {
+        setXp((current) => current + reward.xpGain);
+      }
+      if (badgeIds.length > 0) {
+        const newlyEarned = badgeIds.filter((badgeId) => !earnedBadges.includes(badgeId));
+        if (newlyEarned.length > 0) {
+          setNewBadges((current) => Array.from(/* @__PURE__ */ new Set([...current || [], ...newlyEarned])));
+        }
+        setEarnedBadges((current) => Array.from(/* @__PURE__ */ new Set([...current || [], ...badgeIds])));
+      }
+      if (reward.notice === "on-time") {
+        pushNotificationHistoryEntry({
+          type: "success",
+          titleEn: "On-time bonus",
+          titleUr: "\u0648\u0642\u062A \u067E\u0631 \u0622\u0646\u06D2 \u06A9\u0627 \u0628\u0648\u0646\u0633",
+          bodyEn: `You earned ${reward.xpGain || 0} XP for starting class on time.`,
+          bodyUr: `\u0622\u067E \u0646\u06D2 \u0648\u0642\u062A \u067E\u0631 \u06A9\u0644\u0627\u0633 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u067E\u0631 ${reward.xpGain || 0} \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u062D\u0627\u0635\u0644 \u06A9\u06CC\u06D4`,
+          createdAt: Date.now()
+        });
+      } else if (reward.notice === "class-time") {
+        pushNotificationHistoryEntry({
+          type: "success",
+          titleEn: "Class-time bonus",
+          titleUr: "\u06A9\u0644\u0627\u0633 \u0648\u0642\u062A \u0628\u0648\u0646\u0633",
+          bodyEn: `You completed your scheduled class time and earned ${reward.xpGain || 0} XP.`,
+          bodyUr: `\u0622\u067E \u0646\u06D2 \u0627\u067E\u0646\u0627 \u0645\u0642\u0631\u0631\u06C1 \u06A9\u0644\u0627\u0633 \u0648\u0642\u062A \u0645\u06A9\u0645\u0644 \u06A9\u06CC\u0627 \u0627\u0648\u0631 ${reward.xpGain || 0} \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u062D\u0627\u0635\u0644 \u06A9\u06CC\u06D4`,
+          createdAt: Date.now()
+        });
+      }
+    }, [earnedBadges, pushNotificationHistoryEntry]);
+    const applyTimeTrackingAction = useCallback((action) => {
+      const result = applyTimeTrackingMutation(timeTrackingRef.current, classScheduleSettings, action);
+      timeTrackingRef.current = result.next;
+      setTimeTrackingData(result.next);
+      if (result.reward) awardTimeManagementReward(result.reward);
+    }, [awardTimeManagementReward, classScheduleSettings]);
+    useEffect(() => {
+      if (!dbLoaded || !grade) return void 0;
+      const flushUsage = () => {
+        const startedAt = Number(usageTrackingRef.current.startedAt) || 0;
+        if (!startedAt) return;
+        const now = Date.now();
+        const deltaMs = now - startedAt;
+        usageTrackingRef.current.startedAt = now;
+        if (deltaMs >= 1e3) {
+          applyTimeTrackingAction({ type: "add-usage", now, deltaMs });
+        }
+      };
+      const startTracking = () => {
+        if (document.visibilityState === "hidden" || !document.hasFocus()) return;
+        applyTimeTrackingAction({ type: "mark-visit", now: Date.now() });
+        if (!usageTrackingRef.current.startedAt) {
+          usageTrackingRef.current.startedAt = Date.now();
+        }
+      };
+      const stopTracking = () => {
+        flushUsage();
+        usageTrackingRef.current.startedAt = 0;
+      };
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "hidden") stopTracking();
+        else startTracking();
+      };
+      startTracking();
+      const timerId = window.setInterval(() => {
+        if (document.visibilityState === "hidden" || !document.hasFocus()) return;
+        flushUsage();
+      }, 3e4);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      window.addEventListener("focus", startTracking);
+      window.addEventListener("blur", stopTracking);
+      window.addEventListener("pagehide", stopTracking);
+      return () => {
+        window.clearInterval(timerId);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        window.removeEventListener("focus", startTracking);
+        window.removeEventListener("blur", stopTracking);
+        window.removeEventListener("pagehide", stopTracking);
+        stopTracking();
+      };
+    }, [applyTimeTrackingAction, dbLoaded, grade]);
+    useEffect(() => {
       setPendingReviewBadge(reviewStats.due || 0);
     }, [reviewStats.due]);
     useEffect(() => {
@@ -3950,6 +5518,12 @@ ${marker} `);
         [key]: key === "dailyReviews" ? Math.max(5, Math.min(60, Number(value) || current.dailyReviews || 20)) : Math.max(10, Math.min(140, Number(value) || current.weeklyWords || 40))
       }));
     }, []);
+    const handleReviewSrsSettingChange = useCallback((key, value) => {
+      setReviewSrsSettings((current) => ({
+        ...current,
+        [key]: key === "masteryThreshold" ? Math.max(3, Math.min(7, Number(value) || current.masteryThreshold || 5)) : key === "intervalScale" ? Math.max(0.5, Math.min(2.5, Number(value) || current.intervalScale || 1)) : Math.max(5, Math.min(180, Number(value) || current.againMinutes || 10))
+      }));
+    }, []);
     const handleFocusTimerSettingChange = useCallback((durationMinutes) => {
       const nextMinutes = Math.max(5, Math.min(60, Number(durationMinutes) || 20));
       setFocusTimerSettings((current) => ({
@@ -3963,6 +5537,125 @@ ${marker} `);
         ...nextPartial
       }));
     }, []);
+    const handleBackupReminderSettingChange = useCallback((key, value) => {
+      setBackupReminderSettings((current) => ({
+        ...normalizeBackupReminderSettings(current),
+        [key]: key === "enabled" ? Boolean(value) : value
+      }));
+    }, []);
+    const handlePracticeTimedSettingChange = useCallback((modeId, seconds) => {
+      const safeSeconds = Math.max(10, Math.min(180, Number(seconds) || 30));
+      setPracticeTimedSettings((current) => ({
+        ...current,
+        [modeId]: safeSeconds
+      }));
+      if (practiceMode === modeId) {
+        setPracticeTimerRemaining(safeSeconds);
+        setPracticeTimerFinished(false);
+      }
+    }, [practiceMode]);
+    const updatePracticeLessonProgress = useCallback((card, correct, marksEarned, marksPossible) => {
+      const lessonKey = getPracticeItemLessonKey(card);
+      const subjectId = (card == null ? void 0 : card.subject) || activePracticeSubjectId;
+      if (!lessonKey || !subjectId) return;
+      const progressKey = `${subjectId}|${lessonKey}`;
+      setPracticeLessonProgress((current) => {
+        const previous = (current == null ? void 0 : current[progressKey]) || { attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, lastPlayedAt: null };
+        return {
+          ...current,
+          [progressKey]: {
+            attempted: (previous.attempted || 0) + 1,
+            correct: (previous.correct || 0) + (correct ? 1 : 0),
+            marksEarned: (previous.marksEarned || 0) + marksEarned,
+            marksPossible: (previous.marksPossible || 0) + marksPossible,
+            lastPlayedAt: Date.now()
+          }
+        };
+      });
+    }, [activePracticeSubjectId]);
+    const commitConfidenceChoice = useCallback((level) => {
+      if (practiceConfidenceChoice || !["low", "medium", "high"].includes(level)) return;
+      setPracticeConfidenceChoice(level);
+      setPracticeSessionStats((current) => {
+        var _a2, _b2, _c2;
+        return {
+          ...current,
+          confidence: {
+            low: (((_a2 = current.confidence) == null ? void 0 : _a2.low) || 0) + (level === "low" ? 1 : 0),
+            medium: (((_b2 = current.confidence) == null ? void 0 : _b2.medium) || 0) + (level === "medium" ? 1 : 0),
+            high: (((_c2 = current.confidence) == null ? void 0 : _c2.high) || 0) + (level === "high" ? 1 : 0)
+          }
+        };
+      });
+    }, [practiceConfidenceChoice]);
+    const savePracticeReflection = useCallback(() => {
+      const card = activePracticeCard;
+      const text = String(practiceReflectionDraft || "").trim();
+      if (!card || !text) return;
+      setPracticeReflectionLog((current) => [{
+        id: `${card.id}_${Date.now()}`,
+        cardId: card.id,
+        subject: card.subject || activePracticeSubjectId,
+        lessonKey: getPracticeItemLessonKey(card),
+        prompt: getPracticeFlashFront(card) || card.prompt,
+        note: text,
+        createdAt: Date.now()
+      }, ...current || []].slice(0, 40));
+      setPracticeReflectionDraft("");
+    }, [activePracticeCard, activePracticeSubjectId, practiceReflectionDraft]);
+    const triggerPracticeFeedback = useCallback((correct) => {
+      var _a2, _b2;
+      (_b2 = (_a2 = window.HomeSchoolUtils) == null ? void 0 : _a2.playFeedbackSound) == null ? void 0 : _b2.call(_a2, correct ? "correct" : "wrong");
+      if (correct) setPracticeCelebrationSeed((value) => value + 1);
+    }, []);
+    const recordPracticeOutcome = useCallback((card, correct, modeId = practiceMode) => {
+      if (!card) return;
+      const marksPossible = getPracticeDifficultyMarks(getPracticeItemDifficulty(card));
+      const marksEarned = correct ? marksPossible : 0;
+      setPracticeReveal(true);
+      setPracticeFeedbackText(getPracticeFeedbackText(card, modeId, correct, language));
+      setPracticeConfidenceChoice(null);
+      setPracticeReflectionDraft("");
+      setPracticeSessionStats((current) => ({
+        attempted: (current.attempted || 0) + 1,
+        correct: (current.correct || 0) + (correct ? 1 : 0),
+        marksEarned: (current.marksEarned || 0) + marksEarned,
+        marksPossible: (current.marksPossible || 0) + marksPossible,
+        confidence: current.confidence || { low: 0, medium: 0, high: 0 }
+      }));
+      updatePracticeLessonProgress(card, correct, marksEarned, marksPossible);
+      triggerPracticeFeedback(correct);
+    }, [language, practiceMode, triggerPracticeFeedback, updatePracticeLessonProgress]);
+    const handlePracticeTimerExpiry = useCallback(() => {
+      if (!activePracticeCard) return;
+      if (practiceMode === "timedmatching") {
+        setPracticeTimerFinished(true);
+        setPracticeFeedbackText(joinLocalizedText("Time is up for this matching set. Review the pairs and go next.", "\u0627\u0633 \u062C\u0648\u0691\u06CC \u0648\u0627\u0644\u06D2 \u0633\u06CC\u0679 \u06A9\u0627 \u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4 \u062C\u0648\u0691\u06CC\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u0627\u0648\u0631 \u0627\u06AF\u0644\u0627 \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4", language));
+        recordPracticeOutcome(activePracticeCard, false, "timedmatching");
+        return;
+      }
+      if (practiceMode === "timedquiz" || practiceMode === "timedtruefalse" || practiceMode === "timedchallenge") {
+        setPracticeTimerFinished(true);
+        recordPracticeOutcome(activePracticeCard, false, practiceMode);
+      }
+    }, [activePracticeCard, language, practiceMode, recordPracticeOutcome]);
+    useEffect(() => {
+      if (!["timedchallenge", "timedquiz", "timedtruefalse", "timedmatching"].includes(practiceMode) || practiceTimerFinished) return void 0;
+      if (practiceTimerRemaining <= 0) {
+        handlePracticeTimerExpiry();
+        return void 0;
+      }
+      const timerId = setTimeout(() => {
+        setPracticeTimerRemaining((current) => Math.max(0, current - 1));
+      }, 1e3);
+      return () => clearTimeout(timerId);
+    }, [handlePracticeTimerExpiry, practiceMode, practiceTimerFinished, practiceTimerRemaining]);
+    const handleClassScheduleChange = useCallback((key, value) => {
+      setClassScheduleSettings((current) => ({
+        ...current,
+        [key]: key === "enabled" ? Boolean(value) : value
+      }));
+    }, []);
     const handleRequestNotificationPermission = useCallback(async () => {
       if (!("Notification" in window)) return;
       try {
@@ -3974,6 +5667,18 @@ ${marker} `);
         console.log("Unable to request notification permission:", error);
       }
     }, []);
+    const handleOpenDiscoveryLesson = useCallback((item) => {
+      if (!(item == null ? void 0 : item.subjectId) || !grade) return;
+      const subject = SUBJECTS.find((entry) => entry.id === item.subjectId);
+      if (!subject) return;
+      const lesson = (getLessons(subject.id, grade) || []).find((entry) => (entry.key || entry.id) === item.lessonKey);
+      if (!lesson) return;
+      window.speechSynthesis.cancel();
+      setTab("home");
+      setSelectedSubject(subject);
+      clearLessonSelections();
+      setSelectedLesson(lesson);
+    }, [clearLessonSelections, grade]);
     const handleAiProviderDraftChange = useCallback((providerId, field, value) => {
       setAiProviderDrafts((current) => ({
         ...current,
@@ -4249,10 +5954,158 @@ Update check fell back to inline mode.`);
       alert(result.refreshed ? `${ui.refreshSuccess} (${formatDate(Date.now())})${((_a2 = result.changedSubjects) == null ? void 0 : _a2.length) ? `
 ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refreshNoChanges);
     }, [refreshReviewWorkspace, refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
+    const applyImportedAppState = useCallback((nextState = {}, mode = "replace") => {
+      if (mode === "replace") {
+        if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
+        if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
+        if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr(nextState.studentNameUr);
+        if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
+        if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
+        if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
+        if (typeof nextState.streak !== "undefined") setStreak(nextState.streak);
+        if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate(nextState.lastQuizDate);
+        if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
+        if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
+        if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
+        if (typeof nextState.ttsRate !== "undefined") setTtsRate(Math.max(0.6, Math.min(1.3, Number(nextState.ttsRate) || 0.85)));
+        if (nextState.ttsVoiceSelections) setTtsVoiceSelections({ en: nextState.ttsVoiceSelections.en || "", ur: nextState.ttsVoiceSelections.ur || "" });
+        if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
+        if (typeof nextState.themeMode !== "undefined") setThemeMode(nextState.themeMode);
+        if (typeof nextState.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(nextState.fontSizeMode)) setFontSizeMode(nextState.fontSizeMode);
+        if (typeof nextState.reducedMotion !== "undefined") setReducedMotion(Boolean(nextState.reducedMotion));
+        if (typeof nextState.highContrast !== "undefined") setHighContrast(Boolean(nextState.highContrast));
+        if (typeof nextState.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(nextState.keyboardShortcutsEnabled));
+        if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition(nextState.navPosition);
+        if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
+        if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
+        if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
+        if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
+        if (nextState.reviewSrsSettings) setReviewSrsSettings({
+          masteryThreshold: Math.max(3, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || 5)),
+          intervalScale: Math.max(0.5, Math.min(2.5, Number(nextState.reviewSrsSettings.intervalScale) || 1)),
+          againMinutes: Math.max(5, Math.min(180, Number(nextState.reviewSrsSettings.againMinutes) || 10))
+        });
+        if (typeof nextState.practiceSubjectId !== "undefined") setPracticeSubjectId(nextState.practiceSubjectId || "english");
+        if (nextState.practiceFiltersBySubject) setPracticeFiltersBySubject(nextState.practiceFiltersBySubject);
+        if (nextState.practiceTimedSettings) setPracticeTimedSettings((current) => ({ ...current, ...nextState.practiceTimedSettings }));
+        if (nextState.practiceLessonProgress) setPracticeLessonProgress(nextState.practiceLessonProgress);
+        setDaySectionOverrides(nextState.daySectionOverrides || {});
+        if (nextState.studyGoals) setStudyGoals({
+          dailyReviews: Math.max(5, Math.min(60, Number(nextState.studyGoals.dailyReviews) || 20)),
+          weeklyWords: Math.max(10, Math.min(140, Number(nextState.studyGoals.weeklyWords) || 40))
+        });
+        if (nextState.focusTimerSettings) setFocusTimerSettings({
+          durationMinutes: Math.max(5, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || 20)),
+          autoStartBreak: Boolean(nextState.focusTimerSettings.autoStartBreak)
+        });
+        if (nextState.reminderSettings) setReminderSettings({
+          enabled: Boolean(nextState.reminderSettings.enabled),
+          time: nextState.reminderSettings.time || "18:00",
+          notifications: Boolean(nextState.reminderSettings.notifications),
+          lastShownDay: nextState.reminderSettings.lastShownDay || null
+        });
+        if (nextState.backupReminderSettings) setBackupReminderSettings(normalizeBackupReminderSettings(nextState.backupReminderSettings));
+        if (nextState.classScheduleSettings) setClassScheduleSettings({
+          enabled: Boolean(nextState.classScheduleSettings.enabled),
+          startTime: nextState.classScheduleSettings.startTime || "08:00",
+          endTime: nextState.classScheduleSettings.endTime || "13:00"
+        });
+        if (nextState.timeTrackingData) {
+          const normalizedTracking = normalizeTimeTrackingData(nextState.timeTrackingData);
+          timeTrackingRef.current = normalizedTracking;
+          setTimeTrackingData(normalizedTracking);
+        }
+        if (Array.isArray(nextState.notificationHistory)) setNotificationHistory(nextState.notificationHistory.slice(0, 40));
+        return;
+      }
+      if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
+      if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
+      if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr((current) => current || nextState.studentNameUr);
+      if (nextState.completedQuizzes) setCompletedQuizzes((current) => ({ ...current, ...nextState.completedQuizzes }));
+      if (typeof nextState.totalScore !== "undefined") setTotalScore((current) => Math.max(current, nextState.totalScore));
+      if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone((current) => Math.max(current, nextState.totalQuizzesDone));
+      if (typeof nextState.streak !== "undefined") setStreak((current) => Math.max(current, nextState.streak));
+      if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate((current) => current || nextState.lastQuizDate);
+      if (nextState.earnedBadges) setEarnedBadges((current) => Array.from(/* @__PURE__ */ new Set([...current || [], ...nextState.earnedBadges])));
+      if (typeof nextState.xp !== "undefined") setXp((current) => Math.max(current, nextState.xp));
+      if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
+      if (typeof nextState.ttsRate !== "undefined") setTtsRate((current) => Math.max(current, Math.min(1.3, Number(nextState.ttsRate) || current)));
+      if (nextState.ttsVoiceSelections) setTtsVoiceSelections((current) => ({ ...current, ...nextState.ttsVoiceSelections }));
+      if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
+      if (typeof nextState.themeMode !== "undefined") setThemeMode((current) => current || nextState.themeMode);
+      if (typeof nextState.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(nextState.fontSizeMode)) setFontSizeMode((current) => current || nextState.fontSizeMode);
+      if (typeof nextState.reducedMotion !== "undefined") setReducedMotion((current) => current || Boolean(nextState.reducedMotion));
+      if (typeof nextState.highContrast !== "undefined") setHighContrast((current) => current || Boolean(nextState.highContrast));
+      if (typeof nextState.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled((current) => current || Boolean(nextState.keyboardShortcutsEnabled));
+      if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition((current) => current || nextState.navPosition);
+      if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
+      if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
+      if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
+      if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
+      if (nextState.reviewSrsSettings) setReviewSrsSettings((current) => ({
+        masteryThreshold: Math.max(current.masteryThreshold || 5, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || current.masteryThreshold || 5)),
+        intervalScale: Math.max(current.intervalScale || 1, Math.min(2.5, Number(nextState.reviewSrsSettings.intervalScale) || current.intervalScale || 1)),
+        againMinutes: Math.max(current.againMinutes || 10, Math.min(180, Number(nextState.reviewSrsSettings.againMinutes) || current.againMinutes || 10))
+      }));
+      if (typeof nextState.practiceSubjectId !== "undefined") setPracticeSubjectId((current) => current || nextState.practiceSubjectId || "english");
+      if (nextState.practiceFiltersBySubject) setPracticeFiltersBySubject((current) => ({ ...current || {}, ...nextState.practiceFiltersBySubject }));
+      if (nextState.practiceTimedSettings) setPracticeTimedSettings((current) => ({ ...current || {}, ...nextState.practiceTimedSettings }));
+      if (nextState.practiceLessonProgress) setPracticeLessonProgress((current) => ({ ...current || {}, ...nextState.practiceLessonProgress }));
+      if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
+      if (nextState.studyGoals) setStudyGoals((current) => ({
+        dailyReviews: Math.max(current.dailyReviews || 20, Math.min(60, Number(nextState.studyGoals.dailyReviews) || current.dailyReviews || 20)),
+        weeklyWords: Math.max(current.weeklyWords || 40, Math.min(140, Number(nextState.studyGoals.weeklyWords) || current.weeklyWords || 40))
+      }));
+      if (nextState.focusTimerSettings) setFocusTimerSettings((current) => ({
+        durationMinutes: Math.max(current.durationMinutes || 20, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || current.durationMinutes || 20)),
+        autoStartBreak: current.autoStartBreak || Boolean(nextState.focusTimerSettings.autoStartBreak)
+      }));
+      if (nextState.reminderSettings) setReminderSettings((current) => ({
+        ...current,
+        enabled: current.enabled || Boolean(nextState.reminderSettings.enabled),
+        time: current.time || nextState.reminderSettings.time || "18:00",
+        notifications: current.notifications || Boolean(nextState.reminderSettings.notifications),
+        lastShownDay: current.lastShownDay || nextState.reminderSettings.lastShownDay || null
+      }));
+      if (nextState.backupReminderSettings) setBackupReminderSettings((current) => {
+        var _a2;
+        return {
+          ...normalizeBackupReminderSettings(current),
+          ...normalizeBackupReminderSettings(nextState.backupReminderSettings),
+          intervalDays: Math.min(normalizeBackupReminderSettings(current).intervalDays, normalizeBackupReminderSettings(nextState.backupReminderSettings).intervalDays),
+          lastBackupAt: Math.max(Number(current == null ? void 0 : current.lastBackupAt) || 0, Number((_a2 = nextState.backupReminderSettings) == null ? void 0 : _a2.lastBackupAt) || 0) || null
+        };
+      });
+      if (nextState.classScheduleSettings) setClassScheduleSettings((current) => ({
+        enabled: current.enabled || Boolean(nextState.classScheduleSettings.enabled),
+        startTime: current.startTime || nextState.classScheduleSettings.startTime || "08:00",
+        endTime: current.endTime || nextState.classScheduleSettings.endTime || "13:00"
+      }));
+      if (nextState.timeTrackingData) {
+        const mergedTracking = mergeTimeTrackingData(timeTrackingRef.current, nextState.timeTrackingData);
+        timeTrackingRef.current = mergedTracking;
+        setTimeTrackingData(mergedTracking);
+      }
+      if (Array.isArray(nextState.notificationHistory)) setNotificationHistory((current) => [...current || [], ...nextState.notificationHistory].slice(0, 40));
+    }, []);
+    const executeImportReview = useCallback(async (previewState, mode) => {
+      if (!(previewState == null ? void 0 : previewState.parsed)) return;
+      const parsed = previewState.parsed;
+      const nextState = parsed.appState || {};
+      applyImportedAppState(nextState, mode);
+      if (window.HomeSchoolDB && parsed.dbProgress) {
+        await window.HomeSchoolDB.importProgress(parsed.dbProgress, { mode });
+      }
+      await refreshStorageLabel();
+      await refreshReviewWorkspace();
+      setImportReviewState(null);
+      alert(mode === "replace" ? ui.importSuccessReplace : ui.importSuccessMerge);
+    }, [applyImportedAppState, refreshReviewWorkspace, refreshStorageLabel, ui.importSuccessMerge, ui.importSuccessReplace]);
     const handleExportProgress = useCallback(async () => {
       const dbProgress = window.HomeSchoolDB ? await window.HomeSchoolDB.exportProgress() : null;
+      const exportedAt = Date.now();
       downloadJson(`homeschool-progress-${Date.now()}.json`, {
-        exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        exportedAt: new Date(exportedAt).toISOString(),
         appVersion: window.HomeSchoolData.VERSION,
         appState: {
           grade,
@@ -4270,26 +6123,42 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           ttsVoiceSelections,
           language,
           themeMode,
+          fontSizeMode,
+          reducedMotion,
+          highContrast,
+          keyboardShortcutsEnabled,
           navPosition,
           navAutoHide,
           navBarAutoHide,
           transitionMode,
           dailyReviewCap,
+          reviewSrsSettings,
+          practiceSubjectId,
+          practiceFiltersBySubject,
+          practiceTimedSettings,
+          practiceLessonProgress,
           daySectionOverrides,
           studyGoals,
           focusTimerSettings,
           reminderSettings,
+          backupReminderSettings,
+          classScheduleSettings,
+          timeTrackingData,
           notificationHistory
         },
         dbProgress
       });
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory]);
+      setBackupReminderSettings((current) => ({
+        ...normalizeBackupReminderSettings(current),
+        lastBackupAt: exportedAt,
+        lastPromptDay: getLocalDayKey(exportedAt)
+      }));
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory]);
     const handleImportProgress = useCallback(async (event) => {
-      var _a2, _b2, _c2;
+      var _a2, _b2;
       const file = (_b2 = (_a2 = event == null ? void 0 : event.target) == null ? void 0 : _a2.files) == null ? void 0 : _b2[0];
       if (!file) return;
       try {
-        if (!confirm(ui.importNow)) return;
         const text = await file.text();
         const parsed = JSON.parse(text);
         const validation = validateProgressImport(parsed);
@@ -4298,99 +6167,29 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
 ${validation.errors.join("\n")}`);
           return;
         }
-        if (((_c2 = parsed == null ? void 0 : parsed.dbProgress) == null ? void 0 : _c2.dataVersion) && parsed.dbProgress.dataVersion > window.HomeSchoolData.VERSION && !confirm(ui.importNewer)) {
-          return;
-        }
-        const replaceMode = confirm(ui.replacePrompt);
-        const mode = replaceMode ? "replace" : "merge";
-        const nextState = parsed.appState || {};
-        if (mode === "replace") {
-          if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
-          if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
-          if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr(nextState.studentNameUr);
-          if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
-          if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
-          if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
-          if (typeof nextState.streak !== "undefined") setStreak(nextState.streak);
-          if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate(nextState.lastQuizDate);
-          if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
-          if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
-          if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
-          if (typeof nextState.ttsRate !== "undefined") setTtsRate(Math.max(0.6, Math.min(1.3, Number(nextState.ttsRate) || 0.85)));
-          if (nextState.ttsVoiceSelections) setTtsVoiceSelections({ en: nextState.ttsVoiceSelections.en || "", ur: nextState.ttsVoiceSelections.ur || "" });
-          if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
-          if (typeof nextState.themeMode !== "undefined") setThemeMode(nextState.themeMode);
-          if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition(nextState.navPosition);
-          if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
-          if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
-          if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
-          if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
-          setDaySectionOverrides(nextState.daySectionOverrides || {});
-          if (nextState.studyGoals) setStudyGoals({
-            dailyReviews: Math.max(5, Math.min(60, Number(nextState.studyGoals.dailyReviews) || 20)),
-            weeklyWords: Math.max(10, Math.min(140, Number(nextState.studyGoals.weeklyWords) || 40))
-          });
-          if (nextState.focusTimerSettings) setFocusTimerSettings({
-            durationMinutes: Math.max(5, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || 20)),
-            autoStartBreak: Boolean(nextState.focusTimerSettings.autoStartBreak)
-          });
-          if (nextState.reminderSettings) setReminderSettings({
-            enabled: Boolean(nextState.reminderSettings.enabled),
-            time: nextState.reminderSettings.time || "18:00",
-            notifications: Boolean(nextState.reminderSettings.notifications),
-            lastShownDay: nextState.reminderSettings.lastShownDay || null
-          });
-          if (Array.isArray(nextState.notificationHistory)) setNotificationHistory(nextState.notificationHistory.slice(0, 40));
-        } else {
-          if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
-          if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
-          if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr((current) => current || nextState.studentNameUr);
-          if (nextState.completedQuizzes) setCompletedQuizzes((current) => ({ ...current, ...nextState.completedQuizzes }));
-          if (typeof nextState.totalScore !== "undefined") setTotalScore((current) => Math.max(current, nextState.totalScore));
-          if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone((current) => Math.max(current, nextState.totalQuizzesDone));
-          if (typeof nextState.streak !== "undefined") setStreak((current) => Math.max(current, nextState.streak));
-          if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate((current) => current || nextState.lastQuizDate);
-          if (nextState.earnedBadges) setEarnedBadges((current) => Array.from(/* @__PURE__ */ new Set([...current || [], ...nextState.earnedBadges])));
-          if (typeof nextState.xp !== "undefined") setXp((current) => Math.max(current, nextState.xp));
-          if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
-          if (typeof nextState.ttsRate !== "undefined") setTtsRate((current) => Math.max(current, Math.min(1.3, Number(nextState.ttsRate) || current)));
-          if (nextState.ttsVoiceSelections) setTtsVoiceSelections((current) => ({ ...current, ...nextState.ttsVoiceSelections }));
-          if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
-          if (typeof nextState.themeMode !== "undefined") setThemeMode((current) => current || nextState.themeMode);
-          if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition((current) => current || nextState.navPosition);
-          if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
-          if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
-          if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
-          if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
-          if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
-          if (nextState.studyGoals) setStudyGoals((current) => ({
-            dailyReviews: Math.max(current.dailyReviews || 20, Math.min(60, Number(nextState.studyGoals.dailyReviews) || current.dailyReviews || 20)),
-            weeklyWords: Math.max(current.weeklyWords || 40, Math.min(140, Number(nextState.studyGoals.weeklyWords) || current.weeklyWords || 40))
-          }));
-          if (nextState.focusTimerSettings) setFocusTimerSettings((current) => ({
-            durationMinutes: Math.max(current.durationMinutes || 20, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || current.durationMinutes || 20)),
-            autoStartBreak: current.autoStartBreak || Boolean(nextState.focusTimerSettings.autoStartBreak)
-          }));
-          if (nextState.reminderSettings) setReminderSettings((current) => ({
-            ...current,
-            enabled: current.enabled || Boolean(nextState.reminderSettings.enabled),
-            time: current.time || nextState.reminderSettings.time || "18:00",
-            notifications: current.notifications || Boolean(nextState.reminderSettings.notifications),
-            lastShownDay: current.lastShownDay || nextState.reminderSettings.lastShownDay || null
-          }));
-          if (Array.isArray(nextState.notificationHistory)) setNotificationHistory((current) => [...current || [], ...nextState.notificationHistory].slice(0, 40));
-        }
-        if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress, { mode });
-        await refreshStorageLabel();
-        await refreshReviewWorkspace();
-        alert(mode === "replace" ? ui.importSuccessReplace : ui.importSuccessMerge);
+        const preview = summarizeImportPreview(parsed, {
+          grade,
+          studentName,
+          completedQuizzes,
+          language,
+          themeMode,
+          transitionMode,
+          classScheduleSettings,
+          reminderSettings,
+          reviewHistoryCount: reviewAnalytics.totals.reviewedLastPeriod || 0,
+          timeTrackingHistoryCount: (timeTrackingData.history || []).length
+        }, window.HomeSchoolData.VERSION);
+        setImportReviewState({
+          ...preview,
+          fileName: file.name
+        });
       } catch (error) {
         alert(`${ui.importInvalid}
 ${error.message || error}`);
       } finally {
         event.target.value = "";
       }
-    }, [refreshReviewWorkspace, refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
+    }, [classScheduleSettings, completedQuizzes, grade, language, reminderSettings, reviewAnalytics.totals.reviewedLastPeriod, studentName, themeMode, timeTrackingData.history, transitionMode, ui.importInvalid]);
     const handleResetProgress = useCallback(async () => {
       if (!confirm(ui.resetConfirm)) return;
       setCompletedQuizzes({});
@@ -4418,6 +6217,46 @@ ${error.message || error}`);
       localStorage.removeItem(window.HomeSchoolUtils.STORE_KEY);
       location.reload();
     }, [ui.fullResetConfirm]);
+    const handleResetReviewSystem = useCallback(async () => {
+      if (!confirm(joinLocalizedText("Reset only the review queue and review history?", "\u0635\u0631\u0641 \u0631\u06CC\u0648\u06CC\u0648 \u0642\u0637\u0627\u0631 \u0627\u0648\u0631 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u0633\u0679\u0631\u06CC \u0631\u06CC \u0633\u06CC\u0679 \u06A9\u0631\u0646\u06CC \u06C1\u06D2\u061F", language))) return;
+      if (window.HomeSchoolDB) await window.HomeSchoolDB.resetReviewSystem(window.HomeSchoolData);
+      setReviewQueue([]);
+      setReviewIdx(0);
+      setReviewReveal(false);
+      setReviewSessionDone(false);
+      setReviewSessionXp(0);
+      await refreshReviewWorkspace();
+      await refreshStorageLabel();
+    }, [language, refreshReviewWorkspace, refreshStorageLabel]);
+    const handleClearStudyCollections = useCallback(async () => {
+      if (!confirm(joinLocalizedText("Clear favorites, notes, and custom lists only?", "\u0635\u0631\u0641 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1\u060C \u0646\u0648\u0679\u0633\u060C \u0627\u0648\u0631 \u0627\u067E\u0646\u06CC \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0635\u0627\u0641 \u06A9\u0631\u0646\u06CC \u06C1\u06CC\u06BA\u061F", language))) return;
+      if (window.HomeSchoolDB) await window.HomeSchoolDB.clearStudyCollections();
+      setReviewQueue((current) => current.map((card) => ({
+        ...card,
+        favorite: false,
+        note: "",
+        listIds: [],
+        listNames: []
+      })));
+      await refreshReviewWorkspace();
+      await refreshStorageLabel();
+    }, [language, refreshReviewWorkspace, refreshStorageLabel]);
+    const handleResetPlanningData = useCallback(async () => {
+      if (!confirm(joinLocalizedText("Reset class time tracking, reminders, and planning tools?", "\u06A9\u06CC\u0627 \u06A9\u0644\u0627\u0633 \u0648\u0642\u062A \u0679\u0631\u06CC\u06A9\u0646\u06AF\u060C \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA\u060C \u0627\u0648\u0631 \u0645\u0646\u0635\u0648\u0628\u06C1 \u0628\u0646\u062F\u06CC \u0679\u0648\u0644\u0632 \u0631\u06CC \u0633\u06CC\u0679 \u06A9\u0631\u0646\u06D2 \u06C1\u06CC\u06BA\u061F", language))) return;
+      if (window.HomeSchoolDB) await window.HomeSchoolDB.resetPlanningData();
+      setStudyGoals({ dailyReviews: 20, weeklyWords: 40 });
+      setFocusTimerSettings({ durationMinutes: 20, autoStartBreak: false });
+      setFocusTimerState({ active: false, remainingSeconds: 20 * 60, startedAt: null, completedSessions: 0 });
+      setReminderSettings({ enabled: false, time: "18:00", notifications: false, lastShownDay: null });
+      setBackupReminderSettings(normalizeBackupReminderSettings({}));
+      setClassScheduleSettings({ enabled: false, startTime: "08:00", endTime: "13:00" });
+      const clearedTracking = normalizeTimeTrackingData({});
+      timeTrackingRef.current = clearedTracking;
+      usageTrackingRef.current.startedAt = 0;
+      setTimeTrackingData(clearedTracking);
+      setNotificationHistory([]);
+      await refreshStorageLabel();
+    }, [language, refreshStorageLabel]);
     const handleStartReview = useCallback(async () => {
       if (!window.HomeSchoolDB) return;
       setReviewLoading(true);
@@ -4438,7 +6277,7 @@ ${error.message || error}`);
     }, [dailyReviewCap]);
     const handleReviewResponse = useCallback(async (rating) => {
       if (!window.HomeSchoolDB || !activeReviewCard) return;
-      const result = await window.HomeSchoolDB.saveReviewResult(activeReviewCard.id, rating);
+      const result = await window.HomeSchoolDB.saveReviewResult(activeReviewCard.id, rating, reviewSrsSettings);
       if (result == null ? void 0 : result.stats) {
         setXp(result.stats.xp || 0);
       }
@@ -4451,7 +6290,7 @@ ${error.message || error}`);
       }
       setReviewIdx((current) => current + 1);
       await refreshReviewWorkspace();
-    }, [activeReviewCard, refreshReviewWorkspace, reviewIdx, reviewQueue.length]);
+    }, [activeReviewCard, refreshReviewWorkspace, reviewIdx, reviewQueue.length, reviewSrsSettings]);
     const resetReviewSession = useCallback(() => {
       setReviewQueue([]);
       setReviewIdx(0);
@@ -4460,19 +6299,48 @@ ${error.message || error}`);
       setReviewSessionXp(0);
     }, []);
     const resetPracticeSession = useCallback(() => {
+      if (practiceAdvanceTimerRef.current) {
+        clearTimeout(practiceAdvanceTimerRef.current);
+        practiceAdvanceTimerRef.current = null;
+      }
       setPracticeMode(null);
       setPracticeDeck([]);
       setPracticeIdx(0);
       setPracticeReveal(false);
       setPracticeTypingInput("");
       setPracticeTypingResult(null);
+      setPracticeDictationInput("");
+      setPracticeDictationResult(null);
       setPracticeMatchRound(null);
       setPracticeMatchSelection(null);
-      setPracticeSessionStats({ attempted: 0, correct: 0 });
+      setPracticeBlankChoice(null);
+      setPracticeBlankResult(null);
+      setPracticeSentenceSelection([]);
+      setPracticeSentenceResult(null);
+      setPracticeTimedChoice(null);
+      setPracticeTimedResult(null);
+      setPracticeTimerRemaining(60);
+      setPracticeTimerFinished(false);
+      setPracticeSessionStats({ attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, confidence: { low: 0, medium: 0, high: 0 } });
+      setPracticeConfidenceChoice(null);
+      setPracticeFeedbackText("");
+      setPracticeReflectionDraft("");
+      setPracticeReflectionLog([]);
+      setPracticeBreakDismissedAt(0);
     }, []);
     const handleStartPractice = useCallback((mode) => {
-      const deck = buildPracticeDeck(reviewLibrary, mode === "matching" ? 8 : 12);
-      if (!deck.length) return;
+      var _a2, _b2;
+      if (mode === "dictation" && !((_b2 = (_a2 = window.HomeSchoolUtils) == null ? void 0 : _a2.isTtsEnabled) == null ? void 0 : _b2.call(_a2))) {
+        alert(joinLocalizedText("Turn on TTS first to use Dictation mode.", "\u0688\u06A9\u0679\u06CC\u0634\u0646 \u0645\u0648\u0688 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0679\u06CC \u0679\u06CC \u0627\u06CC\u0633 \u0622\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language));
+        return;
+      }
+      const sourcePool = mode === "flashcards" || mode === "typing" || mode === "matching" || mode === "timedmatching" ? practiceCoreModePool : practiceSubjectSourcePool;
+      const deck = mode === "fillblanks" ? buildFillBlankDeck(sourcePool, 10, 4) : mode === "sentencebuilder" ? buildSentenceBuilderDeck(practiceSubjectSourcePool, 10) : mode === "timedchallenge" ? buildTimedChallengeDeck(practiceSubjectSourcePool, 16, 4) : mode === "timedquiz" ? buildTimedQuizDeck(practiceSubjectSourcePool, 12) : mode === "timedtruefalse" ? buildTrueFalseDeck(practiceSubjectSourcePool, 12) : mode === "interleaved" ? buildInterleavedDeck(practiceSubjectSourcePool, 12) : buildPracticeDeck(sourcePool, mode === "matching" ? 8 : 12, mode);
+      if (!deck.length) {
+        const message = mode === "fillblanks" ? joinLocalizedText(`${(activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "This subject"} does not have sentence-based practice ready for Fill in Blanks yet.`, `${(activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr) || "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646"} \u06A9\u06D2 \u0644\u06CC\u06D2 \u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u067E\u064F\u0631 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u062C\u0645\u0644\u06C1 \u0648\u0627\u0644\u06CC \u0645\u0634\u0642 \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4`, language) : mode === "sentencebuilder" ? joinLocalizedText(`${(activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "This subject"} does not have enough sentence material for Sentence Builder yet.`, `${(activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr) || "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646"} \u06A9\u06D2 \u0644\u06CC\u06D2 \u062C\u0645\u0644\u06C1 \u0628\u0646\u0627\u0646\u06D2 \u06A9\u06CC \u0645\u0634\u0642 \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4`, language) : mode === "timedchallenge" ? joinLocalizedText(`${(activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "This subject"} does not have enough prompts for Timed Challenge yet.`, `${(activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr) || "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646"} \u06A9\u06D2 \u0644\u06CC\u06D2 \u0648\u0642\u062A \u0648\u0627\u0644\u06CC \u0686\u06CC\u0644\u0646\u062C \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4`, language) : joinLocalizedText(`${(activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "This subject"} does not have practice cards ready for this mode yet.`, `${(activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr) || "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646"} \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633 \u0645\u0648\u0688 \u06A9\u06CC \u067E\u0631\u06CC\u06A9\u0679\u0633 \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4`, language);
+        alert(message);
+        return;
+      }
       resetReviewSession();
       setPracticeMode(mode);
       setPracticeDeck(deck);
@@ -4480,13 +6348,30 @@ ${error.message || error}`);
       setPracticeReveal(false);
       setPracticeTypingInput("");
       setPracticeTypingResult(null);
-      setPracticeSessionStats({ attempted: 0, correct: 0 });
+      setPracticeDictationInput("");
+      setPracticeDictationResult(null);
+      setPracticeSessionStats({ attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, confidence: { low: 0, medium: 0, high: 0 } });
       setPracticeMatchSelection(null);
-      setPracticeMatchRound(mode === "matching" ? buildMatchRound(deck, 4) : null);
+      setPracticeMatchRound(mode === "matching" || mode === "timedmatching" ? buildMatchRound(deck, 4) : null);
+      setPracticeBlankChoice(null);
+      setPracticeBlankResult(null);
+      setPracticeSentenceSelection([]);
+      setPracticeSentenceResult(null);
+      setPracticeTimedChoice(null);
+      setPracticeTimedResult(null);
+      setPracticeTimerRemaining(Math.max(10, Math.min(180, Number((practiceTimedSettings == null ? void 0 : practiceTimedSettings[mode]) || (mode === "timedchallenge" ? 60 : 30)) || (mode === "timedchallenge" ? 60 : 30))));
+      setPracticeTimerFinished(false);
+      setPracticeConfidenceChoice(null);
+      setPracticeFeedbackText("");
+      setPracticeReflectionDraft("");
       setTab("review");
-    }, [reviewLibrary, resetReviewSession]);
+    }, [activePracticeSubject == null ? void 0 : activePracticeSubject.name, activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr, language, practiceCoreModePool, practiceSubjectSourcePool, practiceTimedSettings, resetReviewSession]);
     const handlePracticeNext = useCallback(() => {
-      if (practiceMode === "matching") {
+      if (practiceAdvanceTimerRef.current) {
+        clearTimeout(practiceAdvanceTimerRef.current);
+        practiceAdvanceTimerRef.current = null;
+      }
+      if (practiceMode === "matching" || practiceMode === "timedmatching") {
         if (practiceIdx >= practiceDeck.length - 4) {
           resetPracticeSession();
           return;
@@ -4495,6 +6380,17 @@ ${error.message || error}`);
         setPracticeIdx((current) => current + 4);
         setPracticeMatchSelection(null);
         setPracticeMatchRound(buildMatchRound(nextDeck, 4));
+        if (practiceMode === "timedmatching") {
+          setPracticeTimerRemaining(activePracticeTimeLimit);
+          setPracticeTimerFinished(false);
+        }
+        setPracticeFeedbackText("");
+        setPracticeConfidenceChoice(null);
+        return;
+      }
+      if (practiceMode === "timedchallenge" && practiceIdx >= practiceDeck.length - 1) {
+        setPracticeTimerFinished(true);
+        setPracticeReveal(true);
         return;
       }
       if (practiceIdx >= practiceDeck.length - 1) {
@@ -4505,18 +6401,114 @@ ${error.message || error}`);
       setPracticeReveal(false);
       setPracticeTypingInput("");
       setPracticeTypingResult(null);
-    }, [practiceMode, practiceIdx, practiceDeck, resetPracticeSession]);
+      setPracticeDictationInput("");
+      setPracticeDictationResult(null);
+      setPracticeBlankChoice(null);
+      setPracticeBlankResult(null);
+      setPracticeSentenceSelection([]);
+      setPracticeSentenceResult(null);
+      setPracticeTimedChoice(null);
+      setPracticeTimedResult(null);
+      setPracticeConfidenceChoice(null);
+      setPracticeFeedbackText("");
+      setPracticeReflectionDraft("");
+      if (["timedchallenge", "timedquiz", "timedtruefalse"].includes(practiceMode)) {
+        setPracticeTimerRemaining(activePracticeTimeLimit);
+        setPracticeTimerFinished(false);
+      }
+    }, [activePracticeTimeLimit, practiceMode, practiceIdx, practiceDeck, resetPracticeSession]);
     const handleCheckTypedAnswer = useCallback(() => {
       const card = practiceDeck[practiceIdx];
       if (!card) return;
       const correct = isTypingAnswerCorrect(card, practiceTypingInput);
       setPracticeTypingResult(correct ? "correct" : "wrong");
-      setPracticeReveal(true);
-      setPracticeSessionStats((current) => ({
-        attempted: (current.attempted || 0) + 1,
-        correct: (current.correct || 0) + (correct ? 1 : 0)
-      }));
-    }, [practiceDeck, practiceIdx, practiceTypingInput]);
+      recordPracticeOutcome(card, correct, "typing");
+    }, [practiceDeck, practiceIdx, practiceTypingInput, recordPracticeOutcome]);
+    const handleCheckDictationAnswer = useCallback(() => {
+      const card = practiceDeck[practiceIdx];
+      if (!card) return;
+      const correct = normalizeAnswerText(practiceDictationInput) === normalizeAnswerText(card.prompt);
+      setPracticeDictationResult(correct ? "correct" : "wrong");
+      recordPracticeOutcome(card, correct, "dictation");
+    }, [practiceDeck, practiceDictationInput, practiceIdx, recordPracticeOutcome]);
+    const handleBlankChoice = useCallback((choice) => {
+      const card = practiceDeck[practiceIdx];
+      if (!card || practiceReveal) return;
+      const correct = normalizeAnswerText(choice) === normalizeAnswerText(card.prompt);
+      setPracticeBlankChoice(choice);
+      setPracticeBlankResult(correct ? "correct" : "wrong");
+      recordPracticeOutcome(card, correct, "fillblanks");
+    }, [practiceDeck, practiceIdx, practiceReveal, recordPracticeOutcome]);
+    const handleSentenceTokenToggle = useCallback((token, tokenIndex) => {
+      if (!activePracticeCard || practiceReveal) return;
+      setPracticeSentenceSelection((current) => {
+        const exists = current.some((entry) => entry.index === tokenIndex);
+        if (exists) {
+          return current.filter((entry) => entry.index !== tokenIndex);
+        }
+        return [...current, { index: tokenIndex, text: token }];
+      });
+    }, [activePracticeCard, practiceReveal]);
+    const handleSentenceSelectionRemove = useCallback((selectionIndex) => {
+      if (practiceReveal) return;
+      setPracticeSentenceSelection((current) => current.filter((_, index) => index !== selectionIndex));
+    }, [practiceReveal]);
+    const handleCheckSentenceBuilder = useCallback(() => {
+      const card = practiceDeck[practiceIdx];
+      if (!card) return;
+      const builtSentence = normalizeSentenceSpacing(practiceSentenceSelection.map((entry) => entry.text).join(" "));
+      const expectedSentence = normalizeSentenceSpacing(card.sentenceBuilderSentence || "");
+      const correct = normalizeAnswerText(builtSentence) === normalizeAnswerText(expectedSentence);
+      setPracticeSentenceResult(correct ? "correct" : "wrong");
+      recordPracticeOutcome(card, correct, "sentencebuilder");
+    }, [practiceDeck, practiceIdx, practiceSentenceSelection, recordPracticeOutcome]);
+    const handleFlashcardSelfGrade = useCallback((correct) => {
+      const card = practiceDeck[practiceIdx];
+      if (!card || !practiceReveal) return;
+      recordPracticeOutcome(card, Boolean(correct), "flashcards");
+    }, [practiceDeck, practiceIdx, practiceReveal, recordPracticeOutcome]);
+    const handleTimedQuizChoice = useCallback((choiceIndex) => {
+      const card = practiceDeck[practiceIdx];
+      if (!card || practiceTimerFinished || practiceTimedChoice !== null) return;
+      const correct = Number(choiceIndex) === Number(card.quizCorrectIndex);
+      setPracticeTimedChoice(choiceIndex);
+      setPracticeTimedResult(correct ? "correct" : "wrong");
+      setPracticeTimerFinished(true);
+      recordPracticeOutcome(card, correct, "timedquiz");
+    }, [practiceDeck, practiceIdx, practiceTimedChoice, practiceTimerFinished, recordPracticeOutcome]);
+    const handleTimedTrueFalseChoice = useCallback((choiceValue) => {
+      const card = practiceDeck[practiceIdx];
+      if (!card || practiceTimerFinished || practiceTimedChoice !== null) return;
+      const correct = Boolean(choiceValue) === Boolean(card.trueFalseAnswer);
+      setPracticeTimedChoice(choiceValue ? "true" : "false");
+      setPracticeTimedResult(correct ? "correct" : "wrong");
+      setPracticeTimerFinished(true);
+      recordPracticeOutcome(card, correct, "timedtruefalse");
+    }, [practiceDeck, practiceIdx, practiceTimedChoice, practiceTimerFinished, recordPracticeOutcome]);
+    const handleTimedChallengeChoice = useCallback((choice) => {
+      const card = practiceDeck[practiceIdx];
+      if (!card || practiceTimerFinished || practiceTimedChoice) return;
+      const correct = normalizeAnswerText(choice) === normalizeAnswerText(card.prompt);
+      setPracticeTimedChoice(choice);
+      setPracticeTimedResult(correct ? "correct" : "wrong");
+      recordPracticeOutcome(card, correct, "timedchallenge");
+      if (practiceAdvanceTimerRef.current) {
+        clearTimeout(practiceAdvanceTimerRef.current);
+      }
+      practiceAdvanceTimerRef.current = setTimeout(() => {
+        setPracticeTimedChoice(null);
+        setPracticeTimedResult(null);
+        setPracticeReveal(false);
+        setPracticeIdx((current) => {
+          if (current >= practiceDeck.length - 1) {
+            setPracticeTimerFinished(true);
+            return current;
+          }
+          return current + 1;
+        });
+        practiceAdvanceTimerRef.current = null;
+      }, 500);
+    }, [practiceDeck, practiceIdx, practiceTimedChoice, practiceTimerFinished, recordPracticeOutcome]);
     const handleMatchSelection = useCallback((type, item) => {
       if (!practiceMatchRound || practiceMatchRound.completed) return;
       if (type === "prompt") {
@@ -4540,17 +6532,14 @@ ${error.message || error}`);
       };
       const matchedCount = Object.entries(nextMatches).filter(([, value]) => value === true).length;
       const nextCompleted = matchedCount >= Math.min(4, practiceMatchRound.prompts.length);
-      setPracticeSessionStats((current) => ({
-        attempted: (current.attempted || 0) + 1,
-        correct: (current.correct || 0) + (correct ? 1 : 0)
-      }));
+      recordPracticeOutcome(promptItem, correct, practiceMode === "timedmatching" ? "timedmatching" : "matching");
       setPracticeMatchSelection(null);
       setPracticeMatchRound({
         ...practiceMatchRound,
         matches: nextMatches,
         completed: nextCompleted
       });
-    }, [practiceMatchRound, practiceMatchSelection]);
+    }, [practiceMatchRound, practiceMatchSelection, practiceMode, recordPracticeOutcome]);
     const handleViewStudyItem = useCallback((card) => {
       var _a2, _b2, _c2, _d2, _e2, _f2;
       const source = inferViewSource(card);
@@ -4738,6 +6727,62 @@ ${error.message || error}`);
       })));
       await refreshReviewWorkspace();
     }, [language, refreshReviewWorkspace, reviewAnalytics.customLists]);
+    useEffect(() => {
+      if (!keyboardShortcutsEnabled) return void 0;
+      const handleKeydown = (event) => {
+        if (!event.altKey) return;
+        const target = event.target;
+        const tagName = String((target == null ? void 0 : target.tagName) || "").toLowerCase();
+        const isTypingTarget = tagName === "input" || tagName === "textarea" || tagName === "select" || (target == null ? void 0 : target.isContentEditable);
+        if (isTypingTarget) return;
+        const tutorReady = AI_PROVIDER_ORDER.some((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
+        const shortcutMap = {
+          "1": "home",
+          "2": "progress",
+          "3": "review",
+          "4": "favorites",
+          "5": "badges",
+          "6": "settings",
+          "7": tutorReady ? "tutor" : null
+        };
+        const nextTab = shortcutMap[event.key];
+        if (!nextTab) return;
+        event.preventDefault();
+        window.speechSynthesis.cancel();
+        setNavHidden(Boolean(navAutoHide));
+        setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
+        setSelectedSubject(null);
+        setSelectedLesson(null);
+        setQuizActive(false);
+        setQuizDone(false);
+        setQuizAnswers([]);
+        setQuizIdx(0);
+        setQuizRevealed(false);
+        setSelectedAdverbDay(null);
+        setSelectedPrepDay(null);
+        setSelectedAdjDay(null);
+        setSelectedConjDay(null);
+        setSelectedPronDay(null);
+        setSelectedNounDay(null);
+        setSelectedVerbDay(null);
+        setSelectedTensePara(null);
+        setSelectedVocabDay(null);
+        setMathSubIdx(null);
+        setMathSubTab("examples");
+        setSubExerciseGroupIdx(null);
+        setSubQuizGroupIdx(null);
+        setRevealedEx({});
+        setPosTab("adverbs");
+        setTenseMain("present");
+        setTenseSub("simple");
+        setNewBadges([]);
+        resetReviewSession();
+        resetPracticeSession();
+        setTab(nextTab);
+      };
+      window.addEventListener("keydown", handleKeydown);
+      return () => window.removeEventListener("keydown", handleKeydown);
+    }, [aiProviderConfigs, keyboardShortcutsEnabled, navAutoHide, navBarAutoHide, navPosition, resetPracticeSession, resetReviewSession]);
     if (!dbLoaded) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 16 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 700, marginBottom: 8 } }, ui.loadingHome), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 13 } }, ui.loadingDb), /* @__PURE__ */ React.createElement("div", { style: { width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" } })))));
     if (!grade) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 32 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 12 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h1", { style: { fontSize: 28, fontWeight: 800, marginBottom: 4 } }, "HomeSchool"), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 14 } }, renderLocalizedTextNode(ui.tagline, language)), language === "en" ? /* @__PURE__ */ React.createElement("p", { style: { fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 } }, "\u0622\u067E \u06A9\u0627 \u0630\u0627\u062A\u06CC \u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u062A\u06BE\u06CC") : null), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, renderLocalizedTextNode(ui.yourName, language)), /* @__PURE__ */ React.createElement("input", { value: studentName, onChange: (e) => setStudentName(e.target.value), placeholder: ui.enterName, style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" } })), language !== "en" && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, renderLocalizedTextNode(ui.yourNameUr, language)), /* @__PURE__ */ React.createElement("input", { value: studentNameUr, onChange: (e) => setStudentNameUr(sanitizeUrduInput(e.target.value)), placeholder: "\u0627\u067E\u0646\u0627 \u0646\u0627\u0645 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA", style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font-ur)", fontSize: 15, outline: "none", direction: "rtl" } })), /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" } }, renderLocalizedTextNode(ui.selectGrade, language)), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn", onClick: () => setGrade(g.id) }, g.id))))));
     const goHome = () => {
@@ -4778,6 +6823,7 @@ ${error.message || error}`);
       setNavHidden(Boolean(navAutoHide));
       setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
       if (practiceMode) {
+        setPracticeLabReturnPending(true);
         resetPracticeSession();
         setTab("review");
       } else if (quizDone || quizActive) {
@@ -4874,11 +6920,13 @@ ${error.message || error}`);
       const langCode = String(voice.lang || "").toLowerCase();
       return langCode.startsWith("ur") || langCode.startsWith("hi") || langCode.includes("in");
     });
-    const activePracticeCard = practiceDeck[practiceIdx] || null;
+    const reviewLeitnerMax = Math.max(1, ...(reviewAnalytics.leitnerBoxes || []).map((entry) => Number(entry.count) || 0));
+    const upcomingCalendarMax = Math.max(1, ...(reviewAnalytics.upcomingCalendar || []).map((entry) => Number(entry.dueCount) || 0));
     const dailyGoalProgress = Math.min(100, Math.round((Number(reviewStats.reviewedToday) || 0) / Math.max(1, Number(studyGoals.dailyReviews) || 20) * 100));
     const weeklyGoalProgress = Math.min(100, Math.round((Number(reviewAnalytics.totals.uniqueReviewedLast7) || 0) / Math.max(1, Number(studyGoals.weeklyWords) || 40) * 100));
     const currentReminderLabel = getReminderStatus(reminderSettings, language);
     const reminderDueNow = Boolean((reminderSettings == null ? void 0 : reminderSettings.enabled) && (reminderSettings == null ? void 0 : reminderSettings.lastShownDay) === window.HomeSchoolUtils.getDayKey(Date.now()));
+    const fontSizeZoom = { small: 0.95, normal: 1, large: 1.08, xlarge: 1.14 }[fontSizeMode] || 1;
     const routeTransitionKey = [
       tab,
       (selectedSubject == null ? void 0 : selectedSubject.id) || "",
@@ -5027,7 +7075,14 @@ ${error.message || error}`);
         renderLocalizedTextNode(item.label, language)
       ))
     );
-    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""}`, style: { ...navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}, ...navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {} } }, navAutoHide ? /* @__PURE__ */ React.createElement("div", { className: "header-reveal-hotspot", onMouseEnter: revealAutoHideHeader, onMouseMove: revealAutoHideHeader, onPointerDown: revealAutoHideHeader }) : null, /* @__PURE__ */ React.createElement("div", { ref: headerRef, className: `app-header${navPosition === "top" ? " app-header-top-nav" : ""}`, onMouseEnter: navAutoHide ? revealAutoHideHeader : void 0, onMouseLeave: navAutoHide ? concealAutoHideHeader : void 0 }, /* @__PURE__ */ React.createElement("div", { className: "header-leading" }, /* @__PURE__ */ React.createElement("span", { className: "back-btn-slot" }, showBack ? /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190") : null), /* @__PURE__ */ React.createElement("button", { type: "button", className: "header-mark", title: "HomeSchool", "aria-label": "Go home", onClick: goHome }, /* @__PURE__ */ React.createElement("img", { src: "img/ui/header-hs.png", alt: "HomeSchool", className: "header-mark-img" }))), navPosition === "top" ? renderNavBar("top", true) : /* @__PURE__ */ React.createElement("h1", { style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement(
+    const importConflictLabels = {
+      profile: ui.importConflictProfile,
+      progress: ui.importConflictProgress,
+      preferences: ui.importConflictPreferences,
+      time: ui.importConflictTime,
+      collections: ui.importConflictCollections
+    };
+    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}`, style: { zoom: fontSizeZoom, ...navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}, ...navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {} } }, navAutoHide ? /* @__PURE__ */ React.createElement("div", { className: "header-reveal-hotspot", onMouseEnter: revealAutoHideHeader, onMouseMove: revealAutoHideHeader, onPointerDown: revealAutoHideHeader }) : null, /* @__PURE__ */ React.createElement("div", { ref: headerRef, className: `app-header${navPosition === "top" ? " app-header-top-nav" : ""}`, onMouseEnter: navAutoHide ? revealAutoHideHeader : void 0, onMouseLeave: navAutoHide ? concealAutoHideHeader : void 0 }, /* @__PURE__ */ React.createElement("div", { className: "header-leading" }, /* @__PURE__ */ React.createElement("span", { className: "back-btn-slot" }, showBack ? /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190") : null), /* @__PURE__ */ React.createElement("button", { type: "button", className: "header-mark", title: "HomeSchool", "aria-label": "Go home", onClick: goHome }, /* @__PURE__ */ React.createElement("img", { src: "img/ui/header-hs.png", alt: "HomeSchool", className: "header-mark-img" }))), navPosition === "top" ? renderNavBar("top", true) : /* @__PURE__ */ React.createElement("h1", { style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -5044,7 +7099,17 @@ ${error.message || error}`);
     )), /* @__PURE__ */ React.createElement("div", { className: "app-body" }, navBarAutoHide && navPosition === "left" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-left", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "left" ? renderNavBar("left") : null, /* @__PURE__ */ React.createElement("div", { key: `${transitionMode}:${routeTransitionKey}`, className: `content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}`, "data-transition-mode": transitionMode }, tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "welcome-card" }, /* @__PURE__ */ React.createElement("h2", null, renderWelcomeGreeting(localizedNames, language), " \u{1F44B}"), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "\u0622\u062C \u06A9\u0686\u06BE \u0634\u0627\u0646\u062F\u0627\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u061F", language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag" }, renderLocalizedTextNode(ui.grade, language), " ", grade)), canShowInstallBanner && /* @__PURE__ */ React.createElement("div", { className: "app-status-card", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "app-status-head" }, /* @__PURE__ */ React.createElement("h3", null, renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerTitle, UI_TEXT.ur.installBannerTitle, language, bannerTitleOptions)), /* @__PURE__ */ React.createElement("button", { className: "banner-dismiss", onClick: () => setInstallBannerDismissed(true), "aria-label": ui.hideBanner }, renderSeparatedLocalizedTextNode(UI_TEXT.en.hideBanner, UI_TEXT.ur.hideBanner, language, bannerButtonOptions))), /* @__PURE__ */ React.createElement("p", null, renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerText, UI_TEXT.ur.installBannerText, language, bannerBodyOptions)), (canInstallApp || installAvailability === "available") && /* @__PURE__ */ React.createElement("p", { className: "install-browser-hint" }, renderSeparatedLocalizedTextNode(UI_TEXT.en.installBrowserHint, UI_TEXT.ur.installBrowserHint, language, bannerBodyOptions)), /* @__PURE__ */ React.createElement("div", { className: "app-status-grid" }, /* @__PURE__ */ React.createElement("div", { className: "status-pill" }, /* @__PURE__ */ React.createElement("strong", null, renderSeparatedLocalizedTextNode(UI_TEXT.en.installStatus, UI_TEXT.ur.installStatus, language, bannerLabelOptions)), /* @__PURE__ */ React.createElement("span", null, renderSeparatedLocalizedTextNode(isInstalled || installAvailability === "installed" ? UI_TEXT.en.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.en.appInstallAvailable : UI_TEXT.en.appInstallUnavailable, isInstalled || installAvailability === "installed" ? UI_TEXT.ur.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.ur.appInstallAvailable : UI_TEXT.ur.appInstallUnavailable, language, bannerValueOptions))), /* @__PURE__ */ React.createElement("div", { className: "status-pill" }, /* @__PURE__ */ React.createElement("strong", null, renderSeparatedLocalizedTextNode(UI_TEXT.en.offlineAccess, UI_TEXT.ur.offlineAccess, language, bannerLabelOptions)), /* @__PURE__ */ React.createElement("span", null, renderSeparatedLocalizedTextNode(serviceWorkerStatus === "ready" ? UI_TEXT.en.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.en.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.en.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.en.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.en.offlineUnsupported : UI_TEXT.en.offlineError, serviceWorkerStatus === "ready" ? UI_TEXT.ur.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.ur.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.ur.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.ur.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.ur.offlineUnsupported : UI_TEXT.ur.offlineError, language, bannerValueOptions))), /* @__PURE__ */ React.createElement("div", { className: "status-pill" }, /* @__PURE__ */ React.createElement("strong", null, renderSeparatedLocalizedTextNode(UI_TEXT.en.networkStatus, UI_TEXT.ur.networkStatus, language, bannerLabelOptions)), /* @__PURE__ */ React.createElement("span", null, renderSeparatedLocalizedTextNode(isOnline ? UI_TEXT.en.online : UI_TEXT.en.offline, isOnline ? UI_TEXT.ur.online : UI_TEXT.ur.offline, language, bannerValueOptions)))), /* @__PURE__ */ React.createElement("div", { className: "app-status-actions" }, canInstallApp && /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: handleInstallApp }, renderSeparatedLocalizedTextNode(UI_TEXT.en.installApp, UI_TEXT.ur.installApp, language, bannerButtonOptions)), serviceWorkerStatus === "update-ready" && /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: applyServiceWorkerUpdate }, renderSeparatedLocalizedTextNode(UI_TEXT.en.refreshToUpdate, UI_TEXT.ur.refreshToUpdate, language, bannerButtonOptions)))), /* @__PURE__ */ React.createElement("button", { className: "adverb-home-banner", style: { width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }, onClick: handleStartReview }, /* @__PURE__ */ React.createElement("div", { className: "banner-icon" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("div", { className: "banner-text" }, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewReady, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(
       reviewStats.due > 0 ? language === "ur" ? `${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : language === "bilingual" ? `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due / ${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due` : language === "ur" ? `${formatNumberLabel(reviewStats.reviewedToday || 0)} \u0622\u062C \u062F\u06C1\u0631\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u2022 ${formatNumberLabel(reviewStats.learning || 0)} \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0645\u06CC\u06BA` : language === "bilingual" ? `${formatNumberLabel(reviewStats.reviewedToday || 0)} reviewed today \u2022 ${formatNumberLabel(reviewStats.learning || 0)} learning / ${formatNumberLabel(reviewStats.reviewedToday || 0)} \u0622\u062C \u062F\u06C1\u0631\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u2022 ${formatNumberLabel(reviewStats.learning || 0)} \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0645\u06CC\u06BA` : `${formatNumberLabel(reviewStats.reviewedToday || 0)} reviewed today \u2022 ${formatNumberLabel(reviewStats.learning || 0)} learning`,
       language
-    )))), /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Study Goals", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u06C1\u062F\u0627\u0641", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track your daily review target and weekly vocabulary momentum.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u062F\u0641 \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0631\u0641\u062A\u0627\u0631 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Daily reviews", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewStats.reviewedToday || 0} of ${studyGoals.dailyReviews}`, `${reviewStats.reviewedToday || 0} \u0627\u0632 ${studyGoals.dailyReviews}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, dailyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${dailyGoalProgress}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly words", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewAnalytics.totals.uniqueReviewedLast7 || 0} of ${studyGoals.weeklyWords}`, `${reviewAnalytics.totals.uniqueReviewedLast7 || 0} \u0627\u0632 ${studyGoals.weeklyWords}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, weeklyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${weeklyGoalProgress}%` } })))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "\u0641\u0648\u06A9\u0633 \u0679\u0627\u0626\u0645\u0631 \u0627\u0648\u0631 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Start a quiet study sprint and keep your reminder schedule visible.", "\u0627\u06CC\u06A9 \u0645\u062E\u062A\u0635\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0633\u06CC\u0634\u0646 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u067E\u0646\u06CC \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u06A9\u06CC \u062D\u0627\u0644\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "timer-card" }, /* @__PURE__ */ React.createElement("div", { className: "timer-clock" }, formatClockTime(focusTimerState.remainingSeconds)), /* @__PURE__ */ React.createElement("div", { className: "timer-meta" }, renderLocalizedTextNode(joinLocalizedText(`${focusTimerSettings.durationMinutes} min focus block`, `${focusTimerSettings.durationMinutes} \u0645\u0646\u0679 \u0641\u0648\u06A9\u0633 \u0648\u0642\u062A`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: !current.active || (current.remainingSeconds || 0) === 0, remainingSeconds: (current.remainingSeconds || 0) === 0 ? (focusTimerSettings.durationMinutes || 20) * 60 : current.remainingSeconds, startedAt: Date.now() })) }, renderLocalizedTextNode(focusTimerState.active ? joinLocalizedText("Pause", "\u0631\u0648\u06A9\u06CC\u06BA", language) : joinLocalizedText("Start", "\u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: false, remainingSeconds: (focusTimerSettings.durationMinutes || 20) * 60 })) }, renderLocalizedTextNode(joinLocalizedText("Reset", "\u062F\u0648\u0628\u0627\u0631\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "timer-reminder-status" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Reminder", "\u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC", language), language)), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(currentReminderLabel, language))), reminderDueNow ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "\u0622\u067E \u06A9\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u0627\u0628\u06BE\u06CC \u06A9\u06CC \u06C1\u06D2\u06D4", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notificationHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.notificationHistoryHint, language)))), recentNotificationHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentNotificationHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotificationsYet, language))), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} \u062F\u0646 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644!`, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "\u0627\u0633\u06CC \u0637\u0631\u062D \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u0622\u067E \u0628\u06C1\u062A \u0627\u0686\u06BE\u0627 \u06A9\u0631 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA!", language), language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("div", { className: "subject-grid" }, SUBJECTS.map((subj) => {
+    )))), /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Study Goals", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u06C1\u062F\u0627\u0641", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track your daily review target and weekly vocabulary momentum.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u062F\u0641 \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0631\u0641\u062A\u0627\u0631 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Daily reviews", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewStats.reviewedToday || 0} of ${studyGoals.dailyReviews}`, `${reviewStats.reviewedToday || 0} \u0627\u0632 ${studyGoals.dailyReviews}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, dailyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${dailyGoalProgress}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly words", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewAnalytics.totals.uniqueReviewedLast7 || 0} of ${studyGoals.weeklyWords}`, `${reviewAnalytics.totals.uniqueReviewedLast7 || 0} \u0627\u0632 ${studyGoals.weeklyWords}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, weeklyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${weeklyGoalProgress}%` } })))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.timeManagement, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.timeTrackingHelp, language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(todaySpentMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.timeSpentToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F6B6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, classScheduleSettings.enabled ? formatMinutesLabel(todayLatenessMinutes, language) : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.latenessToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F558}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.punctualityStreak || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.punctualityStreak, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C1}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.classSessionsMet || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.classSessionsMet, language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`${ui.classStartTime}: ${classScheduleSettings.startTime}`, `${ui.classStartTime}: ${classScheduleSettings.startTime}`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${ui.classEndTime}: ${classScheduleSettings.endTime}`, `${ui.classEndTime}: ${classScheduleSettings.endTime}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(timeTrackingStatusLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.classDuration, language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${formatMinutesLabel(scheduleDurationMinutes, "en")} scheduled \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "en")} this week`, `${formatMinutesLabel(scheduleDurationMinutes, "ur")} \u0645\u0642\u0631\u0631 \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "ur")} \u0627\u0633 \u06C1\u0641\u062A\u06D2`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, timeGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${timeGoalProgress}%` } })), !classScheduleSettings.enabled ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.classTrackingDisabled, language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "\u0641\u0648\u06A9\u0633 \u0679\u0627\u0626\u0645\u0631 \u0627\u0648\u0631 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Start a quiet study sprint and keep your reminder schedule visible.", "\u0627\u06CC\u06A9 \u0645\u062E\u062A\u0635\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0633\u06CC\u0634\u0646 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u067E\u0646\u06CC \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u06A9\u06CC \u062D\u0627\u0644\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "timer-card" }, /* @__PURE__ */ React.createElement("div", { className: "timer-clock" }, formatClockTime(focusTimerState.remainingSeconds)), /* @__PURE__ */ React.createElement("div", { className: "timer-meta" }, renderLocalizedTextNode(joinLocalizedText(`${focusTimerSettings.durationMinutes} min focus block`, `${focusTimerSettings.durationMinutes} \u0645\u0646\u0679 \u0641\u0648\u06A9\u0633 \u0648\u0642\u062A`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: !current.active || (current.remainingSeconds || 0) === 0, remainingSeconds: (current.remainingSeconds || 0) === 0 ? (focusTimerSettings.durationMinutes || 20) * 60 : current.remainingSeconds, startedAt: Date.now() })) }, renderLocalizedTextNode(focusTimerState.active ? joinLocalizedText("Pause", "\u0631\u0648\u06A9\u06CC\u06BA", language) : joinLocalizedText("Start", "\u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: false, remainingSeconds: (focusTimerSettings.durationMinutes || 20) * 60 })) }, renderLocalizedTextNode(joinLocalizedText("Reset", "\u062F\u0648\u0628\u0627\u0631\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "timer-reminder-status" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Reminder", "\u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC", language), language)), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(currentReminderLabel, language))), reminderDueNow ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "\u0622\u067E \u06A9\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u0627\u0628\u06BE\u06CC \u06A9\u06CC \u06C1\u06D2\u06D4", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notificationHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.notificationHistoryHint, language)))), recentNotificationHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentNotificationHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotificationsYet, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.contentDiscovery, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Search your current grade lessons by subject, type, and difficulty, and keep a daily word in view.", "\u0627\u067E\u0646\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0636\u0645\u0648\u0646\u060C \u0642\u0633\u0645\u060C \u0627\u0648\u0631 \u062F\u0631\u062C\u06C1 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06CC\u06A9 \u0644\u0641\u0638 \u0633\u0627\u0645\u0646\u06D2 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), wordOfDayCard ? /* @__PURE__ */ React.createElement("div", { className: "discovery-word-card" }, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-label" }, renderLocalizedTextNode(ui.wordOfDay, language)), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-prompt" }, wordOfDayCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-answer", style: containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null }, wordOfDayCard.answer || wordOfDayCard.meaning), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-meta" }, renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", ((_f = SUBJECTS.find((subject) => subject.id === (wordOfDayCard.subject || ""))) == null ? void 0 : _f.nameUr) || "\u0645\u0636\u0645\u0648\u0646", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-shell" }, /* @__PURE__ */ React.createElement("input", { className: "review-list-input", value: contentSearch, onChange: (event) => setContentSearch(event.target.value), placeholder: ui.contentSearch, style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null }), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row" }, /* @__PURE__ */ React.createElement("button", { className: `practice-subject-chip${discoverySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter("all"), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.discoveryAllSubjects, language)))), SUBJECTS.map((subject) => /* @__PURE__ */ React.createElement("button", { key: subject.id, className: `practice-subject-chip${discoverySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter(subject.id), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-icon" }, subject.icon), /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))))), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact" }, [
+      { id: "all", label: ui.discoveryAllTypes },
+      { id: "lesson", label: ui.discoveryTypeLesson },
+      { id: "interactive", label: ui.discoveryTypeInteractive },
+      { id: "practice", label: ui.discoveryTypePractice }
+    ].map((option) => /* @__PURE__ */ React.createElement("button", { key: option.id, type: "button", className: `study-tool-btn compact${discoveryTypeFilter === option.id ? " active" : ""}`, onClick: () => setDiscoveryTypeFilter(option.id) }, renderLocalizedTextNode(option.label, language)))), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact" }, [
+      { id: "all", label: ui.discoveryAllLevels },
+      { id: "starter", label: ui.discoveryDifficultyStarter },
+      { id: "core", label: ui.discoveryDifficultyCore },
+      { id: "stretch", label: ui.discoveryDifficultyStretch }
+    ].map((option) => /* @__PURE__ */ React.createElement("button", { key: option.id, type: "button", className: `study-tool-btn compact${discoveryDifficultyFilter === option.id ? " active" : ""}`, onClick: () => setDiscoveryDifficultyFilter(option.id) }, renderLocalizedTextNode(option.label, language))))), filteredDiscoveryLessons.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "discovery-result-list" }, filteredDiscoveryLessons.map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, type: "button", className: "discovery-result-card", onClick: () => handleOpenDiscoveryLesson(item) }, /* @__PURE__ */ React.createElement("div", { className: "discovery-result-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(item.lessonTitle, language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, renderLocalizedTextNode(joinLocalizedText(item.subjectName, item.subjectNameUr, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(item.lessonContent.slice(0, 120) + (item.lessonContent.length > 120 ? "..." : ""), language)), /* @__PURE__ */ React.createElement("div", { className: "discovery-tag-row" }, /* @__PURE__ */ React.createElement("span", { className: "discovery-tag" }, renderLocalizedTextNode(item.type === "interactive" ? ui.discoveryTypeInteractive : item.type === "practice" ? ui.discoveryTypePractice : ui.discoveryTypeLesson, language)), /* @__PURE__ */ React.createElement("span", { className: "discovery-tag" }, renderLocalizedTextNode(item.difficulty === "starter" ? ui.discoveryDifficultyStarter : item.difficulty === "stretch" ? ui.discoveryDifficultyStretch : ui.discoveryDifficultyCore, language)), (item.tags || []).slice(0, 2).map((tag) => /* @__PURE__ */ React.createElement("span", { key: tag, className: "discovery-tag muted" }, tag)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noDiscoveryResults, language))), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} \u062F\u0646 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644!`, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "\u0627\u0633\u06CC \u0637\u0631\u062D \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u0622\u067E \u0628\u06C1\u062A \u0627\u0686\u06BE\u0627 \u06A9\u0631 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA!", language), language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("div", { className: "subject-grid" }, SUBJECTS.map((subj) => {
       const ls = getLessons(subj.id, grade), done = ls.filter((l) => completedQuizzes[l.id]).length, pct = ls.length > 0 ? done / ls.length * 100 : 0;
       return /* @__PURE__ */ React.createElement("button", { key: subj.id, className: "subject-card", onClick: () => setSelectedSubject(subj) }, /* @__PURE__ */ React.createElement("span", { className: "subj-icon" }, subj.icon), /* @__PURE__ */ React.createElement("span", { className: "subj-name" }, subj.name), /* @__PURE__ */ React.createElement("span", { className: "subj-name-ur" }, subj.nameUr), /* @__PURE__ */ React.createElement("div", { className: "subj-progress" }, /* @__PURE__ */ React.createElement("div", { className: "subj-progress-fill", style: { width: pct + "%", background: subj.color } })));
     }))), tab === "home" && selectedSubject && !selectedLesson && !quizActive && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 36 } }, selectedSubject.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, renderLocalizedTextNode(`${ui.grade} ${grade} \u2022 ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`, language)))), /* @__PURE__ */ React.createElement("div", { className: "lesson-list", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, getLessons(selectedSubject.id, grade).map((l, i) => {
@@ -5326,17 +7391,82 @@ ${error.message || error}`);
       setQuizDone(false);
       setSelectedLesson(null);
       setNewBadges([]);
-    } }, "\u{1F4DA} More Lessons"))), tab === "progress" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DD}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, totalQuizzesDone), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Quizzes Done", "\u0645\u06A9\u0645\u0644 \u06A9\u0648\u0626\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3AF}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, totalQuizzesDone > 0 ? Math.round(totalScore / (totalQuizzesDone * 4) * 100) : 0, "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Avg Score", "\u0627\u0648\u0633\u0637 \u0627\u0633\u06A9\u0648\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, streak), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Day Streak", "\u062F\u0646\u0648\u06BA \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, xp), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Total XP", "\u06A9\u0644 \u0627\u06CC\u06A9\u0633 \u067E\u06CC", language), language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subject Progress", "\u0645\u0636\u0627\u0645\u06CC\u0646 \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A", language), language)), SUBJECTS.map((subj) => {
+    } }, "\u{1F4DA} More Lessons"))), tab === "progress" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DD}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, totalQuizzesDone), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Quizzes Done", "\u0645\u06A9\u0645\u0644 \u06A9\u0648\u0626\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3AF}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, totalQuizzesDone > 0 ? Math.round(totalScore / (totalQuizzesDone * 4) * 100) : 0, "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Avg Score", "\u0627\u0648\u0633\u0637 \u0627\u0633\u06A9\u0648\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, streak), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Day Streak", "\u062F\u0646\u0648\u06BA \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, xp), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Total XP", "\u06A9\u0644 \u0627\u06CC\u06A9\u0633 \u067E\u06CC", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(totalStudyMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.totalStudyTime, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F558}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.onTimeStarts || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("On-time starts", "\u0648\u0642\u062A \u067E\u0631 \u0622\u063A\u0627\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F6B6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(timeTrackingData.totalLateMinutes || 0, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.totalLateTime, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C1}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.classSessionsMet || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.classSessionsMet, language)))), /* @__PURE__ */ React.createElement("h3", { className: "section-title" }, renderLocalizedTextNode(joinLocalizedText("Subject Progress", "\u0645\u0636\u0627\u0645\u06CC\u0646 \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A", language), language)), SUBJECTS.map((subj) => {
       const ls = getLessons(subj.id, grade), done = ls.filter((l) => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round(done / ls.length * 100) : 0;
       return /* @__PURE__ */ React.createElement("div", { key: subj.id, className: "progress-bar-container" }, /* @__PURE__ */ React.createElement("div", { className: "progress-bar-label" }, /* @__PURE__ */ React.createElement("span", null, subj.icon, " ", subj.name), /* @__PURE__ */ React.createElement("span", { style: { color: "var(--text-muted)" } }, done, "/", ls.length)), /* @__PURE__ */ React.createElement("div", { className: "progress-bar-track" }, /* @__PURE__ */ React.createElement("div", { className: "progress-bar-fill", style: { width: pct + "%", background: subj.color } })));
-    })), tab === "review" && /* @__PURE__ */ React.createElement(React.Fragment, null, !activeReviewCard && !reviewSessionDone && !practiceMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F552}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.due || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.dueReviews, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2705"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.reviewedToday || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.reviewedToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.learning || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.learningWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.retentionRate || 0), "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.retentionRate, language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DD}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.notedWords || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.notedWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.customLists || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.customLists, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C5}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.totals.reviewedLastPeriod || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("12-week reviews", "12 \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { textAlign: isUrduUi(language) ? "right" : "left", direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h2", null, renderLocalizedTextNode(ui.reviewReady, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHint, language)), /* @__PURE__ */ React.createElement("button", { className: "start-quiz-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: handleStartReview, disabled: reviewLoading }, reviewLoading ? "..." : `\u{1F9E0} ${ui.startReview}`), reviewStats.due === 0 && /* @__PURE__ */ React.createElement("p", { style: { marginTop: 12, color: "var(--text-muted)" } }, renderLocalizedTextNode(ui.noReviewsDue, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Practice Lab", "\u067E\u0631\u06CC\u06A9\u0679\u0633 \u0644\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use your review library in fast extra modes: flip cards, type answers, or match pairs.", "\u0627\u067E\u0646\u06CC \u0631\u06CC\u0648\u06CC\u0648 \u0644\u0627\u0626\u0628\u0631\u06CC\u0631\u06CC \u06A9\u0648 \u0627\u0636\u0627\u0641\u06CC \u0645\u0634\u0642 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA: \u06A9\u0627\u0631\u0688 \u067E\u0644\u0679\u06CC\u06BA\u060C \u062C\u0648\u0627\u0628 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u062C\u0648\u0691\u06CC\u0627\u06BA \u0645\u0644\u0627\u0626\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "practice-mode-grid" }, /* @__PURE__ */ React.createElement("button", { className: "practice-mode-card", onClick: () => handleStartPractice("flashcards") }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F0CF}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Flashcards", "\u0641\u0644\u06CC\u0634 \u06A9\u0627\u0631\u0688\u0632", language), language))), /* @__PURE__ */ React.createElement("button", { className: "practice-mode-card", onClick: () => handleStartPractice("typing") }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u2328\uFE0F"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Type the Answer", "\u062C\u0648\u0627\u0628 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("button", { className: "practice-mode-card", onClick: () => handleStartPractice("matching") }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F9E9}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Match Pairs", "\u062C\u0648\u0691\u06CC\u0627\u06BA \u0645\u0644\u0627\u0626\u06CC\u06BA", language), language))))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewHeatmap, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHeatmapHint, language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setHeatmapExpanded((value) => !value) }, renderLocalizedTextNode(heatmapExpanded ? joinLocalizedText("Show Less", "\u06A9\u0645 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show Heatmap", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), heatmapExpanded ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-heatmap-grid" }, reviewAnalytics.heatmap.map((cell) => /* @__PURE__ */ React.createElement(
+    }), /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.recentTimeHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See your latest class-time records, usage, and lateness at a glance.", "\u0627\u067E\u0646\u06D2 \u062D\u0627\u0644\u06CC\u06C1 \u06A9\u0644\u0627\u0633 \u0627\u0648\u0642\u0627\u062A\u060C \u0645\u0637\u0627\u0644\u0639\u06C1 \u0648\u0642\u062A\u060C \u0627\u0648\u0631 \u062A\u0627\u062E\u06CC\u0631 \u06A9\u0648 \u0627\u06CC\u06A9 \u0646\u0638\u0631 \u0645\u06CC\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), recentTimeHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentTimeHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(entry.dayKey, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(entry.status === "on-time" ? ui.classStatusOnTime : entry.status === "late" ? ui.classStatusLate : ui.classStatusNotStarted, language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Spent ${formatMinutesLabel(Math.round((entry.msSpent || 0) / 6e4), "en")} \u2022 Late by ${formatMinutesLabel(entry.latenessMinutes || 0, "en")}`, `${formatMinutesLabel(Math.round((entry.msSpent || 0) / 6e4), "ur")} \u0645\u0637\u0627\u0644\u0639\u06C1 \u2022 ${formatMinutesLabel(entry.latenessMinutes || 0, "ur")} \u062A\u0627\u062E\u06CC\u0631`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.classTrackingDisabled, language)))), tab === "review" && /* @__PURE__ */ React.createElement(React.Fragment, null, !activeReviewCard && !reviewSessionDone && !practiceMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F552}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.due || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.dueReviews, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2705"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.reviewedToday || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.reviewedToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.learning || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.learningWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.retentionRate || 0), "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.retentionRate, language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DD}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.notedWords || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.notedWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.customLists || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.customLists, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C5}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.totals.reviewedLastPeriod || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("12-week reviews", "12 \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { textAlign: isUrduUi(language) ? "right" : "left", direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h2", null, renderLocalizedTextNode(ui.reviewReady, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHint, language)), /* @__PURE__ */ React.createElement("button", { className: "start-quiz-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: handleStartReview, disabled: reviewLoading }, reviewLoading ? "..." : `\u{1F9E0} ${ui.startReview}`), reviewStats.due === 0 && /* @__PURE__ */ React.createElement("p", { style: { marginTop: 12, color: "var(--text-muted)" } }, renderLocalizedTextNode(ui.noReviewsDue, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel", id: "practice-lab-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Practice Lab", "\u067E\u0631\u06CC\u06A9\u0679\u0633 \u0644\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose a subject to open its own practice lab: flashcards, typing, matching, dictation, and fill in blanks.", "\u06A9\u0633\u06CC \u0645\u0636\u0645\u0648\u0646 \u06A9\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u0633 \u06A9\u06CC \u0627\u0644\u06AF \u067E\u0631\u06CC\u06A9\u0679\u0633 \u0644\u06CC\u0628 \u06A9\u06BE\u0648\u0644\u06CC\u06BA: \u0641\u0644\u06CC\u0634 \u06A9\u0627\u0631\u0688\u0632\u060C \u0679\u0627\u0626\u067E\u0646\u06AF\u060C \u062C\u0648\u0691\u06CC\u0627\u06BA \u0645\u0644\u0627\u0646\u0627\u060C \u0627\u0645\u0644\u0627\u060C \u0627\u0648\u0631 \u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u067E\u064F\u0631 \u06A9\u0631\u0646\u0627\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "practice-subject-row" }, availablePracticeSubjects.map((subject) => {
+      const isActive = subject.id === activePracticeSubjectId;
+      const hasReviewItems = reviewLibrary.some((card) => ((card == null ? void 0 : card.subject) || "english") === subject.id && (card == null ? void 0 : card.prompt) && ((card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning)));
+      const hasSupplementalItems = gradePracticeItems.some((item) => (item == null ? void 0 : item.subject) === subject.id && (item == null ? void 0 : item.prompt) && ((item == null ? void 0 : item.answer) || (item == null ? void 0 : item.meaning)));
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: subject.id,
+          type: "button",
+          className: `practice-subject-chip${isActive ? " active" : ""}`,
+          onClick: () => setPracticeSubjectId(subject.id)
+        },
+        /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-icon" }, subject.icon),
+        /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(
+          hasReviewItems && hasSupplementalItems ? "Review + lesson practice" : hasReviewItems ? "Review practice" : "Lesson practice",
+          hasReviewItems && hasSupplementalItems ? "\u0631\u06CC\u0648\u06CC\u0648 + \u0633\u0628\u0642 \u067E\u0631\u06CC\u06A9\u0679\u0633" : hasReviewItems ? "\u0631\u06CC\u0648\u06CC\u0648 \u067E\u0631\u06CC\u06A9\u0679\u0633" : "\u0633\u0628\u0642 \u067E\u0631\u06CC\u06A9\u0679\u0633",
+          language
+        ), language)))
+      );
+    })), practiceSubjectLessons.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "practice-filter-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-filter-grid" }, /* @__PURE__ */ React.createElement("label", { className: "practice-filter-field" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("From Lesson", "\u0627\u0633 \u0633\u0628\u0642 \u0633\u06D2", language), language)), /* @__PURE__ */ React.createElement(
+      "select",
+      {
+        className: "review-list-input",
+        value: activePracticeFilter.startLessonKey || "",
+        onChange: (event) => updatePracticeFilters({ startLessonKey: event.target.value })
+      },
+      practiceSubjectLessons.map((lesson, index) => {
+        const lessonKey = getLessonKeyValue(lesson);
+        const label = `${ui.lesson} ${index + 1} \u2014 ${lesson.title}`;
+        return /* @__PURE__ */ React.createElement("option", { key: lessonKey || index, value: lessonKey || "" }, label);
+      })
+    )), /* @__PURE__ */ React.createElement("label", { className: "practice-filter-field" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("To Lesson", "\u0627\u0633 \u0633\u0628\u0642 \u062A\u06A9", language), language)), /* @__PURE__ */ React.createElement(
+      "select",
+      {
+        className: "review-list-input",
+        value: activePracticeFilter.endLessonKey || "",
+        onChange: (event) => updatePracticeFilters({ endLessonKey: event.target.value })
+      },
+      practiceSubjectLessons.map((lesson, index) => {
+        const lessonKey = getLessonKeyValue(lesson);
+        const label = `${ui.lesson} ${index + 1} \u2014 ${lesson.title}`;
+        return /* @__PURE__ */ React.createElement("option", { key: lessonKey || index, value: lessonKey || "" }, label);
+      })
+    ))), /* @__PURE__ */ React.createElement("div", { className: "practice-filter-summary" }, renderLocalizedTextNode(
+      practiceFilterSummary.isSingle ? joinLocalizedText(`Using ${practiceFilterSummary.startLabel} only`, `\u0635\u0631\u0641 ${practiceFilterSummary.startLabel} \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2`, language) : joinLocalizedText(`Using ${practiceFilterSummary.startLabel} to ${practiceFilterSummary.endLabel}`, `${practiceFilterSummary.startLabel} \u0633\u06D2 ${practiceFilterSummary.endLabel} \u062A\u06A9 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2`, language),
+      language
+    )), /* @__PURE__ */ React.createElement("div", { className: "practice-difficulty-row" }, [
+      { id: "beginner", en: "Beginner", ur: "\u0622\u0633\u0627\u0646" },
+      { id: "medium", en: "Medium", ur: "\u062F\u0631\u0645\u06CC\u0627\u0646\u06C1" },
+      { id: "advanced", en: "Advance", ur: "\u0627\u0639\u0644\u06CC\u0670" }
+    ].map((entry) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: entry.id,
+        type: "button",
+        className: `practice-difficulty-chip${activePracticeFilter.difficulty === entry.id ? " active" : ""}`,
+        onClick: () => updatePracticeFilters({ difficulty: entry.id })
+      },
+      renderLocalizedTextNode(joinLocalizedText(entry.en, entry.ur, language), language)
+    ))), /* @__PURE__ */ React.createElement("div", { className: "practice-filter-summary" }, renderLocalizedTextNode(joinLocalizedText(`Difficulty: ${practiceDifficultyLabel}`, `\u0645\u0634\u06A9\u0644 \u06A9\u06CC \u0633\u0637\u062D: ${practiceDifficultyLabel}`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-filter-summary" }, renderLocalizedTextNode(joinLocalizedText(`Lesson progress: ${practiceRangeProgress.correct}/${practiceRangeProgress.attempted || 0} correct \u2022 ${practiceRangeProgress.marksEarned}/${practiceRangeProgress.marksPossible || 0} marks`, `\u0633\u0628\u0642 \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A: ${practiceRangeProgress.correct}/${practiceRangeProgress.attempted || 0} \u062F\u0631\u0633\u062A \u2022 ${practiceRangeProgress.marksEarned}/${practiceRangeProgress.marksPossible || 0} \u0646\u0645\u0628\u0631`, language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "practice-mode-grid" }, /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.flashcards ? "" : " disabled"}`, onClick: () => handleStartPractice("flashcards"), disabled: !practiceModeAvailability.flashcards }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F0CF}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Flashcards", "\u0641\u0644\u06CC\u0634 \u06A9\u0627\u0631\u0688\u0632", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("flashcards", "Subject practice cards", "\u0645\u0636\u0645\u0648\u0646 \u06A9\u06CC \u067E\u0631\u06CC\u06A9\u0679\u0633 \u06A9\u0627\u0631\u0688\u0632"), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.typing ? "" : " disabled"}`, onClick: () => handleStartPractice("typing"), disabled: !practiceModeAvailability.typing }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u2328\uFE0F"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Type the Answer", "\u062C\u0648\u0627\u0628 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("typing", "Subject practice cards", "\u0645\u0636\u0645\u0648\u0646 \u06A9\u06CC \u067E\u0631\u06CC\u06A9\u0679\u0633 \u06A9\u0627\u0631\u0688\u0632"), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.matching ? "" : " disabled"}`, onClick: () => handleStartPractice("matching"), disabled: !practiceModeAvailability.matching }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F9E9}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Match Pairs", "\u062C\u0648\u0691\u06CC\u0627\u06BA \u0645\u0644\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("matching", "Needs 4+ subject cards", "\u06A9\u0645 \u0627\u0632 \u06A9\u0645 4 \u0645\u0636\u0645\u0648\u0646 \u06A9\u0627\u0631\u0688\u0632", 4), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.dictation ? "" : " disabled"}`, onClick: () => handleStartPractice("dictation"), disabled: !practiceModeAvailability.dictation }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F3A7}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Dictation", "\u0627\u0645\u0644\u0627", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("dictation", "Review + lesson prompts", "\u0631\u06CC\u0648\u06CC\u0648 + \u0633\u0628\u0642 \u067E\u0631\u0627\u0645\u067E\u0679\u0633"), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.fillblanks ? "" : " disabled"}`, onClick: () => handleStartPractice("fillblanks"), disabled: !practiceModeAvailability.fillblanks }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u270D\uFE0F"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Fill in Blanks", "\u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u067E\u064F\u0631 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("fillblanks", "Sentence practice", "\u062C\u0645\u0644\u06C1 \u067E\u0631\u06CC\u06A9\u0679\u0633"), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.sentencebuilder ? "" : " disabled"}`, onClick: () => handleStartPractice("sentencebuilder"), disabled: !practiceModeAvailability.sentencebuilder }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F9F1}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Sentence Builder", "\u062C\u0645\u0644\u06C1 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("sentencebuilder", "Rebuild real sentences", "\u062D\u0642\u06CC\u0642\u06CC \u062C\u0645\u0644\u06D2 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0628\u0646\u0627\u0626\u06CC\u06BA"), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.timedchallenge ? "" : " disabled"}`, onClick: () => handleStartPractice("timedchallenge"), disabled: !practiceModeAvailability.timedchallenge }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Timed Challenge", "\u0648\u0642\u062A \u0648\u0627\u0644\u06CC \u0686\u06CC\u0644\u0646\u062C", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("timedchallenge", "60-second speed round", "60 \u0633\u06CC\u06A9\u0646\u0688 \u06A9\u06CC \u062A\u06CC\u0632 \u0645\u0634\u0642"), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.timedquiz ? "" : " disabled"}`, onClick: () => handleStartPractice("timedquiz"), disabled: !practiceModeAvailability.timedquiz }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F4DD}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Timed Quiz", "\u0648\u0642\u062A \u0648\u0627\u0644\u06CC \u06A9\u0648\u0626\u0632", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("timedquiz", "Question timer inside", "\u0633\u0648\u0627\u0644 \u06A9\u0627 \u0648\u0642\u062A \u0627\u0646\u062F\u0631 \u0645\u0648\u062C\u0648\u062F"), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.timedtruefalse ? "" : " disabled"}`, onClick: () => handleStartPractice("timedtruefalse"), disabled: !practiceModeAvailability.timedtruefalse }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u2696\uFE0F"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Timed True / False", "\u0648\u0642\u062A \u0648\u0627\u0644\u06CC \u062F\u0631\u0633\u062A / \u063A\u0644\u0637", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("timedtruefalse", "Quick judgement practice", "\u062A\u06CC\u0632 \u0641\u06CC\u0635\u0644\u06C1 \u0648\u0627\u0644\u06CC \u0645\u0634\u0642"), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.timedmatching ? "" : " disabled"}`, onClick: () => handleStartPractice("timedmatching"), disabled: !practiceModeAvailability.timedmatching }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Timed Match Pairs", "\u0648\u0642\u062A \u0648\u0627\u0644\u06CC \u062C\u0648\u0691\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("timedmatching", "Timed sets", "\u0648\u0642\u062A \u0648\u0627\u0644\u06D2 \u0633\u06CC\u0679", 4), language))), /* @__PURE__ */ React.createElement("button", { className: `practice-mode-card${practiceModeAvailability.interleaved ? "" : " disabled"}`, onClick: () => handleStartPractice("interleaved"), disabled: !practiceModeAvailability.interleaved }, /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F500}"), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Interleaved Practice", "\u0645\u0644\u06CC \u062C\u0644\u06CC \u067E\u0631\u06CC\u06A9\u0679\u0633", language), language)), /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(getPracticeModeMeta("interleaved", "Mixed healthy recall", "\u0645\u062A\u0648\u0627\u0632\u0646 \u0645\u0644\u06CC \u062C\u0644\u06CC \u06CC\u0627\u062F\u062F\u0627\u0634\u062A"), language))))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Leitner & Mastery", "\u0644\u0627\u0626\u0679\u0646\u0631 \u0627\u0648\u0631 \u0645\u06C1\u0627\u0631\u062A", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Cards move through boxes until Box ${reviewSrsSettings.masteryThreshold} counts as mastered.`, `\u06A9\u0627\u0631\u0688\u0632 \u062E\u0627\u0646\u0648\u06BA \u0645\u06CC\u06BA \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u062A\u06D2 \u06C1\u06CC\u06BA \u0627\u0648\u0631 Box ${reviewSrsSettings.masteryThreshold} \u067E\u0631 \u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644 \u0633\u0645\u062C\u06BE\u06CC \u062C\u0627\u062A\u06CC \u06C1\u06D2\u06D4`, language), language)))), (reviewAnalytics.leitnerBoxes || []).length ? /* @__PURE__ */ React.createElement("div", { className: "leitner-box-list" }, (reviewAnalytics.leitnerBoxes || []).map((entry) => {
+      const isMasteredBox = Number(entry.box) >= Number(reviewSrsSettings.masteryThreshold || 5);
+      return /* @__PURE__ */ React.createElement("div", { key: `leitner_${entry.box}`, className: "leitner-box-row" }, /* @__PURE__ */ React.createElement("div", { className: "leitner-box-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(isMasteredBox ? joinLocalizedText("Mastered", "\u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644", language) : joinLocalizedText(`Box ${entry.box}`, `\u0628\u0627\u06A9\u0633 ${entry.box}`, language), language)), /* @__PURE__ */ React.createElement("span", null, formatNumberLabel(entry.count || 0))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar leitner-progress" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, (Number(entry.count) || 0) / reviewLeitnerMax * 100))}%` } })));
+    })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few reviews to fill the Leitner boxes.", "\u06A9\u0686\u06BE \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0644\u0627\u0626\u0679\u0646\u0631 \u0628\u0627\u06A9\u0633 \u0628\u06BE\u0631 \u0633\u06A9\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Predicted Mastery", "\u0645\u062A\u0648\u0642\u0639 \u0645\u06C1\u0627\u0631\u062A", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Estimated finish date if you keep answering \u201CGood\u201D consistently.", "\u0627\u06AF\u0631 \u0622\u067E \u0645\u0633\u0644\u0633\u0644 \u201C\u0627\u0686\u06BE\u0627\u201D \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u062A\u06D2 \u0631\u06C1\u06CC\u06BA \u062A\u0648 \u0627\u0646\u062F\u0627\u0632\u0627\u064B \u06A9\u0628 \u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644 \u06C1\u0648\u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "mastery-prediction-callout" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Overall deck", "\u0645\u06A9\u0645\u0644 \u0645\u062C\u0645\u0648\u0639\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(
+      Number(((_g = reviewAnalytics.predictedMastery) == null ? void 0 : _g.cardsRemaining) || 0) > 0 ? formatProjectedDateLabel((_h = reviewAnalytics.predictedMastery) == null ? void 0 : _h.projectedAt, language) : joinLocalizedText("Already mastered", "\u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u06A9\u0645\u0644", language),
+      language
+    )), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${((_i = reviewAnalytics.predictedMastery) == null ? void 0 : _i.cardsRemaining) || 0} cards remaining`, `${((_j = reviewAnalytics.predictedMastery) == null ? void 0 : _j.cardsRemaining) || 0} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))), (((_k = reviewAnalytics.predictedMastery) == null ? void 0 : _k.sections) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "mastery-section-list" }, reviewAnalytics.predictedMastery.sections.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "mastery-section-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, formatProjectedDateLabel(entry.projectedAt, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.cardsRemaining} cards left`, `${entry.cardsRemaining} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Predictions will appear after your review boxes start moving.", "\u067E\u06CC\u0634 \u06AF\u0648\u0626\u06CC\u0627\u06BA \u062A\u0628 \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC \u062C\u0628 \u0622\u067E \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u06A9\u0633 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Forgetting Curve", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Accuracy by review delay shows how recall changes over longer gaps.", "\u0631\u06CC\u0648\u06CC\u0648 \u06A9\u06D2 \u0648\u0642\u0641\u06D2 \u06A9\u06D2 \u0644\u062D\u0627\u0638 \u0633\u06D2 \u062F\u0631\u0633\u062A\u06AF\u06CC \u062F\u06A9\u06BE\u0627\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u0632\u06CC\u0627\u062F\u06C1 \u0648\u0642\u0641\u0648\u06BA \u067E\u0631 \u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u06A9\u06CC\u0633\u06D2 \u0628\u062F\u0644\u062A\u06CC \u06C1\u06D2\u06D4", language), language)))), (reviewAnalytics.forgettingCurve || []).some((entry) => entry.reviews > 0) ? /* @__PURE__ */ React.createElement("div", { className: "forgetting-curve-list" }, (reviewAnalytics.forgettingCurve || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "forgetting-curve-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getForgettingCurveLabel(entry.id, language), language)), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, Number(entry.accuracy) || 0))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("More review history is needed to draw the forgetting curve.", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646 \u062F\u06A9\u06BE\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Upcoming Reviews", "\u0622\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See the next two weeks of due reviews before they pile up.", "\u0627\u06AF\u0644\u06D2 \u062F\u0648 \u06C1\u0641\u062A\u0648\u06BA \u06A9\u06D2 \u0628\u0627\u0642\u06CC \u0631\u06CC\u0648\u06CC\u0648\u0632 \u067E\u06C1\u0644\u06D2 \u0633\u06D2 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0648\u062C\u06BE \u062C\u0645\u0639 \u0646\u06C1 \u06C1\u0648\u06D4", language), language)))), (reviewAnalytics.upcomingCalendar || []).length ? /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-grid" }, (reviewAnalytics.upcomingCalendar || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: `upcoming-calendar-cell${entry.isToday ? " today" : ""}` }, /* @__PURE__ */ React.createElement("strong", null, entry.weekday), /* @__PURE__ */ React.createElement("span", null, entry.label), /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-count" }, formatNumberLabel(entry.dueCount || 0)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar upcoming-calendar-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(6, Math.min(100, (Number(entry.dueCount) || 0) / upcomingCalendarMax * 100))}%` } }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Upcoming review dates will appear once cards are scheduled ahead.", "\u06A9\u0627\u0631\u0688\u0632 \u0622\u06AF\u06D2 \u0634\u06CC\u0688\u0648\u0644 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u0622\u0646\u06D2 \u0648\u0627\u0644\u06CC \u062A\u0627\u0631\u06CC\u062E\u06CC\u06BA \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewHeatmap, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHeatmapHint, language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setHeatmapExpanded((value) => !value) }, renderLocalizedTextNode(heatmapExpanded ? joinLocalizedText("Show Less", "\u06A9\u0645 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show Heatmap", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), heatmapExpanded ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-heatmap-grid" }, reviewAnalytics.heatmap.map((cell) => /* @__PURE__ */ React.createElement(
       "div",
       {
         key: cell.dayKey,
         className: `review-heat-cell level-${cell.level}`,
         title: `${cell.dateLabel}: ${cell.count} reviews`
       }
-    ))), /* @__PURE__ */ React.createElement("div", { className: "review-heat-legend" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Less", "\u06A9\u0645", language), language)), [0, 1, 2, 3, 4].map((level) => /* @__PURE__ */ React.createElement("span", { key: level, className: `review-heat-cell level-${level}` })), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("More", "\u0632\u06CC\u0627\u062F\u06C1", language), language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Heatmap is hidden. Open it when you want a weekly review overview.", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u0641\u06CC \u0627\u0644\u062D\u0627\u0644 \u0628\u0646\u062F \u06C1\u06D2\u06D4 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u062C\u0627\u0626\u0632\u06C1 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Growth", "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Weekly review volume and unique cards over the recent study streak.", "\u062D\u0627\u0644\u06CC\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0648\u0631\u0627\u0646 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0627\u0648\u0631 \u0645\u0646\u0641\u0631\u062F \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F\u06D4", language), language)))), ((_c = reviewAnalytics.wordGrowth) == null ? void 0 : _c.length) ? /* @__PURE__ */ React.createElement("div", { className: "growth-chart" }, reviewAnalytics.wordGrowth.map((bucket) => /* @__PURE__ */ React.createElement("div", { key: bucket.weekKey, className: "growth-bar-col" }, /* @__PURE__ */ React.createElement("div", { className: "growth-bar-stack" }, /* @__PURE__ */ React.createElement("span", { className: "growth-bar reviews", style: { height: `${Math.max(12, Math.min(100, bucket.reviews * 6))}%` } }), /* @__PURE__ */ React.createElement("span", { className: "growth-bar unique", style: { height: `${Math.max(8, Math.min(84, bucket.uniqueCards * 8))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "growth-bar-label" }, bucket.label)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few review sessions to unlock this chart.", "\u06CC\u06C1 \u0686\u0627\u0631\u0679 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0686\u0646\u062F \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance by Category", "\u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See which sections are strongest and which still need attention.", "\u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0633\u06CC\u06A9\u0634\u0646 \u0645\u0636\u0628\u0648\u0637 \u06C1\u06CC\u06BA \u0627\u0648\u0631 \u06A9\u0646\u06C1\u06CC\u06BA \u0645\u0632\u06CC\u062F \u062A\u0648\u062C\u06C1 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), language)))), ((_d = reviewAnalytics.categoryPerformance) == null ? void 0 : _d.length) ? /* @__PURE__ */ React.createElement("div", { className: "category-performance-list" }, reviewAnalytics.categoryPerformance.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "category-performance-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${entry.accuracy}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews \u2022 ${entry.uniqueCards} cards`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632 \u2022 ${entry.uniqueCards} \u06A9\u0627\u0631\u0688\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Category performance will appear after more review history builds up.", "\u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u0628\u0646\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.weakWordsReport, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.weakWordsHint, language)))), reviewAnalytics.weakWords.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, reviewAnalytics.weakWords.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card }))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noWeakWords, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.studyCollections, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Create focused word packs for revision, dictation, or tricky vocabulary.", "\u0631\u06CC\u0648\u06CC\u0698\u0646\u060C \u0627\u0645\u0644\u0627\u060C \u06CC\u0627 \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u06CC \u0627\u0644\u06AF \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-list-creator" }, /* @__PURE__ */ React.createElement(
+    ))), /* @__PURE__ */ React.createElement("div", { className: "review-heat-legend" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Less", "\u06A9\u0645", language), language)), [0, 1, 2, 3, 4].map((level) => /* @__PURE__ */ React.createElement("span", { key: level, className: `review-heat-cell level-${level}` })), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("More", "\u0632\u06CC\u0627\u062F\u06C1", language), language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Heatmap is hidden. Open it when you want a weekly review overview.", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u0641\u06CC \u0627\u0644\u062D\u0627\u0644 \u0628\u0646\u062F \u06C1\u06D2\u06D4 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u062C\u0627\u0626\u0632\u06C1 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Growth", "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Weekly review volume and unique cards over the recent study streak.", "\u062D\u0627\u0644\u06CC\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0648\u0631\u0627\u0646 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0627\u0648\u0631 \u0645\u0646\u0641\u0631\u062F \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F\u06D4", language), language)))), ((_l = reviewAnalytics.wordGrowth) == null ? void 0 : _l.length) ? /* @__PURE__ */ React.createElement("div", { className: "growth-chart" }, reviewAnalytics.wordGrowth.map((bucket) => /* @__PURE__ */ React.createElement("div", { key: bucket.weekKey, className: "growth-bar-col" }, /* @__PURE__ */ React.createElement("div", { className: "growth-bar-stack" }, /* @__PURE__ */ React.createElement("span", { className: "growth-bar reviews", style: { height: `${Math.max(12, Math.min(100, bucket.reviews * 6))}%` } }), /* @__PURE__ */ React.createElement("span", { className: "growth-bar unique", style: { height: `${Math.max(8, Math.min(84, bucket.uniqueCards * 8))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "growth-bar-label" }, bucket.label)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few review sessions to unlock this chart.", "\u06CC\u06C1 \u0686\u0627\u0631\u0679 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0686\u0646\u062F \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance by Category", "\u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See which sections are strongest and which still need attention.", "\u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0633\u06CC\u06A9\u0634\u0646 \u0645\u0636\u0628\u0648\u0637 \u06C1\u06CC\u06BA \u0627\u0648\u0631 \u06A9\u0646\u06C1\u06CC\u06BA \u0645\u0632\u06CC\u062F \u062A\u0648\u062C\u06C1 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), language)))), ((_m = reviewAnalytics.categoryPerformance) == null ? void 0 : _m.length) ? /* @__PURE__ */ React.createElement("div", { className: "category-performance-list" }, reviewAnalytics.categoryPerformance.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "category-performance-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${entry.accuracy}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews \u2022 ${entry.uniqueCards} cards`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632 \u2022 ${entry.uniqueCards} \u06A9\u0627\u0631\u0688\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Category performance will appear after more review history builds up.", "\u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u0628\u0646\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.weakWordsReport, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.weakWordsHint, language)))), reviewAnalytics.weakWords.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, reviewAnalytics.weakWords.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card }))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noWeakWords, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.studyCollections, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Create focused word packs for revision, dictation, or tricky vocabulary.", "\u0631\u06CC\u0648\u06CC\u0698\u0646\u060C \u0627\u0645\u0644\u0627\u060C \u06CC\u0627 \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u06CC \u0627\u0644\u06AF \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-list-creator" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         value: customListDraft,
@@ -5345,7 +7475,16 @@ ${error.message || error}`);
         className: "review-list-input",
         style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : {}
       }
-    ), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: handleCreateCustomList, disabled: !customListDraft.trim() }, renderLocalizedTextNode(ui.createList, language))), reviewAnalytics.customLists.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "custom-list-grid" }, reviewAnalytics.customLists.map((list) => /* @__PURE__ */ React.createElement("div", { key: list.id, className: "custom-list-card" }, /* @__PURE__ */ React.createElement("div", { className: "custom-list-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", null, list.name), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${list.itemCount} items`, `${list.itemCount} \u0627\u0644\u0641\u0627\u0638`, language), language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => handleDeleteCustomList(list.id) }, renderLocalizedTextNode(ui.deleteList, language))), list.items.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "custom-list-items" }, list.items.slice(0, 6).map((item) => /* @__PURE__ */ React.createElement("span", { key: item.id, className: "custom-list-item-pill" }, item.prompt)), list.items.length > 6 ? /* @__PURE__ */ React.createElement("span", { className: "custom-list-item-pill muted" }, "+", list.items.length - 6) : null) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.noListItems, language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noCustomLists, language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notedWords, language)))), reviewAnalytics.notedWords.length > 0 ? reviewAnalytics.notedWords.slice(0, 6).map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotes, language))))), practiceMode && activePracticeCard && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(joinLocalizedText(`${practiceMode === "flashcards" ? "Flashcards" : practiceMode === "typing" ? "Type the Answer" : "Match Pairs"} \u2022 ${practiceMode === "matching" ? Math.floor(practiceIdx / 4) + 1 : practiceIdx + 1}`, `${practiceMode === "flashcards" ? "\u0641\u0644\u06CC\u0634 \u06A9\u0627\u0631\u0688\u0632" : practiceMode === "typing" ? "\u062C\u0648\u0627\u0628 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA" : "\u062C\u0648\u0691\u06CC\u0627\u06BA \u0645\u0644\u0627\u0626\u06CC\u06BA"} \u2022 ${practiceMode === "matching" ? Math.floor(practiceIdx / 4) + 1 : practiceIdx + 1}`, language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activePracticeCard.sectionLabel)), /* @__PURE__ */ React.createElement("div", { className: "study-word-stats", style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.correct} correct`, `${practiceSessionStats.correct} \u062F\u0631\u0633\u062A`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.attempted} attempts`, `${practiceSessionStats.attempted} \u06A9\u0648\u0634\u0634\u06CC\u06BA`, language), language))), practiceMode === "flashcards" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt" }, activePracticeCard.prompt), practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: { marginTop: 14 } }, activePracticeCard.answer) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Reveal when you are ready.", "\u062A\u06CC\u0627\u0631 \u06C1\u0648\u06BA \u062A\u0648 \u062C\u0648\u0627\u0628 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setPracticeReveal((value) => !value) }, renderLocalizedTextNode(ui.revealAnswer, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Card", "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0631\u0688", language), language)))), practiceMode === "typing" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Type the matching word for this clue:", "\u0627\u0633 \u0627\u0634\u0627\u0631\u06D2 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u0644\u0641\u0638 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA:", language), language)), /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: { marginTop: 10 } }, activePracticeCard.answer || activePracticeCard.meaning), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: handleCreateCustomList, disabled: !customListDraft.trim() }, renderLocalizedTextNode(ui.createList, language))), reviewAnalytics.customLists.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "custom-list-grid" }, reviewAnalytics.customLists.map((list) => /* @__PURE__ */ React.createElement("div", { key: list.id, className: "custom-list-card" }, /* @__PURE__ */ React.createElement("div", { className: "custom-list-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", null, list.name), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${list.itemCount} items`, `${list.itemCount} \u0627\u0644\u0641\u0627\u0638`, language), language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => handleDeleteCustomList(list.id) }, renderLocalizedTextNode(ui.deleteList, language))), list.items.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "custom-list-items" }, list.items.slice(0, 6).map((item) => /* @__PURE__ */ React.createElement("span", { key: item.id, className: "custom-list-item-pill" }, item.prompt)), list.items.length > 6 ? /* @__PURE__ */ React.createElement("span", { className: "custom-list-item-pill muted" }, "+", list.items.length - 6) : null) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.noListItems, language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noCustomLists, language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notedWords, language)))), reviewAnalytics.notedWords.length > 0 ? reviewAnalytics.notedWords.slice(0, 6).map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotes, language))))), practiceMode && activePracticeCard && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(`${getPracticeModeMeta(practiceMode, language)} \u2022 ${getPracticeRoundNumber(["matching", "timedmatching"].includes(practiceMode) ? "matching" : practiceMode, practiceIdx)}`, language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activePracticeCard.sectionLabel)), /* @__PURE__ */ React.createElement("div", { className: "study-word-stats", style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.correct} correct`, `${practiceSessionStats.correct} \u062F\u0631\u0633\u062A`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.attempted} attempts`, `${practiceSessionStats.attempted} \u06A9\u0648\u0634\u0634\u06CC\u06BA`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.marksEarned || 0}/${practiceSessionStats.marksPossible || 0} marks`, `${practiceSessionStats.marksEarned || 0}/${practiceSessionStats.marksPossible || 0} \u0646\u0645\u0628\u0631`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceQuestionMarks} marks each`, `\u06C1\u0631 \u0633\u0648\u0627\u0644 ${practiceQuestionMarks} \u0646\u0645\u0628\u0631`, language), language)), /* @__PURE__ */ React.createElement("span", { className: `practice-mastery-chip ${activePracticeMastery.tone}` }, activePracticeMastery.label)), ["timedchallenge", "timedquiz", "timedtruefalse", "timedmatching"].includes(practiceMode) ? /* @__PURE__ */ React.createElement("div", { className: "practice-timer-control" }, /* @__PURE__ */ React.createElement("label", null, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Time per question / set", "\u0641\u06CC \u0633\u0648\u0627\u0644 / \u0633\u06CC\u0679 \u0648\u0642\u062A", language), language)), /* @__PURE__ */ React.createElement("select", { className: "review-list-input", value: activePracticeTimeLimit, onChange: (event) => handlePracticeTimedSettingChange(practiceMode, Number(event.target.value)) }, [15, 30, 45, 60, 90].map((seconds) => /* @__PURE__ */ React.createElement("option", { key: seconds, value: seconds }, seconds, "s"))))) : null, /* @__PURE__ */ React.createElement("div", { className: `practice-instruction${isUrduUi(language) ? " urdu" : ""}` }, renderLocalizedTextNode(getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-instruction urdu" }, getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, "ur")), practiceQuestionPrompt ? /* @__PURE__ */ React.createElement("div", { className: "practice-question-stack" }, /* @__PURE__ */ React.createElement("div", { className: `practice-question-bar${isUrduUi(language) ? " urdu" : ""}` }, renderLocalizedTextNode(practiceQuestionPrompt, language)), practiceQuestionPromptUrdu && normalizeText(practiceQuestionPromptUrdu) !== normalizeText(practiceQuestionPrompt) ? /* @__PURE__ */ React.createElement("div", { className: "practice-question-bar urdu" }, practiceQuestionPromptUrdu) : null) : null, showPracticeBreakNudge ? /* @__PURE__ */ React.createElement("div", { className: "practice-break-nudge" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("You have worked hard. Take a short breath or sip of water, then continue.", "\u0622\u067E \u06A9\u0627\u0641\u06CC \u0645\u062D\u0646\u062A \u06A9\u0631 \u0686\u06A9\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0627\u06CC\u06A9 \u0686\u06BE\u0648\u0679\u0627 \u0633\u0627 \u0648\u0642\u0641\u06C1 \u0644\u06CC\u06BA \u06CC\u0627 \u067E\u0627\u0646\u06CC \u067E\u06CC \u0644\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setPracticeBreakDismissedAt(practiceSessionStats.attempted) }, renderLocalizedTextNode(joinLocalizedText("Keep Going", "\u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA", language), language))) : null, practiceFeedbackText ? /* @__PURE__ */ React.createElement("div", { className: `practice-feedback-panel${practiceFeedbackText && isUrduText(practiceFeedbackText) ? " urdu" : ""}` }, practiceFeedbackText) : null, practiceCelebrationSeed ? /* @__PURE__ */ React.createElement("div", { className: "practice-celebration", key: practiceCelebrationSeed, "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("span", null, "\u{1F338}"), /* @__PURE__ */ React.createElement("span", null, "\u2728"), /* @__PURE__ */ React.createElement("span", null, "\u{1F33C}"), /* @__PURE__ */ React.createElement("span", null, "\u2728"), /* @__PURE__ */ React.createElement("span", null, "\u{1F338}")) : null, effectivePracticeMode === "flashcards" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(getPracticeFlashFront(activePracticeCard)) }, getPracticeFlashFront(activePracticeCard)), practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: getPracticeTextStyle(getPracticeFlashBack(activePracticeCard), { marginTop: 14, fontSize: 18, fontWeight: 700 }, activePracticeCard.practiceLang) }, getPracticeFlashBack(activePracticeCard)) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Think first, then reveal the answer.", "\u067E\u06C1\u0644\u06D2 \u062E\u0648\u062F \u0633\u0648\u0686\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062C\u0648\u0627\u0628 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setPracticeReveal((value) => !value) }, renderLocalizedTextNode(practiceReveal ? joinLocalizedText("Hide Answer", "\u062C\u0648\u0627\u0628 \u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA", language) : ui.revealAnswer, language)), practiceReveal ? /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => handleFlashcardSelfGrade(false) }, renderLocalizedTextNode(joinLocalizedText("Need Review", "\u0645\u0632\u06CC\u062F \u0645\u0634\u0642 \u0686\u0627\u06C1\u06CC\u06D2", language), language)) : null, practiceReveal ? /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => handleFlashcardSelfGrade(true) }, renderLocalizedTextNode(joinLocalizedText("I Got It", "\u0645\u06CC\u06BA \u0646\u06D2 \u062F\u0631\u0633\u062A \u06A9\u06CC\u0627", language), language)) : null, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Card", "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0631\u0688", language), language)))), effectivePracticeMode === "dictation" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Listen carefully and type the English word you hear.", "\u063A\u0648\u0631 \u0633\u06D2 \u0633\u0646\u06CC\u06BA \u0627\u0648\u0631 \u062C\u0648 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0644\u0641\u0638 \u0633\u0646\u06CC\u06BA \u0627\u0633\u06D2 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: "dictation-actions" }, /* @__PURE__ */ React.createElement("button", { className: "dictation-play-btn", onClick: () => window.HomeSchoolUtils.speakText(activePracticeCard.prompt, activePracticeCard.practiceLang || "en") }, "\u{1F50A} ", renderLocalizedTextNode(joinLocalizedText("Play Again", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", { className: `dictation-hint${containsUrduText(activePracticeCard.answer || activePracticeCard.sectionLabel) ? " urdu" : ""}` }, renderLocalizedTextNode(joinLocalizedText(`Hint: ${activePracticeCard.answer || activePracticeCard.sectionLabel}`, `\u0627\u0634\u0627\u0631\u06C1: ${activePracticeCard.answer || activePracticeCard.sectionLabel}`, language), language))), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        className: "review-list-input",
+        value: practiceDictationInput,
+        onChange: (event) => setPracticeDictationInput(event.target.value),
+        placeholder: language === "ur" ? "\u062C\u0648 \u06A9\u0686\u06BE \u0633\u0646\u06CC\u06BA \u0648\u06C1 \u0644\u06A9\u06BE\u06CC\u06BA..." : "Type what you hear...",
+        style: activePracticeCard.practiceLang === "ur" || isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", marginTop: 14 } : { marginTop: 14 }
+      }
+    ), practiceDictationResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceDictationResult}`, style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceDictationResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Listen and compare this correction", "\u0633\u0646\u06CC\u06BA \u0627\u0648\u0631 \u0627\u0633 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u0633\u06D2 \u0645\u0644\u0627\u0626\u06CC\u06BA", language), language), ": ", activePracticeCard.prompt) : null, practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "practice-answer-clue" }, /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, activePracticeCard.prompt), activePracticeCard.answer ? /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur") }, activePracticeCard.answer) : null) : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: handleCheckDictationAnswer, disabled: !practiceDictationInput.trim() }, renderLocalizedTextNode(joinLocalizedText("Check", "\u062C\u0627\u0646\u0686\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next", "\u0627\u06AF\u0644\u0627", language), language)))), effectivePracticeMode === "typing" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Type the matching word for this clue:", "\u0627\u0633 \u0627\u0634\u0627\u0631\u06D2 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u0644\u0641\u0638 \u0679\u0627\u0626\u067E \u06A9\u0631\u06CC\u06BA:", language), language)), /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: getPracticeTextStyle(getPracticeTypingClue(activePracticeCard), { marginTop: 10, fontSize: 17, fontWeight: 700 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur") }, getPracticeTypingClue(activePracticeCard)), /* @__PURE__ */ React.createElement(
       "input",
       {
         className: "review-list-input",
@@ -5354,16 +7493,84 @@ ${error.message || error}`);
         placeholder: language === "ur" ? "\u062C\u0648\u0627\u0628 \u0644\u06A9\u06BE\u06CC\u06BA..." : "Type your answer...",
         style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", marginTop: 14 } : { marginTop: 14 }
       }
-    ), practiceTypingResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTypingResult}` }, renderLocalizedTextNode(practiceTypingResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Try this correction", "\u0627\u0633 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u06A9\u0648 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA", language), language), ": ", activePracticeCard.prompt) : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: handleCheckTypedAnswer, disabled: !practiceTypingInput.trim() }, renderLocalizedTextNode(joinLocalizedText("Check", "\u062C\u0627\u0646\u0686\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next", "\u0627\u06AF\u0644\u0627", language), language)))), practiceMode === "matching" && practiceMatchRound && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "match-grid" }, /* @__PURE__ */ React.createElement("div", { className: "match-column" }, practiceMatchRound.prompts.map((card) => {
+    ), practiceTypingResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTypingResult}`, style: getPracticeTextStyle(getPracticeTypingTarget(activePracticeCard), {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTypingResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Try this correction", "\u0627\u0633 \u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u06A9\u0648 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA", language), language), ": ", getPracticeTypingTarget(activePracticeCard)) : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: handleCheckTypedAnswer, disabled: !practiceTypingInput.trim() }, renderLocalizedTextNode(joinLocalizedText("Check", "\u062C\u0627\u0646\u0686\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next", "\u0627\u06AF\u0644\u0627", language), language)))), effectivePracticeMode === "fillblanks" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Choose the correct word to complete the sentence.", "\u062C\u0645\u0644\u06C1 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062F\u0631\u0633\u062A \u0644\u0641\u0638 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: "blank-sentence", style: getPracticeTextStyle(activePracticeCard.blankSentence, {}, activePracticeCard.practiceLang) }, activePracticeCard.blankSentence), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid" }, (activePracticeCard.blankOptions || []).map((option) => {
+      const normalizedOption = normalizeAnswerText(option);
+      const normalizedPrompt = normalizeAnswerText(activePracticeCard.prompt);
+      const isSelected = normalizeAnswerText(practiceBlankChoice) === normalizedOption;
+      const isCorrect = normalizedOption === normalizedPrompt;
+      const optionClass = [
+        "blank-option",
+        isSelected ? "selected" : "",
+        practiceReveal && isCorrect ? "correct" : "",
+        practiceReveal && isSelected && !isCorrect ? "wrong" : ""
+      ].filter(Boolean).join(" ");
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: option,
+          className: optionClass,
+          disabled: practiceReveal,
+          onClick: () => handleBlankChoice(option),
+          style: getPracticeTextStyle(option, {}, activePracticeCard.practiceLang)
+        },
+        option
+      );
+    })), practiceBlankResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceBlankResult}`, style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceBlankResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("The missing word is", "\u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u06A9\u0627 \u0644\u0641\u0638 \u06C1\u06D2", language), language), ": ", activePracticeCard.prompt) : null, practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "practice-answer-clue" }, /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, activePracticeCard.prompt), activePracticeCard.answer ? /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur") }, activePracticeCard.answer) : null) : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => window.HomeSchoolUtils.speakText(activePracticeCard.blankSentence.replace("_____", activePracticeCard.prompt), "en") }, renderLocalizedTextNode(joinLocalizedText("Read Sentence", "\u062C\u0645\u0644\u06C1 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next", "\u0627\u06AF\u0644\u0627", language), language)))), effectivePracticeMode === "sentencebuilder" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Tap the pieces in order to rebuild the full sentence.", "\u0645\u06A9\u0645\u0644 \u062C\u0645\u0644\u06C1 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0628\u0646\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0644\u0641\u0638\u0648\u06BA \u06A9\u0648 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `sentence-builder-output${activePracticeCard.sentenceBuilderLang === "ur" ? " urdu" : ""}` }, practiceSentenceSelection.length ? practiceSentenceSelection.map((entry, index) => /* @__PURE__ */ React.createElement("button", { key: `${entry.index}_${index}`, className: "sentence-builder-token selected", onClick: () => handleSentenceSelectionRemove(index) }, entry.text)) : /* @__PURE__ */ React.createElement("span", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Build your sentence here.", "\u0627\u067E\u0646\u0627 \u062C\u0645\u0644\u06C1 \u06CC\u06C1\u0627\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "sentence-builder-bank" }, (activePracticeCard.sentenceBuilderOptions || []).map((token, index) => {
+      const selected = practiceSentenceSelection.some((entry) => entry.index === index);
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: token.id || `${token.text}_${index}`,
+          className: `sentence-builder-token${selected ? " used" : ""}`,
+          disabled: selected || practiceReveal,
+          onClick: () => handleSentenceTokenToggle(token.text, index)
+        },
+        token.text
+      );
+    })), practiceSentenceResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceSentenceResult}`, style: getPracticeTextStyle(activePracticeCard.sentenceBuilderSentence, {}, activePracticeCard.sentenceBuilderLang) }, renderLocalizedTextNode(practiceSentenceResult === "correct" ? joinLocalizedText("Correct sentence", "\u062F\u0631\u0633\u062A \u062C\u0645\u0644\u06C1", language) : joinLocalizedText("Correct order is", "\u062F\u0631\u0633\u062A \u062A\u0631\u062A\u06CC\u0628 \u06CC\u06C1 \u06C1\u06D2", language), language), ": ", activePracticeCard.sentenceBuilderSentence) : null, practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "practice-answer-clue" }, /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.sentenceBuilderSentence, {}, activePracticeCard.sentenceBuilderLang) }, activePracticeCard.sentenceBuilderSentence), activePracticeCard.answer ? /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.sentenceBuilderLang === "ur" ? "en" : "ur") }, activePracticeCard.answer) : null) : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: handleCheckSentenceBuilder, disabled: practiceSentenceSelection.length !== (activePracticeCard.sentenceBuilderTokens || []).length }, renderLocalizedTextNode(joinLocalizedText("Check Order", "\u062A\u0631\u062A\u06CC\u0628 \u062C\u0627\u0646\u0686\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next", "\u0627\u06AF\u0644\u0627", language), language)))), practiceMode === "timedchallenge" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Beat the clock by choosing the correct answer fast.", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628 \u062C\u0644\u062F\u06CC \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631 \u06A9\u06D2 \u0648\u0642\u062A \u06A9\u0648 \u06C1\u0631\u0627\u0646\u0627 \u06C1\u06D2\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), practiceTimerFinished ? /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-summary" }, /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt" }, renderLocalizedTextNode(joinLocalizedText("Challenge complete", "\u0686\u06CC\u0644\u0646\u062C \u0645\u06A9\u0645\u0644", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`You got ${practiceSessionStats.correct} correct out of ${practiceSessionStats.attempted}.`, `\u0622\u067E \u0646\u06D2 ${practiceSessionStats.attempted} \u0645\u06CC\u06BA \u0633\u06D2 ${practiceSessionStats.correct} \u062F\u0631\u0633\u062A \u06A9\u06CC\u06D2\u06D4`, language), language))) : /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: getPracticeTextStyle(activePracticeCard.answer || activePracticeCard.meaning, { marginTop: 10, fontSize: 17, fontWeight: 700 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur") }, activePracticeCard.answer || activePracticeCard.meaning), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, (activePracticeCard.timedOptions || []).map((option) => {
+      const normalizedOption = normalizeAnswerText(option);
+      const normalizedPrompt = normalizeAnswerText(activePracticeCard.prompt);
+      const isSelected = normalizeAnswerText(practiceTimedChoice) === normalizedOption;
+      const isCorrect = normalizedOption === normalizedPrompt;
+      const optionClass = [
+        "blank-option",
+        "timed-option",
+        isSelected ? "selected" : "",
+        practiceReveal && isCorrect ? "correct" : "",
+        practiceReveal && isSelected && !isCorrect ? "wrong" : ""
+      ].filter(Boolean).join(" ");
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: option,
+          className: optionClass,
+          disabled: practiceTimerFinished || Boolean(practiceTimedChoice),
+          onClick: () => handleTimedChallengeChoice(option),
+          style: getPracticeTextStyle(option, {}, activePracticeCard.practiceLang)
+        },
+        option
+      );
+    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}`, style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", activePracticeCard.prompt) : null)), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, practiceTimerFinished ? /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => handleStartPractice("timedchallenge") }, renderLocalizedTextNode(joinLocalizedText("Play Again", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u06BE\u06CC\u0644\u06CC\u06BA", language), language)) : /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => window.HomeSchoolUtils.speakText(activePracticeCard.prompt, activePracticeCard.practiceLang || "en") }, renderLocalizedTextNode(joinLocalizedText("Hear Prompt", "\u0644\u0641\u0638 \u0633\u0646\u06CC\u06BA", language), language)), !practiceTimerFinished ? /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Skip", "\u0686\u06BE\u0648\u0691\u06CC\u06BA", language), language)) : null)), practiceMode === "timedquiz" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Choose the best answer before time ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0628\u06C1\u062A\u0631\u06CC\u0646 \u062C\u0648\u0627\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.quizQuestion, {}, activePracticeCard.practiceLang) }, activePracticeCard.quizQuestion), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, (activePracticeCard.quizOptions || []).map((option, optionIndex) => {
+      const isSelected = practiceTimedChoice === optionIndex;
+      const isCorrect = optionIndex === Number(activePracticeCard.quizCorrectIndex);
+      const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
+      return /* @__PURE__ */ React.createElement("button", { key: `${option}_${optionIndex}`, className: optionClass, disabled: practiceTimerFinished || practiceTimedChoice !== null, onClick: () => handleTimedQuizChoice(optionIndex), style: getPracticeTextStyle(option, {}, activePracticeCard.practiceLang) }, option);
+    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}`, style: getPracticeTextStyle(((_n = activePracticeCard.quizOptions) == null ? void 0 : _n[Number(activePracticeCard.quizCorrectIndex)]) || "", {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", ((_o = activePracticeCard.quizOptions) == null ? void 0 : _o[Number(activePracticeCard.quizCorrectIndex)]) || "") : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Question", "\u0627\u06AF\u0644\u0627 \u0633\u0648\u0627\u0644", language), language)))), practiceMode === "timedtruefalse" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Decide whether the statement is true or false before the timer ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0641\u06CC\u0635\u0644\u06C1 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0633\u0648\u0627\u0644 \u062F\u0631\u0633\u062A \u06C1\u06D2 \u06CC\u0627 \u063A\u0644\u0637\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.trueFalseStatement, {}, activePracticeCard.practiceLang) }, activePracticeCard.trueFalseStatement), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, [{ key: "true", label: joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language), value: true }, { key: "false", label: joinLocalizedText("False", "\u063A\u0644\u0637", language), value: false }].map((option) => {
+      const isSelected = practiceTimedChoice === option.key;
+      const isCorrect = Boolean(activePracticeCard.trueFalseAnswer) === option.value;
+      const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
+      return /* @__PURE__ */ React.createElement("button", { key: option.key, className: optionClass, disabled: practiceTimerFinished || practiceTimedChoice !== null, onClick: () => handleTimedTrueFalseChoice(option.value) }, option.label);
+    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}` }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", activePracticeCard.trueFalseAnswer ? renderLocalizedTextNode(joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language), language) : renderLocalizedTextNode(joinLocalizedText("False", "\u063A\u0644\u0637", language), language)) : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Question", "\u0627\u06AF\u0644\u0627 \u0633\u0648\u0627\u0644", language), language)))), ["matching", "timedmatching"].includes(practiceMode) && practiceMatchRound && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, practiceMode === "timedmatching" ? /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head", style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Complete as many correct pairs as you can before time ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0632\u06CC\u0627\u062F\u06C1 \u0633\u06D2 \u0632\u06CC\u0627\u062F\u06C1 \u062F\u0631\u0633\u062A \u062C\u0648\u0691\u06CC\u0627\u06BA \u0645\u0644\u0627\u0626\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))) : null, /* @__PURE__ */ React.createElement("div", { className: "match-grid" }, /* @__PURE__ */ React.createElement("div", { className: "match-column" }, practiceMatchRound.prompts.map((card) => {
       var _a2, _b2, _c2;
       return /* @__PURE__ */ React.createElement(
         "button",
         {
           key: `prompt_${card.id}`,
           className: `match-chip match-chip-prompt ${((_a2 = practiceMatchSelection == null ? void 0 : practiceMatchSelection.item) == null ? void 0 : _a2.id) === card.id && (practiceMatchSelection == null ? void 0 : practiceMatchSelection.type) === "prompt" ? "selected" : ""}${((_b2 = practiceMatchRound.matches) == null ? void 0 : _b2[card.id]) === true ? " matched" : ((_c2 = practiceMatchRound.matches) == null ? void 0 : _c2[card.id]) === false ? " wrong" : ""}`,
-          onClick: () => handleMatchSelection("prompt", card)
+          onClick: () => handleMatchSelection("prompt", card),
+          style: containsUrduText(getPracticeMatchPrompt(card)) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", lineHeight: 1.8 } : null
         },
-        card.prompt
+        getPracticeMatchPrompt(card)
       );
     })), /* @__PURE__ */ React.createElement("div", { className: "match-column" }, practiceMatchRound.answers.map((answer) => {
       var _a2;
@@ -5373,11 +7580,11 @@ ${error.message || error}`);
           key: `answer_${answer.id}`,
           className: `match-chip match-chip-answer ${((_a2 = practiceMatchSelection == null ? void 0 : practiceMatchSelection.item) == null ? void 0 : _a2.id) === answer.id && (practiceMatchSelection == null ? void 0 : practiceMatchSelection.type) === "answer" ? "selected" : ""}`,
           onClick: () => handleMatchSelection("answer", answer),
-          style: containsUrduText(answer.text) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", fontSize: 15, lineHeight: 1.8 } : null
+          style: getPracticeTextStyle(answer.text, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")
         },
         answer.text
       );
-    }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setPracticeMatchRound(buildMatchRound(practiceDeck.slice(practiceIdx), 4)) }, renderLocalizedTextNode(joinLocalizedText("Shuffle", "\u0628\u062F\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Round", "\u0627\u06AF\u0644\u0627 \u0631\u0627\u0624\u0646\u0688", language), language))))), activeReviewCard && !reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(joinLocalizedText(`Card ${reviewIdx + 1} of ${reviewQueue.length}`, `\u06A9\u0627\u0631\u0688 ${reviewIdx + 1} \u0627\u0632 ${reviewQueue.length}`, language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activeReviewCard.sectionLabel)), /* @__PURE__ */ React.createElement("h2", { style: { marginBottom: 10 } }, activeReviewCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "study-word-stats", style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(getReviewDueLabel(activeReviewCard, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${ui.lapses}: ${activeReviewCard.lapses || 0}`, `${ui.lapses}: ${activeReviewCard.lapses || 0}`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews * 100) : 0}%`, `${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews * 100) : 0}%`, language), language))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "grade-btn active", style: { minWidth: 130 }, onClick: () => window.HomeSchoolUtils.speakText(activeReviewCard.prompt, "en") }, "\u{1F50A} ", renderLocalizedTextNode(joinLocalizedText("Speak", "\u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "grade-btn", style: { minWidth: 170 }, onClick: () => setReviewReveal((value) => !value) }, renderLocalizedTextNode(ui.revealAnswer, language))), /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: activeReviewCard }), reviewReveal && /* @__PURE__ */ React.createElement("div", { style: reviewRevealCardStyle }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.answer, lang: "ur", fullWidth: true, buttonStyle: reviewAnswerButtonStyle, textStyle: { fontSize: 24 } }), activeReviewCard.meaning && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, activeReviewCard.meaning), (activeReviewCard.opposite || activeReviewCard.oppositeUr) && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, renderLocalizedTextNode(joinLocalizedText(`Opposite: ${activeReviewCard.opposite} / ${activeReviewCard.oppositeUr}`, `\u0645\u062A\u0636\u0627\u062F: ${activeReviewCard.oppositeUr} / ${activeReviewCard.opposite}`, language), language)), activeReviewCard.example && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 6, color: "var(--text-secondary)", fontWeight: 700 } }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.reviewExample, language), ":")), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.example, lang: "en", fullWidth: true, buttonStyle: reviewExampleButtonStyle, textStyle: { fontSize: 16, lineHeight: 1.6 } }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => handleReviewResponse("again") }, renderLocalizedTextNode(ui.reviewAgain, language)), /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: { borderColor: "#22C55E55", color: "#22C55E" }, onClick: () => handleReviewResponse("good") }, renderLocalizedTextNode(ui.reviewGood, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => handleReviewResponse("easy") }, renderLocalizedTextNode(ui.reviewEasy, language)))), reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "quiz-result" }, /* @__PURE__ */ React.createElement("div", { className: "result-emoji" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("h2", null, renderLocalizedTextNode(ui.reviewComplete, language)), /* @__PURE__ */ React.createElement("p", { className: "score-text" }, renderLocalizedTextNode(ui.reviewEarnedXp, language)), /* @__PURE__ */ React.createElement("div", { className: "score-big high" }, "+", reviewSessionXp), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
+    }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setPracticeMatchRound(buildMatchRound(practiceDeck.slice(practiceIdx), 4)) }, renderLocalizedTextNode(joinLocalizedText("Shuffle", "\u0628\u062F\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Round", "\u0627\u06AF\u0644\u0627 \u0631\u0627\u0624\u0646\u0688", language), language)))), practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "practice-meta-panel" }, /* @__PURE__ */ React.createElement("div", { className: "practice-confidence-row" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("How sure were you?", "\u0622\u067E \u06A9\u062A\u0646\u06D2 \u067E\u064F\u0631\u06CC\u0642\u06CC\u0646 \u062A\u06BE\u06D2\u061F", language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-confidence-chips" }, [{ id: "low", en: "Not sure", ur: "\u06A9\u0645 \u06CC\u0642\u06CC\u0646" }, { id: "medium", en: "Somewhat sure", ur: "\u06A9\u0686\u06BE \u06CC\u0642\u06CC\u0646" }, { id: "high", en: "Very sure", ur: "\u0628\u06C1\u062A \u06CC\u0642\u06CC\u0646" }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, type: "button", className: `practice-confidence-chip${practiceConfidenceChoice === item.id ? " active" : ""}`, onClick: () => commitConfidenceChoice(item.id), disabled: Boolean(practiceConfidenceChoice) }, renderLocalizedTextNode(joinLocalizedText(item.en, item.ur, language), language))))), practiceTypingResult === "wrong" || practiceDictationResult === "wrong" || practiceBlankResult === "wrong" || practiceSentenceResult === "wrong" || practiceTimedResult === "wrong" || practiceMode === "flashcards" ? /* @__PURE__ */ React.createElement("div", { className: "practice-reflection-box" }, /* @__PURE__ */ React.createElement("label", null, renderLocalizedTextNode(joinLocalizedText("Reflection: why was this tricky?", "\u0633\u0648\u0686\u06CC\u06BA: \u06CC\u06C1 \u0645\u0634\u06A9\u0644 \u06A9\u06CC\u0648\u06BA \u0644\u06AF\u0627\u061F", language), language)), /* @__PURE__ */ React.createElement("textarea", { value: practiceReflectionDraft, onChange: (event) => setPracticeReflectionDraft(event.target.value), placeholder: language === "ur" ? "\u0627\u067E\u0646\u06CC \u0645\u062E\u062A\u0635\u0631 \u0646\u0648\u0679 \u0644\u06A9\u06BE\u06CC\u06BA..." : "Write a short note..." }), /* @__PURE__ */ React.createElement("div", { className: "practice-reflection-actions" }, /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: savePracticeReflection, disabled: !practiceReflectionDraft.trim() }, renderLocalizedTextNode(joinLocalizedText("Save Reflection", "\u0646\u0648\u0679 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null) : null), activeReviewCard && !reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(joinLocalizedText(`Card ${reviewIdx + 1} of ${reviewQueue.length}`, `\u06A9\u0627\u0631\u0688 ${reviewIdx + 1} \u0627\u0632 ${reviewQueue.length}`, language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activeReviewCard.sectionLabel)), /* @__PURE__ */ React.createElement("h2", { style: { marginBottom: 10 } }, activeReviewCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "study-word-stats", style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(getReviewDueLabel(activeReviewCard, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${ui.lapses}: ${activeReviewCard.lapses || 0}`, `${ui.lapses}: ${activeReviewCard.lapses || 0}`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews * 100) : 0}%`, `${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews * 100) : 0}%`, language), language))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "grade-btn active", style: { minWidth: 130 }, onClick: () => window.HomeSchoolUtils.speakText(activeReviewCard.prompt, "en") }, "\u{1F50A} ", renderLocalizedTextNode(joinLocalizedText("Speak", "\u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "grade-btn", style: { minWidth: 170 }, onClick: () => setReviewReveal((value) => !value) }, renderLocalizedTextNode(ui.revealAnswer, language))), /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: activeReviewCard }), reviewReveal && /* @__PURE__ */ React.createElement("div", { style: reviewRevealCardStyle }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.answer, lang: "ur", fullWidth: true, buttonStyle: reviewAnswerButtonStyle, textStyle: { fontSize: 24 } }), activeReviewCard.meaning && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, activeReviewCard.meaning), (activeReviewCard.opposite || activeReviewCard.oppositeUr) && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, renderLocalizedTextNode(joinLocalizedText(`Opposite: ${activeReviewCard.opposite} / ${activeReviewCard.oppositeUr}`, `\u0645\u062A\u0636\u0627\u062F: ${activeReviewCard.oppositeUr} / ${activeReviewCard.opposite}`, language), language)), activeReviewCard.example && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 6, color: "var(--text-secondary)", fontWeight: 700 } }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.reviewExample, language), ":")), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.example, lang: "en", fullWidth: true, buttonStyle: reviewExampleButtonStyle, textStyle: { fontSize: 16, lineHeight: 1.6 } }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => handleReviewResponse("again") }, renderLocalizedTextNode(ui.reviewAgain, language)), /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: { borderColor: "#22C55E55", color: "#22C55E" }, onClick: () => handleReviewResponse("good") }, renderLocalizedTextNode(ui.reviewGood, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => handleReviewResponse("easy") }, renderLocalizedTextNode(ui.reviewEasy, language)))), reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "quiz-result" }, /* @__PURE__ */ React.createElement("div", { className: "result-emoji" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("h2", null, renderLocalizedTextNode(ui.reviewComplete, language)), /* @__PURE__ */ React.createElement("p", { className: "score-text" }, renderLocalizedTextNode(ui.reviewEarnedXp, language)), /* @__PURE__ */ React.createElement("div", { className: "score-big high" }, "+", reviewSessionXp), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
       resetReviewSession();
       setTab("home");
     } }, renderLocalizedTextNode(ui.home, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
@@ -5454,13 +7661,16 @@ ${error.message || error}`);
         currentVersion,
         updateAvailable,
         storageLabel,
-        versionInfo: (_f = (_e = versionManagerRef.current) == null ? void 0 : _e.getVersionInfo) == null ? void 0 : _f.call(_e),
+        versionInfo: (_q = (_p = versionManagerRef.current) == null ? void 0 : _p.getVersionInfo) == null ? void 0 : _q.call(_p),
         onCheckUpdates: handleCheckUpdates,
         onRefreshData: handleRefreshData,
         onExportProgress: handleExportProgress,
         onImportProgress: handleImportProgress,
         onResetProgress: handleResetProgress,
         onFullReset: handleFullReset,
+        onResetReviewSystem: handleResetReviewSystem,
+        onClearStudyCollections: handleClearStudyCollections,
+        onResetPlanningData: handleResetPlanningData,
         onToggleTTS: () => setTtsEnabled((value) => !value),
         ttsEnabled,
         ttsRate,
@@ -5473,6 +7683,14 @@ ${error.message || error}`);
         onLanguageChange: setLanguage,
         themeMode,
         onThemeModeChange: setThemeMode,
+        fontSizeMode,
+        onFontSizeModeChange: setFontSizeMode,
+        reducedMotion,
+        onReducedMotionChange: setReducedMotion,
+        highContrast,
+        onHighContrastChange: setHighContrast,
+        keyboardShortcutsEnabled,
+        onKeyboardShortcutsEnabledChange: setKeyboardShortcutsEnabled,
         navPosition,
         onNavPositionChange: setNavPosition,
         navAutoHide,
@@ -5483,6 +7701,8 @@ ${error.message || error}`);
         onTransitionModeChange: setTransitionMode,
         dailyReviewCap,
         onDailyReviewCapChange: setDailyReviewCap,
+        reviewSrsSettings,
+        onReviewSrsSettingChange: handleReviewSrsSettingChange,
         daySectionSettings,
         onDaySectionChange: handleDaySectionChange,
         studyGoals,
@@ -5491,6 +7711,12 @@ ${error.message || error}`);
         onFocusTimerSettingChange: handleFocusTimerSettingChange,
         reminderSettings,
         onReminderSettingsChange: handleReminderSettingsChange,
+        backupReminderSettings,
+        onBackupReminderSettingChange: handleBackupReminderSettingChange,
+        backupStatusLabel: backupReminderSummary.label,
+        classScheduleSettings,
+        onClassScheduleChange: handleClassScheduleChange,
+        timeTrackingData,
         onRequestNotificationPermission: handleRequestNotificationPermission,
         notificationPermission: typeof Notification === "undefined" ? "unsupported" : Notification.permission,
         notificationHistory,
@@ -5509,7 +7735,7 @@ ${error.message || error}`);
         aiBrowserBlocked: !aiBrowserCapability.ok,
         labels: ui
       }
-    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null)));
+    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, importReviewState ? /* @__PURE__ */ React.createElement("div", { className: "import-review-overlay", onClick: () => setImportReviewState(null) }, /* @__PURE__ */ React.createElement("div", { className: "import-review-dialog", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head", style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)), /* @__PURE__ */ React.createElement("p", null, importReviewState.fileName))), importReviewState.newerVersion ? /* @__PURE__ */ React.createElement("div", { className: "import-review-warning" }, renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)) : null, /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)), /* @__PURE__ */ React.createElement("div", { className: "import-review-grid" }, (importReviewState.summaryRows || []).map((row) => /* @__PURE__ */ React.createElement("div", { key: row.label, className: "import-review-cell" }, /* @__PURE__ */ React.createElement("span", null, row.label), /* @__PURE__ */ React.createElement("strong", null, row.value))))), /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)), (importReviewState.conflicts || []).length > 0 ? /* @__PURE__ */ React.createElement("ul", { className: "import-review-list" }, importReviewState.conflicts.map((key) => /* @__PURE__ */ React.createElement("li", { key }, renderLocalizedTextNode(importConflictLabels[key] || key, language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "\u06A9\u0648\u0626\u06CC \u0628\u0691\u0627 \u0641\u0631\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 \u0639\u0627\u0645 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u0627 \u062F\u06CC\u0646\u0627 \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "import-review-actions" }, /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setImportReviewState(null) }, renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn", onClick: () => executeImportReview(importReviewState, "merge") }, renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)), /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: () => executeImportReview(importReviewState, "replace") }, renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language))))) : null)));
   }
   window.HomeSchoolAppModule = { HomeschoolApp };
   if (!window.__HOME_SCHOOL_BOOTSTRAPPED__ && document.getElementById("root")) {

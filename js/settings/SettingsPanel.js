@@ -244,6 +244,9 @@
       onImportProgress,
       onResetProgress,
       onFullReset,
+      onResetReviewSystem,
+      onClearStudyCollections,
+      onResetPlanningData,
       onToggleTTS,
       ttsEnabled,
       ttsRate,
@@ -256,6 +259,14 @@
       onLanguageChange,
       themeMode,
       onThemeModeChange,
+      fontSizeMode,
+      onFontSizeModeChange,
+      reducedMotion,
+      onReducedMotionChange,
+      highContrast,
+      onHighContrastChange,
+      keyboardShortcutsEnabled,
+      onKeyboardShortcutsEnabledChange,
       navPosition,
       onNavPositionChange,
       navAutoHide,
@@ -266,6 +277,8 @@
       onTransitionModeChange,
       dailyReviewCap,
       onDailyReviewCapChange,
+      reviewSrsSettings,
+      onReviewSrsSettingChange,
       daySectionSettings,
       onDaySectionChange,
       studyGoals,
@@ -274,6 +287,12 @@
       onFocusTimerSettingChange,
       reminderSettings,
       onReminderSettingsChange,
+      backupReminderSettings,
+      onBackupReminderSettingChange,
+      backupStatusLabel,
+      classScheduleSettings,
+      onClassScheduleChange,
+      timeTrackingData,
       onRequestNotificationPermission,
       notificationPermission,
       notificationHistory,
@@ -304,6 +323,9 @@
       color: "var(--text-primary)",
       fontFamily: language === "ur" || language === "bilingual" ? "var(--font-ur)" : "var(--font)",
     };
+    const classDurationMinutes = Math.max(0, ((Number((classScheduleSettings?.endTime || "13:00").split(":")[0]) || 0) * 60 + (Number((classScheduleSettings?.endTime || "13:00").split(":")[1]) || 0)) - ((Number((classScheduleSettings?.startTime || "08:00").split(":")[0]) || 0) * 60 + (Number((classScheduleSettings?.startTime || "08:00").split(":")[1]) || 0)));
+    const latestTimeEntry = Array.isArray(timeTrackingData?.history) ? timeTrackingData.history[0] : null;
+    const latestMinutesSpent = Math.round((latestTimeEntry?.msSpent || 0) / 60000);
 
     const children = [];
 
@@ -367,6 +389,37 @@
         React.createElement("span", { className: "si-value" }, renderStorageValue(storageLabel, language))),
       actionButton(renderLocalizedText(ui.resetProgress || "Reset Progress", language), onResetProgress, "#EF4444", { key: "reset" }),
       actionButton(renderLocalizedText(ui.fullReset || "Full Reset", language), onFullReset, "#DC2626", { key: "full-reset", marginBottom: 0 }),
+    ];
+
+    const adminChildren = [
+      React.createElement("div", { key: "backup-controls", style: { padding: "12px 14px", borderRadius: 12, background: "var(--bg-elevated)", border: "1px solid var(--border)", marginBottom: 10 } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.backupReminderEnabled || "Backup Reminder", language)),
+          React.createElement("select", {
+            value: backupReminderSettings?.enabled ? "on" : "off",
+            onChange: (event) => onBackupReminderSettingChange("enabled", event.target.value === "on"),
+            style: selectStyle,
+          },
+            React.createElement("option", { value: "on" }, renderLocalizedText(ui.enabled || "On", language)),
+            React.createElement("option", { value: "off" }, renderLocalizedText(ui.disabled || "Off", language)))),
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.backupReminderInterval || "Backup Interval", language)),
+          React.createElement("select", {
+            value: String(backupReminderSettings?.intervalDays || 14),
+            onChange: (event) => onBackupReminderSettingChange("intervalDays", Number(event.target.value) || 14),
+            style: selectStyle,
+          },
+            React.createElement("option", { value: "7" }, renderLocalizedText(ui.backupInterval7 || "Every 7 days", language)),
+            React.createElement("option", { value: "14" }, renderLocalizedText(ui.backupInterval14 || "Every 14 days", language)),
+            React.createElement("option", { value: "30" }, renderLocalizedText(ui.backupInterval30 || "Every 30 days", language)))),
+        React.createElement("div", { style: { color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.5 } }, renderLocalizedText(backupStatusLabel || (ui.backupReminderOff || "Backup reminders are off."), language)),
+        React.createElement("div", { style: { marginTop: 6, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 } }, renderLocalizedText(ui.backupReminderNotice || "Export a fresh backup to keep your latest progress safe.", language))),
+      React.createElement("div", { key: "selective-reset", style: { padding: "12px 14px", borderRadius: 12, background: "var(--bg-elevated)", border: "1px solid var(--border)" } },
+        React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 6 } }, renderLocalizedText(ui.selectiveReset || "Selective Reset", language)),
+        React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5, marginBottom: 10 } }, renderLocalizedText(ui.selectiveResetHelp || "Clear only the part you want without wiping the whole app.", language)),
+        actionButton(renderLocalizedText(ui.resetReviewSystem || "Reset Review System", language), onResetReviewSystem, "#EF4444", { key: "reset-review" }),
+        actionButton(renderLocalizedText(ui.clearStudyCollections || "Clear Favorites, Notes & Lists", language), onClearStudyCollections, "#F97316", { key: "clear-study" }),
+        actionButton(renderLocalizedText(ui.resetPlanningData || "Reset Time & Reminders", language), onResetPlanningData, "#8B5CF6", { key: "reset-planning", marginBottom: 0 })),
     ];
 
     const experienceChildren = [
@@ -511,6 +564,59 @@
             React.createElement("option", { value: "bilingual" }, renderLocalizedText(ui.languageBilingual || "Bilingual", "bilingual"))))),
     ];
 
+    const accessibilityChildren = [
+      React.createElement("div", { key: "font-size", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.fontSize || (language === "ur" ? "فونٹ سائز" : "Font Size"), language)),
+          React.createElement("select", { value: fontSizeMode || "normal", onChange: (event) => onFontSizeModeChange(event.target.value), style: selectStyle },
+            React.createElement("option", { value: "small" }, renderLocalizedText(language === "ur" ? "چھوٹا" : "Small", language)),
+            React.createElement("option", { value: "normal" }, renderLocalizedText(language === "ur" ? "معمول" : "Normal", language)),
+            React.createElement("option", { value: "large" }, renderLocalizedText(language === "ur" ? "بڑا" : "Large", language)),
+            React.createElement("option", { value: "xlarge" }, renderLocalizedText(language === "ur" ? "بہت بڑا" : "Extra Large", language))))),
+      React.createElement("div", { key: "reduced-motion", className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.reducedMotion || (language === "ur" ? "کم حرکت" : "Reduced Motion"), language)),
+        React.createElement("button", { className: "grade-btn active", style: { width: 120 }, onClick: () => onReducedMotionChange(!reducedMotion) }, renderLocalizedText(reducedMotion ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled"), language))),
+      React.createElement("div", { key: "high-contrast", className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.highContrast || (language === "ur" ? "ہائی کنٹراسٹ" : "High Contrast"), language)),
+        React.createElement("button", { className: "grade-btn active", style: { width: 120 }, onClick: () => onHighContrastChange(!highContrast) }, renderLocalizedText(highContrast ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled"), language))),
+      React.createElement("div", { key: "keyboard-shortcuts", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.keyboardShortcuts || (language === "ur" ? "کی بورڈ شارٹ کٹس" : "Keyboard Shortcuts"), language)),
+          React.createElement("button", { className: "grade-btn active", style: { width: 120 }, onClick: () => onKeyboardShortcutsEnabledChange(!keyboardShortcutsEnabled) }, renderLocalizedText(keyboardShortcutsEnabled ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled"), language))),
+        React.createElement("div", { style: { marginTop: 8, color: "var(--text-muted)", fontSize: 12 } }, renderLocalizedText(ui.keyboardShortcutHelp || (language === "ur" ? "Alt + 1 تا 7 سے اہم ٹیبز کھولیں۔" : "Use Alt + 1 through 7 to jump to the main tabs."), language))),
+    ];
+
+    const srsChildren = [
+      React.createElement("div", {
+        key: "srs-help",
+        style: {
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border)",
+          marginBottom: 10,
+          color: "var(--text-secondary)",
+          fontSize: 12,
+          lineHeight: 1.5,
+        },
+      }, renderLocalizedText(ui.srsSettingsHelp || (language === "ur" ? "یہ کنٹرول آئندہ ریویوز کے وقفے، مہارت کی حد، اور دوبارہ سیکھنے کے وقت کو بدلتے ہیں۔" : "These controls change future review spacing, mastery threshold, and relearn timing."), language)),
+      React.createElement("div", { key: "srs-threshold", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.masteryThreshold || (language === "ur" ? "مہارت حد" : "Mastery Threshold"), language)),
+          React.createElement("span", { className: "si-value" }, `Box ${reviewSrsSettings?.masteryThreshold || 5}`)),
+        React.createElement("input", { type: "range", min: 3, max: 7, step: 1, value: reviewSrsSettings?.masteryThreshold || 5, onChange: (event) => onReviewSrsSettingChange("masteryThreshold", event.target.value), style: { width: "100%" } })),
+      React.createElement("div", { key: "srs-scale", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.intervalScale || (language === "ur" ? "وقفہ پیمانہ" : "Interval Scale"), language)),
+          React.createElement("span", { className: "si-value" }, `${Number(reviewSrsSettings?.intervalScale || 1).toFixed(2)}x`)),
+        React.createElement("input", { type: "range", min: 0.5, max: 2.5, step: 0.05, value: Number(reviewSrsSettings?.intervalScale || 1), onChange: (event) => onReviewSrsSettingChange("intervalScale", event.target.value), style: { width: "100%" } })),
+      React.createElement("div", { key: "srs-again", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.relearnDelay || (language === "ur" ? "دوبارہ سیکھنے کی تاخیر" : "Again Delay"), language)),
+          React.createElement("span", { className: "si-value" }, renderLocalizedText(language === "ur" ? `${reviewSrsSettings?.againMinutes || 10} منٹ` : `${reviewSrsSettings?.againMinutes || 10} min`, language))),
+        React.createElement("input", { type: "range", min: 5, max: 180, step: 5, value: reviewSrsSettings?.againMinutes || 10, onChange: (event) => onReviewSrsSettingChange("againMinutes", event.target.value), style: { width: "100%" } })),
+    ];
+
     const planningChildren = [
       React.createElement("div", { key: "goal-daily", className: "settings-item", style: { display: "block" } },
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
@@ -552,6 +658,71 @@
         React.createElement("div", { style: { marginTop: 8, color: "var(--text-muted)", fontSize: 12 } }, renderLocalizedText(ui.reminderHelp || "Reminders work when the app is open, installed, or notifications are permitted by the browser.", language))),
     ];
 
+    const timeChildren = [
+      React.createElement("div", {
+        key: "time-help",
+        style: {
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border)",
+          marginBottom: 10,
+          color: "var(--text-secondary)",
+          fontSize: 12,
+          lineHeight: 1.5,
+        },
+      }, renderLocalizedText(ui.timeTrackingHelp || (language === "ur" ? "کلاس وقت، مطالعہ وقت، تاخیر، اور انعامات کو ایک ہی شیڈول سے ٹریک کریں۔" : "Track class timing, study minutes, lateness, and incentives from one schedule."), language)),
+      React.createElement("div", { key: "class-track-enabled", className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.classTracking || "Class Tracking", language)),
+        React.createElement("button", { className: "grade-btn active", style: { width: 120 }, onClick: () => onClassScheduleChange("enabled", !classScheduleSettings?.enabled) }, renderLocalizedText(classScheduleSettings?.enabled ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled"), language))),
+      React.createElement("div", { key: "class-start", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.classStartTime || "Class Start Time", language)),
+          React.createElement("input", {
+            type: "time",
+            value: classScheduleSettings?.startTime || "08:00",
+            onChange: (event) => onClassScheduleChange("startTime", event.target.value || "08:00"),
+            style: {
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid var(--border)",
+              background: "var(--bg-elevated)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font)",
+            },
+          }))),
+      React.createElement("div", { key: "class-end", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.classEndTime || "Class End Time", language)),
+          React.createElement("input", {
+            type: "time",
+            value: classScheduleSettings?.endTime || "13:00",
+            onChange: (event) => onClassScheduleChange("endTime", event.target.value || "13:00"),
+            style: {
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid var(--border)",
+              background: "var(--bg-elevated)",
+              color: "var(--text-primary)",
+              fontFamily: "var(--font)",
+            },
+          }))),
+      React.createElement("div", { key: "class-summary", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 10 } },
+          React.createElement("div", { className: "notification-history-item", style: { marginBottom: 0 } },
+            React.createElement("div", { className: "notification-history-top" },
+              React.createElement("strong", null, renderLocalizedText(ui.classDuration || "Class Duration", language))),
+            React.createElement("p", null, renderLocalizedText(language === "ur" ? `${classDurationMinutes} منٹ` : `${classDurationMinutes} min`, language))),
+          React.createElement("div", { className: "notification-history-item", style: { marginBottom: 0 } },
+            React.createElement("div", { className: "notification-history-top" },
+              React.createElement("strong", null, renderLocalizedText(ui.timeSpentToday || "Time Spent Today", language))),
+            React.createElement("p", null, renderLocalizedText(language === "ur" ? `${latestMinutesSpent} منٹ` : `${latestMinutesSpent} min`, language))),
+          React.createElement("div", { className: "notification-history-item", style: { marginBottom: 0 } },
+            React.createElement("div", { className: "notification-history-top" },
+              React.createElement("strong", null, renderLocalizedText(ui.totalLateTime || "Total Late Time", language))),
+            React.createElement("p", null, renderLocalizedText(language === "ur" ? `${timeTrackingData?.totalLateMinutes || 0} منٹ` : `${timeTrackingData?.totalLateMinutes || 0} min`, language))))),
+    ];
+
     const notificationChildren = [
       React.createElement("div", {
         key: "notice-help",
@@ -584,8 +755,12 @@
     children.push(React.createElement(DisclosureSection, { key: "settings-ai", title: ui.aiConnections || "AI Tutor Connections", language, transitionMode }, ...aiChildren));
     children.push(React.createElement(DisclosureSection, { key: "settings-pacing", title: ui.dayBasedSections || "Day-Based English Sections", language, transitionMode }, ...pacingChildren));
     children.push(React.createElement(DisclosureSection, { key: "settings-preferences", title: ui.preferences || "Preferences", language, transitionMode }, ...preferencesChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-accessibility", title: ui.accessibility || "Accessibility", language, transitionMode }, ...accessibilityChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-srs", title: ui.reviewSrs || "Review SRS", language, transitionMode }, ...srsChildren));
     children.push(React.createElement(DisclosureSection, { key: "settings-planning", title: ui.studyPlanning || "Study Planning", language, transitionMode }, ...planningChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-time", title: ui.timeManagement || "Time Management", language, transitionMode }, ...timeChildren));
     children.push(React.createElement(DisclosureSection, { key: "settings-notices", title: ui.notificationHistory || "Notification History", language, transitionMode }, ...notificationChildren));
+    children.push(React.createElement(DisclosureSection, { key: "settings-admin", title: ui.adminTools || "Admin Tools", language, transitionMode }, ...adminChildren));
 
     return React.createElement("div", null, ...children);
   }

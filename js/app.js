@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef, useCallback, useContext } = React;
+const { useState, useEffect, useRef, useCallback, useContext, useMemo } = React;
 
 const {
   SUBJECTS,
@@ -59,6 +59,36 @@ const UI_TEXT = {
     storageUsage: "Storage",
     resetProgress: "Reset Progress",
     fullReset: "Full Reset",
+    adminTools: "Admin Tools",
+    selectiveReset: "Selective Reset",
+    selectiveResetHelp: "Clear only the part you want without wiping the whole app.",
+    resetReviewSystem: "Reset Review System",
+    clearStudyCollections: "Clear Favorites, Notes & Lists",
+    resetPlanningData: "Reset Time & Reminders",
+    backupReminders: "Backup Reminders",
+    backupReminderEnabled: "Backup Reminder",
+    backupReminderInterval: "Backup Interval",
+    backupReminderStatus: "Backup Status",
+    backupReminderOff: "Backup reminders are off.",
+    backupNeverExported: "No backup exported yet.",
+    backupDueNow: "A fresh backup is recommended now.",
+    backupRecent: "Last backup",
+    backupInterval7: "Every 7 days",
+    backupInterval14: "Every 14 days",
+    backupInterval30: "Every 30 days",
+    backupReminderNotice: "Export a fresh backup to keep your latest progress safe.",
+    importReviewTitle: "Review Backup Import",
+    importReviewSummary: "Backup Summary",
+    importReviewConflicts: "Possible Conflicts",
+    importConflictProfile: "Profile and grade differ from your current app.",
+    importConflictProgress: "Quiz or review progress overlaps with your current records.",
+    importConflictPreferences: "Preferences and pacing settings differ from your current setup.",
+    importConflictTime: "Time tracking or reminders differ from your current schedule.",
+    importConflictCollections: "Favorites, notes, or custom lists overlap with current data.",
+    importModeReplace: "Replace Current Data",
+    importModeMerge: "Merge with Current Data",
+    importCancel: "Cancel Import",
+    importVersionWarning: "This backup was created from a newer curriculum version.",
     dayBasedSections: "Day-Based English Sections",
     dayBasedDescription: "Adjust how many words appear in each study day for every English subsection independently.",
     perDay: "Items per day",
@@ -96,6 +126,44 @@ const UI_TEXT = {
     languageUrdu: "اردو",
     languageBilingual: "Bilingual",
     studyPlanning: "Study Planning",
+    timeManagement: "Time Management",
+    classSchedule: "Class Schedule",
+    classStartTime: "Class Start Time",
+    classEndTime: "Class End Time",
+    classDuration: "Class Duration",
+    classTracking: "Class Tracking",
+    timeSpentToday: "Time Spent Today",
+    totalStudyTime: "Total Study Time",
+    latenessToday: "Lateness Today",
+    totalLateTime: "Total Late Time",
+    punctualityStreak: "Punctuality Streak",
+    classSessionsMet: "Class Sessions Met",
+    timeTrackingHelp: "Track class timing, study minutes, lateness, and punctuality rewards from the same schedule.",
+    classTrackingDisabled: "Class-time tracking is off right now.",
+    classStatusOnTime: "On time",
+    classStatusLate: "Late",
+    classStatusNotStarted: "Not started yet",
+    classStatusOff: "Schedule off",
+    wordOfDay: "Word of the Day",
+    contentDiscovery: "Content Discovery",
+    contentSearch: "Search lessons, topics, prompts...",
+    discoveryType: "Discovery Type",
+    discoveryDifficulty: "Difficulty",
+    discoveryAllSubjects: "All Subjects",
+    discoveryAllTypes: "All Types",
+    discoveryAllLevels: "All Levels",
+    discoveryTypeLesson: "Lesson",
+    discoveryTypeInteractive: "Interactive",
+    discoveryTypePractice: "Practice",
+    discoveryDifficultyStarter: "Starter",
+    discoveryDifficultyCore: "Core",
+    discoveryDifficultyStretch: "Stretch",
+    noDiscoveryResults: "No content matches these filters yet.",
+    openLesson: "Open Lesson",
+    recentTimeHistory: "Recent Class Days",
+    lateBy: "Late by",
+    onTimeReward: "On-time bonus",
+    classTimeReward: "Class-time bonus",
     dailyGoal: "Daily Review Goal",
     weeklyGoal: "Weekly Word Goal",
     focusTimer: "Focus Timer",
@@ -241,6 +309,36 @@ const UI_TEXT = {
     storageUsage: "اسٹوریج",
     resetProgress: "پیش رفت ری سیٹ کریں",
     fullReset: "مکمل ری سیٹ",
+    adminTools: "ایڈمن ٹولز",
+    selectiveReset: "منتخب ری سیٹ",
+    selectiveResetHelp: "صرف وہ حصہ صاف کریں جو آپ چاہتے ہیں، پوری ایپ نہیں۔",
+    resetReviewSystem: "ریویو سسٹم ری سیٹ کریں",
+    clearStudyCollections: "پسندیدہ، نوٹس اور فہرستیں صاف کریں",
+    resetPlanningData: "وقت اور یاد دہانیاں ری سیٹ کریں",
+    backupReminders: "بیک اپ یاد دہانیاں",
+    backupReminderEnabled: "بیک اپ یاد دہانی",
+    backupReminderInterval: "بیک اپ وقفہ",
+    backupReminderStatus: "بیک اپ حالت",
+    backupReminderOff: "بیک اپ یاد دہانیاں بند ہیں۔",
+    backupNeverExported: "ابھی تک کوئی بیک اپ ایکسپورٹ نہیں ہوا۔",
+    backupDueNow: "اب نیا بیک اپ لینا بہتر ہے۔",
+    backupRecent: "آخری بیک اپ",
+    backupInterval7: "ہر 7 دن بعد",
+    backupInterval14: "ہر 14 دن بعد",
+    backupInterval30: "ہر 30 دن بعد",
+    backupReminderNotice: "اپنی تازہ پیش رفت محفوظ رکھنے کے لیے نیا بیک اپ ایکسپورٹ کریں۔",
+    importReviewTitle: "بیک اپ امپورٹ جائزہ",
+    importReviewSummary: "بیک اپ خلاصہ",
+    importReviewConflicts: "ممکنہ فرق",
+    importConflictProfile: "پروفائل یا جماعت موجودہ ایپ سے مختلف ہے۔",
+    importConflictProgress: "امتحان یا ریویو پیش رفت موجودہ ریکارڈ سے ٹکرا سکتی ہے۔",
+    importConflictPreferences: "ترجیحات اور رفتار کی سیٹنگز موجودہ سیٹ اپ سے مختلف ہیں۔",
+    importConflictTime: "وقت ٹریکنگ یا یاد دہانیاں موجودہ شیڈول سے مختلف ہیں۔",
+    importConflictCollections: "پسندیدہ، نوٹس یا فہرستیں موجودہ ڈیٹا سے ملتی جلتی ہیں۔",
+    importModeReplace: "موجودہ ڈیٹا بدل دیں",
+    importModeMerge: "موجودہ ڈیٹا میں ملا دیں",
+    importCancel: "امپورٹ منسوخ کریں",
+    importVersionWarning: "یہ بیک اپ نئے نصاب ورژن سے بنایا گیا تھا۔",
     dayBasedSections: "دن کے حساب سے انگریزی سیکشنز",
     dayBasedDescription: "ہر انگریزی ذیلی سیکشن کے لیے الگ الگ طے کریں کہ ایک دن میں کتنے الفاظ یا جملے دکھائے جائیں۔",
     perDay: "فی دن",
@@ -278,6 +376,44 @@ const UI_TEXT = {
     languageUrdu: "اردو",
     languageBilingual: "Bilingual",
     studyPlanning: "مطالعہ منصوبہ بندی",
+    timeManagement: "وقت کا نظم",
+    classSchedule: "کلاس شیڈول",
+    classStartTime: "کلاس شروع ہونے کا وقت",
+    classEndTime: "کلاس ختم ہونے کا وقت",
+    classDuration: "کلاس دورانیہ",
+    classTracking: "کلاس ٹریکنگ",
+    timeSpentToday: "آج کا مطالعہ وقت",
+    totalStudyTime: "کل مطالعہ وقت",
+    latenessToday: "آج کی تاخیر",
+    totalLateTime: "کل تاخیر",
+    punctualityStreak: "وقت پر آنے کا تسلسل",
+    classSessionsMet: "مکمل کلاس سیشنز",
+    timeTrackingHelp: "اسی شیڈول سے کلاس کا وقت، مطالعہ منٹس، تاخیر، اور وقت کی پابندی کے انعامات ٹریک کریں۔",
+    classTrackingDisabled: "کلاس ٹریکنگ اس وقت بند ہے۔",
+    classStatusOnTime: "وقت پر",
+    classStatusLate: "تاخیر سے",
+    classStatusNotStarted: "ابھی شروع نہیں ہوئی",
+    classStatusOff: "شیڈول بند",
+    wordOfDay: "آج کا لفظ",
+    contentDiscovery: "مواد کی تلاش",
+    contentSearch: "اسباق، موضوعات، سوالات تلاش کریں...",
+    discoveryType: "قسم",
+    discoveryDifficulty: "درجہ",
+    discoveryAllSubjects: "تمام مضامین",
+    discoveryAllTypes: "تمام اقسام",
+    discoveryAllLevels: "تمام درجات",
+    discoveryTypeLesson: "سبق",
+    discoveryTypeInteractive: "انٹرایکٹو",
+    discoveryTypePractice: "مشق",
+    discoveryDifficultyStarter: "آسان",
+    discoveryDifficultyCore: "درمیانی",
+    discoveryDifficultyStretch: "اعلیٰ",
+    noDiscoveryResults: "ابھی ان فلٹرز کے مطابق کوئی مواد نہیں ملا۔",
+    openLesson: "سبق کھولیں",
+    recentTimeHistory: "حالیہ کلاس دن",
+    lateBy: "اتنی تاخیر",
+    onTimeReward: "وقت پر آنے کا بونس",
+    classTimeReward: "کلاس وقت بونس",
     dailyGoal: "روزانہ ریویو ہدف",
     weeklyGoal: "ہفتہ وار لفظی ہدف",
     focusTimer: "فوکس ٹائمر",
@@ -3793,9 +3929,9 @@ function isLightUiTheme() {
   return window.HomeSchoolPrefs?.resolvedTheme === "light";
 }
 
-function buildReviewStatsFallback(stats = {}, library = [], analytics = null) {
+function buildReviewStatsFallback(stats = {}, library = [], analytics = null, options = {}) {
   const now = Date.now();
-  const masteryThreshold = 5;
+  const masteryThreshold = Math.max(3, Number(options.masteryThreshold) || 5);
   const todayKey = window.HomeSchoolUtils.getDayKey(now);
   const safeLibrary = Array.isArray(library) ? library : [];
   const safeAnalytics = analytics || {};
@@ -3840,8 +3976,646 @@ function shuffleArray(items = []) {
   return next;
 }
 
-function buildPracticeDeck(library = [], limit = 12) {
-  return shuffleArray((library || []).filter((card) => card?.prompt && (card?.answer || card?.meaning))).slice(0, Math.max(4, Number(limit) || 12));
+function getPracticeFlashFront(card) {
+  return normalizeText(card?.practiceFront || card?.prompt);
+}
+
+function getPracticeFlashBack(card) {
+  return normalizeText(card?.practiceBack || card?.answer || card?.meaning);
+}
+
+function getPracticeTypingClue(card) {
+  return normalizeText(card?.typingClue || card?.answer || card?.meaning);
+}
+
+function getPracticeTypingTarget(card) {
+  return normalizeText(card?.typingTarget || card?.prompt);
+}
+
+function getPracticeMatchPrompt(card) {
+  return normalizeText(card?.matchPrompt || card?.prompt);
+}
+
+function getPracticeMatchAnswer(card) {
+  return normalizeText(card?.matchAnswer || card?.answer || card?.meaning);
+}
+
+function getPracticeTextStyle(text, baseStyle = {}, fallbackLang = "en") {
+  const content = String(text || "").trim();
+  const isUrdu = content ? containsUrduText(content) : fallbackLang === "ur";
+  return {
+    fontFamily: isUrdu ? "var(--font-ur)" : "var(--font)",
+    direction: isUrdu ? "rtl" : "ltr",
+    textAlign: isUrdu ? "right" : "left",
+    lineHeight: isUrdu ? 1.9 : 1.6,
+    ...baseStyle,
+  };
+}
+
+function getPracticeModeInstructions(mode, language = "en") {
+  const entries = {
+    flashcards: joinLocalizedText(
+      "Read the prompt, think of the answer first, then press Reveal Answer. Use Next Card to continue.",
+      "پہلے سوال پڑھیں اور جواب خود سوچیں، پھر جواب دکھائیں دبائیں۔ آگے بڑھنے کے لیے اگلا کارڈ دبائیں۔",
+      language,
+    ),
+    dictation: joinLocalizedText(
+      "Press Play Again, listen carefully, type exactly what you hear, then press Check.",
+      "دوبارہ سنیں دبائیں، غور سے سنیں، جو سنیں وہی لکھیں، پھر جانچیں دبائیں۔",
+      language,
+    ),
+    typing: joinLocalizedText(
+      "Read the clue, type the exact matching answer, then press Check.",
+      "اشارہ پڑھیں، اس کا درست جواب ٹائپ کریں، پھر جانچیں دبائیں۔",
+      language,
+    ),
+    fillblanks: joinLocalizedText(
+      "Read the sentence and choose the word that completes the blank correctly.",
+      "جملہ پڑھیں اور وہ لفظ منتخب کریں جو خالی جگہ کو درست طور پر مکمل کرے۔",
+      language,
+    ),
+    sentencebuilder: joinLocalizedText(
+      "Tap the word pieces in the correct order. Tap a chosen piece again to remove it.",
+      "لفظوں کے ٹکڑے درست ترتیب سے منتخب کریں۔ کسی منتخب ٹکڑے کو ہٹانے کے لیے اسے دوبارہ دبائیں۔",
+      language,
+    ),
+    timedchallenge: joinLocalizedText(
+      "Choose the correct answer before the timer ends. If you are unsure, skip and keep moving.",
+      "وقت ختم ہونے سے پہلے درست جواب منتخب کریں۔ اگر یقین نہ ہو تو چھوڑ دیں اور آگے بڑھیں۔",
+      language,
+    ),
+    timedquiz: joinLocalizedText(
+      "Read the question, choose the best answer before the timer ends, then move to the next one.",
+      "سوال پڑھیں، وقت ختم ہونے سے پہلے بہترین جواب منتخب کریں، پھر اگلے سوال پر جائیں۔",
+      language,
+    ),
+    timedtruefalse: joinLocalizedText(
+      "Read the statement and decide whether it is true or false before time runs out.",
+      "سوال پڑھیں اور وقت ختم ہونے سے پہلے فیصلہ کریں کہ یہ درست ہے یا غلط۔",
+      language,
+    ),
+    timedmatching: joinLocalizedText(
+      "Match as many pairs as you can before the set timer ends.",
+      "سیٹ کا وقت ختم ہونے سے پہلے جتنی ہو سکیں درست جوڑیاں ملا دیں۔",
+      language,
+    ),
+    interleaved: joinLocalizedText(
+      "This mode mixes card types. Stay alert and answer each card using the instruction shown above it.",
+      "اس موڈ میں مختلف اقسام کی مشقیں ملتی ہیں۔ اوپر دی گئی ہدایت دیکھتے رہیں اور اسی کے مطابق جواب دیں۔",
+      language,
+    ),
+    matching: joinLocalizedText(
+      "Select one item from the left, then tap its matching pair on the right. Finish the round, then go next.",
+      "بائیں طرف سے ایک چیز منتخب کریں، پھر دائیں طرف اس کی درست جوڑی پر دبائیں۔ راؤنڈ مکمل ہونے پر اگلا دبائیں۔",
+      language,
+    ),
+  };
+  return entries[mode] || joinLocalizedText("Complete the activity step by step.", "سرگرمی کو مرحلہ وار مکمل کریں۔", language);
+}
+
+function getPracticeQuestionPrompt(card, mode, language = "en") {
+  const subject = String(card?.subject || "english");
+  const stem = normalizeText(card?.practiceQuestionStem);
+  const flashFront = getPracticeFlashFront(card);
+  const flashBack = getPracticeFlashBack(card);
+  const typingTarget = getPracticeTypingTarget(card);
+  const sectionLabel = normalizeAnswerText(card?.sectionLabel || "");
+  const isSentence = /\s/.test(flashFront || typingTarget);
+  const stemKey = normalizeAnswerText(stem);
+
+  const generic = {
+    flashcards: language === "ur" ? "نیچے دی گئی چیز کا درست جواب بتائیں۔" : "Give the correct answer for the item below.",
+    typing: language === "ur" ? "نیچے دیے گئے اشارے کا درست جواب ٹائپ کریں۔" : "Type the correct answer for the clue below.",
+    matching: language === "ur" ? "بائیں طرف دی گئی چیزوں کو دائیں طرف ان کی درست جوڑی سے ملائیں۔" : "Match each item on the left with its correct answer on the right.",
+    dictation: language === "ur"
+      ? (card?.practiceLang === "ur" ? "جو اردو متن آپ سنیں، اسے ٹھیک اسی طرح لکھیں۔" : "جو انگریزی لفظ یا جملہ آپ سنیں، اسے ٹھیک اسی طرح لکھیں۔")
+      : (card?.practiceLang === "ur" ? "Type the Urdu text exactly as you hear it." : "Type the English word or sentence exactly as you hear it."),
+    fillblanks: language === "ur" ? "نیچے دیے گئے جملے کی خالی جگہ درست لفظ سے پُر کریں۔" : "Fill the blank in the sentence below with the correct word.",
+    sentencebuilder: language === "ur" ? "نیچے دیے گئے لفظوں کو درست ترتیب میں رکھ کر جملہ بنائیں۔" : "Arrange the words below in the correct order to build the sentence.",
+    timedchallenge: language === "ur" ? "نیچے دیے گئے سوال کا درست جواب جلدی منتخب کریں۔" : "Choose the correct answer for the question below before time runs out.",
+  };
+
+  if (mode === "matching" || mode === "timedmatching" || mode === "dictation" || mode === "fillblanks" || mode === "sentencebuilder" || mode === "timedchallenge" || mode === "timedquiz" || mode === "timedtruefalse") {
+    if (stem && language !== "ur") return stem;
+    if (stemKey.includes("solid liquid gas") || stemKey.includes("state of matter")) return language === "ur" ? "نیچے دی گئی چیز کی حالتِ مادہ بتائیں۔" : "Tell the state of matter of the item below.";
+    if (stemKey.includes("fraction") && stemKey.includes("decimal")) return language === "ur" ? "نیچے دی گئی اعشاری صورت کو کسر یا کسر کو اعشاری صورت میں لکھیں۔" : "Convert the item below between fraction and decimal form.";
+    return generic[mode];
+  }
+
+  if (stem) {
+    if (language !== "ur") return stem;
+    if (stemKey.includes("translate") && stemKey.includes("urdu")) return isSentence ? "نیچے دیے گئے جملے کا اردو ترجمہ کریں۔" : "نیچے دیے گئے لفظ کا اردو ترجمہ کریں۔";
+    if (stemKey.includes("translate") && stemKey.includes("english")) return isSentence ? "نیچے دیے گئے جملے کا انگریزی ترجمہ کریں۔" : "نیچے دیے گئے لفظ کا انگریزی ترجمہ کریں۔";
+    if (stemKey.includes("opposite")) return isSentence ? "نیچے دیے گئے جملے یا لفظ کا متضاد بتائیں۔" : "نیچے دیے گئے لفظ کا متضاد بتائیں۔";
+    if (stemKey.includes("solid liquid gas") || stemKey.includes("state of matter")) return "نیچے دی گئی چیز کی حالتِ مادہ بتائیں۔";
+    if (stemKey.includes("true or false")) return "نیچے دیے گئے سوال کے درست یا غلط ہونے کا جواب دیں۔";
+    if (stemKey.includes("place value")) return "نیچے دیے گئے ہندسے یا عدد کی جگہ کی قدر بتائیں۔";
+    if (stemKey.includes("expanded form")) return "نیچے دیے گئے عدد کو بسیط شکل میں لکھیں۔";
+    if (stemKey.includes("standard form")) return "نیچے دی گئی بسیط شکل کو عددی صورت میں لکھیں۔";
+    if (stemKey.includes("fraction") && stemKey.includes("decimal")) return "نیچے دی گئی اعشاری صورت کو کسر یا کسر کو اعشاری صورت میں لکھیں۔";
+    if (stemKey.includes("classify")) return "نیچے دی گئی چیز کی درست درجہ بندی کریں۔";
+    return generic[mode];
+  }
+
+  if (subject === "english") {
+    if (card?.opposite || card?.oppositeUr || sectionLabel.includes("opposite")) return language === "ur" ? "نیچے دیے گئے لفظ کا متضاد بتائیں۔" : "Tell the opposite of the word below.";
+    if (containsUrduText(flashFront) && !containsUrduText(flashBack)) return language === "ur" ? (isSentence ? "نیچے دیے گئے جملے کا انگریزی ترجمہ کریں۔" : "نیچے دیے گئے لفظ کا انگریزی ترجمہ کریں۔") : (isSentence ? "Translate this sentence into English." : "Translate this word into English.");
+    if (!containsUrduText(flashFront) && containsUrduText(flashBack)) return language === "ur" ? (isSentence ? "نیچے دیے گئے جملے کا اردو ترجمہ کریں۔" : "نیچے دیے گئے لفظ کا اردو ترجمہ کریں۔") : (isSentence ? "Translate this sentence into Urdu." : "Translate this word into Urdu.");
+  }
+
+  if (subject === "science") return language === "ur" ? "نیچے دیے گئے سائنسی سوال کا درست جواب دیں۔" : "Give the correct science answer for the item below.";
+  if (subject === "math") return language === "ur" ? "نیچے دیے گئے ریاضی کے سوال کو حل کریں۔" : "Solve the math question below.";
+  if (subject === "urdu") return language === "ur" ? "نیچے دیے گئے اردو سوال کا درست جواب دیں۔" : "Give the correct Urdu answer for the item below.";
+  if (subject === "social") return language === "ur" ? "نیچے دیے گئے سوال کا درست سماجی علوم جواب دیں۔" : "Give the correct social studies answer for the item below.";
+  return generic[mode];
+}
+
+function isUsefulPracticePair(card, mode = "flashcards") {
+  const prompt = mode === "matching" ? getPracticeMatchPrompt(card) : mode === "typing" ? getPracticeTypingTarget(card) : getPracticeFlashFront(card);
+  const answer = mode === "matching" ? getPracticeMatchAnswer(card) : mode === "typing" ? getPracticeTypingClue(card) : getPracticeFlashBack(card);
+  const sectionLabel = normalizeText(card?.sectionLabel);
+  if (!prompt || !answer) return false;
+  if (card?.supplementalType === "example") return false;
+  if (normalizeAnswerText(prompt) === normalizeAnswerText(answer)) return false;
+  if (sectionLabel && normalizeAnswerText(answer) === normalizeAnswerText(sectionLabel) && !card?.blankSentence && !card?.example) return false;
+  return true;
+}
+
+function buildPracticeDeck(library = [], limit = 12, mode = "flashcards") {
+  return shuffleArray((library || []).filter((card) => isUsefulPracticePair(card, mode))).slice(0, Math.max(4, Number(limit) || 12));
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildPromptPattern(prompt) {
+  const normalizedPrompt = String(prompt || "").trim();
+  if (!normalizedPrompt) return null;
+  const escaped = escapeRegExp(normalizedPrompt);
+  const canUseWordBoundary = /^[\p{L}\p{N}_'-]+$/u.test(normalizedPrompt);
+  return new RegExp(canUseWordBoundary ? `\\b${escaped}\\b` : escaped, "i");
+}
+
+function buildFillBlankSentence(card) {
+  if (card?.quizQuestion || card?.supplementalType === "quiz") return "";
+  const prompt = String(card?.prompt || "").trim();
+  const example = String(card?.example || "").trim();
+  if (prompt && example) {
+    const pattern = buildPromptPattern(prompt);
+    if (pattern?.test(example)) {
+      return example.replace(pattern, "_____");
+    }
+  }
+  const clue = String(card?.answer || "").trim();
+  if (clue && !/[?؟]$/.test(clue) && clue.split(/\s+/).length <= 8) return `${clue} _____`;
+  const meaning = String(card?.meaning || "").trim();
+  if (meaning) return `${meaning} _____.`;
+  return "";
+}
+
+function buildFillBlankDeck(library = [], limit = 10, optionCount = 4) {
+  const pool = shuffleArray((library || []).filter((card) => card?.prompt && (card?.answer || card?.meaning)));
+  const selected = [];
+
+  pool.forEach((card) => {
+    if (selected.length >= Math.max(4, Number(limit) || 10)) return;
+    const blankSentence = buildFillBlankSentence(card);
+    if (!blankSentence || !blankSentence.includes("_____")) return;
+
+    const distractorPool = shuffleArray(
+      pool
+        .filter((entry) => entry?.id !== card.id && entry?.prompt && normalizeAnswerText(entry.prompt) !== normalizeAnswerText(card.prompt))
+        .map((entry) => entry.prompt),
+    );
+    const uniqueOptions = [];
+    const seen = new Set();
+    [...distractorPool.slice(0, Math.max(1, optionCount - 1)), card.prompt].forEach((entry) => {
+      const key = normalizeAnswerText(entry);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      uniqueOptions.push(entry);
+    });
+    if (uniqueOptions.length < 2) return;
+
+    selected.push({
+      ...card,
+      blankSentence,
+      blankOptions: shuffleArray(uniqueOptions).slice(0, Math.max(2, optionCount)),
+    });
+  });
+
+  return selected;
+}
+
+function stripPracticeMarkers(value) {
+  return String(value || "")
+    .replace(/\[([^\]]+)\]/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildExerciseBlankSentence(part) {
+  const cleaned = stripPracticeMarkers(part);
+  if (!cleaned) return "";
+  if (/_+/.test(cleaned)) return cleaned.replace(/_+/g, "_____");
+  if (/\?/.test(cleaned)) return cleaned.replace(/\?+/g, "_____");
+  if (/→\s*$/.test(cleaned)) return cleaned.replace(/→\s*$/, "→ _____");
+  if (/:\s*$/.test(cleaned)) return `${cleaned} _____`;
+  if (/[.؟?!]$/.test(cleaned)) return `${cleaned} _____`;
+  return `${cleaned} → _____`;
+}
+
+function getLessonKeyValue(lesson) {
+  return lesson?.key || lesson?.id || lesson?.title || null;
+}
+
+function estimatePracticeDifficulty(prompt, answer, stem = "", type = "exercise") {
+  const promptWords = String(prompt || "").trim().split(/\s+/).filter(Boolean).length;
+  const answerWords = String(answer || "").trim().split(/\s+/).filter(Boolean).length;
+  const stemText = normalizeAnswerText(stem);
+  const totalWords = promptWords + answerWords;
+  if (type === "pair") return totalWords <= 4 ? "beginner" : totalWords <= 10 ? "medium" : "advanced";
+  if (type === "quiz") return totalWords <= 8 && stemText.length <= 60 ? "medium" : "advanced";
+  if (type === "review") return totalWords <= 4 ? "beginner" : totalWords <= 10 ? "medium" : "advanced";
+  if (stemText.includes("true or false") || stemText.includes("classify") || stemText.includes("place value") || stemText.includes("expanded form") || stemText.includes("standard form")) {
+    return totalWords <= 8 ? "beginner" : "medium";
+  }
+  if (totalWords <= 5) return "beginner";
+  if (totalWords <= 12) return "medium";
+  return "advanced";
+}
+
+function getPracticeItemLessonKey(card) {
+  return card?.lessonKey || card?.source?.lessonKey || null;
+}
+
+function getPracticeItemDifficulty(card) {
+  if (["beginner", "medium", "advanced"].includes(card?.practiceDifficulty)) return card.practiceDifficulty;
+  return estimatePracticeDifficulty(
+    card?.practiceFront || card?.prompt,
+    card?.practiceBack || card?.answer || card?.meaning,
+    card?.practiceQuestionStem || "",
+    card?.supplementalType || "review",
+  );
+}
+
+function getPracticeDifficultyMarks(difficulty = "beginner") {
+  if (difficulty === "advanced") return 30;
+  if (difficulty === "medium") return 20;
+  return 10;
+}
+
+function parseTrueFalseAnswer(answer) {
+  const text = String(answer || "").trim();
+  if (!text) return null;
+  if (/^true\b/i.test(text)) return { correct: true, explanation: text.replace(/^true\b\s*[-—–:]*\s*/i, "").trim() };
+  if (/^false\b/i.test(text)) return { correct: false, explanation: text.replace(/^false\b\s*[-—–:]*\s*/i, "").trim() };
+  return null;
+}
+
+function buildDerivedTrueFalseFromPracticeCard(card, alternateAnswer = "", index = 0) {
+  const question = stripPracticeMarkers(card?.trueFalseStatement || card?.quizQuestion || card?.practiceQuestionStem || card?.answer || "");
+  const correctAnswer = stripPracticeMarkers(card?.practiceBack || card?.answer || card?.prompt || "");
+  const wrongOption = stripPracticeMarkers(alternateAnswer);
+  if (!question || !correctAnswer) return null;
+  const useCorrect = index % 2 === 0 || !wrongOption;
+  const proposedAnswer = useCorrect ? correctAnswer : wrongOption;
+  if (!proposedAnswer || normalizeAnswerText(proposedAnswer) === normalizeAnswerText(question)) return null;
+  const statement = containsUrduText(question) || containsUrduText(proposedAnswer)
+    ? `سوال: ${question} درست جواب "${proposedAnswer}" ہے۔`
+    : `For the question "${question}", the correct answer is "${proposedAnswer}".`;
+  return {
+    ...card,
+    trueFalseStatement: statement,
+    trueFalseAnswer: useCorrect,
+    trueFalseExplanation: correctAnswer,
+  };
+}
+
+function buildGradePracticeItems(dataLoader, grade) {
+  const items = [];
+  const subjects = Array.isArray(dataLoader?.SUBJECTS) ? dataLoader.SUBJECTS : [];
+
+  subjects.forEach((subject) => {
+    const lessons = dataLoader?.getLessons?.(subject.id, grade) || [];
+    const defaultLang = subject.id === "urdu" ? "ur" : "en";
+    lessons.forEach((lesson, lessonIndex) => {
+      const lessonKey = lesson?.key || lesson?.id || lesson?.title || null;
+      const sharedQuizItems = Array.isArray(dataLoader?.getQuiz?.(subject.id, grade, lessonKey))
+        ? dataLoader.getQuiz(subject.id, grade, lessonKey)
+        : [];
+      const sections = lesson?.hasMathSub ? (lesson.subs || []).map((sub) => ({
+        title: sub?.t || lesson.title,
+        examples: sub?.examples || [],
+        sentencePairs: sub?.sentencePairs || [],
+        exercises: sub?.exerciseGroups
+          ? sub.exerciseGroups.flatMap((group) => group?.exercises || [])
+          : (sub?.exercises || []),
+        quiz: sub?.quiz || [],
+        wordProblems: sub?.wordProblems || [],
+      })) : [{
+        title: lesson?.title || "",
+        examples: lesson?.examples || [],
+        sentencePairs: lesson?.sentencePairs || [],
+        exercises: lesson?.exerciseGroups
+          ? lesson.exerciseGroups.flatMap((group) => group?.exercises || [])
+          : (lesson?.exercises || []),
+        quiz: lesson?.quiz || [],
+        wordProblems: lesson?.wordProblems || [],
+      }];
+
+      sections.forEach((section, sectionIndex) => {
+        const sectionTitle = section?.title || lesson?.title || subject.name || "Practice";
+        const sectionLabel = `${subject.name} • ${sectionTitle}`;
+        const examples = Array.isArray(section?.examples) ? section.examples : [];
+        examples.forEach((example, exampleIndex) => {
+          const text = stripPracticeMarkers(example);
+          if (!text || text.length < 3) return;
+          items.push({
+            id: `supplemental_example_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, exampleIndex, text].join("|"))}`,
+            subject: subject.id,
+            section: lesson.key || lesson.title || subject.id,
+            sectionLabel,
+            prompt: text,
+            answer: "",
+            meaning: "",
+            supplementalType: "example",
+            lessonKey: lesson.key || lesson.title || null,
+            lessonIndex,
+            practiceDifficulty: estimatePracticeDifficulty(text, "", sectionTitle, "example"),
+            practiceLang: containsUrduText(text) ? "ur" : defaultLang,
+            source: {
+              subject: subject.id,
+              lessonKey: lesson.key || null,
+              lessonTitle: lesson.title || null,
+              subTitle: sectionTitle,
+              subIndex: lesson?.hasMathSub ? sectionIndex : null,
+              subTab: "examples",
+            },
+          });
+        });
+
+        const sentencePairs = Array.isArray(section?.sentencePairs) ? section.sentencePairs : [];
+        sentencePairs.forEach((pair, pairIndex) => {
+          const left = stripPracticeMarkers(pair?.en || pair?.left);
+          const right = stripPracticeMarkers(pair?.ur || pair?.right);
+          if (!left || !right) return;
+          items.push({
+            id: `supplemental_pair_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, pairIndex, left, right].join("|"))}`,
+            subject: subject.id,
+            section: lesson.key || lesson.title || subject.id,
+            sectionLabel,
+            prompt: left,
+            answer: right,
+            meaning: "",
+            supplementalType: "pair",
+            lessonKey: lesson.key || lesson.title || null,
+            lessonIndex,
+            practiceQuestionStem: subject.id === "english"
+              ? (containsUrduText(left) ? "Translate this into English:" : "Translate this into Urdu:")
+              : subject.id === "urdu"
+                ? "ترجمہ کریں:"
+                : "Match the correct meaning:",
+            practiceFront: left,
+            practiceBack: right,
+            typingClue: right,
+            typingTarget: left,
+            matchPrompt: left,
+            matchAnswer: right,
+            practiceDifficulty: estimatePracticeDifficulty(left, right, sectionTitle, "pair"),
+            practiceLang: containsUrduText(left) ? "ur" : defaultLang,
+            source: {
+              subject: subject.id,
+              lessonKey: lesson.key || null,
+              lessonTitle: lesson.title || null,
+              subTitle: sectionTitle,
+              subIndex: lesson?.hasMathSub ? sectionIndex : null,
+              subTab: "examples",
+            },
+          });
+        });
+
+        const exercises = Array.isArray(section?.exercises) ? section.exercises : [];
+        exercises.forEach((exercise, exerciseIndex) => {
+          const parts = Array.isArray(exercise?.parts) ? exercise.parts : [];
+          const answers = Array.isArray(exercise?.ans) ? exercise.ans : [];
+          parts.forEach((part, partIndex) => {
+            const clue = stripPracticeMarkers(part);
+            const solution = stripPracticeMarkers(answers[partIndex]);
+            if (!clue || !solution) return;
+            items.push({
+              id: `supplemental_exercise_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, exerciseIndex, partIndex, clue, solution].join("|"))}`,
+              subject: subject.id,
+              section: lesson.key || lesson.title || subject.id,
+              sectionLabel,
+              prompt: solution,
+              answer: clue,
+              meaning: "",
+              supplementalType: "exercise",
+              lessonKey: lesson.key || lesson.title || null,
+              lessonIndex,
+              practiceQuestionStem: exercise?.q || "",
+              practiceFront: clue,
+              practiceBack: solution,
+              typingClue: clue,
+              typingTarget: solution,
+              matchPrompt: clue,
+              matchAnswer: solution,
+              practiceDifficulty: estimatePracticeDifficulty(clue, solution, exercise?.q || "", "exercise"),
+              trueFalseStatement: /^true\s+or\s+false/i.test(String(exercise?.q || "").trim()) ? clue : "",
+              trueFalseAnswer: parseTrueFalseAnswer(solution)?.correct,
+              trueFalseExplanation: parseTrueFalseAnswer(solution)?.explanation || "",
+              blankSentence: buildExerciseBlankSentence(part),
+              practiceLang: containsUrduText(solution) ? "ur" : defaultLang,
+              source: {
+                subject: subject.id,
+                lessonKey: lesson.key || null,
+                lessonTitle: lesson.title || null,
+                subTitle: sectionTitle,
+                subIndex: lesson?.hasMathSub ? sectionIndex : null,
+                subTab: "exercises",
+              },
+            });
+          });
+        });
+
+        const wordProblems = Array.isArray(section?.wordProblems) ? section.wordProblems : [];
+        wordProblems.forEach((problem, problemIndex) => {
+          const problemQuestion = stripPracticeMarkers(typeof problem === "string" ? problem : (problem?.q || ""));
+          const problemAnswer = stripPracticeMarkers(problem?.a || "");
+          if (!problemQuestion || !problemAnswer) return;
+          items.push({
+            id: `supplemental_wordproblem_${simpleHash([subject.id, lessonKey || "", sectionIndex, problemIndex, problemQuestion, problemAnswer].join("|"))}`,
+            subject: subject.id,
+            section: lessonKey || subject.id,
+            sectionLabel,
+            prompt: problemAnswer,
+            answer: problemQuestion,
+            meaning: "",
+            supplementalType: "wordproblem",
+            lessonKey,
+            lessonIndex,
+            practiceQuestionStem: problemQuestion,
+            practiceFront: problemQuestion,
+            practiceBack: problemAnswer,
+            typingClue: problemQuestion,
+            typingTarget: problemAnswer,
+            matchPrompt: problemQuestion,
+            matchAnswer: problemAnswer,
+            practiceDifficulty: estimatePracticeDifficulty(problemQuestion, problemAnswer, sectionTitle, "quiz"),
+            blankSentence: "",
+            practiceLang: containsUrduText(problemAnswer) ? "ur" : defaultLang,
+            source: {
+              subject: subject.id,
+              lessonKey: lesson?.key || lessonKey,
+              lessonTitle: lesson.title || null,
+              subTitle: sectionTitle,
+              subIndex: lesson?.hasMathSub ? sectionIndex : null,
+              subTab: "wordProblems",
+            },
+          });
+        });
+
+        const sectionQuizItems = Array.isArray(section?.quiz) ? section.quiz : [];
+        const quizItems = sectionIndex === 0 ? [...sectionQuizItems, ...sharedQuizItems] : sectionQuizItems;
+        quizItems.forEach((question, quizIndex) => {
+          const clue = stripPracticeMarkers(question?.q);
+          const options = Array.isArray(question?.a) ? question.a : [];
+          const correctAnswer = stripPracticeMarkers(options[Number(question?.c)] || "");
+          if (!clue || !correctAnswer) return;
+          items.push({
+            id: `supplemental_quiz_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, quizIndex, clue, correctAnswer].join("|"))}`,
+            subject: subject.id,
+            section: lessonKey || subject.id,
+            sectionLabel,
+            prompt: correctAnswer,
+            answer: clue,
+            meaning: "",
+            supplementalType: "quiz",
+            lessonKey,
+            lessonIndex,
+            practiceQuestionStem: question?.q || "",
+            practiceFront: clue,
+            practiceBack: correctAnswer,
+            typingClue: clue,
+            typingTarget: correctAnswer,
+            matchPrompt: clue,
+            matchAnswer: correctAnswer,
+            practiceDifficulty: estimatePracticeDifficulty(clue, correctAnswer, question?.q || "", "quiz"),
+            quizQuestion: clue,
+            quizOptions: options.map((option) => stripPracticeMarkers(option)),
+            quizCorrectIndex: Number(question?.c),
+            practiceLang: containsUrduText(correctAnswer) ? "ur" : defaultLang,
+            source: {
+              subject: subject.id,
+              lessonKey: lesson?.key || lessonKey,
+              lessonTitle: lesson.title || null,
+              subTitle: sectionTitle,
+              subIndex: lesson?.hasMathSub ? sectionIndex : null,
+              subTab: "quiz",
+            },
+          });
+        });
+      });
+    });
+  });
+
+  return items;
+}
+
+function buildTimedQuizDeck(library = [], limit = 12) {
+  return shuffleArray((library || []).filter((card) => card?.quizQuestion && Array.isArray(card?.quizOptions) && card.quizOptions.length >= 2)).slice(0, Math.max(4, Number(limit) || 12));
+}
+
+function buildTrueFalseDeck(library = [], limit = 12) {
+  const pool = shuffleArray(library || []);
+  const selected = [];
+  pool.forEach((card, index) => {
+    if (selected.length >= Math.max(4, Number(limit) || 12)) return;
+    if (card?.trueFalseStatement && typeof card?.trueFalseAnswer === "boolean") {
+      selected.push(card);
+      return;
+    }
+    const alternateAnswer = pool.find((entry) => (
+      entry?.id !== card?.id
+      && (entry?.subject || "english") === (card?.subject || "english")
+      && getPracticeItemLessonKey(entry) === getPracticeItemLessonKey(card)
+      && normalizeAnswerText(entry?.practiceBack || entry?.answer || entry?.prompt || "") !== normalizeAnswerText(card?.practiceBack || card?.answer || card?.prompt || "")
+    ))?.practiceBack
+      || pool.find((entry) => normalizeAnswerText(entry?.practiceBack || entry?.answer || entry?.prompt || "") !== normalizeAnswerText(card?.practiceBack || card?.answer || card?.prompt || ""))?.practiceBack
+      || "";
+    if ((card?.quizQuestion && Array.isArray(card?.quizOptions) && card.quizOptions.length >= 2) || card?.practiceQuestionStem || card?.supplementalType === "exercise" || card?.supplementalType === "wordproblem") {
+      const derived = buildDerivedTrueFalseFromPracticeCard(card, alternateAnswer, index);
+      if (derived) selected.push(derived);
+    }
+  });
+  return selected;
+}
+
+function buildInterleavedDeck(library = [], limit = 12) {
+  const deck = [];
+  const flashcards = buildPracticeDeck(library, limit, "flashcards").map((card) => ({ ...card, interleavedType: "flashcards" }));
+  const typing = buildPracticeDeck(library, limit, "typing").map((card) => ({ ...card, interleavedType: "typing" }));
+  const blanks = buildFillBlankDeck(library, limit, 4).map((card) => ({ ...card, interleavedType: "fillblanks" }));
+  const queues = [flashcards, typing, blanks].filter((items) => items.length);
+  let guard = 0;
+  while (deck.length < Math.max(4, Number(limit) || 12) && queues.some((items) => items.length) && guard < 120) {
+    queues.forEach((items) => {
+      if (items.length && deck.length < Math.max(4, Number(limit) || 12)) deck.push(items.shift());
+    });
+    guard += 1;
+  }
+  return deck;
+}
+
+function getPracticeFeedbackText(card, mode, correct, language = "en") {
+  if (!card) return "";
+  const answer = getPracticeFlashBack(card) || card?.prompt || "";
+  const clue = card?.quizQuestion || card?.trueFalseStatement || getPracticeFlashFront(card);
+  if (correct) {
+    return joinLocalizedText(`Nice work. ${answer}`, `بہت خوب۔ ${answer}`, language);
+  }
+  if (mode === "timedtruefalse") {
+    const verdict = card?.trueFalseAnswer ? joinLocalizedText("True", "درست", language) : joinLocalizedText("False", "غلط", language);
+    const explanation = card?.trueFalseExplanation ? ` ${card.trueFalseExplanation}` : "";
+    return joinLocalizedText(`Correct answer: ${verdict}.${explanation}`, `درست جواب: ${verdict}.${explanation}`, language);
+  }
+  if (mode === "timedquiz" || mode === "timedchallenge") {
+    return joinLocalizedText(`Correct answer: ${answer}`, `درست جواب: ${answer}`, language);
+  }
+  if (mode === "matching" || mode === "timedmatching") {
+    return joinLocalizedText(`Correct match: ${clue} → ${answer}`, `درست جوڑ: ${clue} ← ${answer}`, language);
+  }
+  return joinLocalizedText(`Correct answer: ${answer}`, `درست جواب: ${answer}`, language);
+}
+
+function getPracticeMasteryMeta(card, lessonProgress = null, language = "en") {
+  if (card?.mastered) return { tone: "mastered", label: joinLocalizedText("Mastered", "مہارت حاصل", language) };
+  if ((Number(card?.box) || 0) >= 3) return { tone: "strong", label: joinLocalizedText("Strong", "مضبوط", language) };
+  if ((Number(card?.totalReviews) || 0) > 0 || (lessonProgress?.attempted || 0) > 0) return { tone: "learning", label: joinLocalizedText("Learning", "سیکھ رہے ہیں", language) };
+  return { tone: "starting", label: joinLocalizedText("Starting", "ابتدائی مرحلہ", language) };
+}
+
+function getPracticeModeMeta(mode, language = "en") {
+  const entries = {
+    flashcards: joinLocalizedText("Flashcards", "فلیش کارڈز", language),
+    typing: joinLocalizedText("Type the Answer", "جواب ٹائپ کریں", language),
+    matching: joinLocalizedText("Match Pairs", "جوڑیاں ملائیں", language),
+    dictation: joinLocalizedText("Dictation", "املا", language),
+    fillblanks: joinLocalizedText("Fill in Blanks", "خالی جگہ پُر کریں", language),
+    sentencebuilder: joinLocalizedText("Sentence Builder", "جملہ بنائیں", language),
+    timedchallenge: joinLocalizedText("Timed Challenge", "وقت والی چیلنج", language),
+    timedquiz: joinLocalizedText("Timed Quiz", "وقت والی کوئز", language),
+    timedtruefalse: joinLocalizedText("Timed True / False", "وقت والی درست / غلط", language),
+    timedmatching: joinLocalizedText("Timed Match Pairs", "وقت والی جوڑیاں", language),
+    interleaved: joinLocalizedText("Interleaved Practice", "ملی جلی پریکٹس", language),
+  };
+  return entries[mode] || joinLocalizedText("Practice", "پریکٹس", language);
+}
+
+function getPracticeRoundNumber(mode, index) {
+  return mode === "matching" ? Math.floor(index / 4) + 1 : index + 1;
 }
 
 function normalizeAnswerText(value) {
@@ -3856,6 +4630,7 @@ function isTypingAnswerCorrect(card, input) {
   const guess = normalizeAnswerText(input);
   if (!guess) return false;
   const acceptable = [
+    card?.typingTarget,
     card?.prompt,
     card?.answer,
     card?.meaning,
@@ -3874,11 +4649,75 @@ function buildMatchRound(cards = [], count = 4) {
     prompts: selected,
     answers: shuffleArray(selected.map((card) => ({
       id: card.id,
-      text: card.answer || card.meaning || "",
+      text: getPracticeMatchAnswer(card),
     }))),
     matches: {},
     completed: false,
   };
+}
+
+function splitSentenceTokens(sentence) {
+  return String(sentence || "")
+    .match(/[\p{L}\p{N}'’-]+|[.,!?;:()]/gu) || [];
+}
+
+function normalizeSentenceSpacing(sentence) {
+  return String(sentence || "")
+    .replace(/\s+([.,!?;:])/g, "$1")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildSentenceBuilderDeck(library = [], limit = 10) {
+  const pool = shuffleArray(library || []);
+  const selected = [];
+  const seen = new Set();
+  pool.forEach((card) => {
+    if (selected.length >= Math.max(4, Number(limit) || 10)) return;
+    const baseSentence = normalizeSentenceSpacing(card?.example || card?.blankSentence?.replace?.("_____", card?.prompt || "") || card?.prompt || "");
+    const tokens = splitSentenceTokens(baseSentence);
+    if (tokens.length < 3 || tokens.length > 10) return;
+    const normalizedSentence = normalizeAnswerText(baseSentence);
+    if (!normalizedSentence || seen.has(normalizedSentence)) return;
+    seen.add(normalizedSentence);
+    selected.push({
+      ...card,
+      sentenceBuilderSentence: baseSentence,
+      sentenceBuilderTokens: tokens,
+      sentenceBuilderOptions: shuffleArray(tokens.map((token, index) => ({ id: `${card.id || "sentence"}_${index}_${token}`, text: token }))),
+      sentenceBuilderLang: containsUrduText(baseSentence) ? "ur" : (card?.practiceLang || "en"),
+    });
+  });
+  return selected;
+}
+
+function buildTimedChallengeDeck(library = [], limit = 12, optionCount = 4) {
+  const pool = shuffleArray((library || []).filter((card) => card?.prompt && (card?.answer || card?.meaning)));
+  const selected = [];
+  pool.forEach((card) => {
+    if (selected.length >= Math.max(6, Number(limit) || 12)) return;
+    const distractorPool = shuffleArray(
+      pool
+        .filter((entry) => entry?.id !== card.id && entry?.prompt && normalizeAnswerText(entry.prompt) !== normalizeAnswerText(card.prompt))
+        .map((entry) => entry.prompt),
+    );
+    const uniqueOptions = [];
+    const seen = new Set();
+    [...distractorPool.slice(0, Math.max(1, optionCount - 1)), card.prompt].forEach((entry) => {
+      const key = normalizeAnswerText(entry);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      uniqueOptions.push(entry);
+    });
+    if (uniqueOptions.length < 2) return;
+    selected.push({
+      ...card,
+      timedOptions: shuffleArray(uniqueOptions).slice(0, Math.max(2, optionCount)),
+    });
+  });
+  return selected;
 }
 
 function formatClockTime(totalSeconds) {
@@ -3888,9 +4727,296 @@ function formatClockTime(totalSeconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatProjectedDateLabel(value, language = "en") {
+  if (!value) return joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language);
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function getForgettingCurveLabel(bucketId, language = "en") {
+  const labels = {
+    same_day: joinLocalizedText("Same day", "اسی دن", language),
+    day_1: joinLocalizedText("1 day", "1 دن", language),
+    days_2_3: joinLocalizedText("2-3 days", "2-3 دن", language),
+    days_4_7: joinLocalizedText("4-7 days", "4-7 دن", language),
+    days_8_14: joinLocalizedText("8-14 days", "8-14 دن", language),
+    days_15_plus: joinLocalizedText("15+ days", "15+ دن", language),
+  };
+  return labels[bucketId] || joinLocalizedText("Review gap", "ریویو وقفہ", language);
+}
+
 function getReminderStatus(reminderSettings = {}, language = "en") {
   if (!reminderSettings?.enabled) return joinLocalizedText("Off", "آف", language);
   return joinLocalizedText(`Daily at ${reminderSettings.time || "18:00"}`, `روزانہ ${reminderSettings.time || "18:00"} پر`, language);
+}
+
+function getLocalDayKey(value = Date.now()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return date.toDateString();
+}
+
+function parseClockMinutes(value) {
+  const [hours, minutes] = String(value || "00:00").split(":").map((part) => Number(part) || 0);
+  return (hours * 60) + minutes;
+}
+
+function getScheduleDurationMinutes(settings = {}) {
+  const start = parseClockMinutes(settings.startTime || "08:00");
+  const end = parseClockMinutes(settings.endTime || "13:00");
+  return Math.max(0, end - start);
+}
+
+function normalizeTimeTrackingData(value = {}) {
+  return {
+    history: Array.isArray(value.history) ? value.history.slice(0, 45).map((entry) => ({
+      dayKey: entry?.dayKey || getLocalDayKey(),
+      firstSeenAt: Number(entry?.firstSeenAt) || null,
+      lastSeenAt: Number(entry?.lastSeenAt) || null,
+      msSpent: Math.max(0, Number(entry?.msSpent) || 0),
+      latenessMinutes: Math.max(0, Number(entry?.latenessMinutes) || 0),
+      status: entry?.status || "tracked",
+      onTimeAwarded: Boolean(entry?.onTimeAwarded),
+      durationAwarded: Boolean(entry?.durationAwarded),
+      classStartTime: entry?.classStartTime || null,
+      classEndTime: entry?.classEndTime || null,
+    })) : [],
+    totalMsSpent: Math.max(0, Number(value.totalMsSpent) || 0),
+    totalLateMinutes: Math.max(0, Number(value.totalLateMinutes) || 0),
+    onTimeStarts: Math.max(0, Number(value.onTimeStarts) || 0),
+    lateStarts: Math.max(0, Number(value.lateStarts) || 0),
+    punctualityStreak: Math.max(0, Number(value.punctualityStreak) || 0),
+    bestPunctualityStreak: Math.max(0, Number(value.bestPunctualityStreak) || 0),
+    classSessionsMet: Math.max(0, Number(value.classSessionsMet) || 0),
+  };
+}
+
+function mergeTimeTrackingData(currentValue = {}, incomingValue = {}) {
+  const current = normalizeTimeTrackingData(currentValue);
+  const incoming = normalizeTimeTrackingData(incomingValue);
+  const historyMap = new Map();
+  [...current.history, ...incoming.history].forEach((entry) => {
+    if (!entry?.dayKey) return;
+    const previous = historyMap.get(entry.dayKey);
+    if (!previous || (entry.lastSeenAt || 0) >= (previous.lastSeenAt || 0)) {
+      historyMap.set(entry.dayKey, entry);
+    }
+  });
+  return {
+    history: Array.from(historyMap.values()).sort((a, b) => (b.firstSeenAt || 0) - (a.firstSeenAt || 0)).slice(0, 45),
+    totalMsSpent: Math.max(current.totalMsSpent, incoming.totalMsSpent),
+    totalLateMinutes: Math.max(current.totalLateMinutes, incoming.totalLateMinutes),
+    onTimeStarts: Math.max(current.onTimeStarts, incoming.onTimeStarts),
+    lateStarts: Math.max(current.lateStarts, incoming.lateStarts),
+    punctualityStreak: Math.max(current.punctualityStreak, incoming.punctualityStreak),
+    bestPunctualityStreak: Math.max(current.bestPunctualityStreak, incoming.bestPunctualityStreak),
+    classSessionsMet: Math.max(current.classSessionsMet, incoming.classSessionsMet),
+  };
+}
+
+function normalizeBackupReminderSettings(value = {}) {
+  return {
+    enabled: typeof value.enabled === "boolean" ? value.enabled : true,
+    intervalDays: [7, 14, 30].includes(Number(value.intervalDays)) ? Number(value.intervalDays) : 14,
+    lastBackupAt: Number(value.lastBackupAt) || null,
+    lastPromptDay: value.lastPromptDay || null,
+  };
+}
+
+function getBackupReminderSummary(settings = {}, hasProgress = false, language = "en", now = Date.now()) {
+  const safe = normalizeBackupReminderSettings(settings);
+  if (!safe.enabled) return { due: false, label: UI_TEXT[language === "ur" ? "ur" : "en"].backupReminderOff };
+  if (!safe.lastBackupAt) {
+    const label = UI_TEXT[language === "ur" ? "ur" : "en"].backupNeverExported;
+    return { due: hasProgress, label };
+  }
+  const daysSince = Math.max(0, Math.floor((now - safe.lastBackupAt) / 86400000));
+  if (daysSince >= safe.intervalDays) {
+    return { due: true, label: UI_TEXT[language === "ur" ? "ur" : "en"].backupDueNow, daysSince };
+  }
+  const prefix = UI_TEXT[language === "ur" ? "ur" : "en"].backupRecent;
+  return {
+    due: false,
+    daysSince,
+    label: language === "ur"
+      ? `${prefix}: ${daysSince} دن پہلے`
+      : `${prefix}: ${daysSince} day${daysSince === 1 ? "" : "s"} ago`,
+  };
+}
+
+function summarizeImportPreview(parsed = {}, currentSnapshot = {}, currentVersion = 0) {
+  const appState = parsed?.appState || {};
+  const dbProgress = parsed?.dbProgress || {};
+  const summaryRows = [
+    { label: "App State", value: appState ? "Included" : "Missing" },
+    { label: "Quiz Records", value: Object.keys(appState.completedQuizzes || {}).length || dbProgress.progress?.length || 0 },
+    { label: "Review Cards", value: dbProgress.reviewCards?.length || 0 },
+    { label: "Review History", value: dbProgress.reviewHistory?.length || 0 },
+    { label: "Favorites & Notes", value: (dbProgress.wordMeta?.length || 0) + (dbProgress.customListItems?.length || 0) },
+    { label: "Custom Lists", value: dbProgress.customLists?.length || 0 },
+  ];
+  const conflicts = [];
+  if ((appState.grade && currentSnapshot.grade && appState.grade !== currentSnapshot.grade) || (appState.studentName && currentSnapshot.studentName && appState.studentName !== currentSnapshot.studentName)) {
+    conflicts.push("profile");
+  }
+  if ((Object.keys(appState.completedQuizzes || {}).length > 0 && Object.keys(currentSnapshot.completedQuizzes || {}).length > 0)
+    || (dbProgress.reviewHistory?.length > 0 && (currentSnapshot.reviewHistoryCount || 0) > 0)) {
+    conflicts.push("progress");
+  }
+  if ((appState.language && currentSnapshot.language && appState.language !== currentSnapshot.language)
+    || (appState.themeMode && currentSnapshot.themeMode && appState.themeMode !== currentSnapshot.themeMode)
+    || (appState.transitionMode && currentSnapshot.transitionMode && appState.transitionMode !== currentSnapshot.transitionMode)) {
+    conflicts.push("preferences");
+  }
+  if ((appState.classScheduleSettings && currentSnapshot.classScheduleSettings)
+    || (appState.timeTrackingData && (currentSnapshot.timeTrackingHistoryCount || 0) > 0)
+    || (appState.reminderSettings && currentSnapshot.reminderSettings)) {
+    conflicts.push("time");
+  }
+  if ((dbProgress.wordMeta?.length || 0) > 0 || (dbProgress.customLists?.length || 0) > 0 || (dbProgress.customListItems?.length || 0) > 0) {
+    conflicts.push("collections");
+  }
+  return {
+    parsed,
+    summaryRows,
+    conflicts: Array.from(new Set(conflicts)),
+    newerVersion: Number(dbProgress.dataVersion) > Number(currentVersion || 0),
+  };
+}
+
+function formatMinutesLabel(totalMinutes, language = "en") {
+  const safeMinutes = Math.max(0, Math.round(Number(totalMinutes) || 0));
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  if (language === "ur") {
+    if (hours && minutes) return `${hours} گھنٹے ${minutes} منٹ`;
+    if (hours) return `${hours} گھنٹے`;
+    return `${minutes} منٹ`;
+  }
+  if (language === "bilingual") {
+    const english = hours && minutes ? `${hours}h ${minutes}m` : hours ? `${hours}h` : `${minutes}m`;
+    const urdu = hours && minutes ? `${hours} گھنٹے ${minutes} منٹ` : hours ? `${hours} گھنٹے` : `${minutes} منٹ`;
+    return `${english} / ${urdu}`;
+  }
+  if (hours && minutes) return `${hours}h ${minutes}m`;
+  if (hours) return `${hours}h`;
+  return `${minutes}m`;
+}
+
+function applyTimeTrackingMutation(currentValue = {}, settings = {}, action = {}) {
+  const current = normalizeTimeTrackingData(currentValue);
+  const now = Number(action.now) || Date.now();
+  const dayKey = action.dayKey || getLocalDayKey(now);
+  const history = [...current.history];
+  const entryIndex = history.findIndex((entry) => entry.dayKey === dayKey);
+  const entry = entryIndex >= 0 ? { ...history[entryIndex] } : {
+    dayKey,
+    firstSeenAt: null,
+    lastSeenAt: null,
+    msSpent: 0,
+    latenessMinutes: 0,
+    status: settings?.enabled ? "pending" : "tracked",
+    onTimeAwarded: false,
+    durationAwarded: false,
+    classStartTime: settings?.startTime || "08:00",
+    classEndTime: settings?.endTime || "13:00",
+  };
+  const reward = { xpGain: 0, badgeIds: [], notice: null };
+  const durationMinutes = getScheduleDurationMinutes(settings);
+
+  if (action.type === "mark-visit") {
+    entry.lastSeenAt = now;
+    if (!entry.firstSeenAt) {
+      entry.firstSeenAt = now;
+      entry.classStartTime = settings?.startTime || entry.classStartTime;
+      entry.classEndTime = settings?.endTime || entry.classEndTime;
+      if (settings?.enabled) {
+        const date = new Date(now);
+        const currentMinutes = (date.getHours() * 60) + date.getMinutes();
+        const startMinutes = parseClockMinutes(settings.startTime || "08:00");
+        const lateMinutes = durationMinutes > 0
+          ? Math.min(Math.max(0, currentMinutes - startMinutes), durationMinutes)
+          : Math.max(0, currentMinutes - startMinutes);
+        entry.latenessMinutes = lateMinutes;
+        if (lateMinutes > 0) {
+          entry.status = "late";
+          current.lateStarts += 1;
+          current.totalLateMinutes += lateMinutes;
+          current.punctualityStreak = 0;
+        } else {
+          entry.status = "on-time";
+          entry.onTimeAwarded = true;
+          current.onTimeStarts += 1;
+          current.punctualityStreak += 1;
+          current.bestPunctualityStreak = Math.max(current.bestPunctualityStreak, current.punctualityStreak);
+          reward.xpGain += 25;
+          reward.notice = "on-time";
+          if (current.punctualityStreak >= 3) reward.badgeIds.push("punctual_3");
+          if (current.punctualityStreak >= 7) reward.badgeIds.push("punctual_7");
+        }
+      } else {
+        entry.status = "tracked";
+      }
+    }
+  }
+
+  if (action.type === "add-usage") {
+    const deltaMs = Math.max(0, Number(action.deltaMs) || 0);
+    if (deltaMs > 0) {
+      entry.lastSeenAt = now;
+      if (!entry.firstSeenAt) entry.firstSeenAt = now - deltaMs;
+      entry.msSpent += deltaMs;
+      current.totalMsSpent += deltaMs;
+      if (settings?.enabled && durationMinutes > 0 && !entry.durationAwarded && entry.msSpent >= durationMinutes * 60 * 1000) {
+        entry.durationAwarded = true;
+        current.classSessionsMet += 1;
+        reward.xpGain += 40;
+        reward.badgeIds.push("time_keeper");
+        reward.notice = reward.notice || "class-time";
+      }
+    }
+  }
+
+  const nextHistory = history.filter((item) => item.dayKey !== dayKey);
+  nextHistory.push(entry);
+  nextHistory.sort((a, b) => (b.firstSeenAt || 0) - (a.firstSeenAt || 0));
+
+  return {
+    next: {
+      ...current,
+      history: nextHistory.slice(0, 45),
+    },
+    reward: reward.xpGain || reward.badgeIds.length ? reward : null,
+  };
+}
+
+function inferDiscoveryType(lesson = {}) {
+  if (lesson?.hasMathSub || lesson?.hasAdverbs || lesson?.hasTenses || lesson?.hasVocab) return "interactive";
+  if (lesson?.wordProblems || lesson?.quiz || lesson?.exercises) return "practice";
+  return "lesson";
+}
+
+function inferDiscoveryDifficulty(lesson = {}) {
+  const complexity = [
+    lesson?.hasMathSub,
+    lesson?.hasAdverbs,
+    lesson?.hasTenses,
+    lesson?.hasVocab,
+    Array.isArray(lesson?.subs) ? lesson.subs.length >= 4 : false,
+    String(lesson?.content || "").length > 180,
+  ].filter(Boolean).length;
+  if (complexity >= 4) return "stretch";
+  if (complexity >= 2) return "core";
+  return "starter";
+}
+
+function buildDiscoveryTags(subject, lesson = {}) {
+  const titleWords = String(lesson.title || "")
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\w\u0600-\u06FF-]/g, ""))
+    .filter((word) => word.length >= 3)
+    .slice(0, 3);
+  return Array.from(new Set([subject?.name, subject?.nameUr, ...titleWords].filter(Boolean)));
 }
 
 function createNotificationEntry(type, titleEn, titleUr, bodyEn, bodyUr, createdAt = Date.now(), extra = {}) {
@@ -4463,9 +5589,18 @@ function HomeschoolApp() {
   const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
   const [language, setLanguage] = useState(stored?.language || "en");
   const [themeMode, setThemeMode] = useState(stored?.themeMode || "dark");
+  const [fontSizeMode, setFontSizeMode] = useState(["small", "normal", "large", "xlarge"].includes(stored?.fontSizeMode) ? stored.fontSizeMode : "normal");
+  const [reducedMotion, setReducedMotion] = useState(Boolean(stored?.reducedMotion));
+  const [highContrast, setHighContrast] = useState(Boolean(stored?.highContrast));
+  const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(stored?.keyboardShortcutsEnabled !== false);
   const ui = getUiText(language);
   const [daySectionOverrides, setDaySectionOverrides] = useState(stored?.daySectionOverrides || {});
   const [dailyReviewCap, setDailyReviewCap] = useState(Math.max(5, Math.min(50, Number(stored?.dailyReviewCap) || 20)));
+  const [reviewSrsSettings, setReviewSrsSettings] = useState({
+    masteryThreshold: Math.max(3, Math.min(7, Number(stored?.reviewSrsSettings?.masteryThreshold) || 5)),
+    intervalScale: Math.max(0.5, Math.min(2.5, Number(stored?.reviewSrsSettings?.intervalScale) || 1)),
+    againMinutes: Math.max(5, Math.min(180, Number(stored?.reviewSrsSettings?.againMinutes) || 10)),
+  });
   const [grade, setGrade] = useState(stored?.grade || null);
   const [studentName, setStudentName] = useState(stored?.studentName || "");
   const [studentNameUr, setStudentNameUr] = useState(stored?.studentNameUr || "");
@@ -4520,7 +5655,7 @@ function HomeschoolApp() {
   const [reviewStats, setReviewStats] = useState({ due: 0, mastered: 0, learning: 0, reviewedToday: 0, retentionRate: 0, reviewStreak: 0 });
   const [reviewLibrary, setReviewLibrary] = useState([]);
   const [studyMetaLookup, setStudyMetaLookup] = useState({});
-  const [reviewAnalytics, setReviewAnalytics] = useState({ heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], wordGrowth: [], categoryPerformance: [], totals: { reviewedLastPeriod: 0, reviewedLast7: 0, uniqueReviewedLast7: 0, favorites: 0, notedWords: 0, customLists: 0 } });
+  const [reviewAnalytics, setReviewAnalytics] = useState({ heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], wordGrowth: [], categoryPerformance: [], leitnerBoxes: [], forgettingCurve: [], upcomingCalendar: [], predictedMastery: { cardsRemaining: 0, projectedAt: Date.now(), sections: [] }, totals: { reviewedLastPeriod: 0, reviewedLast7: 0, uniqueReviewedLast7: 0, favorites: 0, notedWords: 0, customLists: 0 } });
   const [reviewQueue, setReviewQueue] = useState([]);
   const [reviewIdx, setReviewIdx] = useState(0);
   const [reviewReveal, setReviewReveal] = useState(false);
@@ -4528,14 +5663,35 @@ function HomeschoolApp() {
   const [reviewSessionXp, setReviewSessionXp] = useState(0);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [practiceMode, setPracticeMode] = useState(null);
+  const [practiceSubjectId, setPracticeSubjectId] = useState(stored?.practiceSubjectId || "english");
+  const [practiceFiltersBySubject, setPracticeFiltersBySubject] = useState(stored?.practiceFiltersBySubject || {});
+  const [practiceTimedSettings, setPracticeTimedSettings] = useState(stored?.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 });
+  const [practiceLessonProgress, setPracticeLessonProgress] = useState(stored?.practiceLessonProgress || {});
   const [practiceDeck, setPracticeDeck] = useState([]);
   const [practiceIdx, setPracticeIdx] = useState(0);
   const [practiceReveal, setPracticeReveal] = useState(false);
   const [practiceTypingInput, setPracticeTypingInput] = useState("");
   const [practiceTypingResult, setPracticeTypingResult] = useState(null);
+  const [practiceDictationInput, setPracticeDictationInput] = useState("");
+  const [practiceDictationResult, setPracticeDictationResult] = useState(null);
   const [practiceMatchRound, setPracticeMatchRound] = useState(null);
   const [practiceMatchSelection, setPracticeMatchSelection] = useState(null);
-  const [practiceSessionStats, setPracticeSessionStats] = useState({ attempted: 0, correct: 0 });
+  const [practiceBlankChoice, setPracticeBlankChoice] = useState(null);
+  const [practiceBlankResult, setPracticeBlankResult] = useState(null);
+  const [practiceSentenceSelection, setPracticeSentenceSelection] = useState([]);
+  const [practiceSentenceResult, setPracticeSentenceResult] = useState(null);
+  const [practiceTimedChoice, setPracticeTimedChoice] = useState(null);
+  const [practiceTimedResult, setPracticeTimedResult] = useState(null);
+  const [practiceTimerRemaining, setPracticeTimerRemaining] = useState(60);
+  const [practiceTimerFinished, setPracticeTimerFinished] = useState(false);
+  const [practiceSessionStats, setPracticeSessionStats] = useState({ attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, confidence: { low: 0, medium: 0, high: 0 } });
+  const [practiceConfidenceChoice, setPracticeConfidenceChoice] = useState(null);
+  const [practiceFeedbackText, setPracticeFeedbackText] = useState("");
+  const [practiceReflectionDraft, setPracticeReflectionDraft] = useState("");
+  const [practiceReflectionLog, setPracticeReflectionLog] = useState([]);
+  const [practiceBreakDismissedAt, setPracticeBreakDismissedAt] = useState(0);
+  const [practiceCelebrationSeed, setPracticeCelebrationSeed] = useState(0);
+  const [practiceLabReturnPending, setPracticeLabReturnPending] = useState(false);
   const [viewTargetId, setViewTargetId] = useState(null);
   const [pageFlashActive, setPageFlashActive] = useState(false);
   const [heatmapExpanded, setHeatmapExpanded] = useState(false);
@@ -4544,6 +5700,9 @@ function HomeschoolApp() {
   const [focusTimerSettings, setFocusTimerSettings] = useState(stored?.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false });
   const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number(stored?.focusTimerSettings?.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
   const [reminderSettings, setReminderSettings] = useState(stored?.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
+  const [classScheduleSettings, setClassScheduleSettings] = useState(stored?.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" });
+  const [timeTrackingData, setTimeTrackingData] = useState(normalizeTimeTrackingData(stored?.timeTrackingData || {}));
+  const [backupReminderSettings, setBackupReminderSettings] = useState(normalizeBackupReminderSettings(stored?.backupReminderSettings || {}));
   const [navPosition, setNavPosition] = useState(["bottom", "right", "left", "top"].includes(stored?.navPosition) ? stored.navPosition : "top");
   const [navAutoHide, setNavAutoHide] = useState(Boolean(stored?.navAutoHide));
   const [navHidden, setNavHidden] = useState(false);
@@ -4551,6 +5710,11 @@ function HomeschoolApp() {
   const [navBarHidden, setNavBarHidden] = useState(false);
   const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
+  const [importReviewState, setImportReviewState] = useState(null);
+  const [contentSearch, setContentSearch] = useState("");
+  const [discoverySubjectFilter, setDiscoverySubjectFilter] = useState("all");
+  const [discoveryTypeFilter, setDiscoveryTypeFilter] = useState("all");
+  const [discoveryDifficultyFilter, setDiscoveryDifficultyFilter] = useState("all");
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
   const [gradeDisclosureOpen, setGradeDisclosureOpen] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "dark"));
@@ -4565,6 +5729,9 @@ function HomeschoolApp() {
   const headerHideTimerRef = useRef(null);
   const navBarRef = useRef(null);
   const navBarHideTimerRef = useRef(null);
+  const practiceAdvanceTimerRef = useRef(null);
+  const usageTrackingRef = useRef({ startedAt: 0 });
+  const timeTrackingRef = useRef(normalizeTimeTrackingData(stored?.timeTrackingData || {}));
   const [headerHideOffset, setHeaderHideOffset] = useState(0);
   const [navBarOffset, setNavBarOffset] = useState(0);
 
@@ -4575,6 +5742,10 @@ function HomeschoolApp() {
   const [dbVocab, setDbVocab] = useState([]);
   const daySectionSettings = buildDaySectionSettings(language, daySectionOverrides);
   const activeReviewCard = reviewQueue[reviewIdx] || null;
+  const activePracticeCard = practiceDeck[practiceIdx] || null;
+  const effectivePracticeMode = practiceMode === "interleaved" ? (activePracticeCard?.interleavedType || "flashcards") : practiceMode;
+  const practiceQuestionPrompt = activePracticeCard ? getPracticeQuestionPrompt(activePracticeCard, effectivePracticeMode, language) : "";
+  const practiceQuestionPromptUrdu = activePracticeCard ? getPracticeQuestionPrompt(activePracticeCard, effectivePracticeMode, "ur") : "";
   const isLightTheme = resolvedTheme === "light";
   const revealToggleBaseStyle = {
     padding: "6px 14px",
@@ -4651,6 +5822,345 @@ function HomeschoolApp() {
     color: "var(--text-primary)",
     border: "1px solid var(--border)",
   };
+  const gradePracticeItems = useMemo(() => (grade ? buildGradePracticeItems(window.HomeSchoolData, grade) : []), [grade]);
+  const availablePracticeSubjects = useMemo(() => SUBJECTS.filter((subject) => {
+    const hasReviewItems = reviewLibrary.some((card) => (card?.subject || "english") === subject.id && card?.prompt && (card?.answer || card?.meaning));
+    const hasSupplementalItems = gradePracticeItems.some((item) => item?.subject === subject.id && item?.prompt && (item?.answer || item?.meaning));
+    return hasReviewItems || hasSupplementalItems;
+  }), [gradePracticeItems, reviewLibrary]);
+  const activePracticeSubject = availablePracticeSubjects.find((subject) => subject.id === practiceSubjectId)
+    || SUBJECTS.find((subject) => subject.id === practiceSubjectId)
+    || availablePracticeSubjects[0]
+    || SUBJECTS[0]
+    || null;
+  const activePracticeSubjectId = activePracticeSubject?.id || "english";
+  const practiceSubjectLessons = useMemo(
+    () => (grade && activePracticeSubjectId ? (window.HomeSchoolData?.getLessons?.(activePracticeSubjectId, grade) || []) : []),
+    [activePracticeSubjectId, grade],
+  );
+  const practiceSubjectLessonMap = useMemo(
+    () => new Map(practiceSubjectLessons.map((lesson, index) => [getLessonKeyValue(lesson), index])),
+    [practiceSubjectLessons],
+  );
+  const activePracticeFilter = useMemo(() => {
+    const subjectFilters = practiceFiltersBySubject?.[activePracticeSubjectId] || {};
+    const lessonKeys = practiceSubjectLessons.map((lesson) => getLessonKeyValue(lesson)).filter(Boolean);
+    const defaultStart = lessonKeys[0] || null;
+    const defaultEnd = lessonKeys[lessonKeys.length - 1] || defaultStart;
+    const startLessonKey = lessonKeys.includes(subjectFilters.startLessonKey) ? subjectFilters.startLessonKey : defaultStart;
+    const endLessonKey = lessonKeys.includes(subjectFilters.endLessonKey) ? subjectFilters.endLessonKey : defaultEnd;
+    const startIndex = practiceSubjectLessonMap.get(startLessonKey);
+    const endIndex = practiceSubjectLessonMap.get(endLessonKey);
+    const orderedStartIndex = Number.isFinite(startIndex) && Number.isFinite(endIndex) ? Math.min(startIndex, endIndex) : 0;
+    const orderedEndIndex = Number.isFinite(startIndex) && Number.isFinite(endIndex) ? Math.max(startIndex, endIndex) : Math.max(0, lessonKeys.length - 1);
+    return {
+      startLessonKey,
+      endLessonKey,
+      startIndex: orderedStartIndex,
+      endIndex: orderedEndIndex,
+      difficulty: ["beginner", "medium", "advanced"].includes(subjectFilters.difficulty) ? subjectFilters.difficulty : "beginner",
+    };
+  }, [activePracticeSubjectId, practiceFiltersBySubject, practiceSubjectLessonMap, practiceSubjectLessons]);
+  const practiceFilterSummary = useMemo(() => {
+    const startLesson = practiceSubjectLessons[activePracticeFilter.startIndex];
+    const endLesson = practiceSubjectLessons[activePracticeFilter.endIndex];
+    return {
+      startLabel: startLesson ? `${ui.lesson} ${activePracticeFilter.startIndex + 1}` : ui.lesson,
+      endLabel: endLesson ? `${ui.lesson} ${activePracticeFilter.endIndex + 1}` : ui.lesson,
+      isSingle: activePracticeFilter.startIndex === activePracticeFilter.endIndex,
+    };
+  }, [activePracticeFilter.endIndex, activePracticeFilter.startIndex, practiceSubjectLessons, ui.lesson]);
+  const practiceDifficultyLabel = useMemo(() => ({
+    beginner: joinLocalizedText("Beginner", "آسان", language),
+    medium: joinLocalizedText("Medium", "درمیانہ", language),
+    advanced: joinLocalizedText("Advance", "اعلیٰ", language),
+  }[activePracticeFilter.difficulty] || joinLocalizedText("Beginner", "آسان", language)), [activePracticeFilter.difficulty, language]);
+  const practiceMatchesFilters = useCallback((card) => {
+    if (!card || (card?.subject || "english") !== activePracticeSubjectId) return false;
+    const lessonKey = getPracticeItemLessonKey(card);
+    const lessonIndex = Number.isFinite(card?.lessonIndex) ? Number(card.lessonIndex) : practiceSubjectLessonMap.get(lessonKey);
+    if (!Number.isFinite(lessonIndex)) return false;
+    if (lessonIndex < activePracticeFilter.startIndex || lessonIndex > activePracticeFilter.endIndex) return false;
+    return getPracticeItemDifficulty(card) === activePracticeFilter.difficulty;
+  }, [activePracticeFilter.difficulty, activePracticeFilter.endIndex, activePracticeFilter.startIndex, activePracticeSubjectId, practiceSubjectLessonMap]);
+  const practiceQuestionMarks = getPracticeDifficultyMarks(activePracticeFilter.difficulty);
+  const activePracticeTimeLimit = Math.max(10, Math.min(180, Number(practiceTimedSettings?.[practiceMode] || (practiceMode === "timedchallenge" ? 60 : 30)) || (practiceMode === "timedchallenge" ? 60 : 30)));
+  const activePracticeLessonKey = getPracticeItemLessonKey(activePracticeCard);
+  const activePracticeLessonProgress = activePracticeLessonKey ? (practiceLessonProgress?.[`${activePracticeSubjectId}|${activePracticeLessonKey}`] || null) : null;
+  const activePracticeMastery = getPracticeMasteryMeta(activePracticeCard, activePracticeLessonProgress, language);
+  const showPracticeBreakNudge = practiceSessionStats.attempted > 0 && practiceSessionStats.attempted % 8 === 0 && practiceBreakDismissedAt !== practiceSessionStats.attempted;
+  const practiceRangeProgress = useMemo(() => {
+    let attempted = 0;
+    let correct = 0;
+    let marksEarned = 0;
+    let marksPossible = 0;
+    practiceSubjectLessons.forEach((lesson, index) => {
+      if (index < activePracticeFilter.startIndex || index > activePracticeFilter.endIndex) return;
+      const lessonKey = getLessonKeyValue(lesson);
+      const row = practiceLessonProgress?.[`${activePracticeSubjectId}|${lessonKey}`];
+      if (!row) return;
+      attempted += Number(row.attempted) || 0;
+      correct += Number(row.correct) || 0;
+      marksEarned += Number(row.marksEarned) || 0;
+      marksPossible += Number(row.marksPossible) || 0;
+    });
+    return { attempted, correct, marksEarned, marksPossible };
+  }, [activePracticeFilter.endIndex, activePracticeFilter.startIndex, activePracticeSubjectId, practiceLessonProgress, practiceSubjectLessons]);
+  const practiceSubjectReviewLibrary = useMemo(
+    () => reviewLibrary.filter((card) => practiceMatchesFilters(card)),
+    [practiceMatchesFilters, reviewLibrary],
+  );
+  const practiceSubjectSupplementalItems = useMemo(
+    () => gradePracticeItems.filter((item) => practiceMatchesFilters(item)),
+    [gradePracticeItems, practiceMatchesFilters],
+  );
+  const practiceSubjectSourcePool = useMemo(
+    () => [...practiceSubjectReviewLibrary, ...practiceSubjectSupplementalItems],
+    [practiceSubjectReviewLibrary, practiceSubjectSupplementalItems],
+  );
+  const practiceCoreModePool = useMemo(() => {
+    const hasReviewPairs = practiceSubjectReviewLibrary.some((card) => isUsefulPracticePair(card, "flashcards"));
+    return hasReviewPairs ? practiceSubjectReviewLibrary : practiceSubjectSourcePool;
+  }, [practiceSubjectReviewLibrary, practiceSubjectSourcePool]);
+  const practiceSourceReadyCount = useMemo(
+    () => practiceSubjectSourcePool.filter((card) => card?.prompt && (card?.answer || card?.meaning)).length,
+    [practiceSubjectSourcePool],
+  );
+  const practiceFlashcardReadyCount = useMemo(
+    () => buildPracticeDeck(practiceCoreModePool, 4, "flashcards").length,
+    [practiceCoreModePool],
+  );
+  const practiceTypingReadyCount = useMemo(
+    () => buildPracticeDeck(practiceCoreModePool, 4, "typing").length,
+    [practiceCoreModePool],
+  );
+  const practiceMatchingReadyCount = useMemo(
+    () => buildPracticeDeck(practiceCoreModePool, 4, "matching").length,
+    [practiceCoreModePool],
+  );
+  const practiceFillBlankReadyCount = useMemo(
+    () => buildFillBlankDeck(practiceSubjectSourcePool, 4, 4).length,
+    [practiceSubjectSourcePool],
+  );
+  const practiceSentenceBuilderReadyCount = useMemo(
+    () => buildSentenceBuilderDeck(practiceSubjectSourcePool, 4).length,
+    [practiceSubjectSourcePool],
+  );
+  const practiceTimedChallengeReadyCount = useMemo(
+    () => buildTimedChallengeDeck(practiceSubjectSourcePool, 6, 4).length,
+    [practiceSubjectSourcePool],
+  );
+  const practiceTimedQuizReadyCount = useMemo(
+    () => buildTimedQuizDeck(practiceSubjectSourcePool, 4).length,
+    [practiceSubjectSourcePool],
+  );
+  const practiceTimedTrueFalseReadyCount = useMemo(
+    () => buildTrueFalseDeck(practiceSubjectSourcePool, 4).length,
+    [practiceSubjectSourcePool],
+  );
+  const practiceInterleavedReadyCount = useMemo(
+    () => buildInterleavedDeck(practiceSubjectSourcePool, 6).length,
+    [practiceSubjectSourcePool],
+  );
+  const practiceModeAvailability = {
+    flashcards: practiceFlashcardReadyCount > 0,
+    typing: practiceTypingReadyCount > 0,
+    matching: practiceMatchingReadyCount >= 4,
+    dictation: practiceSourceReadyCount > 0,
+    fillblanks: practiceFillBlankReadyCount > 0,
+    sentencebuilder: practiceSentenceBuilderReadyCount > 0,
+    timedchallenge: practiceTimedChallengeReadyCount > 0,
+    timedquiz: practiceTimedQuizReadyCount > 0,
+    timedtruefalse: practiceTimedTrueFalseReadyCount > 0,
+    timedmatching: practiceMatchingReadyCount >= 4,
+    interleaved: practiceInterleavedReadyCount > 0,
+  };
+  const practiceModeReadyCounts = {
+    flashcards: practiceFlashcardReadyCount,
+    typing: practiceTypingReadyCount,
+    matching: practiceMatchingReadyCount,
+    dictation: practiceSourceReadyCount,
+    fillblanks: practiceFillBlankReadyCount,
+    sentencebuilder: practiceSentenceBuilderReadyCount,
+    timedchallenge: practiceTimedChallengeReadyCount,
+    timedquiz: practiceTimedQuizReadyCount,
+    timedtruefalse: practiceTimedTrueFalseReadyCount,
+    timedmatching: practiceMatchingReadyCount,
+    interleaved: practiceInterleavedReadyCount,
+  };
+  const getPracticeModeMeta = useCallback((modeId, enabledTextEn, enabledTextUr, minimumRequired = 1) => {
+    const readyCount = Number(practiceModeReadyCounts?.[modeId] || 0);
+    if (readyCount >= minimumRequired) {
+      return joinLocalizedText(
+        `${enabledTextEn} • ${readyCount} ready`,
+        `${enabledTextUr} • ${readyCount} تیار`,
+        language,
+      );
+    }
+    if (practiceSubjectLessons.length === 0) {
+      return joinLocalizedText(
+        "No lessons found in this subject yet",
+        "اس مضمون میں ابھی کوئی سبق موجود نہیں",
+        language,
+      );
+    }
+    if (modeId === "matching" || modeId === "timedmatching") {
+      return joinLocalizedText(
+        "Need at least 4 valid pairs in this lesson range and difficulty",
+        "اس سبق کی حد اور مشکل میں کم از کم 4 درست جوڑیاں درکار ہیں",
+        language,
+      );
+    }
+    return joinLocalizedText(
+      "No matching practice items in this lesson range and difficulty yet",
+      "اس سبق کی حد اور مشکل میں ابھی مناسب پریکٹس مواد موجود نہیں",
+      language,
+    );
+  }, [language, practiceModeReadyCounts, practiceSubjectLessons.length]);
+  const scheduleDurationMinutes = useMemo(() => getScheduleDurationMinutes(classScheduleSettings), [classScheduleSettings]);
+  const todayTimeEntry = useMemo(
+    () => (timeTrackingData.history || []).find((entry) => entry.dayKey === getLocalDayKey()) || null,
+    [timeTrackingData],
+  );
+  const todaySpentMinutes = Math.round((todayTimeEntry?.msSpent || 0) / 60000);
+  const totalStudyMinutes = Math.round((timeTrackingData.totalMsSpent || 0) / 60000);
+  const todayLatenessMinutes = Math.max(0, Number(todayTimeEntry?.latenessMinutes) || 0);
+  const weeklyStudyMinutes = useMemo(
+    () => (timeTrackingData.history || []).slice(0, 7).reduce((sum, entry) => sum + Math.round((entry?.msSpent || 0) / 60000), 0),
+    [timeTrackingData],
+  );
+  const timeGoalProgress = scheduleDurationMinutes > 0 ? Math.min(100, Math.round((todaySpentMinutes / scheduleDurationMinutes) * 100)) : 0;
+  const timeTrackingStatusLabel = classScheduleSettings.enabled
+    ? todayTimeEntry?.status === "on-time"
+      ? ui.classStatusOnTime
+      : todayTimeEntry?.status === "late"
+        ? ui.classStatusLate
+        : ui.classStatusNotStarted
+    : ui.classStatusOff;
+  const recentTimeHistory = useMemo(() => (timeTrackingData.history || []).slice(0, 7), [timeTrackingData]);
+  const hasBackupWorthData = Object.keys(completedQuizzes || {}).length > 0
+    || totalQuizzesDone > 0
+    || xp > 0
+    || (timeTrackingData.history || []).length > 0
+    || (reviewAnalytics.favoriteWords || []).length > 0
+    || (reviewAnalytics.notedWords || []).length > 0;
+  const backupReminderSummary = useMemo(
+    () => getBackupReminderSummary(backupReminderSettings, hasBackupWorthData, language),
+    [backupReminderSettings, hasBackupWorthData, language],
+  );
+  const discoveryLessonIndex = useMemo(() => {
+    if (!grade) return [];
+    return SUBJECTS.flatMap((subject) => {
+      const lessons = getLessons(subject.id, grade) || [];
+      return lessons.map((lesson, lessonIndex) => ({
+        id: `discover_${subject.id}_${lesson.key || lesson.id || lessonIndex}`,
+        subjectId: subject.id,
+        subjectName: subject.name,
+        subjectNameUr: subject.nameUr,
+        subjectIcon: subject.icon,
+        lessonKey: lesson.key || lesson.id || `${subject.id}_${lessonIndex}`,
+        lessonTitle: lesson.title,
+        lessonContent: lesson.content || "",
+        type: inferDiscoveryType(lesson),
+        difficulty: inferDiscoveryDifficulty(lesson),
+        tags: buildDiscoveryTags(subject, lesson),
+        completed: Boolean(completedQuizzes[lesson.id]),
+      }));
+    });
+  }, [completedQuizzes, grade]);
+  const filteredDiscoveryLessons = useMemo(() => {
+    const searchNeedle = normalizeText(contentSearch).toLowerCase();
+    return discoveryLessonIndex.filter((item) => {
+      if (discoverySubjectFilter !== "all" && item.subjectId !== discoverySubjectFilter) return false;
+      if (discoveryTypeFilter !== "all" && item.type !== discoveryTypeFilter) return false;
+      if (discoveryDifficultyFilter !== "all" && item.difficulty !== discoveryDifficultyFilter) return false;
+      if (!searchNeedle) return true;
+      const haystack = [item.lessonTitle, item.lessonContent, item.subjectName, item.subjectNameUr, ...(item.tags || [])]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(searchNeedle);
+    }).slice(0, 8);
+  }, [contentSearch, discoveryDifficultyFilter, discoveryLessonIndex, discoverySubjectFilter, discoveryTypeFilter]);
+  const discoveryWordPool = useMemo(() => {
+    const reviewPool = reviewLibrary.filter((card) => {
+      const prompt = normalizeText(card?.prompt || "");
+      return prompt && prompt.split(/\s+/).length <= 4 && normalizeText(card?.answer || "");
+    });
+    if (reviewPool.length > 0) return reviewPool;
+    return gradePracticeItems.filter((item) => {
+      const prompt = normalizeText(item?.prompt || "");
+      return prompt && prompt.split(/\s+/).length <= 4 && normalizeText(item?.answer || item?.meaning || "");
+    });
+  }, [gradePracticeItems, reviewLibrary]);
+  const wordOfDayCard = useMemo(() => {
+    if (!discoveryWordPool.length) return null;
+    const todayKey = getLocalDayKey();
+    const seed = Math.abs(simpleHash(todayKey).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0));
+    return discoveryWordPool[seed % discoveryWordPool.length];
+  }, [discoveryWordPool]);
+
+  useEffect(() => {
+    timeTrackingRef.current = timeTrackingData;
+  }, [timeTrackingData]);
+
+  useEffect(() => {
+    if (practiceMode !== "dictation" || !activePracticeCard?.prompt) return undefined;
+    const timeoutId = setTimeout(() => {
+      window.HomeSchoolUtils?.speakText?.(activePracticeCard.prompt, activePracticeCard.practiceLang || "en");
+    }, 180);
+    return () => clearTimeout(timeoutId);
+  }, [practiceMode, activePracticeCard?.id]);
+
+  useEffect(() => {
+    if (!availablePracticeSubjects.length) return;
+    if (!availablePracticeSubjects.some((subject) => subject.id === practiceSubjectId)) {
+      setPracticeSubjectId(availablePracticeSubjects[0].id);
+    }
+  }, [availablePracticeSubjects, practiceSubjectId]);
+  useEffect(() => {
+    if (!activePracticeSubjectId || !practiceSubjectLessons.length) return;
+    setPracticeFiltersBySubject((current) => {
+      const currentEntry = current?.[activePracticeSubjectId] || {};
+      const lessonKeys = practiceSubjectLessons.map((lesson) => getLessonKeyValue(lesson)).filter(Boolean);
+      const startLessonKey = lessonKeys.includes(currentEntry.startLessonKey) ? currentEntry.startLessonKey : lessonKeys[0];
+      const endLessonKey = lessonKeys.includes(currentEntry.endLessonKey) ? currentEntry.endLessonKey : lessonKeys[lessonKeys.length - 1];
+      const difficulty = ["beginner", "medium", "advanced"].includes(currentEntry.difficulty) ? currentEntry.difficulty : "beginner";
+      if (currentEntry.startLessonKey === startLessonKey && currentEntry.endLessonKey === endLessonKey && currentEntry.difficulty === difficulty) {
+        return current;
+      }
+      return {
+        ...current,
+        [activePracticeSubjectId]: {
+          startLessonKey,
+          endLessonKey,
+          difficulty,
+        },
+      };
+    });
+  }, [activePracticeSubjectId, practiceSubjectLessons]);
+
+  const updatePracticeFilters = useCallback((updates) => {
+    setPracticeFiltersBySubject((current) => {
+      const currentEntry = current?.[activePracticeSubjectId] || {};
+      const nextEntry = {
+        ...currentEntry,
+        ...updates,
+      };
+      return {
+        ...current,
+        [activePracticeSubjectId]: nextEntry,
+      };
+    });
+  }, [activePracticeSubjectId]);
+
+  useEffect(() => {
+    if (tab !== "review" || practiceMode || !practiceLabReturnPending) return undefined;
+    const timer = window.setTimeout(() => {
+      document.getElementById("practice-lab-panel")?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      setPracticeLabReturnPending(false);
+    }, 40);
+    return () => window.clearTimeout(timer);
+  }, [practiceLabReturnPending, practiceMode, reducedMotion, tab]);
 
   const refreshStorageLabel = useCallback(async () => {
     if (!window.HomeSchoolDB) {
@@ -4671,30 +6181,30 @@ function HomeschoolApp() {
   const refreshReviewStats = useCallback(async () => {
     if (!window.HomeSchoolDB) return;
     const [nextStats, nextLibrary, nextAnalytics, nextMetaRows] = await Promise.all([
-      window.HomeSchoolDB.getReviewStats().catch(() => ({})),
+      window.HomeSchoolDB.getReviewStats({ masteryThreshold: reviewSrsSettings.masteryThreshold }).catch(() => ({})),
       window.HomeSchoolDB.getReviewLibrary().catch(() => []),
-      window.HomeSchoolDB.getReviewAnalytics().catch(() => null),
+      window.HomeSchoolDB.getReviewAnalytics({ masteryThreshold: reviewSrsSettings.masteryThreshold, intervalScale: reviewSrsSettings.intervalScale }).catch(() => null),
       window.HomeSchoolDB.getAllStudyMeta().catch(() => []),
     ]);
     setStudyMetaLookup((nextMetaRows || []).reduce((acc, row) => {
       if (row?.id) acc[row.id] = row;
       return acc;
     }, {}));
-    setReviewStats(buildReviewStatsFallback(nextStats, nextLibrary, nextAnalytics));
-  }, []);
+    setReviewStats(buildReviewStatsFallback(nextStats, nextLibrary, nextAnalytics, { masteryThreshold: reviewSrsSettings.masteryThreshold }));
+  }, [reviewSrsSettings.intervalScale, reviewSrsSettings.masteryThreshold]);
 
   const refreshReviewWorkspace = useCallback(async () => {
     if (!window.HomeSchoolDB) return;
     const [statsResult, libraryResult, analyticsResult, metaResult] = await Promise.allSettled([
-      window.HomeSchoolDB.getReviewStats(),
+      window.HomeSchoolDB.getReviewStats({ masteryThreshold: reviewSrsSettings.masteryThreshold }),
       window.HomeSchoolDB.getReviewLibrary(),
-      window.HomeSchoolDB.getReviewAnalytics(),
+      window.HomeSchoolDB.getReviewAnalytics({ masteryThreshold: reviewSrsSettings.masteryThreshold, intervalScale: reviewSrsSettings.intervalScale }),
       window.HomeSchoolDB.getAllStudyMeta(),
     ]);
     const nextLibrary = libraryResult.status === "fulfilled" ? libraryResult.value : [];
     const nextAnalytics = analyticsResult.status === "fulfilled"
       ? analyticsResult.value
-      : { heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], wordGrowth: [], categoryPerformance: [], totals: { reviewedLastPeriod: 0, reviewedLast7: 0, uniqueReviewedLast7: 0, favorites: 0, notedWords: 0, customLists: 0 } };
+      : { heatmap: [], weakWords: [], favoriteWords: [], notedWords: [], customLists: [], wordGrowth: [], categoryPerformance: [], leitnerBoxes: [], forgettingCurve: [], upcomingCalendar: [], predictedMastery: { cardsRemaining: 0, projectedAt: Date.now(), sections: [] }, totals: { reviewedLastPeriod: 0, reviewedLast7: 0, uniqueReviewedLast7: 0, favorites: 0, notedWords: 0, customLists: 0 } };
     const nextMetaRows = metaResult.status === "fulfilled" ? metaResult.value : [];
     if (libraryResult.status !== "fulfilled") {
       console.log("Unable to refresh review library:", libraryResult.reason);
@@ -4714,8 +6224,8 @@ function HomeschoolApp() {
       if (row?.id) acc[row.id] = row;
       return acc;
     }, {}));
-    setReviewStats(buildReviewStatsFallback(statsResult.status === "fulfilled" ? statsResult.value : {}, nextLibrary, nextAnalytics));
-  }, []);
+    setReviewStats(buildReviewStatsFallback(statsResult.status === "fulfilled" ? statsResult.value : {}, nextLibrary, nextAnalytics, { masteryThreshold: reviewSrsSettings.masteryThreshold }));
+  }, [reviewSrsSettings.intervalScale, reviewSrsSettings.masteryThreshold]);
 
   const pushNotificationHistoryEntry = useCallback((entry) => {
     if (!entry) return;
@@ -4740,6 +6250,11 @@ function HomeschoolApp() {
     setNotificationHistory([]);
   }, []);
 
+  useEffect(() => {
+    if (!dbLoaded) return;
+    refreshReviewWorkspace();
+  }, [dbLoaded, refreshReviewWorkspace]);
+
   if (!persistCustomizationRef.current) {
     persistCustomizationRef.current = debounce(async (nextPayload) => {
       try {
@@ -4748,6 +6263,10 @@ function HomeschoolApp() {
             ttsEnabled: nextPayload.ttsEnabled,
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
+            fontSizeMode: nextPayload.fontSizeMode,
+            reducedMotion: nextPayload.reducedMotion,
+            highContrast: nextPayload.highContrast,
+            keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
             navPosition: nextPayload.navPosition,
             navAutoHide: nextPayload.navAutoHide,
             navBarAutoHide: nextPayload.navBarAutoHide,
@@ -4759,11 +6278,19 @@ function HomeschoolApp() {
           });
           await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
             dailyReviewCap: nextPayload.dailyReviewCap,
+            reviewSrsSettings: nextPayload.reviewSrsSettings || { masteryThreshold: 5, intervalScale: 1, againMinutes: 10 },
+            practiceSubjectId: nextPayload.practiceSubjectId || "english",
+            practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
+            practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 },
           });
+          await window.HomeSchoolDB.saveCustomization("practiceProgress", nextPayload.practiceLessonProgress || {});
           await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
           await window.HomeSchoolDB.saveCustomization("studyGoals", nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 });
           await window.HomeSchoolDB.saveCustomization("focusTimerSettings", nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false });
           await window.HomeSchoolDB.saveCustomization("reminderSettings", nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
+          await window.HomeSchoolDB.saveCustomization("backupReminderSettings", normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}));
+          await window.HomeSchoolDB.saveCustomization("classScheduleSettings", nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" });
+          await window.HomeSchoolDB.saveCustomization("timeTrackingData", normalizeTimeTrackingData(nextPayload.timeTrackingData || {}));
           await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40));
           await window.HomeSchoolDB.saveCustomization("studentProfile", {
             grade: nextPayload.grade,
@@ -4780,6 +6307,10 @@ function HomeschoolApp() {
               ttsEnabled: nextPayload.ttsEnabled,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
+              fontSizeMode: nextPayload.fontSizeMode,
+              reducedMotion: nextPayload.reducedMotion,
+              highContrast: nextPayload.highContrast,
+              keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
               navPosition: nextPayload.navPosition,
               navAutoHide: nextPayload.navAutoHide,
               navBarAutoHide: nextPayload.navBarAutoHide,
@@ -4791,11 +6322,19 @@ function HomeschoolApp() {
             },
             reviewPreferences: {
               dailyReviewCap: nextPayload.dailyReviewCap,
+              reviewSrsSettings: nextPayload.reviewSrsSettings || { masteryThreshold: 5, intervalScale: 1, againMinutes: 10 },
+              practiceSubjectId: nextPayload.practiceSubjectId || "english",
+              practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
+              practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 },
             },
+            practiceProgress: nextPayload.practiceLessonProgress || {},
             daySectionPacing: nextPayload.daySectionOverrides || {},
             studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
             focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
             reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
+            backupReminderSettings: normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}),
+            classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
+            timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
             notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
             studentProfile: {
               grade: nextPayload.grade,
@@ -4815,6 +6354,10 @@ function HomeschoolApp() {
             ttsEnabled: nextPayload.ttsEnabled,
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
+            fontSizeMode: nextPayload.fontSizeMode,
+            reducedMotion: nextPayload.reducedMotion,
+            highContrast: nextPayload.highContrast,
+            keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
             navPosition: nextPayload.navPosition,
             navAutoHide: nextPayload.navAutoHide,
             navBarAutoHide: nextPayload.navBarAutoHide,
@@ -4826,12 +6369,20 @@ function HomeschoolApp() {
           },
           reviewPreferences: {
             dailyReviewCap: nextPayload.dailyReviewCap,
+            reviewSrsSettings: nextPayload.reviewSrsSettings || { masteryThreshold: 5, intervalScale: 1, againMinutes: 10 },
+            practiceSubjectId: nextPayload.practiceSubjectId || "english",
+            practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
+            practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 },
           },
+          practiceProgress: nextPayload.practiceLessonProgress || {},
           daySectionPacing: nextPayload.daySectionOverrides || {},
-          studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
-          focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
-          reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
-          notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
+            studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
+            focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
+            reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
+            backupReminderSettings: normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}),
+            classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
+            timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
+            notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
           studentProfile: {
             grade: nextPayload.grade,
             studentName: nextPayload.studentName,
@@ -4875,14 +6426,22 @@ function HomeschoolApp() {
         const storedGoals = customizations.studyGoals?.data || null;
         const storedFocusTimer = customizations.focusTimerSettings?.data || null;
         const storedReminderSettings = customizations.reminderSettings?.data || null;
+        const storedBackupReminderSettings = customizations.backupReminderSettings?.data || null;
+        const storedClassSchedule = customizations.classScheduleSettings?.data || null;
+        const storedTimeTracking = customizations.timeTrackingData?.data || null;
         const storedNotificationHistory = customizations.notificationHistory?.data || null;
         const storedProfile = customizations.studentProfile?.data || null;
+        const storedPracticeProgress = customizations.practiceProgress?.data || null;
         const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
         const storedAiTutor = customizations.aiTutorPreferences?.data || null;
         if (storedPreferences) {
           if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
           if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
           if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
+          if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
+          if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
+          if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
+          if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
           if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
           if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
           if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
@@ -4903,9 +6462,28 @@ function HomeschoolApp() {
           if (typeof storedReviewPreferences.dailyReviewCap !== "undefined") {
             setDailyReviewCap(Math.max(5, Math.min(50, Number(storedReviewPreferences.dailyReviewCap) || 20)));
           }
+          if (typeof storedReviewPreferences.practiceSubjectId !== "undefined") {
+            setPracticeSubjectId(storedReviewPreferences.practiceSubjectId || "english");
+          }
+          if (storedReviewPreferences.practiceFiltersBySubject && typeof storedReviewPreferences.practiceFiltersBySubject === "object") {
+            setPracticeFiltersBySubject(storedReviewPreferences.practiceFiltersBySubject);
+          }
+          if (storedReviewPreferences.practiceTimedSettings && typeof storedReviewPreferences.practiceTimedSettings === "object") {
+            setPracticeTimedSettings((current) => ({ ...current, ...storedReviewPreferences.practiceTimedSettings }));
+          }
+          if (storedReviewPreferences.reviewSrsSettings && typeof storedReviewPreferences.reviewSrsSettings === "object") {
+            setReviewSrsSettings({
+              masteryThreshold: Math.max(3, Math.min(7, Number(storedReviewPreferences.reviewSrsSettings.masteryThreshold) || 5)),
+              intervalScale: Math.max(0.5, Math.min(2.5, Number(storedReviewPreferences.reviewSrsSettings.intervalScale) || 1)),
+              againMinutes: Math.max(5, Math.min(180, Number(storedReviewPreferences.reviewSrsSettings.againMinutes) || 10)),
+            });
+          }
         }
         if (storedPacing && typeof storedPacing === "object") {
           setDaySectionOverrides(storedPacing);
+        }
+        if (storedPracticeProgress && typeof storedPracticeProgress === "object") {
+          setPracticeLessonProgress(storedPracticeProgress);
         }
         if (storedGoals && typeof storedGoals === "object") {
           setStudyGoals({
@@ -4932,6 +6510,21 @@ function HomeschoolApp() {
             lastShownDay: storedReminderSettings.lastShownDay || null,
           });
         }
+        if (storedBackupReminderSettings && typeof storedBackupReminderSettings === "object") {
+          setBackupReminderSettings(normalizeBackupReminderSettings(storedBackupReminderSettings));
+        }
+        if (storedClassSchedule && typeof storedClassSchedule === "object") {
+          setClassScheduleSettings({
+            enabled: Boolean(storedClassSchedule.enabled),
+            startTime: storedClassSchedule.startTime || "08:00",
+            endTime: storedClassSchedule.endTime || "13:00",
+          });
+        }
+        if (storedTimeTracking && typeof storedTimeTracking === "object") {
+          const normalizedTracking = normalizeTimeTrackingData(storedTimeTracking);
+          timeTrackingRef.current = normalizedTracking;
+          setTimeTrackingData(normalizedTracking);
+        }
         if (Array.isArray(storedNotificationHistory)) {
           setNotificationHistory(storedNotificationHistory.slice(0, 40));
         }
@@ -4948,13 +6541,13 @@ function HomeschoolApp() {
           setCompletedQuizzes(progressMap);
         }
         const persistedStats = await window.HomeSchoolDB.getUserStats();
-        if (persistedStats && persistedStats.totalQuizzes > 0 && !stored?.totalQuizzesDone) {
-          setTotalQuizzesDone(persistedStats.totalQuizzes || 0);
-          setTotalScore(persistedStats.totalScore || 0);
-          setStreak(persistedStats.streak || 0);
-          setLastQuizDate(persistedStats.lastQuizDate || null);
-          setEarnedBadges(persistedStats.badges || []);
-          setXp(persistedStats.xp || 0);
+        if (persistedStats) {
+          setTotalQuizzesDone((current) => Math.max(current || 0, persistedStats.totalQuizzes || 0));
+          setTotalScore((current) => Math.max(current || 0, persistedStats.totalScore || 0));
+          setStreak((current) => Math.max(current || 0, persistedStats.streak || 0));
+          setLastQuizDate((current) => current || persistedStats.lastQuizDate || null);
+          setEarnedBadges((current) => Array.from(new Set([...(current || []), ...(persistedStats.badges || [])])));
+          setXp((current) => Math.max(current || 0, persistedStats.xp || 0));
         }
         await refreshStorageLabel();
         if (versionManagerRef.current) {
@@ -5256,9 +6849,15 @@ function HomeschoolApp() {
     };
   }, [themeMode]);
   useEffect(() => {
-    window.HomeSchoolPrefs = { ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections };
+    window.HomeSchoolPrefs = { ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled };
     if (!ttsEnabled) window.speechSynthesis.cancel();
-  }, [ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections]);
+  }, [ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled]);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!root) return;
+    root.dataset.motion = reducedMotion ? "reduced" : "full";
+    root.dataset.contrast = highContrast ? "high" : "normal";
+  }, [highContrast, reducedMotion]);
   useEffect(() => {
     if (!dbLoaded) return;
     persistCustomizationRef.current?.({
@@ -5267,15 +6866,27 @@ function HomeschoolApp() {
       ttsVoiceSelections,
       language,
       themeMode,
+      fontSizeMode,
+      reducedMotion,
+      highContrast,
+      keyboardShortcutsEnabled,
       navPosition,
       navAutoHide,
       navBarAutoHide,
       transitionMode,
       dailyReviewCap,
+      reviewSrsSettings,
+      practiceSubjectId,
+      practiceFiltersBySubject,
+      practiceTimedSettings,
+      practiceLessonProgress,
       daySectionOverrides,
       studyGoals,
       focusTimerSettings,
       reminderSettings,
+      backupReminderSettings,
+      classScheduleSettings,
+      timeTrackingData,
       notificationHistory,
       grade,
       studentName,
@@ -5283,10 +6894,10 @@ function HomeschoolApp() {
       aiProviderConfigs,
       selectedAiProvider,
     });
-  }, [dbLoaded, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+  }, [dbLoaded, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, installBannerDismissed });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory, installBannerDismissed]);
+    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed });
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -5461,6 +7072,116 @@ function HomeschoolApp() {
     return () => window.clearInterval(timerId);
   }, [reminderSettings, pushNotificationHistoryEntry]);
   useEffect(() => {
+    if (!dbLoaded || !backupReminderSettings.enabled || !hasBackupWorthData || !backupReminderSummary.due) return;
+    const todayKey = getLocalDayKey();
+    if (backupReminderSettings.lastPromptDay === todayKey) return;
+    pushNotificationHistoryEntry({
+      type: "reminder",
+      titleEn: "Backup reminder",
+      titleUr: "بیک اپ یاد دہانی",
+      bodyEn: "Export a fresh backup so your latest progress stays safe.",
+      bodyUr: "نیا بیک اپ ایکسپورٹ کریں تاکہ آپ کی تازہ پیش رفت محفوظ رہے۔",
+      dedupeKey: `backup_${todayKey}`,
+    });
+    setBackupReminderSettings((current) => ({
+      ...normalizeBackupReminderSettings(current),
+      lastPromptDay: todayKey,
+    }));
+  }, [backupReminderSettings, backupReminderSummary.due, dbLoaded, hasBackupWorthData, pushNotificationHistoryEntry]);
+  const awardTimeManagementReward = useCallback((reward) => {
+    if (!reward) return;
+    const badgeIds = Array.from(new Set(reward.badgeIds || []));
+    if (reward.xpGain) {
+      setXp((current) => current + reward.xpGain);
+    }
+    if (badgeIds.length > 0) {
+      const newlyEarned = badgeIds.filter((badgeId) => !earnedBadges.includes(badgeId));
+      if (newlyEarned.length > 0) {
+        setNewBadges((current) => Array.from(new Set([...(current || []), ...newlyEarned])));
+      }
+      setEarnedBadges((current) => Array.from(new Set([...(current || []), ...badgeIds])));
+    }
+    if (reward.notice === "on-time") {
+      pushNotificationHistoryEntry({
+        type: "success",
+        titleEn: "On-time bonus",
+        titleUr: "وقت پر آنے کا بونس",
+        bodyEn: `You earned ${reward.xpGain || 0} XP for starting class on time.`,
+        bodyUr: `آپ نے وقت پر کلاس شروع کرنے پر ${reward.xpGain || 0} ایکس پی حاصل کی۔`,
+        createdAt: Date.now(),
+      });
+    } else if (reward.notice === "class-time") {
+      pushNotificationHistoryEntry({
+        type: "success",
+        titleEn: "Class-time bonus",
+        titleUr: "کلاس وقت بونس",
+        bodyEn: `You completed your scheduled class time and earned ${reward.xpGain || 0} XP.`,
+        bodyUr: `آپ نے اپنا مقررہ کلاس وقت مکمل کیا اور ${reward.xpGain || 0} ایکس پی حاصل کی۔`,
+        createdAt: Date.now(),
+      });
+    }
+  }, [earnedBadges, pushNotificationHistoryEntry]);
+
+  const applyTimeTrackingAction = useCallback((action) => {
+    const result = applyTimeTrackingMutation(timeTrackingRef.current, classScheduleSettings, action);
+    timeTrackingRef.current = result.next;
+    setTimeTrackingData(result.next);
+    if (result.reward) awardTimeManagementReward(result.reward);
+  }, [awardTimeManagementReward, classScheduleSettings]);
+
+  useEffect(() => {
+    if (!dbLoaded || !grade) return undefined;
+
+    const flushUsage = () => {
+      const startedAt = Number(usageTrackingRef.current.startedAt) || 0;
+      if (!startedAt) return;
+      const now = Date.now();
+      const deltaMs = now - startedAt;
+      usageTrackingRef.current.startedAt = now;
+      if (deltaMs >= 1000) {
+        applyTimeTrackingAction({ type: "add-usage", now, deltaMs });
+      }
+    };
+
+    const startTracking = () => {
+      if (document.visibilityState === "hidden" || !document.hasFocus()) return;
+      applyTimeTrackingAction({ type: "mark-visit", now: Date.now() });
+      if (!usageTrackingRef.current.startedAt) {
+        usageTrackingRef.current.startedAt = Date.now();
+      }
+    };
+
+    const stopTracking = () => {
+      flushUsage();
+      usageTrackingRef.current.startedAt = 0;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") stopTracking();
+      else startTracking();
+    };
+
+    startTracking();
+    const timerId = window.setInterval(() => {
+      if (document.visibilityState === "hidden" || !document.hasFocus()) return;
+      flushUsage();
+    }, 30000);
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", startTracking);
+    window.addEventListener("blur", stopTracking);
+    window.addEventListener("pagehide", stopTracking);
+
+    return () => {
+      window.clearInterval(timerId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", startTracking);
+      window.removeEventListener("blur", stopTracking);
+      window.removeEventListener("pagehide", stopTracking);
+      stopTracking();
+    };
+  }, [applyTimeTrackingAction, dbLoaded, grade]);
+  useEffect(() => {
     setPendingReviewBadge(reviewStats.due || 0);
   }, [reviewStats.due]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
@@ -5529,6 +7250,17 @@ function HomeschoolApp() {
     }));
   }, []);
 
+  const handleReviewSrsSettingChange = useCallback((key, value) => {
+    setReviewSrsSettings((current) => ({
+      ...current,
+      [key]: key === "masteryThreshold"
+        ? Math.max(3, Math.min(7, Number(value) || current.masteryThreshold || 5))
+        : key === "intervalScale"
+          ? Math.max(0.5, Math.min(2.5, Number(value) || current.intervalScale || 1))
+          : Math.max(5, Math.min(180, Number(value) || current.againMinutes || 10)),
+    }));
+  }, []);
+
   const handleFocusTimerSettingChange = useCallback((durationMinutes) => {
     const nextMinutes = Math.max(5, Math.min(60, Number(durationMinutes) || 20));
     setFocusTimerSettings((current) => ({
@@ -5544,6 +7276,131 @@ function HomeschoolApp() {
     }));
   }, []);
 
+  const handleBackupReminderSettingChange = useCallback((key, value) => {
+    setBackupReminderSettings((current) => ({
+      ...normalizeBackupReminderSettings(current),
+      [key]: key === "enabled" ? Boolean(value) : value,
+    }));
+  }, []);
+
+  const handlePracticeTimedSettingChange = useCallback((modeId, seconds) => {
+    const safeSeconds = Math.max(10, Math.min(180, Number(seconds) || 30));
+    setPracticeTimedSettings((current) => ({
+      ...current,
+      [modeId]: safeSeconds,
+    }));
+    if (practiceMode === modeId) {
+      setPracticeTimerRemaining(safeSeconds);
+      setPracticeTimerFinished(false);
+    }
+  }, [practiceMode]);
+
+  const updatePracticeLessonProgress = useCallback((card, correct, marksEarned, marksPossible) => {
+    const lessonKey = getPracticeItemLessonKey(card);
+    const subjectId = card?.subject || activePracticeSubjectId;
+    if (!lessonKey || !subjectId) return;
+    const progressKey = `${subjectId}|${lessonKey}`;
+    setPracticeLessonProgress((current) => {
+      const previous = current?.[progressKey] || { attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, lastPlayedAt: null };
+      return {
+        ...current,
+        [progressKey]: {
+          attempted: (previous.attempted || 0) + 1,
+          correct: (previous.correct || 0) + (correct ? 1 : 0),
+          marksEarned: (previous.marksEarned || 0) + marksEarned,
+          marksPossible: (previous.marksPossible || 0) + marksPossible,
+          lastPlayedAt: Date.now(),
+        },
+      };
+    });
+  }, [activePracticeSubjectId]);
+
+  const commitConfidenceChoice = useCallback((level) => {
+    if (practiceConfidenceChoice || !["low", "medium", "high"].includes(level)) return;
+    setPracticeConfidenceChoice(level);
+    setPracticeSessionStats((current) => ({
+      ...current,
+      confidence: {
+        low: (current.confidence?.low || 0) + (level === "low" ? 1 : 0),
+        medium: (current.confidence?.medium || 0) + (level === "medium" ? 1 : 0),
+        high: (current.confidence?.high || 0) + (level === "high" ? 1 : 0),
+      },
+    }));
+  }, [practiceConfidenceChoice]);
+
+  const savePracticeReflection = useCallback(() => {
+    const card = activePracticeCard;
+    const text = String(practiceReflectionDraft || "").trim();
+    if (!card || !text) return;
+    setPracticeReflectionLog((current) => [{
+      id: `${card.id}_${Date.now()}`,
+      cardId: card.id,
+      subject: card.subject || activePracticeSubjectId,
+      lessonKey: getPracticeItemLessonKey(card),
+      prompt: getPracticeFlashFront(card) || card.prompt,
+      note: text,
+      createdAt: Date.now(),
+    }, ...(current || [])].slice(0, 40));
+    setPracticeReflectionDraft("");
+  }, [activePracticeCard, activePracticeSubjectId, practiceReflectionDraft]);
+
+  const triggerPracticeFeedback = useCallback((correct) => {
+    window.HomeSchoolUtils?.playFeedbackSound?.(correct ? "correct" : "wrong");
+    if (correct) setPracticeCelebrationSeed((value) => value + 1);
+  }, []);
+
+  const recordPracticeOutcome = useCallback((card, correct, modeId = practiceMode) => {
+    if (!card) return;
+    const marksPossible = getPracticeDifficultyMarks(getPracticeItemDifficulty(card));
+    const marksEarned = correct ? marksPossible : 0;
+    setPracticeReveal(true);
+    setPracticeFeedbackText(getPracticeFeedbackText(card, modeId, correct, language));
+    setPracticeConfidenceChoice(null);
+    setPracticeReflectionDraft("");
+    setPracticeSessionStats((current) => ({
+      attempted: (current.attempted || 0) + 1,
+      correct: (current.correct || 0) + (correct ? 1 : 0),
+      marksEarned: (current.marksEarned || 0) + marksEarned,
+      marksPossible: (current.marksPossible || 0) + marksPossible,
+      confidence: current.confidence || { low: 0, medium: 0, high: 0 },
+    }));
+    updatePracticeLessonProgress(card, correct, marksEarned, marksPossible);
+    triggerPracticeFeedback(correct);
+  }, [language, practiceMode, triggerPracticeFeedback, updatePracticeLessonProgress]);
+
+  const handlePracticeTimerExpiry = useCallback(() => {
+    if (!activePracticeCard) return;
+    if (practiceMode === "timedmatching") {
+      setPracticeTimerFinished(true);
+      setPracticeFeedbackText(joinLocalizedText("Time is up for this matching set. Review the pairs and go next.", "اس جوڑی والے سیٹ کا وقت ختم ہو گیا۔ جوڑیاں دیکھیں اور اگلا دبائیں۔", language));
+      recordPracticeOutcome(activePracticeCard, false, "timedmatching");
+      return;
+    }
+    if (practiceMode === "timedquiz" || practiceMode === "timedtruefalse" || practiceMode === "timedchallenge") {
+      setPracticeTimerFinished(true);
+      recordPracticeOutcome(activePracticeCard, false, practiceMode);
+    }
+  }, [activePracticeCard, language, practiceMode, recordPracticeOutcome]);
+
+  useEffect(() => {
+    if (!["timedchallenge", "timedquiz", "timedtruefalse", "timedmatching"].includes(practiceMode) || practiceTimerFinished) return undefined;
+    if (practiceTimerRemaining <= 0) {
+      handlePracticeTimerExpiry();
+      return undefined;
+    }
+    const timerId = setTimeout(() => {
+      setPracticeTimerRemaining((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => clearTimeout(timerId);
+  }, [handlePracticeTimerExpiry, practiceMode, practiceTimerFinished, practiceTimerRemaining]);
+
+  const handleClassScheduleChange = useCallback((key, value) => {
+    setClassScheduleSettings((current) => ({
+      ...current,
+      [key]: key === "enabled" ? Boolean(value) : value,
+    }));
+  }, []);
+
   const handleRequestNotificationPermission = useCallback(async () => {
     if (!("Notification" in window)) return;
     try {
@@ -5555,6 +7412,19 @@ function HomeschoolApp() {
       console.log("Unable to request notification permission:", error);
     }
   }, []);
+
+  const handleOpenDiscoveryLesson = useCallback((item) => {
+    if (!item?.subjectId || !grade) return;
+    const subject = SUBJECTS.find((entry) => entry.id === item.subjectId);
+    if (!subject) return;
+    const lesson = (getLessons(subject.id, grade) || []).find((entry) => (entry.key || entry.id) === item.lessonKey);
+    if (!lesson) return;
+    window.speechSynthesis.cancel();
+    setTab("home");
+    setSelectedSubject(subject);
+    clearLessonSelections();
+    setSelectedLesson(lesson);
+  }, [clearLessonSelections, grade]);
 
   const handleAiProviderDraftChange = useCallback((providerId, field, value) => {
     setAiProviderDrafts((current) => ({
@@ -5820,10 +7690,158 @@ function HomeschoolApp() {
       : ui.refreshNoChanges);
   }, [refreshReviewWorkspace, refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
 
+  const applyImportedAppState = useCallback((nextState = {}, mode = "replace") => {
+    if (mode === "replace") {
+      if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
+      if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
+      if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr(nextState.studentNameUr);
+      if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
+      if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
+      if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
+      if (typeof nextState.streak !== "undefined") setStreak(nextState.streak);
+      if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate(nextState.lastQuizDate);
+      if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
+      if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
+      if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
+      if (typeof nextState.ttsRate !== "undefined") setTtsRate(Math.max(0.6, Math.min(1.3, Number(nextState.ttsRate) || 0.85)));
+      if (nextState.ttsVoiceSelections) setTtsVoiceSelections({ en: nextState.ttsVoiceSelections.en || "", ur: nextState.ttsVoiceSelections.ur || "" });
+      if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
+      if (typeof nextState.themeMode !== "undefined") setThemeMode(nextState.themeMode);
+      if (typeof nextState.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(nextState.fontSizeMode)) setFontSizeMode(nextState.fontSizeMode);
+      if (typeof nextState.reducedMotion !== "undefined") setReducedMotion(Boolean(nextState.reducedMotion));
+      if (typeof nextState.highContrast !== "undefined") setHighContrast(Boolean(nextState.highContrast));
+      if (typeof nextState.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(nextState.keyboardShortcutsEnabled));
+      if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition(nextState.navPosition);
+      if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
+      if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
+      if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
+      if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
+      if (nextState.reviewSrsSettings) setReviewSrsSettings({
+        masteryThreshold: Math.max(3, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || 5)),
+        intervalScale: Math.max(0.5, Math.min(2.5, Number(nextState.reviewSrsSettings.intervalScale) || 1)),
+        againMinutes: Math.max(5, Math.min(180, Number(nextState.reviewSrsSettings.againMinutes) || 10)),
+      });
+      if (typeof nextState.practiceSubjectId !== "undefined") setPracticeSubjectId(nextState.practiceSubjectId || "english");
+      if (nextState.practiceFiltersBySubject) setPracticeFiltersBySubject(nextState.practiceFiltersBySubject);
+      if (nextState.practiceTimedSettings) setPracticeTimedSettings((current) => ({ ...current, ...nextState.practiceTimedSettings }));
+      if (nextState.practiceLessonProgress) setPracticeLessonProgress(nextState.practiceLessonProgress);
+      setDaySectionOverrides(nextState.daySectionOverrides || {});
+      if (nextState.studyGoals) setStudyGoals({
+        dailyReviews: Math.max(5, Math.min(60, Number(nextState.studyGoals.dailyReviews) || 20)),
+        weeklyWords: Math.max(10, Math.min(140, Number(nextState.studyGoals.weeklyWords) || 40)),
+      });
+      if (nextState.focusTimerSettings) setFocusTimerSettings({
+        durationMinutes: Math.max(5, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || 20)),
+        autoStartBreak: Boolean(nextState.focusTimerSettings.autoStartBreak),
+      });
+      if (nextState.reminderSettings) setReminderSettings({
+        enabled: Boolean(nextState.reminderSettings.enabled),
+        time: nextState.reminderSettings.time || "18:00",
+        notifications: Boolean(nextState.reminderSettings.notifications),
+        lastShownDay: nextState.reminderSettings.lastShownDay || null,
+      });
+      if (nextState.backupReminderSettings) setBackupReminderSettings(normalizeBackupReminderSettings(nextState.backupReminderSettings));
+      if (nextState.classScheduleSettings) setClassScheduleSettings({
+        enabled: Boolean(nextState.classScheduleSettings.enabled),
+        startTime: nextState.classScheduleSettings.startTime || "08:00",
+        endTime: nextState.classScheduleSettings.endTime || "13:00",
+      });
+      if (nextState.timeTrackingData) {
+        const normalizedTracking = normalizeTimeTrackingData(nextState.timeTrackingData);
+        timeTrackingRef.current = normalizedTracking;
+        setTimeTrackingData(normalizedTracking);
+      }
+      if (Array.isArray(nextState.notificationHistory)) setNotificationHistory(nextState.notificationHistory.slice(0, 40));
+      return;
+    }
+
+    if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
+    if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
+    if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr((current) => current || nextState.studentNameUr);
+    if (nextState.completedQuizzes) setCompletedQuizzes((current) => ({ ...current, ...nextState.completedQuizzes }));
+    if (typeof nextState.totalScore !== "undefined") setTotalScore((current) => Math.max(current, nextState.totalScore));
+    if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone((current) => Math.max(current, nextState.totalQuizzesDone));
+    if (typeof nextState.streak !== "undefined") setStreak((current) => Math.max(current, nextState.streak));
+    if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate((current) => current || nextState.lastQuizDate);
+    if (nextState.earnedBadges) setEarnedBadges((current) => Array.from(new Set([...(current || []), ...nextState.earnedBadges])));
+    if (typeof nextState.xp !== "undefined") setXp((current) => Math.max(current, nextState.xp));
+    if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
+    if (typeof nextState.ttsRate !== "undefined") setTtsRate((current) => Math.max(current, Math.min(1.3, Number(nextState.ttsRate) || current)));
+    if (nextState.ttsVoiceSelections) setTtsVoiceSelections((current) => ({ ...current, ...nextState.ttsVoiceSelections }));
+    if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
+    if (typeof nextState.themeMode !== "undefined") setThemeMode((current) => current || nextState.themeMode);
+    if (typeof nextState.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(nextState.fontSizeMode)) setFontSizeMode((current) => current || nextState.fontSizeMode);
+    if (typeof nextState.reducedMotion !== "undefined") setReducedMotion((current) => current || Boolean(nextState.reducedMotion));
+    if (typeof nextState.highContrast !== "undefined") setHighContrast((current) => current || Boolean(nextState.highContrast));
+    if (typeof nextState.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled((current) => current || Boolean(nextState.keyboardShortcutsEnabled));
+    if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition((current) => current || nextState.navPosition);
+    if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
+    if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
+    if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
+    if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
+    if (nextState.reviewSrsSettings) setReviewSrsSettings((current) => ({
+      masteryThreshold: Math.max(current.masteryThreshold || 5, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || current.masteryThreshold || 5)),
+      intervalScale: Math.max(current.intervalScale || 1, Math.min(2.5, Number(nextState.reviewSrsSettings.intervalScale) || current.intervalScale || 1)),
+      againMinutes: Math.max(current.againMinutes || 10, Math.min(180, Number(nextState.reviewSrsSettings.againMinutes) || current.againMinutes || 10)),
+    }));
+    if (typeof nextState.practiceSubjectId !== "undefined") setPracticeSubjectId((current) => current || nextState.practiceSubjectId || "english");
+    if (nextState.practiceFiltersBySubject) setPracticeFiltersBySubject((current) => ({ ...(current || {}), ...nextState.practiceFiltersBySubject }));
+    if (nextState.practiceTimedSettings) setPracticeTimedSettings((current) => ({ ...(current || {}), ...nextState.practiceTimedSettings }));
+    if (nextState.practiceLessonProgress) setPracticeLessonProgress((current) => ({ ...(current || {}), ...nextState.practiceLessonProgress }));
+    if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
+    if (nextState.studyGoals) setStudyGoals((current) => ({
+      dailyReviews: Math.max(current.dailyReviews || 20, Math.min(60, Number(nextState.studyGoals.dailyReviews) || current.dailyReviews || 20)),
+      weeklyWords: Math.max(current.weeklyWords || 40, Math.min(140, Number(nextState.studyGoals.weeklyWords) || current.weeklyWords || 40)),
+    }));
+    if (nextState.focusTimerSettings) setFocusTimerSettings((current) => ({
+      durationMinutes: Math.max(current.durationMinutes || 20, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || current.durationMinutes || 20)),
+      autoStartBreak: current.autoStartBreak || Boolean(nextState.focusTimerSettings.autoStartBreak),
+    }));
+    if (nextState.reminderSettings) setReminderSettings((current) => ({
+      ...current,
+      enabled: current.enabled || Boolean(nextState.reminderSettings.enabled),
+      time: current.time || nextState.reminderSettings.time || "18:00",
+      notifications: current.notifications || Boolean(nextState.reminderSettings.notifications),
+      lastShownDay: current.lastShownDay || nextState.reminderSettings.lastShownDay || null,
+    }));
+    if (nextState.backupReminderSettings) setBackupReminderSettings((current) => ({
+      ...normalizeBackupReminderSettings(current),
+      ...normalizeBackupReminderSettings(nextState.backupReminderSettings),
+      intervalDays: Math.min(normalizeBackupReminderSettings(current).intervalDays, normalizeBackupReminderSettings(nextState.backupReminderSettings).intervalDays),
+      lastBackupAt: Math.max(Number(current?.lastBackupAt) || 0, Number(nextState.backupReminderSettings?.lastBackupAt) || 0) || null,
+    }));
+    if (nextState.classScheduleSettings) setClassScheduleSettings((current) => ({
+      enabled: current.enabled || Boolean(nextState.classScheduleSettings.enabled),
+      startTime: current.startTime || nextState.classScheduleSettings.startTime || "08:00",
+      endTime: current.endTime || nextState.classScheduleSettings.endTime || "13:00",
+    }));
+    if (nextState.timeTrackingData) {
+      const mergedTracking = mergeTimeTrackingData(timeTrackingRef.current, nextState.timeTrackingData);
+      timeTrackingRef.current = mergedTracking;
+      setTimeTrackingData(mergedTracking);
+    }
+    if (Array.isArray(nextState.notificationHistory)) setNotificationHistory((current) => [...(current || []), ...nextState.notificationHistory].slice(0, 40));
+  }, []);
+
+  const executeImportReview = useCallback(async (previewState, mode) => {
+    if (!previewState?.parsed) return;
+    const parsed = previewState.parsed;
+    const nextState = parsed.appState || {};
+    applyImportedAppState(nextState, mode);
+    if (window.HomeSchoolDB && parsed.dbProgress) {
+      await window.HomeSchoolDB.importProgress(parsed.dbProgress, { mode });
+    }
+    await refreshStorageLabel();
+    await refreshReviewWorkspace();
+    setImportReviewState(null);
+    alert(mode === "replace" ? ui.importSuccessReplace : ui.importSuccessMerge);
+  }, [applyImportedAppState, refreshReviewWorkspace, refreshStorageLabel, ui.importSuccessMerge, ui.importSuccessReplace]);
+
   const handleExportProgress = useCallback(async () => {
     const dbProgress = window.HomeSchoolDB ? await window.HomeSchoolDB.exportProgress() : null;
+    const exportedAt = Date.now();
     downloadJson(`homeschool-progress-${Date.now()}.json`, {
-      exportedAt: new Date().toISOString(),
+      exportedAt: new Date(exportedAt).toISOString(),
       appVersion: window.HomeSchoolData.VERSION,
       appState: {
         grade,
@@ -5841,26 +7859,42 @@ function HomeschoolApp() {
         ttsVoiceSelections,
         language,
         themeMode,
+        fontSizeMode,
+        reducedMotion,
+        highContrast,
+        keyboardShortcutsEnabled,
         navPosition,
         navAutoHide,
         navBarAutoHide,
         transitionMode,
         dailyReviewCap,
+        reviewSrsSettings,
+        practiceSubjectId,
+        practiceFiltersBySubject,
+        practiceTimedSettings,
+        practiceLessonProgress,
         daySectionOverrides,
         studyGoals,
         focusTimerSettings,
         reminderSettings,
+        backupReminderSettings,
+        classScheduleSettings,
+        timeTrackingData,
         notificationHistory,
       },
       dbProgress,
     });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, notificationHistory]);
+    setBackupReminderSettings((current) => ({
+      ...normalizeBackupReminderSettings(current),
+      lastBackupAt: exportedAt,
+      lastPromptDay: getLocalDayKey(exportedAt),
+    }));
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
     if (!file) return;
     try {
-      if (!confirm(ui.importNow)) return;
       const text = await file.text();
       const parsed = JSON.parse(text);
       const validation = validateProgressImport(parsed);
@@ -5868,98 +7902,28 @@ function HomeschoolApp() {
         alert(`${ui.importInvalid}\n${validation.errors.join("\n")}`);
         return;
       }
-      if (parsed?.dbProgress?.dataVersion && parsed.dbProgress.dataVersion > window.HomeSchoolData.VERSION && !confirm(ui.importNewer)) {
-        return;
-      }
-      const replaceMode = confirm(ui.replacePrompt);
-      const mode = replaceMode ? "replace" : "merge";
-      const nextState = parsed.appState || {};
-      if (mode === "replace") {
-        if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
-        if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
-        if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr(nextState.studentNameUr);
-        if (nextState.completedQuizzes) setCompletedQuizzes(nextState.completedQuizzes);
-        if (typeof nextState.totalScore !== "undefined") setTotalScore(nextState.totalScore);
-        if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone(nextState.totalQuizzesDone);
-        if (typeof nextState.streak !== "undefined") setStreak(nextState.streak);
-        if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate(nextState.lastQuizDate);
-        if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
-        if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
-        if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
-        if (typeof nextState.ttsRate !== "undefined") setTtsRate(Math.max(0.6, Math.min(1.3, Number(nextState.ttsRate) || 0.85)));
-        if (nextState.ttsVoiceSelections) setTtsVoiceSelections({ en: nextState.ttsVoiceSelections.en || "", ur: nextState.ttsVoiceSelections.ur || "" });
-        if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
-        if (typeof nextState.themeMode !== "undefined") setThemeMode(nextState.themeMode);
-        if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition(nextState.navPosition);
-        if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
-        if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
-        if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
-        if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
-        setDaySectionOverrides(nextState.daySectionOverrides || {});
-        if (nextState.studyGoals) setStudyGoals({
-          dailyReviews: Math.max(5, Math.min(60, Number(nextState.studyGoals.dailyReviews) || 20)),
-          weeklyWords: Math.max(10, Math.min(140, Number(nextState.studyGoals.weeklyWords) || 40)),
-        });
-        if (nextState.focusTimerSettings) setFocusTimerSettings({
-          durationMinutes: Math.max(5, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || 20)),
-          autoStartBreak: Boolean(nextState.focusTimerSettings.autoStartBreak),
-        });
-        if (nextState.reminderSettings) setReminderSettings({
-          enabled: Boolean(nextState.reminderSettings.enabled),
-          time: nextState.reminderSettings.time || "18:00",
-          notifications: Boolean(nextState.reminderSettings.notifications),
-          lastShownDay: nextState.reminderSettings.lastShownDay || null,
-        });
-        if (Array.isArray(nextState.notificationHistory)) setNotificationHistory(nextState.notificationHistory.slice(0, 40));
-      } else {
-        if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
-        if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
-        if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr((current) => current || nextState.studentNameUr);
-        if (nextState.completedQuizzes) setCompletedQuizzes((current) => ({ ...current, ...nextState.completedQuizzes }));
-        if (typeof nextState.totalScore !== "undefined") setTotalScore((current) => Math.max(current, nextState.totalScore));
-        if (typeof nextState.totalQuizzesDone !== "undefined") setTotalQuizzesDone((current) => Math.max(current, nextState.totalQuizzesDone));
-        if (typeof nextState.streak !== "undefined") setStreak((current) => Math.max(current, nextState.streak));
-        if (typeof nextState.lastQuizDate !== "undefined") setLastQuizDate((current) => current || nextState.lastQuizDate);
-        if (nextState.earnedBadges) setEarnedBadges((current) => Array.from(new Set([...(current || []), ...nextState.earnedBadges])));
-        if (typeof nextState.xp !== "undefined") setXp((current) => Math.max(current, nextState.xp));
-        if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
-        if (typeof nextState.ttsRate !== "undefined") setTtsRate((current) => Math.max(current, Math.min(1.3, Number(nextState.ttsRate) || current)));
-        if (nextState.ttsVoiceSelections) setTtsVoiceSelections((current) => ({ ...current, ...nextState.ttsVoiceSelections }));
-        if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
-        if (typeof nextState.themeMode !== "undefined") setThemeMode((current) => current || nextState.themeMode);
-        if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition((current) => current || nextState.navPosition);
-        if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
-        if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
-        if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
-        if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
-        if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
-        if (nextState.studyGoals) setStudyGoals((current) => ({
-          dailyReviews: Math.max(current.dailyReviews || 20, Math.min(60, Number(nextState.studyGoals.dailyReviews) || current.dailyReviews || 20)),
-          weeklyWords: Math.max(current.weeklyWords || 40, Math.min(140, Number(nextState.studyGoals.weeklyWords) || current.weeklyWords || 40)),
-        }));
-        if (nextState.focusTimerSettings) setFocusTimerSettings((current) => ({
-          durationMinutes: Math.max(current.durationMinutes || 20, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || current.durationMinutes || 20)),
-          autoStartBreak: current.autoStartBreak || Boolean(nextState.focusTimerSettings.autoStartBreak),
-        }));
-        if (nextState.reminderSettings) setReminderSettings((current) => ({
-          ...current,
-          enabled: current.enabled || Boolean(nextState.reminderSettings.enabled),
-          time: current.time || nextState.reminderSettings.time || "18:00",
-          notifications: current.notifications || Boolean(nextState.reminderSettings.notifications),
-          lastShownDay: current.lastShownDay || nextState.reminderSettings.lastShownDay || null,
-        }));
-        if (Array.isArray(nextState.notificationHistory)) setNotificationHistory((current) => [...(current || []), ...nextState.notificationHistory].slice(0, 40));
-      }
-      if (window.HomeSchoolDB && parsed.dbProgress) await window.HomeSchoolDB.importProgress(parsed.dbProgress, { mode });
-      await refreshStorageLabel();
-      await refreshReviewWorkspace();
-      alert(mode === "replace" ? ui.importSuccessReplace : ui.importSuccessMerge);
+      const preview = summarizeImportPreview(parsed, {
+        grade,
+        studentName,
+        completedQuizzes,
+        language,
+        themeMode,
+        transitionMode,
+        classScheduleSettings,
+        reminderSettings,
+        reviewHistoryCount: reviewAnalytics.totals.reviewedLastPeriod || 0,
+        timeTrackingHistoryCount: (timeTrackingData.history || []).length,
+      }, window.HomeSchoolData.VERSION);
+      setImportReviewState({
+        ...preview,
+        fileName: file.name,
+      });
     } catch (error) {
       alert(`${ui.importInvalid}\n${error.message || error}`);
     } finally {
       event.target.value = "";
     }
-  }, [refreshReviewWorkspace, refreshStorageLabel, ui.importInvalid, ui.importNewer, ui.importNow, ui.importSuccessMerge, ui.importSuccessReplace, ui.replacePrompt]);
+  }, [classScheduleSettings, completedQuizzes, grade, language, reminderSettings, reviewAnalytics.totals.reviewedLastPeriod, studentName, themeMode, timeTrackingData.history, transitionMode, ui.importInvalid]);
 
   const handleResetProgress = useCallback(async () => {
     if (!confirm(ui.resetConfirm)) return;
@@ -5990,6 +7954,49 @@ function HomeschoolApp() {
     location.reload();
   }, [ui.fullResetConfirm]);
 
+  const handleResetReviewSystem = useCallback(async () => {
+    if (!confirm(joinLocalizedText("Reset only the review queue and review history?", "صرف ریویو قطار اور ریویو ہسٹری ری سیٹ کرنی ہے؟", language))) return;
+    if (window.HomeSchoolDB) await window.HomeSchoolDB.resetReviewSystem(window.HomeSchoolData);
+    setReviewQueue([]);
+    setReviewIdx(0);
+    setReviewReveal(false);
+    setReviewSessionDone(false);
+    setReviewSessionXp(0);
+    await refreshReviewWorkspace();
+    await refreshStorageLabel();
+  }, [language, refreshReviewWorkspace, refreshStorageLabel]);
+
+  const handleClearStudyCollections = useCallback(async () => {
+    if (!confirm(joinLocalizedText("Clear favorites, notes, and custom lists only?", "صرف پسندیدہ، نوٹس، اور اپنی فہرستیں صاف کرنی ہیں؟", language))) return;
+    if (window.HomeSchoolDB) await window.HomeSchoolDB.clearStudyCollections();
+    setReviewQueue((current) => current.map((card) => ({
+      ...card,
+      favorite: false,
+      note: "",
+      listIds: [],
+      listNames: [],
+    })));
+    await refreshReviewWorkspace();
+    await refreshStorageLabel();
+  }, [language, refreshReviewWorkspace, refreshStorageLabel]);
+
+  const handleResetPlanningData = useCallback(async () => {
+    if (!confirm(joinLocalizedText("Reset class time tracking, reminders, and planning tools?", "کیا کلاس وقت ٹریکنگ، یاد دہانیاں، اور منصوبہ بندی ٹولز ری سیٹ کرنے ہیں؟", language))) return;
+    if (window.HomeSchoolDB) await window.HomeSchoolDB.resetPlanningData();
+    setStudyGoals({ dailyReviews: 20, weeklyWords: 40 });
+    setFocusTimerSettings({ durationMinutes: 20, autoStartBreak: false });
+    setFocusTimerState({ active: false, remainingSeconds: 20 * 60, startedAt: null, completedSessions: 0 });
+    setReminderSettings({ enabled: false, time: "18:00", notifications: false, lastShownDay: null });
+    setBackupReminderSettings(normalizeBackupReminderSettings({}));
+    setClassScheduleSettings({ enabled: false, startTime: "08:00", endTime: "13:00" });
+    const clearedTracking = normalizeTimeTrackingData({});
+    timeTrackingRef.current = clearedTracking;
+    usageTrackingRef.current.startedAt = 0;
+    setTimeTrackingData(clearedTracking);
+    setNotificationHistory([]);
+    await refreshStorageLabel();
+  }, [language, refreshStorageLabel]);
+
   const handleStartReview = useCallback(async () => {
     if (!window.HomeSchoolDB) return;
     setReviewLoading(true);
@@ -6011,7 +8018,7 @@ function HomeschoolApp() {
 
   const handleReviewResponse = useCallback(async (rating) => {
     if (!window.HomeSchoolDB || !activeReviewCard) return;
-    const result = await window.HomeSchoolDB.saveReviewResult(activeReviewCard.id, rating);
+    const result = await window.HomeSchoolDB.saveReviewResult(activeReviewCard.id, rating, reviewSrsSettings);
     if (result?.stats) {
       setXp(result.stats.xp || 0);
     }
@@ -6024,7 +8031,7 @@ function HomeschoolApp() {
     }
     setReviewIdx((current) => current + 1);
     await refreshReviewWorkspace();
-  }, [activeReviewCard, refreshReviewWorkspace, reviewIdx, reviewQueue.length]);
+  }, [activeReviewCard, refreshReviewWorkspace, reviewIdx, reviewQueue.length, reviewSrsSettings]);
 
   const resetReviewSession = useCallback(() => {
     setReviewQueue([]);
@@ -6035,20 +8042,68 @@ function HomeschoolApp() {
   }, []);
 
   const resetPracticeSession = useCallback(() => {
+    if (practiceAdvanceTimerRef.current) {
+      clearTimeout(practiceAdvanceTimerRef.current);
+      practiceAdvanceTimerRef.current = null;
+    }
     setPracticeMode(null);
     setPracticeDeck([]);
     setPracticeIdx(0);
     setPracticeReveal(false);
     setPracticeTypingInput("");
     setPracticeTypingResult(null);
+    setPracticeDictationInput("");
+    setPracticeDictationResult(null);
     setPracticeMatchRound(null);
     setPracticeMatchSelection(null);
-    setPracticeSessionStats({ attempted: 0, correct: 0 });
+    setPracticeBlankChoice(null);
+    setPracticeBlankResult(null);
+    setPracticeSentenceSelection([]);
+    setPracticeSentenceResult(null);
+    setPracticeTimedChoice(null);
+    setPracticeTimedResult(null);
+    setPracticeTimerRemaining(60);
+    setPracticeTimerFinished(false);
+    setPracticeSessionStats({ attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, confidence: { low: 0, medium: 0, high: 0 } });
+    setPracticeConfidenceChoice(null);
+    setPracticeFeedbackText("");
+    setPracticeReflectionDraft("");
+    setPracticeReflectionLog([]);
+    setPracticeBreakDismissedAt(0);
   }, []);
 
   const handleStartPractice = useCallback((mode) => {
-    const deck = buildPracticeDeck(reviewLibrary, mode === "matching" ? 8 : 12);
-    if (!deck.length) return;
+    if (mode === "dictation" && !window.HomeSchoolUtils?.isTtsEnabled?.()) {
+      alert(joinLocalizedText("Turn on TTS first to use Dictation mode.", "ڈکٹیشن موڈ استعمال کرنے کے لیے پہلے ٹی ٹی ایس آن کریں۔", language));
+      return;
+    }
+    const sourcePool = mode === "flashcards" || mode === "typing" || mode === "matching" || mode === "timedmatching"
+      ? practiceCoreModePool
+      : practiceSubjectSourcePool;
+    const deck = mode === "fillblanks"
+      ? buildFillBlankDeck(sourcePool, 10, 4)
+      : mode === "sentencebuilder"
+        ? buildSentenceBuilderDeck(practiceSubjectSourcePool, 10)
+        : mode === "timedchallenge"
+          ? buildTimedChallengeDeck(practiceSubjectSourcePool, 16, 4)
+          : mode === "timedquiz"
+            ? buildTimedQuizDeck(practiceSubjectSourcePool, 12)
+            : mode === "timedtruefalse"
+              ? buildTrueFalseDeck(practiceSubjectSourcePool, 12)
+              : mode === "interleaved"
+                ? buildInterleavedDeck(practiceSubjectSourcePool, 12)
+          : buildPracticeDeck(sourcePool, mode === "matching" ? 8 : 12, mode);
+    if (!deck.length) {
+      const message = mode === "fillblanks"
+        ? joinLocalizedText(`${activePracticeSubject?.name || "This subject"} does not have sentence-based practice ready for Fill in Blanks yet.`, `${activePracticeSubject?.nameUr || "اس مضمون"} کے لیے خالی جگہ پُر کرنے کی جملہ والی مشق ابھی تیار نہیں ہے۔`, language)
+        : mode === "sentencebuilder"
+          ? joinLocalizedText(`${activePracticeSubject?.name || "This subject"} does not have enough sentence material for Sentence Builder yet.`, `${activePracticeSubject?.nameUr || "اس مضمون"} کے لیے جملہ بنانے کی مشق ابھی تیار نہیں ہے۔`, language)
+          : mode === "timedchallenge"
+            ? joinLocalizedText(`${activePracticeSubject?.name || "This subject"} does not have enough prompts for Timed Challenge yet.`, `${activePracticeSubject?.nameUr || "اس مضمون"} کے لیے وقت والی چیلنج ابھی تیار نہیں ہے۔`, language)
+        : joinLocalizedText(`${activePracticeSubject?.name || "This subject"} does not have practice cards ready for this mode yet.`, `${activePracticeSubject?.nameUr || "اس مضمون"} کے لیے اس موڈ کی پریکٹس ابھی تیار نہیں ہے۔`, language);
+      alert(message);
+      return;
+    }
     resetReviewSession();
     setPracticeMode(mode);
     setPracticeDeck(deck);
@@ -6056,14 +8111,31 @@ function HomeschoolApp() {
     setPracticeReveal(false);
     setPracticeTypingInput("");
     setPracticeTypingResult(null);
-    setPracticeSessionStats({ attempted: 0, correct: 0 });
+    setPracticeDictationInput("");
+    setPracticeDictationResult(null);
+    setPracticeSessionStats({ attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, confidence: { low: 0, medium: 0, high: 0 } });
     setPracticeMatchSelection(null);
-    setPracticeMatchRound(mode === "matching" ? buildMatchRound(deck, 4) : null);
+    setPracticeMatchRound(mode === "matching" || mode === "timedmatching" ? buildMatchRound(deck, 4) : null);
+    setPracticeBlankChoice(null);
+    setPracticeBlankResult(null);
+    setPracticeSentenceSelection([]);
+    setPracticeSentenceResult(null);
+    setPracticeTimedChoice(null);
+    setPracticeTimedResult(null);
+    setPracticeTimerRemaining(Math.max(10, Math.min(180, Number(practiceTimedSettings?.[mode] || (mode === "timedchallenge" ? 60 : 30)) || (mode === "timedchallenge" ? 60 : 30))));
+    setPracticeTimerFinished(false);
+    setPracticeConfidenceChoice(null);
+    setPracticeFeedbackText("");
+    setPracticeReflectionDraft("");
     setTab("review");
-  }, [reviewLibrary, resetReviewSession]);
+  }, [activePracticeSubject?.name, activePracticeSubject?.nameUr, language, practiceCoreModePool, practiceSubjectSourcePool, practiceTimedSettings, resetReviewSession]);
 
   const handlePracticeNext = useCallback(() => {
-    if (practiceMode === "matching") {
+    if (practiceAdvanceTimerRef.current) {
+      clearTimeout(practiceAdvanceTimerRef.current);
+      practiceAdvanceTimerRef.current = null;
+    }
+    if (practiceMode === "matching" || practiceMode === "timedmatching") {
       if (practiceIdx >= practiceDeck.length - 4) {
         resetPracticeSession();
         return;
@@ -6072,6 +8144,17 @@ function HomeschoolApp() {
       setPracticeIdx((current) => current + 4);
       setPracticeMatchSelection(null);
       setPracticeMatchRound(buildMatchRound(nextDeck, 4));
+      if (practiceMode === "timedmatching") {
+        setPracticeTimerRemaining(activePracticeTimeLimit);
+        setPracticeTimerFinished(false);
+      }
+      setPracticeFeedbackText("");
+      setPracticeConfidenceChoice(null);
+      return;
+    }
+    if (practiceMode === "timedchallenge" && practiceIdx >= practiceDeck.length - 1) {
+      setPracticeTimerFinished(true);
+      setPracticeReveal(true);
       return;
     }
     if (practiceIdx >= practiceDeck.length - 1) {
@@ -6082,19 +8165,124 @@ function HomeschoolApp() {
     setPracticeReveal(false);
     setPracticeTypingInput("");
     setPracticeTypingResult(null);
-  }, [practiceMode, practiceIdx, practiceDeck, resetPracticeSession]);
+    setPracticeDictationInput("");
+    setPracticeDictationResult(null);
+    setPracticeBlankChoice(null);
+    setPracticeBlankResult(null);
+    setPracticeSentenceSelection([]);
+    setPracticeSentenceResult(null);
+    setPracticeTimedChoice(null);
+    setPracticeTimedResult(null);
+    setPracticeConfidenceChoice(null);
+    setPracticeFeedbackText("");
+    setPracticeReflectionDraft("");
+    if (["timedchallenge", "timedquiz", "timedtruefalse"].includes(practiceMode)) {
+      setPracticeTimerRemaining(activePracticeTimeLimit);
+      setPracticeTimerFinished(false);
+    }
+  }, [activePracticeTimeLimit, practiceMode, practiceIdx, practiceDeck, resetPracticeSession]);
 
   const handleCheckTypedAnswer = useCallback(() => {
     const card = practiceDeck[practiceIdx];
     if (!card) return;
     const correct = isTypingAnswerCorrect(card, practiceTypingInput);
     setPracticeTypingResult(correct ? "correct" : "wrong");
-    setPracticeReveal(true);
-    setPracticeSessionStats((current) => ({
-      attempted: (current.attempted || 0) + 1,
-      correct: (current.correct || 0) + (correct ? 1 : 0),
-    }));
-  }, [practiceDeck, practiceIdx, practiceTypingInput]);
+    recordPracticeOutcome(card, correct, "typing");
+  }, [practiceDeck, practiceIdx, practiceTypingInput, recordPracticeOutcome]);
+
+  const handleCheckDictationAnswer = useCallback(() => {
+    const card = practiceDeck[practiceIdx];
+    if (!card) return;
+    const correct = normalizeAnswerText(practiceDictationInput) === normalizeAnswerText(card.prompt);
+    setPracticeDictationResult(correct ? "correct" : "wrong");
+    recordPracticeOutcome(card, correct, "dictation");
+  }, [practiceDeck, practiceDictationInput, practiceIdx, recordPracticeOutcome]);
+
+  const handleBlankChoice = useCallback((choice) => {
+    const card = practiceDeck[practiceIdx];
+    if (!card || practiceReveal) return;
+    const correct = normalizeAnswerText(choice) === normalizeAnswerText(card.prompt);
+    setPracticeBlankChoice(choice);
+    setPracticeBlankResult(correct ? "correct" : "wrong");
+    recordPracticeOutcome(card, correct, "fillblanks");
+  }, [practiceDeck, practiceIdx, practiceReveal, recordPracticeOutcome]);
+
+  const handleSentenceTokenToggle = useCallback((token, tokenIndex) => {
+    if (!activePracticeCard || practiceReveal) return;
+    setPracticeSentenceSelection((current) => {
+      const exists = current.some((entry) => entry.index === tokenIndex);
+      if (exists) {
+        return current.filter((entry) => entry.index !== tokenIndex);
+      }
+      return [...current, { index: tokenIndex, text: token }];
+    });
+  }, [activePracticeCard, practiceReveal]);
+
+  const handleSentenceSelectionRemove = useCallback((selectionIndex) => {
+    if (practiceReveal) return;
+    setPracticeSentenceSelection((current) => current.filter((_, index) => index !== selectionIndex));
+  }, [practiceReveal]);
+
+  const handleCheckSentenceBuilder = useCallback(() => {
+    const card = practiceDeck[practiceIdx];
+    if (!card) return;
+    const builtSentence = normalizeSentenceSpacing(practiceSentenceSelection.map((entry) => entry.text).join(" "));
+    const expectedSentence = normalizeSentenceSpacing(card.sentenceBuilderSentence || "");
+    const correct = normalizeAnswerText(builtSentence) === normalizeAnswerText(expectedSentence);
+    setPracticeSentenceResult(correct ? "correct" : "wrong");
+    recordPracticeOutcome(card, correct, "sentencebuilder");
+  }, [practiceDeck, practiceIdx, practiceSentenceSelection, recordPracticeOutcome]);
+
+  const handleFlashcardSelfGrade = useCallback((correct) => {
+    const card = practiceDeck[practiceIdx];
+    if (!card || !practiceReveal) return;
+    recordPracticeOutcome(card, Boolean(correct), "flashcards");
+  }, [practiceDeck, practiceIdx, practiceReveal, recordPracticeOutcome]);
+
+  const handleTimedQuizChoice = useCallback((choiceIndex) => {
+    const card = practiceDeck[practiceIdx];
+    if (!card || practiceTimerFinished || practiceTimedChoice !== null) return;
+    const correct = Number(choiceIndex) === Number(card.quizCorrectIndex);
+    setPracticeTimedChoice(choiceIndex);
+    setPracticeTimedResult(correct ? "correct" : "wrong");
+    setPracticeTimerFinished(true);
+    recordPracticeOutcome(card, correct, "timedquiz");
+  }, [practiceDeck, practiceIdx, practiceTimedChoice, practiceTimerFinished, recordPracticeOutcome]);
+
+  const handleTimedTrueFalseChoice = useCallback((choiceValue) => {
+    const card = practiceDeck[practiceIdx];
+    if (!card || practiceTimerFinished || practiceTimedChoice !== null) return;
+    const correct = Boolean(choiceValue) === Boolean(card.trueFalseAnswer);
+    setPracticeTimedChoice(choiceValue ? "true" : "false");
+    setPracticeTimedResult(correct ? "correct" : "wrong");
+    setPracticeTimerFinished(true);
+    recordPracticeOutcome(card, correct, "timedtruefalse");
+  }, [practiceDeck, practiceIdx, practiceTimedChoice, practiceTimerFinished, recordPracticeOutcome]);
+
+  const handleTimedChallengeChoice = useCallback((choice) => {
+    const card = practiceDeck[practiceIdx];
+    if (!card || practiceTimerFinished || practiceTimedChoice) return;
+    const correct = normalizeAnswerText(choice) === normalizeAnswerText(card.prompt);
+    setPracticeTimedChoice(choice);
+    setPracticeTimedResult(correct ? "correct" : "wrong");
+    recordPracticeOutcome(card, correct, "timedchallenge");
+    if (practiceAdvanceTimerRef.current) {
+      clearTimeout(practiceAdvanceTimerRef.current);
+    }
+    practiceAdvanceTimerRef.current = setTimeout(() => {
+      setPracticeTimedChoice(null);
+      setPracticeTimedResult(null);
+      setPracticeReveal(false);
+      setPracticeIdx((current) => {
+        if (current >= practiceDeck.length - 1) {
+          setPracticeTimerFinished(true);
+          return current;
+        }
+        return current + 1;
+      });
+      practiceAdvanceTimerRef.current = null;
+    }, 500);
+  }, [practiceDeck, practiceIdx, practiceTimedChoice, practiceTimerFinished, recordPracticeOutcome]);
 
   const handleMatchSelection = useCallback((type, item) => {
     if (!practiceMatchRound || practiceMatchRound.completed) return;
@@ -6119,17 +8307,14 @@ function HomeschoolApp() {
     };
     const matchedCount = Object.entries(nextMatches).filter(([, value]) => value === true).length;
     const nextCompleted = matchedCount >= Math.min(4, practiceMatchRound.prompts.length);
-    setPracticeSessionStats((current) => ({
-      attempted: (current.attempted || 0) + 1,
-      correct: (current.correct || 0) + (correct ? 1 : 0),
-    }));
+    recordPracticeOutcome(promptItem, correct, practiceMode === "timedmatching" ? "timedmatching" : "matching");
     setPracticeMatchSelection(null);
     setPracticeMatchRound({
       ...practiceMatchRound,
       matches: nextMatches,
       completed: nextCompleted,
     });
-  }, [practiceMatchRound, practiceMatchSelection]);
+  }, [practiceMatchRound, practiceMatchSelection, practiceMode, recordPracticeOutcome]);
 
   const handleViewStudyItem = useCallback((card) => {
     const source = inferViewSource(card);
@@ -6331,6 +8516,63 @@ function HomeschoolApp() {
     await refreshReviewWorkspace();
   }, [language, refreshReviewWorkspace, reviewAnalytics.customLists]);
 
+  useEffect(() => {
+    if (!keyboardShortcutsEnabled) return undefined;
+    const handleKeydown = (event) => {
+      if (!event.altKey) return;
+      const target = event.target;
+      const tagName = String(target?.tagName || "").toLowerCase();
+      const isTypingTarget = tagName === "input" || tagName === "textarea" || tagName === "select" || target?.isContentEditable;
+      if (isTypingTarget) return;
+      const tutorReady = AI_PROVIDER_ORDER.some((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
+      const shortcutMap = {
+        "1": "home",
+        "2": "progress",
+        "3": "review",
+        "4": "favorites",
+        "5": "badges",
+        "6": "settings",
+        "7": tutorReady ? "tutor" : null,
+      };
+      const nextTab = shortcutMap[event.key];
+      if (!nextTab) return;
+      event.preventDefault();
+      window.speechSynthesis.cancel();
+      setNavHidden(Boolean(navAutoHide));
+      setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
+      setSelectedSubject(null);
+      setSelectedLesson(null);
+      setQuizActive(false);
+      setQuizDone(false);
+      setQuizAnswers([]);
+      setQuizIdx(0);
+      setQuizRevealed(false);
+      setSelectedAdverbDay(null);
+      setSelectedPrepDay(null);
+      setSelectedAdjDay(null);
+      setSelectedConjDay(null);
+      setSelectedPronDay(null);
+      setSelectedNounDay(null);
+      setSelectedVerbDay(null);
+      setSelectedTensePara(null);
+      setSelectedVocabDay(null);
+      setMathSubIdx(null);
+      setMathSubTab("examples");
+      setSubExerciseGroupIdx(null);
+      setSubQuizGroupIdx(null);
+      setRevealedEx({});
+      setPosTab("adverbs");
+      setTenseMain("present");
+      setTenseSub("simple");
+      setNewBadges([]);
+      resetReviewSession();
+      resetPracticeSession();
+      setTab(nextTab);
+    };
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  }, [aiProviderConfigs, keyboardShortcutsEnabled, navAutoHide, navBarAutoHide, navPosition, resetPracticeSession, resetReviewSession]);
+
   // Show loading while DB initializes
   if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{ui.loadingHome}</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ui.loadingDb}</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
 
@@ -6369,7 +8611,7 @@ function HomeschoolApp() {
     resetReviewSession();
     resetPracticeSession();
   };
-  const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { resetPracticeSession(); setTab("review"); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
+  const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
   const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
@@ -6427,11 +8669,13 @@ function HomeschoolApp() {
     const langCode = String(voice.lang || "").toLowerCase();
     return langCode.startsWith("ur") || langCode.startsWith("hi") || langCode.includes("in");
   });
-  const activePracticeCard = practiceDeck[practiceIdx] || null;
+  const reviewLeitnerMax = Math.max(1, ...(reviewAnalytics.leitnerBoxes || []).map((entry) => Number(entry.count) || 0));
+  const upcomingCalendarMax = Math.max(1, ...(reviewAnalytics.upcomingCalendar || []).map((entry) => Number(entry.dueCount) || 0));
   const dailyGoalProgress = Math.min(100, Math.round(((Number(reviewStats.reviewedToday) || 0) / Math.max(1, Number(studyGoals.dailyReviews) || 20)) * 100));
   const weeklyGoalProgress = Math.min(100, Math.round(((Number(reviewAnalytics.totals.uniqueReviewedLast7) || 0) / Math.max(1, Number(studyGoals.weeklyWords) || 40)) * 100));
   const currentReminderLabel = getReminderStatus(reminderSettings, language);
   const reminderDueNow = Boolean(reminderSettings?.enabled && reminderSettings?.lastShownDay === window.HomeSchoolUtils.getDayKey(Date.now()));
+  const fontSizeZoom = ({ small: 0.95, normal: 1, large: 1.08, xlarge: 1.14 })[fontSizeMode] || 1;
   const routeTransitionKey = [
     tab,
     selectedSubject?.id || "",
@@ -6571,7 +8815,14 @@ function HomeschoolApp() {
       ))}
     </div>
   );
-  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""}`} style={{ ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
+  const importConflictLabels = {
+    profile: ui.importConflictProfile,
+    progress: ui.importConflictProgress,
+    preferences: ui.importConflictPreferences,
+    time: ui.importConflictTime,
+    collections: ui.importConflictCollections,
+  };
+  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
     {navAutoHide ? <div className="header-reveal-hotspot" onMouseEnter={revealAutoHideHeader} onMouseMove={revealAutoHideHeader} onPointerDown={revealAutoHideHeader} /> : null}
     <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
       <div className="header-leading">
@@ -6649,6 +8900,38 @@ function HomeschoolApp() {
         <div className="review-panel">
           <div className="review-panel-head">
             <div>
+              <h3>{renderLocalizedTextNode(ui.timeManagement, language)}</h3>
+              <p>{renderLocalizedTextNode(ui.timeTrackingHelp, language)}</p>
+            </div>
+          </div>
+          <div className="stat-grid">
+            <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(todaySpentMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(ui.timeSpentToday, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">🚶</div><div className="stat-value">{classScheduleSettings.enabled ? formatMinutesLabel(todayLatenessMinutes, language) : "—"}</div><div className="stat-label">{renderLocalizedTextNode(ui.latenessToday, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">🕘</div><div className="stat-value">{formatNumberLabel(timeTrackingData.punctualityStreak || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.punctualityStreak, language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">🏁</div><div className="stat-value">{formatNumberLabel(timeTrackingData.classSessionsMet || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.classSessionsMet, language)}</div></div>
+          </div>
+          <div className="goal-progress-card" style={{ marginTop: 12 }}>
+            <div className="goal-progress-row">
+              <div>
+                <strong>{renderLocalizedTextNode(joinLocalizedText(`${ui.classStartTime}: ${classScheduleSettings.startTime}`, `${ui.classStartTime}: ${classScheduleSettings.startTime}`, language), language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${ui.classEndTime}: ${classScheduleSettings.endTime}`, `${ui.classEndTime}: ${classScheduleSettings.endTime}`, language), language)}</div>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(timeTrackingStatusLabel, language)}</span>
+            </div>
+            <div className="goal-progress-row" style={{ marginTop: 10 }}>
+              <div>
+                <strong>{renderLocalizedTextNode(ui.classDuration, language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${formatMinutesLabel(scheduleDurationMinutes, "en")} scheduled • ${formatMinutesLabel(weeklyStudyMinutes, "en")} this week`, `${formatMinutesLabel(scheduleDurationMinutes, "ur")} مقرر • ${formatMinutesLabel(weeklyStudyMinutes, "ur")} اس ہفتے`, language), language)}</div>
+              </div>
+              <span className="goal-progress-badge">{timeGoalProgress}%</span>
+            </div>
+            <div className="goal-progress-bar accent-alt"><span style={{ width: `${timeGoalProgress}%` }} /></div>
+            {!classScheduleSettings.enabled ? <p className="empty-state" style={{ marginTop: 10 }}>{renderLocalizedTextNode(ui.classTrackingDisabled, language)}</p> : null}
+          </div>
+        </div>
+        <div className="review-panel">
+          <div className="review-panel-head">
+            <div>
               <h3>{renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "فوکس ٹائمر اور یاد دہانیاں", language), language)}</h3>
               <p>{renderLocalizedTextNode(joinLocalizedText("Start a quiet study sprint and keep your reminder schedule visible.", "ایک مختصر مطالعہ سیشن شروع کریں اور اپنی یاد دہانی کی حالت دیکھیں۔", language), language)}</p>
             </div>
@@ -6693,6 +8976,76 @@ function HomeschoolApp() {
               ))}
             </div>
           ) : <p className="empty-state">{renderLocalizedTextNode(ui.noNotificationsYet, language)}</p>}
+        </div>
+        <div className="review-panel">
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(ui.contentDiscovery, language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Search your current grade lessons by subject, type, and difficulty, and keep a daily word in view.", "اپنی جماعت کے اسباق کو مضمون، قسم، اور درجہ کے مطابق تلاش کریں اور روزانہ ایک لفظ سامنے رکھیں۔", language), language)}</p>
+            </div>
+          </div>
+          {wordOfDayCard ? (
+            <div className="discovery-word-card">
+              <div className="discovery-word-label">{renderLocalizedTextNode(ui.wordOfDay, language)}</div>
+              <div className="discovery-word-prompt">{wordOfDayCard.prompt}</div>
+              <div className="discovery-word-answer" style={containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null}>{wordOfDayCard.answer || wordOfDayCard.meaning}</div>
+              <div className="discovery-word-meta">{renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", SUBJECTS.find((subject) => subject.id === (wordOfDayCard.subject || ""))?.nameUr || "مضمون", language), language)}</div>
+            </div>
+          ) : null}
+          <div className="discovery-filter-shell">
+            <input className="review-list-input" value={contentSearch} onChange={(event) => setContentSearch(event.target.value)} placeholder={ui.contentSearch} style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null} />
+            <div className="discovery-filter-row">
+              <button className={`practice-subject-chip${discoverySubjectFilter === "all" ? " active" : ""}`} onClick={() => setDiscoverySubjectFilter("all")} type="button"><span className="practice-subject-chip-copy"><strong>{renderLocalizedTextNode(ui.discoveryAllSubjects, language)}</strong></span></button>
+              {SUBJECTS.map((subject) => (
+                <button key={subject.id} className={`practice-subject-chip${discoverySubjectFilter === subject.id ? " active" : ""}`} onClick={() => setDiscoverySubjectFilter(subject.id)} type="button">
+                  <span className="practice-subject-chip-icon">{subject.icon}</span>
+                  <span className="practice-subject-chip-copy"><strong>{renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)}</strong></span>
+                </button>
+              ))}
+            </div>
+            <div className="discovery-filter-row compact">
+              {[
+                { id: "all", label: ui.discoveryAllTypes },
+                { id: "lesson", label: ui.discoveryTypeLesson },
+                { id: "interactive", label: ui.discoveryTypeInteractive },
+                { id: "practice", label: ui.discoveryTypePractice },
+              ].map((option) => (
+                <button key={option.id} type="button" className={`study-tool-btn compact${discoveryTypeFilter === option.id ? " active" : ""}`} onClick={() => setDiscoveryTypeFilter(option.id)}>
+                  {renderLocalizedTextNode(option.label, language)}
+                </button>
+              ))}
+            </div>
+            <div className="discovery-filter-row compact">
+              {[
+                { id: "all", label: ui.discoveryAllLevels },
+                { id: "starter", label: ui.discoveryDifficultyStarter },
+                { id: "core", label: ui.discoveryDifficultyCore },
+                { id: "stretch", label: ui.discoveryDifficultyStretch },
+              ].map((option) => (
+                <button key={option.id} type="button" className={`study-tool-btn compact${discoveryDifficultyFilter === option.id ? " active" : ""}`} onClick={() => setDiscoveryDifficultyFilter(option.id)}>
+                  {renderLocalizedTextNode(option.label, language)}
+                </button>
+              ))}
+            </div>
+          </div>
+          {filteredDiscoveryLessons.length > 0 ? (
+            <div className="discovery-result-list">
+              {filteredDiscoveryLessons.map((item) => (
+                <button key={item.id} type="button" className="discovery-result-card" onClick={() => handleOpenDiscoveryLesson(item)}>
+                  <div className="discovery-result-head">
+                    <strong>{renderLocalizedTextNode(item.lessonTitle, language)}</strong>
+                    <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(item.subjectName, item.subjectNameUr, language), language)}</span>
+                  </div>
+                  <p>{renderLocalizedTextNode(item.lessonContent.slice(0, 120) + (item.lessonContent.length > 120 ? "..." : ""), language)}</p>
+                  <div className="discovery-tag-row">
+                    <span className="discovery-tag">{renderLocalizedTextNode(item.type === "interactive" ? ui.discoveryTypeInteractive : item.type === "practice" ? ui.discoveryTypePractice : ui.discoveryTypeLesson, language)}</span>
+                    <span className="discovery-tag">{renderLocalizedTextNode(item.difficulty === "starter" ? ui.discoveryDifficultyStarter : item.difficulty === "stretch" ? ui.discoveryDifficultyStretch : ui.discoveryDifficultyCore, language)}</span>
+                    {(item.tags || []).slice(0, 2).map((tag) => <span key={tag} className="discovery-tag muted">{tag}</span>)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : <p className="empty-state">{renderLocalizedTextNode(ui.noDiscoveryResults, language)}</p>}
         </div>
         {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
         <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
@@ -7373,8 +9726,35 @@ function HomeschoolApp() {
 
       {tab === "progress" && (<>
         <div className="stat-grid"><div className="stat-card"><div className="stat-icon">📝</div><div className="stat-value">{totalQuizzesDone}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Quizzes Done", "مکمل کوئز", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🎯</div><div className="stat-value">{totalQuizzesDone > 0 ? Math.round((totalScore / (totalQuizzesDone * 4)) * 100) : 0}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Avg Score", "اوسط اسکور", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{streak}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Day Streak", "دنوں کا تسلسل", language), language)}</div></div><div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{xp}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Total XP", "کل ایکس پی", language), language)}</div></div></div>
+        <div className="stat-grid">
+          <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(totalStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(ui.totalStudyTime, language)}</div></div>
+          <div className="stat-card"><div className="stat-icon">🕘</div><div className="stat-value">{formatNumberLabel(timeTrackingData.onTimeStarts || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("On-time starts", "وقت پر آغاز", language), language)}</div></div>
+          <div className="stat-card"><div className="stat-icon">🚶</div><div className="stat-value">{formatMinutesLabel(timeTrackingData.totalLateMinutes || 0, language)}</div><div className="stat-label">{renderLocalizedTextNode(ui.totalLateTime, language)}</div></div>
+          <div className="stat-card"><div className="stat-icon">🏁</div><div className="stat-value">{formatNumberLabel(timeTrackingData.classSessionsMet || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.classSessionsMet, language)}</div></div>
+        </div>
         <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subject Progress", "مضامین کی پیش رفت", language), language)}</h3>
         {SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round((done / ls.length) * 100) : 0; return (<div key={subj.id} className="progress-bar-container"><div className="progress-bar-label"><span>{subj.icon} {subj.name}</span><span style={{ color: "var(--text-muted)" }}>{done}/{ls.length}</span></div><div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: pct + "%", background: subj.color }} /></div></div>); })}
+        <div className="review-panel" style={{ marginTop: 18 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(ui.recentTimeHistory, language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("See your latest class-time records, usage, and lateness at a glance.", "اپنے حالیہ کلاس اوقات، مطالعہ وقت، اور تاخیر کو ایک نظر میں دیکھیں۔", language), language)}</p>
+            </div>
+          </div>
+          {recentTimeHistory.length > 0 ? (
+            <div className="notification-history-list">
+              {recentTimeHistory.map((entry) => (
+                <div key={entry.dayKey} className="notification-history-item">
+                  <div className="notification-history-top">
+                    <strong>{renderLocalizedTextNode(entry.dayKey, language)}</strong>
+                    <span>{renderLocalizedTextNode(entry.status === "on-time" ? ui.classStatusOnTime : entry.status === "late" ? ui.classStatusLate : ui.classStatusNotStarted, language)}</span>
+                  </div>
+                  <p>{renderLocalizedTextNode(joinLocalizedText(`Spent ${formatMinutesLabel(Math.round((entry.msSpent || 0) / 60000), "en")} • Late by ${formatMinutesLabel(entry.latenessMinutes || 0, "en")}`, `${formatMinutesLabel(Math.round((entry.msSpent || 0) / 60000), "ur")} مطالعہ • ${formatMinutesLabel(entry.latenessMinutes || 0, "ur")} تاخیر`, language), language)}</p>
+                </div>
+              ))}
+            </div>
+          ) : <p className="empty-state">{renderLocalizedTextNode(ui.classTrackingDisabled, language)}</p>}
+        </div>
       </>)}
 
       {tab === "review" && (<>
@@ -7398,26 +9778,269 @@ function HomeschoolApp() {
             {reviewStats.due === 0 && <p style={{ marginTop: 12, color: "var(--text-muted)" }}>{renderLocalizedTextNode(ui.noReviewsDue, language)}</p>}
           </div>
 
-          <div className="review-panel">
+          <div className="review-panel" id="practice-lab-panel">
             <div className="review-panel-head">
               <div>
                 <h3>{renderLocalizedTextNode(joinLocalizedText("Practice Lab", "پریکٹس لیب", language), language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText("Use your review library in fast extra modes: flip cards, type answers, or match pairs.", "اپنی ریویو لائبریری کو اضافی مشق کے لیے استعمال کریں: کارڈ پلٹیں، جواب ٹائپ کریں، یا جوڑیاں ملائیں۔", language), language)}</p>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Choose a subject to open its own practice lab: flashcards, typing, matching, dictation, and fill in blanks.", "کسی مضمون کا انتخاب کریں اور اس کی الگ پریکٹس لیب کھولیں: فلیش کارڈز، ٹائپنگ، جوڑیاں ملانا، املا، اور خالی جگہ پُر کرنا۔", language), language)}</p>
               </div>
             </div>
+            <div className="practice-subject-row">
+              {availablePracticeSubjects.map((subject) => {
+                const isActive = subject.id === activePracticeSubjectId;
+                const hasReviewItems = reviewLibrary.some((card) => (card?.subject || "english") === subject.id && card?.prompt && (card?.answer || card?.meaning));
+                const hasSupplementalItems = gradePracticeItems.some((item) => item?.subject === subject.id && item?.prompt && (item?.answer || item?.meaning));
+                return (
+                  <button
+                    key={subject.id}
+                    type="button"
+                    className={`practice-subject-chip${isActive ? " active" : ""}`}
+                    onClick={() => setPracticeSubjectId(subject.id)}
+                  >
+                    <span className="practice-subject-chip-icon">{subject.icon}</span>
+                    <span className="practice-subject-chip-copy">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText(
+                        hasReviewItems && hasSupplementalItems
+                          ? "Review + lesson practice"
+                          : hasReviewItems
+                            ? "Review practice"
+                            : "Lesson practice",
+                        hasReviewItems && hasSupplementalItems
+                          ? "ریویو + سبق پریکٹس"
+                          : hasReviewItems
+                            ? "ریویو پریکٹس"
+                            : "سبق پریکٹس",
+                        language,
+                      ), language)}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {practiceSubjectLessons.length > 0 ? (
+              <div className="practice-filter-shell">
+                <div className="practice-filter-grid">
+                  <label className="practice-filter-field">
+                    <span>{renderLocalizedTextNode(joinLocalizedText("From Lesson", "اس سبق سے", language), language)}</span>
+                    <select
+                      className="review-list-input"
+                      value={activePracticeFilter.startLessonKey || ""}
+                      onChange={(event) => updatePracticeFilters({ startLessonKey: event.target.value })}
+                    >
+                      {practiceSubjectLessons.map((lesson, index) => {
+                        const lessonKey = getLessonKeyValue(lesson);
+                        const label = `${ui.lesson} ${index + 1} — ${lesson.title}`;
+                        return <option key={lessonKey || index} value={lessonKey || ""}>{label}</option>;
+                      })}
+                    </select>
+                  </label>
+                  <label className="practice-filter-field">
+                    <span>{renderLocalizedTextNode(joinLocalizedText("To Lesson", "اس سبق تک", language), language)}</span>
+                    <select
+                      className="review-list-input"
+                      value={activePracticeFilter.endLessonKey || ""}
+                      onChange={(event) => updatePracticeFilters({ endLessonKey: event.target.value })}
+                    >
+                      {practiceSubjectLessons.map((lesson, index) => {
+                        const lessonKey = getLessonKeyValue(lesson);
+                        const label = `${ui.lesson} ${index + 1} — ${lesson.title}`;
+                        return <option key={lessonKey || index} value={lessonKey || ""}>{label}</option>;
+                      })}
+                    </select>
+                  </label>
+                </div>
+                <div className="practice-filter-summary">
+                  {renderLocalizedTextNode(
+                    practiceFilterSummary.isSingle
+                      ? joinLocalizedText(`Using ${practiceFilterSummary.startLabel} only`, `صرف ${practiceFilterSummary.startLabel} استعمال ہو رہا ہے`, language)
+                      : joinLocalizedText(`Using ${practiceFilterSummary.startLabel} to ${practiceFilterSummary.endLabel}`, `${practiceFilterSummary.startLabel} سے ${practiceFilterSummary.endLabel} تک استعمال ہو رہا ہے`, language),
+                    language,
+                  )}
+                </div>
+                <div className="practice-difficulty-row">
+                  {[
+                    { id: "beginner", en: "Beginner", ur: "آسان" },
+                    { id: "medium", en: "Medium", ur: "درمیانہ" },
+                    { id: "advanced", en: "Advance", ur: "اعلیٰ" },
+                  ].map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className={`practice-difficulty-chip${activePracticeFilter.difficulty === entry.id ? " active" : ""}`}
+                      onClick={() => updatePracticeFilters({ difficulty: entry.id })}
+                    >
+                      {renderLocalizedTextNode(joinLocalizedText(entry.en, entry.ur, language), language)}
+                    </button>
+                  ))}
+                </div>
+                <div className="practice-filter-summary">
+                  {renderLocalizedTextNode(joinLocalizedText(`Difficulty: ${practiceDifficultyLabel}`, `مشکل کی سطح: ${practiceDifficultyLabel}`, language), language)}
+                </div>
+                <div className="practice-filter-summary">
+                  {renderLocalizedTextNode(joinLocalizedText(`Lesson progress: ${practiceRangeProgress.correct}/${practiceRangeProgress.attempted || 0} correct • ${practiceRangeProgress.marksEarned}/${practiceRangeProgress.marksPossible || 0} marks`, `سبق کی پیش رفت: ${practiceRangeProgress.correct}/${practiceRangeProgress.attempted || 0} درست • ${practiceRangeProgress.marksEarned}/${practiceRangeProgress.marksPossible || 0} نمبر`, language), language)}
+                </div>
+              </div>
+            ) : null}
             <div className="practice-mode-grid">
-              <button className="practice-mode-card" onClick={() => handleStartPractice("flashcards")}>
+              <button className={`practice-mode-card${practiceModeAvailability.flashcards ? "" : " disabled"}`} onClick={() => handleStartPractice("flashcards")} disabled={!practiceModeAvailability.flashcards}>
                 <span className="practice-mode-icon">🃏</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Flashcards", "فلیش کارڈز", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("flashcards", "Subject practice cards", "مضمون کی پریکٹس کارڈز"), language)}</span>
               </button>
-              <button className="practice-mode-card" onClick={() => handleStartPractice("typing")}>
+              <button className={`practice-mode-card${practiceModeAvailability.typing ? "" : " disabled"}`} onClick={() => handleStartPractice("typing")} disabled={!practiceModeAvailability.typing}>
                 <span className="practice-mode-icon">⌨️</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Type the Answer", "جواب ٹائپ کریں", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("typing", "Subject practice cards", "مضمون کی پریکٹس کارڈز"), language)}</span>
               </button>
-              <button className="practice-mode-card" onClick={() => handleStartPractice("matching")}>
+              <button className={`practice-mode-card${practiceModeAvailability.matching ? "" : " disabled"}`} onClick={() => handleStartPractice("matching")} disabled={!practiceModeAvailability.matching}>
                 <span className="practice-mode-icon">🧩</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Match Pairs", "جوڑیاں ملائیں", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("matching", "Needs 4+ subject cards", "کم از کم 4 مضمون کارڈز", 4), language)}</span>
               </button>
+              <button className={`practice-mode-card${practiceModeAvailability.dictation ? "" : " disabled"}`} onClick={() => handleStartPractice("dictation")} disabled={!practiceModeAvailability.dictation}>
+                <span className="practice-mode-icon">🎧</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Dictation", "املا", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("dictation", "Review + lesson prompts", "ریویو + سبق پرامپٹس"), language)}</span>
+              </button>
+              <button className={`practice-mode-card${practiceModeAvailability.fillblanks ? "" : " disabled"}`} onClick={() => handleStartPractice("fillblanks")} disabled={!practiceModeAvailability.fillblanks}>
+                <span className="practice-mode-icon">✍️</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Fill in Blanks", "خالی جگہ پُر کریں", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("fillblanks", "Sentence practice", "جملہ پریکٹس"), language)}</span>
+              </button>
+              <button className={`practice-mode-card${practiceModeAvailability.sentencebuilder ? "" : " disabled"}`} onClick={() => handleStartPractice("sentencebuilder")} disabled={!practiceModeAvailability.sentencebuilder}>
+                <span className="practice-mode-icon">🧱</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Sentence Builder", "جملہ بنائیں", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("sentencebuilder", "Rebuild real sentences", "حقیقی جملے دوبارہ بنائیں"), language)}</span>
+              </button>
+              <button className={`practice-mode-card${practiceModeAvailability.timedchallenge ? "" : " disabled"}`} onClick={() => handleStartPractice("timedchallenge")} disabled={!practiceModeAvailability.timedchallenge}>
+                <span className="practice-mode-icon">⏱️</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Timed Challenge", "وقت والی چیلنج", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("timedchallenge", "60-second speed round", "60 سیکنڈ کی تیز مشق"), language)}</span>
+              </button>
+              <button className={`practice-mode-card${practiceModeAvailability.timedquiz ? "" : " disabled"}`} onClick={() => handleStartPractice("timedquiz")} disabled={!practiceModeAvailability.timedquiz}>
+                <span className="practice-mode-icon">📝</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Timed Quiz", "وقت والی کوئز", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("timedquiz", "Question timer inside", "سوال کا وقت اندر موجود"), language)}</span>
+              </button>
+              <button className={`practice-mode-card${practiceModeAvailability.timedtruefalse ? "" : " disabled"}`} onClick={() => handleStartPractice("timedtruefalse")} disabled={!practiceModeAvailability.timedtruefalse}>
+                <span className="practice-mode-icon">⚖️</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Timed True / False", "وقت والی درست / غلط", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("timedtruefalse", "Quick judgement practice", "تیز فیصلہ والی مشق"), language)}</span>
+              </button>
+              <button className={`practice-mode-card${practiceModeAvailability.timedmatching ? "" : " disabled"}`} onClick={() => handleStartPractice("timedmatching")} disabled={!practiceModeAvailability.timedmatching}>
+                <span className="practice-mode-icon">🧠</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Timed Match Pairs", "وقت والی جوڑیاں", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("timedmatching", "Timed sets", "وقت والے سیٹ", 4), language)}</span>
+              </button>
+              <button className={`practice-mode-card${practiceModeAvailability.interleaved ? "" : " disabled"}`} onClick={() => handleStartPractice("interleaved")} disabled={!practiceModeAvailability.interleaved}>
+                <span className="practice-mode-icon">🔀</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Interleaved Practice", "ملی جلی پریکٹس", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("interleaved", "Mixed healthy recall", "متوازن ملی جلی یادداشت"), language)}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="study-word-columns">
+            <div className="review-panel">
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Leitner & Mastery", "لائٹنر اور مہارت", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText(`Cards move through boxes until Box ${reviewSrsSettings.masteryThreshold} counts as mastered.`, `کارڈز خانوں میں آگے بڑھتے ہیں اور Box ${reviewSrsSettings.masteryThreshold} پر مہارت مکمل سمجھی جاتی ہے۔`, language), language)}</p>
+                </div>
+              </div>
+              {(reviewAnalytics.leitnerBoxes || []).length ? (
+                <div className="leitner-box-list">
+                  {(reviewAnalytics.leitnerBoxes || []).map((entry) => {
+                    const isMasteredBox = Number(entry.box) >= Number(reviewSrsSettings.masteryThreshold || 5);
+                    return (
+                      <div key={`leitner_${entry.box}`} className="leitner-box-row">
+                        <div className="leitner-box-head">
+                          <strong>{renderLocalizedTextNode(isMasteredBox ? joinLocalizedText("Mastered", "مہارت مکمل", language) : joinLocalizedText(`Box ${entry.box}`, `باکس ${entry.box}`, language), language)}</strong>
+                          <span>{formatNumberLabel(entry.count || 0)}</span>
+                        </div>
+                        <div className="goal-progress-bar leitner-progress"><span style={{ width: `${Math.max(8, Math.min(100, ((Number(entry.count) || 0) / reviewLeitnerMax) * 100))}%` }} /></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Complete a few reviews to fill the Leitner boxes.", "کچھ ریویوز مکمل کریں تاکہ لائٹنر باکس بھر سکیں۔", language), language)}</p>}
+            </div>
+            <div className="review-panel">
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Predicted Mastery", "متوقع مہارت", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Estimated finish date if you keep answering “Good” consistently.", "اگر آپ مسلسل “اچھا” منتخب کرتے رہیں تو اندازاً کب مہارت مکمل ہوگی۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="mastery-prediction-callout">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Overall deck", "مکمل مجموعہ", language), language)}</strong>
+                <span>{renderLocalizedTextNode(
+                  Number(reviewAnalytics.predictedMastery?.cardsRemaining || 0) > 0
+                    ? formatProjectedDateLabel(reviewAnalytics.predictedMastery?.projectedAt, language)
+                    : joinLocalizedText("Already mastered", "پہلے ہی مکمل", language),
+                  language,
+                )}</span>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${reviewAnalytics.predictedMastery?.cardsRemaining || 0} cards remaining`, `${reviewAnalytics.predictedMastery?.cardsRemaining || 0} کارڈ باقی`, language), language)}</div>
+              </div>
+              {(reviewAnalytics.predictedMastery?.sections || []).length ? (
+                <div className="mastery-section-list">
+                  {reviewAnalytics.predictedMastery.sections.map((entry) => (
+                    <div key={entry.id} className="mastery-section-item">
+                      <div className="category-performance-head">
+                        <strong>{entry.sectionLabel}</strong>
+                        <span>{formatProjectedDateLabel(entry.projectedAt, language)}</span>
+                      </div>
+                      <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${entry.cardsRemaining} cards left`, `${entry.cardsRemaining} کارڈ باقی`, language), language)}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Predictions will appear after your review boxes start moving.", "پیش گوئیاں تب نظر آئیں گی جب آپ کے ریویو باکس آگے بڑھنا شروع کریں۔", language), language)}</p>}
+            </div>
+          </div>
+
+          <div className="study-word-columns">
+            <div className="review-panel">
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Forgetting Curve", "بھولنے کا رجحان", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Accuracy by review delay shows how recall changes over longer gaps.", "ریویو کے وقفے کے لحاظ سے درستگی دکھاتی ہے کہ زیادہ وقفوں پر یادداشت کیسے بدلتی ہے۔", language), language)}</p>
+                </div>
+              </div>
+              {(reviewAnalytics.forgettingCurve || []).some((entry) => entry.reviews > 0) ? (
+                <div className="forgetting-curve-list">
+                  {(reviewAnalytics.forgettingCurve || []).map((entry) => (
+                    <div key={entry.id} className="forgetting-curve-item">
+                      <div className="category-performance-head">
+                        <strong>{renderLocalizedTextNode(getForgettingCurveLabel(entry.id, language), language)}</strong>
+                        <span>{entry.accuracy}%</span>
+                      </div>
+                      <div className="goal-progress-bar"><span style={{ width: `${Math.max(8, Math.min(100, Number(entry.accuracy) || 0))}%` }} /></div>
+                      <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews`, `${entry.reviews} ریویوز`, language), language)}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("More review history is needed to draw the forgetting curve.", "بھولنے کا رجحان دکھانے کے لیے مزید ریویو تاریخ درکار ہے۔", language), language)}</p>}
+            </div>
+            <div className="review-panel">
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Upcoming Reviews", "آنے والے ریویوز", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("See the next two weeks of due reviews before they pile up.", "اگلے دو ہفتوں کے باقی ریویوز پہلے سے دیکھیں تاکہ بوجھ جمع نہ ہو۔", language), language)}</p>
+                </div>
+              </div>
+              {(reviewAnalytics.upcomingCalendar || []).length ? (
+                <div className="upcoming-calendar-grid">
+                  {(reviewAnalytics.upcomingCalendar || []).map((entry) => (
+                    <div key={entry.dayKey} className={`upcoming-calendar-cell${entry.isToday ? " today" : ""}`}>
+                      <strong>{entry.weekday}</strong>
+                      <span>{entry.label}</span>
+                      <div className="upcoming-calendar-count">{formatNumberLabel(entry.dueCount || 0)}</div>
+                      <div className="goal-progress-bar upcoming-calendar-bar"><span style={{ width: `${Math.max(6, Math.min(100, ((Number(entry.dueCount) || 0) / upcomingCalendarMax) * 100))}%` }} /></div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Upcoming review dates will appear once cards are scheduled ahead.", "کارڈز آگے شیڈول ہونے پر آنے والی تاریخیں یہاں نظر آئیں گی۔", language), language)}</p>}
             </div>
           </div>
 
@@ -7569,30 +10192,104 @@ function HomeschoolApp() {
         {practiceMode && activePracticeCard && (
           <div className="lesson-detail" style={{ direction: isUrduUi(language) ? "rtl" : "ltr" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-              <span className="lesson-num">{renderLocalizedTextNode(joinLocalizedText(`${practiceMode === "flashcards" ? "Flashcards" : practiceMode === "typing" ? "Type the Answer" : "Match Pairs"} • ${practiceMode === "matching" ? Math.floor(practiceIdx / 4) + 1 : practiceIdx + 1}`, `${practiceMode === "flashcards" ? "فلیش کارڈز" : practiceMode === "typing" ? "جواب ٹائپ کریں" : "جوڑیاں ملائیں"} • ${practiceMode === "matching" ? Math.floor(practiceIdx / 4) + 1 : practiceIdx + 1}`, language), language)}</span>
+              <span className="lesson-num">{renderLocalizedTextNode(`${getPracticeModeMeta(practiceMode, language)} • ${getPracticeRoundNumber(["matching", "timedmatching"].includes(practiceMode) ? "matching" : practiceMode, practiceIdx)}`, language)}</span>
               <span className="grade-tag" style={{ marginTop: 0 }}>{activePracticeCard.sectionLabel}</span>
             </div>
             <div className="study-word-stats" style={{ marginBottom: 14 }}>
               <span>{renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.correct} correct`, `${practiceSessionStats.correct} درست`, language), language)}</span>
               <span>{renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.attempted} attempts`, `${practiceSessionStats.attempted} کوششیں`, language), language)}</span>
+              <span>{renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.marksEarned || 0}/${practiceSessionStats.marksPossible || 0} marks`, `${practiceSessionStats.marksEarned || 0}/${practiceSessionStats.marksPossible || 0} نمبر`, language), language)}</span>
+              <span>{renderLocalizedTextNode(joinLocalizedText(`${practiceQuestionMarks} marks each`, `ہر سوال ${practiceQuestionMarks} نمبر`, language), language)}</span>
+              <span className={`practice-mastery-chip ${activePracticeMastery.tone}`}>{activePracticeMastery.label}</span>
             </div>
-            {practiceMode === "flashcards" && (
+            {["timedchallenge", "timedquiz", "timedtruefalse", "timedmatching"].includes(practiceMode) ? (
+              <div className="practice-timer-control">
+                <label>
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Time per question / set", "فی سوال / سیٹ وقت", language), language)}</span>
+                  <select className="review-list-input" value={activePracticeTimeLimit} onChange={(event) => handlePracticeTimedSettingChange(practiceMode, Number(event.target.value))}>
+                    {[15, 30, 45, 60, 90].map((seconds) => <option key={seconds} value={seconds}>{seconds}s</option>)}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+            <div className={`practice-instruction${isUrduUi(language) ? " urdu" : ""}`}>
+              {renderLocalizedTextNode(getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, language), language)}
+            </div>
+            <div className="practice-instruction urdu">
+              {getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, "ur")}
+            </div>
+            {practiceQuestionPrompt ? (
+              <div className="practice-question-stack">
+                <div className={`practice-question-bar${isUrduUi(language) ? " urdu" : ""}`}>
+                  {renderLocalizedTextNode(practiceQuestionPrompt, language)}
+                </div>
+                {practiceQuestionPromptUrdu && normalizeText(practiceQuestionPromptUrdu) !== normalizeText(practiceQuestionPrompt) ? (
+                  <div className="practice-question-bar urdu">
+                    {practiceQuestionPromptUrdu}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {showPracticeBreakNudge ? (
+              <div className="practice-break-nudge">
+                <span>{renderLocalizedTextNode(joinLocalizedText("You have worked hard. Take a short breath or sip of water, then continue.", "آپ کافی محنت کر چکے ہیں۔ ایک چھوٹا سا وقفہ لیں یا پانی پی لیں، پھر جاری رکھیں۔", language), language)}</span>
+                <button className="study-tool-btn compact" onClick={() => setPracticeBreakDismissedAt(practiceSessionStats.attempted)}>{renderLocalizedTextNode(joinLocalizedText("Keep Going", "جاری رکھیں", language), language)}</button>
+              </div>
+            ) : null}
+            {practiceFeedbackText ? <div className={`practice-feedback-panel${practiceFeedbackText && isUrduText(practiceFeedbackText) ? " urdu" : ""}`}>{practiceFeedbackText}</div> : null}
+            {practiceCelebrationSeed ? <div className="practice-celebration" key={practiceCelebrationSeed} aria-hidden="true">
+              <span>🌸</span><span>✨</span><span>🌼</span><span>✨</span><span>🌸</span>
+            </div> : null}
+            {effectivePracticeMode === "flashcards" && (
               <div className="practice-card-shell">
                 <div className="practice-card-face">
-                  <div className="study-word-prompt">{activePracticeCard.prompt}</div>
-                  {practiceReveal ? <div className="study-word-answer" style={{ marginTop: 14 }}>{activePracticeCard.answer}</div> : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Reveal when you are ready.", "تیار ہوں تو جواب دکھائیں۔", language), language)}</p>}
+                  <div className="study-word-prompt" style={getPracticeTextStyle(getPracticeFlashFront(activePracticeCard))}>{getPracticeFlashFront(activePracticeCard)}</div>
+                  {practiceReveal ? <div className="study-word-answer" style={getPracticeTextStyle(getPracticeFlashBack(activePracticeCard), { marginTop: 14, fontSize: 18, fontWeight: 700 }, activePracticeCard.practiceLang)}>{getPracticeFlashBack(activePracticeCard)}</div> : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Think first, then reveal the answer.", "پہلے خود سوچیں، پھر جواب دکھائیں۔", language), language)}</p>}
                 </div>
                 <div className="result-actions">
-                  <button className="retry-btn" onClick={() => setPracticeReveal((value) => !value)}>{renderLocalizedTextNode(ui.revealAnswer, language)}</button>
+                  <button className="retry-btn" onClick={() => setPracticeReveal((value) => !value)}>{renderLocalizedTextNode(practiceReveal ? joinLocalizedText("Hide Answer", "جواب چھپائیں", language) : ui.revealAnswer, language)}</button>
+                  {practiceReveal ? <button className="retry-btn" onClick={() => handleFlashcardSelfGrade(false)}>{renderLocalizedTextNode(joinLocalizedText("Need Review", "مزید مشق چاہیے", language), language)}</button> : null}
+                  {practiceReveal ? <button className="next-btn" onClick={() => handleFlashcardSelfGrade(true)}>{renderLocalizedTextNode(joinLocalizedText("I Got It", "میں نے درست کیا", language), language)}</button> : null}
                   <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next Card", "اگلا کارڈ", language), language)}</button>
                 </div>
               </div>
             )}
-            {practiceMode === "typing" && (
+            {effectivePracticeMode === "dictation" && (
+              <div className="practice-card-shell">
+                <div className="practice-card-face">
+                  <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Listen carefully and type the English word you hear.", "غور سے سنیں اور جو انگریزی لفظ سنیں اسے ٹائپ کریں۔", language), language)}</div>
+                  <div className="dictation-actions">
+                    <button className="dictation-play-btn" onClick={() => window.HomeSchoolUtils.speakText(activePracticeCard.prompt, activePracticeCard.practiceLang || "en")}>
+                      🔊 {renderLocalizedTextNode(joinLocalizedText("Play Again", "دوبارہ سنیں", language), language)}
+                    </button>
+                    <span className={`dictation-hint${containsUrduText(activePracticeCard.answer || activePracticeCard.sectionLabel) ? " urdu" : ""}`}>{renderLocalizedTextNode(joinLocalizedText(`Hint: ${activePracticeCard.answer || activePracticeCard.sectionLabel}`, `اشارہ: ${activePracticeCard.answer || activePracticeCard.sectionLabel}`, language), language)}</span>
+                  </div>
+                  <input
+                    className="review-list-input"
+                    value={practiceDictationInput}
+                    onChange={(event) => setPracticeDictationInput(event.target.value)}
+                    placeholder={language === "ur" ? "جو کچھ سنیں وہ لکھیں..." : "Type what you hear..."}
+                    style={activePracticeCard.practiceLang === "ur" || isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", marginTop: 14 } : { marginTop: 14 }}
+                  />
+                  {practiceDictationResult ? <p className={`practice-result ${practiceDictationResult}`} style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceDictationResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Listen and compare this correction", "سنیں اور اس درست جواب سے ملائیں", language), language)}: {activePracticeCard.prompt}</p> : null}
+                  {practiceReveal ? (
+                    <div className="practice-answer-clue">
+                      <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{activePracticeCard.prompt}</div>
+                      {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="result-actions">
+                  <button className="retry-btn" onClick={handleCheckDictationAnswer} disabled={!practiceDictationInput.trim()}>{renderLocalizedTextNode(joinLocalizedText("Check", "جانچیں", language), language)}</button>
+                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
+                </div>
+              </div>
+            )}
+            {effectivePracticeMode === "typing" && (
               <div className="practice-card-shell">
                 <div className="practice-card-face">
                   <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Type the matching word for this clue:", "اس اشارے کے مطابق لفظ ٹائپ کریں:", language), language)}</div>
-                  <div className="study-word-answer" style={{ marginTop: 10 }}>{activePracticeCard.answer || activePracticeCard.meaning}</div>
+                  <div className="study-word-answer" style={getPracticeTextStyle(getPracticeTypingClue(activePracticeCard), { marginTop: 10, fontSize: 17, fontWeight: 700 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{getPracticeTypingClue(activePracticeCard)}</div>
                   <input
                     className="review-list-input"
                     value={practiceTypingInput}
@@ -7600,7 +10297,7 @@ function HomeschoolApp() {
                     placeholder={language === "ur" ? "جواب لکھیں..." : "Type your answer..."}
                     style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", marginTop: 14 } : { marginTop: 14 }}
                   />
-                  {practiceTypingResult ? <p className={`practice-result ${practiceTypingResult}`}>{renderLocalizedTextNode(practiceTypingResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Try this correction", "اس درست جواب کو دیکھیں", language), language)}: {activePracticeCard.prompt}</p> : null}
+                  {practiceTypingResult ? <p className={`practice-result ${practiceTypingResult}`} style={getPracticeTextStyle(getPracticeTypingTarget(activePracticeCard), {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceTypingResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Try this correction", "اس درست جواب کو دیکھیں", language), language)}: {getPracticeTypingTarget(activePracticeCard)}</p> : null}
                 </div>
                 <div className="result-actions">
                   <button className="retry-btn" onClick={handleCheckTypedAnswer} disabled={!practiceTypingInput.trim()}>{renderLocalizedTextNode(joinLocalizedText("Check", "جانچیں", language), language)}</button>
@@ -7608,8 +10305,207 @@ function HomeschoolApp() {
                 </div>
               </div>
             )}
-            {practiceMode === "matching" && practiceMatchRound && (
+            {effectivePracticeMode === "fillblanks" && (
               <div className="practice-card-shell">
+                <div className="practice-card-face">
+                  <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Choose the correct word to complete the sentence.", "جملہ مکمل کرنے کے لیے درست لفظ منتخب کریں۔", language), language)}</div>
+                  <div className="blank-sentence" style={getPracticeTextStyle(activePracticeCard.blankSentence, {}, activePracticeCard.practiceLang)}>{activePracticeCard.blankSentence}</div>
+                  <div className="blank-option-grid">
+                    {(activePracticeCard.blankOptions || []).map((option) => {
+                      const normalizedOption = normalizeAnswerText(option);
+                      const normalizedPrompt = normalizeAnswerText(activePracticeCard.prompt);
+                      const isSelected = normalizeAnswerText(practiceBlankChoice) === normalizedOption;
+                      const isCorrect = normalizedOption === normalizedPrompt;
+                      const optionClass = [
+                        "blank-option",
+                        isSelected ? "selected" : "",
+                        practiceReveal && isCorrect ? "correct" : "",
+                        practiceReveal && isSelected && !isCorrect ? "wrong" : "",
+                      ].filter(Boolean).join(" ");
+                      return (
+                        <button
+                          key={option}
+                          className={optionClass}
+                          disabled={practiceReveal}
+                          onClick={() => handleBlankChoice(option)}
+                          style={getPracticeTextStyle(option, {}, activePracticeCard.practiceLang)}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {practiceBlankResult ? <p className={`practice-result ${practiceBlankResult}`} style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceBlankResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("The missing word is", "خالی جگہ کا لفظ ہے", language), language)}: {activePracticeCard.prompt}</p> : null}
+                  {practiceReveal ? (
+                    <div className="practice-answer-clue">
+                      <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{activePracticeCard.prompt}</div>
+                      {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="result-actions">
+                  <button className="retry-btn" onClick={() => window.HomeSchoolUtils.speakText(activePracticeCard.blankSentence.replace("_____", activePracticeCard.prompt), "en")}>{renderLocalizedTextNode(joinLocalizedText("Read Sentence", "جملہ سنیں", language), language)}</button>
+                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
+                </div>
+              </div>
+            )}
+            {effectivePracticeMode === "sentencebuilder" && (
+              <div className="practice-card-shell">
+                <div className="practice-card-face">
+                  <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Tap the pieces in order to rebuild the full sentence.", "مکمل جملہ دوبارہ بنانے کے لیے لفظوں کو ترتیب سے منتخب کریں۔", language), language)}</div>
+                  <div className={`sentence-builder-output${activePracticeCard.sentenceBuilderLang === "ur" ? " urdu" : ""}`}>
+                    {practiceSentenceSelection.length
+                      ? practiceSentenceSelection.map((entry, index) => (
+                        <button key={`${entry.index}_${index}`} className="sentence-builder-token selected" onClick={() => handleSentenceSelectionRemove(index)}>
+                          {entry.text}
+                        </button>
+                      ))
+                      : <span className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Build your sentence here.", "اپنا جملہ یہاں بنائیں۔", language), language)}</span>}
+                  </div>
+                  <div className="sentence-builder-bank">
+                    {(activePracticeCard.sentenceBuilderOptions || []).map((token, index) => {
+                      const selected = practiceSentenceSelection.some((entry) => entry.index === index);
+                      return (
+                        <button
+                          key={token.id || `${token.text}_${index}`}
+                          className={`sentence-builder-token${selected ? " used" : ""}`}
+                          disabled={selected || practiceReveal}
+                          onClick={() => handleSentenceTokenToggle(token.text, index)}
+                        >
+                          {token.text}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {practiceSentenceResult ? <p className={`practice-result ${practiceSentenceResult}`} style={getPracticeTextStyle(activePracticeCard.sentenceBuilderSentence, {}, activePracticeCard.sentenceBuilderLang)}>{renderLocalizedTextNode(practiceSentenceResult === "correct" ? joinLocalizedText("Correct sentence", "درست جملہ", language) : joinLocalizedText("Correct order is", "درست ترتیب یہ ہے", language), language)}: {activePracticeCard.sentenceBuilderSentence}</p> : null}
+                  {practiceReveal ? (
+                    <div className="practice-answer-clue">
+                      <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.sentenceBuilderSentence, {}, activePracticeCard.sentenceBuilderLang)}>{activePracticeCard.sentenceBuilderSentence}</div>
+                      {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.sentenceBuilderLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="result-actions">
+                  <button className="retry-btn" onClick={handleCheckSentenceBuilder} disabled={practiceSentenceSelection.length !== (activePracticeCard.sentenceBuilderTokens || []).length}>{renderLocalizedTextNode(joinLocalizedText("Check Order", "ترتیب جانچیں", language), language)}</button>
+                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
+                </div>
+              </div>
+            )}
+            {practiceMode === "timedchallenge" && (
+              <div className="practice-card-shell">
+                <div className="practice-card-face">
+                  <div className="timed-challenge-head">
+                    <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Beat the clock by choosing the correct answer fast.", "درست جواب جلدی منتخب کر کے وقت کو ہرانا ہے۔", language), language)}</div>
+                    <div className={`timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}`}>{formatClockTime(practiceTimerRemaining)}</div>
+                  </div>
+                  {practiceTimerFinished ? (
+                    <div className="timed-challenge-summary">
+                      <div className="study-word-prompt">{renderLocalizedTextNode(joinLocalizedText("Challenge complete", "چیلنج مکمل", language), language)}</div>
+                      <p>{renderLocalizedTextNode(joinLocalizedText(`You got ${practiceSessionStats.correct} correct out of ${practiceSessionStats.attempted}.`, `آپ نے ${practiceSessionStats.attempted} میں سے ${practiceSessionStats.correct} درست کیے۔`, language), language)}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer || activePracticeCard.meaning, { marginTop: 10, fontSize: 17, fontWeight: 700 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer || activePracticeCard.meaning}</div>
+                      <div className="blank-option-grid timed-challenge-options">
+                        {(activePracticeCard.timedOptions || []).map((option) => {
+                          const normalizedOption = normalizeAnswerText(option);
+                          const normalizedPrompt = normalizeAnswerText(activePracticeCard.prompt);
+                          const isSelected = normalizeAnswerText(practiceTimedChoice) === normalizedOption;
+                          const isCorrect = normalizedOption === normalizedPrompt;
+                          const optionClass = [
+                            "blank-option",
+                            "timed-option",
+                            isSelected ? "selected" : "",
+                            practiceReveal && isCorrect ? "correct" : "",
+                            practiceReveal && isSelected && !isCorrect ? "wrong" : "",
+                          ].filter(Boolean).join(" ");
+                          return (
+                            <button
+                              key={option}
+                              className={optionClass}
+                              disabled={practiceTimerFinished || Boolean(practiceTimedChoice)}
+                              onClick={() => handleTimedChallengeChoice(option)}
+                              style={getPracticeTextStyle(option, {}, activePracticeCard.practiceLang)}
+                            >
+                              {option}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {practiceTimedResult ? <p className={`practice-result ${practiceTimedResult}`} style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Correct answer", "درست جواب", language), language)}: {activePracticeCard.prompt}</p> : null}
+                    </>
+                  )}
+                </div>
+                <div className="result-actions">
+                  {practiceTimerFinished
+                    ? <button className="next-btn" onClick={() => handleStartPractice("timedchallenge")}>{renderLocalizedTextNode(joinLocalizedText("Play Again", "دوبارہ کھیلیں", language), language)}</button>
+                    : <button className="retry-btn" onClick={() => window.HomeSchoolUtils.speakText(activePracticeCard.prompt, activePracticeCard.practiceLang || "en")}>{renderLocalizedTextNode(joinLocalizedText("Hear Prompt", "لفظ سنیں", language), language)}</button>}
+                  {!practiceTimerFinished ? <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Skip", "چھوڑیں", language), language)}</button> : null}
+                </div>
+              </div>
+            )}
+            {practiceMode === "timedquiz" && (
+              <div className="practice-card-shell">
+                <div className="practice-card-face">
+                  <div className="timed-challenge-head">
+                    <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Choose the best answer before time ends.", "وقت ختم ہونے سے پہلے بہترین جواب منتخب کریں۔", language), language)}</div>
+                    <div className={`timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}`}>{formatClockTime(practiceTimerRemaining)}</div>
+                  </div>
+                  <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.quizQuestion, {}, activePracticeCard.practiceLang)}>{activePracticeCard.quizQuestion}</div>
+                  <div className="blank-option-grid timed-challenge-options">
+                    {(activePracticeCard.quizOptions || []).map((option, optionIndex) => {
+                      const isSelected = practiceTimedChoice === optionIndex;
+                      const isCorrect = optionIndex === Number(activePracticeCard.quizCorrectIndex);
+                      const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
+                      return (
+                        <button key={`${option}_${optionIndex}`} className={optionClass} disabled={practiceTimerFinished || practiceTimedChoice !== null} onClick={() => handleTimedQuizChoice(optionIndex)} style={getPracticeTextStyle(option, {}, activePracticeCard.practiceLang)}>
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {practiceTimedResult ? <p className={`practice-result ${practiceTimedResult}`} style={getPracticeTextStyle(activePracticeCard.quizOptions?.[Number(activePracticeCard.quizCorrectIndex)] || "", {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Correct answer", "درست جواب", language), language)}: {activePracticeCard.quizOptions?.[Number(activePracticeCard.quizCorrectIndex)] || ""}</p> : null}
+                </div>
+                <div className="result-actions">
+                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next Question", "اگلا سوال", language), language)}</button>
+                </div>
+              </div>
+            )}
+            {practiceMode === "timedtruefalse" && (
+              <div className="practice-card-shell">
+                <div className="practice-card-face">
+                  <div className="timed-challenge-head">
+                    <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Decide whether the statement is true or false before the timer ends.", "وقت ختم ہونے سے پہلے فیصلہ کریں کہ سوال درست ہے یا غلط۔", language), language)}</div>
+                    <div className={`timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}`}>{formatClockTime(practiceTimerRemaining)}</div>
+                  </div>
+                  <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.trueFalseStatement, {}, activePracticeCard.practiceLang)}>{activePracticeCard.trueFalseStatement}</div>
+                  <div className="blank-option-grid timed-challenge-options">
+                    {[{ key: "true", label: joinLocalizedText("True", "درست", language), value: true }, { key: "false", label: joinLocalizedText("False", "غلط", language), value: false }].map((option) => {
+                      const isSelected = practiceTimedChoice === option.key;
+                      const isCorrect = Boolean(activePracticeCard.trueFalseAnswer) === option.value;
+                      const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
+                      return (
+                        <button key={option.key} className={optionClass} disabled={practiceTimerFinished || practiceTimedChoice !== null} onClick={() => handleTimedTrueFalseChoice(option.value)}>
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {practiceTimedResult ? <p className={`practice-result ${practiceTimedResult}`}>{renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Correct answer", "درست جواب", language), language)}: {activePracticeCard.trueFalseAnswer ? renderLocalizedTextNode(joinLocalizedText("True", "درست", language), language) : renderLocalizedTextNode(joinLocalizedText("False", "غلط", language), language)}</p> : null}
+                </div>
+                <div className="result-actions">
+                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next Question", "اگلا سوال", language), language)}</button>
+                </div>
+              </div>
+            )}
+            {["matching", "timedmatching"].includes(practiceMode) && practiceMatchRound && (
+              <div className="practice-card-shell">
+                {practiceMode === "timedmatching" ? (
+                  <div className="timed-challenge-head" style={{ marginBottom: 12 }}>
+                    <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Complete as many correct pairs as you can before time ends.", "وقت ختم ہونے سے پہلے زیادہ سے زیادہ درست جوڑیاں ملائیں۔", language), language)}</div>
+                    <div className={`timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}`}>{formatClockTime(practiceTimerRemaining)}</div>
+                  </div>
+                ) : null}
                 <div className="match-grid">
                   <div className="match-column">
                     {practiceMatchRound.prompts.map((card) => (
@@ -7617,8 +10513,9 @@ function HomeschoolApp() {
                         key={`prompt_${card.id}`}
                         className={`match-chip match-chip-prompt ${practiceMatchSelection?.item?.id === card.id && practiceMatchSelection?.type === "prompt" ? "selected" : ""}${practiceMatchRound.matches?.[card.id] === true ? " matched" : practiceMatchRound.matches?.[card.id] === false ? " wrong" : ""}`}
                         onClick={() => handleMatchSelection("prompt", card)}
+                        style={containsUrduText(getPracticeMatchPrompt(card)) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", lineHeight: 1.8 } : null}
                       >
-                        {card.prompt}
+                        {getPracticeMatchPrompt(card)}
                       </button>
                     ))}
                   </div>
@@ -7628,7 +10525,7 @@ function HomeschoolApp() {
                         key={`answer_${answer.id}`}
                         className={`match-chip match-chip-answer ${practiceMatchSelection?.item?.id === answer.id && practiceMatchSelection?.type === "answer" ? "selected" : ""}`}
                         onClick={() => handleMatchSelection("answer", answer)}
-                        style={containsUrduText(answer.text) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", fontSize: 15, lineHeight: 1.8 } : null}
+                        style={getPracticeTextStyle(answer.text, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}
                       >
                         {answer.text}
                       </button>
@@ -7641,6 +10538,29 @@ function HomeschoolApp() {
                 </div>
               </div>
             )}
+            {practiceReveal ? (
+              <div className="practice-meta-panel">
+                <div className="practice-confidence-row">
+                  <span>{renderLocalizedTextNode(joinLocalizedText("How sure were you?", "آپ کتنے پُریقین تھے؟", language), language)}</span>
+                  <div className="practice-confidence-chips">
+                    {[{ id: "low", en: "Not sure", ur: "کم یقین" }, { id: "medium", en: "Somewhat sure", ur: "کچھ یقین" }, { id: "high", en: "Very sure", ur: "بہت یقین" }].map((item) => (
+                      <button key={item.id} type="button" className={`practice-confidence-chip${practiceConfidenceChoice === item.id ? " active" : ""}`} onClick={() => commitConfidenceChoice(item.id)} disabled={Boolean(practiceConfidenceChoice)}>
+                        {renderLocalizedTextNode(joinLocalizedText(item.en, item.ur, language), language)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {(practiceTypingResult === "wrong" || practiceDictationResult === "wrong" || practiceBlankResult === "wrong" || practiceSentenceResult === "wrong" || practiceTimedResult === "wrong" || practiceMode === "flashcards") ? (
+                  <div className="practice-reflection-box">
+                    <label>{renderLocalizedTextNode(joinLocalizedText("Reflection: why was this tricky?", "سوچیں: یہ مشکل کیوں لگا؟", language), language)}</label>
+                    <textarea value={practiceReflectionDraft} onChange={(event) => setPracticeReflectionDraft(event.target.value)} placeholder={language === "ur" ? "اپنی مختصر نوٹ لکھیں..." : "Write a short note..."} />
+                    <div className="practice-reflection-actions">
+                      <button className="study-tool-btn compact" onClick={savePracticeReflection} disabled={!practiceReflectionDraft.trim()}>{renderLocalizedTextNode(joinLocalizedText("Save Reflection", "نوٹ محفوظ کریں", language), language)}</button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         )}
         {activeReviewCard && !reviewSessionDone && <div className="lesson-detail" style={{ direction: isUrduUi(language) ? "rtl" : "ltr" }}>
@@ -7851,6 +10771,9 @@ function HomeschoolApp() {
             onImportProgress={handleImportProgress}
             onResetProgress={handleResetProgress}
             onFullReset={handleFullReset}
+            onResetReviewSystem={handleResetReviewSystem}
+            onClearStudyCollections={handleClearStudyCollections}
+            onResetPlanningData={handleResetPlanningData}
             onToggleTTS={() => setTtsEnabled(value => !value)}
             ttsEnabled={ttsEnabled}
             ttsRate={ttsRate}
@@ -7863,6 +10786,14 @@ function HomeschoolApp() {
             onLanguageChange={setLanguage}
             themeMode={themeMode}
             onThemeModeChange={setThemeMode}
+            fontSizeMode={fontSizeMode}
+            onFontSizeModeChange={setFontSizeMode}
+            reducedMotion={reducedMotion}
+            onReducedMotionChange={setReducedMotion}
+            highContrast={highContrast}
+            onHighContrastChange={setHighContrast}
+            keyboardShortcutsEnabled={keyboardShortcutsEnabled}
+            onKeyboardShortcutsEnabledChange={setKeyboardShortcutsEnabled}
       navPosition={navPosition}
       onNavPositionChange={setNavPosition}
       navAutoHide={navAutoHide}
@@ -7873,6 +10804,8 @@ function HomeschoolApp() {
       onTransitionModeChange={setTransitionMode}
             dailyReviewCap={dailyReviewCap}
             onDailyReviewCapChange={setDailyReviewCap}
+            reviewSrsSettings={reviewSrsSettings}
+            onReviewSrsSettingChange={handleReviewSrsSettingChange}
             daySectionSettings={daySectionSettings}
             onDaySectionChange={handleDaySectionChange}
             studyGoals={studyGoals}
@@ -7881,6 +10814,12 @@ function HomeschoolApp() {
             onFocusTimerSettingChange={handleFocusTimerSettingChange}
             reminderSettings={reminderSettings}
             onReminderSettingsChange={handleReminderSettingsChange}
+            backupReminderSettings={backupReminderSettings}
+            onBackupReminderSettingChange={handleBackupReminderSettingChange}
+            backupStatusLabel={backupReminderSummary.label}
+            classScheduleSettings={classScheduleSettings}
+            onClassScheduleChange={handleClassScheduleChange}
+            timeTrackingData={timeTrackingData}
             onRequestNotificationPermission={handleRequestNotificationPermission}
             notificationPermission={typeof Notification === "undefined" ? "unsupported" : Notification.permission}
             notificationHistory={notificationHistory}
@@ -7907,6 +10846,49 @@ function HomeschoolApp() {
     </div>
     {navBarAutoHide && navPosition === "bottom" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-bottom" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
     {navPosition === "bottom" ? renderNavBar("bottom") : null}
+    {importReviewState ? (
+      <div className="import-review-overlay" onClick={() => setImportReviewState(null)}>
+        <div className="import-review-dialog" onClick={(event) => event.stopPropagation()} style={isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {}}>
+          <div className="review-panel-head" style={{ marginBottom: 16 }}>
+            <div>
+              <h3>{renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)}</h3>
+              <p>{importReviewState.fileName}</p>
+            </div>
+          </div>
+          {importReviewState.newerVersion ? (
+            <div className="import-review-warning">
+              {renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)}
+            </div>
+          ) : null}
+          <div className="import-review-section">
+            <strong>{renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)}</strong>
+            <div className="import-review-grid">
+              {(importReviewState.summaryRows || []).map((row) => (
+                <div key={row.label} className="import-review-cell">
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="import-review-section">
+            <strong>{renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)}</strong>
+            {(importReviewState.conflicts || []).length > 0 ? (
+              <ul className="import-review-list">
+                {importReviewState.conflicts.map((key) => <li key={key}>{renderLocalizedTextNode(importConflictLabels[key] || key, language)}</li>)}
+              </ul>
+            ) : (
+              <p className="empty-state" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "کوئی بڑا فرق نہیں ملا۔ عام طور پر ملا دینا محفوظ رہتا ہے۔", language), language)}</p>
+            )}
+          </div>
+          <div className="import-review-actions">
+            <button className="ghost-cta" onClick={() => setImportReviewState(null)}>{renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)}</button>
+            <button className="study-tool-btn" onClick={() => executeImportReview(importReviewState, "merge")}>{renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)}</button>
+            <button className="install-cta" onClick={() => executeImportReview(importReviewState, "replace")}>{renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language)}</button>
+          </div>
+        </div>
+      </div>
+    ) : null}
   </div></></AppContext.Provider>);
 }
 
