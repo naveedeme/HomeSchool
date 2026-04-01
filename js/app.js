@@ -8871,6 +8871,8 @@ function HomeschoolApp() {
             language)}</p>
           </div>
         </button>
+        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
+        <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
         <div className="review-panel" style={{ marginTop: 16 }}>
           <div className="review-panel-head">
             <div>
@@ -9030,26 +9032,25 @@ function HomeschoolApp() {
           </div>
           {filteredDiscoveryLessons.length > 0 ? (
             <div className="discovery-result-list">
-              {filteredDiscoveryLessons.map((item) => (
-                <button key={item.id} type="button" className="discovery-result-card" onClick={() => handleOpenDiscoveryLesson(item)}>
+              {filteredDiscoveryLessons.map((item) => {
+                const discoveryIsUrdu = item.subjectId === "urdu" || containsUrduText(item.lessonTitle) || containsUrduText(item.lessonContent);
+                return (
+                <button key={item.id} type="button" className={`discovery-result-card${discoveryIsUrdu ? " urdu-content" : ""}`} onClick={() => handleOpenDiscoveryLesson(item)}>
                   <div className="discovery-result-head">
                     <strong>{renderLocalizedTextNode(item.lessonTitle, language)}</strong>
-                    <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(item.subjectName, item.subjectNameUr, language), language)}</span>
+                    <span className={`grade-tag${item.subjectId === "urdu" ? " discovery-subject-badge-ur" : ""}`} style={{ marginTop: 0 }}>{item.subjectId === "urdu" ? "اردو" : renderLocalizedTextNode(joinLocalizedText(item.subjectName, item.subjectNameUr, language), language)}</span>
                   </div>
                   <p>{renderLocalizedTextNode(item.lessonContent.slice(0, 120) + (item.lessonContent.length > 120 ? "..." : ""), language)}</p>
                   <div className="discovery-tag-row">
                     <span className="discovery-tag">{renderLocalizedTextNode(item.type === "interactive" ? ui.discoveryTypeInteractive : item.type === "practice" ? ui.discoveryTypePractice : ui.discoveryTypeLesson, language)}</span>
                     <span className="discovery-tag">{renderLocalizedTextNode(item.difficulty === "starter" ? ui.discoveryDifficultyStarter : item.difficulty === "stretch" ? ui.discoveryDifficultyStretch : ui.discoveryDifficultyCore, language)}</span>
-                    {(item.tags || []).slice(0, 2).map((tag) => <span key={tag} className="discovery-tag muted">{tag}</span>)}
                   </div>
                 </button>
-              ))}
+              );})}
             </div>
           ) : <p className="empty-state">{renderLocalizedTextNode(ui.noDiscoveryResults, language)}</p>}
         </div>
         {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
-        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
-        <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
       </>)}
 
 

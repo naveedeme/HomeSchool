@@ -326,8 +326,12 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .discovery-word-answer{font-size:16px;color:var(--text-secondary);line-height:1.6}
 .discovery-word-meta{font-size:12px;color:var(--text-muted);margin-top:8px}
 .discovery-filter-shell{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
-.discovery-filter-row{display:flex;gap:10px;flex-wrap:wrap}
+.discovery-filter-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .discovery-filter-row.compact{gap:8px}
+.discovery-filter-row > .practice-subject-chip,
+.discovery-filter-row > .study-tool-btn.compact{width:100%;min-height:56px}
+.discovery-filter-row > .practice-subject-chip{justify-content:flex-start}
+.discovery-filter-row > .study-tool-btn.compact{display:inline-flex;align-items:center;justify-content:center;padding:0 14px}
 .discovery-result-list{display:flex;flex-direction:column;gap:10px}
 .discovery-result-card{width:100%;padding:14px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);text-align:left;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
 .discovery-result-card:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 26%,var(--border));box-shadow:0 14px 28px color-mix(in srgb,var(--bg-primary) 14%,transparent)}
@@ -384,6 +388,15 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .practice-confidence-chip{padding:9px 12px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-family:var(--font);font-size:12px;font-weight:800;cursor:pointer;transition:transform .16s ease,background-color .18s ease,border-color .18s ease}
 .practice-confidence-chip:hover{background:color-mix(in srgb,var(--accent) 7%,var(--bg-card));border-color:color-mix(in srgb,var(--accent) 28%,var(--border))}
 .practice-confidence-chip.active{background:color-mix(in srgb,#22c55e 14%,var(--bg-card));border-color:color-mix(in srgb,#22c55e 40%,var(--border))}
+.discovery-result-card.urdu-content{direction:rtl;text-align:right}
+.discovery-result-card.urdu-content .discovery-result-head,
+.discovery-result-card.urdu-content .discovery-tag-row{direction:rtl}
+.discovery-result-card.urdu-content .discovery-result-head strong,
+.discovery-result-card.urdu-content p,
+.discovery-result-card.urdu-content .grade-tag,
+.discovery-result-card .discovery-subject-badge-ur,
+.discovery-result-card.urdu-content .discovery-tag{font-family:var(--font-ur);line-height:1.85}
+.discovery-result-card.urdu-content .discovery-tag{font-family:inherit;line-height:inherit}
 .practice-reflection-box{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:14px;border:1px solid var(--border);background:var(--bg-card)}
 .practice-reflection-box label{font-size:12px;font-weight:800;color:var(--text-secondary)}
 .practice-reflection-box textarea{width:100%;min-height:78px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-family:var(--font);font-size:13px;resize:vertical}
