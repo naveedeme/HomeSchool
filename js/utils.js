@@ -129,7 +129,7 @@
   }
 
   function isTtsEnabled() {
-    return window.HomeSchoolPrefs?.ttsEnabled !== false;
+    return window.HomeSchoolPrefs?.ttsEnabled !== false && window.HomeSchoolPrefs?.audioMuted !== true;
   }
 
   function getSpeechConfig(lang = "en", voices = window.speechSynthesis?.getVoices?.() || []) {

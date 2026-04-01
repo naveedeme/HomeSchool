@@ -113,6 +113,16 @@ const UI_TEXT = {
     voiceAuto: "Auto",
     voiceAutoHelp: "Auto chooses the best supported browser voice.",
     urduVoiceHelp: "Choose the closest Urdu or Urdu-friendly browser voice.",
+    muteAudio: "Mute Audio",
+    autoPlayNext: "Auto-Play Next",
+    autoPlayNextHelp: "Automatically play the next prompt when a new practice card opens.",
+    phoneticSpelling: "Phonetic Spelling",
+    syllableBreakdown: "Syllable Breakdown",
+    wordBankExplorer: "Word Bank Explorer",
+    wordSearch: "Word Search",
+    wordSearchPlaceholder: "Search words, meanings, or translations...",
+    noWordResults: "No words match this search yet.",
+    openSource: "Open Source",
     enabled: "Enabled",
     disabled: "Disabled",
     themeMode: "Theme Mode",
@@ -188,6 +198,10 @@ const UI_TEXT = {
     transitionFade: "Fade",
     transitionSlide: "Slide",
     transitionZoom: "Zoom",
+    focusMode: "Focus Mode",
+    focusModeHelp: "Hide extra dashboard distractions so the main study path stays front and center.",
+    readingMode: "Reading Mode",
+    readingModeHelp: "Give lessons and reading surfaces a calmer, roomier layout with easier text flow.",
     notificationHistory: "Notification History",
     clearNotifications: "Clear History",
     noNotificationsYet: "No notifications yet.",
@@ -363,6 +377,16 @@ const UI_TEXT = {
     voiceAuto: "خودکار",
     voiceAutoHelp: "خودکار موڈ براؤزر کی مناسب آواز منتخب کرے گا۔",
     urduVoiceHelp: "قریب ترین اردو یا اردو کے موافق براؤزر آواز منتخب کریں۔",
+    muteAudio: "آواز بند کریں",
+    autoPlayNext: "اگلا خودکار سنائیں",
+    autoPlayNextHelp: "نیا پریکٹس کارڈ کھلتے ہی اگلا پرامپٹ خودکار طور پر سنائیں۔",
+    phoneticSpelling: "صوتی املا",
+    syllableBreakdown: "ہجوں کی تقسیم",
+    wordBankExplorer: "لفظی ذخیرہ ایکسپلورر",
+    wordSearch: "لفظ تلاش",
+    wordSearchPlaceholder: "الفاظ، معنی، یا تراجم تلاش کریں...",
+    noWordResults: "ابھی اس تلاش کے مطابق کوئی لفظ نہیں ملا۔",
+    openSource: "اصل سبق کھولیں",
     enabled: "آن",
     disabled: "آف",
     themeMode: "تھیم موڈ",
@@ -438,6 +462,10 @@ const UI_TEXT = {
     transitionFade: "فِیڈ",
     transitionSlide: "سلائیڈ",
     transitionZoom: "زوم",
+    focusMode: "فوکس موڈ",
+    focusModeHelp: "ہوم اسکرین کی اضافی توجہ بٹانے والی چیزیں چھپا کر اصل مطالعہ سامنے رکھیں۔",
+    readingMode: "ریڈنگ موڈ",
+    readingModeHelp: "اسباق اور مطالعہ والی سطحوں کو زیادہ کھلا، پُرسکون اور آسان پڑھائی والا انداز دیں۔",
     notificationHistory: "نوٹیفکیشن ہسٹری",
     clearNotifications: "ہسٹری صاف کریں",
     noNotificationsYet: "ابھی کوئی نوٹیفکیشن نہیں۔",
@@ -4230,6 +4258,47 @@ function getLessonKeyValue(lesson) {
   return lesson?.key || lesson?.id || lesson?.title || null;
 }
 
+function inferDayValueFromLabel(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const match = text.match(/\bday\s*(\d+)\b/i) || text.match(/\bدن\s*(\d+)\b/u);
+  if (!match) return null;
+  const dayValue = Number(match[1]);
+  return Number.isFinite(dayValue) && dayValue > 0 ? dayValue : null;
+}
+
+function getLessonDayValues(lesson) {
+  const values = new Set();
+  const collectDays = (entries = []) => {
+    entries.forEach((entry) => {
+      const dayValue = Number(entry?.day);
+      if (Number.isFinite(dayValue) && dayValue > 0) values.add(dayValue);
+    });
+  };
+
+  collectDays(Array.isArray(lesson?.dayLessons) ? lesson.dayLessons : []);
+  (lesson?.subs || []).forEach((sub) => {
+    collectDays(Array.isArray(sub?.dayLessons) ? sub.dayLessons : []);
+    const titledDay = inferDayValueFromLabel(sub?.t || sub?.title || "");
+    if (Number.isFinite(titledDay)) values.add(titledDay);
+  });
+
+  return Array.from(values).sort((a, b) => a - b);
+}
+
+function getPracticeRangeDayValues(lessons = []) {
+  const values = new Set();
+  (lessons || []).forEach((lesson) => {
+    getLessonDayValues(lesson).forEach((dayValue) => values.add(dayValue));
+  });
+  return Array.from(values).sort((a, b) => a - b);
+}
+
+function getPracticeItemDay(card) {
+  const dayValue = Number(card?.day ?? card?.source?.day ?? null);
+  return Number.isFinite(dayValue) && dayValue > 0 ? dayValue : null;
+}
+
 function estimatePracticeDifficulty(prompt, answer, stem = "", type = "exercise") {
   const promptWords = String(prompt || "").trim().split(/\s+/).filter(Boolean).length;
   const answerWords = String(answer || "").trim().split(/\s+/).filter(Boolean).length;
@@ -4309,6 +4378,8 @@ function buildGradePracticeItems(dataLoader, grade) {
         title: sub?.t || lesson.title,
         examples: sub?.examples || [],
         sentencePairs: sub?.sentencePairs || [],
+        dayLessons: sub?.dayLessons || [],
+        day: inferDayValueFromLabel(sub?.t || sub?.title || ""),
         exercises: sub?.exerciseGroups
           ? sub.exerciseGroups.flatMap((group) => group?.exercises || [])
           : (sub?.exercises || []),
@@ -4318,6 +4389,8 @@ function buildGradePracticeItems(dataLoader, grade) {
         title: lesson?.title || "",
         examples: lesson?.examples || [],
         sentencePairs: lesson?.sentencePairs || [],
+        dayLessons: lesson?.dayLessons || [],
+        day: inferDayValueFromLabel(lesson?.title || ""),
         exercises: lesson?.exerciseGroups
           ? lesson.exerciseGroups.flatMap((group) => group?.exercises || [])
           : (lesson?.exercises || []),
@@ -4328,6 +4401,79 @@ function buildGradePracticeItems(dataLoader, grade) {
       sections.forEach((section, sectionIndex) => {
         const sectionTitle = section?.title || lesson?.title || subject.name || "Practice";
         const sectionLabel = `${subject.name} • ${sectionTitle}`;
+        const sectionDay = Number.isFinite(Number(section?.day)) ? Number(section.day) : null;
+        const dayLessons = Array.isArray(section?.dayLessons) ? section.dayLessons : [];
+        dayLessons.forEach((lessonDay, dayIndex) => {
+          const dayValue = Number(lessonDay?.day);
+          const safeDay = Number.isFinite(dayValue) && dayValue > 0 ? dayValue : null;
+          const words = Array.isArray(lessonDay?.words) ? lessonDay.words : [];
+          const paragraph = stripPracticeMarkers(lessonDay?.paragraph || "");
+
+          words.forEach((word, wordIndex) => {
+            const left = stripPracticeMarkers(word?.en || word?.left);
+            const right = stripPracticeMarkers(word?.ur || word?.right);
+            if (!left || !right) return;
+            items.push({
+              id: `supplemental_day_pair_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, dayIndex, wordIndex, left, right].join("|"))}`,
+              subject: subject.id,
+              section: lesson.key || lesson.title || subject.id,
+              sectionLabel,
+              prompt: left,
+              answer: right,
+              meaning: "",
+              supplementalType: "pair",
+              lessonKey: lesson.key || lesson.title || null,
+              lessonIndex,
+              day: safeDay,
+              practiceQuestionStem: containsUrduText(left) ? "Translate this into English:" : "Translate this into Urdu:",
+              practiceFront: left,
+              practiceBack: right,
+              typingClue: right,
+              typingTarget: left,
+              matchPrompt: left,
+              matchAnswer: right,
+              practiceDifficulty: estimatePracticeDifficulty(left, right, sectionTitle, "pair"),
+              practiceLang: containsUrduText(left) ? "ur" : defaultLang,
+              source: {
+                subject: subject.id,
+                lessonKey: lesson.key || null,
+                lessonTitle: lesson.title || null,
+                subTitle: sectionTitle,
+                subIndex: lesson?.hasMathSub ? sectionIndex : null,
+                subTab: "examples",
+                day: safeDay,
+              },
+            });
+          });
+
+          if (!paragraph) return;
+          items.push({
+            id: `supplemental_day_example_${simpleHash([subject.id, lesson.key || lesson.title || "", sectionIndex, dayIndex, paragraph].join("|"))}`,
+            subject: subject.id,
+            section: lesson.key || lesson.title || subject.id,
+            sectionLabel,
+            prompt: paragraph,
+            answer: "",
+            meaning: "",
+            example: paragraph,
+            supplementalType: "example",
+            lessonKey: lesson.key || lesson.title || null,
+            lessonIndex,
+            day: safeDay,
+            practiceDifficulty: estimatePracticeDifficulty(paragraph, "", sectionTitle, "example"),
+            practiceLang: containsUrduText(paragraph) ? "ur" : defaultLang,
+            source: {
+              subject: subject.id,
+              lessonKey: lesson.key || null,
+              lessonTitle: lesson.title || null,
+              subTitle: sectionTitle,
+              subIndex: lesson?.hasMathSub ? sectionIndex : null,
+              subTab: "examples",
+              day: safeDay,
+            },
+          });
+        });
+
         const examples = Array.isArray(section?.examples) ? section.examples : [];
         examples.forEach((example, exampleIndex) => {
           const text = stripPracticeMarkers(example);
@@ -4343,6 +4489,7 @@ function buildGradePracticeItems(dataLoader, grade) {
             supplementalType: "example",
             lessonKey: lesson.key || lesson.title || null,
             lessonIndex,
+            day: sectionDay,
             practiceDifficulty: estimatePracticeDifficulty(text, "", sectionTitle, "example"),
             practiceLang: containsUrduText(text) ? "ur" : defaultLang,
             source: {
@@ -4352,6 +4499,7 @@ function buildGradePracticeItems(dataLoader, grade) {
               subTitle: sectionTitle,
               subIndex: lesson?.hasMathSub ? sectionIndex : null,
               subTab: "examples",
+              day: sectionDay,
             },
           });
         });
@@ -4372,6 +4520,7 @@ function buildGradePracticeItems(dataLoader, grade) {
             supplementalType: "pair",
             lessonKey: lesson.key || lesson.title || null,
             lessonIndex,
+            day: sectionDay,
             practiceQuestionStem: subject.id === "english"
               ? (containsUrduText(left) ? "Translate this into English:" : "Translate this into Urdu:")
               : subject.id === "urdu"
@@ -4392,6 +4541,7 @@ function buildGradePracticeItems(dataLoader, grade) {
               subTitle: sectionTitle,
               subIndex: lesson?.hasMathSub ? sectionIndex : null,
               subTab: "examples",
+              day: sectionDay,
             },
           });
         });
@@ -4415,6 +4565,7 @@ function buildGradePracticeItems(dataLoader, grade) {
               supplementalType: "exercise",
               lessonKey: lesson.key || lesson.title || null,
               lessonIndex,
+              day: sectionDay,
               practiceQuestionStem: exercise?.q || "",
               practiceFront: clue,
               practiceBack: solution,
@@ -4435,6 +4586,7 @@ function buildGradePracticeItems(dataLoader, grade) {
                 subTitle: sectionTitle,
                 subIndex: lesson?.hasMathSub ? sectionIndex : null,
                 subTab: "exercises",
+                day: sectionDay,
               },
             });
           });
@@ -4456,6 +4608,7 @@ function buildGradePracticeItems(dataLoader, grade) {
             supplementalType: "wordproblem",
             lessonKey,
             lessonIndex,
+            day: sectionDay,
             practiceQuestionStem: problemQuestion,
             practiceFront: problemQuestion,
             practiceBack: problemAnswer,
@@ -4473,6 +4626,7 @@ function buildGradePracticeItems(dataLoader, grade) {
               subTitle: sectionTitle,
               subIndex: lesson?.hasMathSub ? sectionIndex : null,
               subTab: "wordProblems",
+              day: sectionDay,
             },
           });
         });
@@ -4495,6 +4649,7 @@ function buildGradePracticeItems(dataLoader, grade) {
             supplementalType: "quiz",
             lessonKey,
             lessonIndex,
+            day: sectionDay,
             practiceQuestionStem: question?.q || "",
             practiceFront: clue,
             practiceBack: correctAnswer,
@@ -4514,6 +4669,7 @@ function buildGradePracticeItems(dataLoader, grade) {
               subTitle: sectionTitle,
               subIndex: lesson?.hasMathSub ? sectionIndex : null,
               subTab: "quiz",
+              day: sectionDay,
             },
           });
         });
@@ -4624,6 +4780,132 @@ function normalizeAnswerText(value) {
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+}
+
+const PHONETIC_EXCEPTIONS = {
+  one: "wun",
+  two: "too",
+  once: "wuns",
+  hour: "our",
+  honest: "on-ist",
+  know: "noh",
+  school: "skool",
+  enough: "ee-nuf",
+  through: "throo",
+  though: "thoh",
+  daughter: "daw-ter",
+  laugh: "laf",
+  great: "grayt",
+  water: "waw-ter",
+};
+
+function isEnglishStudyText(value) {
+  const text = String(value || "").trim();
+  if (!text || containsUrduText(text)) return false;
+  return /^[A-Za-z\s'’-]+$/.test(text);
+}
+
+function splitEnglishWordIntoSyllables(word) {
+  const raw = String(word || "").trim();
+  const cleaned = raw.toLowerCase().replace(/[^a-z]/g, "");
+  if (!cleaned) return [];
+  if (cleaned.length <= 3) return [raw.toLowerCase()];
+  const matches = cleaned.match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy](?=[^aeiouy][aeiouy])|[^aeiouy]?$)?/g);
+  if (!matches || !matches.length) return [raw.toLowerCase()];
+  return matches;
+}
+
+function simplifyPhoneticChunk(chunk = "") {
+  let next = String(chunk || "").toLowerCase();
+  if (!next) return "";
+  if (PHONETIC_EXCEPTIONS[next]) return PHONETIC_EXCEPTIONS[next];
+  next = next
+    .replace(/tion/g, "shun")
+    .replace(/sion/g, "zhun")
+    .replace(/ture/g, "cher")
+    .replace(/ph/g, "f")
+    .replace(/igh/g, "eye")
+    .replace(/eigh/g, "ay")
+    .replace(/ee/g, "ee")
+    .replace(/ea/g, "ee")
+    .replace(/oo/g, "oo")
+    .replace(/ou/g, "ow")
+    .replace(/ow/g, "ow")
+    .replace(/ai/g, "ay")
+    .replace(/ay/g, "ay")
+    .replace(/oa/g, "oh")
+    .replace(/oi/g, "oy")
+    .replace(/oy/g, "oy")
+    .replace(/au/g, "aw")
+    .replace(/aw/g, "aw")
+    .replace(/ir/g, "er")
+    .replace(/er/g, "er")
+    .replace(/ur/g, "er")
+    .replace(/ar/g, "aar")
+    .replace(/or/g, "or")
+    .replace(/qu/g, "kw")
+    .replace(/ck/g, "k")
+    .replace(/x/g, "ks");
+  next = next
+    .replace(/c(?=[eiy])/g, "s")
+    .replace(/c/g, "k")
+    .replace(/g(?=[eiy])/g, "j")
+    .replace(/^kn/g, "n")
+    .replace(/^wr/g, "r")
+    .replace(/mb$/g, "m");
+  if (next.length > 3 && /e$/.test(next) && !/(le|ee|ye)$/.test(next)) next = next.slice(0, -1);
+  return next;
+}
+
+function getPhoneticBreakdown(text) {
+  const trimmed = String(text || "").trim();
+  if (!isEnglishStudyText(trimmed) || trimmed.split(/\s+/).length > 6) return null;
+  const words = trimmed.split(/\s+/).map((word) => word.replace(/[^A-Za-z'’-]/g, "")).filter(Boolean);
+  if (!words.length) return null;
+  const syllables = words.flatMap((word) => splitEnglishWordIntoSyllables(word));
+  const phonetic = words
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (PHONETIC_EXCEPTIONS[lower]) return PHONETIC_EXCEPTIONS[lower];
+      return splitEnglishWordIntoSyllables(lower).map((chunk) => simplifyPhoneticChunk(chunk)).join("-");
+    })
+    .join(" ");
+  return {
+    phonetic: phonetic || trimmed.toLowerCase(),
+    syllables: syllables.length ? syllables.join(" • ") : trimmed.toLowerCase(),
+  };
+}
+
+function getPracticeAudioPrompt(card, mode) {
+  if (!card) return "";
+  if (mode === "dictation") return normalizeText(card?.prompt);
+  if (mode === "fillblanks") return normalizeText(card?.blankSentence || "").replace("_____", normalizeText(card?.prompt || ""));
+  if (mode === "typing") return normalizeText(card?.typingTarget || card?.prompt || "");
+  if (mode === "matching" || mode === "timedmatching") return normalizeText(card?.matchPrompt || card?.prompt || "");
+  if (mode === "sentencebuilder") return normalizeText(card?.sentenceBuilderSentence || "");
+  if (mode === "timedchallenge") return normalizeText(card?.prompt || "");
+  if (mode === "timedquiz") return normalizeText(card?.quizQuestion || "");
+  if (mode === "timedtruefalse") return normalizeText(card?.trueFalseStatement || "");
+  return normalizeText(card?.practiceFront || card?.prompt || "");
+}
+
+function getPracticePhonicsMeta(card, mode) {
+  if (!card) return null;
+  const candidates = [
+    mode === "typing" ? getPracticeTypingTarget(card) : "",
+    mode === "dictation" ? normalizeText(card?.prompt) : "",
+    mode === "fillblanks" ? normalizeText(card?.prompt) : "",
+    mode === "matching" || mode === "timedmatching" ? getPracticeMatchPrompt(card) : "",
+    mode === "sentencebuilder" ? normalizeText(card?.sentenceBuilderSentence) : "",
+    mode === "timedchallenge" ? normalizeText(card?.prompt) : "",
+    getPracticeFlashFront(card),
+    getPracticeFlashBack(card),
+  ].filter(Boolean);
+  const candidate = candidates.find((entry) => isEnglishStudyText(entry) && String(entry).trim().split(/\s+/).length <= 6);
+  if (!candidate) return null;
+  const breakdown = getPhoneticBreakdown(candidate);
+  if (!breakdown) return null;
+  return { text: candidate, ...breakdown };
 }
 
 function isTypingAnswerCorrect(card, input) {
@@ -5592,6 +5874,8 @@ function HomeschoolApp() {
   const [fontSizeMode, setFontSizeMode] = useState(["small", "normal", "large", "xlarge"].includes(stored?.fontSizeMode) ? stored.fontSizeMode : "normal");
   const [reducedMotion, setReducedMotion] = useState(Boolean(stored?.reducedMotion));
   const [highContrast, setHighContrast] = useState(Boolean(stored?.highContrast));
+  const [focusMode, setFocusMode] = useState(Boolean(stored?.focusMode));
+  const [readingMode, setReadingMode] = useState(Boolean(stored?.readingMode));
   const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(stored?.keyboardShortcutsEnabled !== false);
   const ui = getUiText(language);
   const [daySectionOverrides, setDaySectionOverrides] = useState(stored?.daySectionOverrides || {});
@@ -5648,6 +5932,8 @@ function HomeschoolApp() {
   const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
+  const [audioMuted, setAudioMuted] = useState(Boolean(stored?.audioMuted));
+  const [autoPlayNext, setAutoPlayNext] = useState(Boolean(stored?.autoPlayNext));
   const [ttsRate, setTtsRate] = useState(Math.max(0.6, Math.min(1.3, Number(stored?.ttsRate) || 0.85)));
   const [availableVoices, setAvailableVoices] = useState([]);
   const [ttsVoiceSelections, setTtsVoiceSelections] = useState(stored?.ttsVoiceSelections || { en: "", ur: "" });
@@ -5715,6 +6001,8 @@ function HomeschoolApp() {
   const [discoverySubjectFilter, setDiscoverySubjectFilter] = useState("all");
   const [discoveryTypeFilter, setDiscoveryTypeFilter] = useState("all");
   const [discoveryDifficultyFilter, setDiscoveryDifficultyFilter] = useState("all");
+  const [wordSearch, setWordSearch] = useState("");
+  const [wordBankSubjectFilter, setWordBankSubjectFilter] = useState("all");
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
   const [gradeDisclosureOpen, setGradeDisclosureOpen] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "dark"));
@@ -5746,6 +6034,8 @@ function HomeschoolApp() {
   const effectivePracticeMode = practiceMode === "interleaved" ? (activePracticeCard?.interleavedType || "flashcards") : practiceMode;
   const practiceQuestionPrompt = activePracticeCard ? getPracticeQuestionPrompt(activePracticeCard, effectivePracticeMode, language) : "";
   const practiceQuestionPromptUrdu = activePracticeCard ? getPracticeQuestionPrompt(activePracticeCard, effectivePracticeMode, "ur") : "";
+  const practiceAudioPrompt = activePracticeCard ? getPracticeAudioPrompt(activePracticeCard, effectivePracticeMode) : "";
+  const practicePhonicsMeta = activePracticeCard ? getPracticePhonicsMeta(activePracticeCard, effectivePracticeMode) : null;
   const isLightTheme = resolvedTheme === "light";
   const revealToggleBaseStyle = {
     padding: "6px 14px",
@@ -5842,6 +6132,7 @@ function HomeschoolApp() {
     () => new Map(practiceSubjectLessons.map((lesson, index) => [getLessonKeyValue(lesson), index])),
     [practiceSubjectLessons],
   );
+  const isEnglishPracticeSubject = activePracticeSubjectId === "english";
   const activePracticeFilter = useMemo(() => {
     const subjectFilters = practiceFiltersBySubject?.[activePracticeSubjectId] || {};
     const lessonKeys = practiceSubjectLessons.map((lesson) => getLessonKeyValue(lesson)).filter(Boolean);
@@ -5853,14 +6144,28 @@ function HomeschoolApp() {
     const endIndex = practiceSubjectLessonMap.get(endLessonKey);
     const orderedStartIndex = Number.isFinite(startIndex) && Number.isFinite(endIndex) ? Math.min(startIndex, endIndex) : 0;
     const orderedEndIndex = Number.isFinite(startIndex) && Number.isFinite(endIndex) ? Math.max(startIndex, endIndex) : Math.max(0, lessonKeys.length - 1);
+    const rangeLessons = practiceSubjectLessons.slice(orderedStartIndex, orderedEndIndex + 1);
+    const dayValues = isEnglishPracticeSubject ? getPracticeRangeDayValues(rangeLessons) : [];
+    const defaultStartDay = dayValues[0] || null;
+    const defaultEndDay = dayValues[dayValues.length - 1] || defaultStartDay;
+    const rawStartDay = Number(subjectFilters.startDay);
+    const rawEndDay = Number(subjectFilters.endDay);
+    const startDay = dayValues.includes(rawStartDay) ? rawStartDay : defaultStartDay;
+    const endDay = dayValues.includes(rawEndDay) ? rawEndDay : defaultEndDay;
+    const orderedStartDay = Number.isFinite(startDay) && Number.isFinite(endDay) ? Math.min(startDay, endDay) : defaultStartDay;
+    const orderedEndDay = Number.isFinite(startDay) && Number.isFinite(endDay) ? Math.max(startDay, endDay) : defaultEndDay;
     return {
       startLessonKey,
       endLessonKey,
       startIndex: orderedStartIndex,
       endIndex: orderedEndIndex,
+      dayValues,
+      startDay: orderedStartDay,
+      endDay: orderedEndDay,
+      hasDayRange: dayValues.length > 0 && Number.isFinite(orderedStartDay) && Number.isFinite(orderedEndDay),
       difficulty: ["beginner", "medium", "advanced"].includes(subjectFilters.difficulty) ? subjectFilters.difficulty : "beginner",
     };
-  }, [activePracticeSubjectId, practiceFiltersBySubject, practiceSubjectLessonMap, practiceSubjectLessons]);
+  }, [activePracticeSubjectId, isEnglishPracticeSubject, practiceFiltersBySubject, practiceSubjectLessonMap, practiceSubjectLessons]);
   const practiceFilterSummary = useMemo(() => {
     const startLesson = practiceSubjectLessons[activePracticeFilter.startIndex];
     const endLesson = practiceSubjectLessons[activePracticeFilter.endIndex];
@@ -5868,21 +6173,34 @@ function HomeschoolApp() {
       startLabel: startLesson ? `${ui.lesson} ${activePracticeFilter.startIndex + 1}` : ui.lesson,
       endLabel: endLesson ? `${ui.lesson} ${activePracticeFilter.endIndex + 1}` : ui.lesson,
       isSingle: activePracticeFilter.startIndex === activePracticeFilter.endIndex,
+      dayStartLabel: activePracticeFilter.hasDayRange ? joinLocalizedText(`Day ${activePracticeFilter.startDay}`, `دن ${activePracticeFilter.startDay}`, language) : "",
+      dayEndLabel: activePracticeFilter.hasDayRange ? joinLocalizedText(`Day ${activePracticeFilter.endDay}`, `دن ${activePracticeFilter.endDay}`, language) : "",
+      isSingleDay: activePracticeFilter.startDay === activePracticeFilter.endDay,
+      hasDayRange: activePracticeFilter.hasDayRange,
     };
-  }, [activePracticeFilter.endIndex, activePracticeFilter.startIndex, practiceSubjectLessons, ui.lesson]);
+  }, [activePracticeFilter.endDay, activePracticeFilter.endIndex, activePracticeFilter.hasDayRange, activePracticeFilter.startDay, activePracticeFilter.startIndex, language, practiceSubjectLessons, ui.lesson]);
   const practiceDifficultyLabel = useMemo(() => ({
     beginner: joinLocalizedText("Beginner", "آسان", language),
     medium: joinLocalizedText("Medium", "درمیانہ", language),
     advanced: joinLocalizedText("Advance", "اعلیٰ", language),
   }[activePracticeFilter.difficulty] || joinLocalizedText("Beginner", "آسان", language)), [activePracticeFilter.difficulty, language]);
+  const englishPracticeHasDayLessons = useMemo(
+    () => isEnglishPracticeSubject && practiceSubjectLessons.some((lesson) => getLessonDayValues(lesson).length > 0),
+    [isEnglishPracticeSubject, practiceSubjectLessons],
+  );
   const practiceMatchesFilters = useCallback((card) => {
     if (!card || (card?.subject || "english") !== activePracticeSubjectId) return false;
     const lessonKey = getPracticeItemLessonKey(card);
     const lessonIndex = Number.isFinite(card?.lessonIndex) ? Number(card.lessonIndex) : practiceSubjectLessonMap.get(lessonKey);
     if (!Number.isFinite(lessonIndex)) return false;
     if (lessonIndex < activePracticeFilter.startIndex || lessonIndex > activePracticeFilter.endIndex) return false;
+    if (activePracticeFilter.hasDayRange) {
+      const cardDay = getPracticeItemDay(card);
+      if (!Number.isFinite(cardDay)) return false;
+      if (cardDay < activePracticeFilter.startDay || cardDay > activePracticeFilter.endDay) return false;
+    }
     return getPracticeItemDifficulty(card) === activePracticeFilter.difficulty;
-  }, [activePracticeFilter.difficulty, activePracticeFilter.endIndex, activePracticeFilter.startIndex, activePracticeSubjectId, practiceSubjectLessonMap]);
+  }, [activePracticeFilter.difficulty, activePracticeFilter.endDay, activePracticeFilter.endIndex, activePracticeFilter.hasDayRange, activePracticeFilter.startDay, activePracticeFilter.startIndex, activePracticeSubjectId, practiceSubjectLessonMap]);
   const practiceQuestionMarks = getPracticeDifficultyMarks(activePracticeFilter.difficulty);
   const activePracticeTimeLimit = Math.max(10, Math.min(180, Number(practiceTimedSettings?.[practiceMode] || (practiceMode === "timedchallenge" ? 60 : 30)) || (practiceMode === "timedchallenge" ? 60 : 30)));
   const activePracticeLessonKey = getPracticeItemLessonKey(activePracticeCard);
@@ -5988,6 +6306,9 @@ function HomeschoolApp() {
     timedmatching: practiceMatchingReadyCount,
     interleaved: practiceInterleavedReadyCount,
   };
+  const practiceScopeLabel = activePracticeFilter.hasDayRange
+    ? joinLocalizedText("lesson/day range and difficulty", "سبق/دن کی حد اور مشکل", language)
+    : joinLocalizedText("lesson range and difficulty", "سبق کی حد اور مشکل", language);
   const getPracticeModeMeta = useCallback((modeId, enabledTextEn, enabledTextUr, minimumRequired = 1) => {
     const readyCount = Number(practiceModeReadyCounts?.[modeId] || 0);
     if (readyCount >= minimumRequired) {
@@ -6006,17 +6327,17 @@ function HomeschoolApp() {
     }
     if (modeId === "matching" || modeId === "timedmatching") {
       return joinLocalizedText(
-        "Need at least 4 valid pairs in this lesson range and difficulty",
-        "اس سبق کی حد اور مشکل میں کم از کم 4 درست جوڑیاں درکار ہیں",
+        `Need at least 4 valid pairs in this ${practiceScopeLabel}`,
+        `اس ${practiceScopeLabel} میں کم از کم 4 درست جوڑیاں درکار ہیں`,
         language,
       );
     }
     return joinLocalizedText(
-      "No matching practice items in this lesson range and difficulty yet",
-      "اس سبق کی حد اور مشکل میں ابھی مناسب پریکٹس مواد موجود نہیں",
+      `No matching practice items in this ${practiceScopeLabel} yet`,
+      `اس ${practiceScopeLabel} میں ابھی مناسب پریکٹس مواد موجود نہیں`,
       language,
     );
-  }, [language, practiceModeReadyCounts, practiceSubjectLessons.length]);
+  }, [language, practiceModeReadyCounts, practiceScopeLabel, practiceSubjectLessons.length]);
   const scheduleDurationMinutes = useMemo(() => getScheduleDurationMinutes(classScheduleSettings), [classScheduleSettings]);
   const todayTimeEntry = useMemo(
     () => (timeTrackingData.history || []).find((entry) => entry.dayKey === getLocalDayKey()) || null,
@@ -6098,18 +6419,71 @@ function HomeschoolApp() {
     const seed = Math.abs(simpleHash(todayKey).split("").reduce((sum, char) => sum + char.charCodeAt(0), 0));
     return discoveryWordPool[seed % discoveryWordPool.length];
   }, [discoveryWordPool]);
+  const wordBankIndex = useMemo(() => {
+    const subjectLookup = Object.fromEntries(SUBJECTS.map((subject) => [subject.id, subject]));
+    const seen = new Set();
+    const items = [...(reviewLibrary || []), ...(gradePracticeItems || [])];
+    return items.reduce((acc, item, index) => {
+      const prompt = normalizeText(item?.prompt || item?.practiceFront || "");
+      const answer = normalizeText(item?.answer || item?.meaning || item?.practiceBack || "");
+      if (!prompt || !answer) return acc;
+      if (prompt.split(/\s+/).length > 6) return acc;
+      const subjectId = item?.subject || "english";
+      const dedupeKey = normalizeAnswerText(`${subjectId}|${prompt}|${answer}`);
+      if (!dedupeKey || seen.has(dedupeKey)) return acc;
+      seen.add(dedupeKey);
+      const subjectInfo = subjectLookup[subjectId] || {};
+      acc.push({
+        id: item?.id || `wordbank_${simpleHash(`${dedupeKey}|${index}`)}`,
+        prompt,
+        answer,
+        meaning: normalizeText(item?.meaning || ""),
+        subjectId,
+        subjectName: subjectInfo.name || subjectId,
+        subjectNameUr: subjectInfo.nameUr || subjectId,
+        sectionLabel: item?.sectionLabel || "",
+        lessonKey: item?.lessonKey || item?.source?.lessonKey || null,
+        day: item?.day || item?.source?.day || null,
+        source: item?.source || {
+          subject: subjectId,
+          lessonKey: item?.lessonKey || null,
+          lessonTitle: item?.lessonTitle || item?.sectionLabel || null,
+          day: item?.day || null,
+        },
+      });
+      return acc;
+    }, []);
+  }, [gradePracticeItems, reviewLibrary]);
+  const filteredWordBank = useMemo(() => {
+    const searchNeedle = normalizeText(wordSearch).toLowerCase();
+    return wordBankIndex.filter((item) => {
+      if (wordBankSubjectFilter !== "all" && item.subjectId !== wordBankSubjectFilter) return false;
+      if (!searchNeedle) return true;
+      const haystack = [item.prompt, item.answer, item.meaning, item.subjectName, item.subjectNameUr, item.sectionLabel].join(" ").toLowerCase();
+      return haystack.includes(searchNeedle);
+    }).slice(0, 18);
+  }, [wordBankIndex, wordBankSubjectFilter, wordSearch]);
 
   useEffect(() => {
     timeTrackingRef.current = timeTrackingData;
   }, [timeTrackingData]);
 
   useEffect(() => {
-    if (practiceMode !== "dictation" || !activePracticeCard?.prompt) return undefined;
+    if (practiceMode !== "dictation" || !activePracticeCard?.prompt || audioMuted) return undefined;
     const timeoutId = setTimeout(() => {
       window.HomeSchoolUtils?.speakText?.(activePracticeCard.prompt, activePracticeCard.practiceLang || "en");
     }, 180);
     return () => clearTimeout(timeoutId);
-  }, [practiceMode, activePracticeCard?.id]);
+  }, [practiceMode, activePracticeCard?.id, audioMuted]);
+
+  useEffect(() => {
+    if (!autoPlayNext || audioMuted || practiceMode === "dictation" || !activePracticeCard || !practiceAudioPrompt) return undefined;
+    const promptLang = containsUrduText(practiceAudioPrompt) ? "ur" : (activePracticeCard.practiceLang || "en");
+    const timeoutId = setTimeout(() => {
+      window.HomeSchoolUtils?.speakText?.(practiceAudioPrompt, promptLang);
+    }, 180);
+    return () => clearTimeout(timeoutId);
+  }, [autoPlayNext, audioMuted, practiceMode, effectivePracticeMode, activePracticeCard?.id, practiceAudioPrompt]);
 
   useEffect(() => {
     if (!availablePracticeSubjects.length) return;
@@ -6125,19 +6499,45 @@ function HomeschoolApp() {
       const startLessonKey = lessonKeys.includes(currentEntry.startLessonKey) ? currentEntry.startLessonKey : lessonKeys[0];
       const endLessonKey = lessonKeys.includes(currentEntry.endLessonKey) ? currentEntry.endLessonKey : lessonKeys[lessonKeys.length - 1];
       const difficulty = ["beginner", "medium", "advanced"].includes(currentEntry.difficulty) ? currentEntry.difficulty : "beginner";
-      if (currentEntry.startLessonKey === startLessonKey && currentEntry.endLessonKey === endLessonKey && currentEntry.difficulty === difficulty) {
+      const startIndex = practiceSubjectLessonMap.get(startLessonKey);
+      const endIndex = practiceSubjectLessonMap.get(endLessonKey);
+      const orderedStartIndex = Number.isFinite(startIndex) && Number.isFinite(endIndex) ? Math.min(startIndex, endIndex) : 0;
+      const orderedEndIndex = Number.isFinite(startIndex) && Number.isFinite(endIndex) ? Math.max(startIndex, endIndex) : Math.max(0, lessonKeys.length - 1);
+      const dayValues = activePracticeSubjectId === "english"
+        ? getPracticeRangeDayValues(practiceSubjectLessons.slice(orderedStartIndex, orderedEndIndex + 1))
+        : [];
+      const normalizedEntry = {
+        startLessonKey,
+        endLessonKey,
+        difficulty,
+        startDay: null,
+        endDay: null,
+      };
+      if (dayValues.length) {
+        const defaultStartDay = dayValues[0];
+        const defaultEndDay = dayValues[dayValues.length - 1];
+        const rawStartDay = Number(currentEntry.startDay);
+        const rawEndDay = Number(currentEntry.endDay);
+        const startDay = dayValues.includes(rawStartDay) ? rawStartDay : defaultStartDay;
+        const endDay = dayValues.includes(rawEndDay) ? rawEndDay : defaultEndDay;
+        normalizedEntry.startDay = Number.isFinite(startDay) && Number.isFinite(endDay) ? Math.min(startDay, endDay) : defaultStartDay;
+        normalizedEntry.endDay = Number.isFinite(startDay) && Number.isFinite(endDay) ? Math.max(startDay, endDay) : defaultEndDay;
+      }
+      if (
+        currentEntry.startLessonKey === normalizedEntry.startLessonKey
+        && currentEntry.endLessonKey === normalizedEntry.endLessonKey
+        && currentEntry.difficulty === normalizedEntry.difficulty
+        && (currentEntry.startDay ?? null) === normalizedEntry.startDay
+        && (currentEntry.endDay ?? null) === normalizedEntry.endDay
+      ) {
         return current;
       }
       return {
         ...current,
-        [activePracticeSubjectId]: {
-          startLessonKey,
-          endLessonKey,
-          difficulty,
-        },
+        [activePracticeSubjectId]: normalizedEntry,
       };
     });
-  }, [activePracticeSubjectId, practiceSubjectLessons]);
+  }, [activePracticeSubjectId, practiceSubjectLessonMap, practiceSubjectLessons]);
 
   const updatePracticeFilters = useCallback((updates) => {
     setPracticeFiltersBySubject((current) => {
@@ -6261,11 +6661,15 @@ function HomeschoolApp() {
         if (window.HomeSchoolDB && customizationDbEnabledRef.current) {
           await window.HomeSchoolDB.saveCustomization("preferences", {
             ttsEnabled: nextPayload.ttsEnabled,
+            audioMuted: nextPayload.audioMuted,
+            autoPlayNext: nextPayload.autoPlayNext,
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
             fontSizeMode: nextPayload.fontSizeMode,
             reducedMotion: nextPayload.reducedMotion,
             highContrast: nextPayload.highContrast,
+            focusMode: nextPayload.focusMode,
+            readingMode: nextPayload.readingMode,
             keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
             navPosition: nextPayload.navPosition,
             navAutoHide: nextPayload.navAutoHide,
@@ -6305,11 +6709,15 @@ function HomeschoolApp() {
           localStorageFallback("hs_db_customization_fallback", {
             preferences: {
               ttsEnabled: nextPayload.ttsEnabled,
+              audioMuted: nextPayload.audioMuted,
+              autoPlayNext: nextPayload.autoPlayNext,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
               fontSizeMode: nextPayload.fontSizeMode,
               reducedMotion: nextPayload.reducedMotion,
               highContrast: nextPayload.highContrast,
+              focusMode: nextPayload.focusMode,
+              readingMode: nextPayload.readingMode,
               keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
               navPosition: nextPayload.navPosition,
               navAutoHide: nextPayload.navAutoHide,
@@ -6352,11 +6760,15 @@ function HomeschoolApp() {
         localStorageFallback("hs_db_customization_fallback", {
           preferences: {
             ttsEnabled: nextPayload.ttsEnabled,
+            audioMuted: nextPayload.audioMuted,
+            autoPlayNext: nextPayload.autoPlayNext,
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
             fontSizeMode: nextPayload.fontSizeMode,
             reducedMotion: nextPayload.reducedMotion,
             highContrast: nextPayload.highContrast,
+            focusMode: nextPayload.focusMode,
+            readingMode: nextPayload.readingMode,
             keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
             navPosition: nextPayload.navPosition,
             navAutoHide: nextPayload.navAutoHide,
@@ -6437,11 +6849,15 @@ function HomeschoolApp() {
         if (storedPreferences) {
           if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
           if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
-          if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
-          if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
-          if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
-          if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
-          if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
+        if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
+        if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
+        if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+        if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
+        if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
+        if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
+        if (typeof storedPreferences.focusMode !== "undefined") setFocusMode(Boolean(storedPreferences.focusMode));
+        if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
+        if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
           if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
           if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
           if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
@@ -6849,9 +7265,9 @@ function HomeschoolApp() {
     };
   }, [themeMode]);
   useEffect(() => {
-    window.HomeSchoolPrefs = { ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled };
-    if (!ttsEnabled) window.speechSynthesis.cancel();
-  }, [ttsEnabled, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled]);
+    window.HomeSchoolPrefs = { ttsEnabled, audioMuted, autoPlayNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled };
+    if (!ttsEnabled || audioMuted) window.speechSynthesis.cancel();
+  }, [ttsEnabled, audioMuted, autoPlayNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled]);
   useEffect(() => {
     const root = document.documentElement;
     if (!root) return;
@@ -6862,6 +7278,8 @@ function HomeschoolApp() {
     if (!dbLoaded) return;
     persistCustomizationRef.current?.({
       ttsEnabled,
+      audioMuted,
+      autoPlayNext,
       ttsRate,
       ttsVoiceSelections,
       language,
@@ -6869,6 +7287,8 @@ function HomeschoolApp() {
       fontSizeMode,
       reducedMotion,
       highContrast,
+      focusMode,
+      readingMode,
       keyboardShortcutsEnabled,
       navPosition,
       navAutoHide,
@@ -6894,10 +7314,10 @@ function HomeschoolApp() {
       aiProviderConfigs,
       selectedAiProvider,
     });
-  }, [dbLoaded, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+  }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed]);
+    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed });
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -7703,6 +8123,8 @@ function HomeschoolApp() {
       if (nextState.earnedBadges) setEarnedBadges(nextState.earnedBadges);
       if (typeof nextState.xp !== "undefined") setXp(nextState.xp);
       if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
+      if (typeof nextState.audioMuted !== "undefined") setAudioMuted(Boolean(nextState.audioMuted));
+      if (typeof nextState.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(nextState.autoPlayNext));
       if (typeof nextState.ttsRate !== "undefined") setTtsRate(Math.max(0.6, Math.min(1.3, Number(nextState.ttsRate) || 0.85)));
       if (nextState.ttsVoiceSelections) setTtsVoiceSelections({ en: nextState.ttsVoiceSelections.en || "", ur: nextState.ttsVoiceSelections.ur || "" });
       if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
@@ -7710,6 +8132,8 @@ function HomeschoolApp() {
       if (typeof nextState.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(nextState.fontSizeMode)) setFontSizeMode(nextState.fontSizeMode);
       if (typeof nextState.reducedMotion !== "undefined") setReducedMotion(Boolean(nextState.reducedMotion));
       if (typeof nextState.highContrast !== "undefined") setHighContrast(Boolean(nextState.highContrast));
+      if (typeof nextState.focusMode !== "undefined") setFocusMode(Boolean(nextState.focusMode));
+      if (typeof nextState.readingMode !== "undefined") setReadingMode(Boolean(nextState.readingMode));
       if (typeof nextState.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(nextState.keyboardShortcutsEnabled));
       if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition(nextState.navPosition);
       if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
@@ -7766,6 +8190,8 @@ function HomeschoolApp() {
     if (nextState.earnedBadges) setEarnedBadges((current) => Array.from(new Set([...(current || []), ...nextState.earnedBadges])));
     if (typeof nextState.xp !== "undefined") setXp((current) => Math.max(current, nextState.xp));
     if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
+    if (typeof nextState.audioMuted !== "undefined") setAudioMuted((current) => current || Boolean(nextState.audioMuted));
+    if (typeof nextState.autoPlayNext !== "undefined") setAutoPlayNext((current) => current || Boolean(nextState.autoPlayNext));
     if (typeof nextState.ttsRate !== "undefined") setTtsRate((current) => Math.max(current, Math.min(1.3, Number(nextState.ttsRate) || current)));
     if (nextState.ttsVoiceSelections) setTtsVoiceSelections((current) => ({ ...current, ...nextState.ttsVoiceSelections }));
     if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
@@ -7773,6 +8199,8 @@ function HomeschoolApp() {
     if (typeof nextState.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(nextState.fontSizeMode)) setFontSizeMode((current) => current || nextState.fontSizeMode);
     if (typeof nextState.reducedMotion !== "undefined") setReducedMotion((current) => current || Boolean(nextState.reducedMotion));
     if (typeof nextState.highContrast !== "undefined") setHighContrast((current) => current || Boolean(nextState.highContrast));
+    if (typeof nextState.focusMode !== "undefined") setFocusMode((current) => current || Boolean(nextState.focusMode));
+    if (typeof nextState.readingMode !== "undefined") setReadingMode((current) => current || Boolean(nextState.readingMode));
     if (typeof nextState.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled((current) => current || Boolean(nextState.keyboardShortcutsEnabled));
     if (typeof nextState.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(nextState.navPosition)) setNavPosition((current) => current || nextState.navPosition);
     if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
@@ -8822,7 +9250,7 @@ function HomeschoolApp() {
     time: ui.importConflictTime,
     collections: ui.importConflictCollections,
   };
-  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
+  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
     {navAutoHide ? <div className="header-reveal-hotspot" onMouseEnter={revealAutoHideHeader} onMouseMove={revealAutoHideHeader} onPointerDown={revealAutoHideHeader} /> : null}
     <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
       <div className="header-leading">
@@ -8850,7 +9278,29 @@ function HomeschoolApp() {
       {navPosition === "left" ? renderNavBar("left") : null}
       <div key={`${transitionMode}:${routeTransitionKey}`} className={`content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}`} data-transition-mode={transitionMode} data-ui-language={language}>
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
-        <div className="welcome-card" data-ui-language={language}><h2>{renderWelcomeGreeting(localizedNames, language)} 👋</h2><p>{renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟", language), language)}</p><span className="grade-tag">{renderLocalizedTextNode(ui.grade, language)} {grade}</span></div>
+        <div className="welcome-card" data-ui-language={language}>
+          <div className="welcome-card-head">
+            <div className="welcome-copy">
+              <h2>{renderWelcomeGreeting(localizedNames, language)} 👋</h2>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "آج کچھ شاندار سیکھنے کے لیے تیار ہیں؟", language), language)}</p>
+            </div>
+            <button
+              type="button"
+              className={`welcome-focus-toggle${focusMode ? " active" : ""}`}
+              onClick={() => setFocusMode((current) => !current)}
+              aria-pressed={focusMode ? "true" : "false"}
+            >
+              <span className="welcome-focus-toggle-copy">
+                <span className="welcome-focus-toggle-label">{renderLocalizedTextNode(ui.focusMode, language)}</span>
+                <span className="welcome-focus-toggle-state">{renderLocalizedTextNode(focusMode ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled"), language)}</span>
+              </span>
+              <span className="welcome-focus-toggle-switch" aria-hidden="true">
+                <span className="welcome-focus-toggle-knob" />
+              </span>
+            </button>
+          </div>
+          <span className="grade-tag">{renderLocalizedTextNode(ui.grade, language)} {grade}</span>
+        </div>
         {canShowInstallBanner && <div className="app-status-card" data-ui-language={language}><div className="app-status-head"><h3>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerTitle, UI_TEXT.ur.installBannerTitle, language, bannerTitleOptions)}</h3><button className="banner-dismiss" onClick={() => setInstallBannerDismissed(true)} aria-label={ui.hideBanner}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.hideBanner, UI_TEXT.ur.hideBanner, language, bannerButtonOptions)}</button></div><p>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerText, UI_TEXT.ur.installBannerText, language, bannerBodyOptions)}</p>{(canInstallApp || installAvailability === "available") && <p className="install-browser-hint">{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBrowserHint, UI_TEXT.ur.installBrowserHint, language, bannerBodyOptions)}</p>}<div className="app-status-grid"><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installStatus, UI_TEXT.ur.installStatus, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(isInstalled || installAvailability === "installed" ? UI_TEXT.en.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.en.appInstallAvailable : UI_TEXT.en.appInstallUnavailable, isInstalled || installAvailability === "installed" ? UI_TEXT.ur.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.ur.appInstallAvailable : UI_TEXT.ur.appInstallUnavailable, language, bannerValueOptions)}</span></div><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.offlineAccess, UI_TEXT.ur.offlineAccess, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(serviceWorkerStatus === "ready" ? UI_TEXT.en.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.en.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.en.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.en.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.en.offlineUnsupported : UI_TEXT.en.offlineError, serviceWorkerStatus === "ready" ? UI_TEXT.ur.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.ur.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.ur.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.ur.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.ur.offlineUnsupported : UI_TEXT.ur.offlineError, language, bannerValueOptions)}</span></div><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.networkStatus, UI_TEXT.ur.networkStatus, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(isOnline ? UI_TEXT.en.online : UI_TEXT.en.offline, isOnline ? UI_TEXT.ur.online : UI_TEXT.ur.offline, language, bannerValueOptions)}</span></div></div><div className="app-status-actions">{canInstallApp && <button className="install-cta" onClick={handleInstallApp}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installApp, UI_TEXT.ur.installApp, language, bannerButtonOptions)}</button>}{serviceWorkerStatus === "update-ready" && <button className="ghost-cta" onClick={applyServiceWorkerUpdate}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.refreshToUpdate, UI_TEXT.ur.refreshToUpdate, language, bannerButtonOptions)}</button>}</div></div>}
         <button className="adverb-home-banner" style={{ width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }} onClick={handleStartReview}>
           <div className="banner-icon">🧠</div>
@@ -8873,7 +9323,7 @@ function HomeschoolApp() {
         </button>
         <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
         <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
-        <div className="review-panel" style={{ marginTop: 16 }}>
+        <div className="review-panel home-support-panel" style={{ marginTop: 16 }}>
           <div className="review-panel-head">
             <div>
               <h3>{renderLocalizedTextNode(joinLocalizedText("Study Goals", "مطالعہ اہداف", language), language)}</h3>
@@ -8899,7 +9349,7 @@ function HomeschoolApp() {
             <div className="goal-progress-bar accent-alt"><span style={{ width: `${weeklyGoalProgress}%` }} /></div>
           </div>
         </div>
-        <div className="review-panel">
+        <div className="review-panel home-support-panel">
           <div className="review-panel-head">
             <div>
               <h3>{renderLocalizedTextNode(ui.timeManagement, language)}</h3>
@@ -8931,7 +9381,7 @@ function HomeschoolApp() {
             {!classScheduleSettings.enabled ? <p className="empty-state" style={{ marginTop: 10 }}>{renderLocalizedTextNode(ui.classTrackingDisabled, language)}</p> : null}
           </div>
         </div>
-        <div className="review-panel">
+        <div className="review-panel home-support-panel">
           <div className="review-panel-head">
             <div>
               <h3>{renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "فوکس ٹائمر اور یاد دہانیاں", language), language)}</h3>
@@ -8958,7 +9408,7 @@ function HomeschoolApp() {
             {reminderDueNow ? <p className="empty-state" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "آپ کی مطالعہ یاد دہانی ابھی کی ہے۔", language), language)}</p> : null}
           </div>
         </div>
-        <div className="review-panel">
+        <div className="review-panel home-support-panel">
           <div className="review-panel-head">
             <div>
               <h3>{renderLocalizedTextNode(ui.notificationHistory, language)}</h3>
@@ -8979,7 +9429,7 @@ function HomeschoolApp() {
             </div>
           ) : <p className="empty-state">{renderLocalizedTextNode(ui.noNotificationsYet, language)}</p>}
         </div>
-        <div className="review-panel">
+        <div className="review-panel home-support-panel">
           <div className="review-panel-head">
             <div>
               <h3>{renderLocalizedTextNode(ui.contentDiscovery, language)}</h3>
@@ -8991,6 +9441,12 @@ function HomeschoolApp() {
               <div className="discovery-word-label">{renderLocalizedTextNode(ui.wordOfDay, language)}</div>
               <div className="discovery-word-prompt">{wordOfDayCard.prompt}</div>
               <div className="discovery-word-answer" style={containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null}>{wordOfDayCard.answer || wordOfDayCard.meaning}</div>
+              {getPhoneticBreakdown(wordOfDayCard.prompt) ? (
+                <div className="phonics-card" style={{ marginTop: 10 }}>
+                  <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.phoneticSpelling, language)}</strong><span>{getPhoneticBreakdown(wordOfDayCard.prompt).phonetic}</span></div>
+                  <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.syllableBreakdown, language)}</strong><span>{getPhoneticBreakdown(wordOfDayCard.prompt).syllables}</span></div>
+                </div>
+              ) : null}
               <div className="discovery-word-meta">{renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", SUBJECTS.find((subject) => subject.id === (wordOfDayCard.subject || ""))?.nameUr || "مضمون", language), language)}</div>
             </div>
           ) : null}
@@ -9049,6 +9505,63 @@ function HomeschoolApp() {
               );})}
             </div>
           ) : <p className="empty-state">{renderLocalizedTextNode(ui.noDiscoveryResults, language)}</p>}
+          <div className="word-bank-shell">
+            <div className="review-panel-head" style={{ marginTop: 14 }}>
+              <div>
+                <h3>{renderLocalizedTextNode(ui.wordBankExplorer, language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Search meaningful words, meanings, and translations from your current study pool.", "اپنی موجودہ پڑھائی سے اہم الفاظ، معنی، اور تراجم تلاش کریں۔", language), language)}</p>
+              </div>
+            </div>
+            <input
+              className="review-list-input"
+              value={wordSearch}
+              onChange={(event) => setWordSearch(event.target.value)}
+              placeholder={ui.wordSearchPlaceholder}
+              style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
+            />
+            <div className="discovery-filter-row compact" style={{ marginTop: 10 }}>
+              <button className={`study-tool-btn compact${wordBankSubjectFilter === "all" ? " active" : ""}`} onClick={() => setWordBankSubjectFilter("all")} type="button">
+                {renderLocalizedTextNode(ui.discoveryAllSubjects, language)}
+              </button>
+              {SUBJECTS.map((subject) => (
+                <button key={`wordbank_${subject.id}`} className={`study-tool-btn compact${wordBankSubjectFilter === subject.id ? " active" : ""}`} onClick={() => setWordBankSubjectFilter(subject.id)} type="button">
+                  {renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)}
+                </button>
+              ))}
+            </div>
+            {filteredWordBank.length ? (
+              <div className="study-word-grid" style={{ marginTop: 12 }}>
+                {filteredWordBank.map((item) => {
+                  const phonicsMeta = getPhoneticBreakdown(item.prompt);
+                  return (
+                    <div key={`wordbank_card_${item.id}`} className="study-word-card">
+                      <div className="study-word-head">
+                        <div>
+                          <div className="study-word-prompt" style={getPracticeTextStyle(item.prompt)}>{item.prompt}</div>
+                          <div className="study-word-answer" style={getPracticeTextStyle(item.answer, {}, containsUrduText(item.answer) ? "ur" : "en")}>{item.answer}</div>
+                        </div>
+                        <span className={`grade-tag${item.subjectId === "urdu" ? " discovery-subject-badge-ur" : ""}`} style={{ marginTop: 0 }}>{item.subjectId === "urdu" ? "اردو" : renderLocalizedTextNode(joinLocalizedText(item.subjectName, item.subjectNameUr, language), language)}</span>
+                      </div>
+                      {phonicsMeta ? (
+                        <div className="phonics-card">
+                          <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.phoneticSpelling, language)}</strong><span>{phonicsMeta.phonetic}</span></div>
+                          <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.syllableBreakdown, language)}</strong><span>{phonicsMeta.syllables}</span></div>
+                        </div>
+                      ) : null}
+                      <div className="study-word-stats">
+                        <span>{renderLocalizedTextNode(joinLocalizedText(item.sectionLabel || "Lesson", item.sectionLabel || "سبق", language), language)}</span>
+                        {item.day ? <span>{renderLocalizedTextNode(joinLocalizedText(`Day ${item.day}`, `دن ${item.day}`, language), language)}</span> : null}
+                      </div>
+                      <div className="result-actions" style={{ marginTop: 10 }}>
+                        <button className="retry-btn" onClick={() => window.HomeSchoolUtils?.speakText?.(item.prompt, containsUrduText(item.prompt) ? "ur" : "en")} disabled={audioMuted}>{renderLocalizedTextNode(joinLocalizedText("Speak", "سنیں", language), language)}</button>
+                        <button className="next-btn" onClick={() => handleViewStudyItem(item)}>{renderLocalizedTextNode(ui.openSource, language)}</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(ui.noWordResults, language)}</p>}
+          </div>
         </div>
         {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
       </>)}
@@ -9866,6 +10379,38 @@ function HomeschoolApp() {
                       })}
                     </select>
                   </label>
+                  {activePracticeFilter.hasDayRange ? (
+                    <label className="practice-filter-field">
+                      <span>{renderLocalizedTextNode(joinLocalizedText("From Day", "اس دن سے", language), language)}</span>
+                      <select
+                        className="review-list-input"
+                        value={activePracticeFilter.startDay || ""}
+                        onChange={(event) => updatePracticeFilters({ startDay: Number(event.target.value) || null })}
+                      >
+                        {activePracticeFilter.dayValues.map((dayValue) => (
+                          <option key={`practice_start_day_${dayValue}`} value={dayValue}>
+                            {joinLocalizedText(`Day ${dayValue}`, `دن ${dayValue}`, language)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {activePracticeFilter.hasDayRange ? (
+                    <label className="practice-filter-field">
+                      <span>{renderLocalizedTextNode(joinLocalizedText("To Day", "اس دن تک", language), language)}</span>
+                      <select
+                        className="review-list-input"
+                        value={activePracticeFilter.endDay || ""}
+                        onChange={(event) => updatePracticeFilters({ endDay: Number(event.target.value) || null })}
+                      >
+                        {activePracticeFilter.dayValues.map((dayValue) => (
+                          <option key={`practice_end_day_${dayValue}`} value={dayValue}>
+                            {joinLocalizedText(`Day ${dayValue}`, `دن ${dayValue}`, language)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                 </div>
                 <div className="practice-filter-summary">
                   {renderLocalizedTextNode(
@@ -9875,6 +10420,28 @@ function HomeschoolApp() {
                     language,
                   )}
                 </div>
+                {englishPracticeHasDayLessons && !practiceFilterSummary.hasDayRange ? (
+                  <div className="practice-filter-summary">
+                    {renderLocalizedTextNode(
+                      joinLocalizedText(
+                        "This English lesson range has no day-based material. Choose a range that includes a day-based English lesson to unlock day filters.",
+                        "اس انگریزی سبق کی حد میں دن وار مواد موجود نہیں۔ دن کے فلٹر کھولنے کے لیے ایسا رینج منتخب کریں جس میں دنوں والا انگریزی سبق شامل ہو۔",
+                        language,
+                      ),
+                      language,
+                    )}
+                  </div>
+                ) : null}
+                {practiceFilterSummary.hasDayRange ? (
+                  <div className="practice-filter-summary">
+                    {renderLocalizedTextNode(
+                      practiceFilterSummary.isSingleDay
+                        ? joinLocalizedText(`Using ${practiceFilterSummary.dayStartLabel} across the selected English lessons`, `منتخب انگریزی اسباق میں صرف ${practiceFilterSummary.dayStartLabel} استعمال ہو رہا ہے`, language)
+                        : joinLocalizedText(`Using ${practiceFilterSummary.dayStartLabel} to ${practiceFilterSummary.dayEndLabel} across the selected English lessons`, `منتخب انگریزی اسباق میں ${practiceFilterSummary.dayStartLabel} سے ${practiceFilterSummary.dayEndLabel} تک استعمال ہو رہا ہے`, language),
+                      language,
+                    )}
+                  </div>
+                ) : null}
                 <div className="practice-difficulty-row">
                   {[
                     { id: "beginner", en: "Beginner", ur: "آسان" },
@@ -10245,6 +10812,23 @@ function HomeschoolApp() {
                     {practiceQuestionPromptUrdu}
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+            <div className="practice-audio-toolbar">
+              <button className={`study-tool-btn compact${audioMuted ? " active" : ""}`} onClick={() => setAudioMuted((current) => !current)}>
+                {renderLocalizedTextNode(audioMuted ? joinLocalizedText("Unmute", "آواز کھولیں", language) : ui.muteAudio, language)}
+              </button>
+              <button className={`study-tool-btn compact${autoPlayNext ? " active" : ""}`} onClick={() => setAutoPlayNext((current) => !current)}>
+                {renderLocalizedTextNode(ui.autoPlayNext, language)}
+              </button>
+              <button className="study-tool-btn compact" onClick={() => window.HomeSchoolUtils?.speakText?.(practiceAudioPrompt, containsUrduText(practiceAudioPrompt) ? "ur" : (activePracticeCard?.practiceLang || "en"))} disabled={!practiceAudioPrompt || audioMuted}>
+                {renderLocalizedTextNode(joinLocalizedText("Hear Prompt", "اشارہ سنیں", language), language)}
+              </button>
+            </div>
+            {practicePhonicsMeta ? (
+              <div className="phonics-card">
+                <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.phoneticSpelling, language)}</strong><span>{practicePhonicsMeta.phonetic}</span></div>
+                <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.syllableBreakdown, language)}</strong><span>{practicePhonicsMeta.syllables}</span></div>
               </div>
             ) : null}
             {showPracticeBreakNudge ? (
@@ -10793,6 +11377,10 @@ function HomeschoolApp() {
             onResetPlanningData={handleResetPlanningData}
             onToggleTTS={() => setTtsEnabled(value => !value)}
             ttsEnabled={ttsEnabled}
+            audioMuted={audioMuted}
+            onAudioMutedChange={setAudioMuted}
+            autoPlayNext={autoPlayNext}
+            onAutoPlayNextChange={setAutoPlayNext}
             ttsRate={ttsRate}
             onTtsRateChange={setTtsRate}
             englishVoiceOptions={englishVoiceOptions}
@@ -10809,6 +11397,10 @@ function HomeschoolApp() {
             onReducedMotionChange={setReducedMotion}
             highContrast={highContrast}
             onHighContrastChange={setHighContrast}
+            focusMode={focusMode}
+            onFocusModeChange={setFocusMode}
+            readingMode={readingMode}
+            onReadingModeChange={setReadingMode}
             keyboardShortcutsEnabled={keyboardShortcutsEnabled}
             onKeyboardShortcutsEnabledChange={setKeyboardShortcutsEnabled}
       navPosition={navPosition}
