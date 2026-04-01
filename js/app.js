@@ -5314,6 +5314,116 @@ function createNotificationEntry(type, titleEn, titleUr, bodyEn, bodyUr, created
   };
 }
 
+function normalizeCelebrationEntry(entry = {}) {
+  const createdAt = Number(entry.createdAt) || Date.now();
+  return {
+    id: entry.id || `celebrate_${createdAt}_${Math.random().toString(36).slice(2, 8)}`,
+    key: String(entry.key || `celebration_${createdAt}`),
+    kind: String(entry.kind || "milestone"),
+    icon: String(entry.icon || "🎉"),
+    titleEn: String(entry.titleEn || "Celebration"),
+    titleUr: String(entry.titleUr || "خوشی کا لمحہ"),
+    bodyEn: String(entry.bodyEn || ""),
+    bodyUr: String(entry.bodyUr || ""),
+    createdAt,
+  };
+}
+
+function normalizeCelebrationHistory(value = []) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map((entry) => normalizeCelebrationEntry(entry))
+    .filter((entry) => {
+      if (seen.has(entry.key)) return false;
+      seen.add(entry.key);
+      return true;
+    })
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+    .slice(0, 40);
+}
+
+function createDefaultDailyActivityEntry() {
+  return {
+    quizzesCompleted: 0,
+    practiceRounds: 0,
+    focusSessions: 0,
+    perfectDayAwarded: false,
+    perfectDayAwardedAt: null,
+  };
+}
+
+function trimGamificationActivity(activityByDay = {}) {
+  const sortedKeys = Object.keys(activityByDay || {})
+    .filter(Boolean)
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())
+    .slice(0, 45);
+  return sortedKeys.reduce((acc, key) => {
+    acc[key] = activityByDay[key];
+    return acc;
+  }, {});
+}
+
+function normalizeGamificationState(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  const rawActivity = source.activityByDay && typeof source.activityByDay === "object" ? source.activityByDay : {};
+  const normalizedActivity = Object.entries(rawActivity).reduce((acc, [dayKey, entry]) => {
+    if (!dayKey) return acc;
+    acc[dayKey] = {
+      quizzesCompleted: Math.max(0, Number(entry?.quizzesCompleted) || 0),
+      practiceRounds: Math.max(0, Number(entry?.practiceRounds) || 0),
+      focusSessions: Math.max(0, Number(entry?.focusSessions) || 0),
+      perfectDayAwarded: Boolean(entry?.perfectDayAwarded),
+      perfectDayAwardedAt: Number(entry?.perfectDayAwardedAt) || null,
+    };
+    return acc;
+  }, {});
+  const milestoneClaims = Object.entries(source.milestoneClaims || {}).reduce((acc, [key, value]) => {
+    if (value) acc[key] = true;
+    return acc;
+  }, {});
+  return {
+    activityByDay: trimGamificationActivity(normalizedActivity),
+    milestoneClaims,
+    celebrationHistory: normalizeCelebrationHistory(source.celebrationHistory),
+  };
+}
+
+function mergeGamificationState(currentValue = {}, incomingValue = {}) {
+  const current = normalizeGamificationState(currentValue);
+  const incoming = normalizeGamificationState(incomingValue);
+  const activityByDay = trimGamificationActivity(Object.entries({ ...current.activityByDay, ...incoming.activityByDay }).reduce((acc, [dayKey]) => {
+    const currentEntry = current.activityByDay[dayKey] || createDefaultDailyActivityEntry();
+    const incomingEntry = incoming.activityByDay[dayKey] || createDefaultDailyActivityEntry();
+    acc[dayKey] = {
+      quizzesCompleted: Math.max(currentEntry.quizzesCompleted || 0, incomingEntry.quizzesCompleted || 0),
+      practiceRounds: Math.max(currentEntry.practiceRounds || 0, incomingEntry.practiceRounds || 0),
+      focusSessions: Math.max(currentEntry.focusSessions || 0, incomingEntry.focusSessions || 0),
+      perfectDayAwarded: Boolean(currentEntry.perfectDayAwarded || incomingEntry.perfectDayAwarded),
+      perfectDayAwardedAt: Math.max(Number(currentEntry.perfectDayAwardedAt) || 0, Number(incomingEntry.perfectDayAwardedAt) || 0) || null,
+    };
+    return acc;
+  }, {}));
+  return {
+    activityByDay,
+    milestoneClaims: { ...current.milestoneClaims, ...incoming.milestoneClaims },
+    celebrationHistory: normalizeCelebrationHistory([...(incoming.celebrationHistory || []), ...(current.celebrationHistory || [])]),
+  };
+}
+
+function getPerfectDayCount(gamificationState = {}) {
+  return Object.values(gamificationState.activityByDay || {}).filter((entry) => entry?.perfectDayAwarded).length;
+}
+
+function getNextMilestoneThreshold(value, thresholds = []) {
+  const safeValue = Math.max(0, Number(value) || 0);
+  return thresholds.find((threshold) => safeValue < threshold) || null;
+}
+
+const XP_MILESTONES = [250, 500, 1000, 2000, 5000];
+const STREAK_MILESTONES = [3, 7, 14, 30];
+const PERFECT_DAY_MILESTONES = [1, 3, 7, 14];
+
 function formatNotificationTime(createdAt, language = "en") {
   try {
     const stamp = new Date(createdAt || Date.now());
@@ -5996,6 +6106,8 @@ function HomeschoolApp() {
   const [navBarHidden, setNavBarHidden] = useState(false);
   const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
+  const [gamificationState, setGamificationState] = useState(normalizeGamificationState(stored?.gamificationState || {}));
+  const [celebrationQueue, setCelebrationQueue] = useState([]);
   const [importReviewState, setImportReviewState] = useState(null);
   const [contentSearch, setContentSearch] = useState("");
   const [discoverySubjectFilter, setDiscoverySubjectFilter] = useState("all");
@@ -6020,6 +6132,7 @@ function HomeschoolApp() {
   const practiceAdvanceTimerRef = useRef(null);
   const usageTrackingRef = useRef({ startedAt: 0 });
   const timeTrackingRef = useRef(normalizeTimeTrackingData(stored?.timeTrackingData || {}));
+  const gamificationStateRef = useRef(normalizeGamificationState(stored?.gamificationState || {}));
   const [headerHideOffset, setHeaderHideOffset] = useState(0);
   const [navBarOffset, setNavBarOffset] = useState(0);
 
@@ -6359,6 +6472,56 @@ function HomeschoolApp() {
         : ui.classStatusNotStarted
     : ui.classStatusOff;
   const recentTimeHistory = useMemo(() => (timeTrackingData.history || []).slice(0, 7), [timeTrackingData]);
+  const todayKey = getLocalDayKey();
+  const todayGamificationEntry = gamificationState.activityByDay?.[todayKey] || createDefaultDailyActivityEntry();
+  const dailyReviewChallengeTarget = Math.max(6, Math.min(15, Math.round((studyGoals.dailyReviews || 20) * 0.4)));
+  const dailyPracticeChallengeTarget = 4;
+  const dailyFocusChallengeTarget = Math.max(15, Math.min(30, Number(focusTimerSettings.durationMinutes) || 20));
+  const dailyPracticeProgress = todayGamificationEntry.quizzesCompleted > 0
+    ? dailyPracticeChallengeTarget
+    : Math.min(dailyPracticeChallengeTarget, todayGamificationEntry.practiceRounds || 0);
+  const dailyFocusProgress = todayGamificationEntry.focusSessions > 0
+    ? dailyFocusChallengeTarget
+    : Math.min(dailyFocusChallengeTarget, todaySpentMinutes);
+  const dailyChallenges = useMemo(() => ([
+    {
+      id: "reviews",
+      icon: "🧠",
+      titleEn: `Review ${dailyReviewChallengeTarget} cards`,
+      titleUr: `${dailyReviewChallengeTarget} کارڈز دہرائیں`,
+      bodyEn: "Keep your queue moving with a short review sprint.",
+      bodyUr: "مختصر ریویو سیشن کے ساتھ اپنی قطار کو آگے بڑھائیں۔",
+      progress: Math.min(dailyReviewChallengeTarget, reviewStats.reviewedToday || 0),
+      target: dailyReviewChallengeTarget,
+      completed: (reviewStats.reviewedToday || 0) >= dailyReviewChallengeTarget,
+    },
+    {
+      id: "practice",
+      icon: "🎯",
+      titleEn: `Finish ${dailyPracticeChallengeTarget} practice rounds`,
+      titleUr: `${dailyPracticeChallengeTarget} پریکٹس راؤنڈ مکمل کریں`,
+      bodyEn: "Any completed quiz also clears this challenge for the day.",
+      bodyUr: "آج کا کوئی ایک مکمل کوئز بھی یہ چیلنج پورا کر دے گا۔",
+      progress: dailyPracticeProgress,
+      target: dailyPracticeChallengeTarget,
+      completed: todayGamificationEntry.quizzesCompleted > 0 || (todayGamificationEntry.practiceRounds || 0) >= dailyPracticeChallengeTarget,
+    },
+    {
+      id: "focus",
+      icon: "⏳",
+      titleEn: `Study for ${dailyFocusChallengeTarget} minutes`,
+      titleUr: `${dailyFocusChallengeTarget} منٹ مطالعہ کریں`,
+      bodyEn: "A completed focus timer also counts as a full win here.",
+      bodyUr: "فوکس ٹائمر مکمل کرنا بھی یہاں مکمل کامیابی شمار ہوگا۔",
+      progress: dailyFocusProgress,
+      target: dailyFocusChallengeTarget,
+      completed: todayGamificationEntry.focusSessions > 0 || todaySpentMinutes >= dailyFocusChallengeTarget,
+    },
+  ]), [dailyFocusChallengeTarget, dailyFocusProgress, dailyPracticeChallengeTarget, dailyPracticeProgress, dailyReviewChallengeTarget, reviewStats.reviewedToday, todayGamificationEntry.focusSessions, todayGamificationEntry.practiceRounds, todayGamificationEntry.quizzesCompleted, todaySpentMinutes]);
+  const completedDailyChallenges = dailyChallenges.filter((challenge) => challenge.completed).length;
+  const perfectDayReady = dailyChallenges.length > 0 && completedDailyChallenges === dailyChallenges.length;
+  const perfectDayCount = useMemo(() => getPerfectDayCount(gamificationState), [gamificationState]);
+  const nextXpMilestone = getNextMilestoneThreshold(xp, XP_MILESTONES);
   const hasBackupWorthData = Object.keys(completedQuizzes || {}).length > 0
     || totalQuizzesDone > 0
     || xp > 0
@@ -6650,10 +6813,171 @@ function HomeschoolApp() {
     setNotificationHistory([]);
   }, []);
 
+  const updateGamificationActivity = useCallback((mutator, dayKey = getLocalDayKey()) => {
+    setGamificationState((current) => {
+      const safe = normalizeGamificationState(current);
+      const currentEntry = safe.activityByDay?.[dayKey] || createDefaultDailyActivityEntry();
+      const nextEntrySource = typeof mutator === "function" ? mutator(currentEntry) : { ...currentEntry, ...(mutator || {}) };
+      const nextEntry = {
+        ...createDefaultDailyActivityEntry(),
+        ...(nextEntrySource || currentEntry),
+      };
+      const nextState = {
+        ...safe,
+        activityByDay: trimGamificationActivity({
+          ...safe.activityByDay,
+          [dayKey]: nextEntry,
+        }),
+      };
+      gamificationStateRef.current = nextState;
+      return nextState;
+    });
+  }, []);
+
+  const pushCelebration = useCallback((entry) => {
+    if (!entry) return;
+    const celebration = normalizeCelebrationEntry(entry);
+    setCelebrationQueue((current) => current.some((item) => item.key === celebration.key) ? current : [...current, celebration].slice(-6));
+    setGamificationState((current) => {
+      const safe = normalizeGamificationState(current);
+      if ((safe.celebrationHistory || []).some((item) => item.key === celebration.key)) {
+        gamificationStateRef.current = safe;
+        return safe;
+      }
+      const nextState = {
+        ...safe,
+        celebrationHistory: normalizeCelebrationHistory([celebration, ...(safe.celebrationHistory || [])]),
+      };
+      gamificationStateRef.current = nextState;
+      return nextState;
+    });
+    pushNotificationHistoryEntry({
+      type: "success",
+      titleEn: celebration.titleEn,
+      titleUr: celebration.titleUr,
+      bodyEn: celebration.bodyEn,
+      bodyUr: celebration.bodyUr,
+      createdAt: celebration.createdAt,
+      dedupeKey: celebration.key,
+    });
+  }, [pushNotificationHistoryEntry]);
+
+  const dismissCelebration = useCallback(() => {
+    setCelebrationQueue((current) => current.slice(1));
+  }, []);
+
+  const claimMilestone = useCallback((claimKey, celebration) => {
+    const safe = gamificationStateRef.current || normalizeGamificationState({});
+    if (safe.milestoneClaims?.[claimKey]) return;
+    const nextState = {
+      ...safe,
+      milestoneClaims: {
+        ...(safe.milestoneClaims || {}),
+        [claimKey]: true,
+      },
+    };
+    gamificationStateRef.current = nextState;
+    setGamificationState(nextState);
+    pushCelebration({
+      ...celebration,
+      key: claimKey,
+    });
+  }, [pushCelebration]);
+
+  useEffect(() => {
+    gamificationStateRef.current = gamificationState;
+  }, [gamificationState]);
+
   useEffect(() => {
     if (!dbLoaded) return;
     refreshReviewWorkspace();
   }, [dbLoaded, refreshReviewWorkspace]);
+
+  useEffect(() => {
+    if (!dbLoaded) return;
+    const safe = gamificationStateRef.current || normalizeGamificationState({});
+    if (safe.milestoneClaims?.__baselineReady) return;
+    const baselineClaims = {
+      ...(safe.milestoneClaims || {}),
+      __baselineReady: true,
+    };
+    XP_MILESTONES.forEach((threshold) => {
+      if (xp >= threshold) baselineClaims[`xp_${threshold}`] = true;
+    });
+    STREAK_MILESTONES.forEach((threshold) => {
+      if (streak >= threshold) baselineClaims[`streak_${threshold}`] = true;
+    });
+    PERFECT_DAY_MILESTONES.forEach((threshold) => {
+      if (perfectDayCount >= threshold) baselineClaims[`perfect_day_${threshold}`] = true;
+    });
+    const nextState = {
+      ...safe,
+      milestoneClaims: baselineClaims,
+    };
+    gamificationStateRef.current = nextState;
+    setGamificationState(nextState);
+  }, [dbLoaded, perfectDayCount, streak, xp]);
+
+  useEffect(() => {
+    if (!dbLoaded || !perfectDayReady || todayGamificationEntry.perfectDayAwarded) return;
+    const awardedAt = Date.now();
+    updateGamificationActivity((current) => ({
+      ...current,
+      perfectDayAwarded: true,
+      perfectDayAwardedAt: awardedAt,
+    }), todayKey);
+    setXp((current) => current + 120);
+    pushCelebration({
+      kind: "perfect-day",
+      icon: "🌟",
+      key: `perfect_day_bonus_${todayKey}`,
+      titleEn: "Perfect Day Bonus",
+      titleUr: "پرفیکٹ ڈے بونس",
+      bodyEn: "You completed every daily challenge and earned a 120 XP bonus.",
+      bodyUr: "آپ نے آج کے تمام چیلنج مکمل کیے اور 120 ایکس پی بونس حاصل کیا۔",
+      createdAt: awardedAt,
+    });
+  }, [dbLoaded, perfectDayReady, pushCelebration, todayGamificationEntry.perfectDayAwarded, todayKey, updateGamificationActivity]);
+
+  useEffect(() => {
+    if (!dbLoaded || !gamificationState.milestoneClaims?.__baselineReady) return;
+    XP_MILESTONES.forEach((threshold) => {
+      if (xp >= threshold) {
+        claimMilestone(`xp_${threshold}`, {
+          kind: "xp",
+          icon: "✨",
+          titleEn: `${threshold} XP Milestone`,
+          titleUr: `${threshold} ایکس پی سنگِ میل`,
+          bodyEn: `You crossed ${threshold} XP. Your effort is stacking up beautifully.`,
+          bodyUr: `آپ نے ${threshold} ایکس پی عبور کر لیا۔ آپ کی محنت خوب جمع ہو رہی ہے۔`,
+        });
+      }
+    });
+    STREAK_MILESTONES.forEach((threshold) => {
+      if (streak >= threshold) {
+        claimMilestone(`streak_${threshold}`, {
+          kind: "streak",
+          icon: "🔥",
+          titleEn: `${threshold}-Day Streak`,
+          titleUr: `${threshold} دن کا تسلسل`,
+          bodyEn: "Consistency is turning into a real study habit now.",
+          bodyUr: "اب باقاعدگی ایک مضبوط مطالعہ عادت میں بدل رہی ہے۔",
+        });
+      }
+    });
+    PERFECT_DAY_MILESTONES.forEach((threshold) => {
+      if (perfectDayCount >= threshold) {
+        claimMilestone(`perfect_day_${threshold}`, {
+          kind: "perfect-day",
+          icon: "🏅",
+          titleEn: `${threshold} Perfect Day${threshold === 1 ? "" : "s"}`,
+          titleUr: `${threshold} پرفیکٹ ڈے`,
+          bodyEn: "You are building strong daily momentum. Keep protecting it.",
+          bodyUr: "آپ روزانہ کی مضبوط رفتار بنا رہے ہیں۔ اسے برقرار رکھیں۔",
+        });
+      }
+    });
+  }, [claimMilestone, dbLoaded, gamificationState.milestoneClaims, perfectDayCount, streak, xp]);
 
   if (!persistCustomizationRef.current) {
     persistCustomizationRef.current = debounce(async (nextPayload) => {
@@ -6696,6 +7020,7 @@ function HomeschoolApp() {
           await window.HomeSchoolDB.saveCustomization("classScheduleSettings", nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" });
           await window.HomeSchoolDB.saveCustomization("timeTrackingData", normalizeTimeTrackingData(nextPayload.timeTrackingData || {}));
           await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40));
+          await window.HomeSchoolDB.saveCustomization("gamificationState", normalizeGamificationState(nextPayload.gamificationState || {}));
           await window.HomeSchoolDB.saveCustomization("studentProfile", {
             grade: nextPayload.grade,
             studentName: nextPayload.studentName,
@@ -6744,6 +7069,7 @@ function HomeschoolApp() {
             classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
             timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
             notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
+            gamificationState: normalizeGamificationState(nextPayload.gamificationState || {}),
             studentProfile: {
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
@@ -6842,6 +7168,7 @@ function HomeschoolApp() {
         const storedClassSchedule = customizations.classScheduleSettings?.data || null;
         const storedTimeTracking = customizations.timeTrackingData?.data || null;
         const storedNotificationHistory = customizations.notificationHistory?.data || null;
+        const storedGamification = customizations.gamificationState?.data || null;
         const storedProfile = customizations.studentProfile?.data || null;
         const storedPracticeProgress = customizations.practiceProgress?.data || null;
         const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
@@ -6943,6 +7270,11 @@ function HomeschoolApp() {
         }
         if (Array.isArray(storedNotificationHistory)) {
           setNotificationHistory(storedNotificationHistory.slice(0, 40));
+        }
+        if (storedGamification && typeof storedGamification === "object") {
+          const normalizedGamification = normalizeGamificationState(storedGamification);
+          gamificationStateRef.current = normalizedGamification;
+          setGamificationState(normalizedGamification);
         }
         if (storedProfile) {
           if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
@@ -7308,16 +7640,17 @@ function HomeschoolApp() {
       classScheduleSettings,
       timeTrackingData,
       notificationHistory,
+      gamificationState,
       grade,
       studentName,
       studentNameUr,
       aiProviderConfigs,
       selectedAiProvider,
     });
-  }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+  }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, installBannerDismissed]);
+    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed });
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -7439,6 +7772,10 @@ function HomeschoolApp() {
           } catch (error) {
             console.log("Unable to show focus timer notification:", error);
           }
+          updateGamificationActivity((entry) => ({
+            ...entry,
+            focusSessions: (entry.focusSessions || 0) + 1,
+          }));
           return {
             ...current,
             active: false,
@@ -7453,7 +7790,7 @@ function HomeschoolApp() {
       });
     }, 1000);
     return () => window.clearInterval(timerId);
-  }, [focusTimerState.active, pushNotificationHistoryEntry]);
+  }, [focusTimerState.active, pushNotificationHistoryEntry, updateGamificationActivity]);
   useEffect(() => {
     if (!reminderSettings?.enabled) return undefined;
     const checkReminder = () => {
@@ -7773,6 +8110,7 @@ function HomeschoolApp() {
     if (!card) return;
     const marksPossible = getPracticeDifficultyMarks(getPracticeItemDifficulty(card));
     const marksEarned = correct ? marksPossible : 0;
+    const shouldCountRound = !practiceReveal;
     setPracticeReveal(true);
     setPracticeFeedbackText(getPracticeFeedbackText(card, modeId, correct, language));
     setPracticeConfidenceChoice(null);
@@ -7784,9 +8122,15 @@ function HomeschoolApp() {
       marksPossible: (current.marksPossible || 0) + marksPossible,
       confidence: current.confidence || { low: 0, medium: 0, high: 0 },
     }));
+    if (shouldCountRound) {
+      updateGamificationActivity((entry) => ({
+        ...entry,
+        practiceRounds: (entry.practiceRounds || 0) + 1,
+      }));
+    }
     updatePracticeLessonProgress(card, correct, marksEarned, marksPossible);
     triggerPracticeFeedback(correct);
-  }, [language, practiceMode, triggerPracticeFeedback, updatePracticeLessonProgress]);
+  }, [language, practiceMode, practiceReveal, triggerPracticeFeedback, updateGamificationActivity, updatePracticeLessonProgress]);
 
   const handlePracticeTimerExpiry = useCallback(() => {
     if (!activePracticeCard) return;
@@ -7950,6 +8294,10 @@ function HomeschoolApp() {
     setTotalScore(s => s + sc); setTotalQuizzesDone(n => n + 1); setStreak(ns); setLastQuizDate(today);
     setXp(x => x + earnedXp);
     setCompletedQuizzes(p => ({ ...p, [selectedLesson.id]: { score: sc, total: qs.length, date: today } }));
+    updateGamificationActivity((entry) => ({
+      ...entry,
+      quizzesCompleted: (entry.quizzesCompleted || 0) + 1,
+    }), today);
     const badgeResult = checkBadges(sc, el, selectedSubject.id);
     if (window.HomeSchoolDB) {
       try {
@@ -8176,6 +8524,11 @@ function HomeschoolApp() {
         setTimeTrackingData(normalizedTracking);
       }
       if (Array.isArray(nextState.notificationHistory)) setNotificationHistory(nextState.notificationHistory.slice(0, 40));
+      if (nextState.gamificationState) {
+        const normalizedGamification = normalizeGamificationState(nextState.gamificationState);
+        gamificationStateRef.current = normalizedGamification;
+        setGamificationState(normalizedGamification);
+      }
       return;
     }
 
@@ -8249,6 +8602,11 @@ function HomeschoolApp() {
       setTimeTrackingData(mergedTracking);
     }
     if (Array.isArray(nextState.notificationHistory)) setNotificationHistory((current) => [...(current || []), ...nextState.notificationHistory].slice(0, 40));
+    if (nextState.gamificationState) {
+      const mergedGamification = mergeGamificationState(gamificationStateRef.current, nextState.gamificationState);
+      gamificationStateRef.current = mergedGamification;
+      setGamificationState(mergedGamification);
+    }
   }, []);
 
   const executeImportReview = useCallback(async (previewState, mode) => {
@@ -8309,6 +8667,7 @@ function HomeschoolApp() {
         classScheduleSettings,
         timeTrackingData,
         notificationHistory,
+        gamificationState,
       },
       dbProgress,
     });
@@ -8317,7 +8676,7 @@ function HomeschoolApp() {
       lastBackupAt: exportedAt,
       lastPromptDay: getLocalDayKey(exportedAt),
     }));
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory]);
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
@@ -8363,6 +8722,10 @@ function HomeschoolApp() {
     setEarnedBadges([]);
     setXp(0);
     setNewBadges([]);
+    const clearedGamification = normalizeGamificationState({});
+    gamificationStateRef.current = clearedGamification;
+    setGamificationState(clearedGamification);
+    setCelebrationQueue([]);
     if (window.HomeSchoolDB) await window.HomeSchoolDB.resetProgress();
     await refreshReviewWorkspace();
   }, [refreshReviewWorkspace, ui.resetConfirm]);
@@ -8377,6 +8740,10 @@ function HomeschoolApp() {
     setEarnedBadges([]);
     setXp(0);
     setNewBadges([]);
+    const clearedGamification = normalizeGamificationState({});
+    gamificationStateRef.current = clearedGamification;
+    setGamificationState(clearedGamification);
+    setCelebrationQueue([]);
     if (window.HomeSchoolDB) await window.HomeSchoolDB.fullReset(window.HomeSchoolData, window.HomeSchoolData.VERSION);
     localStorage.removeItem(window.HomeSchoolUtils.STORE_KEY);
     location.reload();
@@ -9321,6 +9688,52 @@ function HomeschoolApp() {
             language)}</p>
           </div>
         </button>
+        <div className="review-panel challenge-panel" style={{ marginTop: 16 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Daily Challenges", "روزانہ چیلنجز", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Small wins every day build strong learning habits.", "روزانہ کی چھوٹی کامیابیاں مضبوط تعلیمی عادتیں بناتی ہیں۔", language), language)}</p>
+            </div>
+            <span className="goal-progress-badge">{completedDailyChallenges}/{dailyChallenges.length}</span>
+          </div>
+          <div className="challenge-grid">
+            {dailyChallenges.map((challenge) => {
+              const challengeProgress = Math.min(100, Math.round(((challenge.progress || 0) / Math.max(1, challenge.target || 1)) * 100));
+              return (
+                <div key={challenge.id} className={`challenge-card${challenge.completed ? " completed" : ""}`}>
+                  <div className="challenge-card-top">
+                    <span className="challenge-icon" aria-hidden="true">{challenge.icon}</span>
+                    <div>
+                      <strong>{renderLocalizedTextNode(joinLocalizedText(challenge.titleEn, challenge.titleUr, language), language)}</strong>
+                      <p>{renderLocalizedTextNode(joinLocalizedText(challenge.bodyEn, challenge.bodyUr, language), language)}</p>
+                    </div>
+                  </div>
+                  <div className="goal-progress-row">
+                    <span className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${challenge.progress}/${challenge.target} done`, `${challenge.progress}/${challenge.target} مکمل`, language), language)}</span>
+                    <span className={`goal-progress-badge${challenge.completed ? " success" : ""}`}>{challenge.completed ? renderLocalizedTextNode(joinLocalizedText("Done", "مکمل", language), language) : `${challengeProgress}%`}</span>
+                  </div>
+                  <div className="goal-progress-bar challenge-progress-bar"><span style={{ width: `${challengeProgress}%` }} /></div>
+                </div>
+              );
+            })}
+          </div>
+          <div className={`perfect-day-card${perfectDayReady ? " ready" : ""}`}>
+            <div>
+              <strong>{renderLocalizedTextNode(joinLocalizedText("Perfect Day Bonus", "پرفیکٹ ڈے بونس", language), language)}</strong>
+              <div className="goal-progress-meta">
+                {renderLocalizedTextNode(
+                  todayGamificationEntry.perfectDayAwarded
+                    ? joinLocalizedText("Today's bonus has already been collected. Beautiful work.", "آج کا بونس پہلے ہی مل چکا ہے۔ بہت خوب۔", language)
+                    : perfectDayReady
+                      ? joinLocalizedText("All daily challenges are complete. The 120 XP bonus is yours.", "آج کے تمام چیلنج مکمل ہو گئے۔ 120 ایکس پی بونس آپ کا ہے۔", language)
+                      : joinLocalizedText("Complete all three daily challenges to unlock a 120 XP bonus.", "120 ایکس پی بونس کے لیے تینوں روزانہ چیلنج مکمل کریں۔", language),
+                  language,
+                )}
+              </div>
+            </div>
+            <span className="goal-progress-badge">{todayGamificationEntry.perfectDayAwarded ? "+120 XP" : `${completedDailyChallenges}/${dailyChallenges.length}`}</span>
+          </div>
+        </div>
         <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
         <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
         <div className="review-panel home-support-panel" style={{ marginTop: 16 }}>
@@ -11195,7 +11608,36 @@ function HomeschoolApp() {
       {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">🧠</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); setTab("home"); }}>{renderLocalizedTextNode(ui.home, language)}</button><button className="next-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
       </>)}
 
-      {tab === "badges" && (<><div style={{ textAlign: "center", marginBottom: 20 }}><p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{earnedBadges.length} of {BADGES.length} badges earned</p></div><div className="badge-grid">{BADGES.map(b => <div key={b.id} className={"badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked")}><div className="badge-big-icon">{b.icon}</div><h4>{b.name}</h4><p>{b.desc}</p></div>)}</div></>)}
+      {tab === "badges" && (<>
+        <div className="review-panel" style={{ marginBottom: 18 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Milestones & Momentum", "سنگِ میل اور رفتار", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Track challenge wins, perfect days, and the next target worth chasing.", "اپنے روزانہ چیلنج، پرفیکٹ ڈیز، اور اگلے اہم ہدف کو یہاں دیکھیں۔", language), language)}</p>
+            </div>
+          </div>
+          <div className="stat-grid">
+            <div className="stat-card"><div className="stat-icon">🌟</div><div className="stat-value">{formatNumberLabel(perfectDayCount)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Perfect Days", "پرفیکٹ ڈیز", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">🎉</div><div className="stat-value">{formatNumberLabel((gamificationState.celebrationHistory || []).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Celebrations", "خوشیوں کے لمحات", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">✨</div><div className="stat-value">{nextXpMilestone ? formatNumberLabel(nextXpMilestone) : renderLocalizedTextNode(joinLocalizedText("Max", "مکمل", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Next XP Target", "اگلا ایکس پی ہدف", language), language)}</div></div>
+          </div>
+          {(gamificationState.celebrationHistory || []).length > 0 ? (
+            <div className="milestone-history-list">
+              {(gamificationState.celebrationHistory || []).slice(0, 4).map((entry) => (
+                <div key={entry.key} className="milestone-history-item">
+                  <span className="milestone-history-icon" aria-hidden="true">{entry.icon}</span>
+                  <div>
+                    <strong>{renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)}</strong>
+                    <p>{renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div style={{ textAlign: "center", marginBottom: 20 }}><p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{earnedBadges.length} of {BADGES.length} badges earned</p></div>
+        <div className="badge-grid">{BADGES.map(b => <div key={b.id} className={"badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked")}><div className="badge-big-icon">{b.icon}</div><h4>{b.name}</h4><p>{b.desc}</p></div>)}</div>
+      </>)}
 
       {tab === "tutor" && (<>
         <div className="review-panel">
@@ -11455,6 +11897,18 @@ function HomeschoolApp() {
     </div>
     {navBarAutoHide && navPosition === "bottom" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-bottom" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
     {navPosition === "bottom" ? renderNavBar("bottom") : null}
+    {celebrationQueue[0] ? (
+      <div className="celebration-overlay" onClick={dismissCelebration}>
+        <div className="celebration-card" onClick={(event) => event.stopPropagation()} style={isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null}>
+          <div className="celebration-icon" aria-hidden="true">{celebrationQueue[0].icon}</div>
+          <h3>{renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].titleEn, celebrationQueue[0].titleUr, language), language)}</h3>
+          <p>{renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].bodyEn, celebrationQueue[0].bodyUr, language), language)}</p>
+          <div className="celebration-actions">
+            <button className="next-btn" onClick={dismissCelebration}>{renderLocalizedTextNode(joinLocalizedText("Nice!", "بہت خوب!", language), language)}</button>
+          </div>
+        </div>
+      </div>
+    ) : null}
     {importReviewState ? (
       <div className="import-review-overlay" onClick={() => setImportReviewState(null)}>
         <div className="import-review-dialog" onClick={(event) => event.stopPropagation()} style={isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {}}>

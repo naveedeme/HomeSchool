@@ -364,9 +364,25 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .goal-progress-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .goal-progress-meta{font-size:12px;color:var(--text-muted);margin-top:4px}
 .goal-progress-badge{display:inline-flex;align-items:center;justify-content:center;min-width:48px;padding:6px 10px;border-radius:999px;background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.24);color:var(--accent);font-weight:800;font-size:12px}
+.goal-progress-badge.success{background:rgba(34,197,94,0.14);border-color:rgba(34,197,94,0.28);color:#22C55E}
 .goal-progress-bar{position:relative;height:10px;border-radius:999px;background:var(--bg-elevated);border:1px solid var(--border);overflow:hidden}
 .goal-progress-bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,rgba(56,189,248,0.85),rgba(34,197,94,0.72))}
 .goal-progress-bar.accent-alt span{background:linear-gradient(90deg,rgba(245,158,11,0.92),rgba(236,72,153,0.78))}
+.challenge-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.challenge-card{padding:14px;border-radius:16px;border:1px solid var(--border);background:var(--bg-elevated);display:flex;flex-direction:column;gap:12px}
+.challenge-card.completed{border-color:rgba(34,197,94,0.28);background:linear-gradient(135deg,rgba(34,197,94,0.10),rgba(56,189,248,0.08))}
+.challenge-card-top{display:flex;align-items:flex-start;gap:12px}
+.challenge-card-top strong{display:block;font-size:14px;line-height:1.35}
+.challenge-card-top p{font-size:12px;color:var(--text-secondary);line-height:1.5}
+.challenge-icon{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:14px;background:color-mix(in srgb,var(--accent) 10%,var(--bg-card));font-size:20px;flex-shrink:0}
+.challenge-progress-bar{height:9px}
+.perfect-day-card{margin-top:14px;padding:14px 16px;border-radius:16px;border:1px solid rgba(245,158,11,0.22);background:linear-gradient(135deg,rgba(245,158,11,0.10),rgba(236,72,153,0.08));display:flex;align-items:center;justify-content:space-between;gap:14px}
+.perfect-day-card.ready{border-color:rgba(34,197,94,0.30);background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(56,189,248,0.10))}
+.milestone-history-list{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.milestone-history-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:14px;border:1px solid var(--border);background:var(--bg-elevated)}
+.milestone-history-item strong{display:block;font-size:14px;line-height:1.35}
+.milestone-history-item p{font-size:12px;color:var(--text-secondary);line-height:1.5}
+.milestone-history-icon{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,var(--bg-card));font-size:18px;flex-shrink:0}
 .discovery-word-card{padding:14px 16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent) 24%,var(--border));background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,var(--bg-elevated)),color-mix(in srgb,#22C55E 10%,var(--bg-card)));margin-bottom:14px}
 .discovery-word-label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
 .discovery-word-prompt{font-size:22px;font-weight:900;color:var(--text-primary);line-height:1.2;margin-bottom:6px}
@@ -544,6 +560,12 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .notification-history-top span{font-size:11px;color:var(--text-muted)}
 .notification-history-item p{font-size:13px;color:var(--text-secondary);line-height:1.55}
 .import-review-overlay{position:fixed;inset:0;z-index:1200;background:rgba(15,23,42,.58);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px}
+.celebration-overlay{position:fixed;inset:0;z-index:1180;display:flex;align-items:flex-end;justify-content:center;padding:24px;background:rgba(15,23,42,0.18);pointer-events:auto}
+.celebration-card{width:min(460px,100%);padding:20px 22px;border-radius:24px;border:1px solid rgba(250,204,21,0.25);background:linear-gradient(135deg,rgba(250,204,21,0.16),rgba(56,189,248,0.14),var(--bg-card));box-shadow:0 24px 60px rgba(15,23,42,0.28);text-align:center}
+.celebration-icon{font-size:42px;margin-bottom:8px}
+.celebration-card h3{font-size:20px;font-weight:900;margin-bottom:8px}
+.celebration-card p{font-size:13px;line-height:1.6;color:var(--text-secondary)}
+.celebration-actions{display:flex;justify-content:center;margin-top:14px}
 .import-review-dialog{width:min(720px,100%);max-height:min(86vh,760px);overflow:auto;padding:20px;border-radius:22px;border:1px solid var(--border);background:var(--bg-card);box-shadow:0 30px 80px rgba(2,6,23,.34)}
 .import-review-section{margin-bottom:16px}
 .import-review-section strong{display:block;font-size:13px;font-weight:800;color:var(--text-primary);margin-bottom:10px}
