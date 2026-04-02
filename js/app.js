@@ -118,6 +118,10 @@ const UI_TEXT = {
     autoPlayNextHelp: "Automatically play the next prompt when a new practice card opens.",
     phoneticSpelling: "Phonetic Spelling",
     syllableBreakdown: "Syllable Breakdown",
+    meaningLookupPriority: "Meaning Lookup Priority",
+    meaningLookupPriorityHelp: "Choose whether word meanings should prefer local vocabulary first or try AI first when available.",
+    meaningPriorityLocalFirst: "Local first",
+    meaningPriorityAiFirst: "AI first",
     wordBankExplorer: "Word Bank Explorer",
     wordSearch: "Word Search",
     wordSearchPlaceholder: "Search words, meanings, or translations...",
@@ -382,6 +386,10 @@ const UI_TEXT = {
     autoPlayNextHelp: "نیا پریکٹس کارڈ کھلتے ہی اگلا پرامپٹ خودکار طور پر سنائیں۔",
     phoneticSpelling: "صوتی املا",
     syllableBreakdown: "ہجوں کی تقسیم",
+    meaningLookupPriority: "معنی تلاش کی ترجیح",
+    meaningLookupPriorityHelp: "منتخب کریں کہ لفظوں کے معنی پہلے مقامی ذخیرہ الفاظ سے لیے جائیں یا دستیاب ہونے پر پہلے اے آئی سے پوچھا جائے۔",
+    meaningPriorityLocalFirst: "پہلے مقامی",
+    meaningPriorityAiFirst: "پہلے اے آئی",
     wordBankExplorer: "لفظی ذخیرہ ایکسپلورر",
     wordSearch: "لفظ تلاش",
     wordSearchPlaceholder: "الفاظ، معنی، یا تراجم تلاش کریں...",
@@ -994,10 +1002,18 @@ function normalizeWordMeaningCache(rawCache) {
     .map(([key, value]) => {
       const normalizedKey = normalizeLookupWord(key);
       if (!normalizedKey || !value || typeof value !== "object") return null;
-      const meaningUr = String(value.meaningUr || value.meaning || "").trim();
-      if (!meaningUr) return null;
+      const meaningsUr = Array.isArray(value.meaningsUr)
+        ? value.meaningsUr.map((entry) => String(entry || "").trim()).filter(Boolean)
+        : String(value.meaningUr || value.meaning || "").trim()
+          ? [String(value.meaningUr || value.meaning || "").trim()]
+          : [];
+      const explanationUr = String(value.explanationUr || value.simpleExplanationUr || "").trim();
+      const meaningUr = meaningsUr[0] || "";
+      if (!meaningUr && !explanationUr) return null;
       return [normalizedKey, {
         meaningUr,
+        meaningsUr: meaningsUr.slice(0, 6),
+        explanationUr,
         source: String(value.source || "cache"),
         fetchedAt: Number(value.fetchedAt) || Date.now(),
       }];
@@ -1026,6 +1042,8 @@ function buildWordMeaningLookupFromIndex(items) {
       if (!lookup[candidate]) {
         lookup[candidate] = {
           meaningUr,
+          meaningsUr: [meaningUr],
+          explanationUr: "",
           source: "local",
         };
       }
@@ -1044,6 +1062,139 @@ function extractShortUrduMeaning(text) {
     .replace(/^urdu\s*[:\-]\s*/i, "")
     .trim();
   return cleaned;
+}
+
+function extractWordMeaningDetails(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return { meaningsUr: [], explanationUr: "" };
+
+  const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]+?)```/i);
+  const candidateJson = jsonMatch ? jsonMatch[1].trim() : raw;
+  try {
+    const parsed = JSON.parse(candidateJson);
+    const meaningsUr = Array.isArray(parsed?.meaningsUr)
+      ? parsed.meaningsUr.map((entry) => String(entry || "").trim()).filter(Boolean)
+      : String(parsed?.meaningUr || parsed?.meaning || "").trim()
+        ? [String(parsed.meaningUr || parsed.meaning || "").trim()]
+        : [];
+    const explanationUr = String(parsed?.simpleExplanationUr || parsed?.explanationUr || "").trim();
+    if (meaningsUr.length || explanationUr) {
+      return { meaningsUr: meaningsUr.slice(0, 6), explanationUr };
+    }
+  } catch (error) {
+    // Fall through to text parsing.
+  }
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[\s\-*•\d.)]+/, "").trim())
+    .filter(Boolean);
+  const meaningsUr = [];
+  const explanationParts = [];
+  let inExplanation = false;
+  lines.forEach((line) => {
+    const normalized = line.replace(/^معانی\s*[:：-]?\s*/u, "").replace(/^وضاحت\s*[:：-]?\s*/u, "").trim();
+    if (!normalized) return;
+    if (/^وضاحت/u.test(line) || /^سادہ\s*وضاحت/u.test(line)) {
+      inExplanation = true;
+      if (normalized) explanationParts.push(normalized);
+      return;
+    }
+    if (!inExplanation && meaningsUr.length < 6) {
+      meaningsUr.push(normalized);
+      return;
+    }
+    explanationParts.push(normalized);
+  });
+
+  if (!meaningsUr.length) {
+    const fallbackMeaning = extractShortUrduMeaning(raw);
+    if (fallbackMeaning) meaningsUr.push(fallbackMeaning);
+  }
+
+  const explanationUr = explanationParts.join(" ").trim();
+  return { meaningsUr: meaningsUr.slice(0, 6), explanationUr };
+}
+
+function buildWordMeaningCopyText(entry) {
+  if (!entry) return "";
+  const parts = [];
+  if (entry.word) parts.push(String(entry.word).trim());
+  if (Array.isArray(entry.meaningsUr) && entry.meaningsUr.length > 0) {
+    parts.push(`معانی:\n${entry.meaningsUr.map((meaning, index) => `${index + 1}. ${meaning}`).join("\n")}`);
+  } else if (entry.meaningUr) {
+    parts.push(`معنی:\n${entry.meaningUr}`);
+  }
+  if (entry.explanationUr) {
+    parts.push(`سادہ وضاحت:\n${entry.explanationUr}`);
+  }
+  return parts.filter(Boolean).join("\n\n").trim();
+}
+
+function buildWordMeaningSpeakText(entry) {
+  if (!entry) return "";
+  const orderedMeanings = Array.isArray(entry.meaningsUr) ? entry.meaningsUr.filter(Boolean) : [];
+  const meaningText = orderedMeanings.length > 0 ? orderedMeanings.join("، ") : String(entry.meaningUr || "").trim();
+  return [meaningText, String(entry.explanationUr || "").trim()].filter(Boolean).join("۔ ");
+}
+
+function getDefaultTutorGreeting(language) {
+  return isUrduUi(language)
+    ? "السلام علیکم! میں آپ کا اے آئی استاد ہوں۔ اپنے سبق یا کسی مشکل سوال کے بارے میں پوچھیں، میں آسان انداز میں سمجھاؤں گا۔"
+    : "Assalam-o-Alaikum! I'm your AI tutor. Ask me anything about your lessons and I'll explain it in a simple way.";
+}
+
+function createTutorSession(language, messages = null) {
+  const now = Date.now();
+  return {
+    id: `chat_${now}_${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: now,
+    updatedAt: now,
+    messages: Array.isArray(messages) && messages.length > 0 ? messages : [{ role: "ai", text: getDefaultTutorGreeting(language) }],
+  };
+}
+
+function normalizeTutorSessions(rawSessions, language) {
+  const sessions = Array.isArray(rawSessions) ? rawSessions : [];
+  const normalized = sessions
+    .map((session) => {
+      const messages = Array.isArray(session?.messages)
+        ? session.messages
+          .map((message) => {
+            const role = message?.role === "user" ? "user" : "ai";
+            const text = String(message?.text || "").trim();
+            if (!text) return null;
+            return {
+              role,
+              text,
+              provider: message?.provider ? String(message.provider) : "",
+              createdAt: Number(message?.createdAt) || Number(session?.updatedAt) || Date.now(),
+            };
+          })
+          .filter(Boolean)
+        : [];
+      const fallbackMessages = messages.length > 0 ? messages : [{ role: "ai", text: getDefaultTutorGreeting(language), createdAt: Date.now() }];
+      return {
+        id: String(session?.id || `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+        createdAt: Number(session?.createdAt) || Date.now(),
+        updatedAt: Number(session?.updatedAt) || Date.now(),
+        messages: fallbackMessages,
+      };
+    })
+    .filter((session) => session.messages.length > 0)
+    .sort((left, right) => (Number(right.updatedAt) || 0) - (Number(left.updatedAt) || 0))
+    .slice(0, 30);
+  return normalized.length > 0 ? normalized : [createTutorSession(language)];
+}
+
+function getTutorSessionTitle(session, language) {
+  const firstUserMessage = (session?.messages || []).find((message) => message.role === "user" && String(message.text || "").trim());
+  const baseText = String(firstUserMessage?.text || "").trim();
+  if (!baseText) return joinLocalizedText("New Chat", "نئی چیٹ", language);
+  const words = baseText.split(/\s+/);
+  const limit = containsUrduText(baseText) ? 7 : 8;
+  const preview = words.slice(0, limit).join(" ");
+  return `${preview}${words.length > limit ? "…" : ""}`;
 }
 
 function joinLocalizedText(enText, urText, language) {
@@ -6215,6 +6366,12 @@ function HomeschoolApp() {
   const stored = loadState();
   const storedAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
   const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
+  const storedAiTutorHistory = localStorageFallback("hs_ai_tutor_history") || {};
+  const initialTutorLanguage = stored?.language || "en";
+  const initialTutorSessions = normalizeTutorSessions(storedAiTutorHistory.sessions, initialTutorLanguage);
+  const initialActiveTutorSessionId = initialTutorSessions.some((session) => session.id === storedAiTutorHistory.activeSessionId)
+    ? storedAiTutorHistory.activeSessionId
+    : initialTutorSessions[0]?.id;
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
   const persistCustomizationRef = useRef(null);
   const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
@@ -6271,9 +6428,12 @@ function HomeschoolApp() {
   const [earnedBadges, setEarnedBadges] = useState(stored?.earnedBadges || []);
   const [xp, setXp] = useState(stored?.xp || 0);
   const [newBadges, setNewBadges] = useState([]);
-  const [chatMessages, setChatMessages] = useState([{ role: "ai", text: "Assalam-o-Alaikum! 👋 I'm your AI tutor. Ask me anything about your lessons — I'll explain it in a way that's easy to understand!" }]);
+  const [tutorSessions, setTutorSessions] = useState(initialTutorSessions);
+  const [activeTutorSessionId, setActiveTutorSessionId] = useState(initialActiveTutorSessionId || null);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatListening, setChatListening] = useState(false);
+  const [clipboardHasText, setClipboardHasText] = useState(false);
   const [aiProviderConfigs, setAiProviderConfigs] = useState(storedAiConfigs);
   const [aiProviderDrafts, setAiProviderDrafts] = useState(storedAiConfigs);
   const [aiProviderBusy, setAiProviderBusy] = useState({});
@@ -6283,6 +6443,7 @@ function HomeschoolApp() {
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [audioMuted, setAudioMuted] = useState(Boolean(stored?.audioMuted));
   const [autoPlayNext, setAutoPlayNext] = useState(Boolean(stored?.autoPlayNext));
+  const [wordMeaningPriority, setWordMeaningPriority] = useState(["local-first", "ai-first"].includes(stored?.wordMeaningPriority) ? stored.wordMeaningPriority : "local-first");
   const [ttsRate, setTtsRate] = useState(Math.max(0.6, Math.min(1.3, Number(stored?.ttsRate) || 0.85)));
   const [availableVoices, setAvailableVoices] = useState([]);
   const [ttsVoiceSelections, setTtsVoiceSelections] = useState(stored?.ttsVoiceSelections || { en: "", ur: "" });
@@ -6366,6 +6527,8 @@ function HomeschoolApp() {
   const [serviceWorkerStatus, setServiceWorkerStatus] = useState(window.location.protocol === "file:" ? "local-static" : "checking");
   const [isOnline, setIsOnline] = useState(navigator.onLine !== false);
   const chatEndRef = useRef(null);
+  const chatTextareaRef = useRef(null);
+  const speechRecognitionRef = useRef(null);
   const headerRef = useRef(null);
   const headerHideTimerRef = useRef(null);
   const navBarRef = useRef(null);
@@ -6376,6 +6539,171 @@ function HomeschoolApp() {
   const gamificationStateRef = useRef(normalizeGamificationState(stored?.gamificationState || {}));
   const [headerHideOffset, setHeaderHideOffset] = useState(0);
   const [navBarOffset, setNavBarOffset] = useState(0);
+
+  const activeTutorSession = useMemo(
+    () => tutorSessions.find((session) => session.id === activeTutorSessionId) || tutorSessions[0] || null,
+    [activeTutorSessionId, tutorSessions],
+  );
+  const currentTutorSessionId = activeTutorSession?.id || activeTutorSessionId || tutorSessions[0]?.id || null;
+  const chatMessages = activeTutorSession?.messages || [];
+  const chatInputWordCount = chatInput.trim() ? chatInput.trim().split(/\s+/).filter(Boolean).length : 0;
+  const speechRecognitionSupported = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const persistTutorHistory = useCallback((sessions, sessionId) => {
+    localStorageFallback("hs_ai_tutor_history", {
+      sessions: normalizeTutorSessions(sessions, language).slice(0, 30),
+      activeSessionId: sessionId,
+    });
+  }, [language]);
+
+  const appendTutorMessages = useCallback((sessionId, nextMessages) => {
+    const messageList = (Array.isArray(nextMessages) ? nextMessages : [nextMessages])
+      .map((message) => {
+        const role = message?.role === "user" ? "user" : "ai";
+        const text = String(message?.text || "").trim();
+        if (!text) return null;
+        return {
+          role,
+          text,
+          provider: message?.provider ? String(message.provider) : "",
+          createdAt: Date.now(),
+        };
+      })
+      .filter(Boolean);
+    if (messageList.length === 0) return;
+    setTutorSessions((current) => {
+      const base = normalizeTutorSessions(current, language);
+      const resolvedSessionId = base.some((session) => session.id === sessionId) ? sessionId : (base[0]?.id || createTutorSession(language).id);
+      const targetIndex = base.findIndex((session) => session.id === resolvedSessionId);
+      const targetSession = targetIndex >= 0 ? base[targetIndex] : createTutorSession(language);
+      const updatedSession = {
+        ...targetSession,
+        messages: [...(targetSession.messages || []), ...messageList],
+        updatedAt: Date.now(),
+      };
+      return [updatedSession, ...base.filter((session) => session.id !== updatedSession.id)].slice(0, 30);
+    });
+  }, [language]);
+
+  const handleNewTutorChat = useCallback(() => {
+    try {
+      speechRecognitionRef.current?.stop?.();
+    } catch (error) {
+      // Ignore speech recognition shutdown errors.
+    }
+    const nextSession = createTutorSession(language);
+    setTutorSessions((current) => [nextSession, ...normalizeTutorSessions(current, language).filter((session) => session.id !== nextSession.id)].slice(0, 30));
+    setActiveTutorSessionId(nextSession.id);
+    setChatInput("");
+    setChatLoading(false);
+    setChatListening(false);
+  }, [language]);
+
+  const copyTextToClipboard = useCallback(async (text) => {
+    const payload = String(text || "");
+    if (!payload.trim()) return false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(payload);
+        return true;
+      }
+    } catch (error) {
+      // Fall through to manual copy.
+    }
+    try {
+      const helper = document.createElement("textarea");
+      helper.value = payload;
+      helper.setAttribute("readonly", "readonly");
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.select();
+      document.execCommand("copy");
+      document.body.removeChild(helper);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }, []);
+
+  const speakInlineText = useCallback((text, languageHint = null) => {
+    const content = String(text || "").trim();
+    if (!content) return;
+    const detectedLanguage = languageHint || (containsUrduText(content) || isUrduText(content) ? "ur" : "en");
+    window.HomeSchoolUtils?.speakText?.(content, detectedLanguage);
+  }, []);
+
+  const refreshClipboardAvailability = useCallback(async () => {
+    if (!navigator.clipboard?.readText) {
+      setClipboardHasText(false);
+      return;
+    }
+    try {
+      const text = await navigator.clipboard.readText();
+      setClipboardHasText(Boolean(String(text || "").trim()));
+    } catch (error) {
+      setClipboardHasText(false);
+    }
+  }, []);
+
+  const handlePasteIntoChat = useCallback(async () => {
+    if (!navigator.clipboard?.readText) return;
+    try {
+      const pasted = await navigator.clipboard.readText();
+      const cleaned = String(pasted || "").trim();
+      if (!cleaned) {
+        setClipboardHasText(false);
+        return;
+      }
+      setChatInput((current) => (current ? `${current}${/\s$/.test(current) ? "" : "\n"}${cleaned}` : cleaned));
+      setClipboardHasText(true);
+    } catch (error) {
+      setClipboardHasText(false);
+    }
+  }, []);
+
+  const handleToggleChatListening = useCallback(() => {
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) return;
+    if (chatListening) {
+      speechRecognitionRef.current?.stop?.();
+      return;
+    }
+    const recognition = new SpeechRecognitionClass();
+    recognition.lang = isUrduUi(language) ? "ur-PK" : "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results || [])
+        .map((result) => result?.[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      if (transcript) {
+        setChatInput((current) => (current ? `${current}${/\s$/.test(current) ? "" : " "}${transcript}` : transcript));
+      }
+    };
+    recognition.onerror = () => {
+      setChatListening(false);
+    };
+    recognition.onend = () => {
+      setChatListening(false);
+      speechRecognitionRef.current = null;
+    };
+    speechRecognitionRef.current = recognition;
+    setChatListening(true);
+    recognition.start();
+  }, [chatListening, language]);
+
+  const handleCopyWordMeaning = useCallback(() => {
+    if (!wordMeaningPopover) return;
+    copyTextToClipboard(buildWordMeaningCopyText(wordMeaningPopover));
+  }, [copyTextToClipboard, wordMeaningPopover]);
+
+  const handleSpeakWordMeaning = useCallback(() => {
+    if (!wordMeaningPopover) return;
+    speakInlineText(buildWordMeaningSpeakText(wordMeaningPopover), "ur");
+  }, [speakInlineText, wordMeaningPopover]);
 
   // ─── DB-backed data state ───
   const [dbLoaded, setDbLoaded] = useState(false);
@@ -7229,6 +7557,7 @@ function HomeschoolApp() {
             ttsEnabled: nextPayload.ttsEnabled,
             audioMuted: nextPayload.audioMuted,
             autoPlayNext: nextPayload.autoPlayNext,
+            wordMeaningPriority: nextPayload.wordMeaningPriority,
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
             fontSizeMode: nextPayload.fontSizeMode,
@@ -7279,6 +7608,7 @@ function HomeschoolApp() {
               ttsEnabled: nextPayload.ttsEnabled,
               audioMuted: nextPayload.audioMuted,
               autoPlayNext: nextPayload.autoPlayNext,
+              wordMeaningPriority: nextPayload.wordMeaningPriority,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
               fontSizeMode: nextPayload.fontSizeMode,
@@ -7332,6 +7662,7 @@ function HomeschoolApp() {
             ttsEnabled: nextPayload.ttsEnabled,
             audioMuted: nextPayload.audioMuted,
             autoPlayNext: nextPayload.autoPlayNext,
+            wordMeaningPriority: nextPayload.wordMeaningPriority,
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
             fontSizeMode: nextPayload.fontSizeMode,
@@ -7425,6 +7756,7 @@ function HomeschoolApp() {
         if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
         if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
         if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+        if (typeof storedPreferences.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(storedPreferences.wordMeaningPriority)) setWordMeaningPriority(storedPreferences.wordMeaningPriority);
         if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
         if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
         if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
@@ -7897,10 +8229,10 @@ function HomeschoolApp() {
       aiProviderConfigs,
       selectedAiProvider,
     });
-  }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache]);
+  if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache });
+}, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -7992,6 +8324,36 @@ function HomeschoolApp() {
         window.speechSynthesis.onvoiceschanged = null;
       }
     };
+  }, []);
+  useEffect(() => {
+    if (!activeTutorSession && tutorSessions[0]?.id) {
+      setActiveTutorSessionId(tutorSessions[0].id);
+    }
+  }, [activeTutorSession, tutorSessions]);
+  useEffect(() => {
+    persistTutorHistory(tutorSessions, activeTutorSession?.id || activeTutorSessionId || tutorSessions[0]?.id || null);
+  }, [activeTutorSession?.id, activeTutorSessionId, persistTutorHistory, tutorSessions]);
+  useEffect(() => {
+    if (tab !== "tutor") return undefined;
+    refreshClipboardAvailability();
+    const handleFocus = () => {
+      refreshClipboardAvailability();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [refreshClipboardAvailability, tab]);
+  useEffect(() => {
+    const textarea = chatTextareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.min(220, Math.max(62, textarea.scrollHeight))}px`;
+  }, [chatInput, tab]);
+  useEffect(() => () => {
+    try {
+      speechRecognitionRef.current?.stop?.();
+    } catch (error) {
+      // Ignore speech recognition shutdown errors.
+    }
   }, []);
   useEffect(() => {
     const nextMinutes = Math.max(5, Math.min(60, Number(focusTimerSettings?.durationMinutes) || 20));
@@ -8562,19 +8924,20 @@ function HomeschoolApp() {
   const sendChat = async () => {
     if (!chatInput.trim()) return;
     const msg = chatInput.trim();
+    const sessionId = currentTutorSessionId || activeTutorSessionId || tutorSessions[0]?.id || createTutorSession(language).id;
     const savedProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
     const availableProviders = savedProviders.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
     if (!savedProviders.length) {
-      setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor." }]);
+      appendTutorMessages(sessionId, { role: "ai", text: ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor." });
       return;
     }
     if (!availableProviders.length) {
-      setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "ٹیوٹر چیٹ شروع کرنے سے پہلے آپ کے محفوظ اے آئی فراہم کنندگان کو ترتیبات میں درست کرنا ہوگا۔", language) }]);
+      appendTutorMessages(sessionId, { role: "ai", text: joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "ٹیوٹر چیٹ شروع کرنے سے پہلے آپ کے محفوظ اے آئی فراہم کنندگان کو ترتیبات میں درست کرنا ہوگا۔", language) });
       return;
     }
     const browserCapability = canUseDirectAiFromBrowser();
     if (!browserCapability.ok) {
-      setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode." }]);
+      appendTutorMessages(sessionId, { role: "ai", text: ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode." });
       return;
     }
     const providerId = availableProviders.includes(selectedAiProvider) ? selectedAiProvider : availableProviders[0];
@@ -8584,11 +8947,11 @@ function HomeschoolApp() {
     const model = providerConfig.model || providerDefinition.defaultModel;
     const conversation = [...chatMessages, { role: "user", text: msg }];
     setChatInput("");
-    setChatMessages((messages) => [...messages, { role: "user", text: msg }]);
+    appendTutorMessages(sessionId, { role: "user", text: msg });
     setChatLoading(true);
     try {
       const answer = await requestAiTutorResponse(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
-      setChatMessages((messages) => [...messages, { role: "ai", text: answer, provider: providerId }]);
+      appendTutorMessages(sessionId, { role: "ai", text: answer, provider: providerId });
     } catch (error) {
       const nextStatus = getAiStatusFromError(error);
       const nextFriendlyMessage = getFriendlyAiErrorMessage(providerId, error, language);
@@ -8629,7 +8992,7 @@ function HomeschoolApp() {
           if (updatedConfig?.apiKey) {
             try {
               const retryAnswer = await requestAiTutorResponse(providerId, updatedConfig.apiKey, updatedConfig.model || model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
-              setChatMessages((messages) => [...messages, { role: "ai", text: retryAnswer, provider: providerId }]);
+              appendTutorMessages(sessionId, { role: "ai", text: retryAnswer, provider: providerId });
               setChatLoading(false);
               return;
             } catch (retryError) {
@@ -8651,14 +9014,14 @@ function HomeschoolApp() {
                   lastError: retryMessage,
                 },
               }));
-              setChatMessages((messages) => [...messages, { role: "ai", text: `${providerLabel}: ${retryMessage}` }]);
+              appendTutorMessages(sessionId, { role: "ai", text: `${providerLabel}: ${retryMessage}` });
               setChatLoading(false);
               return;
             }
           }
         }
       }
-      setChatMessages((messages) => [...messages, { role: "ai", text: `${providerLabel}: ${nextFriendlyMessage}` }]);
+      appendTutorMessages(sessionId, { role: "ai", text: `${providerLabel}: ${nextFriendlyMessage}` });
     }
     setChatLoading(false);
   };
@@ -8737,6 +9100,7 @@ function HomeschoolApp() {
       if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
       if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
       if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
+      if (typeof nextState.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(nextState.wordMeaningPriority)) setWordMeaningPriority(nextState.wordMeaningPriority);
       if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
       if (nextState.reviewSrsSettings) setReviewSrsSettings({
         masteryThreshold: Math.max(3, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || 5)),
@@ -8810,6 +9174,7 @@ function HomeschoolApp() {
     if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
     if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
     if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
+    if (typeof nextState.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(nextState.wordMeaningPriority)) setWordMeaningPriority((current) => current || nextState.wordMeaningPriority);
     if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
     if (nextState.reviewSrsSettings) setReviewSrsSettings((current) => ({
       masteryThreshold: Math.max(current.masteryThreshold || 5, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || current.masteryThreshold || 5)),
@@ -8900,6 +9265,7 @@ function HomeschoolApp() {
         ttsEnabled,
         ttsRate,
         ttsVoiceSelections,
+        wordMeaningPriority,
         language,
         themeMode,
         fontSizeMode,
@@ -8934,7 +9300,7 @@ function HomeschoolApp() {
       lastBackupAt: exportedAt,
       lastPromptDay: getLocalDayKey(exportedAt),
     }));
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache]);
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
@@ -9730,9 +10096,9 @@ function HomeschoolApp() {
       providerConfig.apiKey,
       providerConfig.model || providerDefinition.defaultModel,
       [{ role: "user", text: `English word: ${word}` }],
-      "You are a bilingual dictionary helper for Pakistani school students. Return only a very short Urdu meaning for the given English word. Use Urdu script only. No explanation. No bullets. No English.",
+      "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only with keys meaningsUr (an array of short Urdu meanings in order) and simpleExplanationUr (one easy Urdu explanation in Urdu script). Do not include English.",
     );
-    return extractShortUrduMeaning(response);
+    return extractWordMeaningDetails(response);
   }, [aiProviderConfigs]);
   const handleLookupWordMeaning = useCallback(async (rawWord, anchorNode) => {
     const normalizedWord = normalizeLookupWord(rawWord);
@@ -9753,6 +10119,8 @@ function HomeschoolApp() {
         width: popupWidth,
         placement,
         meaningUr: "",
+        meaningsUr: [],
+        explanationUr: "",
         source: "",
         loading: false,
         error: "",
@@ -9766,38 +10134,84 @@ function HomeschoolApp() {
 
     const candidateWords = getLookupWordCandidates(rawWord);
     const localEntry = candidateWords.map((candidate) => localWordMeaningLookup[candidate]).find(Boolean);
-    if (localEntry?.meaningUr) {
-      setPopupState({ loading: false, meaningUr: localEntry.meaningUr, source: "Local" });
-      return;
-    }
-
     const cacheEntry = candidateWords.map((candidate) => wordMeaningCache[candidate]).find(Boolean);
-    if (cacheEntry?.meaningUr) {
-      setPopupState({ loading: false, meaningUr: cacheEntry.meaningUr, source: cacheEntry.source || "Cache" });
-      return;
+    const applyMeaningEntry = (entry, fallbackSource) => {
+      if (!entry?.meaningUr && !(entry?.meaningsUr || []).length && !entry?.explanationUr) return false;
+      const orderedMeanings = Array.isArray(entry.meaningsUr) && entry.meaningsUr.length > 0
+        ? entry.meaningsUr.filter(Boolean)
+        : entry.meaningUr
+          ? [entry.meaningUr]
+          : [];
+      setPopupState({
+        loading: false,
+        meaningUr: entry.meaningUr || orderedMeanings[0] || "",
+        meaningsUr: orderedMeanings,
+        explanationUr: entry.explanationUr || "",
+        source: entry.source || fallbackSource,
+      });
+      return Boolean(entry.explanationUr || orderedMeanings.length > 1);
+    };
+    let shouldEnrichFromAi = true;
+    let hasInlineMeaning = false;
+
+    if (wordMeaningPriority === "local-first") {
+      if (localEntry?.meaningUr) {
+        hasInlineMeaning = true;
+        shouldEnrichFromAi = !applyMeaningEntry(localEntry, "Local");
+        if (!shouldEnrichFromAi) return;
+      }
+      if (!hasInlineMeaning && cacheEntry?.meaningUr) {
+        hasInlineMeaning = true;
+        shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
+        if (!shouldEnrichFromAi) return;
+      }
+    } else if (cacheEntry?.meaningUr) {
+      hasInlineMeaning = true;
+      shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
+      if (!shouldEnrichFromAi) return;
     }
 
     const providerOrder = ["gemini", ...readyAiProviderIds.filter((providerId) => providerId !== "gemini")];
     let lastError = null;
     for (const providerId of providerOrder) {
       try {
-        const meaningUr = await requestWordMeaningFromAi(providerId, rawWord);
-        if (!meaningUr) continue;
+        const details = await requestWordMeaningFromAi(providerId, rawWord);
+        const meaningsUr = Array.isArray(details?.meaningsUr) ? details.meaningsUr.filter(Boolean) : [];
+        const explanationUr = String(details?.explanationUr || "").trim();
+        const meaningUr = meaningsUr[0] || "";
+        if (!meaningUr && !explanationUr) continue;
         const cacheRecord = normalizeWordMeaningCache({
           ...wordMeaningCache,
           [normalizedWord]: {
             meaningUr,
+            meaningsUr,
+            explanationUr,
             source: providerId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[providerId]?.name || "AI",
             fetchedAt: Date.now(),
           },
         });
         setWordMeaningCache(cacheRecord);
-        setPopupState({ loading: false, meaningUr, source: cacheRecord[normalizedWord]?.source || "AI", error: "" });
+        setPopupState({
+          loading: false,
+          meaningUr,
+          meaningsUr,
+          explanationUr,
+          source: cacheRecord[normalizedWord]?.source || "AI",
+          error: "",
+        });
         return;
       } catch (error) {
         lastError = error;
       }
     }
+
+    if (!hasInlineMeaning && wordMeaningPriority === "ai-first" && localEntry?.meaningUr) {
+      hasInlineMeaning = true;
+      applyMeaningEntry(localEntry, "Local");
+      return;
+    }
+
+    if (hasInlineMeaning) return;
 
     const blockedReason = canUseDirectAiFromBrowser();
     setPopupState({
@@ -9807,7 +10221,7 @@ function HomeschoolApp() {
         : (ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode."),
       source: lastError ? "Unavailable" : "",
     });
-  }, [language, localWordMeaningLookup, readyAiProviderIds, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache]);
+  }, [language, localWordMeaningLookup, readyAiProviderIds, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
   useEffect(() => {
     if (!wordMeaningPopover) return undefined;
     const handleDismiss = (event) => {
@@ -12046,20 +12460,74 @@ function HomeschoolApp() {
           )}
         </div>
         <div className="tutor-shell">
-          <div className="tutor-chat">
-            {chatMessages.map((m, i) => <div key={i} className={"chat-bubble " + (m.role === "ai" ? "ai" : "user")}>{m.text}</div>)}
-            {chatLoading && <div className="chat-bubble ai"><div className="typing-dots"><span /><span /><span /></div></div>}
-            <div ref={chatEndRef} />
-          </div>
-          <div className="chat-input-area">
-            <input
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && sendChat()}
-              placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : readyAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں..." : "Ask your tutor anything...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Fix or add an AI key in Settings first...")}
-              disabled={chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok}
-            />
-            <button onClick={sendChat} disabled={chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok}>➤</button>
+          <aside className="tutor-sidebar">
+            <button className="tutor-new-chat-btn" onClick={handleNewTutorChat}>
+              <span aria-hidden="true">＋</span>
+              <span>{renderLocalizedTextNode(joinLocalizedText("New Chat", "نئی چیٹ", language), language)}</span>
+            </button>
+            <div className="tutor-history-list">
+              {tutorSessions.map((session) => (
+                <button
+                  key={session.id}
+                  type="button"
+                  className={`tutor-history-item${session.id === currentTutorSessionId ? " active" : ""}`}
+                  onClick={() => setActiveTutorSessionId(session.id)}
+                >
+                  <div className="tutor-history-title">{getTutorSessionTitle(session, language)}</div>
+                  <div className="tutor-history-meta">{formatDate(session.updatedAt)}</div>
+                </button>
+              ))}
+            </div>
+          </aside>
+          <div className="tutor-main">
+            <div className="tutor-chat">
+              {chatMessages.map((message, index) => {
+                const messageIsUrdu = containsUrduText(message.text) || isUrduText(message.text);
+                const providerBadge = message.provider && AI_PROVIDER_DEFS[message.provider]
+                  ? joinLocalizedText(AI_PROVIDER_DEFS[message.provider].name, AI_PROVIDER_DEFS[message.provider].nameUr, language)
+                  : "";
+                return (
+                  <div key={`${activeTutorSession?.id || "chat"}_${index}`} className={`chat-bubble ${message.role === "ai" ? "ai" : "user"}${messageIsUrdu ? " urdu" : " english"}`}>
+                    <div className="chat-bubble-body">{message.text}</div>
+                    <div className="chat-bubble-tools">
+                      <span className="chat-bubble-provider">{providerBadge || "\u00A0"}</span>
+                      <div className="chat-bubble-actions">
+                        <button type="button" className="chat-bubble-action" onClick={() => copyTextToClipboard(message.text)}>{renderLocalizedTextNode(joinLocalizedText("Copy", "کاپی", language), language)}</button>
+                        <button type="button" className="chat-bubble-action" onClick={() => speakInlineText(message.text)}>{renderLocalizedTextNode(joinLocalizedText("Listen", "سنیں", language), language)}</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {chatLoading && <div className="chat-bubble ai english"><div className="typing-dots"><span /><span /><span /></div></div>}
+              <div ref={chatEndRef} />
+            </div>
+            <div className="chat-input-area">
+              <div className="chat-input-toolbar">
+                {clipboardHasText ? <button type="button" className="chat-tool-btn" onClick={handlePasteIntoChat} title={joinLocalizedText("Paste from clipboard", "کلپ بورڈ سے پیسٹ کریں", language)}>📋</button> : null}
+                {speechRecognitionSupported ? <button type="button" className={`chat-tool-btn${chatListening ? " active" : ""}`} onClick={handleToggleChatListening} title={joinLocalizedText("Speak to type", "بول کر لکھیں", language)}>{chatListening ? "◼" : "🎙"}</button> : null}
+                {chatInput ? <button type="button" className="chat-tool-btn" onClick={() => setChatInput("")} title={joinLocalizedText("Clear", "صاف کریں", language)}>✕</button> : null}
+                {chatInput ? <span className="chat-word-count">{renderLocalizedTextNode(joinLocalizedText(`${chatInputWordCount} words`, `${chatInputWordCount} الفاظ`, language), language)}</span> : null}
+              </div>
+              <div className="chat-composer">
+                <textarea
+                  ref={chatTextareaRef}
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onFocus={refreshClipboardAvailability}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      sendChat();
+                    }
+                  }}
+                  className={containsUrduText(chatInput) || isUrduUi(language) ? "urdu" : "english"}
+                  placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : readyAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں..." : "Ask your tutor anything...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Fix or add an AI key in Settings first...")}
+                  disabled={chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok}
+                />
+                <button className="chat-send-btn" onClick={sendChat} disabled={chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok}>➤</button>
+              </div>
+            </div>
           </div>
         </div>
       </>)}
@@ -12188,6 +12656,8 @@ function HomeschoolApp() {
             onAudioMutedChange={setAudioMuted}
             autoPlayNext={autoPlayNext}
             onAutoPlayNextChange={setAutoPlayNext}
+            wordMeaningPriority={wordMeaningPriority}
+            onWordMeaningPriorityChange={setWordMeaningPriority}
             ttsRate={ttsRate}
             onTtsRateChange={setTtsRate}
             englishVoiceOptions={englishVoiceOptions}
@@ -12269,11 +12739,37 @@ function HomeschoolApp() {
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="word-meaning-popover-word">{wordMeaningPopover.word}</div>
+        <div className="word-meaning-popover-head">
+          <div className="word-meaning-popover-word">{wordMeaningPopover.word}</div>
+          <div className="word-meaning-popover-actions">
+            <button type="button" className="word-meaning-popover-icon" onClick={handleCopyWordMeaning} title={joinLocalizedText("Copy meaning", "معنی کاپی کریں", language)}>⧉</button>
+            <button type="button" className="word-meaning-popover-icon" onClick={handleSpeakWordMeaning} title={joinLocalizedText("Listen meaning", "معنی سنیں", language)}>🔊</button>
+          </div>
+        </div>
         {wordMeaningPopover.loading ? (
           <div className="word-meaning-popover-loading">{renderLocalizedTextNode(joinLocalizedText("Looking up meaning...", "معنی تلاش کیے جا رہے ہیں...", language), language)}</div>
-        ) : wordMeaningPopover.meaningUr ? (
-          <div className="word-meaning-popover-meaning">{wordMeaningPopover.meaningUr}</div>
+        ) : wordMeaningPopover.meaningUr || (wordMeaningPopover.meaningsUr || []).length > 0 || wordMeaningPopover.explanationUr ? (
+          <>
+            {(wordMeaningPopover.meaningsUr || []).length > 0 ? (
+              <div className="word-meaning-popover-list">
+                {(wordMeaningPopover.meaningsUr || []).map((meaning, index) => (
+                  <div key={`${meaning}_${index}`} className="word-meaning-popover-meaning">
+                    <span className="word-meaning-popover-order">{index + 1}.</span>
+                    <span>{meaning}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="word-meaning-popover-meaning">
+                <span>{wordMeaningPopover.meaningUr}</span>
+              </div>
+            )}
+            {wordMeaningPopover.explanationUr ? (
+              <div className="word-meaning-popover-explanation">
+                {wordMeaningPopover.explanationUr}
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="word-meaning-popover-loading">{renderLocalizedTextNode(wordMeaningPopover.error || joinLocalizedText("Meaning not found yet.", "ابھی معنی دستیاب نہیں۔", language), language)}</div>
         )}

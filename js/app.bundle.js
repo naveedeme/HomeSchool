@@ -117,6 +117,10 @@
       autoPlayNextHelp: "Automatically play the next prompt when a new practice card opens.",
       phoneticSpelling: "Phonetic Spelling",
       syllableBreakdown: "Syllable Breakdown",
+      meaningLookupPriority: "Meaning Lookup Priority",
+      meaningLookupPriorityHelp: "Choose whether word meanings should prefer local vocabulary first or try AI first when available.",
+      meaningPriorityLocalFirst: "Local first",
+      meaningPriorityAiFirst: "AI first",
       wordBankExplorer: "Word Bank Explorer",
       wordSearch: "Word Search",
       wordSearchPlaceholder: "Search words, meanings, or translations...",
@@ -381,6 +385,10 @@
       autoPlayNextHelp: "\u0646\u06CC\u0627 \u067E\u0631\u06CC\u06A9\u0679\u0633 \u06A9\u0627\u0631\u0688 \u06A9\u06BE\u0644\u062A\u06D2 \u06C1\u06CC \u0627\u06AF\u0644\u0627 \u067E\u0631\u0627\u0645\u067E\u0679 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0633\u0646\u0627\u0626\u06CC\u06BA\u06D4",
       phoneticSpelling: "\u0635\u0648\u062A\u06CC \u0627\u0645\u0644\u0627",
       syllableBreakdown: "\u06C1\u062C\u0648\u06BA \u06A9\u06CC \u062A\u0642\u0633\u06CC\u0645",
+      meaningLookupPriority: "\u0645\u0639\u0646\u06CC \u062A\u0644\u0627\u0634 \u06A9\u06CC \u062A\u0631\u062C\u06CC\u062D",
+      meaningLookupPriorityHelp: "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0644\u0641\u0638\u0648\u06BA \u06A9\u06D2 \u0645\u0639\u0646\u06CC \u067E\u06C1\u0644\u06D2 \u0645\u0642\u0627\u0645\u06CC \u0630\u062E\u06CC\u0631\u06C1 \u0627\u0644\u0641\u0627\u0638 \u0633\u06D2 \u0644\u06CC\u06D2 \u062C\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062F\u0633\u062A\u06CC\u0627\u0628 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u067E\u06C1\u0644\u06D2 \u0627\u06D2 \u0622\u0626\u06CC \u0633\u06D2 \u067E\u0648\u0686\u06BE\u0627 \u062C\u0627\u0626\u06D2\u06D4",
+      meaningPriorityLocalFirst: "\u067E\u06C1\u0644\u06D2 \u0645\u0642\u0627\u0645\u06CC",
+      meaningPriorityAiFirst: "\u067E\u06C1\u0644\u06D2 \u0627\u06D2 \u0622\u0626\u06CC",
       wordBankExplorer: "\u0644\u0641\u0638\u06CC \u0630\u062E\u06CC\u0631\u06C1 \u0627\u06CC\u06A9\u0633\u067E\u0644\u0648\u0631\u0631",
       wordSearch: "\u0644\u0641\u0638 \u062A\u0644\u0627\u0634",
       wordSearchPlaceholder: "\u0627\u0644\u0641\u0627\u0638\u060C \u0645\u0639\u0646\u06CC\u060C \u06CC\u0627 \u062A\u0631\u0627\u062C\u0645 \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA...",
@@ -991,10 +999,14 @@
     return Object.entries(rawCache).map(([key, value]) => {
       const normalizedKey = normalizeLookupWord(key);
       if (!normalizedKey || !value || typeof value !== "object") return null;
-      const meaningUr = String(value.meaningUr || value.meaning || "").trim();
-      if (!meaningUr) return null;
+      const meaningsUr = Array.isArray(value.meaningsUr) ? value.meaningsUr.map((entry) => String(entry || "").trim()).filter(Boolean) : String(value.meaningUr || value.meaning || "").trim() ? [String(value.meaningUr || value.meaning || "").trim()] : [];
+      const explanationUr = String(value.explanationUr || value.simpleExplanationUr || "").trim();
+      const meaningUr = meaningsUr[0] || "";
+      if (!meaningUr && !explanationUr) return null;
       return [normalizedKey, {
         meaningUr,
+        meaningsUr: meaningsUr.slice(0, 6),
+        explanationUr,
         source: String(value.source || "cache"),
         fetchedAt: Number(value.fetchedAt) || Date.now()
       }];
@@ -1016,6 +1028,8 @@
         if (!lookup[candidate]) {
           lookup[candidate] = {
             meaningUr,
+            meaningsUr: [meaningUr],
+            explanationUr: "",
             source: "local"
           };
         }
@@ -1029,6 +1043,113 @@
     const firstLine = raw.split(/\r?\n/).find(Boolean) || raw;
     const cleaned = firstLine.replace(/^["'`]+|["'`]+$/g, "").replace(/^meaning\s*[:\-]\s*/i, "").replace(/^urdu\s*[:\-]\s*/i, "").trim();
     return cleaned;
+  }
+  function extractWordMeaningDetails(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return { meaningsUr: [], explanationUr: "" };
+    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]+?)```/i);
+    const candidateJson = jsonMatch ? jsonMatch[1].trim() : raw;
+    try {
+      const parsed = JSON.parse(candidateJson);
+      const meaningsUr2 = Array.isArray(parsed == null ? void 0 : parsed.meaningsUr) ? parsed.meaningsUr.map((entry) => String(entry || "").trim()).filter(Boolean) : String((parsed == null ? void 0 : parsed.meaningUr) || (parsed == null ? void 0 : parsed.meaning) || "").trim() ? [String(parsed.meaningUr || parsed.meaning || "").trim()] : [];
+      const explanationUr2 = String((parsed == null ? void 0 : parsed.simpleExplanationUr) || (parsed == null ? void 0 : parsed.explanationUr) || "").trim();
+      if (meaningsUr2.length || explanationUr2) {
+        return { meaningsUr: meaningsUr2.slice(0, 6), explanationUr: explanationUr2 };
+      }
+    } catch (error) {
+    }
+    const lines = raw.split(/\r?\n/).map((line) => line.replace(/^[\s\-*•\d.)]+/, "").trim()).filter(Boolean);
+    const meaningsUr = [];
+    const explanationParts = [];
+    let inExplanation = false;
+    lines.forEach((line) => {
+      const normalized = line.replace(/^معانی\s*[:：-]?\s*/u, "").replace(/^وضاحت\s*[:：-]?\s*/u, "").trim();
+      if (!normalized) return;
+      if (/^وضاحت/u.test(line) || /^سادہ\s*وضاحت/u.test(line)) {
+        inExplanation = true;
+        if (normalized) explanationParts.push(normalized);
+        return;
+      }
+      if (!inExplanation && meaningsUr.length < 6) {
+        meaningsUr.push(normalized);
+        return;
+      }
+      explanationParts.push(normalized);
+    });
+    if (!meaningsUr.length) {
+      const fallbackMeaning = extractShortUrduMeaning(raw);
+      if (fallbackMeaning) meaningsUr.push(fallbackMeaning);
+    }
+    const explanationUr = explanationParts.join(" ").trim();
+    return { meaningsUr: meaningsUr.slice(0, 6), explanationUr };
+  }
+  function buildWordMeaningCopyText(entry) {
+    if (!entry) return "";
+    const parts = [];
+    if (entry.word) parts.push(String(entry.word).trim());
+    if (Array.isArray(entry.meaningsUr) && entry.meaningsUr.length > 0) {
+      parts.push(`\u0645\u0639\u0627\u0646\u06CC:
+${entry.meaningsUr.map((meaning, index) => `${index + 1}. ${meaning}`).join("\n")}`);
+    } else if (entry.meaningUr) {
+      parts.push(`\u0645\u0639\u0646\u06CC:
+${entry.meaningUr}`);
+    }
+    if (entry.explanationUr) {
+      parts.push(`\u0633\u0627\u062F\u06C1 \u0648\u0636\u0627\u062D\u062A:
+${entry.explanationUr}`);
+    }
+    return parts.filter(Boolean).join("\n\n").trim();
+  }
+  function buildWordMeaningSpeakText(entry) {
+    if (!entry) return "";
+    const orderedMeanings = Array.isArray(entry.meaningsUr) ? entry.meaningsUr.filter(Boolean) : [];
+    const meaningText = orderedMeanings.length > 0 ? orderedMeanings.join("\u060C ") : String(entry.meaningUr || "").trim();
+    return [meaningText, String(entry.explanationUr || "").trim()].filter(Boolean).join("\u06D4 ");
+  }
+  function getDefaultTutorGreeting(language) {
+    return isUrduUi(language) ? "\u0627\u0644\u0633\u0644\u0627\u0645 \u0639\u0644\u06CC\u06A9\u0645! \u0645\u06CC\u06BA \u0622\u067E \u06A9\u0627 \u0627\u06D2 \u0622\u0626\u06CC \u0627\u0633\u062A\u0627\u062F \u06C1\u0648\u06BA\u06D4 \u0627\u067E\u0646\u06D2 \u0633\u0628\u0642 \u06CC\u0627 \u06A9\u0633\u06CC \u0645\u0634\u06A9\u0644 \u0633\u0648\u0627\u0644 \u06A9\u06D2 \u0628\u0627\u0631\u06D2 \u0645\u06CC\u06BA \u067E\u0648\u0686\u06BE\u06CC\u06BA\u060C \u0645\u06CC\u06BA \u0622\u0633\u0627\u0646 \u0627\u0646\u062F\u0627\u0632 \u0645\u06CC\u06BA \u0633\u0645\u062C\u06BE\u0627\u0624\u06BA \u06AF\u0627\u06D4" : "Assalam-o-Alaikum! I'm your AI tutor. Ask me anything about your lessons and I'll explain it in a simple way.";
+  }
+  function createTutorSession(language, messages = null) {
+    const now = Date.now();
+    return {
+      id: `chat_${now}_${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: now,
+      updatedAt: now,
+      messages: Array.isArray(messages) && messages.length > 0 ? messages : [{ role: "ai", text: getDefaultTutorGreeting(language) }]
+    };
+  }
+  function normalizeTutorSessions(rawSessions, language) {
+    const sessions = Array.isArray(rawSessions) ? rawSessions : [];
+    const normalized = sessions.map((session) => {
+      const messages = Array.isArray(session == null ? void 0 : session.messages) ? session.messages.map((message) => {
+        const role = (message == null ? void 0 : message.role) === "user" ? "user" : "ai";
+        const text = String((message == null ? void 0 : message.text) || "").trim();
+        if (!text) return null;
+        return {
+          role,
+          text,
+          provider: (message == null ? void 0 : message.provider) ? String(message.provider) : "",
+          createdAt: Number(message == null ? void 0 : message.createdAt) || Number(session == null ? void 0 : session.updatedAt) || Date.now()
+        };
+      }).filter(Boolean) : [];
+      const fallbackMessages = messages.length > 0 ? messages : [{ role: "ai", text: getDefaultTutorGreeting(language), createdAt: Date.now() }];
+      return {
+        id: String((session == null ? void 0 : session.id) || `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+        createdAt: Number(session == null ? void 0 : session.createdAt) || Date.now(),
+        updatedAt: Number(session == null ? void 0 : session.updatedAt) || Date.now(),
+        messages: fallbackMessages
+      };
+    }).filter((session) => session.messages.length > 0).sort((left, right) => (Number(right.updatedAt) || 0) - (Number(left.updatedAt) || 0)).slice(0, 30);
+    return normalized.length > 0 ? normalized : [createTutorSession(language)];
+  }
+  function getTutorSessionTitle(session, language) {
+    const firstUserMessage = ((session == null ? void 0 : session.messages) || []).find((message) => message.role === "user" && String(message.text || "").trim());
+    const baseText = String((firstUserMessage == null ? void 0 : firstUserMessage.text) || "").trim();
+    if (!baseText) return joinLocalizedText("New Chat", "\u0646\u0626\u06CC \u0686\u06CC\u0679", language);
+    const words = baseText.split(/\s+/);
+    const limit = containsUrduText(baseText) ? 7 : 8;
+    const preview = words.slice(0, limit).join(" ");
+    return `${preview}${words.length > limit ? "\u2026" : ""}`;
   }
   function joinLocalizedText(enText, urText, language) {
     if (language === "ur") return urText;
@@ -4478,10 +4599,14 @@ ${marker} `);
     return /* @__PURE__ */ React.createElement("div", { ...focusProps, style: { cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } }, /* @__PURE__ */ React.createElement("span", { onClick: speakEn, style: { cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 } }, en, " \u2192 ", v2, " \u2192 ", v3, " ", sEn ? "\u{1F50A}" : "\u{1F508}"), /* @__PURE__ */ React.createElement("span", { onClick: speakUr, style: { cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 } }, sUr ? "\u{1F50A}" : "\u{1F508}", " ", ur), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" } })));
   }
   function HomeschoolApp() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
     const stored = loadState();
     const storedAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
     const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
+    const storedAiTutorHistory = localStorageFallback("hs_ai_tutor_history") || {};
+    const initialTutorLanguage = (stored == null ? void 0 : stored.language) || "en";
+    const initialTutorSessions = normalizeTutorSessions(storedAiTutorHistory.sessions, initialTutorLanguage);
+    const initialActiveTutorSessionId = initialTutorSessions.some((session) => session.id === storedAiTutorHistory.activeSessionId) ? storedAiTutorHistory.activeSessionId : (_a = initialTutorSessions[0]) == null ? void 0 : _a.id;
     const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
     const persistCustomizationRef = useRef(null);
     const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
@@ -4497,9 +4622,9 @@ ${marker} `);
     const [daySectionOverrides, setDaySectionOverrides] = useState((stored == null ? void 0 : stored.daySectionOverrides) || {});
     const [dailyReviewCap, setDailyReviewCap] = useState(Math.max(5, Math.min(50, Number(stored == null ? void 0 : stored.dailyReviewCap) || 20)));
     const [reviewSrsSettings, setReviewSrsSettings] = useState({
-      masteryThreshold: Math.max(3, Math.min(7, Number((_a = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _a.masteryThreshold) || 5)),
-      intervalScale: Math.max(0.5, Math.min(2.5, Number((_b = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _b.intervalScale) || 1)),
-      againMinutes: Math.max(5, Math.min(180, Number((_c = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _c.againMinutes) || 10))
+      masteryThreshold: Math.max(3, Math.min(7, Number((_b = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _b.masteryThreshold) || 5)),
+      intervalScale: Math.max(0.5, Math.min(2.5, Number((_c = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _c.intervalScale) || 1)),
+      againMinutes: Math.max(5, Math.min(180, Number((_d = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _d.againMinutes) || 10))
     });
     const [grade, setGrade] = useState((stored == null ? void 0 : stored.grade) || null);
     const [studentName, setStudentName] = useState((stored == null ? void 0 : stored.studentName) || "");
@@ -4538,18 +4663,22 @@ ${marker} `);
     const [earnedBadges, setEarnedBadges] = useState((stored == null ? void 0 : stored.earnedBadges) || []);
     const [xp, setXp] = useState((stored == null ? void 0 : stored.xp) || 0);
     const [newBadges, setNewBadges] = useState([]);
-    const [chatMessages, setChatMessages] = useState([{ role: "ai", text: "Assalam-o-Alaikum! \u{1F44B} I'm your AI tutor. Ask me anything about your lessons \u2014 I'll explain it in a way that's easy to understand!" }]);
+    const [tutorSessions, setTutorSessions] = useState(initialTutorSessions);
+    const [activeTutorSessionId, setActiveTutorSessionId] = useState(initialActiveTutorSessionId || null);
     const [chatInput, setChatInput] = useState("");
     const [chatLoading, setChatLoading] = useState(false);
+    const [chatListening, setChatListening] = useState(false);
+    const [clipboardHasText, setClipboardHasText] = useState(false);
     const [aiProviderConfigs, setAiProviderConfigs] = useState(storedAiConfigs);
     const [aiProviderDrafts, setAiProviderDrafts] = useState(storedAiConfigs);
     const [aiProviderBusy, setAiProviderBusy] = useState({});
     const [selectedAiProvider, setSelectedAiProvider] = useState((storedAiTutorPreferences == null ? void 0 : storedAiTutorPreferences.providerId) || "openai");
     const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
     const [updateAvailable, setUpdateAvailable] = useState(false);
-    const [ttsEnabled, setTtsEnabled] = useState((_d = stored == null ? void 0 : stored.ttsEnabled) != null ? _d : true);
+    const [ttsEnabled, setTtsEnabled] = useState((_e = stored == null ? void 0 : stored.ttsEnabled) != null ? _e : true);
     const [audioMuted, setAudioMuted] = useState(Boolean(stored == null ? void 0 : stored.audioMuted));
     const [autoPlayNext, setAutoPlayNext] = useState(Boolean(stored == null ? void 0 : stored.autoPlayNext));
+    const [wordMeaningPriority, setWordMeaningPriority] = useState(["local-first", "ai-first"].includes(stored == null ? void 0 : stored.wordMeaningPriority) ? stored.wordMeaningPriority : "local-first");
     const [ttsRate, setTtsRate] = useState(Math.max(0.6, Math.min(1.3, Number(stored == null ? void 0 : stored.ttsRate) || 0.85)));
     const [availableVoices, setAvailableVoices] = useState([]);
     const [ttsVoiceSelections, setTtsVoiceSelections] = useState((stored == null ? void 0 : stored.ttsVoiceSelections) || { en: "", ur: "" });
@@ -4600,7 +4729,7 @@ ${marker} `);
     const [customListDraft, setCustomListDraft] = useState("");
     const [studyGoals, setStudyGoals] = useState((stored == null ? void 0 : stored.studyGoals) || { dailyReviews: 20, weeklyWords: 40 });
     const [focusTimerSettings, setFocusTimerSettings] = useState((stored == null ? void 0 : stored.focusTimerSettings) || { durationMinutes: 20, autoStartBreak: false });
-    const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number((_e = stored == null ? void 0 : stored.focusTimerSettings) == null ? void 0 : _e.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
+    const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number((_f = stored == null ? void 0 : stored.focusTimerSettings) == null ? void 0 : _f.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
     const [reminderSettings, setReminderSettings] = useState((stored == null ? void 0 : stored.reminderSettings) || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
     const [classScheduleSettings, setClassScheduleSettings] = useState((stored == null ? void 0 : stored.classScheduleSettings) || { enabled: false, startTime: "08:00", endTime: "13:00" });
     const [timeTrackingData, setTimeTrackingData] = useState(normalizeTimeTrackingData((stored == null ? void 0 : stored.timeTrackingData) || {}));
@@ -4633,6 +4762,8 @@ ${marker} `);
     const [serviceWorkerStatus, setServiceWorkerStatus] = useState(window.location.protocol === "file:" ? "local-static" : "checking");
     const [isOnline, setIsOnline] = useState(navigator.onLine !== false);
     const chatEndRef = useRef(null);
+    const chatTextareaRef = useRef(null);
+    const speechRecognitionRef = useRef(null);
     const headerRef = useRef(null);
     const headerHideTimerRef = useRef(null);
     const navBarRef = useRef(null);
@@ -4643,6 +4774,163 @@ ${marker} `);
     const gamificationStateRef = useRef(normalizeGamificationState((stored == null ? void 0 : stored.gamificationState) || {}));
     const [headerHideOffset, setHeaderHideOffset] = useState(0);
     const [navBarOffset, setNavBarOffset] = useState(0);
+    const activeTutorSession = useMemo(
+      () => tutorSessions.find((session) => session.id === activeTutorSessionId) || tutorSessions[0] || null,
+      [activeTutorSessionId, tutorSessions]
+    );
+    const currentTutorSessionId = (activeTutorSession == null ? void 0 : activeTutorSession.id) || activeTutorSessionId || ((_g = tutorSessions[0]) == null ? void 0 : _g.id) || null;
+    const chatMessages = (activeTutorSession == null ? void 0 : activeTutorSession.messages) || [];
+    const chatInputWordCount = chatInput.trim() ? chatInput.trim().split(/\s+/).filter(Boolean).length : 0;
+    const speechRecognitionSupported = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+    const persistTutorHistory = useCallback((sessions, sessionId) => {
+      localStorageFallback("hs_ai_tutor_history", {
+        sessions: normalizeTutorSessions(sessions, language).slice(0, 30),
+        activeSessionId: sessionId
+      });
+    }, [language]);
+    const appendTutorMessages = useCallback((sessionId, nextMessages) => {
+      const messageList = (Array.isArray(nextMessages) ? nextMessages : [nextMessages]).map((message) => {
+        const role = (message == null ? void 0 : message.role) === "user" ? "user" : "ai";
+        const text = String((message == null ? void 0 : message.text) || "").trim();
+        if (!text) return null;
+        return {
+          role,
+          text,
+          provider: (message == null ? void 0 : message.provider) ? String(message.provider) : "",
+          createdAt: Date.now()
+        };
+      }).filter(Boolean);
+      if (messageList.length === 0) return;
+      setTutorSessions((current) => {
+        var _a2;
+        const base = normalizeTutorSessions(current, language);
+        const resolvedSessionId = base.some((session) => session.id === sessionId) ? sessionId : ((_a2 = base[0]) == null ? void 0 : _a2.id) || createTutorSession(language).id;
+        const targetIndex = base.findIndex((session) => session.id === resolvedSessionId);
+        const targetSession = targetIndex >= 0 ? base[targetIndex] : createTutorSession(language);
+        const updatedSession = {
+          ...targetSession,
+          messages: [...targetSession.messages || [], ...messageList],
+          updatedAt: Date.now()
+        };
+        return [updatedSession, ...base.filter((session) => session.id !== updatedSession.id)].slice(0, 30);
+      });
+    }, [language]);
+    const handleNewTutorChat = useCallback(() => {
+      var _a2, _b2;
+      try {
+        (_b2 = (_a2 = speechRecognitionRef.current) == null ? void 0 : _a2.stop) == null ? void 0 : _b2.call(_a2);
+      } catch (error) {
+      }
+      const nextSession = createTutorSession(language);
+      setTutorSessions((current) => [nextSession, ...normalizeTutorSessions(current, language).filter((session) => session.id !== nextSession.id)].slice(0, 30));
+      setActiveTutorSessionId(nextSession.id);
+      setChatInput("");
+      setChatLoading(false);
+      setChatListening(false);
+    }, [language]);
+    const copyTextToClipboard = useCallback(async (text) => {
+      var _a2;
+      const payload = String(text || "");
+      if (!payload.trim()) return false;
+      try {
+        if ((_a2 = navigator.clipboard) == null ? void 0 : _a2.writeText) {
+          await navigator.clipboard.writeText(payload);
+          return true;
+        }
+      } catch (error) {
+      }
+      try {
+        const helper = document.createElement("textarea");
+        helper.value = payload;
+        helper.setAttribute("readonly", "readonly");
+        helper.style.position = "fixed";
+        helper.style.opacity = "0";
+        document.body.appendChild(helper);
+        helper.select();
+        document.execCommand("copy");
+        document.body.removeChild(helper);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }, []);
+    const speakInlineText = useCallback((text, languageHint = null) => {
+      var _a2, _b2;
+      const content = String(text || "").trim();
+      if (!content) return;
+      const detectedLanguage = languageHint || (containsUrduText(content) || isUrduText(content) ? "ur" : "en");
+      (_b2 = (_a2 = window.HomeSchoolUtils) == null ? void 0 : _a2.speakText) == null ? void 0 : _b2.call(_a2, content, detectedLanguage);
+    }, []);
+    const refreshClipboardAvailability = useCallback(async () => {
+      var _a2;
+      if (!((_a2 = navigator.clipboard) == null ? void 0 : _a2.readText)) {
+        setClipboardHasText(false);
+        return;
+      }
+      try {
+        const text = await navigator.clipboard.readText();
+        setClipboardHasText(Boolean(String(text || "").trim()));
+      } catch (error) {
+        setClipboardHasText(false);
+      }
+    }, []);
+    const handlePasteIntoChat = useCallback(async () => {
+      var _a2;
+      if (!((_a2 = navigator.clipboard) == null ? void 0 : _a2.readText)) return;
+      try {
+        const pasted = await navigator.clipboard.readText();
+        const cleaned = String(pasted || "").trim();
+        if (!cleaned) {
+          setClipboardHasText(false);
+          return;
+        }
+        setChatInput((current) => current ? `${current}${/\s$/.test(current) ? "" : "\n"}${cleaned}` : cleaned);
+        setClipboardHasText(true);
+      } catch (error) {
+        setClipboardHasText(false);
+      }
+    }, []);
+    const handleToggleChatListening = useCallback(() => {
+      var _a2, _b2;
+      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognitionClass) return;
+      if (chatListening) {
+        (_b2 = (_a2 = speechRecognitionRef.current) == null ? void 0 : _a2.stop) == null ? void 0 : _b2.call(_a2);
+        return;
+      }
+      const recognition = new SpeechRecognitionClass();
+      recognition.lang = isUrduUi(language) ? "ur-PK" : "en-US";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results || []).map((result) => {
+          var _a3;
+          return ((_a3 = result == null ? void 0 : result[0]) == null ? void 0 : _a3.transcript) || "";
+        }).join(" ").trim();
+        if (transcript) {
+          setChatInput((current) => current ? `${current}${/\s$/.test(current) ? "" : " "}${transcript}` : transcript);
+        }
+      };
+      recognition.onerror = () => {
+        setChatListening(false);
+      };
+      recognition.onend = () => {
+        setChatListening(false);
+        speechRecognitionRef.current = null;
+      };
+      speechRecognitionRef.current = recognition;
+      setChatListening(true);
+      recognition.start();
+    }, [chatListening, language]);
+    const handleCopyWordMeaning = useCallback(() => {
+      if (!wordMeaningPopover) return;
+      copyTextToClipboard(buildWordMeaningCopyText(wordMeaningPopover));
+    }, [copyTextToClipboard, wordMeaningPopover]);
+    const handleSpeakWordMeaning = useCallback(() => {
+      if (!wordMeaningPopover) return;
+      speakInlineText(buildWordMeaningSpeakText(wordMeaningPopover), "ur");
+    }, [speakInlineText, wordMeaningPopover]);
     const [dbLoaded, setDbLoaded] = useState(false);
     const [dbPos, setDbPos] = useState({});
     const [dbTenses, setDbTenses] = useState({});
@@ -4968,7 +5256,7 @@ ${marker} `);
     const timeTrackingStatusLabel = classScheduleSettings.enabled ? (todayTimeEntry == null ? void 0 : todayTimeEntry.status) === "on-time" ? ui.classStatusOnTime : (todayTimeEntry == null ? void 0 : todayTimeEntry.status) === "late" ? ui.classStatusLate : ui.classStatusNotStarted : ui.classStatusOff;
     const recentTimeHistory = useMemo(() => (timeTrackingData.history || []).slice(0, 7), [timeTrackingData]);
     const todayKey = getLocalDayKey();
-    const todayGamificationEntry = ((_f = gamificationState.activityByDay) == null ? void 0 : _f[todayKey]) || createDefaultDailyActivityEntry();
+    const todayGamificationEntry = ((_h = gamificationState.activityByDay) == null ? void 0 : _h[todayKey]) || createDefaultDailyActivityEntry();
     const dailyReviewChallengeTarget = Math.max(6, Math.min(15, Math.round((studyGoals.dailyReviews || 20) * 0.4)));
     const dailyPracticeChallengeTarget = 4;
     const dailyFocusChallengeTarget = Math.max(15, Math.min(30, Number(focusTimerSettings.durationMinutes) || 20));
@@ -5450,6 +5738,7 @@ ${marker} `);
               ttsEnabled: nextPayload.ttsEnabled,
               audioMuted: nextPayload.audioMuted,
               autoPlayNext: nextPayload.autoPlayNext,
+              wordMeaningPriority: nextPayload.wordMeaningPriority,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
               fontSizeMode: nextPayload.fontSizeMode,
@@ -5500,6 +5789,7 @@ ${marker} `);
                 ttsEnabled: nextPayload.ttsEnabled,
                 audioMuted: nextPayload.audioMuted,
                 autoPlayNext: nextPayload.autoPlayNext,
+                wordMeaningPriority: nextPayload.wordMeaningPriority,
                 language: nextPayload.language,
                 themeMode: nextPayload.themeMode,
                 fontSizeMode: nextPayload.fontSizeMode,
@@ -5553,6 +5843,7 @@ ${marker} `);
               ttsEnabled: nextPayload.ttsEnabled,
               audioMuted: nextPayload.audioMuted,
               autoPlayNext: nextPayload.autoPlayNext,
+              wordMeaningPriority: nextPayload.wordMeaningPriority,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
               fontSizeMode: nextPayload.fontSizeMode,
@@ -5645,6 +5936,7 @@ ${marker} `);
             if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
             if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
             if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+            if (typeof storedPreferences.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(storedPreferences.wordMeaningPriority)) setWordMeaningPriority(storedPreferences.wordMeaningPriority);
             if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
             if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
             if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
@@ -6097,10 +6389,10 @@ ${marker} `);
         aiProviderConfigs,
         selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache });
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache]);
+      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache });
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache]);
     useEffect(() => {
       setNavHidden(Boolean(navAutoHide));
     }, [navPosition, navAutoHide]);
@@ -6193,6 +6485,38 @@ ${marker} `);
           window.speechSynthesis.onvoiceschanged = null;
         }
       };
+    }, []);
+    useEffect(() => {
+      var _a2;
+      if (!activeTutorSession && ((_a2 = tutorSessions[0]) == null ? void 0 : _a2.id)) {
+        setActiveTutorSessionId(tutorSessions[0].id);
+      }
+    }, [activeTutorSession, tutorSessions]);
+    useEffect(() => {
+      var _a2;
+      persistTutorHistory(tutorSessions, (activeTutorSession == null ? void 0 : activeTutorSession.id) || activeTutorSessionId || ((_a2 = tutorSessions[0]) == null ? void 0 : _a2.id) || null);
+    }, [activeTutorSession == null ? void 0 : activeTutorSession.id, activeTutorSessionId, persistTutorHistory, tutorSessions]);
+    useEffect(() => {
+      if (tab !== "tutor") return void 0;
+      refreshClipboardAvailability();
+      const handleFocus = () => {
+        refreshClipboardAvailability();
+      };
+      window.addEventListener("focus", handleFocus);
+      return () => window.removeEventListener("focus", handleFocus);
+    }, [refreshClipboardAvailability, tab]);
+    useEffect(() => {
+      const textarea = chatTextareaRef.current;
+      if (!textarea) return;
+      textarea.style.height = "0px";
+      textarea.style.height = `${Math.min(220, Math.max(62, textarea.scrollHeight))}px`;
+    }, [chatInput, tab]);
+    useEffect(() => () => {
+      var _a2, _b2;
+      try {
+        (_b2 = (_a2 = speechRecognitionRef.current) == null ? void 0 : _a2.stop) == null ? void 0 : _b2.call(_a2);
+      } catch (error) {
+      }
     }, []);
     useEffect(() => {
       const nextMinutes = Math.max(5, Math.min(60, Number(focusTimerSettings == null ? void 0 : focusTimerSettings.durationMinutes) || 20));
@@ -6743,24 +7067,26 @@ ${marker} `);
       setQuizDone(true);
     };
     const sendChat = async () => {
+      var _a2;
       if (!chatInput.trim()) return;
       const msg = chatInput.trim();
+      const sessionId = currentTutorSessionId || activeTutorSessionId || ((_a2 = tutorSessions[0]) == null ? void 0 : _a2.id) || createTutorSession(language).id;
       const savedProviders = AI_PROVIDER_ORDER.filter((providerId2) => {
-        var _a2;
-        return String(((_a2 = aiProviderConfigs[providerId2]) == null ? void 0 : _a2.apiKey) || "").trim();
+        var _a3;
+        return String(((_a3 = aiProviderConfigs[providerId2]) == null ? void 0 : _a3.apiKey) || "").trim();
       });
       const availableProviders = savedProviders.filter((providerId2) => isAiProviderReady(aiProviderConfigs[providerId2]));
       if (!savedProviders.length) {
-        setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor." }]);
+        appendTutorMessages(sessionId, { role: "ai", text: ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor." });
         return;
       }
       if (!availableProviders.length) {
-        setChatMessages((messages) => [...messages, { role: "ai", text: joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "\u0679\u06CC\u0648\u0679\u0631 \u0686\u06CC\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0622\u067E \u06A9\u06D2 \u0645\u062D\u0641\u0648\u0638 \u0627\u06D2 \u0622\u0626\u06CC \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06AF\u0627\u0646 \u06A9\u0648 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u062F\u0631\u0633\u062A \u06A9\u0631\u0646\u0627 \u06C1\u0648\u06AF\u0627\u06D4", language) }]);
+        appendTutorMessages(sessionId, { role: "ai", text: joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "\u0679\u06CC\u0648\u0679\u0631 \u0686\u06CC\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0622\u067E \u06A9\u06D2 \u0645\u062D\u0641\u0648\u0638 \u0627\u06D2 \u0622\u0626\u06CC \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06AF\u0627\u0646 \u06A9\u0648 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u062F\u0631\u0633\u062A \u06A9\u0631\u0646\u0627 \u06C1\u0648\u06AF\u0627\u06D4", language) });
         return;
       }
       const browserCapability = canUseDirectAiFromBrowser();
       if (!browserCapability.ok) {
-        setChatMessages((messages) => [...messages, { role: "ai", text: ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode." }]);
+        appendTutorMessages(sessionId, { role: "ai", text: ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode." });
         return;
       }
       const providerId = availableProviders.includes(selectedAiProvider) ? selectedAiProvider : availableProviders[0];
@@ -6770,11 +7096,11 @@ ${marker} `);
       const model = providerConfig.model || providerDefinition.defaultModel;
       const conversation = [...chatMessages, { role: "user", text: msg }];
       setChatInput("");
-      setChatMessages((messages) => [...messages, { role: "user", text: msg }]);
+      appendTutorMessages(sessionId, { role: "user", text: msg });
       setChatLoading(true);
       try {
         const answer = await requestAiTutorResponse(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
-        setChatMessages((messages) => [...messages, { role: "ai", text: answer, provider: providerId }]);
+        appendTutorMessages(sessionId, { role: "ai", text: answer, provider: providerId });
       } catch (error) {
         const nextStatus = getAiStatusFromError(error);
         const nextFriendlyMessage = getFriendlyAiErrorMessage(providerId, error, language);
@@ -6815,7 +7141,7 @@ ${marker} `);
             if (updatedConfig == null ? void 0 : updatedConfig.apiKey) {
               try {
                 const retryAnswer = await requestAiTutorResponse(providerId, updatedConfig.apiKey, updatedConfig.model || model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
-                setChatMessages((messages) => [...messages, { role: "ai", text: retryAnswer, provider: providerId }]);
+                appendTutorMessages(sessionId, { role: "ai", text: retryAnswer, provider: providerId });
                 setChatLoading(false);
                 return;
               } catch (retryError) {
@@ -6837,14 +7163,14 @@ ${marker} `);
                     lastError: retryMessage
                   }
                 }));
-                setChatMessages((messages) => [...messages, { role: "ai", text: `${providerLabel}: ${retryMessage}` }]);
+                appendTutorMessages(sessionId, { role: "ai", text: `${providerLabel}: ${retryMessage}` });
                 setChatLoading(false);
                 return;
               }
             }
           }
         }
-        setChatMessages((messages) => [...messages, { role: "ai", text: `${providerLabel}: ${nextFriendlyMessage}` }]);
+        appendTutorMessages(sessionId, { role: "ai", text: `${providerLabel}: ${nextFriendlyMessage}` });
       }
       setChatLoading(false);
     };
@@ -6931,6 +7257,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
         if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
         if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
+        if (typeof nextState.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(nextState.wordMeaningPriority)) setWordMeaningPriority(nextState.wordMeaningPriority);
         if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
         if (nextState.reviewSrsSettings) setReviewSrsSettings({
           masteryThreshold: Math.max(3, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || 5)),
@@ -7003,6 +7330,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
       if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
       if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
       if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
+      if (typeof nextState.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(nextState.wordMeaningPriority)) setWordMeaningPriority((current) => current || nextState.wordMeaningPriority);
       if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
       if (nextState.reviewSrsSettings) setReviewSrsSettings((current) => ({
         masteryThreshold: Math.max(current.masteryThreshold || 5, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || current.masteryThreshold || 5)),
@@ -7094,6 +7422,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           ttsEnabled,
           ttsRate,
           ttsVoiceSelections,
+          wordMeaningPriority,
           language,
           themeMode,
           fontSizeMode,
@@ -7128,7 +7457,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         lastBackupAt: exportedAt,
         lastPromptDay: getLocalDayKey(exportedAt)
       }));
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache]);
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache]);
     const handleImportProgress = useCallback(async (event) => {
       var _a2, _b2;
       const file = (_b2 = (_a2 = event == null ? void 0 : event.target) == null ? void 0 : _a2.files) == null ? void 0 : _b2[0];
@@ -7861,9 +8190,9 @@ ${error.message || error}`);
         providerConfig.apiKey,
         providerConfig.model || providerDefinition.defaultModel,
         [{ role: "user", text: `English word: ${word}` }],
-        "You are a bilingual dictionary helper for Pakistani school students. Return only a very short Urdu meaning for the given English word. Use Urdu script only. No explanation. No bullets. No English."
+        "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only with keys meaningsUr (an array of short Urdu meanings in order) and simpleExplanationUr (one easy Urdu explanation in Urdu script). Do not include English."
       );
-      return extractShortUrduMeaning(response);
+      return extractWordMeaningDetails(response);
     }, [aiProviderConfigs]);
     const handleLookupWordMeaning = useCallback(async (rawWord, anchorNode) => {
       var _a2, _b2, _c2, _d2, _e2;
@@ -7883,6 +8212,8 @@ ${error.message || error}`);
           width: popupWidth,
           placement,
           meaningUr: "",
+          meaningsUr: [],
+          explanationUr: "",
           source: "",
           loading: false,
           error: "",
@@ -7894,43 +8225,83 @@ ${error.message || error}`);
       setPopupState({ loading: true, error: "" });
       const candidateWords = getLookupWordCandidates(rawWord);
       const localEntry = candidateWords.map((candidate) => localWordMeaningLookup[candidate]).find(Boolean);
-      if (localEntry == null ? void 0 : localEntry.meaningUr) {
-        setPopupState({ loading: false, meaningUr: localEntry.meaningUr, source: "Local" });
-        return;
-      }
       const cacheEntry = candidateWords.map((candidate) => wordMeaningCache[candidate]).find(Boolean);
-      if (cacheEntry == null ? void 0 : cacheEntry.meaningUr) {
-        setPopupState({ loading: false, meaningUr: cacheEntry.meaningUr, source: cacheEntry.source || "Cache" });
-        return;
+      const applyMeaningEntry = (entry, fallbackSource) => {
+        if (!(entry == null ? void 0 : entry.meaningUr) && !((entry == null ? void 0 : entry.meaningsUr) || []).length && !(entry == null ? void 0 : entry.explanationUr)) return false;
+        const orderedMeanings = Array.isArray(entry.meaningsUr) && entry.meaningsUr.length > 0 ? entry.meaningsUr.filter(Boolean) : entry.meaningUr ? [entry.meaningUr] : [];
+        setPopupState({
+          loading: false,
+          meaningUr: entry.meaningUr || orderedMeanings[0] || "",
+          meaningsUr: orderedMeanings,
+          explanationUr: entry.explanationUr || "",
+          source: entry.source || fallbackSource
+        });
+        return Boolean(entry.explanationUr || orderedMeanings.length > 1);
+      };
+      let shouldEnrichFromAi = true;
+      let hasInlineMeaning = false;
+      if (wordMeaningPriority === "local-first") {
+        if (localEntry == null ? void 0 : localEntry.meaningUr) {
+          hasInlineMeaning = true;
+          shouldEnrichFromAi = !applyMeaningEntry(localEntry, "Local");
+          if (!shouldEnrichFromAi) return;
+        }
+        if (!hasInlineMeaning && (cacheEntry == null ? void 0 : cacheEntry.meaningUr)) {
+          hasInlineMeaning = true;
+          shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
+          if (!shouldEnrichFromAi) return;
+        }
+      } else if (cacheEntry == null ? void 0 : cacheEntry.meaningUr) {
+        hasInlineMeaning = true;
+        shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
+        if (!shouldEnrichFromAi) return;
       }
       const providerOrder = ["gemini", ...readyAiProviderIds.filter((providerId) => providerId !== "gemini")];
       let lastError = null;
       for (const providerId of providerOrder) {
         try {
-          const meaningUr = await requestWordMeaningFromAi(providerId, rawWord);
-          if (!meaningUr) continue;
+          const details = await requestWordMeaningFromAi(providerId, rawWord);
+          const meaningsUr = Array.isArray(details == null ? void 0 : details.meaningsUr) ? details.meaningsUr.filter(Boolean) : [];
+          const explanationUr = String((details == null ? void 0 : details.explanationUr) || "").trim();
+          const meaningUr = meaningsUr[0] || "";
+          if (!meaningUr && !explanationUr) continue;
           const cacheRecord = normalizeWordMeaningCache({
             ...wordMeaningCache,
             [normalizedWord]: {
               meaningUr,
+              meaningsUr,
+              explanationUr,
               source: providerId === "gemini" ? "Gemini" : ((_d2 = AI_PROVIDER_DEFS[providerId]) == null ? void 0 : _d2.name) || "AI",
               fetchedAt: Date.now()
             }
           });
           setWordMeaningCache(cacheRecord);
-          setPopupState({ loading: false, meaningUr, source: ((_e2 = cacheRecord[normalizedWord]) == null ? void 0 : _e2.source) || "AI", error: "" });
+          setPopupState({
+            loading: false,
+            meaningUr,
+            meaningsUr,
+            explanationUr,
+            source: ((_e2 = cacheRecord[normalizedWord]) == null ? void 0 : _e2.source) || "AI",
+            error: ""
+          });
           return;
         } catch (error) {
           lastError = error;
         }
       }
+      if (!hasInlineMeaning && wordMeaningPriority === "ai-first" && (localEntry == null ? void 0 : localEntry.meaningUr)) {
+        hasInlineMeaning = true;
+        applyMeaningEntry(localEntry, "Local");
+        return;
+      }
+      if (hasInlineMeaning) return;
       const blockedReason = canUseDirectAiFromBrowser();
       setPopupState({
         loading: false,
         error: blockedReason.ok ? joinLocalizedText("Meaning not found yet.", "\u0627\u0628\u06BE\u06CC \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language) : ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
         source: lastError ? "Unavailable" : ""
       });
-    }, [language, localWordMeaningLookup, readyAiProviderIds, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache]);
+    }, [language, localWordMeaningLookup, readyAiProviderIds, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
     useEffect(() => {
       if (!wordMeaningPopover) return void 0;
       const handleDismiss = (event) => {
@@ -8200,7 +8571,7 @@ ${error.message || error}`);
     })), /* @__PURE__ */ React.createElement("div", { className: `perfect-day-card${perfectDayReady ? " ready" : ""}` }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Perfect Day Bonus", "\u067E\u0631\u0641\u06CC\u06A9\u0679 \u0688\u06D2 \u0628\u0648\u0646\u0633", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(
       todayGamificationEntry.perfectDayAwarded ? joinLocalizedText("Today's bonus has already been collected. Beautiful work.", "\u0622\u062C \u06A9\u0627 \u0628\u0648\u0646\u0633 \u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u0644 \u0686\u06A9\u0627 \u06C1\u06D2\u06D4 \u0628\u06C1\u062A \u062E\u0648\u0628\u06D4", language) : perfectDayReady ? joinLocalizedText("All daily challenges are complete. The 120 XP bonus is yours.", "\u0622\u062C \u06A9\u06D2 \u062A\u0645\u0627\u0645 \u0686\u06CC\u0644\u0646\u062C \u0645\u06A9\u0645\u0644 \u06C1\u0648 \u06AF\u0626\u06D2\u06D4 120 \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u0628\u0648\u0646\u0633 \u0622\u067E \u06A9\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText("Complete all three daily challenges to unlock a 120 XP bonus.", "120 \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u0628\u0648\u0646\u0633 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0646\u0648\u06BA \u0631\u0648\u0632\u0627\u0646\u06C1 \u0686\u06CC\u0644\u0646\u062C \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language),
       language
-    ))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, todayGamificationEntry.perfectDayAwarded ? "+120 XP" : `${completedDailyChallenges}/${dailyChallenges.length}`))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Study Goals", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u06C1\u062F\u0627\u0641", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track your daily review target and weekly vocabulary momentum.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u062F\u0641 \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0631\u0641\u062A\u0627\u0631 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Daily reviews", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewStats.reviewedToday || 0} of ${studyGoals.dailyReviews}`, `${reviewStats.reviewedToday || 0} \u0627\u0632 ${studyGoals.dailyReviews}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, dailyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${dailyGoalProgress}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly words", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewAnalytics.totals.uniqueReviewedLast7 || 0} of ${studyGoals.weeklyWords}`, `${reviewAnalytics.totals.uniqueReviewedLast7 || 0} \u0627\u0632 ${studyGoals.weeklyWords}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, weeklyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${weeklyGoalProgress}%` } })))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.timeManagement, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.timeTrackingHelp, language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(todaySpentMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.timeSpentToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F6B6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, classScheduleSettings.enabled ? formatMinutesLabel(todayLatenessMinutes, language) : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.latenessToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F558}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.punctualityStreak || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.punctualityStreak, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C1}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.classSessionsMet || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.classSessionsMet, language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`${ui.classStartTime}: ${classScheduleSettings.startTime}`, `${ui.classStartTime}: ${classScheduleSettings.startTime}`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${ui.classEndTime}: ${classScheduleSettings.endTime}`, `${ui.classEndTime}: ${classScheduleSettings.endTime}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(timeTrackingStatusLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.classDuration, language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${formatMinutesLabel(scheduleDurationMinutes, "en")} scheduled \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "en")} this week`, `${formatMinutesLabel(scheduleDurationMinutes, "ur")} \u0645\u0642\u0631\u0631 \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "ur")} \u0627\u0633 \u06C1\u0641\u062A\u06D2`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, timeGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${timeGoalProgress}%` } })), !classScheduleSettings.enabled ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.classTrackingDisabled, language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "\u0641\u0648\u06A9\u0633 \u0679\u0627\u0626\u0645\u0631 \u0627\u0648\u0631 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Start a quiet study sprint and keep your reminder schedule visible.", "\u0627\u06CC\u06A9 \u0645\u062E\u062A\u0635\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0633\u06CC\u0634\u0646 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u067E\u0646\u06CC \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u06A9\u06CC \u062D\u0627\u0644\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "timer-card" }, /* @__PURE__ */ React.createElement("div", { className: "timer-clock" }, formatClockTime(focusTimerState.remainingSeconds)), /* @__PURE__ */ React.createElement("div", { className: "timer-meta" }, renderLocalizedTextNode(joinLocalizedText(`${focusTimerSettings.durationMinutes} min focus block`, `${focusTimerSettings.durationMinutes} \u0645\u0646\u0679 \u0641\u0648\u06A9\u0633 \u0648\u0642\u062A`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: !current.active || (current.remainingSeconds || 0) === 0, remainingSeconds: (current.remainingSeconds || 0) === 0 ? (focusTimerSettings.durationMinutes || 20) * 60 : current.remainingSeconds, startedAt: Date.now() })) }, renderLocalizedTextNode(focusTimerState.active ? joinLocalizedText("Pause", "\u0631\u0648\u06A9\u06CC\u06BA", language) : joinLocalizedText("Start", "\u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: false, remainingSeconds: (focusTimerSettings.durationMinutes || 20) * 60 })) }, renderLocalizedTextNode(joinLocalizedText("Reset", "\u062F\u0648\u0628\u0627\u0631\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "timer-reminder-status" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Reminder", "\u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC", language), language)), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(currentReminderLabel, language))), reminderDueNow ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "\u0622\u067E \u06A9\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u0627\u0628\u06BE\u06CC \u06A9\u06CC \u06C1\u06D2\u06D4", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notificationHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.notificationHistoryHint, language)))), recentNotificationHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentNotificationHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotificationsYet, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.contentDiscovery, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Search your current grade lessons by subject, type, and difficulty, and keep a daily word in view.", "\u0627\u067E\u0646\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0636\u0645\u0648\u0646\u060C \u0642\u0633\u0645\u060C \u0627\u0648\u0631 \u062F\u0631\u062C\u06C1 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06CC\u06A9 \u0644\u0641\u0638 \u0633\u0627\u0645\u0646\u06D2 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), wordOfDayCard ? /* @__PURE__ */ React.createElement("div", { className: "discovery-word-card" }, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-label" }, renderLocalizedTextNode(ui.wordOfDay, language)), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-prompt" }, wordOfDayCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-answer", style: containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null }, wordOfDayCard.answer || wordOfDayCard.meaning), getPhoneticBreakdown(wordOfDayCard.prompt) ? /* @__PURE__ */ React.createElement("div", { className: "phonics-card", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "phonics-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.phoneticSpelling, language)), /* @__PURE__ */ React.createElement("span", null, getPhoneticBreakdown(wordOfDayCard.prompt).phonetic)), /* @__PURE__ */ React.createElement("div", { className: "phonics-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.syllableBreakdown, language)), /* @__PURE__ */ React.createElement("span", null, getPhoneticBreakdown(wordOfDayCard.prompt).syllables))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-meta" }, renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", ((_g = SUBJECTS.find((subject) => subject.id === (wordOfDayCard.subject || ""))) == null ? void 0 : _g.nameUr) || "\u0645\u0636\u0645\u0648\u0646", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-shell" }, /* @__PURE__ */ React.createElement("input", { className: "review-list-input", value: contentSearch, onChange: (event) => setContentSearch(event.target.value), placeholder: ui.contentSearch, style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null }), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row" }, /* @__PURE__ */ React.createElement("button", { className: `practice-subject-chip${discoverySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter("all"), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.discoveryAllSubjects, language)))), SUBJECTS.map((subject) => /* @__PURE__ */ React.createElement("button", { key: subject.id, className: `practice-subject-chip${discoverySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter(subject.id), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-icon" }, subject.icon), /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))))), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact" }, [
+    ))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, todayGamificationEntry.perfectDayAwarded ? "+120 XP" : `${completedDailyChallenges}/${dailyChallenges.length}`))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Study Goals", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u06C1\u062F\u0627\u0641", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track your daily review target and weekly vocabulary momentum.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u062F\u0641 \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0631\u0641\u062A\u0627\u0631 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Daily reviews", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewStats.reviewedToday || 0} of ${studyGoals.dailyReviews}`, `${reviewStats.reviewedToday || 0} \u0627\u0632 ${studyGoals.dailyReviews}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, dailyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${dailyGoalProgress}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly words", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewAnalytics.totals.uniqueReviewedLast7 || 0} of ${studyGoals.weeklyWords}`, `${reviewAnalytics.totals.uniqueReviewedLast7 || 0} \u0627\u0632 ${studyGoals.weeklyWords}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, weeklyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${weeklyGoalProgress}%` } })))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.timeManagement, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.timeTrackingHelp, language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(todaySpentMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.timeSpentToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F6B6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, classScheduleSettings.enabled ? formatMinutesLabel(todayLatenessMinutes, language) : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.latenessToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F558}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.punctualityStreak || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.punctualityStreak, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C1}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.classSessionsMet || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.classSessionsMet, language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`${ui.classStartTime}: ${classScheduleSettings.startTime}`, `${ui.classStartTime}: ${classScheduleSettings.startTime}`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${ui.classEndTime}: ${classScheduleSettings.endTime}`, `${ui.classEndTime}: ${classScheduleSettings.endTime}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(timeTrackingStatusLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.classDuration, language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${formatMinutesLabel(scheduleDurationMinutes, "en")} scheduled \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "en")} this week`, `${formatMinutesLabel(scheduleDurationMinutes, "ur")} \u0645\u0642\u0631\u0631 \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "ur")} \u0627\u0633 \u06C1\u0641\u062A\u06D2`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, timeGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${timeGoalProgress}%` } })), !classScheduleSettings.enabled ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.classTrackingDisabled, language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "\u0641\u0648\u06A9\u0633 \u0679\u0627\u0626\u0645\u0631 \u0627\u0648\u0631 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Start a quiet study sprint and keep your reminder schedule visible.", "\u0627\u06CC\u06A9 \u0645\u062E\u062A\u0635\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0633\u06CC\u0634\u0646 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u067E\u0646\u06CC \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u06A9\u06CC \u062D\u0627\u0644\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "timer-card" }, /* @__PURE__ */ React.createElement("div", { className: "timer-clock" }, formatClockTime(focusTimerState.remainingSeconds)), /* @__PURE__ */ React.createElement("div", { className: "timer-meta" }, renderLocalizedTextNode(joinLocalizedText(`${focusTimerSettings.durationMinutes} min focus block`, `${focusTimerSettings.durationMinutes} \u0645\u0646\u0679 \u0641\u0648\u06A9\u0633 \u0648\u0642\u062A`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: !current.active || (current.remainingSeconds || 0) === 0, remainingSeconds: (current.remainingSeconds || 0) === 0 ? (focusTimerSettings.durationMinutes || 20) * 60 : current.remainingSeconds, startedAt: Date.now() })) }, renderLocalizedTextNode(focusTimerState.active ? joinLocalizedText("Pause", "\u0631\u0648\u06A9\u06CC\u06BA", language) : joinLocalizedText("Start", "\u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: false, remainingSeconds: (focusTimerSettings.durationMinutes || 20) * 60 })) }, renderLocalizedTextNode(joinLocalizedText("Reset", "\u062F\u0648\u0628\u0627\u0631\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "timer-reminder-status" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Reminder", "\u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC", language), language)), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(currentReminderLabel, language))), reminderDueNow ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "\u0622\u067E \u06A9\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u0627\u0628\u06BE\u06CC \u06A9\u06CC \u06C1\u06D2\u06D4", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notificationHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.notificationHistoryHint, language)))), recentNotificationHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentNotificationHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotificationsYet, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.contentDiscovery, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Search your current grade lessons by subject, type, and difficulty, and keep a daily word in view.", "\u0627\u067E\u0646\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0636\u0645\u0648\u0646\u060C \u0642\u0633\u0645\u060C \u0627\u0648\u0631 \u062F\u0631\u062C\u06C1 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06CC\u06A9 \u0644\u0641\u0638 \u0633\u0627\u0645\u0646\u06D2 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), wordOfDayCard ? /* @__PURE__ */ React.createElement("div", { className: "discovery-word-card" }, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-label" }, renderLocalizedTextNode(ui.wordOfDay, language)), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-prompt" }, wordOfDayCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-answer", style: containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null }, wordOfDayCard.answer || wordOfDayCard.meaning), getPhoneticBreakdown(wordOfDayCard.prompt) ? /* @__PURE__ */ React.createElement("div", { className: "phonics-card", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "phonics-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.phoneticSpelling, language)), /* @__PURE__ */ React.createElement("span", null, getPhoneticBreakdown(wordOfDayCard.prompt).phonetic)), /* @__PURE__ */ React.createElement("div", { className: "phonics-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.syllableBreakdown, language)), /* @__PURE__ */ React.createElement("span", null, getPhoneticBreakdown(wordOfDayCard.prompt).syllables))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-meta" }, renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", ((_i = SUBJECTS.find((subject) => subject.id === (wordOfDayCard.subject || ""))) == null ? void 0 : _i.nameUr) || "\u0645\u0636\u0645\u0648\u0646", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-shell" }, /* @__PURE__ */ React.createElement("input", { className: "review-list-input", value: contentSearch, onChange: (event) => setContentSearch(event.target.value), placeholder: ui.contentSearch, style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null }), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row" }, /* @__PURE__ */ React.createElement("button", { className: `practice-subject-chip${discoverySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter("all"), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.discoveryAllSubjects, language)))), SUBJECTS.map((subject) => /* @__PURE__ */ React.createElement("button", { key: subject.id, className: `practice-subject-chip${discoverySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter(subject.id), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-icon" }, subject.icon), /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))))), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact" }, [
       { id: "all", label: ui.discoveryAllTypes },
       { id: "lesson", label: ui.discoveryTypeLesson },
       { id: "interactive", label: ui.discoveryTypeInteractive },
@@ -8613,16 +8984,16 @@ ${error.message || error}`);
       const isMasteredBox = Number(entry.box) >= Number(reviewSrsSettings.masteryThreshold || 5);
       return /* @__PURE__ */ React.createElement("div", { key: `leitner_${entry.box}`, className: "leitner-box-row" }, /* @__PURE__ */ React.createElement("div", { className: "leitner-box-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(isMasteredBox ? joinLocalizedText("Mastered", "\u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644", language) : joinLocalizedText(`Box ${entry.box}`, `\u0628\u0627\u06A9\u0633 ${entry.box}`, language), language)), /* @__PURE__ */ React.createElement("span", null, formatNumberLabel(entry.count || 0))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar leitner-progress" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, (Number(entry.count) || 0) / reviewLeitnerMax * 100))}%` } })));
     })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few reviews to fill the Leitner boxes.", "\u06A9\u0686\u06BE \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0644\u0627\u0626\u0679\u0646\u0631 \u0628\u0627\u06A9\u0633 \u0628\u06BE\u0631 \u0633\u06A9\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Predicted Mastery", "\u0645\u062A\u0648\u0642\u0639 \u0645\u06C1\u0627\u0631\u062A", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Estimated finish date if you keep answering \u201CGood\u201D consistently.", "\u0627\u06AF\u0631 \u0622\u067E \u0645\u0633\u0644\u0633\u0644 \u201C\u0627\u0686\u06BE\u0627\u201D \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u062A\u06D2 \u0631\u06C1\u06CC\u06BA \u062A\u0648 \u0627\u0646\u062F\u0627\u0632\u0627\u064B \u06A9\u0628 \u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644 \u06C1\u0648\u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "mastery-prediction-callout" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Overall deck", "\u0645\u06A9\u0645\u0644 \u0645\u062C\u0645\u0648\u0639\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(
-      Number(((_h = reviewAnalytics.predictedMastery) == null ? void 0 : _h.cardsRemaining) || 0) > 0 ? formatProjectedDateLabel((_i = reviewAnalytics.predictedMastery) == null ? void 0 : _i.projectedAt, language) : joinLocalizedText("Already mastered", "\u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u06A9\u0645\u0644", language),
+      Number(((_j = reviewAnalytics.predictedMastery) == null ? void 0 : _j.cardsRemaining) || 0) > 0 ? formatProjectedDateLabel((_k = reviewAnalytics.predictedMastery) == null ? void 0 : _k.projectedAt, language) : joinLocalizedText("Already mastered", "\u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u06A9\u0645\u0644", language),
       language
-    )), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${((_j = reviewAnalytics.predictedMastery) == null ? void 0 : _j.cardsRemaining) || 0} cards remaining`, `${((_k = reviewAnalytics.predictedMastery) == null ? void 0 : _k.cardsRemaining) || 0} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))), (((_l = reviewAnalytics.predictedMastery) == null ? void 0 : _l.sections) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "mastery-section-list" }, reviewAnalytics.predictedMastery.sections.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "mastery-section-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, formatProjectedDateLabel(entry.projectedAt, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.cardsRemaining} cards left`, `${entry.cardsRemaining} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Predictions will appear after your review boxes start moving.", "\u067E\u06CC\u0634 \u06AF\u0648\u0626\u06CC\u0627\u06BA \u062A\u0628 \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC \u062C\u0628 \u0622\u067E \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u06A9\u0633 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Forgetting Curve", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Accuracy by review delay shows how recall changes over longer gaps.", "\u0631\u06CC\u0648\u06CC\u0648 \u06A9\u06D2 \u0648\u0642\u0641\u06D2 \u06A9\u06D2 \u0644\u062D\u0627\u0638 \u0633\u06D2 \u062F\u0631\u0633\u062A\u06AF\u06CC \u062F\u06A9\u06BE\u0627\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u0632\u06CC\u0627\u062F\u06C1 \u0648\u0642\u0641\u0648\u06BA \u067E\u0631 \u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u06A9\u06CC\u0633\u06D2 \u0628\u062F\u0644\u062A\u06CC \u06C1\u06D2\u06D4", language), language)))), (reviewAnalytics.forgettingCurve || []).some((entry) => entry.reviews > 0) ? /* @__PURE__ */ React.createElement("div", { className: "forgetting-curve-list" }, (reviewAnalytics.forgettingCurve || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "forgetting-curve-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getForgettingCurveLabel(entry.id, language), language)), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, Number(entry.accuracy) || 0))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("More review history is needed to draw the forgetting curve.", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646 \u062F\u06A9\u06BE\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Upcoming Reviews", "\u0622\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See the next two weeks of due reviews before they pile up.", "\u0627\u06AF\u0644\u06D2 \u062F\u0648 \u06C1\u0641\u062A\u0648\u06BA \u06A9\u06D2 \u0628\u0627\u0642\u06CC \u0631\u06CC\u0648\u06CC\u0648\u0632 \u067E\u06C1\u0644\u06D2 \u0633\u06D2 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0648\u062C\u06BE \u062C\u0645\u0639 \u0646\u06C1 \u06C1\u0648\u06D4", language), language)))), (reviewAnalytics.upcomingCalendar || []).length ? /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-grid" }, (reviewAnalytics.upcomingCalendar || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: `upcoming-calendar-cell${entry.isToday ? " today" : ""}` }, /* @__PURE__ */ React.createElement("strong", null, entry.weekday), /* @__PURE__ */ React.createElement("span", null, entry.label), /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-count" }, formatNumberLabel(entry.dueCount || 0)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar upcoming-calendar-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(6, Math.min(100, (Number(entry.dueCount) || 0) / upcomingCalendarMax * 100))}%` } }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Upcoming review dates will appear once cards are scheduled ahead.", "\u06A9\u0627\u0631\u0688\u0632 \u0622\u06AF\u06D2 \u0634\u06CC\u0688\u0648\u0644 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u0622\u0646\u06D2 \u0648\u0627\u0644\u06CC \u062A\u0627\u0631\u06CC\u062E\u06CC\u06BA \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewHeatmap, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHeatmapHint, language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setHeatmapExpanded((value) => !value) }, renderLocalizedTextNode(heatmapExpanded ? joinLocalizedText("Show Less", "\u06A9\u0645 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show Heatmap", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), heatmapExpanded ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-heatmap-grid" }, reviewAnalytics.heatmap.map((cell) => /* @__PURE__ */ React.createElement(
+    )), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${((_l = reviewAnalytics.predictedMastery) == null ? void 0 : _l.cardsRemaining) || 0} cards remaining`, `${((_m = reviewAnalytics.predictedMastery) == null ? void 0 : _m.cardsRemaining) || 0} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))), (((_n = reviewAnalytics.predictedMastery) == null ? void 0 : _n.sections) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "mastery-section-list" }, reviewAnalytics.predictedMastery.sections.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "mastery-section-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, formatProjectedDateLabel(entry.projectedAt, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.cardsRemaining} cards left`, `${entry.cardsRemaining} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Predictions will appear after your review boxes start moving.", "\u067E\u06CC\u0634 \u06AF\u0648\u0626\u06CC\u0627\u06BA \u062A\u0628 \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC \u062C\u0628 \u0622\u067E \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u06A9\u0633 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Forgetting Curve", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Accuracy by review delay shows how recall changes over longer gaps.", "\u0631\u06CC\u0648\u06CC\u0648 \u06A9\u06D2 \u0648\u0642\u0641\u06D2 \u06A9\u06D2 \u0644\u062D\u0627\u0638 \u0633\u06D2 \u062F\u0631\u0633\u062A\u06AF\u06CC \u062F\u06A9\u06BE\u0627\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u0632\u06CC\u0627\u062F\u06C1 \u0648\u0642\u0641\u0648\u06BA \u067E\u0631 \u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u06A9\u06CC\u0633\u06D2 \u0628\u062F\u0644\u062A\u06CC \u06C1\u06D2\u06D4", language), language)))), (reviewAnalytics.forgettingCurve || []).some((entry) => entry.reviews > 0) ? /* @__PURE__ */ React.createElement("div", { className: "forgetting-curve-list" }, (reviewAnalytics.forgettingCurve || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "forgetting-curve-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getForgettingCurveLabel(entry.id, language), language)), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, Number(entry.accuracy) || 0))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("More review history is needed to draw the forgetting curve.", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646 \u062F\u06A9\u06BE\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Upcoming Reviews", "\u0622\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See the next two weeks of due reviews before they pile up.", "\u0627\u06AF\u0644\u06D2 \u062F\u0648 \u06C1\u0641\u062A\u0648\u06BA \u06A9\u06D2 \u0628\u0627\u0642\u06CC \u0631\u06CC\u0648\u06CC\u0648\u0632 \u067E\u06C1\u0644\u06D2 \u0633\u06D2 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0648\u062C\u06BE \u062C\u0645\u0639 \u0646\u06C1 \u06C1\u0648\u06D4", language), language)))), (reviewAnalytics.upcomingCalendar || []).length ? /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-grid" }, (reviewAnalytics.upcomingCalendar || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: `upcoming-calendar-cell${entry.isToday ? " today" : ""}` }, /* @__PURE__ */ React.createElement("strong", null, entry.weekday), /* @__PURE__ */ React.createElement("span", null, entry.label), /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-count" }, formatNumberLabel(entry.dueCount || 0)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar upcoming-calendar-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(6, Math.min(100, (Number(entry.dueCount) || 0) / upcomingCalendarMax * 100))}%` } }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Upcoming review dates will appear once cards are scheduled ahead.", "\u06A9\u0627\u0631\u0688\u0632 \u0622\u06AF\u06D2 \u0634\u06CC\u0688\u0648\u0644 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u0622\u0646\u06D2 \u0648\u0627\u0644\u06CC \u062A\u0627\u0631\u06CC\u062E\u06CC\u06BA \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewHeatmap, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHeatmapHint, language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setHeatmapExpanded((value) => !value) }, renderLocalizedTextNode(heatmapExpanded ? joinLocalizedText("Show Less", "\u06A9\u0645 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show Heatmap", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), heatmapExpanded ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-heatmap-grid" }, reviewAnalytics.heatmap.map((cell) => /* @__PURE__ */ React.createElement(
       "div",
       {
         key: cell.dayKey,
         className: `review-heat-cell level-${cell.level}`,
         title: `${cell.dateLabel}: ${cell.count} reviews`
       }
-    ))), /* @__PURE__ */ React.createElement("div", { className: "review-heat-legend" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Less", "\u06A9\u0645", language), language)), [0, 1, 2, 3, 4].map((level) => /* @__PURE__ */ React.createElement("span", { key: level, className: `review-heat-cell level-${level}` })), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("More", "\u0632\u06CC\u0627\u062F\u06C1", language), language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Heatmap is hidden. Open it when you want a weekly review overview.", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u0641\u06CC \u0627\u0644\u062D\u0627\u0644 \u0628\u0646\u062F \u06C1\u06D2\u06D4 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u062C\u0627\u0626\u0632\u06C1 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Growth", "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Weekly review volume and unique cards over the recent study streak.", "\u062D\u0627\u0644\u06CC\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0648\u0631\u0627\u0646 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0627\u0648\u0631 \u0645\u0646\u0641\u0631\u062F \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F\u06D4", language), language)))), ((_m = reviewAnalytics.wordGrowth) == null ? void 0 : _m.length) ? /* @__PURE__ */ React.createElement("div", { className: "growth-chart" }, reviewAnalytics.wordGrowth.map((bucket) => /* @__PURE__ */ React.createElement("div", { key: bucket.weekKey, className: "growth-bar-col" }, /* @__PURE__ */ React.createElement("div", { className: "growth-bar-stack" }, /* @__PURE__ */ React.createElement("span", { className: "growth-bar reviews", style: { height: `${Math.max(12, Math.min(100, bucket.reviews * 6))}%` } }), /* @__PURE__ */ React.createElement("span", { className: "growth-bar unique", style: { height: `${Math.max(8, Math.min(84, bucket.uniqueCards * 8))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "growth-bar-label" }, bucket.label)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few review sessions to unlock this chart.", "\u06CC\u06C1 \u0686\u0627\u0631\u0679 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0686\u0646\u062F \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance by Category", "\u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See which sections are strongest and which still need attention.", "\u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0633\u06CC\u06A9\u0634\u0646 \u0645\u0636\u0628\u0648\u0637 \u06C1\u06CC\u06BA \u0627\u0648\u0631 \u06A9\u0646\u06C1\u06CC\u06BA \u0645\u0632\u06CC\u062F \u062A\u0648\u062C\u06C1 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), language)))), ((_n = reviewAnalytics.categoryPerformance) == null ? void 0 : _n.length) ? /* @__PURE__ */ React.createElement("div", { className: "category-performance-list" }, reviewAnalytics.categoryPerformance.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "category-performance-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${entry.accuracy}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews \u2022 ${entry.uniqueCards} cards`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632 \u2022 ${entry.uniqueCards} \u06A9\u0627\u0631\u0688\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Category performance will appear after more review history builds up.", "\u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u0628\u0646\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.weakWordsReport, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.weakWordsHint, language)))), reviewAnalytics.weakWords.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, reviewAnalytics.weakWords.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card }))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noWeakWords, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.studyCollections, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Create focused word packs for revision, dictation, or tricky vocabulary.", "\u0631\u06CC\u0648\u06CC\u0698\u0646\u060C \u0627\u0645\u0644\u0627\u060C \u06CC\u0627 \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u06CC \u0627\u0644\u06AF \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-list-creator" }, /* @__PURE__ */ React.createElement(
+    ))), /* @__PURE__ */ React.createElement("div", { className: "review-heat-legend" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Less", "\u06A9\u0645", language), language)), [0, 1, 2, 3, 4].map((level) => /* @__PURE__ */ React.createElement("span", { key: level, className: `review-heat-cell level-${level}` })), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("More", "\u0632\u06CC\u0627\u062F\u06C1", language), language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Heatmap is hidden. Open it when you want a weekly review overview.", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u0641\u06CC \u0627\u0644\u062D\u0627\u0644 \u0628\u0646\u062F \u06C1\u06D2\u06D4 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u062C\u0627\u0626\u0632\u06C1 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Growth", "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Weekly review volume and unique cards over the recent study streak.", "\u062D\u0627\u0644\u06CC\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0648\u0631\u0627\u0646 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0627\u0648\u0631 \u0645\u0646\u0641\u0631\u062F \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F\u06D4", language), language)))), ((_o = reviewAnalytics.wordGrowth) == null ? void 0 : _o.length) ? /* @__PURE__ */ React.createElement("div", { className: "growth-chart" }, reviewAnalytics.wordGrowth.map((bucket) => /* @__PURE__ */ React.createElement("div", { key: bucket.weekKey, className: "growth-bar-col" }, /* @__PURE__ */ React.createElement("div", { className: "growth-bar-stack" }, /* @__PURE__ */ React.createElement("span", { className: "growth-bar reviews", style: { height: `${Math.max(12, Math.min(100, bucket.reviews * 6))}%` } }), /* @__PURE__ */ React.createElement("span", { className: "growth-bar unique", style: { height: `${Math.max(8, Math.min(84, bucket.uniqueCards * 8))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "growth-bar-label" }, bucket.label)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few review sessions to unlock this chart.", "\u06CC\u06C1 \u0686\u0627\u0631\u0679 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0686\u0646\u062F \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance by Category", "\u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See which sections are strongest and which still need attention.", "\u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0633\u06CC\u06A9\u0634\u0646 \u0645\u0636\u0628\u0648\u0637 \u06C1\u06CC\u06BA \u0627\u0648\u0631 \u06A9\u0646\u06C1\u06CC\u06BA \u0645\u0632\u06CC\u062F \u062A\u0648\u062C\u06C1 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), language)))), ((_p = reviewAnalytics.categoryPerformance) == null ? void 0 : _p.length) ? /* @__PURE__ */ React.createElement("div", { className: "category-performance-list" }, reviewAnalytics.categoryPerformance.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "category-performance-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${entry.accuracy}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews \u2022 ${entry.uniqueCards} cards`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632 \u2022 ${entry.uniqueCards} \u06A9\u0627\u0631\u0688\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Category performance will appear after more review history builds up.", "\u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u0628\u0646\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.weakWordsReport, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.weakWordsHint, language)))), reviewAnalytics.weakWords.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, reviewAnalytics.weakWords.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card }))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noWeakWords, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.studyCollections, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Create focused word packs for revision, dictation, or tricky vocabulary.", "\u0631\u06CC\u0648\u06CC\u0698\u0646\u060C \u0627\u0645\u0644\u0627\u060C \u06CC\u0627 \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u06CC \u0627\u0644\u06AF \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-list-creator" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         value: customListDraft,
@@ -8714,7 +9085,7 @@ ${error.message || error}`);
       const isCorrect = optionIndex === Number(activePracticeCard.quizCorrectIndex);
       const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
       return /* @__PURE__ */ React.createElement("button", { key: `${option}_${optionIndex}`, className: optionClass, disabled: practiceTimerFinished || practiceTimedChoice !== null, onClick: () => handleTimedQuizChoice(optionIndex), style: getPracticeTextStyle(option, {}, activePracticeCard.practiceLang) }, option);
-    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}`, style: getPracticeTextStyle(((_o = activePracticeCard.quizOptions) == null ? void 0 : _o[Number(activePracticeCard.quizCorrectIndex)]) || "", {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", ((_p = activePracticeCard.quizOptions) == null ? void 0 : _p[Number(activePracticeCard.quizCorrectIndex)]) || "") : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Question", "\u0627\u06AF\u0644\u0627 \u0633\u0648\u0627\u0644", language), language)))), practiceMode === "timedtruefalse" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Decide whether the statement is true or false before the timer ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0641\u06CC\u0635\u0644\u06C1 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0633\u0648\u0627\u0644 \u062F\u0631\u0633\u062A \u06C1\u06D2 \u06CC\u0627 \u063A\u0644\u0637\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.trueFalseStatement, {}, activePracticeCard.practiceLang) }, activePracticeCard.trueFalseStatement), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, [{ key: "true", label: joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language), value: true }, { key: "false", label: joinLocalizedText("False", "\u063A\u0644\u0637", language), value: false }].map((option) => {
+    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}`, style: getPracticeTextStyle(((_q = activePracticeCard.quizOptions) == null ? void 0 : _q[Number(activePracticeCard.quizCorrectIndex)]) || "", {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", ((_r = activePracticeCard.quizOptions) == null ? void 0 : _r[Number(activePracticeCard.quizCorrectIndex)]) || "") : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Question", "\u0627\u06AF\u0644\u0627 \u0633\u0648\u0627\u0644", language), language)))), practiceMode === "timedtruefalse" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Decide whether the statement is true or false before the timer ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0641\u06CC\u0635\u0644\u06C1 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0633\u0648\u0627\u0644 \u062F\u0631\u0633\u062A \u06C1\u06D2 \u06CC\u0627 \u063A\u0644\u0637\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.trueFalseStatement, {}, activePracticeCard.practiceLang) }, activePracticeCard.trueFalseStatement), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, [{ key: "true", label: joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language), value: true }, { key: "false", label: joinLocalizedText("False", "\u063A\u0644\u0637", language), value: false }].map((option) => {
       const isSelected = practiceTimedChoice === option.key;
       const isCorrect = Boolean(activePracticeCard.trueFalseAnswer) === option.value;
       const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
@@ -8765,16 +9136,38 @@ ${error.message || error}`);
         style: { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)", minWidth: 220 }
       },
       currentAiModelOptions.map((modelName) => /* @__PURE__ */ React.createElement("option", { key: modelName, value: modelName }, modelName))
-    ))), !aiBrowserCapability.ok ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)) : null) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 0 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(configuredAiProviderIds.length > 0 ? joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "\u0679\u06CC\u0648\u0679\u0631 \u0686\u06CC\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0622\u067E \u06A9\u06D2 \u0645\u062D\u0641\u0648\u0638 \u0627\u06D2 \u0622\u0626\u06CC \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06AF\u0627\u0646 \u06A9\u0648 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u062F\u0631\u0633\u062A \u06A9\u0631\u0646\u0627 \u06C1\u0648\u06AF\u0627\u06D4", language) : ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor.", language)), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setTab("settings") }, renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)))), /* @__PURE__ */ React.createElement("div", { className: "tutor-shell" }, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((m, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "chat-bubble " + (m.role === "ai" ? "ai" : "user") }, m.text)), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement(
-      "input",
+    ))), !aiBrowserCapability.ok ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)) : null) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 0 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginBottom: 12 } }, renderLocalizedTextNode(configuredAiProviderIds.length > 0 ? joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "\u0679\u06CC\u0648\u0679\u0631 \u0686\u06CC\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0622\u067E \u06A9\u06D2 \u0645\u062D\u0641\u0648\u0638 \u0627\u06D2 \u0622\u0626\u06CC \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06AF\u0627\u0646 \u06A9\u0648 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u062F\u0631\u0633\u062A \u06A9\u0631\u0646\u0627 \u06C1\u0648\u06AF\u0627\u06D4", language) : ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor.", language)), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setTab("settings") }, renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)))), /* @__PURE__ */ React.createElement("div", { className: "tutor-shell" }, /* @__PURE__ */ React.createElement("aside", { className: "tutor-sidebar" }, /* @__PURE__ */ React.createElement("button", { className: "tutor-new-chat-btn", onClick: handleNewTutorChat }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, "\uFF0B"), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("New Chat", "\u0646\u0626\u06CC \u0686\u06CC\u0679", language), language))), /* @__PURE__ */ React.createElement("div", { className: "tutor-history-list" }, tutorSessions.map((session) => /* @__PURE__ */ React.createElement(
+      "button",
       {
+        key: session.id,
+        type: "button",
+        className: `tutor-history-item${session.id === currentTutorSessionId ? " active" : ""}`,
+        onClick: () => setActiveTutorSessionId(session.id)
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "tutor-history-title" }, getTutorSessionTitle(session, language)),
+      /* @__PURE__ */ React.createElement("div", { className: "tutor-history-meta" }, formatDate(session.updatedAt))
+    )))), /* @__PURE__ */ React.createElement("div", { className: "tutor-main" }, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((message, index) => {
+      const messageIsUrdu = containsUrduText(message.text) || isUrduText(message.text);
+      const providerBadge = message.provider && AI_PROVIDER_DEFS[message.provider] ? joinLocalizedText(AI_PROVIDER_DEFS[message.provider].name, AI_PROVIDER_DEFS[message.provider].nameUr, language) : "";
+      return /* @__PURE__ */ React.createElement("div", { key: `${(activeTutorSession == null ? void 0 : activeTutorSession.id) || "chat"}_${index}`, className: `chat-bubble ${message.role === "ai" ? "ai" : "user"}${messageIsUrdu ? " urdu" : " english"}` }, /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-body" }, message.text), /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-tools" }, /* @__PURE__ */ React.createElement("span", { className: "chat-bubble-provider" }, providerBadge || "\xA0"), /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-bubble-action", onClick: () => copyTextToClipboard(message.text) }, renderLocalizedTextNode(joinLocalizedText("Copy", "\u06A9\u0627\u067E\u06CC", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-bubble-action", onClick: () => speakInlineText(message.text) }, renderLocalizedTextNode(joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language), language)))));
+    }), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai english" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("div", { className: "chat-input-toolbar" }, clipboardHasText ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-tool-btn", onClick: handlePasteIntoChat, title: joinLocalizedText("Paste from clipboard", "\u06A9\u0644\u067E \u0628\u0648\u0631\u0688 \u0633\u06D2 \u067E\u06CC\u0633\u0679 \u06A9\u0631\u06CC\u06BA", language) }, "\u{1F4CB}") : null, speechRecognitionSupported ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `chat-tool-btn${chatListening ? " active" : ""}`, onClick: handleToggleChatListening, title: joinLocalizedText("Speak to type", "\u0628\u0648\u0644 \u06A9\u0631 \u0644\u06A9\u06BE\u06CC\u06BA", language) }, chatListening ? "\u25FC" : "\u{1F399}") : null, chatInput ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-tool-btn", onClick: () => setChatInput(""), title: joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language) }, "\u2715") : null, chatInput ? /* @__PURE__ */ React.createElement("span", { className: "chat-word-count" }, renderLocalizedTextNode(joinLocalizedText(`${chatInputWordCount} words`, `${chatInputWordCount} \u0627\u0644\u0641\u0627\u0638`, language), language)) : null), /* @__PURE__ */ React.createElement("div", { className: "chat-composer" }, /* @__PURE__ */ React.createElement(
+      "textarea",
+      {
+        ref: chatTextareaRef,
         value: chatInput,
-        onChange: (e) => setChatInput(e.target.value),
-        onKeyDown: (e) => e.key === "Enter" && sendChat(),
+        onChange: (event) => setChatInput(event.target.value),
+        onFocus: refreshClipboardAvailability,
+        onKeyDown: (event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            sendChat();
+          }
+        },
+        className: containsUrduText(chatInput) || isUrduUi(language) ? "urdu" : "english",
         placeholder: !aiBrowserCapability.ok ? language === "ur" ? "\u0627\u06D2 \u0622\u0626\u06CC \u0686\u06CC\u0679 \u06A9\u06D2 \u0644\u06CC\u06D2 HTTPS \u06CC\u0627 localhost \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA..." : "Use HTTPS or localhost for AI chat..." : readyAiProviderIds.length > 0 ? language === "ur" ? "\u0627\u067E\u0646\u06D2 \u0627\u0633\u062A\u0627\u062F \u0633\u06D2 \u06A9\u0686\u06BE \u0628\u06BE\u06CC \u067E\u0648\u0686\u06BE\u06CC\u06BA..." : "Ask your tutor anything..." : language === "ur" ? "\u067E\u06C1\u0644\u06D2 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u0627\u06D2 \u0622\u0626\u06CC \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA..." : "Fix or add an AI key in Settings first...",
         disabled: chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok
       }
-    ), /* @__PURE__ */ React.createElement("button", { onClick: sendChat, disabled: chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok }, "\u27A4")))), tab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `settings-disclosure${profileDisclosureOpen ? " open" : ""}`, "data-transition-mode": transitionMode }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("button", { className: "chat-send-btn", onClick: sendChat, disabled: chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok }, "\u27A4")))))), tab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `settings-disclosure${profileDisclosureOpen ? " open" : ""}`, "data-transition-mode": transitionMode }, /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -8820,7 +9213,7 @@ ${error.message || error}`);
         currentVersion,
         updateAvailable,
         storageLabel,
-        versionInfo: (_r = (_q = versionManagerRef.current) == null ? void 0 : _q.getVersionInfo) == null ? void 0 : _r.call(_q),
+        versionInfo: (_t = (_s = versionManagerRef.current) == null ? void 0 : _s.getVersionInfo) == null ? void 0 : _t.call(_s),
         onCheckUpdates: handleCheckUpdates,
         onRefreshData: handleRefreshData,
         onExportProgress: handleExportProgress,
@@ -8836,6 +9229,8 @@ ${error.message || error}`);
         onAudioMutedChange: setAudioMuted,
         autoPlayNext,
         onAutoPlayNextChange: setAutoPlayNext,
+        wordMeaningPriority,
+        onWordMeaningPriorityChange: setWordMeaningPriority,
         ttsRate,
         onTtsRateChange: setTtsRate,
         englishVoiceOptions,
@@ -8910,8 +9305,8 @@ ${error.message || error}`);
         onPointerDown: (event) => event.stopPropagation(),
         onClick: (event) => event.stopPropagation()
       },
-      /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-word" }, wordMeaningPopover.word),
-      wordMeaningPopover.loading ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(joinLocalizedText("Looking up meaning...", "\u0645\u0639\u0646\u06CC \u062A\u0644\u0627\u0634 \u06A9\u06CC\u06D2 \u062C\u0627 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA...", language), language)) : wordMeaningPopover.meaningUr ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-meaning" }, wordMeaningPopover.meaningUr) : /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(wordMeaningPopover.error || joinLocalizedText("Meaning not found yet.", "\u0627\u0628\u06BE\u06CC \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)),
+      /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-head" }, /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-word" }, wordMeaningPopover.word), /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "word-meaning-popover-icon", onClick: handleCopyWordMeaning, title: joinLocalizedText("Copy meaning", "\u0645\u0639\u0646\u06CC \u06A9\u0627\u067E\u06CC \u06A9\u0631\u06CC\u06BA", language) }, "\u29C9"), /* @__PURE__ */ React.createElement("button", { type: "button", className: "word-meaning-popover-icon", onClick: handleSpeakWordMeaning, title: joinLocalizedText("Listen meaning", "\u0645\u0639\u0646\u06CC \u0633\u0646\u06CC\u06BA", language) }, "\u{1F50A}"))),
+      wordMeaningPopover.loading ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(joinLocalizedText("Looking up meaning...", "\u0645\u0639\u0646\u06CC \u062A\u0644\u0627\u0634 \u06A9\u06CC\u06D2 \u062C\u0627 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA...", language), language)) : wordMeaningPopover.meaningUr || (wordMeaningPopover.meaningsUr || []).length > 0 || wordMeaningPopover.explanationUr ? /* @__PURE__ */ React.createElement(React.Fragment, null, (wordMeaningPopover.meaningsUr || []).length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-list" }, (wordMeaningPopover.meaningsUr || []).map((meaning, index) => /* @__PURE__ */ React.createElement("div", { key: `${meaning}_${index}`, className: "word-meaning-popover-meaning" }, /* @__PURE__ */ React.createElement("span", { className: "word-meaning-popover-order" }, index + 1, "."), /* @__PURE__ */ React.createElement("span", null, meaning)))) : /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-meaning" }, /* @__PURE__ */ React.createElement("span", null, wordMeaningPopover.meaningUr)), wordMeaningPopover.explanationUr ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-explanation" }, wordMeaningPopover.explanationUr) : null) : /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(wordMeaningPopover.error || joinLocalizedText("Meaning not found yet.", "\u0627\u0628\u06BE\u06CC \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)),
       wordMeaningPopover.source ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-source" }, wordMeaningPopover.source) : null
     ) : null, celebrationQueue[0] ? /* @__PURE__ */ React.createElement("div", { className: "celebration-overlay", onClick: dismissCelebration }, /* @__PURE__ */ React.createElement("div", { className: "celebration-card", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null }, /* @__PURE__ */ React.createElement("div", { className: "celebration-icon", "aria-hidden": "true" }, celebrationQueue[0].icon), /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].titleEn, celebrationQueue[0].titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].bodyEn, celebrationQueue[0].bodyUr, language), language)), /* @__PURE__ */ React.createElement("div", { className: "celebration-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: dismissCelebration }, renderLocalizedTextNode(joinLocalizedText("Nice!", "\u0628\u06C1\u062A \u062E\u0648\u0628!", language), language))))) : null, importReviewState ? /* @__PURE__ */ React.createElement("div", { className: "import-review-overlay", onClick: () => setImportReviewState(null) }, /* @__PURE__ */ React.createElement("div", { className: "import-review-dialog", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head", style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)), /* @__PURE__ */ React.createElement("p", null, importReviewState.fileName))), importReviewState.newerVersion ? /* @__PURE__ */ React.createElement("div", { className: "import-review-warning" }, renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)) : null, /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)), /* @__PURE__ */ React.createElement("div", { className: "import-review-grid" }, (importReviewState.summaryRows || []).map((row) => /* @__PURE__ */ React.createElement("div", { key: row.label, className: "import-review-cell" }, /* @__PURE__ */ React.createElement("span", null, row.label), /* @__PURE__ */ React.createElement("strong", null, row.value))))), /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)), (importReviewState.conflicts || []).length > 0 ? /* @__PURE__ */ React.createElement("ul", { className: "import-review-list" }, importReviewState.conflicts.map((key) => /* @__PURE__ */ React.createElement("li", { key }, renderLocalizedTextNode(importConflictLabels[key] || key, language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "\u06A9\u0648\u0626\u06CC \u0628\u0691\u0627 \u0641\u0631\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 \u0639\u0627\u0645 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u0627 \u062F\u06CC\u0646\u0627 \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "import-review-actions" }, /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setImportReviewState(null) }, renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn", onClick: () => executeImportReview(importReviewState, "merge") }, renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)), /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: () => executeImportReview(importReviewState, "replace") }, renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language))))) : null)));
   }

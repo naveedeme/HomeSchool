@@ -253,6 +253,8 @@
       onAudioMutedChange,
       autoPlayNext,
       onAutoPlayNextChange,
+      wordMeaningPriority,
+      onWordMeaningPriorityChange,
       ttsRate,
       onTtsRateChange,
       englishVoiceOptions,
@@ -506,6 +508,27 @@
         },
       }, renderLocalizedText(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)));
     }
+    aiChildren.push(React.createElement("div", {
+      key: "meaning-priority",
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border)",
+        marginBottom: 10,
+      },
+    },
+      React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" } },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.meaningLookupPriority || (language === "ur" ? "معنی تلاش کی ترجیح" : "Meaning Lookup Priority"), language)),
+        React.createElement("select", {
+          value: wordMeaningPriority || "local-first",
+          onChange: (event) => onWordMeaningPriorityChange(event.target.value),
+          style: selectStyle,
+        },
+          React.createElement("option", { value: "local-first" }, renderLocalizedText(ui.meaningPriorityLocalFirst || (language === "ur" ? "پہلے مقامی" : "Local first"), language)),
+          React.createElement("option", { value: "ai-first" }, renderLocalizedText(ui.meaningPriorityAiFirst || (language === "ur" ? "پہلے اے آئی" : "AI first"), language)))),
+      React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6, fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)", direction: language === "ur" ? "rtl" : "ltr", textAlign: language === "ur" ? "right" : "left" } },
+        renderLocalizedText(ui.meaningLookupPriorityHelp || (language === "ur" ? "منتخب کریں کہ لفظوں کے معنی پہلے مقامی ذخیرہ الفاظ سے لیے جائیں یا دستیاب ہونے پر پہلے اے آئی سے پوچھا جائے۔" : "Choose whether word meanings should prefer local vocabulary first or try AI first when available."), language)))),
     (Array.isArray(aiProviders) ? aiProviders : []).forEach((provider) => {
       aiChildren.push(renderAiProviderCard(provider, ui, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider));
     });
