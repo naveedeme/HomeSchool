@@ -9424,7 +9424,7 @@ ${error.message || error}`);
       {
         key: session.id,
         type: "button",
-        className: `tutor-history-item${session.id === currentTutorSessionId ? " active" : ""}`,
+        className: `tutor-history-item${session.id === currentTutorSessionId ? " active" : ""}${containsUrduText(getTutorSessionTitle(session, language)) ? " urdu" : " english"}`,
         onClick: () => setActiveTutorSessionId(session.id)
       },
       /* @__PURE__ */ React.createElement("div", { className: "tutor-history-title" }, getTutorSessionTitle(session, language)),

@@ -242,8 +242,9 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .tutor-history-item.active{border-color:color-mix(in srgb,var(--accent) 38%,var(--border));background:color-mix(in srgb,var(--accent) 12%,var(--bg-elevated));box-shadow:0 12px 22px rgba(14,165,233,.12)}
 .tutor-history-title{width:100%;font-family:var(--font);font-size:13px;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tutor-history-meta{font-size:11px;color:var(--text-muted)}
-.tutor-sidebar[data-ui-language="ur"] .tutor-history-item,.tutor-sidebar[data-ui-language="ur"] .tutor-history-title,.tutor-sidebar[data-ui-language="ur"] .tutor-history-meta{font-family:var(--font-ur);direction:rtl;text-align:right}
-.tutor-main{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:14px;min-width:0;min-height:0;height:100%}
+.tutor-history-item.urdu,.tutor-history-item.urdu .tutor-history-title,.tutor-history-item.urdu .tutor-history-meta{font-family:var(--font-ur);direction:rtl;text-align:right}
+.tutor-history-item.english,.tutor-history-item.english .tutor-history-title,.tutor-history-item.english .tutor-history-meta{font-family:var(--font);direction:ltr;text-align:left}
+.tutor-main{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:14px;min-width:0;min-height:0;height:100%;overflow:hidden}
 .tutor-chat{display:flex;flex-direction:column;gap:14px;margin-bottom:0;padding:18px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);min-height:0;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;box-shadow:var(--shadow)}
 .tutor-chat::-webkit-scrollbar{width:0;height:0}
 .chat-bubble{max-width:min(92%,720px);padding:14px 16px 12px;border-radius:18px;font-size:15px;line-height:1.78;animation:fadeSlide .3s ease;white-space:pre-wrap;overflow-wrap:anywhere;display:flex;flex-direction:column;gap:10px}
@@ -268,7 +269,7 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .chat-bubble-action:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 30%,var(--border))}
 .chat-bubble-action.icon-only{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:12px}
 .chat-bubble-action.icon-only svg,.chat-tool-btn svg{width:17px;height:17px}
-.chat-input-area{display:flex;flex-direction:column;gap:10px;position:sticky;bottom:0;z-index:2;background:linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 40%,transparent),var(--bg-card) 18%,var(--bg-card));padding:14px;border:1px solid var(--border);border-radius:20px;box-shadow:0 18px 36px rgba(2,6,23,.16);margin-top:0}
+.chat-input-area{display:flex;flex-direction:column;gap:10px;position:static;z-index:2;background:linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 40%,transparent),var(--bg-card) 18%,var(--bg-card));padding:14px;border:1px solid var(--border);border-radius:20px;box-shadow:0 18px 36px rgba(2,6,23,.16);margin-top:0}
 .chat-attachment-list{display:flex;flex-wrap:wrap;gap:8px}
 .chat-attachment-chip{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:8px 10px;border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 22%,var(--border));background:color-mix(in srgb,var(--accent) 8%,var(--bg-card))}
 .chat-attachment-icon{font-size:14px;line-height:1}

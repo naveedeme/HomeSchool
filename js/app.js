@@ -12784,7 +12784,7 @@ function HomeschoolApp() {
                 <button
                   key={session.id}
                   type="button"
-                  className={`tutor-history-item${session.id === currentTutorSessionId ? " active" : ""}`}
+                  className={`tutor-history-item${session.id === currentTutorSessionId ? " active" : ""}${containsUrduText(getTutorSessionTitle(session, language)) ? " urdu" : " english"}`}
                   onClick={() => setActiveTutorSessionId(session.id)}
                 >
                   <div className="tutor-history-title">{getTutorSessionTitle(session, language)}</div>

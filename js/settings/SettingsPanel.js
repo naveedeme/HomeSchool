@@ -209,6 +209,7 @@
 
   function DisclosureSection({ title, language, children, transitionMode }) {
     const [open, setOpen] = React.useState(false);
+    const childList = React.Children.toArray(children);
 
     return React.createElement("div", {
       className: `settings-disclosure${open ? " open" : ""}`,
@@ -229,10 +230,11 @@
         React.createElement("span", { className: "settings-disclosure-icon", "aria-hidden": "true" }, open ? "−" : "+")),
       React.createElement("div", { className: "settings-disclosure-body-wrap" },
         React.createElement("div", { className: "settings-disclosure-body-clip" },
-          React.createElement("div", { className: "settings-disclosure-body" }, ...children))));
+          React.createElement("div", { className: "settings-disclosure-body" }, ...childList))));
   }
 
   function SettingsGroup({ title, language, children }) {
+    const childList = React.Children.toArray(children);
     return React.createElement("div", {
       className: "settings-group-card",
       style: language === "ur"
@@ -240,7 +242,7 @@
         : null,
     },
       React.createElement("div", { className: "settings-group-title" }, renderLocalizedText(title, language)),
-      React.createElement("div", { className: "settings-group-body" }, ...children));
+      React.createElement("div", { className: "settings-group-body" }, ...childList));
   }
 
   function getNoticeText(entry, key, language) {
