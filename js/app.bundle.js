@@ -567,7 +567,7 @@
     sentences: { labelEn: "Sentence Sections", labelUr: "\u062C\u0645\u0644\u0648\u06BA \u0648\u0627\u0644\u06D2 \u0633\u06CC\u06A9\u0634\u0646", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 10, max: 20 },
     urduToEnglish: { labelEn: "Urdu to English", labelUr: "\u0627\u0631\u062F\u0648 \u0633\u06D2 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 5, max: 20 }
   };
-  const AI_PROVIDER_ORDER = ["openai", "anthropic", "ollama"];
+  const AI_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "ollama"];
   const AI_PROVIDER_DEFS = {
     openai: {
       id: "openai",
@@ -584,6 +584,14 @@
       defaultModel: "claude-sonnet-4-20250514",
       keyPlaceholder: "sk-ant-...",
       modelHints: ["claude-sonnet-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"]
+    },
+    gemini: {
+      id: "gemini",
+      name: "Gemini",
+      nameUr: "\u062C\u06CC\u0645\u0646\u06CC",
+      defaultModel: "gemini-2.5-flash",
+      keyPlaceholder: "AIza...",
+      modelHints: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     },
     ollama: {
       id: "ollama",
@@ -664,6 +672,12 @@
       }).join("").trim();
     }
     return "";
+  }
+  function extractGeminiText(data) {
+    return ((data == null ? void 0 : data.candidates) || []).flatMap((candidate) => {
+      var _a;
+      return ((_a = candidate == null ? void 0 : candidate.content) == null ? void 0 : _a.parts) || [];
+    }).map((part) => (part == null ? void 0 : part.text) || "").join("").trim();
   }
   function buildAiError(code, message, status = null) {
     const error = new Error(message);
@@ -774,6 +788,19 @@
         status: "ready"
       };
     }
+    if (providerId === "gemini") {
+      const data2 = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`, {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+      const models = normalizeAiModelList(providerId, ((data2 == null ? void 0 : data2.models) || []).filter((entry) => Array.isArray(entry == null ? void 0 : entry.supportedGenerationMethods) && entry.supportedGenerationMethods.includes("generateContent")).map((entry) => String((entry == null ? void 0 : entry.name) || "").replace(/^models\//, "")), preferredModel);
+      return {
+        model: preferredModel || AI_PROVIDER_DEFS.gemini.defaultModel,
+        models,
+        status: "ready"
+      };
+    }
     const data = await fetchJsonWithTimeout("https://ollama.com/api/tags", {
       headers: {
         "Authorization": `Bearer ${apiKey}`
@@ -831,6 +858,27 @@
       });
       return ((data2 == null ? void 0 : data2.content) || []).map((entry) => (entry == null ? void 0 : entry.text) || "").join("").trim() || "Sorry, I could not generate a reply.";
     }
+    if (providerId === "gemini") {
+      const data2 = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemPrompt }]
+          },
+          contents: messages.map((entry) => ({
+            role: entry.role === "assistant" ? "model" : "user",
+            parts: [{ text: entry.content }]
+          })),
+          generationConfig: {
+            temperature: 0.4
+          }
+        })
+      });
+      return extractGeminiText(data2) || "Sorry, I could not generate a reply.";
+    }
     const data = await fetchJsonWithTimeout("https://ollama.com/api/chat", {
       method: "POST",
       headers: {
@@ -856,6 +904,131 @@
   }
   function containsUrduText(value) {
     return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(String(value || ""));
+  }
+  const WORD_LOOKUP_STOPWORDS = /* @__PURE__ */ new Set([
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "had",
+    "has",
+    "have",
+    "he",
+    "her",
+    "him",
+    "his",
+    "i",
+    "in",
+    "is",
+    "it",
+    "its",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "our",
+    "she",
+    "so",
+    "than",
+    "that",
+    "the",
+    "their",
+    "them",
+    "there",
+    "these",
+    "they",
+    "this",
+    "to",
+    "too",
+    "was",
+    "we",
+    "were",
+    "will",
+    "with",
+    "you",
+    "your"
+  ]);
+  function normalizeLookupWord(word) {
+    return String(word || "").toLowerCase().replace(/[’]/g, "'").replace(/^[^a-z]+|[^a-z]+$/g, "").trim();
+  }
+  function getLookupWordCandidates(word) {
+    const base = normalizeLookupWord(word);
+    const candidates = /* @__PURE__ */ new Set();
+    if (!base) return [];
+    const pushCandidate = (value) => {
+      const normalized = normalizeLookupWord(value);
+      if (normalized) candidates.add(normalized);
+    };
+    pushCandidate(base);
+    if (base.endsWith("'s")) pushCandidate(base.slice(0, -2));
+    if (base.endsWith("ies") && base.length > 4) pushCandidate(`${base.slice(0, -3)}y`);
+    if (base.endsWith("ing") && base.length > 5) {
+      pushCandidate(base.slice(0, -3));
+      pushCandidate(`${base.slice(0, -3)}e`);
+      if (/(.)\1$/.test(base.slice(0, -3))) pushCandidate(base.slice(0, -4));
+    }
+    if (base.endsWith("ied") && base.length > 4) pushCandidate(`${base.slice(0, -3)}y`);
+    if (base.endsWith("ed") && base.length > 4) {
+      pushCandidate(base.slice(0, -2));
+      pushCandidate(`${base.slice(0, -2)}e`);
+      if (/(.)\1$/.test(base.slice(0, -2))) pushCandidate(base.slice(0, -3));
+    }
+    if (base.endsWith("es") && base.length > 4) pushCandidate(base.slice(0, -2));
+    if (base.endsWith("s") && base.length > 3) pushCandidate(base.slice(0, -1));
+    if (base.endsWith("er") && base.length > 4) pushCandidate(base.slice(0, -2));
+    if (base.endsWith("est") && base.length > 5) pushCandidate(base.slice(0, -3));
+    return Array.from(candidates);
+  }
+  function normalizeWordMeaningCache(rawCache) {
+    if (!rawCache || typeof rawCache !== "object") return {};
+    return Object.entries(rawCache).map(([key, value]) => {
+      const normalizedKey = normalizeLookupWord(key);
+      if (!normalizedKey || !value || typeof value !== "object") return null;
+      const meaningUr = String(value.meaningUr || value.meaning || "").trim();
+      if (!meaningUr) return null;
+      return [normalizedKey, {
+        meaningUr,
+        source: String(value.source || "cache"),
+        fetchedAt: Number(value.fetchedAt) || Date.now()
+      }];
+    }).filter(Boolean).sort((left, right) => (right[1].fetchedAt || 0) - (left[1].fetchedAt || 0)).slice(0, 300).reduce((acc, entry) => {
+      acc[entry[0]] = entry[1];
+      return acc;
+    }, {});
+  }
+  function buildWordMeaningLookupFromIndex(items) {
+    const lookup = {};
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const prompt2 = normalizeText((item == null ? void 0 : item.prompt) || (item == null ? void 0 : item.practiceFront) || "");
+      if (!prompt2 || prompt2.split(/\s+/).length > 3 || containsUrduText(prompt2)) return;
+      const meaningUr = normalizeText(
+        containsUrduText((item == null ? void 0 : item.meaning) || "") ? item.meaning : containsUrduText((item == null ? void 0 : item.answer) || "") ? item.answer : ""
+      );
+      if (!meaningUr) return;
+      getLookupWordCandidates(prompt2).forEach((candidate) => {
+        if (!lookup[candidate]) {
+          lookup[candidate] = {
+            meaningUr,
+            source: "local"
+          };
+        }
+      });
+    });
+    return lookup;
+  }
+  function extractShortUrduMeaning(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return "";
+    const firstLine = raw.split(/\r?\n/).find(Boolean) || raw;
+    const cleaned = firstLine.replace(/^["'`]+|["'`]+$/g, "").replace(/^meaning\s*[:\-]\s*/i, "").replace(/^urdu\s*[:\-]\s*/i, "").trim();
+    return cleaned;
   }
   function joinLocalizedText(enText, urText, language) {
     if (language === "ur") return urText;
@@ -1972,9 +2145,9 @@
     const source = Array.isArray(highlight) ? highlight : [highlight];
     return [...new Set(source.map(normalizeHighlightTerm).filter(Boolean))].sort((a, b) => b.length - a.length);
   }
-  function renderHighlightText(text, highlight, keyPrefix = "hl") {
+  function getHighlightRanges(text, highlight) {
     const terms = buildHighlightTerms(highlight);
-    if (!terms.length) return text;
+    if (!terms.length) return [];
     const lower = String(text).toLowerCase();
     const matches = [];
     terms.forEach((term) => {
@@ -1999,7 +2172,7 @@
         matches.push({ start: wordMatch.index, end: wordMatch.index + wordMatch[0].length });
       }
     }
-    if (!matches.length) return text;
+    if (!matches.length) return [];
     matches.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
     const merged = [];
     matches.forEach((match) => {
@@ -2008,6 +2181,10 @@
         merged.push(match);
       }
     });
+    return merged;
+  }
+  function renderHighlightText(text, highlight, keyPrefix = "hl") {
+    const merged = getHighlightRanges(text, highlight);
     if (!merged.length) return text;
     const parts = [];
     let cursor = 0;
@@ -2017,6 +2194,51 @@
       cursor = match.end;
     });
     if (cursor < text.length) parts.push(text.slice(cursor));
+    return /* @__PURE__ */ React.createElement(React.Fragment, null, parts);
+  }
+  function isHighlightedRange(ranges, start, end) {
+    return (Array.isArray(ranges) ? ranges : []).some((range) => start < range.end && end > range.start);
+  }
+  function renderInteractiveEnglishText(text, app, highlight = null, keyPrefix = "tap") {
+    const safeText = String(text || "");
+    if (!safeText) return "";
+    const ranges = getHighlightRanges(safeText, highlight);
+    const parts = [];
+    const wordMatcher = /[A-Za-z]+(?:['’][A-Za-z]+)?/g;
+    let match;
+    let cursor = 0;
+    while ((match = wordMatcher.exec(safeText)) !== null) {
+      if (match.index > cursor) parts.push(safeText.slice(cursor, match.index));
+      const token = match[0];
+      const normalized = normalizeLookupWord(token);
+      const highlighted = isHighlightedRange(ranges, match.index, match.index + token.length);
+      const tappable = normalized && normalized.length >= 3 && !WORD_LOOKUP_STOPWORDS.has(normalized) && typeof (app == null ? void 0 : app.onLookupWordMeaning) === "function";
+      if (tappable) {
+        const isActive = (app == null ? void 0 : app.activeLookupWord) === normalized;
+        parts.push(
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              key: `${keyPrefix}-${match.index}`,
+              type: "button",
+              className: `tap-word${highlighted ? " highlighted" : ""}${isActive ? " active" : ""}`,
+              onClick: (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                app.onLookupWordMeaning(token, event.currentTarget);
+              }
+            },
+            token
+          )
+        );
+      } else if (highlighted) {
+        parts.push(/* @__PURE__ */ React.createElement("span", { key: `${keyPrefix}-${match.index}`, style: { color: "#38BDF8", fontWeight: 700 } }, token));
+      } else {
+        parts.push(token);
+      }
+      cursor = match.index + token.length;
+    }
+    if (cursor < safeText.length) parts.push(safeText.slice(cursor));
     return /* @__PURE__ */ React.createElement(React.Fragment, null, parts);
   }
   function stripInlineUrduForKnownWords(text, words) {
@@ -2041,18 +2263,25 @@
     const [speaking, setSpeaking] = useState(false);
     const isLight = isLightUiTheme();
     const handleClick = () => {
+      var _a, _b;
       if (!isTtsEnabled()) return;
-      window.speechSynthesis.cancel();
       setSpeaking(true);
-      const u = new SpeechSynthesisUtterance(ttsClean(text));
-      const speechConfig = getSpeechConfig(lang, window.speechSynthesis.getVoices());
-      u.lang = speechConfig.lang;
-      u.rate = speechConfig.rate;
-      u.pitch = 1.05;
-      if (speechConfig.voice) u.voice = speechConfig.voice;
-      u.onend = () => setSpeaking(false);
-      u.onerror = () => setSpeaking(false);
-      window.speechSynthesis.speak(u);
+      const utterance = ((_b = (_a = window.HomeSchoolUtils) == null ? void 0 : _a.speakText) == null ? void 0 : _b.call(_a, text, lang)) || null;
+      if (utterance) {
+        utterance.onend = () => setSpeaking(false);
+        utterance.onerror = () => setSpeaking(false);
+        return;
+      }
+      setSpeaking(false);
+    };
+    const handleKeyDown = (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      handleClick();
+    };
+    const renderPlainSegment = (segment, keyBase) => {
+      if (!segment) return null;
+      return /* @__PURE__ */ React.createElement(React.Fragment, { key: keyBase }, lang === "en" ? renderInteractiveEnglishText(segment, app, highlight, keyBase) : renderHighlightText(segment, highlight, keyBase));
     };
     const renderText = () => {
       let t = text;
@@ -2062,7 +2291,7 @@
       const re = /\[(\d+)\]|(\d\s*[><=≥≤≈+\-×÷]\s*\d)|([><=≥≤≈])|([→←↑↓])|(___)/g;
       let m;
       while ((m = re.exec(t)) !== null) {
-        if (m.index > lastIdx) parts.push(t.slice(lastIdx, m.index));
+        if (m.index > lastIdx) parts.push(renderPlainSegment(t.slice(lastIdx, m.index), `txt-${m.index}`));
         if (m[1]) {
           parts.push(/* @__PURE__ */ React.createElement("span", { key: "b" + m.index, style: { display: "inline-block", background: "#F59E0B22", border: "2px solid #F59E0B", borderRadius: 6, padding: "0 5px", color: "#F59E0B", fontWeight: 800, margin: "0 1px" } }, m[1]));
         } else if (m[2]) {
@@ -2087,14 +2316,25 @@
         lastIdx = m.index + m[0].length;
       }
       if (parts.length > 0) {
-        if (lastIdx < t.length) parts.push(t.slice(lastIdx));
+        if (lastIdx < t.length) parts.push(renderPlainSegment(t.slice(lastIdx), "tail"));
         return /* @__PURE__ */ React.createElement(React.Fragment, null, parts);
       }
-      return renderHighlightText(text, highlight, "sentence");
+      return lang === "en" ? renderInteractiveEnglishText(text, app, highlight, "sentence") : renderHighlightText(text, highlight, "sentence");
     };
     const inlineTools = showStudyToolbar && studyCard;
     const fillHeight = (buttonStyle == null ? void 0 : buttonStyle.height) === "100%" || (buttonStyle == null ? void 0 : buttonStyle.minHeight) === "100%";
-    return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: inlineTools ? "inline-study-row" : "", style: { width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...fillHeight ? { height: "100%", alignSelf: "stretch" } : {} } }, /* @__PURE__ */ React.createElement("div", { style: { flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...fillHeight ? { height: "100%", alignSelf: "stretch" } : {} } }, /* @__PURE__ */ React.createElement("button", { onClick: handleClick, style: { display: fillHeight ? "flex" : fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none", position: "relative", ...fillHeight ? { height: "100%", alignItems: "center" } : {}, ...buttonStyle } }, /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", right: lang === "ur" ? "auto" : 12, left: lang === "ur" ? 12 : "auto", top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" } }, speaking ? "\u{1F50A}" : "\u{1F508}"), /* @__PURE__ */ React.createElement("span", { style: { paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0, ...fillHeight ? { display: "flex", alignItems: "center", minHeight: "100%", width: "100%" } : {}, ...textStyle } }, renderText()))), inlineTools ? /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: studyCard, compact: true, iconOnly: true, inline: true, showLists: false }) : null);
+    return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: inlineTools ? "inline-study-row" : "", style: { width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...fillHeight ? { height: "100%", alignSelf: "stretch" } : {} } }, /* @__PURE__ */ React.createElement("div", { style: { flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...fillHeight ? { height: "100%", alignSelf: "stretch" } : {} } }, /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        role: "button",
+        tabIndex: 0,
+        onClick: handleClick,
+        onKeyDown: handleKeyDown,
+        style: { display: fillHeight ? "flex" : fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none", position: "relative", ...fillHeight ? { height: "100%", alignItems: "center" } : {}, ...buttonStyle }
+      },
+      /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", right: lang === "ur" ? "auto" : 12, left: lang === "ur" ? 12 : "auto", top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" } }, speaking ? "\u{1F50A}" : "\u{1F508}"),
+      /* @__PURE__ */ React.createElement("span", { style: { paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0, ...fillHeight ? { display: "flex", alignItems: "center", minHeight: "100%", width: "100%" } : {}, ...textStyle } }, renderText())
+    )), inlineTools ? /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: studyCard, compact: true, iconOnly: true, inline: true, showLists: false }) : null);
   }
   function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, showStudyToolbar = true }) {
     const app = useContext(AppContext);
@@ -2110,22 +2350,24 @@
     const [speaking, setSpeaking] = useState(false);
     const isLight = isLightUiTheme();
     const handleClick = () => {
+      var _a, _b;
       if (!isTtsEnabled()) return;
-      window.speechSynthesis.cancel();
       setSpeaking(true);
-      const u = new SpeechSynthesisUtterance(ttsClean(text));
-      u.lang = "en-US";
-      u.rate = 0.85;
-      u.pitch = 1.05;
-      const voices = window.speechSynthesis.getVoices();
-      const pref = voices.find((v) => v.lang.startsWith("en") && v.localService) || voices.find((v) => v.lang.startsWith("en"));
-      if (pref) u.voice = pref;
-      u.onend = () => setSpeaking(false);
-      u.onerror = () => setSpeaking(false);
-      window.speechSynthesis.speak(u);
+      const utterance = ((_b = (_a = window.HomeSchoolUtils) == null ? void 0 : _a.speakText) == null ? void 0 : _b.call(_a, text, "en")) || null;
+      if (utterance) {
+        utterance.onend = () => setSpeaking(false);
+        utterance.onerror = () => setSpeaking(false);
+        return;
+      }
+      setSpeaking(false);
+    };
+    const handleKeyDown = (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      handleClick();
     };
     const renderHighlighted = (segment, keyBase) => {
-      return renderHighlightText(segment, highlight, keyBase + "-hl");
+      return renderInteractiveEnglishText(segment, app, highlight, keyBase + "-hl");
     };
     const renderText = () => {
       const parts = [];
@@ -2147,7 +2389,18 @@
       return parts.length ? /* @__PURE__ */ React.createElement(React.Fragment, null, parts) : renderHighlighted(text, "full");
     };
     const inlineTools = showStudyToolbar && studyCard;
-    return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: inlineTools ? "inline-study-row" : "", style: { width: "100%", maxWidth: "100%" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: inlineTools ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" } }, /* @__PURE__ */ React.createElement("button", { onClick: handleClick, style: { display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none", position: "relative" } }, /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" } }, speaking ? "\u{1F50A}" : "\u{1F508}"), /* @__PURE__ */ React.createElement("span", { style: { paddingRight: 28 } }, renderText()))), inlineTools ? /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: studyCard, compact: true, iconOnly: true, inline: true, showLists: false }) : null);
+    return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: inlineTools ? "inline-study-row" : "", style: { width: "100%", maxWidth: "100%" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: inlineTools ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" } }, /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        role: "button",
+        tabIndex: 0,
+        onClick: handleClick,
+        onKeyDown: handleKeyDown,
+        style: { display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)", color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none", position: "relative" }
+      },
+      /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" } }, speaking ? "\u{1F50A}" : "\u{1F508}"),
+      /* @__PURE__ */ React.createElement("span", { style: { paddingRight: 28 } }, renderText())
+    )), inlineTools ? /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: studyCard, compact: true, iconOnly: true, inline: true, showLists: false }) : null);
   }
   function formatListedAnswer(text) {
     if (typeof text !== "string") return text;
@@ -4368,6 +4621,8 @@ ${marker} `);
     const [discoveryDifficultyFilter, setDiscoveryDifficultyFilter] = useState("all");
     const [wordSearch, setWordSearch] = useState("");
     const [wordBankSubjectFilter, setWordBankSubjectFilter] = useState("all");
+    const [wordMeaningCache, setWordMeaningCache] = useState(normalizeWordMeaningCache((stored == null ? void 0 : stored.wordMeaningCache) || {}));
+    const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
     const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
     const [gradeDisclosureOpen, setGradeDisclosureOpen] = useState(false);
     const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme((stored == null ? void 0 : stored.themeMode) || "dark"));
@@ -4856,6 +5111,7 @@ ${marker} `);
         return haystack.includes(searchNeedle);
       }).slice(0, 18);
     }, [wordBankIndex, wordBankSubjectFilter, wordSearch]);
+    const localWordMeaningLookup = useMemo(() => buildWordMeaningLookupFromIndex(wordBankIndex), [wordBankIndex]);
     useEffect(() => {
       timeTrackingRef.current = timeTrackingData;
     }, [timeTrackingData]);
@@ -5228,6 +5484,7 @@ ${marker} `);
             await window.HomeSchoolDB.saveCustomization("timeTrackingData", normalizeTimeTrackingData(nextPayload.timeTrackingData || {}));
             await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40));
             await window.HomeSchoolDB.saveCustomization("gamificationState", normalizeGamificationState(nextPayload.gamificationState || {}));
+            await window.HomeSchoolDB.saveCustomization("wordMeaningCache", normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}));
             await window.HomeSchoolDB.saveCustomization("studentProfile", {
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
@@ -5277,6 +5534,7 @@ ${marker} `);
               timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
               notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
               gamificationState: normalizeGamificationState(nextPayload.gamificationState || {}),
+              wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
               studentProfile: {
                 grade: nextPayload.grade,
                 studentName: nextPayload.studentName,
@@ -5328,6 +5586,7 @@ ${marker} `);
             classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
             timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
             notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
+            wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
             studentProfile: {
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
@@ -5353,7 +5612,7 @@ ${marker} `);
         return;
       }
       (async () => {
-        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2;
+        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2;
         try {
           await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
           const pos = await window.HomeSchoolDB.getAllPosTypes();
@@ -5375,10 +5634,11 @@ ${marker} `);
           const storedTimeTracking = ((_j2 = customizations.timeTrackingData) == null ? void 0 : _j2.data) || null;
           const storedNotificationHistory = ((_k2 = customizations.notificationHistory) == null ? void 0 : _k2.data) || null;
           const storedGamification = ((_l2 = customizations.gamificationState) == null ? void 0 : _l2.data) || null;
-          const storedProfile = ((_m2 = customizations.studentProfile) == null ? void 0 : _m2.data) || null;
-          const storedPracticeProgress = ((_n2 = customizations.practiceProgress) == null ? void 0 : _n2.data) || null;
-          const storedAiProviders = sanitizeAiProviderConfigs(((_o2 = customizations.aiProviderConfigs) == null ? void 0 : _o2.data) || {});
-          const storedAiTutor = ((_p2 = customizations.aiTutorPreferences) == null ? void 0 : _p2.data) || null;
+          const storedWordMeaningCache = ((_m2 = customizations.wordMeaningCache) == null ? void 0 : _m2.data) || null;
+          const storedProfile = ((_n2 = customizations.studentProfile) == null ? void 0 : _n2.data) || null;
+          const storedPracticeProgress = ((_o2 = customizations.practiceProgress) == null ? void 0 : _o2.data) || null;
+          const storedAiProviders = sanitizeAiProviderConfigs(((_p2 = customizations.aiProviderConfigs) == null ? void 0 : _p2.data) || {});
+          const storedAiTutor = ((_q2 = customizations.aiTutorPreferences) == null ? void 0 : _q2.data) || null;
           if (storedPreferences) {
             if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
             if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
@@ -5481,6 +5741,9 @@ ${marker} `);
             const normalizedGamification = normalizeGamificationState(storedGamification);
             gamificationStateRef.current = normalizedGamification;
             setGamificationState(normalizedGamification);
+          }
+          if (storedWordMeaningCache && typeof storedWordMeaningCache === "object") {
+            setWordMeaningCache(normalizeWordMeaningCache(storedWordMeaningCache));
           }
           if (storedProfile) {
             if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
@@ -5827,16 +6090,17 @@ ${marker} `);
         timeTrackingData,
         notificationHistory,
         gamificationState,
+        wordMeaningCache,
         grade,
         studentName,
         studentNameUr,
         aiProviderConfigs,
         selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed });
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed]);
+      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache });
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache]);
     useEffect(() => {
       setNavHidden(Boolean(navAutoHide));
     }, [navPosition, navAutoHide]);
@@ -6709,6 +6973,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           gamificationStateRef.current = normalizedGamification;
           setGamificationState(normalizedGamification);
         }
+        if (nextState.wordMeaningCache) setWordMeaningCache(normalizeWordMeaningCache(nextState.wordMeaningCache));
         return;
       }
       if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
@@ -6789,6 +7054,12 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         gamificationStateRef.current = mergedGamification;
         setGamificationState(mergedGamification);
       }
+      if (nextState.wordMeaningCache) {
+        setWordMeaningCache((current) => normalizeWordMeaningCache({
+          ...current,
+          ...nextState.wordMeaningCache
+        }));
+      }
     }, []);
     const executeImportReview = useCallback(async (previewState, mode) => {
       if (!(previewState == null ? void 0 : previewState.parsed)) return;
@@ -6847,7 +7118,8 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           classScheduleSettings,
           timeTrackingData,
           notificationHistory,
-          gamificationState
+          gamificationState,
+          wordMeaningCache
         },
         dbProgress
       });
@@ -6856,7 +7128,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         lastBackupAt: exportedAt,
         lastPromptDay: getLocalDayKey(exportedAt)
       }));
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState]);
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache]);
     const handleImportProgress = useCallback(async (event) => {
       var _a2, _b2;
       const file = (_b2 = (_a2 = event == null ? void 0 : event.target) == null ? void 0 : _a2.files) == null ? void 0 : _b2[0];
@@ -7494,6 +7766,188 @@ ${error.message || error}`);
       window.addEventListener("keydown", handleKeydown);
       return () => window.removeEventListener("keydown", handleKeydown);
     }, [aiProviderConfigs, keyboardShortcutsEnabled, navAutoHide, navBarAutoHide, navPosition, resetPracticeSession, resetReviewSession]);
+    const reviewWordLookup = reviewLibrary.reduce((acc, card) => {
+      if (!(card == null ? void 0 : card.prompt) || !(card == null ? void 0 : card.answer)) return acc;
+      const key = getReviewWordLookupKey(card.prompt, card.answer);
+      if (!acc[key]) acc[key] = card;
+      return acc;
+    }, {});
+    const groupedFavoriteWords = (reviewAnalytics.favoriteWords || []).reduce((groups, card) => {
+      var _a2;
+      const subjectId = (card == null ? void 0 : card.subject) || ((_a2 = card == null ? void 0 : card.source) == null ? void 0 : _a2.subject) || "general";
+      if (!groups[subjectId]) {
+        const subject = SUBJECTS.find((entry) => entry.id === subjectId) || null;
+        groups[subjectId] = { subjectId, subject, cards: [] };
+      }
+      groups[subjectId].cards.push(card);
+      return groups;
+    }, {});
+    const favoriteSubjectGroups = Object.values(groupedFavoriteWords).sort((left, right) => {
+      var _a2, _b2;
+      const leftName = (((_a2 = left.subject) == null ? void 0 : _a2.name) || left.subjectId || "").toLowerCase();
+      const rightName = (((_b2 = right.subject) == null ? void 0 : _b2.name) || right.subjectId || "").toLowerCase();
+      return leftName.localeCompare(rightName);
+    });
+    const recentNotificationHistory = (notificationHistory || []).slice(0, 5);
+    const englishVoiceOptions = availableVoices.filter((voice) => String(voice.lang || "").toLowerCase().startsWith("en"));
+    const urduVoiceOptions = availableVoices.filter((voice) => {
+      const langCode = String(voice.lang || "").toLowerCase();
+      return langCode.startsWith("ur") || langCode.startsWith("hi") || langCode.includes("in");
+    });
+    const reviewLeitnerMax = Math.max(1, ...(reviewAnalytics.leitnerBoxes || []).map((entry) => Number(entry.count) || 0));
+    const upcomingCalendarMax = Math.max(1, ...(reviewAnalytics.upcomingCalendar || []).map((entry) => Number(entry.dueCount) || 0));
+    const dailyGoalProgress = Math.min(100, Math.round((Number(reviewStats.reviewedToday) || 0) / Math.max(1, Number(studyGoals.dailyReviews) || 20) * 100));
+    const weeklyGoalProgress = Math.min(100, Math.round((Number(reviewAnalytics.totals.uniqueReviewedLast7) || 0) / Math.max(1, Number(studyGoals.weeklyWords) || 40) * 100));
+    const currentReminderLabel = getReminderStatus(reminderSettings, language);
+    const reminderDueNow = Boolean((reminderSettings == null ? void 0 : reminderSettings.enabled) && (reminderSettings == null ? void 0 : reminderSettings.lastShownDay) === window.HomeSchoolUtils.getDayKey(Date.now()));
+    const fontSizeZoom = { small: 0.95, normal: 1, large: 1.08, xlarge: 1.14 }[fontSizeMode] || 1;
+    const routeTransitionKey = [
+      tab,
+      (selectedSubject == null ? void 0 : selectedSubject.id) || "",
+      (selectedLesson == null ? void 0 : selectedLesson.key) || "",
+      (selectedAdverbDay == null ? void 0 : selectedAdverbDay.day) || "",
+      (selectedPrepDay == null ? void 0 : selectedPrepDay.day) || "",
+      (selectedAdjDay == null ? void 0 : selectedAdjDay.day) || "",
+      (selectedConjDay == null ? void 0 : selectedConjDay.day) || "",
+      (selectedPronDay == null ? void 0 : selectedPronDay.day) || "",
+      (selectedNounDay == null ? void 0 : selectedNounDay.day) || "",
+      (selectedVerbDay == null ? void 0 : selectedVerbDay.day) || "",
+      (selectedTensePara == null ? void 0 : selectedTensePara.title) || "",
+      (selectedVocabDay == null ? void 0 : selectedVocabDay.day) || "",
+      quizActive ? "quiz" : "",
+      quizDone ? "quizDone" : "",
+      subExerciseGroupIdx != null ? subExerciseGroupIdx : "",
+      subQuizGroupIdx != null ? subQuizGroupIdx : "",
+      mathSubIdx != null ? mathSubIdx : "",
+      practiceMode || "",
+      reviewIdx,
+      reviewSessionDone ? "reviewDone" : ""
+    ].join("|");
+    const aiBrowserCapability = canUseDirectAiFromBrowser();
+    const configuredAiProviderIds = AI_PROVIDER_ORDER.filter((providerId) => {
+      var _a2;
+      return String(((_a2 = aiProviderConfigs[providerId]) == null ? void 0 : _a2.apiKey) || "").trim();
+    });
+    const readyAiProviderIds = configuredAiProviderIds.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
+    const currentAiProviderId = readyAiProviderIds.includes(selectedAiProvider) ? selectedAiProvider : readyAiProviderIds[0] || "openai";
+    const currentAiProviderConfig = aiProviderConfigs[currentAiProviderId] || createDefaultAiProviderConfigs()[currentAiProviderId];
+    const currentAiModelOptions = normalizeAiModelList(currentAiProviderId, currentAiProviderConfig.models, currentAiProviderConfig.model);
+    const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
+      const definition = AI_PROVIDER_DEFS[providerId];
+      const saved = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
+      const draft = aiProviderDrafts[providerId] || saved;
+      const statusLabel = saved.status === "ready" ? joinLocalizedText("Ready", "\u062A\u06CC\u0627\u0631", language) : saved.status === "auth" ? joinLocalizedText("Needs authorization", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u062C\u0627\u0632\u062A \u062F\u0631\u06A9\u0627\u0631", language) : saved.status === "quota" ? joinLocalizedText("Quota or billing needed", "\u06A9\u0648\u0679\u06C1 \u06CC\u0627 \u0628\u0644\u0646\u06AF \u062F\u0631\u06A9\u0627\u0631", language) : saved.status === "blocked" ? joinLocalizedText("Browser blocked", "\u0628\u0631\u0627\u0624\u0632\u0631 \u0646\u06D2 \u0631\u0648\u06A9\u0627", language) : saved.status === "error" ? joinLocalizedText("Needs review", "\u062C\u0627\u0626\u0632\u06C1 \u062F\u0631\u06A9\u0627\u0631", language) : saved.apiKey ? joinLocalizedText("Saved locally", "\u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638", language) : joinLocalizedText("Not configured", "\u0627\u0628\u06BE\u06CC \u0634\u0627\u0645\u0644 \u0646\u06C1\u06CC\u06BA", language);
+      return {
+        id: providerId,
+        label: joinLocalizedText(definition.name, definition.nameUr, language),
+        apiKey: draft.apiKey || "",
+        model: draft.model || definition.defaultModel,
+        modelOptions: normalizeAiModelList(providerId, saved.models, draft.model || saved.model || definition.defaultModel),
+        statusLabel,
+        helpText: saved.lastError || (saved.apiKey ? `${maskApiKey(saved.apiKey)}` : joinLocalizedText("Add a key to enable this provider in Tutor.", "\u0627\u0633 \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06C1 \u06A9\u0648 \u0641\u0639\u0627\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language)),
+        busy: Boolean(aiProviderBusy[providerId]),
+        availableInTutor: isAiProviderReady(saved)
+      };
+    });
+    const closeWordMeaningPopover = useCallback(() => {
+      setWordMeaningPopover(null);
+    }, []);
+    const requestWordMeaningFromAi = useCallback(async (providerId, word) => {
+      const providerConfig = aiProviderConfigs[providerId];
+      const providerDefinition = AI_PROVIDER_DEFS[providerId];
+      if (!(providerConfig == null ? void 0 : providerConfig.apiKey) || !providerDefinition) return "";
+      const response = await requestAiTutorResponse(
+        providerId,
+        providerConfig.apiKey,
+        providerConfig.model || providerDefinition.defaultModel,
+        [{ role: "user", text: `English word: ${word}` }],
+        "You are a bilingual dictionary helper for Pakistani school students. Return only a very short Urdu meaning for the given English word. Use Urdu script only. No explanation. No bullets. No English."
+      );
+      return extractShortUrduMeaning(response);
+    }, [aiProviderConfigs]);
+    const handleLookupWordMeaning = useCallback(async (rawWord, anchorNode) => {
+      var _a2, _b2, _c2, _d2, _e2;
+      const normalizedWord = normalizeLookupWord(rawWord);
+      if (!normalizedWord) return;
+      const anchorRect = ((_a2 = anchorNode == null ? void 0 : anchorNode.getBoundingClientRect) == null ? void 0 : _a2.call(anchorNode)) || null;
+      const popupWidth = Math.min(280, Math.max(220, Math.round((window.innerWidth || 360) * 0.38)));
+      const left = anchorRect ? Math.min(Math.max(14, anchorRect.left + anchorRect.width / 2 - popupWidth / 2), Math.max(14, (window.innerWidth || 360) - popupWidth - 14)) : 20;
+      const top = anchorRect ? Math.max(56, anchorRect.top - 6) : 84;
+      const placement = anchorRect && anchorRect.top > 150 ? "above" : "below";
+      const setPopupState = (nextPartial) => {
+        setWordMeaningPopover((current) => ({
+          word: rawWord,
+          normalizedWord,
+          left,
+          top,
+          width: popupWidth,
+          placement,
+          meaningUr: "",
+          source: "",
+          loading: false,
+          error: "",
+          ...current && current.normalizedWord === normalizedWord ? current : {},
+          ...nextPartial
+        }));
+      };
+      (_c2 = (_b2 = window.HomeSchoolUtils) == null ? void 0 : _b2.speakText) == null ? void 0 : _c2.call(_b2, rawWord, "en");
+      setPopupState({ loading: true, error: "" });
+      const candidateWords = getLookupWordCandidates(rawWord);
+      const localEntry = candidateWords.map((candidate) => localWordMeaningLookup[candidate]).find(Boolean);
+      if (localEntry == null ? void 0 : localEntry.meaningUr) {
+        setPopupState({ loading: false, meaningUr: localEntry.meaningUr, source: "Local" });
+        return;
+      }
+      const cacheEntry = candidateWords.map((candidate) => wordMeaningCache[candidate]).find(Boolean);
+      if (cacheEntry == null ? void 0 : cacheEntry.meaningUr) {
+        setPopupState({ loading: false, meaningUr: cacheEntry.meaningUr, source: cacheEntry.source || "Cache" });
+        return;
+      }
+      const providerOrder = ["gemini", ...readyAiProviderIds.filter((providerId) => providerId !== "gemini")];
+      let lastError = null;
+      for (const providerId of providerOrder) {
+        try {
+          const meaningUr = await requestWordMeaningFromAi(providerId, rawWord);
+          if (!meaningUr) continue;
+          const cacheRecord = normalizeWordMeaningCache({
+            ...wordMeaningCache,
+            [normalizedWord]: {
+              meaningUr,
+              source: providerId === "gemini" ? "Gemini" : ((_d2 = AI_PROVIDER_DEFS[providerId]) == null ? void 0 : _d2.name) || "AI",
+              fetchedAt: Date.now()
+            }
+          });
+          setWordMeaningCache(cacheRecord);
+          setPopupState({ loading: false, meaningUr, source: ((_e2 = cacheRecord[normalizedWord]) == null ? void 0 : _e2.source) || "AI", error: "" });
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      const blockedReason = canUseDirectAiFromBrowser();
+      setPopupState({
+        loading: false,
+        error: blockedReason.ok ? joinLocalizedText("Meaning not found yet.", "\u0627\u0628\u06BE\u06CC \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language) : ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
+        source: lastError ? "Unavailable" : ""
+      });
+    }, [language, localWordMeaningLookup, readyAiProviderIds, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache]);
+    useEffect(() => {
+      if (!wordMeaningPopover) return void 0;
+      const handleDismiss = (event) => {
+        if (event.type === "keydown" && event.key !== "Escape") return;
+        setWordMeaningPopover(null);
+      };
+      window.addEventListener("scroll", handleDismiss, true);
+      window.addEventListener("resize", handleDismiss);
+      window.addEventListener("keydown", handleDismiss);
+      window.addEventListener("pointerdown", handleDismiss);
+      return () => {
+        window.removeEventListener("scroll", handleDismiss, true);
+        window.removeEventListener("resize", handleDismiss);
+        window.removeEventListener("keydown", handleDismiss);
+        window.removeEventListener("pointerdown", handleDismiss);
+      };
+    }, [wordMeaningPopover]);
     if (!dbLoaded) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 16 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 700, marginBottom: 8 } }, ui.loadingHome), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 13 } }, ui.loadingDb), /* @__PURE__ */ React.createElement("div", { style: { width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" } })))));
     if (!grade) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 32 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 12 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h1", { style: { fontSize: 28, fontWeight: 800, marginBottom: 4 } }, "HomeSchool"), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 14 } }, renderLocalizedTextNode(ui.tagline, language)), language === "en" ? /* @__PURE__ */ React.createElement("p", { style: { fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 } }, "\u0622\u067E \u06A9\u0627 \u0630\u0627\u062A\u06CC \u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u062A\u06BE\u06CC") : null), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, renderLocalizedTextNode(ui.yourName, language)), /* @__PURE__ */ React.createElement("input", { value: studentName, onChange: (e) => setStudentName(e.target.value), placeholder: ui.enterName, style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" } })), language !== "en" && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, renderLocalizedTextNode(ui.yourNameUr, language)), /* @__PURE__ */ React.createElement("input", { value: studentNameUr, onChange: (e) => setStudentNameUr(sanitizeUrduInput(e.target.value)), placeholder: "\u0627\u067E\u0646\u0627 \u0646\u0627\u0645 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA", style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font-ur)", fontSize: 15, outline: "none", direction: "rtl" } })), /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" } }, renderLocalizedTextNode(ui.selectGrade, language)), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn", onClick: () => setGrade(g.id) }, g.id))))));
     const goHome = () => {
@@ -7603,89 +8057,6 @@ ${error.message || error}`);
     const bannerLabelOptions = { gap: 1, enStyle: { fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }, urStyle: { fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700 } };
     const bannerValueOptions = { gap: 1, enStyle: { fontSize: 12.5, color: "var(--accent)", fontWeight: 800 }, urStyle: { fontSize: 12.5, color: "var(--text-primary)", fontWeight: 700 } };
     const bannerButtonOptions = { gap: 0, enStyle: { fontSize: 12, fontWeight: 700 }, urStyle: { fontSize: 11.5, fontWeight: 700 } };
-    const reviewWordLookup = reviewLibrary.reduce((acc, card) => {
-      if (!(card == null ? void 0 : card.prompt) || !(card == null ? void 0 : card.answer)) return acc;
-      const key = getReviewWordLookupKey(card.prompt, card.answer);
-      if (!acc[key]) acc[key] = card;
-      return acc;
-    }, {});
-    const groupedFavoriteWords = (reviewAnalytics.favoriteWords || []).reduce((groups, card) => {
-      var _a2;
-      const subjectId = (card == null ? void 0 : card.subject) || ((_a2 = card == null ? void 0 : card.source) == null ? void 0 : _a2.subject) || "general";
-      if (!groups[subjectId]) {
-        const subject = SUBJECTS.find((entry) => entry.id === subjectId) || null;
-        groups[subjectId] = { subjectId, subject, cards: [] };
-      }
-      groups[subjectId].cards.push(card);
-      return groups;
-    }, {});
-    const favoriteSubjectGroups = Object.values(groupedFavoriteWords).sort((left, right) => {
-      var _a2, _b2;
-      const leftName = (((_a2 = left.subject) == null ? void 0 : _a2.name) || left.subjectId || "").toLowerCase();
-      const rightName = (((_b2 = right.subject) == null ? void 0 : _b2.name) || right.subjectId || "").toLowerCase();
-      return leftName.localeCompare(rightName);
-    });
-    const recentNotificationHistory = (notificationHistory || []).slice(0, 5);
-    const englishVoiceOptions = availableVoices.filter((voice) => String(voice.lang || "").toLowerCase().startsWith("en"));
-    const urduVoiceOptions = availableVoices.filter((voice) => {
-      const langCode = String(voice.lang || "").toLowerCase();
-      return langCode.startsWith("ur") || langCode.startsWith("hi") || langCode.includes("in");
-    });
-    const reviewLeitnerMax = Math.max(1, ...(reviewAnalytics.leitnerBoxes || []).map((entry) => Number(entry.count) || 0));
-    const upcomingCalendarMax = Math.max(1, ...(reviewAnalytics.upcomingCalendar || []).map((entry) => Number(entry.dueCount) || 0));
-    const dailyGoalProgress = Math.min(100, Math.round((Number(reviewStats.reviewedToday) || 0) / Math.max(1, Number(studyGoals.dailyReviews) || 20) * 100));
-    const weeklyGoalProgress = Math.min(100, Math.round((Number(reviewAnalytics.totals.uniqueReviewedLast7) || 0) / Math.max(1, Number(studyGoals.weeklyWords) || 40) * 100));
-    const currentReminderLabel = getReminderStatus(reminderSettings, language);
-    const reminderDueNow = Boolean((reminderSettings == null ? void 0 : reminderSettings.enabled) && (reminderSettings == null ? void 0 : reminderSettings.lastShownDay) === window.HomeSchoolUtils.getDayKey(Date.now()));
-    const fontSizeZoom = { small: 0.95, normal: 1, large: 1.08, xlarge: 1.14 }[fontSizeMode] || 1;
-    const routeTransitionKey = [
-      tab,
-      (selectedSubject == null ? void 0 : selectedSubject.id) || "",
-      (selectedLesson == null ? void 0 : selectedLesson.key) || "",
-      (selectedAdverbDay == null ? void 0 : selectedAdverbDay.day) || "",
-      (selectedPrepDay == null ? void 0 : selectedPrepDay.day) || "",
-      (selectedAdjDay == null ? void 0 : selectedAdjDay.day) || "",
-      (selectedConjDay == null ? void 0 : selectedConjDay.day) || "",
-      (selectedPronDay == null ? void 0 : selectedPronDay.day) || "",
-      (selectedNounDay == null ? void 0 : selectedNounDay.day) || "",
-      (selectedVerbDay == null ? void 0 : selectedVerbDay.day) || "",
-      (selectedTensePara == null ? void 0 : selectedTensePara.title) || "",
-      (selectedVocabDay == null ? void 0 : selectedVocabDay.day) || "",
-      quizActive ? "quiz" : "",
-      quizDone ? "quizDone" : "",
-      subExerciseGroupIdx != null ? subExerciseGroupIdx : "",
-      subQuizGroupIdx != null ? subQuizGroupIdx : "",
-      mathSubIdx != null ? mathSubIdx : "",
-      practiceMode || "",
-      reviewIdx,
-      reviewSessionDone ? "reviewDone" : ""
-    ].join("|");
-    const aiBrowserCapability = canUseDirectAiFromBrowser();
-    const configuredAiProviderIds = AI_PROVIDER_ORDER.filter((providerId) => {
-      var _a2;
-      return String(((_a2 = aiProviderConfigs[providerId]) == null ? void 0 : _a2.apiKey) || "").trim();
-    });
-    const readyAiProviderIds = configuredAiProviderIds.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
-    const currentAiProviderId = readyAiProviderIds.includes(selectedAiProvider) ? selectedAiProvider : readyAiProviderIds[0] || "openai";
-    const currentAiProviderConfig = aiProviderConfigs[currentAiProviderId] || createDefaultAiProviderConfigs()[currentAiProviderId];
-    const currentAiModelOptions = normalizeAiModelList(currentAiProviderId, currentAiProviderConfig.models, currentAiProviderConfig.model);
-    const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
-      const definition = AI_PROVIDER_DEFS[providerId];
-      const saved = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
-      const draft = aiProviderDrafts[providerId] || saved;
-      const statusLabel = saved.status === "ready" ? joinLocalizedText("Ready", "\u062A\u06CC\u0627\u0631", language) : saved.status === "auth" ? joinLocalizedText("Needs authorization", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u062C\u0627\u0632\u062A \u062F\u0631\u06A9\u0627\u0631", language) : saved.status === "quota" ? joinLocalizedText("Quota or billing needed", "\u06A9\u0648\u0679\u06C1 \u06CC\u0627 \u0628\u0644\u0646\u06AF \u062F\u0631\u06A9\u0627\u0631", language) : saved.status === "blocked" ? joinLocalizedText("Browser blocked", "\u0628\u0631\u0627\u0624\u0632\u0631 \u0646\u06D2 \u0631\u0648\u06A9\u0627", language) : saved.status === "error" ? joinLocalizedText("Needs review", "\u062C\u0627\u0626\u0632\u06C1 \u062F\u0631\u06A9\u0627\u0631", language) : saved.apiKey ? joinLocalizedText("Saved locally", "\u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638", language) : joinLocalizedText("Not configured", "\u0627\u0628\u06BE\u06CC \u0634\u0627\u0645\u0644 \u0646\u06C1\u06CC\u06BA", language);
-      return {
-        id: providerId,
-        label: joinLocalizedText(definition.name, definition.nameUr, language),
-        apiKey: draft.apiKey || "",
-        model: draft.model || definition.defaultModel,
-        modelOptions: normalizeAiModelList(providerId, saved.models, draft.model || saved.model || definition.defaultModel),
-        statusLabel,
-        helpText: saved.lastError || (saved.apiKey ? `${maskApiKey(saved.apiKey)}` : joinLocalizedText("Add a key to enable this provider in Tutor.", "\u0627\u0633 \u0641\u0631\u0627\u06C1\u0645 \u06A9\u0646\u0646\u062F\u06C1 \u06A9\u0648 \u0641\u0639\u0627\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language)),
-        busy: Boolean(aiProviderBusy[providerId]),
-        availableInTutor: isAiProviderReady(saved)
-      };
-    });
     const playAll = (p) => {
       if (!isTtsEnabled()) return;
       window.speechSynthesis.cancel();
@@ -7793,7 +8164,7 @@ ${error.message || error}`);
       time: ui.importConflictTime,
       collections: ui.importConflictCollections
     };
-    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`, style: { zoom: fontSizeZoom, ...navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}, ...navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {} } }, navAutoHide ? /* @__PURE__ */ React.createElement("div", { className: "header-reveal-hotspot", onMouseEnter: revealAutoHideHeader, onMouseMove: revealAutoHideHeader, onPointerDown: revealAutoHideHeader }) : null, /* @__PURE__ */ React.createElement("div", { ref: headerRef, className: `app-header${navPosition === "top" ? " app-header-top-nav" : ""}`, onMouseEnter: navAutoHide ? revealAutoHideHeader : void 0, onMouseLeave: navAutoHide ? concealAutoHideHeader : void 0 }, /* @__PURE__ */ React.createElement("div", { className: "header-leading" }, /* @__PURE__ */ React.createElement("span", { className: "back-btn-slot" }, showBack ? /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190") : null), /* @__PURE__ */ React.createElement("button", { type: "button", className: "header-mark", title: "HomeSchool", "aria-label": "Go home", onClick: goHome }, /* @__PURE__ */ React.createElement("img", { src: "img/ui/header-hs.png", alt: "HomeSchool", className: "header-mark-img" }))), navPosition === "top" ? renderNavBar("top", true) : /* @__PURE__ */ React.createElement("h1", { style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: (wordMeaningPopover == null ? void 0 : wordMeaningPopover.normalizedWord) || "" } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`, style: { zoom: fontSizeZoom, ...navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}, ...navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {} } }, navAutoHide ? /* @__PURE__ */ React.createElement("div", { className: "header-reveal-hotspot", onMouseEnter: revealAutoHideHeader, onMouseMove: revealAutoHideHeader, onPointerDown: revealAutoHideHeader }) : null, /* @__PURE__ */ React.createElement("div", { ref: headerRef, className: `app-header${navPosition === "top" ? " app-header-top-nav" : ""}`, onMouseEnter: navAutoHide ? revealAutoHideHeader : void 0, onMouseLeave: navAutoHide ? concealAutoHideHeader : void 0 }, /* @__PURE__ */ React.createElement("div", { className: "header-leading" }, /* @__PURE__ */ React.createElement("span", { className: "back-btn-slot" }, showBack ? /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190") : null), /* @__PURE__ */ React.createElement("button", { type: "button", className: "header-mark", title: "HomeSchool", "aria-label": "Go home", onClick: goHome }, /* @__PURE__ */ React.createElement("img", { src: "img/ui/header-hs.png", alt: "HomeSchool", className: "header-mark-img" }))), navPosition === "top" ? renderNavBar("top", true) : /* @__PURE__ */ React.createElement("h1", { style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -8531,7 +8902,18 @@ ${error.message || error}`);
         aiBrowserBlocked: !aiBrowserCapability.ok,
         labels: ui
       }
-    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, celebrationQueue[0] ? /* @__PURE__ */ React.createElement("div", { className: "celebration-overlay", onClick: dismissCelebration }, /* @__PURE__ */ React.createElement("div", { className: "celebration-card", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null }, /* @__PURE__ */ React.createElement("div", { className: "celebration-icon", "aria-hidden": "true" }, celebrationQueue[0].icon), /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].titleEn, celebrationQueue[0].titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].bodyEn, celebrationQueue[0].bodyUr, language), language)), /* @__PURE__ */ React.createElement("div", { className: "celebration-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: dismissCelebration }, renderLocalizedTextNode(joinLocalizedText("Nice!", "\u0628\u06C1\u062A \u062E\u0648\u0628!", language), language))))) : null, importReviewState ? /* @__PURE__ */ React.createElement("div", { className: "import-review-overlay", onClick: () => setImportReviewState(null) }, /* @__PURE__ */ React.createElement("div", { className: "import-review-dialog", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head", style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)), /* @__PURE__ */ React.createElement("p", null, importReviewState.fileName))), importReviewState.newerVersion ? /* @__PURE__ */ React.createElement("div", { className: "import-review-warning" }, renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)) : null, /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)), /* @__PURE__ */ React.createElement("div", { className: "import-review-grid" }, (importReviewState.summaryRows || []).map((row) => /* @__PURE__ */ React.createElement("div", { key: row.label, className: "import-review-cell" }, /* @__PURE__ */ React.createElement("span", null, row.label), /* @__PURE__ */ React.createElement("strong", null, row.value))))), /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)), (importReviewState.conflicts || []).length > 0 ? /* @__PURE__ */ React.createElement("ul", { className: "import-review-list" }, importReviewState.conflicts.map((key) => /* @__PURE__ */ React.createElement("li", { key }, renderLocalizedTextNode(importConflictLabels[key] || key, language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "\u06A9\u0648\u0626\u06CC \u0628\u0691\u0627 \u0641\u0631\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 \u0639\u0627\u0645 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u0627 \u062F\u06CC\u0646\u0627 \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "import-review-actions" }, /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setImportReviewState(null) }, renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn", onClick: () => executeImportReview(importReviewState, "merge") }, renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)), /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: () => executeImportReview(importReviewState, "replace") }, renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language))))) : null)));
+    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, wordMeaningPopover ? /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `word-meaning-popover word-meaning-popover-${wordMeaningPopover.placement || "above"}`,
+        style: { left: wordMeaningPopover.left, top: wordMeaningPopover.top, width: wordMeaningPopover.width },
+        onPointerDown: (event) => event.stopPropagation(),
+        onClick: (event) => event.stopPropagation()
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-word" }, wordMeaningPopover.word),
+      wordMeaningPopover.loading ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(joinLocalizedText("Looking up meaning...", "\u0645\u0639\u0646\u06CC \u062A\u0644\u0627\u0634 \u06A9\u06CC\u06D2 \u062C\u0627 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA...", language), language)) : wordMeaningPopover.meaningUr ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-meaning" }, wordMeaningPopover.meaningUr) : /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(wordMeaningPopover.error || joinLocalizedText("Meaning not found yet.", "\u0627\u0628\u06BE\u06CC \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)),
+      wordMeaningPopover.source ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-source" }, wordMeaningPopover.source) : null
+    ) : null, celebrationQueue[0] ? /* @__PURE__ */ React.createElement("div", { className: "celebration-overlay", onClick: dismissCelebration }, /* @__PURE__ */ React.createElement("div", { className: "celebration-card", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null }, /* @__PURE__ */ React.createElement("div", { className: "celebration-icon", "aria-hidden": "true" }, celebrationQueue[0].icon), /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].titleEn, celebrationQueue[0].titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].bodyEn, celebrationQueue[0].bodyUr, language), language)), /* @__PURE__ */ React.createElement("div", { className: "celebration-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: dismissCelebration }, renderLocalizedTextNode(joinLocalizedText("Nice!", "\u0628\u06C1\u062A \u062E\u0648\u0628!", language), language))))) : null, importReviewState ? /* @__PURE__ */ React.createElement("div", { className: "import-review-overlay", onClick: () => setImportReviewState(null) }, /* @__PURE__ */ React.createElement("div", { className: "import-review-dialog", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head", style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)), /* @__PURE__ */ React.createElement("p", null, importReviewState.fileName))), importReviewState.newerVersion ? /* @__PURE__ */ React.createElement("div", { className: "import-review-warning" }, renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)) : null, /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)), /* @__PURE__ */ React.createElement("div", { className: "import-review-grid" }, (importReviewState.summaryRows || []).map((row) => /* @__PURE__ */ React.createElement("div", { key: row.label, className: "import-review-cell" }, /* @__PURE__ */ React.createElement("span", null, row.label), /* @__PURE__ */ React.createElement("strong", null, row.value))))), /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)), (importReviewState.conflicts || []).length > 0 ? /* @__PURE__ */ React.createElement("ul", { className: "import-review-list" }, importReviewState.conflicts.map((key) => /* @__PURE__ */ React.createElement("li", { key }, renderLocalizedTextNode(importConflictLabels[key] || key, language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "\u06A9\u0648\u0626\u06CC \u0628\u0691\u0627 \u0641\u0631\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 \u0639\u0627\u0645 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u0627 \u062F\u06CC\u0646\u0627 \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "import-review-actions" }, /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setImportReviewState(null) }, renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn", onClick: () => executeImportReview(importReviewState, "merge") }, renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)), /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: () => executeImportReview(importReviewState, "replace") }, renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language))))) : null)));
   }
   window.HomeSchoolAppModule = { HomeschoolApp };
   if (!window.__HOME_SCHOOL_BOOTSTRAPPED__ && document.getElementById("root")) {

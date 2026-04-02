@@ -1,0 +1,28 @@
+HomeSchool app.js -> app.bundle.js build steps
+
+Run these commands from:
+D:\HS\HomeSchool
+
+1. Optional safety check only
+python scripts\fix_react_hook_order.py --check
+
+2. Rewrite app.js if any React hooks slipped below the first early return
+python scripts\fix_react_hook_order.py
+
+3. Build js\app.bundle.js from js\app.js
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -Command "npx --yes esbuild js/app.js --loader:.js=jsx --format=iife --target=es2018 --outfile=js/app.bundle.js"
+
+4. Parse-check the built bundle
+@'
+new Function(require('fs').readFileSync('js/app.bundle.js','utf8'));
+console.log('bundle-parse-ok');
+'@ | node -
+
+5. If the app was already open, close the local HTML tab/window and reopen:
+D:\HS\HomeSchool\HomeSchool.html
+
+Notes
+- Step 2 creates a backup file beside app.js as js\app.js.bak.
+- If you do not want a backup file, use:
+  python scripts\fix_react_hook_order.py --no-backup
+- If step 1 reports no problem, you can go directly to step 3.

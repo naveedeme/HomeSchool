@@ -570,7 +570,7 @@ const DAY_SECTION_META = {
   urduToEnglish: { labelEn: "Urdu to English", labelUr: "اردو سے انگریزی", unitEn: "sentences", unitUr: "جملے", defaultSize: 5, max: 20 },
 };
 
-const AI_PROVIDER_ORDER = ["openai", "anthropic", "ollama"];
+const AI_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "ollama"];
 const AI_PROVIDER_DEFS = {
   openai: {
     id: "openai",
@@ -587,6 +587,14 @@ const AI_PROVIDER_DEFS = {
     defaultModel: "claude-sonnet-4-20250514",
     keyPlaceholder: "sk-ant-...",
     modelHints: ["claude-sonnet-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"],
+  },
+  gemini: {
+    id: "gemini",
+    name: "Gemini",
+    nameUr: "جیمنی",
+    defaultModel: "gemini-2.5-flash",
+    keyPlaceholder: "AIza...",
+    modelHints: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
   },
   ollama: {
     id: "ollama",
@@ -678,6 +686,14 @@ function extractOpenAiText(content) {
     }).join("").trim();
   }
   return "";
+}
+
+function extractGeminiText(data) {
+  return (data?.candidates || [])
+    .flatMap((candidate) => candidate?.content?.parts || [])
+    .map((part) => part?.text || "")
+    .join("")
+    .trim();
 }
 
 function buildAiError(code, message, status = null) {
@@ -800,6 +816,21 @@ async function validateAiProviderConfig(providerId, apiKey, preferredModel) {
       status: "ready",
     };
   }
+  if (providerId === "gemini") {
+    const data = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const models = normalizeAiModelList(providerId, (data?.models || [])
+      .filter((entry) => Array.isArray(entry?.supportedGenerationMethods) && entry.supportedGenerationMethods.includes("generateContent"))
+      .map((entry) => String(entry?.name || "").replace(/^models\//, "")), preferredModel);
+    return {
+      model: preferredModel || AI_PROVIDER_DEFS.gemini.defaultModel,
+      models,
+      status: "ready",
+    };
+  }
   const data = await fetchJsonWithTimeout("https://ollama.com/api/tags", {
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -859,6 +890,27 @@ async function requestAiTutorResponse(providerId, apiKey, model, conversation, s
     });
     return (data?.content || []).map((entry) => entry?.text || "").join("").trim() || "Sorry, I could not generate a reply.";
   }
+  if (providerId === "gemini") {
+    const data = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: messages.map((entry) => ({
+          role: entry.role === "assistant" ? "model" : "user",
+          parts: [{ text: entry.content }],
+        })),
+        generationConfig: {
+          temperature: 0.4,
+        },
+      }),
+    });
+    return extractGeminiText(data) || "Sorry, I could not generate a reply.";
+  }
   const data = await fetchJsonWithTimeout("https://ollama.com/api/chat", {
     method: "POST",
     headers: {
@@ -890,6 +942,108 @@ function sanitizeUrduInput(value) {
 
 function containsUrduText(value) {
   return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(String(value || ""));
+}
+
+const WORD_LOOKUP_STOPWORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "had", "has", "have", "he", "her", "him",
+  "his", "i", "in", "is", "it", "its", "me", "my", "of", "on", "or", "our", "she", "so", "than", "that", "the",
+  "their", "them", "there", "these", "they", "this", "to", "too", "was", "we", "were", "will", "with", "you",
+  "your",
+]);
+
+function normalizeLookupWord(word) {
+  return String(word || "")
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .replace(/^[^a-z]+|[^a-z]+$/g, "")
+    .trim();
+}
+
+function getLookupWordCandidates(word) {
+  const base = normalizeLookupWord(word);
+  const candidates = new Set();
+  if (!base) return [];
+  const pushCandidate = (value) => {
+    const normalized = normalizeLookupWord(value);
+    if (normalized) candidates.add(normalized);
+  };
+  pushCandidate(base);
+  if (base.endsWith("'s")) pushCandidate(base.slice(0, -2));
+  if (base.endsWith("ies") && base.length > 4) pushCandidate(`${base.slice(0, -3)}y`);
+  if (base.endsWith("ing") && base.length > 5) {
+    pushCandidate(base.slice(0, -3));
+    pushCandidate(`${base.slice(0, -3)}e`);
+    if (/(.)\1$/.test(base.slice(0, -3))) pushCandidate(base.slice(0, -4));
+  }
+  if (base.endsWith("ied") && base.length > 4) pushCandidate(`${base.slice(0, -3)}y`);
+  if (base.endsWith("ed") && base.length > 4) {
+    pushCandidate(base.slice(0, -2));
+    pushCandidate(`${base.slice(0, -2)}e`);
+    if (/(.)\1$/.test(base.slice(0, -2))) pushCandidate(base.slice(0, -3));
+  }
+  if (base.endsWith("es") && base.length > 4) pushCandidate(base.slice(0, -2));
+  if (base.endsWith("s") && base.length > 3) pushCandidate(base.slice(0, -1));
+  if (base.endsWith("er") && base.length > 4) pushCandidate(base.slice(0, -2));
+  if (base.endsWith("est") && base.length > 5) pushCandidate(base.slice(0, -3));
+  return Array.from(candidates);
+}
+
+function normalizeWordMeaningCache(rawCache) {
+  if (!rawCache || typeof rawCache !== "object") return {};
+  return Object.entries(rawCache)
+    .map(([key, value]) => {
+      const normalizedKey = normalizeLookupWord(key);
+      if (!normalizedKey || !value || typeof value !== "object") return null;
+      const meaningUr = String(value.meaningUr || value.meaning || "").trim();
+      if (!meaningUr) return null;
+      return [normalizedKey, {
+        meaningUr,
+        source: String(value.source || "cache"),
+        fetchedAt: Number(value.fetchedAt) || Date.now(),
+      }];
+    })
+    .filter(Boolean)
+    .sort((left, right) => (right[1].fetchedAt || 0) - (left[1].fetchedAt || 0))
+    .slice(0, 300)
+    .reduce((acc, entry) => {
+      acc[entry[0]] = entry[1];
+      return acc;
+    }, {});
+}
+
+function buildWordMeaningLookupFromIndex(items) {
+  const lookup = {};
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const prompt = normalizeText(item?.prompt || item?.practiceFront || "");
+    if (!prompt || prompt.split(/\s+/).length > 3 || containsUrduText(prompt)) return;
+    const meaningUr = normalizeText(
+      containsUrduText(item?.meaning || "") ? item.meaning
+        : containsUrduText(item?.answer || "") ? item.answer
+        : "",
+    );
+    if (!meaningUr) return;
+    getLookupWordCandidates(prompt).forEach((candidate) => {
+      if (!lookup[candidate]) {
+        lookup[candidate] = {
+          meaningUr,
+          source: "local",
+        };
+      }
+    });
+  });
+  return lookup;
+}
+
+function extractShortUrduMeaning(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const firstLine = raw.split(/\r?\n/).find(Boolean) || raw;
+  const cleaned = firstLine
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/^meaning\s*[:\-]\s*/i, "")
+    .replace(/^urdu\s*[:\-]\s*/i, "")
+    .trim();
+  return cleaned;
 }
 
 function joinLocalizedText(enText, urText, language) {
@@ -3303,9 +3457,9 @@ function buildHighlightTerms(highlight) {
   return [...new Set(source.map(normalizeHighlightTerm).filter(Boolean))].sort((a, b) => b.length - a.length);
 }
 
-function renderHighlightText(text, highlight, keyPrefix = "hl") {
+function getHighlightRanges(text, highlight) {
   const terms = buildHighlightTerms(highlight);
-  if (!terms.length) return text;
+  if (!terms.length) return [];
   const lower = String(text).toLowerCase();
   const matches = [];
   terms.forEach(term => {
@@ -3330,7 +3484,7 @@ function renderHighlightText(text, highlight, keyPrefix = "hl") {
       matches.push({ start: wordMatch.index, end: wordMatch.index + wordMatch[0].length });
     }
   }
-  if (!matches.length) return text;
+  if (!matches.length) return [];
   matches.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
   const merged = [];
   matches.forEach(match => {
@@ -3339,6 +3493,11 @@ function renderHighlightText(text, highlight, keyPrefix = "hl") {
       merged.push(match);
     }
   });
+  return merged;
+}
+
+function renderHighlightText(text, highlight, keyPrefix = "hl") {
+  const merged = getHighlightRanges(text, highlight);
   if (!merged.length) return text;
   const parts = [];
   let cursor = 0;
@@ -3348,6 +3507,51 @@ function renderHighlightText(text, highlight, keyPrefix = "hl") {
     cursor = match.end;
   });
   if (cursor < text.length) parts.push(text.slice(cursor));
+  return <>{parts}</>;
+}
+
+function isHighlightedRange(ranges, start, end) {
+  return (Array.isArray(ranges) ? ranges : []).some((range) => start < range.end && end > range.start);
+}
+
+function renderInteractiveEnglishText(text, app, highlight = null, keyPrefix = "tap") {
+  const safeText = String(text || "");
+  if (!safeText) return "";
+  const ranges = getHighlightRanges(safeText, highlight);
+  const parts = [];
+  const wordMatcher = /[A-Za-z]+(?:['’][A-Za-z]+)?/g;
+  let match;
+  let cursor = 0;
+  while ((match = wordMatcher.exec(safeText)) !== null) {
+    if (match.index > cursor) parts.push(safeText.slice(cursor, match.index));
+    const token = match[0];
+    const normalized = normalizeLookupWord(token);
+    const highlighted = isHighlightedRange(ranges, match.index, match.index + token.length);
+    const tappable = normalized && normalized.length >= 3 && !WORD_LOOKUP_STOPWORDS.has(normalized) && typeof app?.onLookupWordMeaning === "function";
+    if (tappable) {
+      const isActive = app?.activeLookupWord === normalized;
+      parts.push(
+        <button
+          key={`${keyPrefix}-${match.index}`}
+          type="button"
+          className={`tap-word${highlighted ? " highlighted" : ""}${isActive ? " active" : ""}`}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            app.onLookupWordMeaning(token, event.currentTarget);
+          }}
+        >
+          {token}
+        </button>,
+      );
+    } else if (highlighted) {
+      parts.push(<span key={`${keyPrefix}-${match.index}`} style={{ color: "#38BDF8", fontWeight: 700 }}>{token}</span>);
+    } else {
+      parts.push(token);
+    }
+    cursor = match.index + token.length;
+  }
+  if (cursor < safeText.length) parts.push(safeText.slice(cursor));
   return <>{parts}</>;
 }
 
@@ -3376,16 +3580,29 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
   const isLight = isLightUiTheme();
   const handleClick = () => {
     if (!isTtsEnabled()) return;
-    window.speechSynthesis.cancel();
     setSpeaking(true);
-    const u = new SpeechSynthesisUtterance(ttsClean(text));
-    const speechConfig = getSpeechConfig(lang, window.speechSynthesis.getVoices());
-    u.lang = speechConfig.lang;
-    u.rate = speechConfig.rate;
-    u.pitch = 1.05;
-    if (speechConfig.voice) u.voice = speechConfig.voice;
-    u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(u);
+    const utterance = window.HomeSchoolUtils?.speakText?.(text, lang) || null;
+    if (utterance) {
+      utterance.onend = () => setSpeaking(false);
+      utterance.onerror = () => setSpeaking(false);
+      return;
+    }
+    setSpeaking(false);
+  };
+  const handleKeyDown = (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    handleClick();
+  };
+  const renderPlainSegment = (segment, keyBase) => {
+    if (!segment) return null;
+    return (
+      <React.Fragment key={keyBase}>
+        {lang === "en"
+          ? renderInteractiveEnglishText(segment, app, highlight, keyBase)
+          : renderHighlightText(segment, highlight, keyBase)}
+      </React.Fragment>
+    );
   };
   const renderText = () => {
     let t = text;
@@ -3396,7 +3613,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
     const re = /\[(\d+)\]|(\d\s*[><=≥≤≈+\-×÷]\s*\d)|([><=≥≤≈])|([→←↑↓])|(___)/g;
     let m;
     while ((m = re.exec(t)) !== null) {
-      if (m.index > lastIdx) parts.push(t.slice(lastIdx, m.index));
+      if (m.index > lastIdx) parts.push(renderPlainSegment(t.slice(lastIdx, m.index), `txt-${m.index}`));
       if (m[1]) {
         parts.push(<span key={"b"+m.index} style={{display:"inline-block",background:"#F59E0B22",border:"2px solid #F59E0B",borderRadius:6,padding:"0 5px",color:"#F59E0B",fontWeight:800,margin:"0 1px"}}>{m[1]}</span>);
       } else if (m[2]) {
@@ -3421,18 +3638,29 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
       }
       lastIdx = m.index + m[0].length;
     }
-    if (parts.length > 0) { if (lastIdx < t.length) parts.push(t.slice(lastIdx)); return <>{parts}</>; }
-    return renderHighlightText(text, highlight, "sentence");
+    if (parts.length > 0) {
+      if (lastIdx < t.length) parts.push(renderPlainSegment(t.slice(lastIdx), "tail"));
+      return <>{parts}</>;
+    }
+    return lang === "en"
+      ? renderInteractiveEnglishText(text, app, highlight, "sentence")
+      : renderHighlightText(text, highlight, "sentence");
   };
   const inlineTools = showStudyToolbar && studyCard;
   const fillHeight = buttonStyle?.height === "100%" || buttonStyle?.minHeight === "100%";
   return (
     <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
       <div style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
-      <button onClick={handleClick} style={{ display: fillHeight ? "flex" : (fullWidth ? "block" : "inline-block"), width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative", ...(fillHeight ? { height: "100%", alignItems: "center" } : {}), ...buttonStyle }}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        style={{ display: fillHeight ? "flex" : (fullWidth ? "block" : "inline-block"), width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: lang === "ur" ? "rtl" : "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative", ...(fillHeight ? { height: "100%", alignItems: "center" } : {}), ...buttonStyle }}
+      >
         <span style={{ position: "absolute", right: lang === "ur" ? "auto" : 12, left: lang === "ur" ? 12 : "auto", top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
         <span style={{ paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0, ...(fillHeight ? { display: "flex", alignItems: "center", minHeight: "100%", width: "100%" } : {}), ...textStyle }}>{renderText()}</span>
-      </button>
+      </div>
       </div>
       {inlineTools ? <WordCollectionToolbar card={studyCard} compact={true} iconOnly={true} inline={true} showLists={false} /> : null}
     </div>
@@ -3454,18 +3682,22 @@ function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, 
   const isLight = isLightUiTheme();
   const handleClick = () => {
     if (!isTtsEnabled()) return;
-    window.speechSynthesis.cancel();
     setSpeaking(true);
-    const u = new SpeechSynthesisUtterance(ttsClean(text));
-    u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.05;
-    const voices = window.speechSynthesis.getVoices();
-    const pref = voices.find(v => v.lang.startsWith("en") && v.localService) || voices.find(v => v.lang.startsWith("en"));
-    if (pref) u.voice = pref;
-    u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false);
-    window.speechSynthesis.speak(u);
+    const utterance = window.HomeSchoolUtils?.speakText?.(text, "en") || null;
+    if (utterance) {
+      utterance.onend = () => setSpeaking(false);
+      utterance.onerror = () => setSpeaking(false);
+      return;
+    }
+    setSpeaking(false);
+  };
+  const handleKeyDown = (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    handleClick();
   };
   const renderHighlighted = (segment, keyBase) => {
-    return renderHighlightText(segment, highlight, keyBase + "-hl");
+    return renderInteractiveEnglishText(segment, app, highlight, keyBase + "-hl");
   };
   const renderText = () => {
     const parts = [];
@@ -3496,10 +3728,16 @@ function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, 
   return (
     <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: "100%", maxWidth: "100%" }}>
       <div style={{ flex: inlineTools ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" }}>
-      <button onClick={handleClick} style={{ display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative" }}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        style={{ display: "block", width: "100%", maxWidth: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: speaking ? "2px solid #38BDF8" : "1px solid var(--border)", background: speaking ? "rgba(56,189,248,0.12)" : (isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)"), color: speaking ? "#38BDF8" : "var(--text-primary)", fontFamily: "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, cursor: "pointer", transition: "all 0.25s", direction: "ltr", boxShadow: speaking ? "0 0 16px rgba(56,189,248,0.2)" : (isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none"), position: "relative" }}
+      >
         <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: speaking ? 1 : 0.4, transition: "opacity 0.2s" }}>{speaking ? "🔊" : "🔈"}</span>
         <span style={{ paddingRight: 28 }}>{renderText()}</span>
-      </button>
+      </div>
       </div>
       {inlineTools ? <WordCollectionToolbar card={studyCard} compact={true} iconOnly={true} inline={true} showLists={false} /> : null}
     </div>
@@ -6116,6 +6354,8 @@ function HomeschoolApp() {
   const [discoveryDifficultyFilter, setDiscoveryDifficultyFilter] = useState("all");
   const [wordSearch, setWordSearch] = useState("");
   const [wordBankSubjectFilter, setWordBankSubjectFilter] = useState("all");
+  const [wordMeaningCache, setWordMeaningCache] = useState(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
+  const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
   const [gradeDisclosureOpen, setGradeDisclosureOpen] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "dark"));
@@ -6627,6 +6867,7 @@ function HomeschoolApp() {
       return haystack.includes(searchNeedle);
     }).slice(0, 18);
   }, [wordBankIndex, wordBankSubjectFilter, wordSearch]);
+  const localWordMeaningLookup = useMemo(() => buildWordMeaningLookupFromIndex(wordBankIndex), [wordBankIndex]);
 
   useEffect(() => {
     timeTrackingRef.current = timeTrackingData;
@@ -7022,6 +7263,7 @@ function HomeschoolApp() {
           await window.HomeSchoolDB.saveCustomization("timeTrackingData", normalizeTimeTrackingData(nextPayload.timeTrackingData || {}));
           await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40));
           await window.HomeSchoolDB.saveCustomization("gamificationState", normalizeGamificationState(nextPayload.gamificationState || {}));
+          await window.HomeSchoolDB.saveCustomization("wordMeaningCache", normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}));
           await window.HomeSchoolDB.saveCustomization("studentProfile", {
             grade: nextPayload.grade,
             studentName: nextPayload.studentName,
@@ -7071,6 +7313,7 @@ function HomeschoolApp() {
             timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
             notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
             gamificationState: normalizeGamificationState(nextPayload.gamificationState || {}),
+            wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
             studentProfile: {
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
@@ -7122,6 +7365,7 @@ function HomeschoolApp() {
             classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
             timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
             notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
+            wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
           studentProfile: {
             grade: nextPayload.grade,
             studentName: nextPayload.studentName,
@@ -7170,6 +7414,7 @@ function HomeschoolApp() {
         const storedTimeTracking = customizations.timeTrackingData?.data || null;
         const storedNotificationHistory = customizations.notificationHistory?.data || null;
         const storedGamification = customizations.gamificationState?.data || null;
+        const storedWordMeaningCache = customizations.wordMeaningCache?.data || null;
         const storedProfile = customizations.studentProfile?.data || null;
         const storedPracticeProgress = customizations.practiceProgress?.data || null;
         const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
@@ -7276,6 +7521,9 @@ function HomeschoolApp() {
           const normalizedGamification = normalizeGamificationState(storedGamification);
           gamificationStateRef.current = normalizedGamification;
           setGamificationState(normalizedGamification);
+        }
+        if (storedWordMeaningCache && typeof storedWordMeaningCache === "object") {
+          setWordMeaningCache(normalizeWordMeaningCache(storedWordMeaningCache));
         }
         if (storedProfile) {
           if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
@@ -7642,16 +7890,17 @@ function HomeschoolApp() {
       timeTrackingData,
       notificationHistory,
       gamificationState,
+      wordMeaningCache,
       grade,
       studentName,
       studentNameUr,
       aiProviderConfigs,
       selectedAiProvider,
     });
-  }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+  }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed });
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed]);
+    if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache });
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -8530,6 +8779,7 @@ function HomeschoolApp() {
         gamificationStateRef.current = normalizedGamification;
         setGamificationState(normalizedGamification);
       }
+      if (nextState.wordMeaningCache) setWordMeaningCache(normalizeWordMeaningCache(nextState.wordMeaningCache));
       return;
     }
 
@@ -8608,6 +8858,12 @@ function HomeschoolApp() {
       gamificationStateRef.current = mergedGamification;
       setGamificationState(mergedGamification);
     }
+    if (nextState.wordMeaningCache) {
+      setWordMeaningCache((current) => normalizeWordMeaningCache({
+        ...current,
+        ...nextState.wordMeaningCache,
+      }));
+    }
   }, []);
 
   const executeImportReview = useCallback(async (previewState, mode) => {
@@ -8669,6 +8925,7 @@ function HomeschoolApp() {
         timeTrackingData,
         notificationHistory,
         gamificationState,
+        wordMeaningCache,
       },
       dbProgress,
     });
@@ -8677,7 +8934,7 @@ function HomeschoolApp() {
       lastBackupAt: exportedAt,
       lastPromptDay: getLocalDayKey(exportedAt),
     }));
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState]);
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
@@ -9369,76 +9626,6 @@ function HomeschoolApp() {
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [aiProviderConfigs, keyboardShortcutsEnabled, navAutoHide, navBarAutoHide, navPosition, resetPracticeSession, resetReviewSession]);
 
-  // Show loading while DB initializes
-  if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{ui.loadingHome}</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ui.loadingDb}</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
-
-  if (!grade) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: isUrduUi(language) ? "rtl" : "ltr" }}><div style={{ textAlign: "center", marginBottom: 32 }}><div style={{ fontSize: 56, marginBottom: 12 }}>📚</div><h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>HomeSchool</h1><p style={{ color: "var(--text-secondary)", fontSize: 14 }}>{renderLocalizedTextNode(ui.tagline, language)}</p>{language === "en" ? <p style={{ fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 }}>آپ کا ذاتی تعلیمی ساتھی</p> : null}</div><div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{renderLocalizedTextNode(ui.yourName, language)}</label><input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder={ui.enterName} style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" }} /></div>{language !== "en" && <div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{renderLocalizedTextNode(ui.yourNameUr, language)}</label><input value={studentNameUr} onChange={e => setStudentNameUr(sanitizeUrduInput(e.target.value))} placeholder="اپنا نام درج کریں" style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font-ur)", fontSize: 15, outline: "none", direction: "rtl" }} /></div>}<label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" }}>{renderLocalizedTextNode(ui.selectGrade, language)}</label><div className="grade-grid">{GRADES.map(g => <button key={g.id} className="grade-btn" onClick={() => setGrade(g.id)}>{g.id}</button>)}</div></div></div></>);
-
-  const goHome = () => {
-    window.speechSynthesis.cancel();
-    setNavHidden(Boolean(navAutoHide));
-    setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
-    setTab("home");
-    setSelectedSubject(null);
-    setSelectedLesson(null);
-    setQuizActive(false);
-    setQuizDone(false);
-    setQuizAnswers([]);
-    setQuizIdx(0);
-    setQuizRevealed(false);
-    setSelectedAdverbDay(null);
-    setSelectedPrepDay(null);
-    setSelectedAdjDay(null);
-    setSelectedConjDay(null);
-    setSelectedPronDay(null);
-    setSelectedNounDay(null);
-    setSelectedVerbDay(null);
-    setSelectedTensePara(null);
-    setSelectedVocabDay(null);
-    setMathSubIdx(null);
-    setMathSubTab("examples");
-    setSubExerciseGroupIdx(null);
-    setSubQuizGroupIdx(null);
-    setRevealedEx({});
-    setPosTab("adverbs");
-    setTenseMain("present");
-    setTenseSub("simple");
-    setNewBadges([]);
-    resetReviewSession();
-    resetPracticeSession();
-  };
-  const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
-  const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
-  const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
-  const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
-  const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
-  const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
-  const reviewReadyNowCount = Math.min(Number(reviewStats.due || 0), Number(dailyReviewCap || 20));
-  const canInstallApp = Boolean(installPromptEvent) && !isInstalled;
-  const canShowInstallBanner = !installBannerDismissed && !isInstalled && serviceWorkerStatus !== "unsupported" && serviceWorkerStatus !== "local-static";
-  const installStatusLabel = isInstalled || installAvailability === "installed"
-    ? ui.appInstalled
-    : canInstallApp || installAvailability === "available"
-      ? ui.appInstallAvailable
-      : ui.appInstallUnavailable;
-  const offlineStatusLabel = serviceWorkerStatus === "ready"
-    ? ui.offlineReady
-    : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking"
-      ? ui.offlineCaching
-      : serviceWorkerStatus === "local-static"
-        ? ui.offlineLocalStatic
-        : serviceWorkerStatus === "update-ready"
-          ? ui.updateReady
-          : serviceWorkerStatus === "unsupported"
-            ? ui.offlineUnsupported
-            : ui.offlineError;
-  const networkStatusLabel = isOnline ? ui.online : ui.offline;
-  const bannerTitleOptions = { gap: 1, enStyle: { fontSize: 15, fontWeight: 800 }, urStyle: { fontSize: 14, fontWeight: 700 } };
-  const bannerBodyOptions = { gap: 2, enStyle: { fontSize: 12.5 }, urStyle: { fontSize: 12.5, lineHeight: 1.8 } };
-  const bannerLabelOptions = { gap: 1, enStyle: { fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }, urStyle: { fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700 } };
-  const bannerValueOptions = { gap: 1, enStyle: { fontSize: 12.5, color: "var(--accent)", fontWeight: 800 }, urStyle: { fontSize: 12.5, color: "var(--text-primary)", fontWeight: 700 } };
-  const bannerButtonOptions = { gap: 0, enStyle: { fontSize: 12, fontWeight: 700 }, urStyle: { fontSize: 11.5, fontWeight: 700 } };
   const reviewWordLookup = reviewLibrary.reduce((acc, card) => {
     if (!card?.prompt || !card?.answer) return acc;
     const key = getReviewWordLookupKey(card.prompt, card.answer);
@@ -9510,13 +9697,13 @@ function HomeschoolApp() {
         ? joinLocalizedText("Needs authorization", "دوبارہ اجازت درکار", language)
         : saved.status === "quota"
           ? joinLocalizedText("Quota or billing needed", "کوٹہ یا بلنگ درکار", language)
-        : saved.status === "blocked"
-          ? joinLocalizedText("Browser blocked", "براؤزر نے روکا", language)
-          : saved.status === "error"
-            ? joinLocalizedText("Needs review", "جائزہ درکار", language)
-          : saved.apiKey
-            ? joinLocalizedText("Saved locally", "مقامی طور پر محفوظ", language)
-            : joinLocalizedText("Not configured", "ابھی شامل نہیں", language);
+          : saved.status === "blocked"
+            ? joinLocalizedText("Browser blocked", "براؤزر نے روکا", language)
+            : saved.status === "error"
+              ? joinLocalizedText("Needs review", "جائزہ درکار", language)
+              : saved.apiKey
+                ? joinLocalizedText("Saved locally", "مقامی طور پر محفوظ", language)
+                : joinLocalizedText("Not configured", "ابھی شامل نہیں", language);
     return {
       id: providerId,
       label: joinLocalizedText(definition.name, definition.nameUr, language),
@@ -9531,7 +9718,184 @@ function HomeschoolApp() {
       availableInTutor: isAiProviderReady(saved),
     };
   });
+  const closeWordMeaningPopover = useCallback(() => {
+    setWordMeaningPopover(null);
+  }, []);
+  const requestWordMeaningFromAi = useCallback(async (providerId, word) => {
+    const providerConfig = aiProviderConfigs[providerId];
+    const providerDefinition = AI_PROVIDER_DEFS[providerId];
+    if (!providerConfig?.apiKey || !providerDefinition) return "";
+    const response = await requestAiTutorResponse(
+      providerId,
+      providerConfig.apiKey,
+      providerConfig.model || providerDefinition.defaultModel,
+      [{ role: "user", text: `English word: ${word}` }],
+      "You are a bilingual dictionary helper for Pakistani school students. Return only a very short Urdu meaning for the given English word. Use Urdu script only. No explanation. No bullets. No English.",
+    );
+    return extractShortUrduMeaning(response);
+  }, [aiProviderConfigs]);
+  const handleLookupWordMeaning = useCallback(async (rawWord, anchorNode) => {
+    const normalizedWord = normalizeLookupWord(rawWord);
+    if (!normalizedWord) return;
+    const anchorRect = anchorNode?.getBoundingClientRect?.() || null;
+    const popupWidth = Math.min(280, Math.max(220, Math.round((window.innerWidth || 360) * 0.38)));
+    const left = anchorRect
+      ? Math.min(Math.max(14, anchorRect.left + (anchorRect.width / 2) - (popupWidth / 2)), Math.max(14, (window.innerWidth || 360) - popupWidth - 14))
+      : 20;
+    const top = anchorRect ? Math.max(56, anchorRect.top - 6) : 84;
+    const placement = anchorRect && anchorRect.top > 150 ? "above" : "below";
+    const setPopupState = (nextPartial) => {
+      setWordMeaningPopover((current) => ({
+        word: rawWord,
+        normalizedWord,
+        left,
+        top,
+        width: popupWidth,
+        placement,
+        meaningUr: "",
+        source: "",
+        loading: false,
+        error: "",
+        ...(current && current.normalizedWord === normalizedWord ? current : {}),
+        ...nextPartial,
+      }));
+    };
 
+    window.HomeSchoolUtils?.speakText?.(rawWord, "en");
+    setPopupState({ loading: true, error: "" });
+
+    const candidateWords = getLookupWordCandidates(rawWord);
+    const localEntry = candidateWords.map((candidate) => localWordMeaningLookup[candidate]).find(Boolean);
+    if (localEntry?.meaningUr) {
+      setPopupState({ loading: false, meaningUr: localEntry.meaningUr, source: "Local" });
+      return;
+    }
+
+    const cacheEntry = candidateWords.map((candidate) => wordMeaningCache[candidate]).find(Boolean);
+    if (cacheEntry?.meaningUr) {
+      setPopupState({ loading: false, meaningUr: cacheEntry.meaningUr, source: cacheEntry.source || "Cache" });
+      return;
+    }
+
+    const providerOrder = ["gemini", ...readyAiProviderIds.filter((providerId) => providerId !== "gemini")];
+    let lastError = null;
+    for (const providerId of providerOrder) {
+      try {
+        const meaningUr = await requestWordMeaningFromAi(providerId, rawWord);
+        if (!meaningUr) continue;
+        const cacheRecord = normalizeWordMeaningCache({
+          ...wordMeaningCache,
+          [normalizedWord]: {
+            meaningUr,
+            source: providerId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[providerId]?.name || "AI",
+            fetchedAt: Date.now(),
+          },
+        });
+        setWordMeaningCache(cacheRecord);
+        setPopupState({ loading: false, meaningUr, source: cacheRecord[normalizedWord]?.source || "AI", error: "" });
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    const blockedReason = canUseDirectAiFromBrowser();
+    setPopupState({
+      loading: false,
+      error: blockedReason.ok
+        ? joinLocalizedText("Meaning not found yet.", "ابھی معنی دستیاب نہیں۔", language)
+        : (ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode."),
+      source: lastError ? "Unavailable" : "",
+    });
+  }, [language, localWordMeaningLookup, readyAiProviderIds, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache]);
+  useEffect(() => {
+    if (!wordMeaningPopover) return undefined;
+    const handleDismiss = (event) => {
+      if (event.type === "keydown" && event.key !== "Escape") return;
+      setWordMeaningPopover(null);
+    };
+    window.addEventListener("scroll", handleDismiss, true);
+    window.addEventListener("resize", handleDismiss);
+    window.addEventListener("keydown", handleDismiss);
+    window.addEventListener("pointerdown", handleDismiss);
+    return () => {
+      window.removeEventListener("scroll", handleDismiss, true);
+      window.removeEventListener("resize", handleDismiss);
+      window.removeEventListener("keydown", handleDismiss);
+      window.removeEventListener("pointerdown", handleDismiss);
+    };
+  }, [wordMeaningPopover]);
+
+  // Show loading while DB initializes
+  if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{ui.loadingHome}</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ui.loadingDb}</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
+
+  if (!grade) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: isUrduUi(language) ? "rtl" : "ltr" }}><div style={{ textAlign: "center", marginBottom: 32 }}><div style={{ fontSize: 56, marginBottom: 12 }}>📚</div><h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>HomeSchool</h1><p style={{ color: "var(--text-secondary)", fontSize: 14 }}>{renderLocalizedTextNode(ui.tagline, language)}</p>{language === "en" ? <p style={{ fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 }}>آپ کا ذاتی تعلیمی ساتھی</p> : null}</div><div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{renderLocalizedTextNode(ui.yourName, language)}</label><input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder={ui.enterName} style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" }} /></div>{language !== "en" && <div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{renderLocalizedTextNode(ui.yourNameUr, language)}</label><input value={studentNameUr} onChange={e => setStudentNameUr(sanitizeUrduInput(e.target.value))} placeholder="اپنا نام درج کریں" style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font-ur)", fontSize: 15, outline: "none", direction: "rtl" }} /></div>}<label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" }}>{renderLocalizedTextNode(ui.selectGrade, language)}</label><div className="grade-grid">{GRADES.map(g => <button key={g.id} className="grade-btn" onClick={() => setGrade(g.id)}>{g.id}</button>)}</div></div></div></>);
+
+  const goHome = () => {
+    window.speechSynthesis.cancel();
+    setNavHidden(Boolean(navAutoHide));
+    setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
+    setTab("home");
+    setSelectedSubject(null);
+    setSelectedLesson(null);
+    setQuizActive(false);
+    setQuizDone(false);
+    setQuizAnswers([]);
+    setQuizIdx(0);
+    setQuizRevealed(false);
+    setSelectedAdverbDay(null);
+    setSelectedPrepDay(null);
+    setSelectedAdjDay(null);
+    setSelectedConjDay(null);
+    setSelectedPronDay(null);
+    setSelectedNounDay(null);
+    setSelectedVerbDay(null);
+    setSelectedTensePara(null);
+    setSelectedVocabDay(null);
+    setMathSubIdx(null);
+    setMathSubTab("examples");
+    setSubExerciseGroupIdx(null);
+    setSubQuizGroupIdx(null);
+    setRevealedEx({});
+    setPosTab("adverbs");
+    setTenseMain("present");
+    setTenseSub("simple");
+    setNewBadges([]);
+    resetReviewSession();
+    resetPracticeSession();
+  };
+  const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
+  const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+  const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
+  const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
+  const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
+  const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
+  const reviewReadyNowCount = Math.min(Number(reviewStats.due || 0), Number(dailyReviewCap || 20));
+  const canInstallApp = Boolean(installPromptEvent) && !isInstalled;
+  const canShowInstallBanner = !installBannerDismissed && !isInstalled && serviceWorkerStatus !== "unsupported" && serviceWorkerStatus !== "local-static";
+  const installStatusLabel = isInstalled || installAvailability === "installed"
+    ? ui.appInstalled
+    : canInstallApp || installAvailability === "available"
+      ? ui.appInstallAvailable
+      : ui.appInstallUnavailable;
+  const offlineStatusLabel = serviceWorkerStatus === "ready"
+    ? ui.offlineReady
+    : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking"
+      ? ui.offlineCaching
+      : serviceWorkerStatus === "local-static"
+        ? ui.offlineLocalStatic
+        : serviceWorkerStatus === "update-ready"
+          ? ui.updateReady
+          : serviceWorkerStatus === "unsupported"
+            ? ui.offlineUnsupported
+            : ui.offlineError;
+  const networkStatusLabel = isOnline ? ui.online : ui.offline;
+  const bannerTitleOptions = { gap: 1, enStyle: { fontSize: 15, fontWeight: 800 }, urStyle: { fontSize: 14, fontWeight: 700 } };
+  const bannerBodyOptions = { gap: 2, enStyle: { fontSize: 12.5 }, urStyle: { fontSize: 12.5, lineHeight: 1.8 } };
+  const bannerLabelOptions = { gap: 1, enStyle: { fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px" }, urStyle: { fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700 } };
+  const bannerValueOptions = { gap: 1, enStyle: { fontSize: 12.5, color: "var(--accent)", fontWeight: 800 }, urStyle: { fontSize: 12.5, color: "var(--text-primary)", fontWeight: 700 } };
+  const bannerButtonOptions = { gap: 0, enStyle: { fontSize: 12, fontWeight: 700 }, urStyle: { fontSize: 11.5, fontWeight: 700 } };
   const playAll = (p) => { if (!isTtsEnabled()) return; window.speechSynthesis.cancel(); const ss = p.split(/(?<=[.!?])\s+/).filter(Boolean); let i = 0; const next = () => { if (i < ss.length) { const u = new SpeechSynthesisUtterance(ttsClean(ss[i])); const speechConfig = getSpeechConfig("en", window.speechSynthesis.getVoices()); u.lang = speechConfig.lang; u.rate = speechConfig.rate; u.pitch = 1.05; if (speechConfig.voice) u.voice = speechConfig.voice; u.onend = () => { i++; next(); }; window.speechSynthesis.speak(u); } }; next(); };
   const handleInstallApp = async () => {
     if (!installPromptEvent) return;
@@ -9618,7 +9982,7 @@ function HomeschoolApp() {
     time: ui.importConflictTime,
     collections: ui.importConflictCollections,
   };
-  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
+  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: wordMeaningPopover?.normalizedWord || "" }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
     {navAutoHide ? <div className="header-reveal-hotspot" onMouseEnter={revealAutoHideHeader} onMouseMove={revealAutoHideHeader} onPointerDown={revealAutoHideHeader} /> : null}
     <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
       <div className="header-leading">
@@ -11898,6 +12262,24 @@ function HomeschoolApp() {
     </div>
     {navBarAutoHide && navPosition === "bottom" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-bottom" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
     {navPosition === "bottom" ? renderNavBar("bottom") : null}
+    {wordMeaningPopover ? (
+      <div
+        className={`word-meaning-popover word-meaning-popover-${wordMeaningPopover.placement || "above"}`}
+        style={{ left: wordMeaningPopover.left, top: wordMeaningPopover.top, width: wordMeaningPopover.width }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="word-meaning-popover-word">{wordMeaningPopover.word}</div>
+        {wordMeaningPopover.loading ? (
+          <div className="word-meaning-popover-loading">{renderLocalizedTextNode(joinLocalizedText("Looking up meaning...", "معنی تلاش کیے جا رہے ہیں...", language), language)}</div>
+        ) : wordMeaningPopover.meaningUr ? (
+          <div className="word-meaning-popover-meaning">{wordMeaningPopover.meaningUr}</div>
+        ) : (
+          <div className="word-meaning-popover-loading">{renderLocalizedTextNode(wordMeaningPopover.error || joinLocalizedText("Meaning not found yet.", "ابھی معنی دستیاب نہیں۔", language), language)}</div>
+        )}
+        {wordMeaningPopover.source ? <div className="word-meaning-popover-source">{wordMeaningPopover.source}</div> : null}
+      </div>
+    ) : null}
     {celebrationQueue[0] ? (
       <div className="celebration-overlay" onClick={dismissCelebration}>
         <div className="celebration-card" onClick={(event) => event.stopPropagation()} style={isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null}>
