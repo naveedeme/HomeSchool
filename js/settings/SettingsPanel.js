@@ -46,6 +46,12 @@
       }, urText));
   }
 
+  function joinLocalizedText(enText, urText, language) {
+    if (language === "ur") return urText;
+    if (language === "bilingual") return `${enText} / ${urText}`;
+    return enText;
+  }
+
   function renderLocalizedCount(count, unitLabel, language) {
     const safeCount = Number.isFinite(Number(count)) ? Number(count) : count;
     if (language === "ur") {

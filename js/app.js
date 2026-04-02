@@ -1276,6 +1276,12 @@ function buildWordMeaningSpeakText(entry) {
   return [meaningText, String(entry.explanationUr || "").trim()].filter(Boolean).join("۔ ");
 }
 
+function hasWordMeaningContent(entry) {
+  if (!entry || typeof entry !== "object") return false;
+  const meanings = Array.isArray(entry.meaningsUr) ? entry.meaningsUr.filter(Boolean) : [];
+  return Boolean(String(entry.meaningUr || "").trim() || meanings.length > 0 || String(entry.explanationUr || "").trim());
+}
+
 function getDefaultTutorGreeting(language) {
   return isUrduUi(language)
     ? "السلام علیکم! میں آپ کا اے آئی استاد ہوں۔ اپنے سبق یا کسی مشکل سوال کے بارے میں پوچھیں، میں آسان انداز میں سمجھاؤں گا۔"
@@ -10324,7 +10330,7 @@ function HomeschoolApp() {
       providerConfig.apiKey,
       providerConfig.model || providerDefinition.defaultModel,
       [{ role: "user", text: `English word: ${word}` }],
-      "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only with keys meaningsUr (an array of short Urdu meanings in order) and simpleExplanationUr (one easy Urdu explanation in Urdu script). Do not include English.",
+      "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 2 to 6 short Urdu meanings in Urdu script only, covering common senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand when the word is used. No English. No markdown. No extra keys.",
     );
     return extractWordMeaningDetails(response);
   }, [aiProviderConfigs]);
@@ -10364,7 +10370,7 @@ function HomeschoolApp() {
     const localEntry = candidateWords.map((candidate) => localWordMeaningLookup[candidate]).find(Boolean);
     const cacheEntry = candidateWords.map((candidate) => wordMeaningCache[candidate]).find(Boolean);
     const applyMeaningEntry = (entry, fallbackSource) => {
-      if (!entry?.meaningUr && !(entry?.meaningsUr || []).length && !entry?.explanationUr) return false;
+      if (!hasWordMeaningContent(entry)) return false;
       const orderedMeanings = Array.isArray(entry.meaningsUr) && entry.meaningsUr.length > 0
         ? entry.meaningsUr.filter(Boolean)
         : entry.meaningUr
@@ -10383,17 +10389,17 @@ function HomeschoolApp() {
     let hasInlineMeaning = false;
 
     if (wordMeaningPriority === "local-first") {
-      if (localEntry?.meaningUr) {
+      if (hasWordMeaningContent(localEntry)) {
         hasInlineMeaning = true;
         shouldEnrichFromAi = !applyMeaningEntry(localEntry, "Local");
         if (!shouldEnrichFromAi) return;
       }
-      if (!hasInlineMeaning && cacheEntry?.meaningUr) {
+      if (!hasInlineMeaning && hasWordMeaningContent(cacheEntry)) {
         hasInlineMeaning = true;
         shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
         if (!shouldEnrichFromAi) return;
       }
-    } else if (cacheEntry?.meaningUr) {
+    } else if (hasWordMeaningContent(cacheEntry)) {
       hasInlineMeaning = true;
       shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
       if (!shouldEnrichFromAi) return;
@@ -10408,12 +10414,15 @@ function HomeschoolApp() {
         const explanationUr = String(details?.explanationUr || "").trim();
         const meaningUr = meaningsUr[0] || "";
         if (!meaningUr && !explanationUr) continue;
+        const existingEntry = wordMeaningCache[normalizedWord] || localEntry || {};
+        const mergedMeanings = Array.from(new Set([...(meaningsUr || []), ...((existingEntry.meaningsUr || []).filter(Boolean))])).slice(0, 6);
+        const mergedExplanation = explanationUr || existingEntry.explanationUr || "";
         const cacheRecord = normalizeWordMeaningCache({
           ...wordMeaningCache,
           [normalizedWord]: {
-            meaningUr,
-            meaningsUr,
-            explanationUr,
+            meaningUr: mergedMeanings[0] || meaningUr || existingEntry.meaningUr || "",
+            meaningsUr: mergedMeanings,
+            explanationUr: mergedExplanation,
             source: providerId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[providerId]?.name || "AI",
             fetchedAt: Date.now(),
           },
@@ -10421,9 +10430,9 @@ function HomeschoolApp() {
         setWordMeaningCache(cacheRecord);
         setPopupState({
           loading: false,
-          meaningUr,
-          meaningsUr,
-          explanationUr,
+          meaningUr: cacheRecord[normalizedWord]?.meaningUr || "",
+          meaningsUr: cacheRecord[normalizedWord]?.meaningsUr || [],
+          explanationUr: cacheRecord[normalizedWord]?.explanationUr || "",
           source: cacheRecord[normalizedWord]?.source || "AI",
           error: "",
         });
@@ -10433,7 +10442,7 @@ function HomeschoolApp() {
       }
     }
 
-    if (!hasInlineMeaning && wordMeaningPriority === "ai-first" && localEntry?.meaningUr) {
+    if (!hasInlineMeaning && wordMeaningPriority === "ai-first" && hasWordMeaningContent(localEntry)) {
       hasInlineMeaning = true;
       applyMeaningEntry(localEntry, "Local");
       return;
@@ -10644,9 +10653,33 @@ function HomeschoolApp() {
     }
     return <div key={`text_${index}`} className="chat-bubble-body">{part.text}</div>;
   };
+  const renderIconGlyph = (iconId) => {
+    if (iconId === "copy") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V8Zm-4 4V6a2 2 0 0 1 2-2h8v2H6v6H4Z"/></svg>;
+    }
+    if (iconId === "listen") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5 9v6h4l5 4V5L9 9H5Zm11.5 3a4.5 4.5 0 0 0-2.1-3.8v7.6a4.5 4.5 0 0 0 2.1-3.8Zm0-7.7v2.1a8 8 0 0 1 0 11.2v2.1a10 10 0 0 0 0-15.4Z"/></svg>;
+    }
+    if (iconId === "attach") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.5 6.5v8.8a4.5 4.5 0 1 1-9 0V5.8a3.3 3.3 0 1 1 6.6 0v8.6a2.1 2.1 0 1 1-4.2 0V7h1.8v7.4a.3.3 0 1 0 .6 0V5.8a1.5 1.5 0 0 0-3 0v9.5a2.7 2.7 0 1 0 5.4 0V6.5h1.8Z"/></svg>;
+    }
+    if (iconId === "paste") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 3h6a2 2 0 0 1 2 2h2a2 2 0 0 1 2 2v11a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2-2Zm0 4H7v11a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7h-2v1H9V7Zm2-2v1h2V5h-2Z"/></svg>;
+    }
+    if (iconId === "mic") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm-5-3a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.9V22h-2v-3.1A7 7 0 0 1 5 12h2Z"/></svg>;
+    }
+    if (iconId === "stop") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 7h10v10H7z"/></svg>;
+    }
+    if (iconId === "clear") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.2 5 5 6.2 10.8 12 5 17.8 6.2 19l5.8-5.8 5.8 5.8 1.2-1.2-5.8-5.8L19 6.2 17.8 5 12 10.8 6.2 5Z"/></svg>;
+    }
+    return <span aria-hidden="true">•</span>;
+  };
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: wordMeaningPopover?.normalizedWord || "" }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
     {navAutoHide ? <div className="header-reveal-hotspot" onMouseEnter={revealAutoHideHeader} onMouseMove={revealAutoHideHeader} onPointerDown={revealAutoHideHeader} /> : null}
-    <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
+    <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} data-tab={tab} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
       <div className="header-leading">
         <span className="back-btn-slot">{showBack ? <button className="back-btn" onClick={goBack}>←</button> : null}</span>
         <button type="button" className="header-mark" title="HomeSchool" aria-label="Go home" onClick={goHome}>
@@ -10669,7 +10702,7 @@ function HomeschoolApp() {
           }}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M14.8 3.2a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4l-2 2 .8 4.5a1 1 0 0 1-1.7.9l-3.3-3.3-2.7 2.7V22a1 1 0 1 1-2 0v-5.9L4.4 21.6a1 1 0 0 1-1.4-1.4l6.2-6.2-3.3-3.3a1 1 0 0 1 .9-1.7l4.5.8 2-2Z" fill="currentColor" />
+            <path fill="currentColor" d="M15.3 3.4c.3 0 .6.1.8.3l4.2 4.2a1.1 1.1 0 0 1 0 1.6l-1.8 1.8-1.7-.4-3.9 3.9 1.5 5.8-1.2 1.2-3.3-6.1-3.4-3.4-6.1-3.3 1.2-1.2 5.8 1.5 3.9-3.9-.4-1.7 1.8-1.8c.2-.2.5-.3.8-.3Z"/>
           </svg>
         </button>
         <button
@@ -12684,7 +12717,7 @@ function HomeschoolApp() {
       </>)}
 
       {tab === "tutor" && (<>
-        <div className="review-panel">
+        <div className="review-panel tutor-setup-panel">
           <div className={`settings-disclosure${tutorSetupOpen ? " open" : ""}`} data-transition-mode={transitionMode}>
             <button
               type="button"
@@ -12741,7 +12774,7 @@ function HomeschoolApp() {
           </div>
         </div>
         <div className="tutor-shell">
-          <aside className="tutor-sidebar">
+          <aside className="tutor-sidebar" data-ui-language={language}>
             <button className="tutor-new-chat-btn" onClick={handleNewTutorChat}>
               <span aria-hidden="true">＋</span>
               <span>{renderLocalizedTextNode(joinLocalizedText("New Chat", "نئی چیٹ", language), language)}</span>
@@ -12775,8 +12808,8 @@ function HomeschoolApp() {
                     <div className="chat-bubble-tools">
                       <span className="chat-bubble-provider">{providerBadge || "\u00A0"}</span>
                       <div className="chat-bubble-actions">
-                        {messageText ? <button type="button" className="chat-bubble-action" onClick={() => copyTextToClipboard(messageText)}>{renderLocalizedTextNode(joinLocalizedText("Copy", "کاپی", language), language)}</button> : null}
-                        {messageText ? <button type="button" className="chat-bubble-action" onClick={() => speakInlineText(messageText)}>{renderLocalizedTextNode(joinLocalizedText("Listen", "سنیں", language), language)}</button> : null}
+                        {messageText ? <button type="button" className="chat-bubble-action icon-only" title={joinLocalizedText("Copy", "کاپی", language)} onClick={() => copyTextToClipboard(messageText)}>{renderIconGlyph("copy")}</button> : null}
+                        {messageText ? <button type="button" className="chat-bubble-action icon-only" title={joinLocalizedText("Listen", "سنیں", language)} onClick={() => speakInlineText(messageText)}>{renderIconGlyph("listen")}</button> : null}
                       </div>
                     </div>
                   </div>
@@ -12798,10 +12831,10 @@ function HomeschoolApp() {
                 </div>
               ) : null}
               <div className="chat-input-toolbar">
-                {tutorSupportsMedia ? <button type="button" className="chat-tool-btn" onClick={handleOpenTutorMediaPicker} title={joinLocalizedText("Add image, audio, or video", "تصویر، آڈیو یا ویڈیو شامل کریں", language)}>＋</button> : null}
-                {clipboardHasText ? <button type="button" className="chat-tool-btn" onClick={handlePasteIntoChat} title={joinLocalizedText("Paste from clipboard", "کلپ بورڈ سے پیسٹ کریں", language)}>📋</button> : null}
-                {speechRecognitionSupported ? <button type="button" className={`chat-tool-btn${chatListening ? " active" : ""}`} onClick={handleToggleChatListening} title={joinLocalizedText("Speak to type", "بول کر لکھیں", language)}>{chatListening ? "◼" : "🎙"}</button> : null}
-                {chatInput ? <button type="button" className="chat-tool-btn" onClick={() => setChatInput("")} title={joinLocalizedText("Clear", "صاف کریں", language)}>✕</button> : null}
+                {tutorSupportsMedia ? <button type="button" className="chat-tool-btn" onClick={handleOpenTutorMediaPicker} title={joinLocalizedText("Add image, audio, or video", "تصویر، آڈیو یا ویڈیو شامل کریں", language)}>{renderIconGlyph("attach")}</button> : null}
+                {clipboardHasText ? <button type="button" className="chat-tool-btn" onClick={handlePasteIntoChat} title={joinLocalizedText("Paste from clipboard", "کلپ بورڈ سے پیسٹ کریں", language)}>{renderIconGlyph("paste")}</button> : null}
+                {speechRecognitionSupported ? <button type="button" className={`chat-tool-btn${chatListening ? " active" : ""}`} onClick={handleToggleChatListening} title={joinLocalizedText("Speak to type", "بول کر لکھیں", language)}>{renderIconGlyph(chatListening ? "stop" : "mic")}</button> : null}
+                {chatInput ? <button type="button" className="chat-tool-btn" onClick={() => setChatInput("")} title={joinLocalizedText("Clear", "صاف کریں", language)}>{renderIconGlyph("clear")}</button> : null}
                 {chatInput ? <span className="chat-word-count">{renderLocalizedTextNode(joinLocalizedText(`${chatInputWordCount} words`, `${chatInputWordCount} الفاظ`, language), language)}</span> : null}
                 {!tutorSupportsMedia && currentTutorProviderId ? <span className="chat-word-count">{renderLocalizedTextNode(joinLocalizedText("Media: Gemini only", "میڈیا: صرف جیمنی", language), language)}</span> : null}
               </div>
