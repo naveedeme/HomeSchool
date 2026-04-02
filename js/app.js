@@ -1184,7 +1184,15 @@ function buildWordMeaningLookupFromIndex(items) {
           explanationUr: "",
           source: "local",
         };
+        return;
       }
+      const mergedMeanings = Array.from(new Set([...(lookup[candidate].meaningsUr || []), meaningUr].filter(Boolean))).slice(0, 6);
+      lookup[candidate] = {
+        ...lookup[candidate],
+        meaningUr: lookup[candidate].meaningUr || mergedMeanings[0] || "",
+        meaningsUr: mergedMeanings,
+        source: "local",
+      };
     });
   });
   return lookup;
@@ -1221,6 +1229,14 @@ function extractWordMeaningDetails(text) {
     }
   } catch (error) {
     // Fall through to text parsing.
+  }
+
+  const inlineParts = raw
+    .split(/[\n\r،,;|/]+/)
+    .map((entry) => entry.replace(/^[\s\-*•\d.)]+/, "").trim())
+    .filter(Boolean);
+  if (inlineParts.length > 1) {
+    return { meaningsUr: inlineParts.slice(0, 6), explanationUr: "" };
   }
 
   const lines = raw
@@ -10330,7 +10346,7 @@ function HomeschoolApp() {
       providerConfig.apiKey,
       providerConfig.model || providerDefinition.defaultModel,
       [{ role: "user", text: `English word: ${word}` }],
-      "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 2 to 6 short Urdu meanings in Urdu script only, covering common senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand when the word is used. No English. No markdown. No extra keys.",
+      "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only, covering common senses or school-use senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand when the word is used in class or daily life. If the word has fewer common senses, still return the best available Urdu meanings. No English. No markdown. No extra keys.",
     );
     return extractWordMeaningDetails(response);
   }, [aiProviderConfigs]);
@@ -10383,7 +10399,11 @@ function HomeschoolApp() {
         explanationUr: entry.explanationUr || "",
         source: entry.source || fallbackSource,
       });
-      return Boolean(entry.explanationUr || orderedMeanings.length > 1);
+      const sourceLabel = String(entry.source || fallbackSource || "").toLowerCase();
+      return Boolean(
+        (entry.explanationUr && orderedMeanings.length > 0)
+        || (sourceLabel && sourceLabel !== "local" && orderedMeanings.length > 1),
+      );
     };
     let shouldEnrichFromAi = true;
     let hasInlineMeaning = false;
@@ -10675,6 +10695,9 @@ function HomeschoolApp() {
     if (iconId === "clear") {
       return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.2 5 5 6.2 10.8 12 5 17.8 6.2 19l5.8-5.8 5.8 5.8 1.2-1.2-5.8-5.8L19 6.2 17.8 5 12 10.8 6.2 5Z"/></svg>;
     }
+    if (iconId === "settings") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.8 7.8 0 0 0 .1-1 7.8 7.8 0 0 0-.1-1l2.1-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.1 7.1 0 0 0-1.7-1l-.4-2.7a.5.5 0 0 0-.5-.4H10a.5.5 0 0 0-.5.4l-.4 2.7a7.1 7.1 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.7L4.6 11a7.8 7.8 0 0 0-.1 1 7.8 7.8 0 0 0 .1 1l-2.1 1.6a.5.5 0 0 0-.1.7l2 3.4a.5.5 0 0 0 .6.2l2.5-1a7.1 7.1 0 0 0 1.7 1l.4 2.7a.5.5 0 0 0 .5.4h4a.5.5 0 0 0 .5-.4l.4-2.7a7.1 7.1 0 0 0 1.7-1l2.5 1a.5.5 0 0 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 13ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/></svg>;
+    }
     return <span aria-hidden="true">•</span>;
   };
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: wordMeaningPopover?.normalizedWord || "" }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
@@ -10702,7 +10725,7 @@ function HomeschoolApp() {
           }}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="currentColor" d="M15.3 3.4c.3 0 .6.1.8.3l4.2 4.2a1.1 1.1 0 0 1 0 1.6l-1.8 1.8-1.7-.4-3.9 3.9 1.5 5.8-1.2 1.2-3.3-6.1-3.4-3.4-6.1-3.3 1.2-1.2 5.8 1.5 3.9-3.9-.4-1.7 1.8-1.8c.2-.2.5-.3.8-.3Z"/>
+            <path fill="currentColor" d="M15.7 3.3c.4-.4 1-.4 1.4 0l3.6 3.6c.4.4.4 1 0 1.4l-1.9 1.9-2.2-.3-2.6 2.6 1 4.9-1.2 1.2-2.7-4.7-2.4-2.4-4.7-2.7 1.2-1.2 4.9 1 2.6-2.6-.3-2.2 1.9-1.9Zm-2.4 4.1.2 1.3-3.1 3.1-3.3-.6 1.9 1.1 2.9 2.9 1.1 1.9-.6-3.3 3.1-3.1 1.3.2 1.1-1.1-2.5-2.5-1.1 1.1Z"/>
           </svg>
         </button>
         <button
@@ -10720,7 +10743,7 @@ function HomeschoolApp() {
     <div className="app-body">
       {navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
       {navPosition === "left" ? renderNavBar("left") : null}
-      <div key={`${transitionMode}:${routeTransitionKey}`} className={`content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}`} data-transition-mode={transitionMode} data-ui-language={language}>
+      <div key={`${transitionMode}:${routeTransitionKey}`} className={`content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}${tab === "tutor" ? " tutor-tab-active" : ""}`} data-transition-mode={transitionMode} data-ui-language={language}>
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
         <div className="welcome-card" data-ui-language={language}>
           <div className="welcome-card-head">
@@ -12717,62 +12740,6 @@ function HomeschoolApp() {
       </>)}
 
       {tab === "tutor" && (<>
-        <div className="review-panel tutor-setup-panel">
-          <div className={`settings-disclosure${tutorSetupOpen ? " open" : ""}`} data-transition-mode={transitionMode}>
-            <button
-              type="button"
-              className="settings-disclosure-toggle"
-              onClick={() => setTutorSetupOpen((value) => !value)}
-              aria-expanded={tutorSetupOpen ? "true" : "false"}
-              style={language === "ur" ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
-            >
-              <span className="settings-disclosure-label">
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Tutor Setup", "اے آئی استاد سیٹ اپ", language), language)}</strong>
-                <small className="tutor-setup-summary">{renderLocalizedTextNode(joinLocalizedText("Choose provider and model for this chat session.", "اسی چیٹ سیشن کے لیے فراہم کنندہ اور ماڈل منتخب کریں۔", language), language)}</small>
-              </span>
-              <span className="settings-disclosure-icon" aria-hidden="true">{tutorSetupOpen ? "−" : "+"}</span>
-            </button>
-            <div className="settings-disclosure-body-wrap">
-              <div className="settings-disclosure-body-clip">
-                <div className="settings-disclosure-body">
-                  <p className="tutor-setup-help">{renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)}</p>
-                  {readyAiProviderIds.length > 0 ? (
-                    <>
-                      <div className="settings-item" style={{ display: "block" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
-                          <span className="si-label">{renderLocalizedTextNode(ui.aiSelectProvider || "Provider", language)}</span>
-                          <select
-                            value={currentAiProviderId}
-                            onChange={(event) => setSelectedAiProvider(event.target.value)}
-                            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "var(--font-ur)" : "var(--font)" }}
-                          >
-                            {readyAiProviderIds.map((providerId) => <option key={providerId} value={providerId}>{renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)}</option>)}
-                          </select>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                          <span className="si-label">{renderLocalizedTextNode(ui.aiSelectModel || "Model", language)}</span>
-                          <select
-                            value={currentAiProviderConfig.model || AI_PROVIDER_DEFS[currentAiProviderId].defaultModel}
-                            onChange={(event) => handleAiTutorModelChange(currentAiProviderId, event.target.value)}
-                            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)", minWidth: 220 }}
-                          >
-                            {currentAiModelOptions.map((modelName) => <option key={modelName} value={modelName}>{modelName}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                      {!aiBrowserCapability.ok ? <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)}</p> : null}
-                    </>
-                  ) : (
-                    <div className="review-panel" style={{ marginBottom: 0 }}>
-                      <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(configuredAiProviderIds.length > 0 ? joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "ٹیوٹر چیٹ شروع کرنے سے پہلے آپ کے محفوظ اے آئی فراہم کنندگان کو ترتیبات میں درست کرنا ہوگا۔", language) : (ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor."), language)}</p>
-                      <button className="ghost-cta" onClick={() => setTab("settings")}>{renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)}</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
         <div className="tutor-shell">
           <aside className="tutor-sidebar" data-ui-language={language}>
             <button className="tutor-new-chat-btn" onClick={handleNewTutorChat}>
@@ -12819,6 +12786,47 @@ function HomeschoolApp() {
               <div ref={chatEndRef} />
             </div>
             <div className="chat-input-area">
+              {tutorSetupOpen ? (
+                <div className="tutor-setup-popover" data-ui-language={language}>
+                  <div className="tutor-setup-popover-head">
+                    <strong>{renderLocalizedTextNode(joinLocalizedText("Tutor Setup", "اے آئی استاد سیٹ اپ", language), language)}</strong>
+                    <button type="button" className="chat-tool-btn compact" onClick={() => setTutorSetupOpen(false)} title={joinLocalizedText("Close", "بند کریں", language)}>{renderIconGlyph("clear")}</button>
+                  </div>
+                  <p className="tutor-setup-help">{renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)}</p>
+                  {readyAiProviderIds.length > 0 ? (
+                    <div className="tutor-setup-fields">
+                      <div className="settings-item" style={{ display: "block", marginBottom: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                          <span className="si-label">{renderLocalizedTextNode(ui.aiSelectProvider || "Provider", language)}</span>
+                          <select
+                            value={currentAiProviderId}
+                            onChange={(event) => setSelectedAiProvider(event.target.value)}
+                            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "var(--font-ur)" : "var(--font)" }}
+                          >
+                            {readyAiProviderIds.map((providerId) => <option key={providerId} value={providerId}>{renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                          <span className="si-label">{renderLocalizedTextNode(ui.aiSelectModel || "Model", language)}</span>
+                          <select
+                            value={currentAiProviderConfig.model || AI_PROVIDER_DEFS[currentAiProviderId].defaultModel}
+                            onChange={(event) => handleAiTutorModelChange(currentAiProviderId, event.target.value)}
+                            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)", minWidth: 220 }}
+                          >
+                            {currentAiModelOptions.map((modelName) => <option key={modelName} value={modelName}>{modelName}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      {!aiBrowserCapability.ok ? <p className="empty-state" style={{ marginBottom: 0 }}>{renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)}</p> : null}
+                    </div>
+                  ) : (
+                    <div className="tutor-setup-fields">
+                      <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(configuredAiProviderIds.length > 0 ? joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "ٹیوٹر چیٹ شروع کرنے سے پہلے آپ کے محفوظ اے آئی فراہم کنندگان کو ترتیبات میں درست کرنا ہوگا۔", language) : (ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor."), language)}</p>
+                      <button className="ghost-cta" onClick={() => setTab("settings")}>{renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)}</button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
               {chatAttachments.length > 0 ? (
                 <div className="chat-attachment-list">
                   {chatAttachments.map((attachment) => (
@@ -12831,6 +12839,7 @@ function HomeschoolApp() {
                 </div>
               ) : null}
               <div className="chat-input-toolbar">
+                <button type="button" className={`chat-tool-btn${tutorSetupOpen ? " active" : ""}`} onClick={() => setTutorSetupOpen((value) => !value)} title={joinLocalizedText("Tutor setup", "ٹیوٹر سیٹ اپ", language)}>{renderIconGlyph("settings")}</button>
                 {tutorSupportsMedia ? <button type="button" className="chat-tool-btn" onClick={handleOpenTutorMediaPicker} title={joinLocalizedText("Add image, audio, or video", "تصویر، آڈیو یا ویڈیو شامل کریں", language)}>{renderIconGlyph("attach")}</button> : null}
                 {clipboardHasText ? <button type="button" className="chat-tool-btn" onClick={handlePasteIntoChat} title={joinLocalizedText("Paste from clipboard", "کلپ بورڈ سے پیسٹ کریں", language)}>{renderIconGlyph("paste")}</button> : null}
                 {speechRecognitionSupported ? <button type="button" className={`chat-tool-btn${chatListening ? " active" : ""}`} onClick={handleToggleChatListening} title={joinLocalizedText("Speak to type", "بول کر لکھیں", language)}>{renderIconGlyph(chatListening ? "stop" : "mic")}</button> : null}
