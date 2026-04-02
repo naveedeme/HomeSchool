@@ -77,6 +77,11 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .header-mark:hover{transform:scale(1.2)}
 .header-mark-img{display:block;height:42px;width:42px;object-fit:cover;object-position:center;transform:scale(1.18);transform-origin:center;border-radius:22px;box-shadow:0 10px 24px color-mix(in srgb,var(--accent) 12%,transparent)}
 .app-header h1{font-size:18px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.header-actions{display:flex;align-items:center;gap:8px;position:relative;z-index:3;flex:0 0 auto}
+.header-pin-btn{width:32px;height:32px;border-radius:18px;border:1px solid color-mix(in srgb,var(--border) 90%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--bg-elevated) 92%,transparent),color-mix(in srgb,var(--bg-card) 88%,transparent));display:inline-flex;align-items:center;justify-content:center;color:var(--text-secondary);cursor:pointer;transition:transform .22s ease,border-color .22s ease,background .22s ease,color .22s ease,box-shadow .22s ease}
+.header-pin-btn svg{width:16px;height:16px}
+.header-pin-btn:hover{transform:scale(1.1);color:var(--text-primary);border-color:color-mix(in srgb,var(--accent) 24%,var(--border));box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 12%,transparent)}
+.header-pin-btn.active{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--bg-card)),color-mix(in srgb,var(--accent) 10%,var(--bg-elevated)));border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--accent)}
 .header-badge{height:31px;display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#F59E0B22,#F59E0B44);border:1px solid #F59E0B55;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;color:#F59E0B;position:relative;z-index:3;flex:0 0 auto;transition:transform .22s ease;cursor:pointer;pointer-events:auto}
 .header-badge:hover{transform:scale(1.2)}
 .app-header-top-nav{justify-content:space-between;min-height:68px;padding-top:16px;padding-bottom:14px}
@@ -296,6 +301,13 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .settings-disclosure[data-transition-mode="zoom"] .settings-disclosure-body-wrap{transition:grid-template-rows .34s cubic-bezier(.22,.8,.22,1)}
 .settings-disclosure[data-transition-mode="zoom"] .settings-disclosure-body{transition:opacity .28s ease,transform .34s cubic-bezier(.22,.8,.22,1),padding .28s ease;transform:scale(.985);transform-origin:50% 0}
 .settings-disclosure.open[data-transition-mode="zoom"] .settings-disclosure-body{transform:scale(1)}
+.settings-group-card{padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,var(--border) 92%,transparent);background:color-mix(in srgb,var(--bg-elevated) 70%,transparent);margin-top:12px}
+.settings-group-card:first-child{margin-top:0}
+.settings-group-title{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.02em;margin-bottom:10px}
+.settings-group-body{display:block}
+.settings-group-body > *:last-child{margin-bottom:0!important}
+.tutor-setup-summary{display:block;margin-top:4px;font-size:11px;font-weight:600;color:var(--text-secondary);line-height:1.45}
+.tutor-setup-help{margin:0 0 12px;color:var(--text-secondary);font-size:12px;line-height:1.6}
 .settings-input-label{display:block;font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:6px}
 .settings-text-input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-size:14px;outline:none}
 .settings-text-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}

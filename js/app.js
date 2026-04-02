@@ -6518,7 +6518,7 @@ function HomeschoolApp() {
   const [wordMeaningCache, setWordMeaningCache] = useState(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
   const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
-  const [gradeDisclosureOpen, setGradeDisclosureOpen] = useState(false);
+  const [tutorSetupOpen, setTutorSetupOpen] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "dark"));
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [installAvailability, setInstallAvailability] = useState(isStandaloneMode() ? "installed" : "unavailable");
@@ -8297,6 +8297,9 @@ function HomeschoolApp() {
       navBarHideTimerRef.current = null;
     }, 140);
   }, [navBarAutoHide, navPosition]);
+  const handleHeaderPinToggle = useCallback(() => {
+    setNavAutoHide((current) => !current);
+  }, []);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
     setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
@@ -10408,16 +10411,33 @@ function HomeschoolApp() {
       {navPosition === "top"
         ? renderNavBar("top", true)
         : <h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1>}
-      <button
-        type="button"
-        className="header-badge"
-        title="Open progress"
-        aria-label="Open progress"
-        onClick={(event) => {
-          event.stopPropagation();
-          handleNavItemSelect("progress");
-        }}
-      ><span>⭐</span><span>{xp} XP</span></button>
+      <div className="header-actions">
+        <button
+          type="button"
+          className={`header-pin-btn${!navAutoHide ? " active" : ""}`}
+          title={navAutoHide ? (language === "ur" ? "ہیڈر کو پن کریں" : "Pin header") : (language === "ur" ? "ہیڈر کو خودکار چھپائیں" : "Auto-hide header")}
+          aria-label={navAutoHide ? (language === "ur" ? "ہیڈر کو پن کریں" : "Pin header") : (language === "ur" ? "ہیڈر کو خودکار چھپائیں" : "Auto-hide header")}
+          aria-pressed={!navAutoHide ? "true" : "false"}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleHeaderPinToggle();
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.8 3.2a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4l-2 2 .8 4.5a1 1 0 0 1-1.7.9l-3.3-3.3-2.7 2.7V22a1 1 0 1 1-2 0v-5.9L4.4 21.6a1 1 0 0 1-1.4-1.4l6.2-6.2-3.3-3.3a1 1 0 0 1 .9-1.7l4.5.8 2-2Z" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="header-badge"
+          title="Open progress"
+          aria-label="Open progress"
+          onClick={(event) => {
+            event.stopPropagation();
+            handleNavItemSelect("progress");
+          }}
+        ><span>⭐</span><span>{xp} XP</span></button>
+      </div>
     </div>
     <div className="app-body">
       {navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
@@ -12420,44 +12440,60 @@ function HomeschoolApp() {
 
       {tab === "tutor" && (<>
         <div className="review-panel">
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(joinLocalizedText("Tutor Setup", "اے آئی استاد سیٹ اپ", language), language)}</h3>
-              <p>{renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)}</p>
-            </div>
-          </div>
-          {readyAiProviderIds.length > 0 ? (
-            <>
-              <div className="settings-item" style={{ display: "block" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
-                  <span className="si-label">{renderLocalizedTextNode(ui.aiSelectProvider || "Provider", language)}</span>
-                  <select
-                    value={currentAiProviderId}
-                    onChange={(event) => setSelectedAiProvider(event.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "var(--font-ur)" : "var(--font)" }}
-                  >
-                    {readyAiProviderIds.map((providerId) => <option key={providerId} value={providerId}>{renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)}</option>)}
-                  </select>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <span className="si-label">{renderLocalizedTextNode(ui.aiSelectModel || "Model", language)}</span>
-                  <select
-                    value={currentAiProviderConfig.model || AI_PROVIDER_DEFS[currentAiProviderId].defaultModel}
-                    onChange={(event) => handleAiTutorModelChange(currentAiProviderId, event.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)", minWidth: 220 }}
-                  >
-                    {currentAiModelOptions.map((modelName) => <option key={modelName} value={modelName}>{modelName}</option>)}
-                  </select>
+          <div className={`settings-disclosure${tutorSetupOpen ? " open" : ""}`} data-transition-mode={transitionMode}>
+            <button
+              type="button"
+              className="settings-disclosure-toggle"
+              onClick={() => setTutorSetupOpen((value) => !value)}
+              aria-expanded={tutorSetupOpen ? "true" : "false"}
+              style={language === "ur" ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
+            >
+              <span className="settings-disclosure-label">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Tutor Setup", "اے آئی استاد سیٹ اپ", language), language)}</strong>
+                <small className="tutor-setup-summary">{renderLocalizedTextNode(joinLocalizedText("Choose provider and model for this chat session.", "اسی چیٹ سیشن کے لیے فراہم کنندہ اور ماڈل منتخب کریں۔", language), language)}</small>
+              </span>
+              <span className="settings-disclosure-icon" aria-hidden="true">{tutorSetupOpen ? "−" : "+"}</span>
+            </button>
+            <div className="settings-disclosure-body-wrap">
+              <div className="settings-disclosure-body-clip">
+                <div className="settings-disclosure-body">
+                  <p className="tutor-setup-help">{renderLocalizedTextNode(ui.aiConnectionsHelp || "Keys stay only in this browser and are excluded from backup export. Browser API calls may still be blocked by a provider or by file mode.", language)}</p>
+                  {readyAiProviderIds.length > 0 ? (
+                    <>
+                      <div className="settings-item" style={{ display: "block" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                          <span className="si-label">{renderLocalizedTextNode(ui.aiSelectProvider || "Provider", language)}</span>
+                          <select
+                            value={currentAiProviderId}
+                            onChange={(event) => setSelectedAiProvider(event.target.value)}
+                            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "var(--font-ur)" : "var(--font)" }}
+                          >
+                            {readyAiProviderIds.map((providerId) => <option key={providerId} value={providerId}>{renderLocalizedTextNode(joinLocalizedText(AI_PROVIDER_DEFS[providerId].name, AI_PROVIDER_DEFS[providerId].nameUr, language), language)}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                          <span className="si-label">{renderLocalizedTextNode(ui.aiSelectModel || "Model", language)}</span>
+                          <select
+                            value={currentAiProviderConfig.model || AI_PROVIDER_DEFS[currentAiProviderId].defaultModel}
+                            onChange={(event) => handleAiTutorModelChange(currentAiProviderId, event.target.value)}
+                            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontFamily: "var(--font)", minWidth: 220 }}
+                          >
+                            {currentAiModelOptions.map((modelName) => <option key={modelName} value={modelName}>{modelName}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      {!aiBrowserCapability.ok ? <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)}</p> : null}
+                    </>
+                  ) : (
+                    <div className="review-panel" style={{ marginBottom: 0 }}>
+                      <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(configuredAiProviderIds.length > 0 ? joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "ٹیوٹر چیٹ شروع کرنے سے پہلے آپ کے محفوظ اے آئی فراہم کنندگان کو ترتیبات میں درست کرنا ہوگا۔", language) : (ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor."), language)}</p>
+                      <button className="ghost-cta" onClick={() => setTab("settings")}>{renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)}</button>
+                    </div>
+                  )}
                 </div>
               </div>
-              {!aiBrowserCapability.ok ? <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.", language)}</p> : null}
-            </>
-          ) : (
-            <div className="review-panel" style={{ marginBottom: 0 }}>
-              <p className="empty-state" style={{ marginBottom: 12 }}>{renderLocalizedTextNode(configuredAiProviderIds.length > 0 ? joinLocalizedText("Your saved AI providers need attention in Settings before Tutor can chat.", "ٹیوٹر چیٹ شروع کرنے سے پہلے آپ کے محفوظ اے آئی فراہم کنندگان کو ترتیبات میں درست کرنا ہوگا۔", language) : (ui.aiConfigureFirst || "Add at least one AI provider key in Settings to use the tutor."), language)}</p>
-              <button className="ghost-cta" onClick={() => setTab("settings")}>{renderLocalizedTextNode(ui.aiOpenSettings || "Open Settings", language)}</button>
             </div>
-          )}
+          </div>
         </div>
         <div className="tutor-shell">
           <aside className="tutor-sidebar">
@@ -12572,7 +12608,7 @@ function HomeschoolApp() {
             aria-expanded={profileDisclosureOpen ? "true" : "false"}
             style={language === "ur" ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
           >
-            <span className="settings-disclosure-label">{renderLocalizedTextNode(ui.profileSection, language)}</span>
+            <span className="settings-disclosure-label">{renderLocalizedTextNode(joinLocalizedText("Profile & Grade", "پروفائل اور گریڈ", language), language)}</span>
             <span className="settings-disclosure-icon" aria-hidden="true">{profileDisclosureOpen ? "−" : "+"}</span>
           </button>
           <div className="settings-disclosure-body-wrap">
@@ -12608,24 +12644,6 @@ function HomeschoolApp() {
                 />
               </div>
             </div>
-          </div>
-            </div>
-          </div>
-        </div>
-        <div className={`settings-disclosure${gradeDisclosureOpen ? " open" : ""}`} data-transition-mode={transitionMode}>
-          <button
-            type="button"
-            className="settings-disclosure-toggle"
-            onClick={() => setGradeDisclosureOpen((value) => !value)}
-            aria-expanded={gradeDisclosureOpen ? "true" : "false"}
-            style={language === "ur" ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
-          >
-            <span className="settings-disclosure-label">{renderLocalizedTextNode(ui.gradeSection, language)}</span>
-            <span className="settings-disclosure-icon" aria-hidden="true">{gradeDisclosureOpen ? "−" : "+"}</span>
-          </button>
-          <div className="settings-disclosure-body-wrap">
-            <div className="settings-disclosure-body-clip">
-          <div className="settings-disclosure-body">
             <div className="settings-item" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {}}>
               <span className="si-label">📚 {renderLocalizedTextNode(ui.currentGrade, language)}</span>
               <span className="si-value">{renderGradeValueNode(ui.grade, grade, language)}</span>

@@ -226,6 +226,17 @@
           React.createElement("div", { className: "settings-disclosure-body" }, ...children))));
   }
 
+  function SettingsGroup({ title, language, children }) {
+    return React.createElement("div", {
+      className: "settings-group-card",
+      style: language === "ur"
+        ? { direction: "rtl", textAlign: "right" }
+        : null,
+    },
+      React.createElement("div", { className: "settings-group-title" }, renderLocalizedText(title, language)),
+      React.createElement("div", { className: "settings-group-body" }, ...children));
+  }
+
   function getNoticeText(entry, key, language) {
     if (language === "ur") return entry?.[`${key}Ur`] || entry?.[`${key}En`] || "";
     if (language === "bilingual") return `${entry?.[`${key}En`] || ""} / ${entry?.[`${key}Ur`] || entry?.[`${key}En`] || ""}`;
@@ -798,18 +809,101 @@
     } else {
       notificationChildren.push(React.createElement("p", { key: "notice-empty", className: "empty-state" }, renderLocalizedText(ui.noNotificationsYet || "No notifications yet.", language)));
     }
-    children.push(React.createElement(DisclosureSection, { key: "settings-data", title: ui.dataManagement || "Data Management", language, transitionMode }, ...dataChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-user", title: ui.userData || "User Data", language, transitionMode }, ...userDataChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-experience", title: ui.appExperience || "App Experience", language, transitionMode }, ...experienceChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-ai", title: ui.aiConnections || "AI Tutor Connections", language, transitionMode }, ...aiChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-pacing", title: ui.dayBasedSections || "Day-Based English Sections", language, transitionMode }, ...pacingChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-preferences", title: ui.preferences || "Preferences", language, transitionMode }, ...preferencesChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-accessibility", title: ui.accessibility || "Accessibility", language, transitionMode }, ...accessibilityChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-srs", title: ui.reviewSrs || "Review SRS", language, transitionMode }, ...srsChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-planning", title: ui.studyPlanning || "Study Planning", language, transitionMode }, ...planningChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-time", title: ui.timeManagement || "Time Management", language, transitionMode }, ...timeChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-notices", title: ui.notificationHistory || "Notification History", language, transitionMode }, ...notificationChildren));
-    children.push(React.createElement(DisclosureSection, { key: "settings-admin", title: ui.adminTools || "Admin Tools", language, transitionMode }, ...adminChildren));
+    children.push(React.createElement(DisclosureSection, {
+      key: "settings-app",
+      title: joinLocalizedText("App, Navigation & Accessibility", "ایپ، نیویگیشن اور رسائی", language),
+      language,
+      transitionMode,
+    },
+      React.createElement(SettingsGroup, {
+        key: "settings-group-experience",
+        title: joinLocalizedText("App Status & Navigation", "ایپ حالت اور نیویگیشن", language),
+        language,
+      }, ...experienceChildren),
+      React.createElement(SettingsGroup, {
+        key: "settings-group-preferences",
+        title: joinLocalizedText("Audio, Language & Display", "آڈیو، زبان اور دکھائی", language),
+        language,
+      }, ...preferencesChildren),
+      React.createElement(SettingsGroup, {
+        key: "settings-group-accessibility",
+        title: joinLocalizedText("Comfort & Accessibility", "آسانی اور رسائی", language),
+        language,
+      }, ...accessibilityChildren),
+    ));
+    children.push(React.createElement(DisclosureSection, {
+      key: "settings-ai",
+      title: joinLocalizedText("AI Tutor", "اے آئی استاد", language),
+      language,
+      transitionMode,
+    },
+      React.createElement(SettingsGroup, {
+        key: "settings-group-ai",
+        title: joinLocalizedText("Connections & Meaning Lookup", "کنکشن اور معنی تلاش", language),
+        language,
+      }, ...aiChildren),
+    ));
+    children.push(React.createElement(DisclosureSection, {
+      key: "settings-learning",
+      title: joinLocalizedText("Learning & Review", "سیکھنا اور ریویو", language),
+      language,
+      transitionMode,
+    },
+      React.createElement(SettingsGroup, {
+        key: "settings-group-pacing",
+        title: joinLocalizedText("Day-Based English Pacing", "دنوں پر مبنی انگریزی رفتار", language),
+        language,
+      }, ...pacingChildren),
+      React.createElement(SettingsGroup, {
+        key: "settings-group-srs",
+        title: joinLocalizedText("Review SRS Controls", "ریویو ایس آر ایس کنٹرول", language),
+        language,
+      }, ...srsChildren),
+    ));
+    children.push(React.createElement(DisclosureSection, {
+      key: "settings-planning-time",
+      title: joinLocalizedText("Planning, Time & Reminders", "منصوبہ بندی، وقت اور یاد دہانیاں", language),
+      language,
+      transitionMode,
+    },
+      React.createElement(SettingsGroup, {
+        key: "settings-group-planning",
+        title: joinLocalizedText("Goals & Study Planning", "اہداف اور مطالعہ منصوبہ بندی", language),
+        language,
+      }, ...planningChildren),
+      React.createElement(SettingsGroup, {
+        key: "settings-group-time",
+        title: joinLocalizedText("Class Time Tracking", "کلاس وقت کی نگرانی", language),
+        language,
+      }, ...timeChildren),
+      React.createElement(SettingsGroup, {
+        key: "settings-group-notifications",
+        title: joinLocalizedText("Notification History", "نوٹیفکیشن ہسٹری", language),
+        language,
+      }, ...notificationChildren),
+    ));
+    children.push(React.createElement(DisclosureSection, {
+      key: "settings-data-backup",
+      title: joinLocalizedText("Data, Backup & Reset", "ڈیٹا، بیک اپ اور ری سیٹ", language),
+      language,
+      transitionMode,
+    },
+      React.createElement(SettingsGroup, {
+        key: "settings-group-data",
+        title: joinLocalizedText("Updates & Progress Files", "اپ ڈیٹس اور پروگریس فائلیں", language),
+        language,
+      }, ...dataChildren),
+      React.createElement(SettingsGroup, {
+        key: "settings-group-user",
+        title: joinLocalizedText("Storage & Reset", "اسٹوریج اور ری سیٹ", language),
+        language,
+      }, ...userDataChildren),
+      React.createElement(SettingsGroup, {
+        key: "settings-group-admin",
+        title: joinLocalizedText("Backup & Admin Tools", "بیک اپ اور ایڈمن اوزار", language),
+        language,
+      }, ...adminChildren),
+    ));
 
     return React.createElement("div", null, ...children);
   }
