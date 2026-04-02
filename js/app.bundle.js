@@ -8404,15 +8404,19 @@ ${error.message || error}`);
     const closeWordMeaningPopover = useCallback(() => {
       setWordMeaningPopover(null);
     }, []);
+    const aiMeaningProviderIds = AI_PROVIDER_ORDER.filter((providerId) => {
+      var _a2;
+      return String(((_a2 = aiProviderConfigs[providerId]) == null ? void 0 : _a2.apiKey) || "").trim();
+    });
     const requestWordMeaningFromAi = useCallback(async (providerId, word) => {
       const providerConfig = aiProviderConfigs[providerId];
       const providerDefinition = AI_PROVIDER_DEFS[providerId];
-      if (!(providerConfig == null ? void 0 : providerConfig.apiKey) || !providerDefinition) return "";
+      if (!(providerConfig == null ? void 0 : providerConfig.apiKey) || !providerDefinition) return null;
       const response = await requestAiTutorResponse(
         providerId,
         providerConfig.apiKey,
         providerConfig.model || providerDefinition.defaultModel,
-        [{ role: "user", text: `English word: ${word}` }],
+        [{ role: "user", text: `Return valid JSON only for the English word "${word}".` }],
         "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only, covering common senses or school-use senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand when the word is used in class or daily life. If the word has fewer common senses, still return the best available Urdu meanings. No English. No markdown. No extra keys."
       );
       return extractWordMeaningDetails(response);
@@ -8449,11 +8453,11 @@ ${error.message || error}`);
       const candidateWords = getLookupWordCandidates(rawWord);
       const localEntry = candidateWords.map((candidate) => localWordMeaningLookup[candidate]).find(Boolean);
       const cacheEntry = candidateWords.map((candidate) => wordMeaningCache[candidate]).find(Boolean);
-      const applyMeaningEntry = (entry, fallbackSource) => {
+      const applyMeaningEntry = (entry, fallbackSource, keepLoading = false) => {
         if (!hasWordMeaningContent(entry)) return false;
         const orderedMeanings = Array.isArray(entry.meaningsUr) && entry.meaningsUr.length > 0 ? entry.meaningsUr.filter(Boolean) : entry.meaningUr ? [entry.meaningUr] : [];
         setPopupState({
-          loading: false,
+          loading: keepLoading,
           meaningUr: entry.meaningUr || orderedMeanings[0] || "",
           meaningsUr: orderedMeanings,
           explanationUr: entry.explanationUr || "",
@@ -8469,20 +8473,20 @@ ${error.message || error}`);
       if (wordMeaningPriority === "local-first") {
         if (hasWordMeaningContent(localEntry)) {
           hasInlineMeaning = true;
-          shouldEnrichFromAi = !applyMeaningEntry(localEntry, "Local");
+          shouldEnrichFromAi = !applyMeaningEntry(localEntry, "Local", true);
           if (!shouldEnrichFromAi) return;
         }
         if (!hasInlineMeaning && hasWordMeaningContent(cacheEntry)) {
           hasInlineMeaning = true;
-          shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
+          shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache", true);
           if (!shouldEnrichFromAi) return;
         }
       } else if (hasWordMeaningContent(cacheEntry)) {
         hasInlineMeaning = true;
-        shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
+        shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache", true);
         if (!shouldEnrichFromAi) return;
       }
-      const providerOrder = ["gemini", ...readyAiProviderIds.filter((providerId) => providerId !== "gemini")];
+      const providerOrder = ["gemini", ...aiMeaningProviderIds.filter((providerId) => providerId !== "gemini")];
       let lastError = null;
       for (const providerId of providerOrder) {
         try {
@@ -8523,14 +8527,17 @@ ${error.message || error}`);
         applyMeaningEntry(localEntry, "Local");
         return;
       }
-      if (hasInlineMeaning) return;
+      if (hasInlineMeaning) {
+        setPopupState({ loading: false, error: "" });
+        return;
+      }
       const blockedReason = canUseDirectAiFromBrowser();
       setPopupState({
         loading: false,
-        error: blockedReason.ok ? joinLocalizedText("Meaning not found yet.", "\u0627\u0628\u06BE\u06CC \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language) : ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
+        error: blockedReason.ok ? joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "\u0627\u0633 \u0648\u0642\u062A \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4 \u062A\u06BE\u0648\u0691\u06CC \u062F\u06CC\u0631 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4", language) : ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
         source: lastError ? "Unavailable" : ""
       });
-    }, [language, localWordMeaningLookup, readyAiProviderIds, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
+    }, [aiMeaningProviderIds, language, localWordMeaningLookup, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
     useEffect(() => {
       if (!wordMeaningPopover) return void 0;
       const handleDismiss = (event) => {
@@ -8824,7 +8831,7 @@ ${error.message || error}`);
           handleHeaderPinToggle();
         }
       },
-      /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { fill: "currentColor", d: "M15.7 3.3c.4-.4 1-.4 1.4 0l3.6 3.6c.4.4.4 1 0 1.4l-1.9 1.9-2.2-.3-2.6 2.6 1 4.9-1.2 1.2-2.7-4.7-2.4-2.4-4.7-2.7 1.2-1.2 4.9 1 2.6-2.6-.3-2.2 1.9-1.9Zm-2.4 4.1.2 1.3-3.1 3.1-3.3-.6 1.9 1.1 2.9 2.9 1.1 1.9-.6-3.3 3.1-3.1 1.3.2 1.1-1.1-2.5-2.5-1.1 1.1Z" }))
+      /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { fill: "currentColor", d: "M14 4v1h1v1h-1v3.17L18 13v1h-5v6l-1 1-1-1v-6H6v-1l4-3.83V6H9V5h1V4h4Z" }))
     ), /* @__PURE__ */ React.createElement(
       "button",
       {
