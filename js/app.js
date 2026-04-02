@@ -9688,6 +9688,8 @@ function HomeschoolApp() {
             language)}</p>
           </div>
         </button>
+        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
+        <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
         <div className="review-panel challenge-panel" style={{ marginTop: 16 }}>
           <div className="review-panel-head">
             <div>
@@ -9734,8 +9736,6 @@ function HomeschoolApp() {
             <span className="goal-progress-badge">{todayGamificationEntry.perfectDayAwarded ? "+120 XP" : `${completedDailyChallenges}/${dailyChallenges.length}`}</span>
           </div>
         </div>
-        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
-        <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
         <div className="review-panel home-support-panel" style={{ marginTop: 16 }}>
           <div className="review-panel-head">
             <div>
