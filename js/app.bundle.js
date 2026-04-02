@@ -777,6 +777,9 @@
       };
     }).filter(Boolean);
   }
+  function extractGeminiText(data) {
+    return extractGeminiResponseParts(data).filter((part) => part.type === "text").map((part) => part.text || "").join("").trim();
+  }
   function buildAiError(code, message, status = null) {
     const error = new Error(message);
     error.code = code;
@@ -925,6 +928,37 @@
   async function requestAiTutorResponse(providerId, apiKey, model, conversation, systemPrompt) {
     const result = await requestAiTutorTurn(providerId, apiKey, model, conversation, systemPrompt);
     return (result == null ? void 0 : result.text) || "Sorry, I could not generate a reply.";
+  }
+  async function requestGeminiWordMeaning(apiKey, model, word) {
+    const browserCapability = canUseDirectAiFromBrowser();
+    if (!browserCapability.ok) {
+      throw buildAiError("blocked", browserCapability.reason === "file" ? "Browser AI access is blocked in direct file mode. Open the HTTPS published site or localhost." : "Browser AI access needs HTTPS or localhost.");
+    }
+    const data = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{
+            text: "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only, covering the most useful classroom and daily-life senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand the word in context. No English. No markdown. No extra keys."
+          }]
+        },
+        contents: [{
+          role: "user",
+          parts: [{
+            text: `English word: "${String(word || "").trim()}". Return JSON only.`
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      })
+    });
+    const text = extractGeminiText(data).trim();
+    return extractWordMeaningDetails(text);
   }
   async function requestAiTutorTurn(providerId, apiKey, model, conversation, systemPrompt) {
     var _a, _b, _c, _d;
@@ -2474,11 +2508,15 @@ ${entry.explanationUr}`);
     if (!safeText) return "";
     const ranges = getHighlightRanges(safeText, highlight);
     const parts = [];
+    const pushPlainText = (segment, key) => {
+      if (!segment) return;
+      parts.push(/* @__PURE__ */ React.createElement("span", { key, style: { whiteSpace: "pre-wrap" } }, segment));
+    };
     const wordMatcher = /[A-Za-z]+(?:['’][A-Za-z]+)?/g;
     let match;
     let cursor = 0;
     while ((match = wordMatcher.exec(safeText)) !== null) {
-      if (match.index > cursor) parts.push(safeText.slice(cursor, match.index));
+      if (match.index > cursor) pushPlainText(safeText.slice(cursor, match.index), `${keyPrefix}-txt-${cursor}`);
       const token = match[0];
       const normalized = normalizeLookupWord(token);
       const highlighted = isHighlightedRange(ranges, match.index, match.index + token.length);
@@ -2508,7 +2546,7 @@ ${entry.explanationUr}`);
       }
       cursor = match.index + token.length;
     }
-    if (cursor < safeText.length) parts.push(safeText.slice(cursor));
+    if (cursor < safeText.length) pushPlainText(safeText.slice(cursor), `${keyPrefix}-tail-${cursor}`);
     return /* @__PURE__ */ React.createElement(React.Fragment, null, parts);
   }
   function stripInlineUrduForKnownWords(text, words) {
@@ -8412,6 +8450,13 @@ ${error.message || error}`);
       const providerConfig = aiProviderConfigs[providerId];
       const providerDefinition = AI_PROVIDER_DEFS[providerId];
       if (!(providerConfig == null ? void 0 : providerConfig.apiKey) || !providerDefinition) return null;
+      if (providerId === "gemini") {
+        return requestGeminiWordMeaning(
+          providerConfig.apiKey,
+          providerConfig.model || providerDefinition.defaultModel,
+          word
+        );
+      }
       const response = await requestAiTutorResponse(
         providerId,
         providerConfig.apiKey,
@@ -8534,7 +8579,7 @@ ${error.message || error}`);
       const blockedReason = canUseDirectAiFromBrowser();
       setPopupState({
         loading: false,
-        error: blockedReason.ok ? joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "\u0627\u0633 \u0648\u0642\u062A \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4 \u062A\u06BE\u0648\u0691\u06CC \u062F\u06CC\u0631 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4", language) : ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
+        error: blockedReason.ok ? (lastError == null ? void 0 : lastError.message) ? String(lastError.message) : joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "\u0627\u0633 \u0648\u0642\u062A \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4 \u062A\u06BE\u0648\u0691\u06CC \u062F\u06CC\u0631 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4", language) : ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
         source: lastError ? "Unavailable" : ""
       });
     }, [aiMeaningProviderIds, language, localWordMeaningLookup, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);

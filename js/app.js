@@ -973,6 +973,40 @@ async function requestAiTutorResponse(providerId, apiKey, model, conversation, s
   return result?.text || "Sorry, I could not generate a reply.";
 }
 
+async function requestGeminiWordMeaning(apiKey, model, word) {
+  const browserCapability = canUseDirectAiFromBrowser();
+  if (!browserCapability.ok) {
+    throw buildAiError("blocked", browserCapability.reason === "file"
+      ? "Browser AI access is blocked in direct file mode. Open the HTTPS published site or localhost."
+      : "Browser AI access needs HTTPS or localhost.");
+  }
+  const data = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [{
+          text: "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only, covering the most useful classroom and daily-life senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand the word in context. No English. No markdown. No extra keys.",
+        }],
+      },
+      contents: [{
+        role: "user",
+        parts: [{
+          text: `English word: "${String(word || "").trim()}". Return JSON only.`,
+        }],
+      }],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+  const text = extractGeminiText(data).trim();
+  return extractWordMeaningDetails(text);
+}
+
 async function requestAiTutorTurn(providerId, apiKey, model, conversation, systemPrompt) {
   const browserCapability = canUseDirectAiFromBrowser();
   if (!browserCapability.ok) {
@@ -3842,11 +3876,15 @@ function renderInteractiveEnglishText(text, app, highlight = null, keyPrefix = "
   if (!safeText) return "";
   const ranges = getHighlightRanges(safeText, highlight);
   const parts = [];
+  const pushPlainText = (segment, key) => {
+    if (!segment) return;
+    parts.push(<span key={key} style={{ whiteSpace: "pre-wrap" }}>{segment}</span>);
+  };
   const wordMatcher = /[A-Za-z]+(?:['’][A-Za-z]+)?/g;
   let match;
   let cursor = 0;
   while ((match = wordMatcher.exec(safeText)) !== null) {
-    if (match.index > cursor) parts.push(safeText.slice(cursor, match.index));
+    if (match.index > cursor) pushPlainText(safeText.slice(cursor, match.index), `${keyPrefix}-txt-${cursor}`);
     const token = match[0];
     const normalized = normalizeLookupWord(token);
     const highlighted = isHighlightedRange(ranges, match.index, match.index + token.length);
@@ -3874,7 +3912,7 @@ function renderInteractiveEnglishText(text, app, highlight = null, keyPrefix = "
     }
     cursor = match.index + token.length;
   }
-  if (cursor < safeText.length) parts.push(safeText.slice(cursor));
+  if (cursor < safeText.length) pushPlainText(safeText.slice(cursor), `${keyPrefix}-tail-${cursor}`);
   return <>{parts}</>;
 }
 
@@ -10342,6 +10380,13 @@ function HomeschoolApp() {
     const providerConfig = aiProviderConfigs[providerId];
     const providerDefinition = AI_PROVIDER_DEFS[providerId];
     if (!providerConfig?.apiKey || !providerDefinition) return null;
+    if (providerId === "gemini") {
+      return requestGeminiWordMeaning(
+        providerConfig.apiKey,
+        providerConfig.model || providerDefinition.defaultModel,
+        word,
+      );
+    }
     const response = await requestAiTutorResponse(
       providerId,
       providerConfig.apiKey,
@@ -10478,7 +10523,9 @@ function HomeschoolApp() {
     setPopupState({
       loading: false,
       error: blockedReason.ok
-        ? joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "اس وقت معنی دستیاب نہیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔", language)
+        ? (lastError?.message
+          ? String(lastError.message)
+          : joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "اس وقت معنی دستیاب نہیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔", language))
         : (ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode."),
       source: lastError ? "Unavailable" : "",
     });
