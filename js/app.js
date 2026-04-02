@@ -696,10 +696,114 @@ function extractOpenAiText(content) {
   return "";
 }
 
-function extractGeminiText(data) {
+function getMediaKindFromMimeType(mimeType) {
+  const normalized = String(mimeType || "").toLowerCase();
+  if (normalized.startsWith("image/")) return "image";
+  if (normalized.startsWith("audio/")) return "audio";
+  if (normalized.startsWith("video/")) return "video";
+  return "file";
+}
+
+function buildInlineDataUrl(mimeType, base64Data) {
+  const mime = String(mimeType || "").trim();
+  const data = String(base64Data || "").trim();
+  if (!mime || !data) return "";
+  return `data:${mime};base64,${data}`;
+}
+
+function normalizeTutorMessageParts(parts, fallbackText = "") {
+  const normalized = Array.isArray(parts)
+    ? parts.map((part) => {
+      if (!part || typeof part !== "object") return null;
+      if (part.type === "media") {
+        const mimeType = String(part.mimeType || "").trim();
+        const mediaType = part.mediaType || getMediaKindFromMimeType(mimeType);
+        const dataUrl = String(part.dataUrl || "").trim();
+        const uri = String(part.uri || "").trim();
+        if (!mimeType || (!dataUrl && !uri)) return null;
+        return {
+          type: "media",
+          mediaType,
+          mimeType,
+          dataUrl,
+          uri,
+          fileName: String(part.fileName || "").trim(),
+          size: Number(part.size) || 0,
+          persistable: Boolean(part.persistable),
+        };
+      }
+      const text = String(part.text || "").trim();
+      if (!text) return null;
+      return { type: "text", text };
+    }).filter(Boolean)
+    : [];
+  if (normalized.length > 0) return normalized;
+  const text = String(fallbackText || "").trim();
+  return text ? [{ type: "text", text }] : [];
+}
+
+function flattenTutorMessageText(message) {
+  if (!message || typeof message !== "object") return "";
+  const parts = Array.isArray(message.parts) ? message.parts : [];
+  const textFromParts = parts.filter((part) => part?.type === "text" && String(part.text || "").trim()).map((part) => String(part.text).trim()).join("\n\n").trim();
+  if (textFromParts) return textFromParts;
+  return String(message.text || "").trim();
+}
+
+function sanitizeTutorMessageForStorage(message) {
+  const normalizedParts = normalizeTutorMessageParts(message?.parts, message?.text);
+  return {
+    role: message?.role === "user" ? "user" : "ai",
+    text: flattenTutorMessageText({ parts: normalizedParts, text: message?.text }),
+    provider: message?.provider ? String(message.provider) : "",
+    createdAt: Number(message?.createdAt) || Date.now(),
+    parts: normalizedParts.map((part) => {
+      if (part.type !== "media") return part;
+      const keepData = part.persistable && String(part.dataUrl || "").length > 0 && String(part.dataUrl || "").length <= 180000;
+      return {
+        type: "media",
+        mediaType: part.mediaType,
+        mimeType: part.mimeType,
+        fileName: part.fileName,
+        size: Number(part.size) || 0,
+        persistable: Boolean(part.persistable),
+        dataUrl: keepData ? part.dataUrl : "",
+        uri: keepData ? "" : String(part.uri || "").trim(),
+      };
+    }),
+  };
+}
+
+function extractGeminiResponseParts(data) {
   return (data?.candidates || [])
     .flatMap((candidate) => candidate?.content?.parts || [])
-    .map((part) => part?.text || "")
+    .map((part) => {
+      const text = String(part?.text || "").trim();
+      if (text) return { type: "text", text };
+      const inline = part?.inlineData || part?.inline_data || null;
+      const fileData = part?.fileData || part?.file_data || null;
+      const mimeType = String(inline?.mimeType || inline?.mime_type || fileData?.mimeType || fileData?.mime_type || "").trim();
+      const base64Data = String(inline?.data || "").trim();
+      const uri = String(fileData?.fileUri || fileData?.file_uri || "").trim();
+      if (!mimeType || (!base64Data && !uri)) return null;
+      return {
+        type: "media",
+        mediaType: getMediaKindFromMimeType(mimeType),
+        mimeType,
+        dataUrl: base64Data ? buildInlineDataUrl(mimeType, base64Data) : "",
+        uri,
+        fileName: "",
+        size: 0,
+        persistable: Boolean(base64Data) && base64Data.length <= 180000,
+      };
+    })
+    .filter(Boolean);
+}
+
+function extractGeminiText(data) {
+  return extractGeminiResponseParts(data)
+    .filter((part) => part.type === "text")
+    .map((part) => part.text || "")
     .join("")
     .trim();
 }
@@ -782,6 +886,19 @@ async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("Failed to read file."));
+      reader.readAsDataURL(file);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 async function validateAiProviderConfig(providerId, apiKey, preferredModel) {
   const browserCapability = canUseDirectAiFromBrowser();
   if (!browserCapability.ok) {
@@ -852,6 +969,11 @@ async function validateAiProviderConfig(providerId, apiKey, preferredModel) {
 }
 
 async function requestAiTutorResponse(providerId, apiKey, model, conversation, systemPrompt) {
+  const result = await requestAiTutorTurn(providerId, apiKey, model, conversation, systemPrompt);
+  return result?.text || "Sorry, I could not generate a reply.";
+}
+
+async function requestAiTutorTurn(providerId, apiKey, model, conversation, systemPrompt) {
   const browserCapability = canUseDirectAiFromBrowser();
   if (!browserCapability.ok) {
     throw buildAiError("blocked", browserCapability.reason === "file"
@@ -860,7 +982,8 @@ async function requestAiTutorResponse(providerId, apiKey, model, conversation, s
   }
   const messages = conversation.map((entry) => ({
     role: entry.role === "ai" ? "assistant" : "user",
-    content: entry.text,
+    content: flattenTutorMessageText(entry),
+    parts: normalizeTutorMessageParts(entry?.parts, entry?.text),
   }));
   if (providerId === "openai") {
     const data = await fetchJsonWithTimeout("https://api.openai.com/v1/chat/completions", {
@@ -872,10 +995,11 @@ async function requestAiTutorResponse(providerId, apiKey, model, conversation, s
       body: JSON.stringify({
         model,
         temperature: 0.4,
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        messages: [{ role: "system", content: systemPrompt }, ...messages.map((entry) => ({ role: entry.role, content: entry.content }))],
       }),
     });
-    return extractOpenAiText(data?.choices?.[0]?.message?.content) || "Sorry, I could not generate a reply.";
+    const text = extractOpenAiText(data?.choices?.[0]?.message?.content) || "Sorry, I could not generate a reply.";
+    return { text, parts: [{ type: "text", text }] };
   }
   if (providerId === "anthropic") {
     const data = await fetchJsonWithTimeout("https://api.anthropic.com/v1/messages", {
@@ -896,7 +1020,8 @@ async function requestAiTutorResponse(providerId, apiKey, model, conversation, s
         })),
       }),
     });
-    return (data?.content || []).map((entry) => entry?.text || "").join("").trim() || "Sorry, I could not generate a reply.";
+    const text = (data?.content || []).map((entry) => entry?.text || "").join("").trim() || "Sorry, I could not generate a reply.";
+    return { text, parts: [{ type: "text", text }] };
   }
   if (providerId === "gemini") {
     const data = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
@@ -910,14 +1035,26 @@ async function requestAiTutorResponse(providerId, apiKey, model, conversation, s
         },
         contents: messages.map((entry) => ({
           role: entry.role === "assistant" ? "model" : "user",
-          parts: [{ text: entry.content }],
+          parts: entry.parts.map((part) => part.type === "media"
+            ? {
+              inlineData: {
+                mimeType: part.mimeType,
+                data: String(part.dataUrl || "").split(",")[1] || "",
+              },
+            }
+            : { text: part.text }),
         })),
         generationConfig: {
           temperature: 0.4,
         },
       }),
     });
-    return extractGeminiText(data) || "Sorry, I could not generate a reply.";
+    const parts = extractGeminiResponseParts(data);
+    const text = parts.filter((part) => part.type === "text").map((part) => part.text).join("").trim();
+    if (parts.length > 0) {
+      return { text, parts };
+    }
+    return { text: "Sorry, I could not generate a reply.", parts: [{ type: "text", text: "Sorry, I could not generate a reply." }] };
   }
   const data = await fetchJsonWithTimeout("https://ollama.com/api/chat", {
     method: "POST",
@@ -928,10 +1065,11 @@ async function requestAiTutorResponse(providerId, apiKey, model, conversation, s
     body: JSON.stringify({
       model,
       stream: false,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      messages: [{ role: "system", content: systemPrompt }, ...messages.map((entry) => ({ role: entry.role, content: entry.content }))],
     }),
   });
-  return data?.message?.content || data?.response || "Sorry, I could not generate a reply.";
+  const text = data?.message?.content || data?.response || "Sorry, I could not generate a reply.";
+  return { text, parts: [{ type: "text", text }] };
 }
 
 function getLocalizedNamePair(studentName, studentNameUr) {
@@ -1150,7 +1288,12 @@ function createTutorSession(language, messages = null) {
     id: `chat_${now}_${Math.random().toString(36).slice(2, 8)}`,
     createdAt: now,
     updatedAt: now,
-    messages: Array.isArray(messages) && messages.length > 0 ? messages : [{ role: "ai", text: getDefaultTutorGreeting(language) }],
+    messages: Array.isArray(messages) && messages.length > 0 ? messages.map((message) => sanitizeTutorMessageForStorage(message)) : [{
+      role: "ai",
+      text: getDefaultTutorGreeting(language),
+      createdAt: now,
+      parts: [{ type: "text", text: getDefaultTutorGreeting(language) }],
+    }],
   };
 }
 
@@ -1162,18 +1305,25 @@ function normalizeTutorSessions(rawSessions, language) {
         ? session.messages
           .map((message) => {
             const role = message?.role === "user" ? "user" : "ai";
-            const text = String(message?.text || "").trim();
-            if (!text) return null;
+            const parts = normalizeTutorMessageParts(message?.parts, message?.text);
+            const text = flattenTutorMessageText({ parts, text: message?.text });
+            if (!text && parts.length === 0) return null;
             return {
               role,
               text,
               provider: message?.provider ? String(message.provider) : "",
               createdAt: Number(message?.createdAt) || Number(session?.updatedAt) || Date.now(),
+              parts,
             };
           })
           .filter(Boolean)
         : [];
-      const fallbackMessages = messages.length > 0 ? messages : [{ role: "ai", text: getDefaultTutorGreeting(language), createdAt: Date.now() }];
+      const fallbackMessages = messages.length > 0 ? messages : [{
+        role: "ai",
+        text: getDefaultTutorGreeting(language),
+        createdAt: Date.now(),
+        parts: [{ type: "text", text: getDefaultTutorGreeting(language) }],
+      }];
       return {
         id: String(session?.id || `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
         createdAt: Number(session?.createdAt) || Date.now(),
@@ -6434,6 +6584,7 @@ function HomeschoolApp() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatListening, setChatListening] = useState(false);
   const [clipboardHasText, setClipboardHasText] = useState(false);
+  const [chatAttachments, setChatAttachments] = useState([]);
   const [aiProviderConfigs, setAiProviderConfigs] = useState(storedAiConfigs);
   const [aiProviderDrafts, setAiProviderDrafts] = useState(storedAiConfigs);
   const [aiProviderBusy, setAiProviderBusy] = useState({});
@@ -6528,6 +6679,7 @@ function HomeschoolApp() {
   const [isOnline, setIsOnline] = useState(navigator.onLine !== false);
   const chatEndRef = useRef(null);
   const chatTextareaRef = useRef(null);
+  const chatFileInputRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const headerRef = useRef(null);
   const headerHideTimerRef = useRef(null);
@@ -6548,10 +6700,18 @@ function HomeschoolApp() {
   const chatMessages = activeTutorSession?.messages || [];
   const chatInputWordCount = chatInput.trim() ? chatInput.trim().split(/\s+/).filter(Boolean).length : 0;
   const speechRecognitionSupported = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const currentTutorProviderId = selectedAiProvider && AI_PROVIDER_ORDER.includes(selectedAiProvider) ? selectedAiProvider : "openai";
+  const tutorSupportsMedia = currentTutorProviderId === "gemini";
 
   const persistTutorHistory = useCallback((sessions, sessionId) => {
+    const safeSessions = normalizeTutorSessions(sessions, language)
+      .slice(0, 30)
+      .map((session) => ({
+        ...session,
+        messages: (session.messages || []).map((message) => sanitizeTutorMessageForStorage(message)),
+      }));
     localStorageFallback("hs_ai_tutor_history", {
-      sessions: normalizeTutorSessions(sessions, language).slice(0, 30),
+      sessions: safeSessions,
       activeSessionId: sessionId,
     });
   }, [language]);
@@ -6560,13 +6720,15 @@ function HomeschoolApp() {
     const messageList = (Array.isArray(nextMessages) ? nextMessages : [nextMessages])
       .map((message) => {
         const role = message?.role === "user" ? "user" : "ai";
-        const text = String(message?.text || "").trim();
-        if (!text) return null;
+        const parts = normalizeTutorMessageParts(message?.parts, message?.text);
+        const text = flattenTutorMessageText({ parts, text: message?.text });
+        if (!text && parts.length === 0) return null;
         return {
           role,
           text,
           provider: message?.provider ? String(message.provider) : "",
           createdAt: Date.now(),
+          parts,
         };
       })
       .filter(Boolean);
@@ -6595,6 +6757,7 @@ function HomeschoolApp() {
     setTutorSessions((current) => [nextSession, ...normalizeTutorSessions(current, language).filter((session) => session.id !== nextSession.id)].slice(0, 30));
     setActiveTutorSessionId(nextSession.id);
     setChatInput("");
+    setChatAttachments([]);
     setChatLoading(false);
     setChatListening(false);
   }, [language]);
@@ -6660,6 +6823,47 @@ function HomeschoolApp() {
     } catch (error) {
       setClipboardHasText(false);
     }
+  }, []);
+
+  const handleOpenTutorMediaPicker = useCallback(() => {
+    if (!tutorSupportsMedia) return;
+    chatFileInputRef.current?.click?.();
+  }, [tutorSupportsMedia]);
+
+  const handleRemoveTutorAttachment = useCallback((attachmentId) => {
+    setChatAttachments((current) => current.filter((item) => item.id !== attachmentId));
+    if (chatFileInputRef.current) chatFileInputRef.current.value = "";
+  }, []);
+
+  const handleTutorMediaSelected = useCallback(async (event) => {
+    const files = Array.from(event?.target?.files || []);
+    if (!files.length) return;
+    const picked = files.slice(0, 3);
+    const nextAttachments = [];
+    for (const file of picked) {
+      const mimeType = String(file?.type || "").trim().toLowerCase();
+      const mediaType = getMediaKindFromMimeType(mimeType);
+      if (!["image", "audio", "video"].includes(mediaType)) continue;
+      if ((Number(file.size) || 0) > 6 * 1024 * 1024) continue;
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        if (!String(dataUrl || "").trim()) continue;
+        nextAttachments.push({
+          id: `media_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          type: "media",
+          mediaType,
+          mimeType,
+          dataUrl,
+          fileName: String(file.name || "").trim(),
+          size: Number(file.size) || 0,
+          persistable: (Number(file.size) || 0) <= 180000,
+        });
+      } catch (error) {
+        // Ignore unreadable files.
+      }
+    }
+    setChatAttachments(nextAttachments.slice(0, 3));
+    if (chatFileInputRef.current) chatFileInputRef.current.value = "";
   }, []);
 
   const handleToggleChatListening = useCallback(() => {
@@ -8334,6 +8538,9 @@ function HomeschoolApp() {
     }
   }, [activeTutorSession, tutorSessions]);
   useEffect(() => {
+    setChatAttachments([]);
+  }, [currentTutorSessionId]);
+  useEffect(() => {
     persistTutorHistory(tutorSessions, activeTutorSession?.id || activeTutorSessionId || tutorSessions[0]?.id || null);
   }, [activeTutorSession?.id, activeTutorSessionId, persistTutorHistory, tutorSessions]);
   useEffect(() => {
@@ -8927,6 +9134,19 @@ function HomeschoolApp() {
   const sendChat = async () => {
     if (!chatInput.trim()) return;
     const msg = chatInput.trim();
+    const outgoingParts = [
+      ...(msg ? [{ type: "text", text: msg }] : []),
+      ...(Array.isArray(chatAttachments) ? chatAttachments.map((attachment) => ({
+        type: "media",
+        mediaType: attachment.mediaType,
+        mimeType: attachment.mimeType,
+        dataUrl: attachment.dataUrl,
+        fileName: attachment.fileName,
+        size: attachment.size,
+        persistable: attachment.persistable,
+      })) : []),
+    ];
+    if (!msg && outgoingParts.length === 0) return;
     const sessionId = currentTutorSessionId || activeTutorSessionId || tutorSessions[0]?.id || createTutorSession(language).id;
     const savedProviders = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
     const availableProviders = savedProviders.filter((providerId) => isAiProviderReady(aiProviderConfigs[providerId]));
@@ -8944,17 +9164,22 @@ function HomeschoolApp() {
       return;
     }
     const providerId = availableProviders.includes(selectedAiProvider) ? selectedAiProvider : availableProviders[0];
+    if (chatAttachments.length > 0 && providerId !== "gemini") {
+      appendTutorMessages(sessionId, { role: "ai", text: joinLocalizedText("Media attachments currently work with Gemini in Tutor.", "میڈیا اٹیچمنٹ اس وقت صرف جیمنی کے ساتھ ٹیوٹر میں کام کرتے ہیں۔", language) });
+      return;
+    }
     const providerConfig = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
     const providerDefinition = AI_PROVIDER_DEFS[providerId];
     const providerLabel = joinLocalizedText(providerDefinition.name, providerDefinition.nameUr, language);
     const model = providerConfig.model || providerDefinition.defaultModel;
-    const conversation = [...chatMessages, { role: "user", text: msg }];
+    const conversation = [...chatMessages, { role: "user", text: msg, parts: outgoingParts }];
     setChatInput("");
-    appendTutorMessages(sessionId, { role: "user", text: msg });
+    setChatAttachments([]);
+    appendTutorMessages(sessionId, { role: "user", text: msg, parts: outgoingParts });
     setChatLoading(true);
     try {
-      const answer = await requestAiTutorResponse(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
-      appendTutorMessages(sessionId, { role: "ai", text: answer, provider: providerId });
+      const answer = await requestAiTutorTurn(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
+      appendTutorMessages(sessionId, { role: "ai", text: answer?.text || "", parts: answer?.parts || [{ type: "text", text: answer?.text || "" }], provider: providerId });
     } catch (error) {
       const nextStatus = getAiStatusFromError(error);
       const nextFriendlyMessage = getFriendlyAiErrorMessage(providerId, error, language);
@@ -8994,8 +9219,8 @@ function HomeschoolApp() {
           const updatedConfig = await saveAiProviderConfiguration(providerId, nextDraft);
           if (updatedConfig?.apiKey) {
             try {
-              const retryAnswer = await requestAiTutorResponse(providerId, updatedConfig.apiKey, updatedConfig.model || model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
-              appendTutorMessages(sessionId, { role: "ai", text: retryAnswer, provider: providerId });
+              const retryAnswer = await requestAiTutorTurn(providerId, updatedConfig.apiKey, updatedConfig.model || model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
+              appendTutorMessages(sessionId, { role: "ai", text: retryAnswer?.text || "", parts: retryAnswer?.parts || [{ type: "text", text: retryAnswer?.text || "" }], provider: providerId });
               setChatLoading(false);
               return;
             } catch (retryError) {
@@ -10398,6 +10623,26 @@ function HomeschoolApp() {
     preferences: ui.importConflictPreferences,
     time: ui.importConflictTime,
     collections: ui.importConflictCollections,
+  };
+  const renderTutorMessagePart = (part, index) => {
+    if (!part || typeof part !== "object") return null;
+    if (part.type === "media") {
+      const src = String(part.dataUrl || part.uri || "").trim();
+      if (!src) {
+        return <div key={`media_${index}`} className="chat-media-placeholder">{renderLocalizedTextNode(joinLocalizedText("Media attached", "میڈیا شامل ہے", language), language)}</div>;
+      }
+      if (part.mediaType === "image") {
+        return <img key={`media_${index}`} src={src} alt={part.fileName || `image_${index + 1}`} className="chat-media chat-media-image" />;
+      }
+      if (part.mediaType === "audio") {
+        return <audio key={`media_${index}`} controls className="chat-media chat-media-audio" src={src} preload="metadata" />;
+      }
+      if (part.mediaType === "video") {
+        return <video key={`media_${index}`} controls className="chat-media chat-media-video" src={src} preload="metadata" />;
+      }
+      return <a key={`media_${index}`} href={src} target="_blank" rel="noreferrer" className="chat-media-link">{part.fileName || renderLocalizedTextNode(joinLocalizedText("Open attachment", "اٹیچمنٹ کھولیں", language), language)}</a>;
+    }
+    return <div key={`text_${index}`} className="chat-bubble-body">{part.text}</div>;
   };
   return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: wordMeaningPopover?.normalizedWord || "" }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
     {navAutoHide ? <div className="header-reveal-hotspot" onMouseEnter={revealAutoHideHeader} onMouseMove={revealAutoHideHeader} onPointerDown={revealAutoHideHeader} /> : null}
@@ -12518,18 +12763,20 @@ function HomeschoolApp() {
           <div className="tutor-main">
             <div className="tutor-chat">
               {chatMessages.map((message, index) => {
-                const messageIsUrdu = containsUrduText(message.text) || isUrduText(message.text);
+                const messageText = flattenTutorMessageText(message);
+                const messageParts = normalizeTutorMessageParts(message?.parts, messageText);
+                const messageIsUrdu = containsUrduText(messageText) || isUrduText(messageText);
                 const providerBadge = message.provider && AI_PROVIDER_DEFS[message.provider]
                   ? joinLocalizedText(AI_PROVIDER_DEFS[message.provider].name, AI_PROVIDER_DEFS[message.provider].nameUr, language)
                   : "";
                 return (
                   <div key={`${activeTutorSession?.id || "chat"}_${index}`} className={`chat-bubble ${message.role === "ai" ? "ai" : "user"}${messageIsUrdu ? " urdu" : " english"}`}>
-                    <div className="chat-bubble-body">{message.text}</div>
+                    <div className="chat-bubble-stack">{messageParts.map((part, partIndex) => renderTutorMessagePart(part, partIndex))}</div>
                     <div className="chat-bubble-tools">
                       <span className="chat-bubble-provider">{providerBadge || "\u00A0"}</span>
                       <div className="chat-bubble-actions">
-                        <button type="button" className="chat-bubble-action" onClick={() => copyTextToClipboard(message.text)}>{renderLocalizedTextNode(joinLocalizedText("Copy", "کاپی", language), language)}</button>
-                        <button type="button" className="chat-bubble-action" onClick={() => speakInlineText(message.text)}>{renderLocalizedTextNode(joinLocalizedText("Listen", "سنیں", language), language)}</button>
+                        {messageText ? <button type="button" className="chat-bubble-action" onClick={() => copyTextToClipboard(messageText)}>{renderLocalizedTextNode(joinLocalizedText("Copy", "کاپی", language), language)}</button> : null}
+                        {messageText ? <button type="button" className="chat-bubble-action" onClick={() => speakInlineText(messageText)}>{renderLocalizedTextNode(joinLocalizedText("Listen", "سنیں", language), language)}</button> : null}
                       </div>
                     </div>
                   </div>
@@ -12539,13 +12786,27 @@ function HomeschoolApp() {
               <div ref={chatEndRef} />
             </div>
             <div className="chat-input-area">
+              {chatAttachments.length > 0 ? (
+                <div className="chat-attachment-list">
+                  {chatAttachments.map((attachment) => (
+                    <div key={attachment.id} className="chat-attachment-chip">
+                      <span className="chat-attachment-icon" aria-hidden="true">{attachment.mediaType === "image" ? "🖼" : attachment.mediaType === "audio" ? "🎧" : "🎬"}</span>
+                      <span className="chat-attachment-name">{attachment.fileName || renderLocalizedTextNode(joinLocalizedText("Attachment", "اٹیچمنٹ", language), language)}</span>
+                      <button type="button" className="chat-attachment-remove" onClick={() => handleRemoveTutorAttachment(attachment.id)}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="chat-input-toolbar">
+                {tutorSupportsMedia ? <button type="button" className="chat-tool-btn" onClick={handleOpenTutorMediaPicker} title={joinLocalizedText("Add image, audio, or video", "تصویر، آڈیو یا ویڈیو شامل کریں", language)}>＋</button> : null}
                 {clipboardHasText ? <button type="button" className="chat-tool-btn" onClick={handlePasteIntoChat} title={joinLocalizedText("Paste from clipboard", "کلپ بورڈ سے پیسٹ کریں", language)}>📋</button> : null}
                 {speechRecognitionSupported ? <button type="button" className={`chat-tool-btn${chatListening ? " active" : ""}`} onClick={handleToggleChatListening} title={joinLocalizedText("Speak to type", "بول کر لکھیں", language)}>{chatListening ? "◼" : "🎙"}</button> : null}
                 {chatInput ? <button type="button" className="chat-tool-btn" onClick={() => setChatInput("")} title={joinLocalizedText("Clear", "صاف کریں", language)}>✕</button> : null}
                 {chatInput ? <span className="chat-word-count">{renderLocalizedTextNode(joinLocalizedText(`${chatInputWordCount} words`, `${chatInputWordCount} الفاظ`, language), language)}</span> : null}
+                {!tutorSupportsMedia && currentTutorProviderId ? <span className="chat-word-count">{renderLocalizedTextNode(joinLocalizedText("Media: Gemini only", "میڈیا: صرف جیمنی", language), language)}</span> : null}
               </div>
               <div className="chat-composer">
+                <input ref={chatFileInputRef} type="file" accept="image/*,audio/*,video/*" multiple style={{ display: "none" }} onChange={handleTutorMediaSelected} />
                 <textarea
                   ref={chatTextareaRef}
                   value={chatInput}
@@ -12558,7 +12819,7 @@ function HomeschoolApp() {
                     }
                   }}
                   className={containsUrduText(chatInput) || isUrduUi(language) ? "urdu" : "english"}
-                  placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : readyAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں..." : "Ask your tutor anything...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Fix or add an AI key in Settings first...")}
+                  placeholder={!aiBrowserCapability.ok ? (language === "ur" ? "اے آئی چیٹ کے لیے HTTPS یا localhost استعمال کریں..." : "Use HTTPS or localhost for AI chat...") : readyAiProviderIds.length > 0 ? (language === "ur" ? "اپنے استاد سے کچھ بھی پوچھیں، اور جیمنی کے ساتھ میڈیا بھی شامل کریں..." : "Ask your tutor anything, and add media too with Gemini...") : (language === "ur" ? "پہلے ترتیبات میں اے آئی کی شامل کریں..." : "Fix or add an AI key in Settings first...")}
                   disabled={chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok}
                 />
                 <button className="chat-send-btn" onClick={sendChat} disabled={chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok}>➤</button>

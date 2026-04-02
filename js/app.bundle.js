@@ -681,11 +681,101 @@
     }
     return "";
   }
-  function extractGeminiText(data) {
+  function getMediaKindFromMimeType(mimeType) {
+    const normalized = String(mimeType || "").toLowerCase();
+    if (normalized.startsWith("image/")) return "image";
+    if (normalized.startsWith("audio/")) return "audio";
+    if (normalized.startsWith("video/")) return "video";
+    return "file";
+  }
+  function buildInlineDataUrl(mimeType, base64Data) {
+    const mime = String(mimeType || "").trim();
+    const data = String(base64Data || "").trim();
+    if (!mime || !data) return "";
+    return `data:${mime};base64,${data}`;
+  }
+  function normalizeTutorMessageParts(parts, fallbackText = "") {
+    const normalized = Array.isArray(parts) ? parts.map((part) => {
+      if (!part || typeof part !== "object") return null;
+      if (part.type === "media") {
+        const mimeType = String(part.mimeType || "").trim();
+        const mediaType = part.mediaType || getMediaKindFromMimeType(mimeType);
+        const dataUrl = String(part.dataUrl || "").trim();
+        const uri = String(part.uri || "").trim();
+        if (!mimeType || !dataUrl && !uri) return null;
+        return {
+          type: "media",
+          mediaType,
+          mimeType,
+          dataUrl,
+          uri,
+          fileName: String(part.fileName || "").trim(),
+          size: Number(part.size) || 0,
+          persistable: Boolean(part.persistable)
+        };
+      }
+      const text2 = String(part.text || "").trim();
+      if (!text2) return null;
+      return { type: "text", text: text2 };
+    }).filter(Boolean) : [];
+    if (normalized.length > 0) return normalized;
+    const text = String(fallbackText || "").trim();
+    return text ? [{ type: "text", text }] : [];
+  }
+  function flattenTutorMessageText(message) {
+    if (!message || typeof message !== "object") return "";
+    const parts = Array.isArray(message.parts) ? message.parts : [];
+    const textFromParts = parts.filter((part) => (part == null ? void 0 : part.type) === "text" && String(part.text || "").trim()).map((part) => String(part.text).trim()).join("\n\n").trim();
+    if (textFromParts) return textFromParts;
+    return String(message.text || "").trim();
+  }
+  function sanitizeTutorMessageForStorage(message) {
+    const normalizedParts = normalizeTutorMessageParts(message == null ? void 0 : message.parts, message == null ? void 0 : message.text);
+    return {
+      role: (message == null ? void 0 : message.role) === "user" ? "user" : "ai",
+      text: flattenTutorMessageText({ parts: normalizedParts, text: message == null ? void 0 : message.text }),
+      provider: (message == null ? void 0 : message.provider) ? String(message.provider) : "",
+      createdAt: Number(message == null ? void 0 : message.createdAt) || Date.now(),
+      parts: normalizedParts.map((part) => {
+        if (part.type !== "media") return part;
+        const keepData = part.persistable && String(part.dataUrl || "").length > 0 && String(part.dataUrl || "").length <= 18e4;
+        return {
+          type: "media",
+          mediaType: part.mediaType,
+          mimeType: part.mimeType,
+          fileName: part.fileName,
+          size: Number(part.size) || 0,
+          persistable: Boolean(part.persistable),
+          dataUrl: keepData ? part.dataUrl : "",
+          uri: keepData ? "" : String(part.uri || "").trim()
+        };
+      })
+    };
+  }
+  function extractGeminiResponseParts(data) {
     return ((data == null ? void 0 : data.candidates) || []).flatMap((candidate) => {
       var _a;
       return ((_a = candidate == null ? void 0 : candidate.content) == null ? void 0 : _a.parts) || [];
-    }).map((part) => (part == null ? void 0 : part.text) || "").join("").trim();
+    }).map((part) => {
+      const text = String((part == null ? void 0 : part.text) || "").trim();
+      if (text) return { type: "text", text };
+      const inline = (part == null ? void 0 : part.inlineData) || (part == null ? void 0 : part.inline_data) || null;
+      const fileData = (part == null ? void 0 : part.fileData) || (part == null ? void 0 : part.file_data) || null;
+      const mimeType = String((inline == null ? void 0 : inline.mimeType) || (inline == null ? void 0 : inline.mime_type) || (fileData == null ? void 0 : fileData.mimeType) || (fileData == null ? void 0 : fileData.mime_type) || "").trim();
+      const base64Data = String((inline == null ? void 0 : inline.data) || "").trim();
+      const uri = String((fileData == null ? void 0 : fileData.fileUri) || (fileData == null ? void 0 : fileData.file_uri) || "").trim();
+      if (!mimeType || !base64Data && !uri) return null;
+      return {
+        type: "media",
+        mediaType: getMediaKindFromMimeType(mimeType),
+        mimeType,
+        dataUrl: base64Data ? buildInlineDataUrl(mimeType, base64Data) : "",
+        uri,
+        fileName: "",
+        size: 0,
+        persistable: Boolean(base64Data) && base64Data.length <= 18e4
+      };
+    }).filter(Boolean);
   }
   function buildAiError(code, message, status = null) {
     const error = new Error(message);
@@ -756,6 +846,18 @@
       if (timeout) clearTimeout(timeout);
     }
   }
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      try {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("Failed to read file."));
+        reader.readAsDataURL(file);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
   async function validateAiProviderConfig(providerId, apiKey, preferredModel) {
     const browserCapability = canUseDirectAiFromBrowser();
     if (!browserCapability.ok) {
@@ -821,6 +923,10 @@
     };
   }
   async function requestAiTutorResponse(providerId, apiKey, model, conversation, systemPrompt) {
+    const result = await requestAiTutorTurn(providerId, apiKey, model, conversation, systemPrompt);
+    return (result == null ? void 0 : result.text) || "Sorry, I could not generate a reply.";
+  }
+  async function requestAiTutorTurn(providerId, apiKey, model, conversation, systemPrompt) {
     var _a, _b, _c, _d;
     const browserCapability = canUseDirectAiFromBrowser();
     if (!browserCapability.ok) {
@@ -828,7 +934,8 @@
     }
     const messages = conversation.map((entry) => ({
       role: entry.role === "ai" ? "assistant" : "user",
-      content: entry.text
+      content: flattenTutorMessageText(entry),
+      parts: normalizeTutorMessageParts(entry == null ? void 0 : entry.parts, entry == null ? void 0 : entry.text)
     }));
     if (providerId === "openai") {
       const data2 = await fetchJsonWithTimeout("https://api.openai.com/v1/chat/completions", {
@@ -840,10 +947,11 @@
         body: JSON.stringify({
           model,
           temperature: 0.4,
-          messages: [{ role: "system", content: systemPrompt }, ...messages]
+          messages: [{ role: "system", content: systemPrompt }, ...messages.map((entry) => ({ role: entry.role, content: entry.content }))]
         })
       });
-      return extractOpenAiText((_c = (_b = (_a = data2 == null ? void 0 : data2.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "Sorry, I could not generate a reply.";
+      const text2 = extractOpenAiText((_c = (_b = (_a = data2 == null ? void 0 : data2.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "Sorry, I could not generate a reply.";
+      return { text: text2, parts: [{ type: "text", text: text2 }] };
     }
     if (providerId === "anthropic") {
       const data2 = await fetchJsonWithTimeout("https://api.anthropic.com/v1/messages", {
@@ -864,7 +972,8 @@
           }))
         })
       });
-      return ((data2 == null ? void 0 : data2.content) || []).map((entry) => (entry == null ? void 0 : entry.text) || "").join("").trim() || "Sorry, I could not generate a reply.";
+      const text2 = ((data2 == null ? void 0 : data2.content) || []).map((entry) => (entry == null ? void 0 : entry.text) || "").join("").trim() || "Sorry, I could not generate a reply.";
+      return { text: text2, parts: [{ type: "text", text: text2 }] };
     }
     if (providerId === "gemini") {
       const data2 = await fetchJsonWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
@@ -878,14 +987,24 @@
           },
           contents: messages.map((entry) => ({
             role: entry.role === "assistant" ? "model" : "user",
-            parts: [{ text: entry.content }]
+            parts: entry.parts.map((part) => part.type === "media" ? {
+              inlineData: {
+                mimeType: part.mimeType,
+                data: String(part.dataUrl || "").split(",")[1] || ""
+              }
+            } : { text: part.text })
           })),
           generationConfig: {
             temperature: 0.4
           }
         })
       });
-      return extractGeminiText(data2) || "Sorry, I could not generate a reply.";
+      const parts = extractGeminiResponseParts(data2);
+      const text2 = parts.filter((part) => part.type === "text").map((part) => part.text).join("").trim();
+      if (parts.length > 0) {
+        return { text: text2, parts };
+      }
+      return { text: "Sorry, I could not generate a reply.", parts: [{ type: "text", text: "Sorry, I could not generate a reply." }] };
     }
     const data = await fetchJsonWithTimeout("https://ollama.com/api/chat", {
       method: "POST",
@@ -896,10 +1015,11 @@
       body: JSON.stringify({
         model,
         stream: false,
-        messages: [{ role: "system", content: systemPrompt }, ...messages]
+        messages: [{ role: "system", content: systemPrompt }, ...messages.map((entry) => ({ role: entry.role, content: entry.content }))]
       })
     });
-    return ((_d = data == null ? void 0 : data.message) == null ? void 0 : _d.content) || (data == null ? void 0 : data.response) || "Sorry, I could not generate a reply.";
+    const text = ((_d = data == null ? void 0 : data.message) == null ? void 0 : _d.content) || (data == null ? void 0 : data.response) || "Sorry, I could not generate a reply.";
+    return { text, parts: [{ type: "text", text }] };
   }
   function getLocalizedNamePair(studentName, studentNameUr) {
     return {
@@ -1115,7 +1235,12 @@ ${entry.explanationUr}`);
       id: `chat_${now}_${Math.random().toString(36).slice(2, 8)}`,
       createdAt: now,
       updatedAt: now,
-      messages: Array.isArray(messages) && messages.length > 0 ? messages : [{ role: "ai", text: getDefaultTutorGreeting(language) }]
+      messages: Array.isArray(messages) && messages.length > 0 ? messages.map((message) => sanitizeTutorMessageForStorage(message)) : [{
+        role: "ai",
+        text: getDefaultTutorGreeting(language),
+        createdAt: now,
+        parts: [{ type: "text", text: getDefaultTutorGreeting(language) }]
+      }]
     };
   }
   function normalizeTutorSessions(rawSessions, language) {
@@ -1123,16 +1248,23 @@ ${entry.explanationUr}`);
     const normalized = sessions.map((session) => {
       const messages = Array.isArray(session == null ? void 0 : session.messages) ? session.messages.map((message) => {
         const role = (message == null ? void 0 : message.role) === "user" ? "user" : "ai";
-        const text = String((message == null ? void 0 : message.text) || "").trim();
-        if (!text) return null;
+        const parts = normalizeTutorMessageParts(message == null ? void 0 : message.parts, message == null ? void 0 : message.text);
+        const text = flattenTutorMessageText({ parts, text: message == null ? void 0 : message.text });
+        if (!text && parts.length === 0) return null;
         return {
           role,
           text,
           provider: (message == null ? void 0 : message.provider) ? String(message.provider) : "",
-          createdAt: Number(message == null ? void 0 : message.createdAt) || Number(session == null ? void 0 : session.updatedAt) || Date.now()
+          createdAt: Number(message == null ? void 0 : message.createdAt) || Number(session == null ? void 0 : session.updatedAt) || Date.now(),
+          parts
         };
       }).filter(Boolean) : [];
-      const fallbackMessages = messages.length > 0 ? messages : [{ role: "ai", text: getDefaultTutorGreeting(language), createdAt: Date.now() }];
+      const fallbackMessages = messages.length > 0 ? messages : [{
+        role: "ai",
+        text: getDefaultTutorGreeting(language),
+        createdAt: Date.now(),
+        parts: [{ type: "text", text: getDefaultTutorGreeting(language) }]
+      }];
       return {
         id: String((session == null ? void 0 : session.id) || `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
         createdAt: Number(session == null ? void 0 : session.createdAt) || Date.now(),
@@ -4669,6 +4801,7 @@ ${marker} `);
     const [chatLoading, setChatLoading] = useState(false);
     const [chatListening, setChatListening] = useState(false);
     const [clipboardHasText, setClipboardHasText] = useState(false);
+    const [chatAttachments, setChatAttachments] = useState([]);
     const [aiProviderConfigs, setAiProviderConfigs] = useState(storedAiConfigs);
     const [aiProviderDrafts, setAiProviderDrafts] = useState(storedAiConfigs);
     const [aiProviderBusy, setAiProviderBusy] = useState({});
@@ -4763,6 +4896,7 @@ ${marker} `);
     const [isOnline, setIsOnline] = useState(navigator.onLine !== false);
     const chatEndRef = useRef(null);
     const chatTextareaRef = useRef(null);
+    const chatFileInputRef = useRef(null);
     const speechRecognitionRef = useRef(null);
     const headerRef = useRef(null);
     const headerHideTimerRef = useRef(null);
@@ -4782,22 +4916,30 @@ ${marker} `);
     const chatMessages = (activeTutorSession == null ? void 0 : activeTutorSession.messages) || [];
     const chatInputWordCount = chatInput.trim() ? chatInput.trim().split(/\s+/).filter(Boolean).length : 0;
     const speechRecognitionSupported = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+    const currentTutorProviderId = selectedAiProvider && AI_PROVIDER_ORDER.includes(selectedAiProvider) ? selectedAiProvider : "openai";
+    const tutorSupportsMedia = currentTutorProviderId === "gemini";
     const persistTutorHistory = useCallback((sessions, sessionId) => {
+      const safeSessions = normalizeTutorSessions(sessions, language).slice(0, 30).map((session) => ({
+        ...session,
+        messages: (session.messages || []).map((message) => sanitizeTutorMessageForStorage(message))
+      }));
       localStorageFallback("hs_ai_tutor_history", {
-        sessions: normalizeTutorSessions(sessions, language).slice(0, 30),
+        sessions: safeSessions,
         activeSessionId: sessionId
       });
     }, [language]);
     const appendTutorMessages = useCallback((sessionId, nextMessages) => {
       const messageList = (Array.isArray(nextMessages) ? nextMessages : [nextMessages]).map((message) => {
         const role = (message == null ? void 0 : message.role) === "user" ? "user" : "ai";
-        const text = String((message == null ? void 0 : message.text) || "").trim();
-        if (!text) return null;
+        const parts = normalizeTutorMessageParts(message == null ? void 0 : message.parts, message == null ? void 0 : message.text);
+        const text = flattenTutorMessageText({ parts, text: message == null ? void 0 : message.text });
+        if (!text && parts.length === 0) return null;
         return {
           role,
           text,
           provider: (message == null ? void 0 : message.provider) ? String(message.provider) : "",
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          parts
         };
       }).filter(Boolean);
       if (messageList.length === 0) return;
@@ -4825,6 +4967,7 @@ ${marker} `);
       setTutorSessions((current) => [nextSession, ...normalizeTutorSessions(current, language).filter((session) => session.id !== nextSession.id)].slice(0, 30));
       setActiveTutorSessionId(nextSession.id);
       setChatInput("");
+      setChatAttachments([]);
       setChatLoading(false);
       setChatListening(false);
     }, [language]);
@@ -4889,6 +5032,45 @@ ${marker} `);
       } catch (error) {
         setClipboardHasText(false);
       }
+    }, []);
+    const handleOpenTutorMediaPicker = useCallback(() => {
+      var _a2, _b2;
+      if (!tutorSupportsMedia) return;
+      (_b2 = (_a2 = chatFileInputRef.current) == null ? void 0 : _a2.click) == null ? void 0 : _b2.call(_a2);
+    }, [tutorSupportsMedia]);
+    const handleRemoveTutorAttachment = useCallback((attachmentId) => {
+      setChatAttachments((current) => current.filter((item) => item.id !== attachmentId));
+      if (chatFileInputRef.current) chatFileInputRef.current.value = "";
+    }, []);
+    const handleTutorMediaSelected = useCallback(async (event) => {
+      var _a2;
+      const files = Array.from(((_a2 = event == null ? void 0 : event.target) == null ? void 0 : _a2.files) || []);
+      if (!files.length) return;
+      const picked = files.slice(0, 3);
+      const nextAttachments = [];
+      for (const file of picked) {
+        const mimeType = String((file == null ? void 0 : file.type) || "").trim().toLowerCase();
+        const mediaType = getMediaKindFromMimeType(mimeType);
+        if (!["image", "audio", "video"].includes(mediaType)) continue;
+        if ((Number(file.size) || 0) > 6 * 1024 * 1024) continue;
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          if (!String(dataUrl || "").trim()) continue;
+          nextAttachments.push({
+            id: `media_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            type: "media",
+            mediaType,
+            mimeType,
+            dataUrl,
+            fileName: String(file.name || "").trim(),
+            size: Number(file.size) || 0,
+            persistable: (Number(file.size) || 0) <= 18e4
+          });
+        } catch (error) {
+        }
+      }
+      setChatAttachments(nextAttachments.slice(0, 3));
+      if (chatFileInputRef.current) chatFileInputRef.current.value = "";
     }, []);
     const handleToggleChatListening = useCallback(() => {
       var _a2, _b2;
@@ -6496,6 +6678,9 @@ ${marker} `);
       }
     }, [activeTutorSession, tutorSessions]);
     useEffect(() => {
+      setChatAttachments([]);
+    }, [currentTutorSessionId]);
+    useEffect(() => {
       var _a2;
       persistTutorHistory(tutorSessions, (activeTutorSession == null ? void 0 : activeTutorSession.id) || activeTutorSessionId || ((_a2 = tutorSessions[0]) == null ? void 0 : _a2.id) || null);
     }, [activeTutorSession == null ? void 0 : activeTutorSession.id, activeTutorSessionId, persistTutorHistory, tutorSessions]);
@@ -7073,6 +7258,19 @@ ${marker} `);
       var _a2;
       if (!chatInput.trim()) return;
       const msg = chatInput.trim();
+      const outgoingParts = [
+        ...msg ? [{ type: "text", text: msg }] : [],
+        ...Array.isArray(chatAttachments) ? chatAttachments.map((attachment) => ({
+          type: "media",
+          mediaType: attachment.mediaType,
+          mimeType: attachment.mimeType,
+          dataUrl: attachment.dataUrl,
+          fileName: attachment.fileName,
+          size: attachment.size,
+          persistable: attachment.persistable
+        })) : []
+      ];
+      if (!msg && outgoingParts.length === 0) return;
       const sessionId = currentTutorSessionId || activeTutorSessionId || ((_a2 = tutorSessions[0]) == null ? void 0 : _a2.id) || createTutorSession(language).id;
       const savedProviders = AI_PROVIDER_ORDER.filter((providerId2) => {
         var _a3;
@@ -7093,17 +7291,22 @@ ${marker} `);
         return;
       }
       const providerId = availableProviders.includes(selectedAiProvider) ? selectedAiProvider : availableProviders[0];
+      if (chatAttachments.length > 0 && providerId !== "gemini") {
+        appendTutorMessages(sessionId, { role: "ai", text: joinLocalizedText("Media attachments currently work with Gemini in Tutor.", "\u0645\u06CC\u0688\u06CC\u0627 \u0627\u0679\u06CC\u0686\u0645\u0646\u0679 \u0627\u0633 \u0648\u0642\u062A \u0635\u0631\u0641 \u062C\u06CC\u0645\u0646\u06CC \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0679\u06CC\u0648\u0679\u0631 \u0645\u06CC\u06BA \u06A9\u0627\u0645 \u06A9\u0631\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language) });
+        return;
+      }
       const providerConfig = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
       const providerDefinition = AI_PROVIDER_DEFS[providerId];
       const providerLabel = joinLocalizedText(providerDefinition.name, providerDefinition.nameUr, language);
       const model = providerConfig.model || providerDefinition.defaultModel;
-      const conversation = [...chatMessages, { role: "user", text: msg }];
+      const conversation = [...chatMessages, { role: "user", text: msg, parts: outgoingParts }];
       setChatInput("");
-      appendTutorMessages(sessionId, { role: "user", text: msg });
+      setChatAttachments([]);
+      appendTutorMessages(sessionId, { role: "user", text: msg, parts: outgoingParts });
       setChatLoading(true);
       try {
-        const answer = await requestAiTutorResponse(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
-        appendTutorMessages(sessionId, { role: "ai", text: answer, provider: providerId });
+        const answer = await requestAiTutorTurn(providerId, providerConfig.apiKey, model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
+        appendTutorMessages(sessionId, { role: "ai", text: (answer == null ? void 0 : answer.text) || "", parts: (answer == null ? void 0 : answer.parts) || [{ type: "text", text: (answer == null ? void 0 : answer.text) || "" }], provider: providerId });
       } catch (error) {
         const nextStatus = getAiStatusFromError(error);
         const nextFriendlyMessage = getFriendlyAiErrorMessage(providerId, error, language);
@@ -7143,8 +7346,8 @@ ${marker} `);
             const updatedConfig = await saveAiProviderConfiguration(providerId, nextDraft);
             if (updatedConfig == null ? void 0 : updatedConfig.apiKey) {
               try {
-                const retryAnswer = await requestAiTutorResponse(providerId, updatedConfig.apiKey, updatedConfig.model || model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
-                appendTutorMessages(sessionId, { role: "ai", text: retryAnswer, provider: providerId });
+                const retryAnswer = await requestAiTutorTurn(providerId, updatedConfig.apiKey, updatedConfig.model || model, conversation.filter((entry) => entry.role === "user" || entry.role === "ai"), buildTutorSystemPrompt(grade, language));
+                appendTutorMessages(sessionId, { role: "ai", text: (retryAnswer == null ? void 0 : retryAnswer.text) || "", parts: (retryAnswer == null ? void 0 : retryAnswer.parts) || [{ type: "text", text: (retryAnswer == null ? void 0 : retryAnswer.text) || "" }], provider: providerId });
                 setChatLoading(false);
                 return;
               } catch (retryError) {
@@ -8538,6 +8741,26 @@ ${error.message || error}`);
       time: ui.importConflictTime,
       collections: ui.importConflictCollections
     };
+    const renderTutorMessagePart = (part, index) => {
+      if (!part || typeof part !== "object") return null;
+      if (part.type === "media") {
+        const src = String(part.dataUrl || part.uri || "").trim();
+        if (!src) {
+          return /* @__PURE__ */ React.createElement("div", { key: `media_${index}`, className: "chat-media-placeholder" }, renderLocalizedTextNode(joinLocalizedText("Media attached", "\u0645\u06CC\u0688\u06CC\u0627 \u0634\u0627\u0645\u0644 \u06C1\u06D2", language), language));
+        }
+        if (part.mediaType === "image") {
+          return /* @__PURE__ */ React.createElement("img", { key: `media_${index}`, src, alt: part.fileName || `image_${index + 1}`, className: "chat-media chat-media-image" });
+        }
+        if (part.mediaType === "audio") {
+          return /* @__PURE__ */ React.createElement("audio", { key: `media_${index}`, controls: true, className: "chat-media chat-media-audio", src, preload: "metadata" });
+        }
+        if (part.mediaType === "video") {
+          return /* @__PURE__ */ React.createElement("video", { key: `media_${index}`, controls: true, className: "chat-media chat-media-video", src, preload: "metadata" });
+        }
+        return /* @__PURE__ */ React.createElement("a", { key: `media_${index}`, href: src, target: "_blank", rel: "noreferrer", className: "chat-media-link" }, part.fileName || renderLocalizedTextNode(joinLocalizedText("Open attachment", "\u0627\u0679\u06CC\u0686\u0645\u0646\u0679 \u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language));
+      }
+      return /* @__PURE__ */ React.createElement("div", { key: `text_${index}`, className: "chat-bubble-body" }, part.text);
+    };
     return /* @__PURE__ */ React.createElement(AppContext.Provider, { value: { currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: (wordMeaningPopover == null ? void 0 : wordMeaningPopover.normalizedWord) || "" } }, /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`, style: { zoom: fontSizeZoom, ...navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}, ...navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {} } }, navAutoHide ? /* @__PURE__ */ React.createElement("div", { className: "header-reveal-hotspot", onMouseEnter: revealAutoHideHeader, onMouseMove: revealAutoHideHeader, onPointerDown: revealAutoHideHeader }) : null, /* @__PURE__ */ React.createElement("div", { ref: headerRef, className: `app-header${navPosition === "top" ? " app-header-top-nav" : ""}`, onMouseEnter: navAutoHide ? revealAutoHideHeader : void 0, onMouseLeave: navAutoHide ? concealAutoHideHeader : void 0 }, /* @__PURE__ */ React.createElement("div", { className: "header-leading" }, /* @__PURE__ */ React.createElement("span", { className: "back-btn-slot" }, showBack ? /* @__PURE__ */ React.createElement("button", { className: "back-btn", onClick: goBack }, "\u2190") : null), /* @__PURE__ */ React.createElement("button", { type: "button", className: "header-mark", title: "HomeSchool", "aria-label": "Go home", onClick: goHome }, /* @__PURE__ */ React.createElement("img", { src: "img/ui/header-hs.png", alt: "HomeSchool", className: "header-mark-img" }))), navPosition === "top" ? renderNavBar("top", true) : /* @__PURE__ */ React.createElement("h1", { style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { fontFamily: "'Noto Nastaliq Urdu',serif", textAlign: "right" } : {} }, renderLocalizedTextNode(headerTitle, language)), /* @__PURE__ */ React.createElement("div", { className: "header-actions" }, /* @__PURE__ */ React.createElement(
       "button",
       {
@@ -9175,10 +9398,12 @@ ${error.message || error}`);
       /* @__PURE__ */ React.createElement("div", { className: "tutor-history-title" }, getTutorSessionTitle(session, language)),
       /* @__PURE__ */ React.createElement("div", { className: "tutor-history-meta" }, formatDate(session.updatedAt))
     )))), /* @__PURE__ */ React.createElement("div", { className: "tutor-main" }, /* @__PURE__ */ React.createElement("div", { className: "tutor-chat" }, chatMessages.map((message, index) => {
-      const messageIsUrdu = containsUrduText(message.text) || isUrduText(message.text);
+      const messageText = flattenTutorMessageText(message);
+      const messageParts = normalizeTutorMessageParts(message == null ? void 0 : message.parts, messageText);
+      const messageIsUrdu = containsUrduText(messageText) || isUrduText(messageText);
       const providerBadge = message.provider && AI_PROVIDER_DEFS[message.provider] ? joinLocalizedText(AI_PROVIDER_DEFS[message.provider].name, AI_PROVIDER_DEFS[message.provider].nameUr, language) : "";
-      return /* @__PURE__ */ React.createElement("div", { key: `${(activeTutorSession == null ? void 0 : activeTutorSession.id) || "chat"}_${index}`, className: `chat-bubble ${message.role === "ai" ? "ai" : "user"}${messageIsUrdu ? " urdu" : " english"}` }, /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-body" }, message.text), /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-tools" }, /* @__PURE__ */ React.createElement("span", { className: "chat-bubble-provider" }, providerBadge || "\xA0"), /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-bubble-action", onClick: () => copyTextToClipboard(message.text) }, renderLocalizedTextNode(joinLocalizedText("Copy", "\u06A9\u0627\u067E\u06CC", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-bubble-action", onClick: () => speakInlineText(message.text) }, renderLocalizedTextNode(joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language), language)))));
-    }), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai english" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, /* @__PURE__ */ React.createElement("div", { className: "chat-input-toolbar" }, clipboardHasText ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-tool-btn", onClick: handlePasteIntoChat, title: joinLocalizedText("Paste from clipboard", "\u06A9\u0644\u067E \u0628\u0648\u0631\u0688 \u0633\u06D2 \u067E\u06CC\u0633\u0679 \u06A9\u0631\u06CC\u06BA", language) }, "\u{1F4CB}") : null, speechRecognitionSupported ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `chat-tool-btn${chatListening ? " active" : ""}`, onClick: handleToggleChatListening, title: joinLocalizedText("Speak to type", "\u0628\u0648\u0644 \u06A9\u0631 \u0644\u06A9\u06BE\u06CC\u06BA", language) }, chatListening ? "\u25FC" : "\u{1F399}") : null, chatInput ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-tool-btn", onClick: () => setChatInput(""), title: joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language) }, "\u2715") : null, chatInput ? /* @__PURE__ */ React.createElement("span", { className: "chat-word-count" }, renderLocalizedTextNode(joinLocalizedText(`${chatInputWordCount} words`, `${chatInputWordCount} \u0627\u0644\u0641\u0627\u0638`, language), language)) : null), /* @__PURE__ */ React.createElement("div", { className: "chat-composer" }, /* @__PURE__ */ React.createElement(
+      return /* @__PURE__ */ React.createElement("div", { key: `${(activeTutorSession == null ? void 0 : activeTutorSession.id) || "chat"}_${index}`, className: `chat-bubble ${message.role === "ai" ? "ai" : "user"}${messageIsUrdu ? " urdu" : " english"}` }, /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-stack" }, messageParts.map((part, partIndex) => renderTutorMessagePart(part, partIndex))), /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-tools" }, /* @__PURE__ */ React.createElement("span", { className: "chat-bubble-provider" }, providerBadge || "\xA0"), /* @__PURE__ */ React.createElement("div", { className: "chat-bubble-actions" }, messageText ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-bubble-action", onClick: () => copyTextToClipboard(messageText) }, renderLocalizedTextNode(joinLocalizedText("Copy", "\u06A9\u0627\u067E\u06CC", language), language)) : null, messageText ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-bubble-action", onClick: () => speakInlineText(messageText) }, renderLocalizedTextNode(joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language), language)) : null)));
+    }), chatLoading && /* @__PURE__ */ React.createElement("div", { className: "chat-bubble ai english" }, /* @__PURE__ */ React.createElement("div", { className: "typing-dots" }, /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null), /* @__PURE__ */ React.createElement("span", null))), /* @__PURE__ */ React.createElement("div", { ref: chatEndRef })), /* @__PURE__ */ React.createElement("div", { className: "chat-input-area" }, chatAttachments.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "chat-attachment-list" }, chatAttachments.map((attachment) => /* @__PURE__ */ React.createElement("div", { key: attachment.id, className: "chat-attachment-chip" }, /* @__PURE__ */ React.createElement("span", { className: "chat-attachment-icon", "aria-hidden": "true" }, attachment.mediaType === "image" ? "\u{1F5BC}" : attachment.mediaType === "audio" ? "\u{1F3A7}" : "\u{1F3AC}"), /* @__PURE__ */ React.createElement("span", { className: "chat-attachment-name" }, attachment.fileName || renderLocalizedTextNode(joinLocalizedText("Attachment", "\u0627\u0679\u06CC\u0686\u0645\u0646\u0679", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-attachment-remove", onClick: () => handleRemoveTutorAttachment(attachment.id) }, "\u2715")))) : null, /* @__PURE__ */ React.createElement("div", { className: "chat-input-toolbar" }, tutorSupportsMedia ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-tool-btn", onClick: handleOpenTutorMediaPicker, title: joinLocalizedText("Add image, audio, or video", "\u062A\u0635\u0648\u06CC\u0631\u060C \u0622\u0688\u06CC\u0648 \u06CC\u0627 \u0648\u06CC\u0688\u06CC\u0648 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language) }, "\uFF0B") : null, clipboardHasText ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-tool-btn", onClick: handlePasteIntoChat, title: joinLocalizedText("Paste from clipboard", "\u06A9\u0644\u067E \u0628\u0648\u0631\u0688 \u0633\u06D2 \u067E\u06CC\u0633\u0679 \u06A9\u0631\u06CC\u06BA", language) }, "\u{1F4CB}") : null, speechRecognitionSupported ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `chat-tool-btn${chatListening ? " active" : ""}`, onClick: handleToggleChatListening, title: joinLocalizedText("Speak to type", "\u0628\u0648\u0644 \u06A9\u0631 \u0644\u06A9\u06BE\u06CC\u06BA", language) }, chatListening ? "\u25FC" : "\u{1F399}") : null, chatInput ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "chat-tool-btn", onClick: () => setChatInput(""), title: joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language) }, "\u2715") : null, chatInput ? /* @__PURE__ */ React.createElement("span", { className: "chat-word-count" }, renderLocalizedTextNode(joinLocalizedText(`${chatInputWordCount} words`, `${chatInputWordCount} \u0627\u0644\u0641\u0627\u0638`, language), language)) : null, !tutorSupportsMedia && currentTutorProviderId ? /* @__PURE__ */ React.createElement("span", { className: "chat-word-count" }, renderLocalizedTextNode(joinLocalizedText("Media: Gemini only", "\u0645\u06CC\u0688\u06CC\u0627: \u0635\u0631\u0641 \u062C\u06CC\u0645\u0646\u06CC", language), language)) : null), /* @__PURE__ */ React.createElement("div", { className: "chat-composer" }, /* @__PURE__ */ React.createElement("input", { ref: chatFileInputRef, type: "file", accept: "image/*,audio/*,video/*", multiple: true, style: { display: "none" }, onChange: handleTutorMediaSelected }), /* @__PURE__ */ React.createElement(
       "textarea",
       {
         ref: chatTextareaRef,
@@ -9192,7 +9417,7 @@ ${error.message || error}`);
           }
         },
         className: containsUrduText(chatInput) || isUrduUi(language) ? "urdu" : "english",
-        placeholder: !aiBrowserCapability.ok ? language === "ur" ? "\u0627\u06D2 \u0622\u0626\u06CC \u0686\u06CC\u0679 \u06A9\u06D2 \u0644\u06CC\u06D2 HTTPS \u06CC\u0627 localhost \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA..." : "Use HTTPS or localhost for AI chat..." : readyAiProviderIds.length > 0 ? language === "ur" ? "\u0627\u067E\u0646\u06D2 \u0627\u0633\u062A\u0627\u062F \u0633\u06D2 \u06A9\u0686\u06BE \u0628\u06BE\u06CC \u067E\u0648\u0686\u06BE\u06CC\u06BA..." : "Ask your tutor anything..." : language === "ur" ? "\u067E\u06C1\u0644\u06D2 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u0627\u06D2 \u0622\u0626\u06CC \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA..." : "Fix or add an AI key in Settings first...",
+        placeholder: !aiBrowserCapability.ok ? language === "ur" ? "\u0627\u06D2 \u0622\u0626\u06CC \u0686\u06CC\u0679 \u06A9\u06D2 \u0644\u06CC\u06D2 HTTPS \u06CC\u0627 localhost \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA..." : "Use HTTPS or localhost for AI chat..." : readyAiProviderIds.length > 0 ? language === "ur" ? "\u0627\u067E\u0646\u06D2 \u0627\u0633\u062A\u0627\u062F \u0633\u06D2 \u06A9\u0686\u06BE \u0628\u06BE\u06CC \u067E\u0648\u0686\u06BE\u06CC\u06BA\u060C \u0627\u0648\u0631 \u062C\u06CC\u0645\u0646\u06CC \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0645\u06CC\u0688\u06CC\u0627 \u0628\u06BE\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA..." : "Ask your tutor anything, and add media too with Gemini..." : language === "ur" ? "\u067E\u06C1\u0644\u06D2 \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0645\u06CC\u06BA \u0627\u06D2 \u0622\u0626\u06CC \u06A9\u06CC \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA..." : "Fix or add an AI key in Settings first...",
         disabled: chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok
       }
     ), /* @__PURE__ */ React.createElement("button", { className: "chat-send-btn", onClick: sendChat, disabled: chatLoading || readyAiProviderIds.length === 0 || !aiBrowserCapability.ok }, "\u27A4")))))), tab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))), tab === "settings" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `settings-disclosure${profileDisclosureOpen ? " open" : ""}`, "data-transition-mode": transitionMode }, /* @__PURE__ */ React.createElement(
