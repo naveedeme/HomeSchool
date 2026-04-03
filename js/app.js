@@ -1155,7 +1155,7 @@ async function requestGeminiWordMeaning(apiKey, model, word) {
     body: JSON.stringify({
       systemInstruction: {
         parts: [{
-          text: "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only, covering the most useful classroom and daily-life senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand the word in context. No English. No markdown. No extra keys.",
+          text: "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use exactly these keys: meaningsUr, simpleExplanationUr, meaningsEn, explanationEng, examplesEng. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only. simpleExplanationUr must be one short, very easy Urdu explanation. meaningsEn must be an ordered array of 1 to 4 short English sense labels. explanationEng must be one short plain-English explanation. examplesEng must be an array of 1 to 3 short classroom-friendly English example sentences. No markdown. No extra keys.",
         }],
       },
       contents: [{
@@ -1333,35 +1333,162 @@ function getLookupWordCandidates(word) {
   return Array.from(candidates);
 }
 
-function normalizeWordMeaningCache(rawCache) {
-  if (!rawCache || typeof rawCache !== "object") return {};
-  return Object.entries(rawCache)
-    .map(([key, value]) => {
-      const normalizedKey = normalizeLookupWord(key);
-      if (!normalizedKey || !value || typeof value !== "object") return null;
-      const meaningsUr = Array.isArray(value.meaningsUr)
-        ? value.meaningsUr.map((entry) => String(entry || "").trim()).filter(Boolean)
-        : String(value.meaningUr || value.meaning || "").trim()
-          ? [String(value.meaningUr || value.meaning || "").trim()]
-          : [];
-      const explanationUr = String(value.explanationUr || value.simpleExplanationUr || "").trim();
-      const meaningUr = meaningsUr[0] || "";
-      if (!meaningUr && !explanationUr) return null;
-      return [normalizedKey, {
-        meaningUr,
-        meaningsUr: meaningsUr.slice(0, 6),
-        explanationUr,
-        source: String(value.source || "cache"),
-        fetchedAt: Number(value.fetchedAt) || Date.now(),
-      }];
-    })
-    .filter(Boolean)
-    .sort((left, right) => (right[1].fetchedAt || 0) - (left[1].fetchedAt || 0))
-    .slice(0, 300)
-    .reduce((acc, entry) => {
-      acc[entry[0]] = entry[1];
+function normalizeMeaningList(value, max = 6) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((entry) => String(entry || "").trim()).filter(Boolean))).slice(0, max);
+  }
+  const text = String(value || "").trim();
+  return text ? [text] : [];
+}
+
+function normalizeExampleList(value, max = 4) {
+  return normalizeMeaningList(value, max);
+}
+
+function choosePreferredText(currentValue, nextValue) {
+  const currentText = String(currentValue || "").trim();
+  const nextText = String(nextValue || "").trim();
+  if (!currentText) return nextText;
+  if (!nextText) return currentText;
+  return nextText.length >= currentText.length ? nextText : currentText;
+}
+
+function normalizeWordMeaningEntry(rawWord, value, options = {}) {
+  const candidateWord = String(rawWord || value?.word || value?.normalizedWord || "").trim();
+  const normalizedWord = normalizeLookupWord(candidateWord);
+  if (!normalizedWord || !value || typeof value !== "object") return null;
+  const meaningsUr = normalizeMeaningList(value.meaningsUr || value.meaningUr || value.meaning || value.translationUr);
+  const explanationUr = String(value.explanationUr || value.simpleExplanationUr || "").trim();
+  const meaningsEn = normalizeMeaningList(value.meaningsEn || value.meaningEn || value.translationEn);
+  const explanationEng = String(value.explanationEng || value.simpleExplanationEng || "").trim();
+  const examplesEng = normalizeExampleList(value.examplesEng || value.examplesEn || value.examples);
+  const sources = Array.from(new Set([
+    ...(Array.isArray(value.sources) ? value.sources : []),
+    String(value.source || options.defaultSource || "").trim(),
+  ].map((entry) => String(entry || "").trim()).filter(Boolean)));
+  const origins = Array.from(new Set([
+    ...(Array.isArray(value.origins) ? value.origins : []),
+    String(value.origin || "").trim(),
+    ...(Array.isArray(options.defaultOrigins) ? options.defaultOrigins : []),
+  ].map((entry) => String(entry || "").trim().toLowerCase()).filter(Boolean)));
+  const meaningUr = meaningsUr[0] || "";
+  if (!meaningUr && !explanationUr && !meaningsEn.length && !explanationEng && !examplesEng.length) return null;
+  const now = Date.now();
+  return {
+    word: String(value.word || rawWord || normalizedWord).trim() || normalizedWord,
+    normalizedWord,
+    meaningUr,
+    meaningsUr,
+    explanationUr,
+    meaningsEn,
+    explanationEng,
+    examplesEng,
+    partOfSpeech: String(value.partOfSpeech || "").trim(),
+    source: sources[0] || String(options.defaultSource || value.source || "cache").trim() || "cache",
+    sources,
+    origins,
+    fetchedAt: Number(value.fetchedAt) || Number(value.updatedAt) || now,
+    createdAt: Number(value.createdAt) || Number(value.fetchedAt) || now,
+    updatedAt: Number(value.updatedAt) || Number(value.fetchedAt) || now,
+  };
+}
+
+function mergeWordMeaningEntry(baseEntry, nextEntry) {
+  const base = baseEntry && typeof baseEntry === "object" ? baseEntry : null;
+  const next = nextEntry && typeof nextEntry === "object" ? nextEntry : null;
+  if (!base && !next) return null;
+  if (!base) return next;
+  if (!next) return base;
+  const meaningsUr = Array.from(new Set([...(base.meaningsUr || []), ...(next.meaningsUr || [])].filter(Boolean))).slice(0, 6);
+  const meaningsEn = Array.from(new Set([...(base.meaningsEn || []), ...(next.meaningsEn || [])].filter(Boolean))).slice(0, 6);
+  const examplesEng = Array.from(new Set([...(base.examplesEng || []), ...(next.examplesEng || [])].filter(Boolean))).slice(0, 4);
+  const sources = Array.from(new Set([...(base.sources || []), ...(next.sources || []), base.source, next.source].filter(Boolean)));
+  const origins = Array.from(new Set([...(base.origins || []), ...(next.origins || [])].filter(Boolean)));
+  const merged = {
+    ...base,
+    ...next,
+    word: String(next.word || base.word || "").trim() || String(next.normalizedWord || base.normalizedWord || ""),
+    normalizedWord: next.normalizedWord || base.normalizedWord,
+    meaningsUr,
+    meaningUr: meaningsUr[0] || String(next.meaningUr || base.meaningUr || "").trim(),
+    explanationUr: choosePreferredText(base.explanationUr, next.explanationUr),
+    meaningsEn,
+    explanationEng: choosePreferredText(base.explanationEng, next.explanationEng),
+    examplesEng,
+    partOfSpeech: String(next.partOfSpeech || base.partOfSpeech || "").trim(),
+    source: next.source || base.source || sources[0] || "cache",
+    sources,
+    origins,
+    createdAt: Math.min(Number(base.createdAt) || Date.now(), Number(next.createdAt) || Date.now()),
+    fetchedAt: Math.max(Number(base.fetchedAt) || 0, Number(next.fetchedAt) || 0, Date.now()),
+    updatedAt: Math.max(Number(base.updatedAt) || 0, Number(next.updatedAt) || 0, Date.now()),
+  };
+  return merged;
+}
+
+function normalizeWordMeaningCache(rawCache, options = {}) {
+  if (!rawCache) return {};
+  let pairs = [];
+  if (Array.isArray(rawCache)) {
+    pairs = rawCache.map((entry) => [entry?.normalizedWord || entry?.word, entry]);
+  } else if (rawCache && typeof rawCache === "object" && Array.isArray(rawCache.entries)) {
+    pairs = rawCache.entries.map((entry) => [entry?.normalizedWord || entry?.word, entry]);
+  } else if (rawCache && typeof rawCache === "object") {
+    pairs = Object.entries(rawCache);
+  }
+  return pairs.reduce((acc, [key, value]) => {
+    const normalizedEntry = normalizeWordMeaningEntry(key, value, options);
+    if (!normalizedEntry) return acc;
+    const normalizedKey = normalizedEntry.normalizedWord;
+    acc[normalizedKey] = mergeWordMeaningEntry(acc[normalizedKey], normalizedEntry);
+    return acc;
+  }, {});
+}
+
+function mergeWordMeaningMaps(...maps) {
+  return maps.reduce((acc, map) => {
+    const normalizedMap = normalizeWordMeaningCache(map || {});
+    Object.entries(normalizedMap).forEach(([key, value]) => {
+      acc[key] = mergeWordMeaningEntry(acc[key], value);
+    });
+    return acc;
+  }, {});
+}
+
+function buildCompactWordMeaningState(rawCache, limit = 80) {
+  return Object.entries(normalizeWordMeaningCache(rawCache || {}))
+    .sort((left, right) => ((right[1]?.updatedAt || right[1]?.fetchedAt || 0) - (left[1]?.updatedAt || left[1]?.fetchedAt || 0)))
+    .slice(0, limit)
+    .reduce((acc, [key, value]) => {
+      acc[key] = value;
       return acc;
     }, {});
+}
+
+function normalizeDictionaryImportPayload(rawPayload, options = {}) {
+  if (!rawPayload) return {};
+  if (Array.isArray(rawPayload)) {
+    return normalizeWordMeaningCache(rawPayload, options);
+  }
+  if (rawPayload && typeof rawPayload === "object") {
+    if (rawPayload.appState?.wordMeaningCache) {
+      return normalizeWordMeaningCache(rawPayload.appState.wordMeaningCache, options);
+    }
+    if (Array.isArray(rawPayload.dbProgress?.customizations)) {
+      const dictionaryRow = rawPayload.dbProgress.customizations.find((row) => row?.type === "wordMeaningCache");
+      if (dictionaryRow?.data) {
+        return normalizeWordMeaningCache(dictionaryRow.data, options);
+      }
+    }
+    if (Array.isArray(rawPayload.entries)) {
+      return normalizeWordMeaningCache(rawPayload.entries, options);
+    }
+    if (rawPayload.dictionary && typeof rawPayload.dictionary === "object") {
+      return normalizeWordMeaningCache(rawPayload.dictionary, options);
+    }
+    return normalizeWordMeaningCache(rawPayload, options);
+  }
+  return {};
 }
 
 function buildWordMeaningLookupFromIndex(items) {
@@ -1376,22 +1503,14 @@ function buildWordMeaningLookupFromIndex(items) {
     );
     if (!meaningUr) return;
     getLookupWordCandidates(prompt).forEach((candidate) => {
-      if (!lookup[candidate]) {
-        lookup[candidate] = {
-          meaningUr,
-          meaningsUr: [meaningUr],
-          explanationUr: "",
-          source: "local",
-        };
-        return;
-      }
-      const mergedMeanings = Array.from(new Set([...(lookup[candidate].meaningsUr || []), meaningUr].filter(Boolean))).slice(0, 6);
-      lookup[candidate] = {
-        ...lookup[candidate],
-        meaningUr: lookup[candidate].meaningUr || mergedMeanings[0] || "",
-        meaningsUr: mergedMeanings,
-        source: "local",
-      };
+      lookup[candidate] = mergeWordMeaningEntry(lookup[candidate], normalizeWordMeaningEntry(prompt, {
+        word: prompt,
+        meaningUr,
+        meaningsUr: [meaningUr],
+        source: "Curriculum",
+        sources: ["Curriculum"],
+        origins: ["curriculum"],
+      }, { defaultSource: "Curriculum", defaultOrigins: ["curriculum"] }));
     });
   });
   return lookup;
@@ -1411,7 +1530,7 @@ function extractShortUrduMeaning(text) {
 
 function extractWordMeaningDetails(text) {
   const raw = String(text || "").trim();
-  if (!raw) return { meaningsUr: [], explanationUr: "" };
+  if (!raw) return { meaningsUr: [], explanationUr: "", meaningsEn: [], explanationEng: "", examplesEng: [] };
 
   const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]+?)```/i);
   const candidateJson = jsonMatch ? jsonMatch[1].trim() : raw;
@@ -1423,8 +1542,11 @@ function extractWordMeaningDetails(text) {
         ? [String(parsed.meaningUr || parsed.meaning || "").trim()]
         : [];
     const explanationUr = String(parsed?.simpleExplanationUr || parsed?.explanationUr || "").trim();
-    if (meaningsUr.length || explanationUr) {
-      return { meaningsUr: meaningsUr.slice(0, 6), explanationUr };
+    const meaningsEn = normalizeMeaningList(parsed?.meaningsEn || parsed?.meaningEn);
+    const explanationEng = String(parsed?.simpleExplanationEng || parsed?.explanationEng || "").trim();
+    const examplesEng = normalizeExampleList(parsed?.examplesEng || parsed?.examplesEn || parsed?.examples, 4);
+    if (meaningsUr.length || explanationUr || meaningsEn.length || explanationEng || examplesEng.length) {
+      return { meaningsUr: meaningsUr.slice(0, 6), explanationUr, meaningsEn, explanationEng, examplesEng };
     }
   } catch (error) {
     // Fall through to text parsing.
@@ -1435,7 +1557,7 @@ function extractWordMeaningDetails(text) {
     .map((entry) => entry.replace(/^[\s\-*•\d.)]+/, "").trim())
     .filter(Boolean);
   if (inlineParts.length > 1) {
-    return { meaningsUr: inlineParts.slice(0, 6), explanationUr: "" };
+    return { meaningsUr: inlineParts.slice(0, 6), explanationUr: "", meaningsEn: [], explanationEng: "", examplesEng: [] };
   }
 
   const lines = raw
@@ -1466,7 +1588,7 @@ function extractWordMeaningDetails(text) {
   }
 
   const explanationUr = explanationParts.join(" ").trim();
-  return { meaningsUr: meaningsUr.slice(0, 6), explanationUr };
+  return { meaningsUr: meaningsUr.slice(0, 6), explanationUr, meaningsEn: [], explanationEng: "", examplesEng: [] };
 }
 
 function buildWordMeaningCopyText(entry) {
@@ -1481,6 +1603,15 @@ function buildWordMeaningCopyText(entry) {
   if (entry.explanationUr) {
     parts.push(`سادہ وضاحت:\n${entry.explanationUr}`);
   }
+  if (Array.isArray(entry.meaningsEn) && entry.meaningsEn.length > 0) {
+    parts.push(`English meanings:\n${entry.meaningsEn.map((meaning, index) => `${index + 1}. ${meaning}`).join("\n")}`);
+  }
+  if (entry.explanationEng) {
+    parts.push(`English explanation:\n${entry.explanationEng}`);
+  }
+  if (Array.isArray(entry.examplesEng) && entry.examplesEng.length > 0) {
+    parts.push(`English examples:\n${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n")}`);
+  }
   return parts.filter(Boolean).join("\n\n").trim();
 }
 
@@ -1494,7 +1625,29 @@ function buildWordMeaningSpeakText(entry) {
 function hasWordMeaningContent(entry) {
   if (!entry || typeof entry !== "object") return false;
   const meanings = Array.isArray(entry.meaningsUr) ? entry.meaningsUr.filter(Boolean) : [];
-  return Boolean(String(entry.meaningUr || "").trim() || meanings.length > 0 || String(entry.explanationUr || "").trim());
+  const meaningsEn = Array.isArray(entry.meaningsEn) ? entry.meaningsEn.filter(Boolean) : [];
+  return Boolean(
+    String(entry.meaningUr || "").trim()
+    || meanings.length > 0
+    || String(entry.explanationUr || "").trim()
+    || meaningsEn.length > 0
+    || String(entry.explanationEng || "").trim()
+    || (Array.isArray(entry.examplesEng) && entry.examplesEng.filter(Boolean).length > 0)
+  );
+}
+
+function needsWordMeaningEnrichment(entry) {
+  if (!entry || typeof entry !== "object") return true;
+  const urMeanings = Array.isArray(entry.meaningsUr) ? entry.meaningsUr.filter(Boolean) : [];
+  const enMeanings = Array.isArray(entry.meaningsEn) ? entry.meaningsEn.filter(Boolean) : [];
+  const examplesEng = Array.isArray(entry.examplesEng) ? entry.examplesEng.filter(Boolean) : [];
+  return !(
+    urMeanings.length >= 2
+    && String(entry.explanationUr || "").trim()
+    && enMeanings.length >= 1
+    && String(entry.explanationEng || "").trim()
+    && examplesEng.length >= 1
+  );
 }
 
 function getDefaultTutorGreeting(language) {
@@ -6892,6 +7045,7 @@ function HomeschoolApp() {
   const [wordSearch, setWordSearch] = useState("");
   const [wordBankSubjectFilter, setWordBankSubjectFilter] = useState("all");
   const [wordMeaningCache, setWordMeaningCache] = useState(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
+  const [dictionaryImportUrl, setDictionaryImportUrl] = useState(String(stored?.dictionaryImportUrl || ""));
   const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
   const [copyToast, setCopyToast] = useState(null);
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
@@ -7640,6 +7794,21 @@ function HomeschoolApp() {
     }).slice(0, 18);
   }, [wordBankIndex, wordBankSubjectFilter, wordSearch]);
   const localWordMeaningLookup = useMemo(() => buildWordMeaningLookupFromIndex(wordBankIndex), [wordBankIndex]);
+  const effectiveWordMeaningDictionary = useMemo(() => mergeWordMeaningMaps(localWordMeaningLookup, wordMeaningCache), [localWordMeaningLookup, wordMeaningCache]);
+  const dictionaryStats = useMemo(() => {
+    const learnedEntries = Object.values(normalizeWordMeaningCache(wordMeaningCache));
+    const effectiveEntries = Object.values(effectiveWordMeaningDictionary);
+    const countByOrigin = (originKey) => learnedEntries.filter((entry) => Array.isArray(entry.origins) && entry.origins.includes(originKey)).length;
+    return {
+      total: effectiveEntries.length,
+      curriculum: Object.keys(localWordMeaningLookup).length,
+      learned: learnedEntries.length,
+      imported: countByOrigin("imported"),
+      ai: countByOrigin("ai"),
+      bilingual: effectiveEntries.filter((entry) => (entry.meaningsEn || []).length > 0 || entry.explanationEng || (entry.examplesEng || []).length > 0).length,
+      descriptive: effectiveEntries.filter((entry) => String(entry.explanationUr || "").trim() || String(entry.explanationEng || "").trim()).length,
+    };
+  }, [effectiveWordMeaningDictionary, localWordMeaningLookup, wordMeaningCache]);
 
   useEffect(() => {
     timeTrackingRef.current = timeTrackingData;
@@ -8037,6 +8206,9 @@ function HomeschoolApp() {
           await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40));
           await window.HomeSchoolDB.saveCustomization("gamificationState", normalizeGamificationState(nextPayload.gamificationState || {}));
           await window.HomeSchoolDB.saveCustomization("wordMeaningCache", normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}));
+          await window.HomeSchoolDB.saveCustomization("dictionaryPreferences", {
+            importUrl: String(nextPayload.dictionaryImportUrl || "").trim(),
+          });
           await window.HomeSchoolDB.saveCustomization("studentProfile", {
             grade: nextPayload.grade,
             studentName: nextPayload.studentName,
@@ -8088,6 +8260,9 @@ function HomeschoolApp() {
             notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
             gamificationState: normalizeGamificationState(nextPayload.gamificationState || {}),
             wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
+            dictionaryPreferences: {
+              importUrl: String(nextPayload.dictionaryImportUrl || "").trim(),
+            },
             studentProfile: {
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
@@ -8133,14 +8308,17 @@ function HomeschoolApp() {
           },
           practiceProgress: nextPayload.practiceLessonProgress || {},
           daySectionPacing: nextPayload.daySectionOverrides || {},
-            studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
-            focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
-            reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
-            backupReminderSettings: normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}),
-            classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
-            timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
-            notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
-            wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
+          studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
+          focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
+          reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
+          backupReminderSettings: normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}),
+          classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
+          timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
+          notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
+          wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
+          dictionaryPreferences: {
+            importUrl: String(nextPayload.dictionaryImportUrl || "").trim(),
+          },
           studentProfile: {
             grade: nextPayload.grade,
             studentName: nextPayload.studentName,
@@ -8190,6 +8368,7 @@ function HomeschoolApp() {
         const storedNotificationHistory = customizations.notificationHistory?.data || null;
         const storedGamification = customizations.gamificationState?.data || null;
         const storedWordMeaningCache = customizations.wordMeaningCache?.data || null;
+        const storedDictionaryPreferences = customizations.dictionaryPreferences?.data || null;
         const storedProfile = customizations.studentProfile?.data || null;
         const storedPracticeProgress = customizations.practiceProgress?.data || null;
         const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
@@ -8300,6 +8479,11 @@ function HomeschoolApp() {
         }
         if (storedWordMeaningCache && typeof storedWordMeaningCache === "object") {
           setWordMeaningCache(normalizeWordMeaningCache(storedWordMeaningCache));
+        }
+        if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") {
+          if (typeof storedDictionaryPreferences.importUrl !== "undefined") {
+            setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || ""));
+          }
         }
         if (storedProfile) {
           if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
@@ -8666,17 +8850,18 @@ function HomeschoolApp() {
       timeTrackingData,
       notificationHistory,
       gamificationState,
-      wordMeaningCache,
+      wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache),
+      dictionaryImportUrl,
       grade,
       studentName,
       studentNameUr,
       aiProviderConfigs,
       selectedAiProvider,
     });
-}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryImportUrl, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-  if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache });
-}, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache]);
+  if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryImportUrl });
+}, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryImportUrl]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -9639,6 +9824,7 @@ function HomeschoolApp() {
         setGamificationState(normalizedGamification);
       }
       if (nextState.wordMeaningCache) setWordMeaningCache(normalizeWordMeaningCache(nextState.wordMeaningCache));
+      if (typeof nextState.dictionaryImportUrl !== "undefined") setDictionaryImportUrl(String(nextState.dictionaryImportUrl || ""));
       return;
     }
 
@@ -9724,6 +9910,9 @@ function HomeschoolApp() {
         ...nextState.wordMeaningCache,
       }));
     }
+    if (typeof nextState.dictionaryImportUrl !== "undefined") {
+      setDictionaryImportUrl((current) => current || String(nextState.dictionaryImportUrl || ""));
+    }
   }, []);
 
   const executeImportReview = useCallback(async (previewState, mode) => {
@@ -9796,6 +9985,71 @@ function HomeschoolApp() {
       lastPromptDay: getLocalDayKey(exportedAt),
     }));
   }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache]);
+
+  const handleExportDictionary = useCallback(() => {
+    const exportedAt = Date.now();
+    const entries = Object.values(effectiveWordMeaningDictionary)
+      .sort((left, right) => String(left.word || left.normalizedWord || "").localeCompare(String(right.word || right.normalizedWord || "")));
+    downloadJson(`homeschool-dictionary-${new Date(exportedAt).toISOString().slice(0, 10)}.json`, {
+      type: "hs-dictionary",
+      schemaVersion: 1,
+      exportedAt: new Date(exportedAt).toISOString(),
+      appVersion: window.HomeSchoolData.VERSION,
+      entryCount: entries.length,
+      entries,
+    });
+  }, [effectiveWordMeaningDictionary]);
+
+  const mergeImportedDictionaryEntries = useCallback((incomingEntries) => {
+    const normalizedIncoming = normalizeWordMeaningCache(incomingEntries || {}, {
+      defaultOrigins: ["imported"],
+      defaultSource: "Imported",
+    });
+    const count = Object.keys(normalizedIncoming).length;
+    if (!count) return 0;
+    setWordMeaningCache((current) => mergeWordMeaningMaps(current, normalizedIncoming));
+    return count;
+  }, []);
+
+  const handleImportDictionary = useCallback(async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const importedCount = mergeImportedDictionaryEntries(normalizeDictionaryImportPayload(parsed));
+      if (!importedCount) {
+        alert(joinLocalizedText("No dictionary entries were found in this file.", "اس فائل میں لغت کے اندراجات نہیں ملے۔", language));
+        return;
+      }
+      alert(joinLocalizedText(`${importedCount} dictionary entries were merged.`, `${importedCount} لغت اندراجات ضم کر دیے گئے۔`, language));
+    } catch (error) {
+      alert(joinLocalizedText(`Dictionary import failed: ${error.message || error}`, `لغت درآمد ناکام ہوئی: ${error.message || error}`, language));
+    } finally {
+      if (event?.target) event.target.value = "";
+    }
+  }, [language, mergeImportedDictionaryEntries]);
+
+  const handleImportDictionaryFromUrl = useCallback(async () => {
+    const url = String(dictionaryImportUrl || "").trim();
+    if (!url) {
+      alert(joinLocalizedText("Enter a dictionary link first.", "پہلے لغت کا لنک درج کریں۔", language));
+      return;
+    }
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const parsed = await response.json();
+      const importedCount = mergeImportedDictionaryEntries(normalizeDictionaryImportPayload(parsed));
+      if (!importedCount) {
+        alert(joinLocalizedText("No dictionary entries were found at that link.", "اس لنک پر لغت کے اندراجات نہیں ملے۔", language));
+        return;
+      }
+      alert(joinLocalizedText(`${importedCount} dictionary entries were imported from the link.`, `${importedCount} لغت اندراجات لنک سے درآمد ہو گئے۔`, language));
+    } catch (error) {
+      alert(joinLocalizedText(`Unable to import dictionary from the link: ${error.message || error}`, `لنک سے لغت درآمد نہ ہو سکی: ${error.message || error}`, language));
+    }
+  }, [dictionaryImportUrl, language, mergeImportedDictionaryEntries]);
 
   const handleImportProgress = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
@@ -10604,7 +10858,7 @@ function HomeschoolApp() {
       providerConfig.apiKey,
       providerConfig.model || providerDefinition.defaultModel,
       [{ role: "user", text: `Return valid JSON only for the English word "${word}".` }],
-      "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only, covering common senses or school-use senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand when the word is used in class or daily life. If the word has fewer common senses, still return the best available Urdu meanings. No English. No markdown. No extra keys.",
+      "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use exactly these keys: meaningsUr, simpleExplanationUr, meaningsEn, explanationEng, examplesEng. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand the word in class or daily life. meaningsEn must be an ordered array of 1 to 4 short English sense labels. explanationEng must be one short plain-English explanation. examplesEng must be an array of 1 to 3 short classroom-friendly English example sentences. If fewer are available, return the best ones. No markdown. No extra keys.",
     );
     return extractWordMeaningDetails(response);
   }, [aiProviderConfigs]);
@@ -10657,50 +10911,52 @@ function HomeschoolApp() {
         explanationUr: entry.explanationUr || "",
         source: entry.source || fallbackSource,
       });
-      const sourceLabel = String(entry.source || fallbackSource || "").toLowerCase();
-      return Boolean(
-        (entry.explanationUr && orderedMeanings.length > 0)
-        || (sourceLabel && sourceLabel !== "local" && orderedMeanings.length > 1),
-      );
+      return !needsWordMeaningEnrichment(entry);
     };
     let lastError = null;
     const sourceOrder = getWordMeaningSourceOrder(wordMeaningPriority);
-    for (const sourceId of sourceOrder) {
+    let shownEntry = null;
+    for (let index = 0; index < sourceOrder.length; index += 1) {
+      const sourceId = sourceOrder[index];
       if (sourceId === "local" && hasWordMeaningContent(localEntry)) {
-        applyMeaningEntry(localEntry, "Local");
-        return;
+        shownEntry = localEntry;
+        const completeEnough = applyMeaningEntry(localEntry, "Curriculum", sourceOrder.includes("ai") && sourceOrder.slice(index + 1).includes("ai"));
+        if (completeEnough || !sourceOrder.slice(index + 1).includes("ai")) return;
+        continue;
       }
       if (sourceId === "cache" && hasWordMeaningContent(cacheEntry)) {
-        applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
-        return;
+        shownEntry = cacheEntry;
+        const completeEnough = applyMeaningEntry(cacheEntry, cacheEntry.source || "Dictionary", sourceOrder.includes("ai") && sourceOrder.slice(index + 1).includes("ai"));
+        if (completeEnough || !sourceOrder.slice(index + 1).includes("ai")) return;
+        continue;
       }
       if (sourceId === "ai" && selectedMeaningAiProviderId) {
         try {
           const details = await requestWordMeaningFromAi(selectedMeaningAiProviderId, rawWord);
-          const meaningsUr = Array.isArray(details?.meaningsUr) ? details.meaningsUr.filter(Boolean) : [];
-          const explanationUr = String(details?.explanationUr || "").trim();
-          const meaningUr = meaningsUr[0] || "";
-          if (!meaningUr && !explanationUr) continue;
-          const existingEntry = wordMeaningCache[normalizedWord] || {};
-          const mergedMeanings = Array.from(new Set([...(meaningsUr || []), ...((existingEntry.meaningsUr || []).filter(Boolean))])).slice(0, 6);
-          const mergedExplanation = explanationUr || existingEntry.explanationUr || "";
-          const cacheRecord = normalizeWordMeaningCache({
-            ...wordMeaningCache,
-            [normalizedWord]: {
-              meaningUr: mergedMeanings[0] || meaningUr || existingEntry.meaningUr || "",
-              meaningsUr: mergedMeanings,
-              explanationUr: mergedExplanation,
-              source: selectedMeaningAiProviderId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI",
-              fetchedAt: Date.now(),
-            },
+          const aiEntry = normalizeWordMeaningEntry(rawWord, {
+            ...details,
+            source: selectedMeaningAiProviderId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI",
+            sources: [selectedMeaningAiProviderId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI"],
+            origins: ["ai"],
+            fetchedAt: Date.now(),
+            updatedAt: Date.now(),
+          }, {
+            defaultOrigins: ["ai"],
+            defaultSource: selectedMeaningAiProviderId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI",
+          });
+          if (!hasWordMeaningContent(aiEntry)) continue;
+          const existingEntry = mergeWordMeaningEntry(localEntry, wordMeaningCache[normalizedWord]);
+          const mergedEntry = mergeWordMeaningEntry(existingEntry, aiEntry);
+          const cacheRecord = mergeWordMeaningMaps(wordMeaningCache, {
+            [normalizedWord]: mergedEntry,
           });
           setWordMeaningCache(cacheRecord);
           setPopupState({
             loading: false,
-            meaningUr: cacheRecord[normalizedWord]?.meaningUr || "",
-            meaningsUr: cacheRecord[normalizedWord]?.meaningsUr || [],
-            explanationUr: cacheRecord[normalizedWord]?.explanationUr || "",
-            source: cacheRecord[normalizedWord]?.source || "AI",
+            meaningUr: mergedEntry?.meaningUr || "",
+            meaningsUr: mergedEntry?.meaningsUr || [],
+            explanationUr: mergedEntry?.explanationUr || "",
+            source: mergedEntry?.source || "AI",
             error: "",
           });
           return;
@@ -10713,12 +10969,15 @@ function HomeschoolApp() {
     const blockedReason = canUseDirectAiFromBrowser();
     setPopupState({
       loading: false,
+      meaningUr: shownEntry?.meaningUr || "",
+      meaningsUr: shownEntry?.meaningsUr || [],
+      explanationUr: shownEntry?.explanationUr || "",
       error: blockedReason.ok
         ? (lastError?.message
           ? String(lastError.message)
           : joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "اس وقت معنی دستیاب نہیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔", language))
         : (ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode."),
-      source: lastError ? "Unavailable" : "",
+      source: shownEntry?.source || (lastError ? "Unavailable" : ""),
     });
   }, [language, localWordMeaningLookup, requestWordMeaningFromAi, selectedMeaningAiProviderId, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
   useEffect(() => {
@@ -13203,11 +13462,15 @@ function HomeschoolApp() {
             currentVersion={currentVersion}
             updateAvailable={updateAvailable}
             storageLabel={storageLabel}
+            dictionaryStats={dictionaryStats}
             versionInfo={versionManagerRef.current?.getVersionInfo?.()}
             onCheckUpdates={handleCheckUpdates}
             onRefreshData={handleRefreshData}
             onExportProgress={handleExportProgress}
             onImportProgress={handleImportProgress}
+            onExportDictionary={handleExportDictionary}
+            onImportDictionary={handleImportDictionary}
+            onImportDictionaryFromUrl={handleImportDictionaryFromUrl}
             onResetProgress={handleResetProgress}
             onFullReset={handleFullReset}
             onResetReviewSystem={handleResetReviewSystem}
@@ -13228,6 +13491,8 @@ function HomeschoolApp() {
             ttsVoiceSelections={ttsVoiceSelections}
             onTtsVoiceSelectionChange={handleTtsVoiceSelectionChange}
             onPreviewTtsVoice={handlePreviewTtsVoice}
+            dictionaryImportUrl={dictionaryImportUrl}
+            onDictionaryImportUrlChange={setDictionaryImportUrl}
             language={language}
             onLanguageChange={setLanguage}
             themeMode={themeMode}

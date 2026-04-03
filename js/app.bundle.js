@@ -1099,7 +1099,7 @@
       body: JSON.stringify({
         systemInstruction: {
           parts: [{
-            text: "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only, covering the most useful classroom and daily-life senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand the word in context. No English. No markdown. No extra keys."
+            text: "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use exactly these keys: meaningsUr, simpleExplanationUr, meaningsEn, explanationEng, examplesEng. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only. simpleExplanationUr must be one short, very easy Urdu explanation. meaningsEn must be an ordered array of 1 to 4 short English sense labels. explanationEng must be one short plain-English explanation. examplesEng must be an array of 1 to 3 short classroom-friendly English example sentences. No markdown. No extra keys."
           }]
         },
         contents: [{
@@ -1303,26 +1303,155 @@
     if (base.endsWith("est") && base.length > 5) pushCandidate(base.slice(0, -3));
     return Array.from(candidates);
   }
-  function normalizeWordMeaningCache(rawCache) {
-    if (!rawCache || typeof rawCache !== "object") return {};
-    return Object.entries(rawCache).map(([key, value]) => {
-      const normalizedKey = normalizeLookupWord(key);
-      if (!normalizedKey || !value || typeof value !== "object") return null;
-      const meaningsUr = Array.isArray(value.meaningsUr) ? value.meaningsUr.map((entry) => String(entry || "").trim()).filter(Boolean) : String(value.meaningUr || value.meaning || "").trim() ? [String(value.meaningUr || value.meaning || "").trim()] : [];
-      const explanationUr = String(value.explanationUr || value.simpleExplanationUr || "").trim();
-      const meaningUr = meaningsUr[0] || "";
-      if (!meaningUr && !explanationUr) return null;
-      return [normalizedKey, {
-        meaningUr,
-        meaningsUr: meaningsUr.slice(0, 6),
-        explanationUr,
-        source: String(value.source || "cache"),
-        fetchedAt: Number(value.fetchedAt) || Date.now()
-      }];
-    }).filter(Boolean).sort((left, right) => (right[1].fetchedAt || 0) - (left[1].fetchedAt || 0)).slice(0, 300).reduce((acc, entry) => {
-      acc[entry[0]] = entry[1];
+  function normalizeMeaningList(value, max = 6) {
+    if (Array.isArray(value)) {
+      return Array.from(new Set(value.map((entry) => String(entry || "").trim()).filter(Boolean))).slice(0, max);
+    }
+    const text = String(value || "").trim();
+    return text ? [text] : [];
+  }
+  function normalizeExampleList(value, max = 4) {
+    return normalizeMeaningList(value, max);
+  }
+  function choosePreferredText(currentValue, nextValue) {
+    const currentText = String(currentValue || "").trim();
+    const nextText = String(nextValue || "").trim();
+    if (!currentText) return nextText;
+    if (!nextText) return currentText;
+    return nextText.length >= currentText.length ? nextText : currentText;
+  }
+  function normalizeWordMeaningEntry(rawWord, value, options = {}) {
+    const candidateWord = String(rawWord || (value == null ? void 0 : value.word) || (value == null ? void 0 : value.normalizedWord) || "").trim();
+    const normalizedWord = normalizeLookupWord(candidateWord);
+    if (!normalizedWord || !value || typeof value !== "object") return null;
+    const meaningsUr = normalizeMeaningList(value.meaningsUr || value.meaningUr || value.meaning || value.translationUr);
+    const explanationUr = String(value.explanationUr || value.simpleExplanationUr || "").trim();
+    const meaningsEn = normalizeMeaningList(value.meaningsEn || value.meaningEn || value.translationEn);
+    const explanationEng = String(value.explanationEng || value.simpleExplanationEng || "").trim();
+    const examplesEng = normalizeExampleList(value.examplesEng || value.examplesEn || value.examples);
+    const sources = Array.from(new Set([
+      ...Array.isArray(value.sources) ? value.sources : [],
+      String(value.source || options.defaultSource || "").trim()
+    ].map((entry) => String(entry || "").trim()).filter(Boolean)));
+    const origins = Array.from(new Set([
+      ...Array.isArray(value.origins) ? value.origins : [],
+      String(value.origin || "").trim(),
+      ...Array.isArray(options.defaultOrigins) ? options.defaultOrigins : []
+    ].map((entry) => String(entry || "").trim().toLowerCase()).filter(Boolean)));
+    const meaningUr = meaningsUr[0] || "";
+    if (!meaningUr && !explanationUr && !meaningsEn.length && !explanationEng && !examplesEng.length) return null;
+    const now = Date.now();
+    return {
+      word: String(value.word || rawWord || normalizedWord).trim() || normalizedWord,
+      normalizedWord,
+      meaningUr,
+      meaningsUr,
+      explanationUr,
+      meaningsEn,
+      explanationEng,
+      examplesEng,
+      partOfSpeech: String(value.partOfSpeech || "").trim(),
+      source: sources[0] || String(options.defaultSource || value.source || "cache").trim() || "cache",
+      sources,
+      origins,
+      fetchedAt: Number(value.fetchedAt) || Number(value.updatedAt) || now,
+      createdAt: Number(value.createdAt) || Number(value.fetchedAt) || now,
+      updatedAt: Number(value.updatedAt) || Number(value.fetchedAt) || now
+    };
+  }
+  function mergeWordMeaningEntry(baseEntry, nextEntry) {
+    const base = baseEntry && typeof baseEntry === "object" ? baseEntry : null;
+    const next = nextEntry && typeof nextEntry === "object" ? nextEntry : null;
+    if (!base && !next) return null;
+    if (!base) return next;
+    if (!next) return base;
+    const meaningsUr = Array.from(new Set([...base.meaningsUr || [], ...next.meaningsUr || []].filter(Boolean))).slice(0, 6);
+    const meaningsEn = Array.from(new Set([...base.meaningsEn || [], ...next.meaningsEn || []].filter(Boolean))).slice(0, 6);
+    const examplesEng = Array.from(new Set([...base.examplesEng || [], ...next.examplesEng || []].filter(Boolean))).slice(0, 4);
+    const sources = Array.from(new Set([...base.sources || [], ...next.sources || [], base.source, next.source].filter(Boolean)));
+    const origins = Array.from(new Set([...base.origins || [], ...next.origins || []].filter(Boolean)));
+    const merged = {
+      ...base,
+      ...next,
+      word: String(next.word || base.word || "").trim() || String(next.normalizedWord || base.normalizedWord || ""),
+      normalizedWord: next.normalizedWord || base.normalizedWord,
+      meaningsUr,
+      meaningUr: meaningsUr[0] || String(next.meaningUr || base.meaningUr || "").trim(),
+      explanationUr: choosePreferredText(base.explanationUr, next.explanationUr),
+      meaningsEn,
+      explanationEng: choosePreferredText(base.explanationEng, next.explanationEng),
+      examplesEng,
+      partOfSpeech: String(next.partOfSpeech || base.partOfSpeech || "").trim(),
+      source: next.source || base.source || sources[0] || "cache",
+      sources,
+      origins,
+      createdAt: Math.min(Number(base.createdAt) || Date.now(), Number(next.createdAt) || Date.now()),
+      fetchedAt: Math.max(Number(base.fetchedAt) || 0, Number(next.fetchedAt) || 0, Date.now()),
+      updatedAt: Math.max(Number(base.updatedAt) || 0, Number(next.updatedAt) || 0, Date.now())
+    };
+    return merged;
+  }
+  function normalizeWordMeaningCache(rawCache, options = {}) {
+    if (!rawCache) return {};
+    let pairs = [];
+    if (Array.isArray(rawCache)) {
+      pairs = rawCache.map((entry) => [(entry == null ? void 0 : entry.normalizedWord) || (entry == null ? void 0 : entry.word), entry]);
+    } else if (rawCache && typeof rawCache === "object" && Array.isArray(rawCache.entries)) {
+      pairs = rawCache.entries.map((entry) => [(entry == null ? void 0 : entry.normalizedWord) || (entry == null ? void 0 : entry.word), entry]);
+    } else if (rawCache && typeof rawCache === "object") {
+      pairs = Object.entries(rawCache);
+    }
+    return pairs.reduce((acc, [key, value]) => {
+      const normalizedEntry = normalizeWordMeaningEntry(key, value, options);
+      if (!normalizedEntry) return acc;
+      const normalizedKey = normalizedEntry.normalizedWord;
+      acc[normalizedKey] = mergeWordMeaningEntry(acc[normalizedKey], normalizedEntry);
       return acc;
     }, {});
+  }
+  function mergeWordMeaningMaps(...maps) {
+    return maps.reduce((acc, map) => {
+      const normalizedMap = normalizeWordMeaningCache(map || {});
+      Object.entries(normalizedMap).forEach(([key, value]) => {
+        acc[key] = mergeWordMeaningEntry(acc[key], value);
+      });
+      return acc;
+    }, {});
+  }
+  function buildCompactWordMeaningState(rawCache, limit = 80) {
+    return Object.entries(normalizeWordMeaningCache(rawCache || {})).sort((left, right) => {
+      var _a, _b, _c, _d;
+      return (((_a = right[1]) == null ? void 0 : _a.updatedAt) || ((_b = right[1]) == null ? void 0 : _b.fetchedAt) || 0) - (((_c = left[1]) == null ? void 0 : _c.updatedAt) || ((_d = left[1]) == null ? void 0 : _d.fetchedAt) || 0);
+    }).slice(0, limit).reduce((acc, [key, value]) => {
+      acc[key] = value;
+      return acc;
+    }, {});
+  }
+  function normalizeDictionaryImportPayload(rawPayload, options = {}) {
+    var _a, _b;
+    if (!rawPayload) return {};
+    if (Array.isArray(rawPayload)) {
+      return normalizeWordMeaningCache(rawPayload, options);
+    }
+    if (rawPayload && typeof rawPayload === "object") {
+      if ((_a = rawPayload.appState) == null ? void 0 : _a.wordMeaningCache) {
+        return normalizeWordMeaningCache(rawPayload.appState.wordMeaningCache, options);
+      }
+      if (Array.isArray((_b = rawPayload.dbProgress) == null ? void 0 : _b.customizations)) {
+        const dictionaryRow = rawPayload.dbProgress.customizations.find((row) => (row == null ? void 0 : row.type) === "wordMeaningCache");
+        if (dictionaryRow == null ? void 0 : dictionaryRow.data) {
+          return normalizeWordMeaningCache(dictionaryRow.data, options);
+        }
+      }
+      if (Array.isArray(rawPayload.entries)) {
+        return normalizeWordMeaningCache(rawPayload.entries, options);
+      }
+      if (rawPayload.dictionary && typeof rawPayload.dictionary === "object") {
+        return normalizeWordMeaningCache(rawPayload.dictionary, options);
+      }
+      return normalizeWordMeaningCache(rawPayload, options);
+    }
+    return {};
   }
   function buildWordMeaningLookupFromIndex(items) {
     const lookup = {};
@@ -1334,22 +1463,14 @@
       );
       if (!meaningUr) return;
       getLookupWordCandidates(prompt2).forEach((candidate) => {
-        if (!lookup[candidate]) {
-          lookup[candidate] = {
-            meaningUr,
-            meaningsUr: [meaningUr],
-            explanationUr: "",
-            source: "local"
-          };
-          return;
-        }
-        const mergedMeanings = Array.from(new Set([...lookup[candidate].meaningsUr || [], meaningUr].filter(Boolean))).slice(0, 6);
-        lookup[candidate] = {
-          ...lookup[candidate],
-          meaningUr: lookup[candidate].meaningUr || mergedMeanings[0] || "",
-          meaningsUr: mergedMeanings,
-          source: "local"
-        };
+        lookup[candidate] = mergeWordMeaningEntry(lookup[candidate], normalizeWordMeaningEntry(prompt2, {
+          word: prompt2,
+          meaningUr,
+          meaningsUr: [meaningUr],
+          source: "Curriculum",
+          sources: ["Curriculum"],
+          origins: ["curriculum"]
+        }, { defaultSource: "Curriculum", defaultOrigins: ["curriculum"] }));
       });
     });
     return lookup;
@@ -1363,21 +1484,24 @@
   }
   function extractWordMeaningDetails(text) {
     const raw = String(text || "").trim();
-    if (!raw) return { meaningsUr: [], explanationUr: "" };
+    if (!raw) return { meaningsUr: [], explanationUr: "", meaningsEn: [], explanationEng: "", examplesEng: [] };
     const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]+?)```/i);
     const candidateJson = jsonMatch ? jsonMatch[1].trim() : raw;
     try {
       const parsed = JSON.parse(candidateJson);
       const meaningsUr2 = Array.isArray(parsed == null ? void 0 : parsed.meaningsUr) ? parsed.meaningsUr.map((entry) => String(entry || "").trim()).filter(Boolean) : String((parsed == null ? void 0 : parsed.meaningUr) || (parsed == null ? void 0 : parsed.meaning) || "").trim() ? [String(parsed.meaningUr || parsed.meaning || "").trim()] : [];
       const explanationUr2 = String((parsed == null ? void 0 : parsed.simpleExplanationUr) || (parsed == null ? void 0 : parsed.explanationUr) || "").trim();
-      if (meaningsUr2.length || explanationUr2) {
-        return { meaningsUr: meaningsUr2.slice(0, 6), explanationUr: explanationUr2 };
+      const meaningsEn = normalizeMeaningList((parsed == null ? void 0 : parsed.meaningsEn) || (parsed == null ? void 0 : parsed.meaningEn));
+      const explanationEng = String((parsed == null ? void 0 : parsed.simpleExplanationEng) || (parsed == null ? void 0 : parsed.explanationEng) || "").trim();
+      const examplesEng = normalizeExampleList((parsed == null ? void 0 : parsed.examplesEng) || (parsed == null ? void 0 : parsed.examplesEn) || (parsed == null ? void 0 : parsed.examples), 4);
+      if (meaningsUr2.length || explanationUr2 || meaningsEn.length || explanationEng || examplesEng.length) {
+        return { meaningsUr: meaningsUr2.slice(0, 6), explanationUr: explanationUr2, meaningsEn, explanationEng, examplesEng };
       }
     } catch (error) {
     }
     const inlineParts = raw.split(/[\n\r،,;|/]+/).map((entry) => entry.replace(/^[\s\-*•\d.)]+/, "").trim()).filter(Boolean);
     if (inlineParts.length > 1) {
-      return { meaningsUr: inlineParts.slice(0, 6), explanationUr: "" };
+      return { meaningsUr: inlineParts.slice(0, 6), explanationUr: "", meaningsEn: [], explanationEng: "", examplesEng: [] };
     }
     const lines = raw.split(/\r?\n/).map((line) => line.replace(/^[\s\-*•\d.)]+/, "").trim()).filter(Boolean);
     const meaningsUr = [];
@@ -1402,7 +1526,7 @@
       if (fallbackMeaning) meaningsUr.push(fallbackMeaning);
     }
     const explanationUr = explanationParts.join(" ").trim();
-    return { meaningsUr: meaningsUr.slice(0, 6), explanationUr };
+    return { meaningsUr: meaningsUr.slice(0, 6), explanationUr, meaningsEn: [], explanationEng: "", examplesEng: [] };
   }
   function buildWordMeaningCopyText(entry) {
     if (!entry) return "";
@@ -1419,6 +1543,18 @@ ${entry.meaningUr}`);
       parts.push(`\u0633\u0627\u062F\u06C1 \u0648\u0636\u0627\u062D\u062A:
 ${entry.explanationUr}`);
     }
+    if (Array.isArray(entry.meaningsEn) && entry.meaningsEn.length > 0) {
+      parts.push(`English meanings:
+${entry.meaningsEn.map((meaning, index) => `${index + 1}. ${meaning}`).join("\n")}`);
+    }
+    if (entry.explanationEng) {
+      parts.push(`English explanation:
+${entry.explanationEng}`);
+    }
+    if (Array.isArray(entry.examplesEng) && entry.examplesEng.length > 0) {
+      parts.push(`English examples:
+${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n")}`);
+    }
     return parts.filter(Boolean).join("\n\n").trim();
   }
   function buildWordMeaningSpeakText(entry) {
@@ -1430,7 +1566,17 @@ ${entry.explanationUr}`);
   function hasWordMeaningContent(entry) {
     if (!entry || typeof entry !== "object") return false;
     const meanings = Array.isArray(entry.meaningsUr) ? entry.meaningsUr.filter(Boolean) : [];
-    return Boolean(String(entry.meaningUr || "").trim() || meanings.length > 0 || String(entry.explanationUr || "").trim());
+    const meaningsEn = Array.isArray(entry.meaningsEn) ? entry.meaningsEn.filter(Boolean) : [];
+    return Boolean(
+      String(entry.meaningUr || "").trim() || meanings.length > 0 || String(entry.explanationUr || "").trim() || meaningsEn.length > 0 || String(entry.explanationEng || "").trim() || Array.isArray(entry.examplesEng) && entry.examplesEng.filter(Boolean).length > 0
+    );
+  }
+  function needsWordMeaningEnrichment(entry) {
+    if (!entry || typeof entry !== "object") return true;
+    const urMeanings = Array.isArray(entry.meaningsUr) ? entry.meaningsUr.filter(Boolean) : [];
+    const enMeanings = Array.isArray(entry.meaningsEn) ? entry.meaningsEn.filter(Boolean) : [];
+    const examplesEng = Array.isArray(entry.examplesEng) ? entry.examplesEng.filter(Boolean) : [];
+    return !(urMeanings.length >= 2 && String(entry.explanationUr || "").trim() && enMeanings.length >= 1 && String(entry.explanationEng || "").trim() && examplesEng.length >= 1);
   }
   function getDefaultTutorGreeting(language) {
     return isUrduUi(language) ? "\u0627\u0644\u0633\u0644\u0627\u0645 \u0639\u0644\u06CC\u06A9\u0645! \u0645\u06CC\u06BA \u0622\u067E \u06A9\u0627 \u0627\u06D2 \u0622\u0626\u06CC \u0627\u0633\u062A\u0627\u062F \u06C1\u0648\u06BA\u06D4 \u0627\u067E\u0646\u06D2 \u0633\u0628\u0642 \u06CC\u0627 \u06A9\u0633\u06CC \u0645\u0634\u06A9\u0644 \u0633\u0648\u0627\u0644 \u06A9\u06D2 \u0628\u0627\u0631\u06D2 \u0645\u06CC\u06BA \u067E\u0648\u0686\u06BE\u06CC\u06BA\u060C \u0645\u06CC\u06BA \u0622\u0633\u0627\u0646 \u0627\u0646\u062F\u0627\u0632 \u0645\u06CC\u06BA \u0633\u0645\u062C\u06BE\u0627\u0624\u06BA \u06AF\u0627\u06D4" : "Assalam-o-Alaikum! I'm your AI tutor. Ask me anything about your lessons and I'll explain it in a simple way.";
@@ -5094,6 +5240,7 @@ ${marker} `);
     const [wordSearch, setWordSearch] = useState("");
     const [wordBankSubjectFilter, setWordBankSubjectFilter] = useState("all");
     const [wordMeaningCache, setWordMeaningCache] = useState(normalizeWordMeaningCache((stored == null ? void 0 : stored.wordMeaningCache) || {}));
+    const [dictionaryImportUrl, setDictionaryImportUrl] = useState(String((stored == null ? void 0 : stored.dictionaryImportUrl) || ""));
     const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
     const [copyToast, setCopyToast] = useState(null);
     const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
@@ -5807,6 +5954,21 @@ ${marker} `);
       }).slice(0, 18);
     }, [wordBankIndex, wordBankSubjectFilter, wordSearch]);
     const localWordMeaningLookup = useMemo(() => buildWordMeaningLookupFromIndex(wordBankIndex), [wordBankIndex]);
+    const effectiveWordMeaningDictionary = useMemo(() => mergeWordMeaningMaps(localWordMeaningLookup, wordMeaningCache), [localWordMeaningLookup, wordMeaningCache]);
+    const dictionaryStats = useMemo(() => {
+      const learnedEntries = Object.values(normalizeWordMeaningCache(wordMeaningCache));
+      const effectiveEntries = Object.values(effectiveWordMeaningDictionary);
+      const countByOrigin = (originKey) => learnedEntries.filter((entry) => Array.isArray(entry.origins) && entry.origins.includes(originKey)).length;
+      return {
+        total: effectiveEntries.length,
+        curriculum: Object.keys(localWordMeaningLookup).length,
+        learned: learnedEntries.length,
+        imported: countByOrigin("imported"),
+        ai: countByOrigin("ai"),
+        bilingual: effectiveEntries.filter((entry) => (entry.meaningsEn || []).length > 0 || entry.explanationEng || (entry.examplesEng || []).length > 0).length,
+        descriptive: effectiveEntries.filter((entry) => String(entry.explanationUr || "").trim() || String(entry.explanationEng || "").trim()).length
+      };
+    }, [effectiveWordMeaningDictionary, localWordMeaningLookup, wordMeaningCache]);
     useEffect(() => {
       timeTrackingRef.current = timeTrackingData;
     }, [timeTrackingData]);
@@ -6181,6 +6343,9 @@ ${marker} `);
             await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40));
             await window.HomeSchoolDB.saveCustomization("gamificationState", normalizeGamificationState(nextPayload.gamificationState || {}));
             await window.HomeSchoolDB.saveCustomization("wordMeaningCache", normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}));
+            await window.HomeSchoolDB.saveCustomization("dictionaryPreferences", {
+              importUrl: String(nextPayload.dictionaryImportUrl || "").trim()
+            });
             await window.HomeSchoolDB.saveCustomization("studentProfile", {
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
@@ -6232,6 +6397,9 @@ ${marker} `);
               notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
               gamificationState: normalizeGamificationState(nextPayload.gamificationState || {}),
               wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
+              dictionaryPreferences: {
+                importUrl: String(nextPayload.dictionaryImportUrl || "").trim()
+              },
               studentProfile: {
                 grade: nextPayload.grade,
                 studentName: nextPayload.studentName,
@@ -6285,6 +6453,9 @@ ${marker} `);
             timeTrackingData: normalizeTimeTrackingData(nextPayload.timeTrackingData || {}),
             notificationHistory: (nextPayload.notificationHistory || []).slice(0, 40),
             wordMeaningCache: normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}),
+            dictionaryPreferences: {
+              importUrl: String(nextPayload.dictionaryImportUrl || "").trim()
+            },
             studentProfile: {
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
@@ -6310,7 +6481,7 @@ ${marker} `);
         return;
       }
       (async () => {
-        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2;
+        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2;
         try {
           await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
           const pos = await window.HomeSchoolDB.getAllPosTypes();
@@ -6333,10 +6504,11 @@ ${marker} `);
           const storedNotificationHistory = ((_k2 = customizations.notificationHistory) == null ? void 0 : _k2.data) || null;
           const storedGamification = ((_l2 = customizations.gamificationState) == null ? void 0 : _l2.data) || null;
           const storedWordMeaningCache = ((_m2 = customizations.wordMeaningCache) == null ? void 0 : _m2.data) || null;
-          const storedProfile = ((_n2 = customizations.studentProfile) == null ? void 0 : _n2.data) || null;
-          const storedPracticeProgress = ((_o2 = customizations.practiceProgress) == null ? void 0 : _o2.data) || null;
-          const storedAiProviders = sanitizeAiProviderConfigs(((_p2 = customizations.aiProviderConfigs) == null ? void 0 : _p2.data) || {});
-          const storedAiTutor = ((_q2 = customizations.aiTutorPreferences) == null ? void 0 : _q2.data) || null;
+          const storedDictionaryPreferences = ((_n2 = customizations.dictionaryPreferences) == null ? void 0 : _n2.data) || null;
+          const storedProfile = ((_o2 = customizations.studentProfile) == null ? void 0 : _o2.data) || null;
+          const storedPracticeProgress = ((_p2 = customizations.practiceProgress) == null ? void 0 : _p2.data) || null;
+          const storedAiProviders = sanitizeAiProviderConfigs(((_q2 = customizations.aiProviderConfigs) == null ? void 0 : _q2.data) || {});
+          const storedAiTutor = ((_r2 = customizations.aiTutorPreferences) == null ? void 0 : _r2.data) || null;
           if (storedPreferences) {
             if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
             if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
@@ -6443,6 +6615,11 @@ ${marker} `);
           }
           if (storedWordMeaningCache && typeof storedWordMeaningCache === "object") {
             setWordMeaningCache(normalizeWordMeaningCache(storedWordMeaningCache));
+          }
+          if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") {
+            if (typeof storedDictionaryPreferences.importUrl !== "undefined") {
+              setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || ""));
+            }
           }
           if (storedProfile) {
             if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
@@ -6789,17 +6966,18 @@ ${marker} `);
         timeTrackingData,
         notificationHistory,
         gamificationState,
-        wordMeaningCache,
+        wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache),
+        dictionaryImportUrl,
         grade,
         studentName,
         studentNameUr,
         aiProviderConfigs,
         selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryImportUrl, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache });
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache]);
+      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryImportUrl });
+    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryImportUrl]);
     useEffect(() => {
       setNavHidden(Boolean(navAutoHide));
     }, [navPosition, navAutoHide]);
@@ -7754,6 +7932,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           setGamificationState(normalizedGamification);
         }
         if (nextState.wordMeaningCache) setWordMeaningCache(normalizeWordMeaningCache(nextState.wordMeaningCache));
+        if (typeof nextState.dictionaryImportUrl !== "undefined") setDictionaryImportUrl(String(nextState.dictionaryImportUrl || ""));
         return;
       }
       if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
@@ -7841,6 +8020,9 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           ...nextState.wordMeaningCache
         }));
       }
+      if (typeof nextState.dictionaryImportUrl !== "undefined") {
+        setDictionaryImportUrl((current) => current || String(nextState.dictionaryImportUrl || ""));
+      }
     }, []);
     const executeImportReview = useCallback(async (previewState, mode) => {
       if (!(previewState == null ? void 0 : previewState.parsed)) return;
@@ -7911,6 +8093,67 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         lastPromptDay: getLocalDayKey(exportedAt)
       }));
     }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache]);
+    const handleExportDictionary = useCallback(() => {
+      const exportedAt = Date.now();
+      const entries = Object.values(effectiveWordMeaningDictionary).sort((left, right) => String(left.word || left.normalizedWord || "").localeCompare(String(right.word || right.normalizedWord || "")));
+      downloadJson(`homeschool-dictionary-${new Date(exportedAt).toISOString().slice(0, 10)}.json`, {
+        type: "hs-dictionary",
+        schemaVersion: 1,
+        exportedAt: new Date(exportedAt).toISOString(),
+        appVersion: window.HomeSchoolData.VERSION,
+        entryCount: entries.length,
+        entries
+      });
+    }, [effectiveWordMeaningDictionary]);
+    const mergeImportedDictionaryEntries = useCallback((incomingEntries) => {
+      const normalizedIncoming = normalizeWordMeaningCache(incomingEntries || {}, {
+        defaultOrigins: ["imported"],
+        defaultSource: "Imported"
+      });
+      const count = Object.keys(normalizedIncoming).length;
+      if (!count) return 0;
+      setWordMeaningCache((current) => mergeWordMeaningMaps(current, normalizedIncoming));
+      return count;
+    }, []);
+    const handleImportDictionary = useCallback(async (event) => {
+      var _a2, _b2;
+      const file = (_b2 = (_a2 = event == null ? void 0 : event.target) == null ? void 0 : _a2.files) == null ? void 0 : _b2[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const importedCount = mergeImportedDictionaryEntries(normalizeDictionaryImportPayload(parsed));
+        if (!importedCount) {
+          alert(joinLocalizedText("No dictionary entries were found in this file.", "\u0627\u0633 \u0641\u0627\u0626\u0644 \u0645\u06CC\u06BA \u0644\u063A\u062A \u06A9\u06D2 \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0646\u06C1\u06CC\u06BA \u0645\u0644\u06D2\u06D4", language));
+          return;
+        }
+        alert(joinLocalizedText(`${importedCount} dictionary entries were merged.`, `${importedCount} \u0644\u063A\u062A \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0636\u0645 \u06A9\u0631 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2\u06D4`, language));
+      } catch (error) {
+        alert(joinLocalizedText(`Dictionary import failed: ${error.message || error}`, `\u0644\u063A\u062A \u062F\u0631\u0622\u0645\u062F \u0646\u0627\u06A9\u0627\u0645 \u06C1\u0648\u0626\u06CC: ${error.message || error}`, language));
+      } finally {
+        if (event == null ? void 0 : event.target) event.target.value = "";
+      }
+    }, [language, mergeImportedDictionaryEntries]);
+    const handleImportDictionaryFromUrl = useCallback(async () => {
+      const url = String(dictionaryImportUrl || "").trim();
+      if (!url) {
+        alert(joinLocalizedText("Enter a dictionary link first.", "\u067E\u06C1\u0644\u06D2 \u0644\u063A\u062A \u06A9\u0627 \u0644\u0646\u06A9 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA\u06D4", language));
+        return;
+      }
+      try {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const parsed = await response.json();
+        const importedCount = mergeImportedDictionaryEntries(normalizeDictionaryImportPayload(parsed));
+        if (!importedCount) {
+          alert(joinLocalizedText("No dictionary entries were found at that link.", "\u0627\u0633 \u0644\u0646\u06A9 \u067E\u0631 \u0644\u063A\u062A \u06A9\u06D2 \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0646\u06C1\u06CC\u06BA \u0645\u0644\u06D2\u06D4", language));
+          return;
+        }
+        alert(joinLocalizedText(`${importedCount} dictionary entries were imported from the link.`, `${importedCount} \u0644\u063A\u062A \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0644\u0646\u06A9 \u0633\u06D2 \u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u06AF\u0626\u06D2\u06D4`, language));
+      } catch (error) {
+        alert(joinLocalizedText(`Unable to import dictionary from the link: ${error.message || error}`, `\u0644\u0646\u06A9 \u0633\u06D2 \u0644\u063A\u062A \u062F\u0631\u0622\u0645\u062F \u0646\u06C1 \u06C1\u0648 \u0633\u06A9\u06CC: ${error.message || error}`, language));
+      }
+    }, [dictionaryImportUrl, language, mergeImportedDictionaryEntries]);
     const handleImportProgress = useCallback(async (event) => {
       var _a2, _b2;
       const file = (_b2 = (_a2 = event == null ? void 0 : event.target) == null ? void 0 : _a2.files) == null ? void 0 : _b2[0];
@@ -8660,12 +8903,12 @@ ${error.message || error}`);
         providerConfig.apiKey,
         providerConfig.model || providerDefinition.defaultModel,
         [{ role: "user", text: `Return valid JSON only for the English word "${word}".` }],
-        "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use keys meaningsUr and simpleExplanationUr. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only, covering common senses or school-use senses of the English word. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand when the word is used in class or daily life. If the word has fewer common senses, still return the best available Urdu meanings. No English. No markdown. No extra keys."
+        "You are a bilingual dictionary helper for Pakistani school students. Return valid JSON only. Use exactly these keys: meaningsUr, simpleExplanationUr, meaningsEn, explanationEng, examplesEng. meaningsUr must be an ordered array of 3 to 6 short Urdu meanings in Urdu script only. simpleExplanationUr must be one short, very easy Urdu explanation that helps a child understand the word in class or daily life. meaningsEn must be an ordered array of 1 to 4 short English sense labels. explanationEng must be one short plain-English explanation. examplesEng must be an array of 1 to 3 short classroom-friendly English example sentences. If fewer are available, return the best ones. No markdown. No extra keys."
       );
       return extractWordMeaningDetails(response);
     }, [aiProviderConfigs]);
     const handleLookupWordMeaning = useCallback(async (rawWord, anchorNode) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2;
+      var _a2, _b2, _c2, _d2, _e2, _f2;
       const normalizedWord = normalizeLookupWord(rawWord);
       if (!normalizedWord) return;
       const anchorRect = ((_a2 = anchorNode == null ? void 0 : anchorNode.getBoundingClientRect) == null ? void 0 : _a2.call(anchorNode)) || null;
@@ -8706,49 +8949,52 @@ ${error.message || error}`);
           explanationUr: entry.explanationUr || "",
           source: entry.source || fallbackSource
         });
-        const sourceLabel = String(entry.source || fallbackSource || "").toLowerCase();
-        return Boolean(
-          entry.explanationUr && orderedMeanings.length > 0 || sourceLabel && sourceLabel !== "local" && orderedMeanings.length > 1
-        );
+        return !needsWordMeaningEnrichment(entry);
       };
       let lastError = null;
       const sourceOrder = getWordMeaningSourceOrder(wordMeaningPriority);
-      for (const sourceId of sourceOrder) {
+      let shownEntry = null;
+      for (let index = 0; index < sourceOrder.length; index += 1) {
+        const sourceId = sourceOrder[index];
         if (sourceId === "local" && hasWordMeaningContent(localEntry)) {
-          applyMeaningEntry(localEntry, "Local");
-          return;
+          shownEntry = localEntry;
+          const completeEnough = applyMeaningEntry(localEntry, "Curriculum", sourceOrder.includes("ai") && sourceOrder.slice(index + 1).includes("ai"));
+          if (completeEnough || !sourceOrder.slice(index + 1).includes("ai")) return;
+          continue;
         }
         if (sourceId === "cache" && hasWordMeaningContent(cacheEntry)) {
-          applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
-          return;
+          shownEntry = cacheEntry;
+          const completeEnough = applyMeaningEntry(cacheEntry, cacheEntry.source || "Dictionary", sourceOrder.includes("ai") && sourceOrder.slice(index + 1).includes("ai"));
+          if (completeEnough || !sourceOrder.slice(index + 1).includes("ai")) return;
+          continue;
         }
         if (sourceId === "ai" && selectedMeaningAiProviderId) {
           try {
             const details = await requestWordMeaningFromAi(selectedMeaningAiProviderId, rawWord);
-            const meaningsUr = Array.isArray(details == null ? void 0 : details.meaningsUr) ? details.meaningsUr.filter(Boolean) : [];
-            const explanationUr = String((details == null ? void 0 : details.explanationUr) || "").trim();
-            const meaningUr = meaningsUr[0] || "";
-            if (!meaningUr && !explanationUr) continue;
-            const existingEntry = wordMeaningCache[normalizedWord] || {};
-            const mergedMeanings = Array.from(/* @__PURE__ */ new Set([...meaningsUr || [], ...(existingEntry.meaningsUr || []).filter(Boolean)])).slice(0, 6);
-            const mergedExplanation = explanationUr || existingEntry.explanationUr || "";
-            const cacheRecord = normalizeWordMeaningCache({
-              ...wordMeaningCache,
-              [normalizedWord]: {
-                meaningUr: mergedMeanings[0] || meaningUr || existingEntry.meaningUr || "",
-                meaningsUr: mergedMeanings,
-                explanationUr: mergedExplanation,
-                source: selectedMeaningAiProviderId === "gemini" ? "Gemini" : ((_d2 = AI_PROVIDER_DEFS[selectedMeaningAiProviderId]) == null ? void 0 : _d2.name) || "AI",
-                fetchedAt: Date.now()
-              }
+            const aiEntry = normalizeWordMeaningEntry(rawWord, {
+              ...details,
+              source: selectedMeaningAiProviderId === "gemini" ? "Gemini" : ((_d2 = AI_PROVIDER_DEFS[selectedMeaningAiProviderId]) == null ? void 0 : _d2.name) || "AI",
+              sources: [selectedMeaningAiProviderId === "gemini" ? "Gemini" : ((_e2 = AI_PROVIDER_DEFS[selectedMeaningAiProviderId]) == null ? void 0 : _e2.name) || "AI"],
+              origins: ["ai"],
+              fetchedAt: Date.now(),
+              updatedAt: Date.now()
+            }, {
+              defaultOrigins: ["ai"],
+              defaultSource: selectedMeaningAiProviderId === "gemini" ? "Gemini" : ((_f2 = AI_PROVIDER_DEFS[selectedMeaningAiProviderId]) == null ? void 0 : _f2.name) || "AI"
+            });
+            if (!hasWordMeaningContent(aiEntry)) continue;
+            const existingEntry = mergeWordMeaningEntry(localEntry, wordMeaningCache[normalizedWord]);
+            const mergedEntry = mergeWordMeaningEntry(existingEntry, aiEntry);
+            const cacheRecord = mergeWordMeaningMaps(wordMeaningCache, {
+              [normalizedWord]: mergedEntry
             });
             setWordMeaningCache(cacheRecord);
             setPopupState({
               loading: false,
-              meaningUr: ((_e2 = cacheRecord[normalizedWord]) == null ? void 0 : _e2.meaningUr) || "",
-              meaningsUr: ((_f2 = cacheRecord[normalizedWord]) == null ? void 0 : _f2.meaningsUr) || [],
-              explanationUr: ((_g2 = cacheRecord[normalizedWord]) == null ? void 0 : _g2.explanationUr) || "",
-              source: ((_h2 = cacheRecord[normalizedWord]) == null ? void 0 : _h2.source) || "AI",
+              meaningUr: (mergedEntry == null ? void 0 : mergedEntry.meaningUr) || "",
+              meaningsUr: (mergedEntry == null ? void 0 : mergedEntry.meaningsUr) || [],
+              explanationUr: (mergedEntry == null ? void 0 : mergedEntry.explanationUr) || "",
+              source: (mergedEntry == null ? void 0 : mergedEntry.source) || "AI",
               error: ""
             });
             return;
@@ -8760,8 +9006,11 @@ ${error.message || error}`);
       const blockedReason = canUseDirectAiFromBrowser();
       setPopupState({
         loading: false,
+        meaningUr: (shownEntry == null ? void 0 : shownEntry.meaningUr) || "",
+        meaningsUr: (shownEntry == null ? void 0 : shownEntry.meaningsUr) || [],
+        explanationUr: (shownEntry == null ? void 0 : shownEntry.explanationUr) || "",
         error: blockedReason.ok ? (lastError == null ? void 0 : lastError.message) ? String(lastError.message) : joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "\u0627\u0633 \u0648\u0642\u062A \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4 \u062A\u06BE\u0648\u0691\u06CC \u062F\u06CC\u0631 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4", language) : ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
-        source: lastError ? "Unavailable" : ""
+        source: (shownEntry == null ? void 0 : shownEntry.source) || (lastError ? "Unavailable" : "")
       });
     }, [language, localWordMeaningLookup, requestWordMeaningFromAi, selectedMeaningAiProviderId, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
     useEffect(() => {
@@ -9727,11 +9976,15 @@ ${error.message || error}`);
         currentVersion,
         updateAvailable,
         storageLabel,
+        dictionaryStats,
         versionInfo: (_t = (_s = versionManagerRef.current) == null ? void 0 : _s.getVersionInfo) == null ? void 0 : _t.call(_s),
         onCheckUpdates: handleCheckUpdates,
         onRefreshData: handleRefreshData,
         onExportProgress: handleExportProgress,
         onImportProgress: handleImportProgress,
+        onExportDictionary: handleExportDictionary,
+        onImportDictionary: handleImportDictionary,
+        onImportDictionaryFromUrl: handleImportDictionaryFromUrl,
         onResetProgress: handleResetProgress,
         onFullReset: handleFullReset,
         onResetReviewSystem: handleResetReviewSystem,
@@ -9752,6 +10005,8 @@ ${error.message || error}`);
         ttsVoiceSelections,
         onTtsVoiceSelectionChange: handleTtsVoiceSelectionChange,
         onPreviewTtsVoice: handlePreviewTtsVoice,
+        dictionaryImportUrl,
+        onDictionaryImportUrlChange: setDictionaryImportUrl,
         language,
         onLanguageChange: setLanguage,
         themeMode,
