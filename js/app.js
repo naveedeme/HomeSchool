@@ -578,7 +578,7 @@ const DAY_SECTION_META = {
   urduToEnglish: { labelEn: "Urdu to English", labelUr: "اردو سے انگریزی", unitEn: "sentences", unitUr: "جملے", defaultSize: 5, max: 20 },
 };
 
-const AI_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "ollama"];
+const AI_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "cohere", "nvidia", "mistral", "groq", "openrouter", "deepseek", "huggingface", "zsky", "ollama"];
 const AI_PROVIDER_DEFS = {
   openai: {
     id: "openai",
@@ -604,6 +604,70 @@ const AI_PROVIDER_DEFS = {
     keyPlaceholder: "AIza...",
     modelHints: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
   },
+  cohere: {
+    id: "cohere",
+    name: "Cohere",
+    nameUr: "کوہیر",
+    defaultModel: "command-a-03-2025",
+    keyPlaceholder: "co_...",
+    modelHints: ["command-a-03-2025", "command-r-plus", "command-r7b-12-2024"],
+  },
+  nvidia: {
+    id: "nvidia",
+    name: "NVIDIA NIM",
+    nameUr: "این ویڈیا نم",
+    defaultModel: "meta/llama-3.1-8b-instruct",
+    keyPlaceholder: "nvapi-...",
+    modelHints: ["meta/llama-3.1-8b-instruct", "meta/llama-3.3-70b-instruct", "google/gemma-3-27b-it"],
+  },
+  mistral: {
+    id: "mistral",
+    name: "Mistral AI",
+    nameUr: "مسٹرال اے آئی",
+    defaultModel: "mistral-small-latest",
+    keyPlaceholder: "mistral-...",
+    modelHints: ["mistral-small-latest", "mistral-medium-latest", "pixtral-large-latest"],
+  },
+  groq: {
+    id: "groq",
+    name: "Groq",
+    nameUr: "گروک",
+    defaultModel: "llama-3.3-70b-versatile",
+    keyPlaceholder: "gsk_...",
+    modelHints: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-20b"],
+  },
+  openrouter: {
+    id: "openrouter",
+    name: "OpenRouter",
+    nameUr: "اوپن راؤٹر",
+    defaultModel: "deepseek/deepseek-chat-v3-0324:free",
+    keyPlaceholder: "sk-or-v1-...",
+    modelHints: ["deepseek/deepseek-chat-v3-0324:free", "openai/gpt-4o-mini", "meta-llama/llama-3.3-70b-instruct"],
+  },
+  deepseek: {
+    id: "deepseek",
+    name: "DeepSeek",
+    nameUr: "ڈیپ سیک",
+    defaultModel: "deepseek-chat",
+    keyPlaceholder: "sk-...",
+    modelHints: ["deepseek-chat", "deepseek-reasoner"],
+  },
+  huggingface: {
+    id: "huggingface",
+    name: "Hugging Face Inference API",
+    nameUr: "ہگنگ فیس انفیرینس اے پی آئی",
+    defaultModel: "openai/gpt-oss-20b:cerebras",
+    keyPlaceholder: "hf_...",
+    modelHints: ["openai/gpt-oss-20b:cerebras", "deepseek-ai/DeepSeek-V3-0324:fireworks-ai", "Qwen/Qwen2.5-72B-Instruct:nebius"],
+  },
+  zsky: {
+    id: "zsky",
+    name: "ZSky AI",
+    nameUr: "زی اسکائی اے آئی",
+    defaultModel: "glm-4.5-flash",
+    keyPlaceholder: "zai_...",
+    modelHints: ["glm-4.5-flash", "glm-4.5", "glm-4-airx"],
+  },
   ollama: {
     id: "ollama",
     name: "Ollama Cloud",
@@ -611,6 +675,46 @@ const AI_PROVIDER_DEFS = {
     defaultModel: "gpt-oss:20b",
     keyPlaceholder: "ollama_...",
     modelHints: ["gpt-oss:20b", "gpt-oss:120b", "llama3.2:latest"],
+  },
+};
+
+const OPENAI_COMPATIBLE_PROVIDER_META = {
+  openai: {
+    baseUrl: "https://api.openai.com/v1",
+    modelsPath: "/models",
+    filterModels: (id) => /^gpt|^o\d|^chatgpt/i.test(id),
+  },
+  cohere: {
+    baseUrl: "https://api.cohere.ai/compatibility/v1",
+    modelsPath: false,
+  },
+  nvidia: {
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    modelsPath: false,
+  },
+  mistral: {
+    baseUrl: "https://api.mistral.ai/v1",
+    modelsPath: "/models",
+  },
+  groq: {
+    baseUrl: "https://api.groq.com/openai/v1",
+    modelsPath: "/models",
+  },
+  openrouter: {
+    baseUrl: "https://openrouter.ai/api/v1",
+    modelsPath: "/models",
+  },
+  deepseek: {
+    baseUrl: "https://api.deepseek.com",
+    modelsPath: "/models",
+  },
+  huggingface: {
+    baseUrl: "https://router.huggingface.co/v1",
+    modelsPath: false,
+  },
+  zsky: {
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    modelsPath: false,
   },
 };
 
@@ -682,6 +786,66 @@ function normalizeAiModelList(providerId, models, preferredModel) {
   const definition = AI_PROVIDER_DEFS[providerId];
   const merged = new Set([...(definition?.modelHints || []), ...(Array.isArray(models) ? models : []), preferredModel || definition?.defaultModel]);
   return Array.from(merged).map((entry) => String(entry || "").trim()).filter(Boolean);
+}
+
+function getOpenAiCompatibleMeta(providerId) {
+  return OPENAI_COMPATIBLE_PROVIDER_META[providerId] || null;
+}
+
+function getOpenAiCompatibleHeaders(providerId, apiKey) {
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${apiKey}`,
+  };
+  if (providerId === "openrouter") {
+    headers["HTTP-Referer"] = window.location.origin || "https://naveedeme.github.io";
+    headers["X-Title"] = "HomeSchool";
+  }
+  return headers;
+}
+
+function extractOpenAiCompatibleModels(data, providerId) {
+  const meta = getOpenAiCompatibleMeta(providerId);
+  const rawIds = Array.isArray(data?.data)
+    ? data.data.map((entry) => String(entry?.id || entry?.name || "").trim()).filter(Boolean)
+    : [];
+  return typeof meta?.filterModels === "function" ? rawIds.filter((id) => meta.filterModels(id)) : rawIds;
+}
+
+async function validateOpenAiCompatibleProvider(providerId, apiKey, preferredModel) {
+  const meta = getOpenAiCompatibleMeta(providerId);
+  if (!meta) throw buildAiError("provider", "Provider metadata is missing.");
+  const definition = AI_PROVIDER_DEFS[providerId];
+  const model = preferredModel || definition.defaultModel;
+  let discoveredModels = [];
+  if (meta.modelsPath) {
+    try {
+      const data = await fetchJsonWithTimeout(`${meta.baseUrl}${meta.modelsPath}`, {
+        headers: getOpenAiCompatibleHeaders(providerId, apiKey),
+      });
+      discoveredModels = extractOpenAiCompatibleModels(data, providerId);
+    } catch (error) {
+      // Fall back to validation via a tiny chat call if model listing is unavailable.
+    }
+  }
+  await fetchJsonWithTimeout(`${meta.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: getOpenAiCompatibleHeaders(providerId, apiKey),
+    body: JSON.stringify({
+      model,
+      max_tokens: 4,
+      temperature: 0,
+      messages: [
+        { role: "system", content: "Reply with ok." },
+        { role: "user", content: "ok" },
+      ],
+    }),
+  });
+  return {
+    model,
+    models: normalizeAiModelList(providerId, discoveredModels.length > 0 ? discoveredModels : definition.modelHints, model),
+    status: "ready",
+  };
 }
 
 function extractOpenAiText(content) {
@@ -906,18 +1070,9 @@ async function validateAiProviderConfig(providerId, apiKey, preferredModel) {
       ? "Browser AI access is blocked in direct file mode. Use the published HTTPS site or localhost."
       : "Browser AI access needs HTTPS or localhost.");
   }
-  if (providerId === "openai") {
-    const data = await fetchJsonWithTimeout("https://api.openai.com/v1/models", {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-      },
-    });
-    const models = normalizeAiModelList(providerId, (data?.data || []).map((entry) => entry.id).filter((id) => /^gpt|^o\d|^chatgpt/i.test(id)), preferredModel);
-    return {
-      model: preferredModel || AI_PROVIDER_DEFS.openai.defaultModel,
-      models,
-      status: "ready",
-    };
+  const openAiMeta = getOpenAiCompatibleMeta(providerId);
+  if (openAiMeta) {
+    return validateOpenAiCompatibleProvider(providerId, apiKey, preferredModel);
   }
   if (providerId === "anthropic") {
     await fetchJsonWithTimeout("https://api.anthropic.com/v1/messages", {
@@ -1019,13 +1174,11 @@ async function requestAiTutorTurn(providerId, apiKey, model, conversation, syste
     content: flattenTutorMessageText(entry),
     parts: normalizeTutorMessageParts(entry?.parts, entry?.text),
   }));
-  if (providerId === "openai") {
-    const data = await fetchJsonWithTimeout("https://api.openai.com/v1/chat/completions", {
+  const openAiMeta = getOpenAiCompatibleMeta(providerId);
+  if (openAiMeta) {
+    const data = await fetchJsonWithTimeout(`${openAiMeta.baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
+      headers: getOpenAiCompatibleHeaders(providerId, apiKey),
       body: JSON.stringify({
         model,
         temperature: 0.4,
@@ -10362,6 +10515,7 @@ function HomeschoolApp() {
       id: providerId,
       label: joinLocalizedText(definition.name, definition.nameUr, language),
       apiKey: draft.apiKey || "",
+      keyPlaceholder: definition.keyPlaceholder || "",
       model: draft.model || definition.defaultModel,
       modelOptions: normalizeAiModelList(providerId, saved.models, draft.model || saved.model || definition.defaultModel),
       statusLabel,

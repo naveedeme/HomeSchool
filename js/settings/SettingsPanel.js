@@ -178,7 +178,7 @@
         spellCheck: false,
         value: provider.apiKey,
         onChange: (event) => onAiProviderDraftChange(provider.id, "apiKey", event.target.value),
-        placeholder: provider.id === "openai" ? "sk-..." : provider.id === "anthropic" ? "sk-ant-..." : provider.id === "gemini" ? "AIza..." : "ollama_...",
+        placeholder: provider.keyPlaceholder || "",
       })),
     React.createElement("div", { style: { marginBottom: 12 } },
       React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(labels.aiDefaultModel || "Default Model", language)),
