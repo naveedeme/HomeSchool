@@ -576,6 +576,7 @@
     urduToEnglish: { labelEn: "Urdu to English", labelUr: "\u0627\u0631\u062F\u0648 \u0633\u06D2 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 5, max: 20 }
   };
   const AI_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "cohere", "nvidia", "mistral", "groq", "openrouter", "deepseek", "huggingface", "zsky", "ollama"];
+  const WORD_MEANING_PRIORITY_OPTIONS = ["local-cache-ai", "cache-local-ai", "ai-cache-local", "ai-local-cache"];
   const AI_PROVIDER_DEFS = {
     openai: {
       id: "openai",
@@ -772,6 +773,15 @@
     const definition = AI_PROVIDER_DEFS[providerId];
     const merged = /* @__PURE__ */ new Set([...(definition == null ? void 0 : definition.modelHints) || [], ...Array.isArray(models) ? models : [], preferredModel || (definition == null ? void 0 : definition.defaultModel)]);
     return Array.from(merged).map((entry) => String(entry || "").trim()).filter(Boolean);
+  }
+  function normalizeWordMeaningPriority(value) {
+    const raw = String(value || "").trim();
+    if (WORD_MEANING_PRIORITY_OPTIONS.includes(raw)) return raw;
+    if (raw === "ai-first") return "ai-cache-local";
+    return "local-cache-ai";
+  }
+  function getWordMeaningSourceOrder(priorityValue) {
+    return normalizeWordMeaningPriority(priorityValue).split("-").filter(Boolean);
   }
   function getOpenAiCompatibleMeta(providerId) {
     return OPENAI_COMPATIBLE_PROVIDER_META[providerId] || null;
@@ -5011,7 +5021,7 @@ ${marker} `);
     const [ttsEnabled, setTtsEnabled] = useState((_e = stored == null ? void 0 : stored.ttsEnabled) != null ? _e : true);
     const [audioMuted, setAudioMuted] = useState(Boolean(stored == null ? void 0 : stored.audioMuted));
     const [autoPlayNext, setAutoPlayNext] = useState(Boolean(stored == null ? void 0 : stored.autoPlayNext));
-    const [wordMeaningPriority, setWordMeaningPriority] = useState(["local-first", "ai-first"].includes(stored == null ? void 0 : stored.wordMeaningPriority) ? stored.wordMeaningPriority : "local-first");
+    const [wordMeaningPriority, setWordMeaningPriority] = useState(normalizeWordMeaningPriority(stored == null ? void 0 : stored.wordMeaningPriority));
     const [ttsRate, setTtsRate] = useState(Math.max(0.6, Math.min(1.3, Number(stored == null ? void 0 : stored.ttsRate) || 0.85)));
     const [availableVoices, setAvailableVoices] = useState([]);
     const [ttsVoiceSelections, setTtsVoiceSelections] = useState((stored == null ? void 0 : stored.ttsVoiceSelections) || { en: "", ur: "" });
@@ -5085,6 +5095,7 @@ ${marker} `);
     const [wordBankSubjectFilter, setWordBankSubjectFilter] = useState("all");
     const [wordMeaningCache, setWordMeaningCache] = useState(normalizeWordMeaningCache((stored == null ? void 0 : stored.wordMeaningCache) || {}));
     const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
+    const [copyToast, setCopyToast] = useState(null);
     const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
     const [tutorSetupOpen, setTutorSetupOpen] = useState(false);
     const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme((stored == null ? void 0 : stored.themeMode) || "dark"));
@@ -5102,6 +5113,7 @@ ${marker} `);
     const headerHideTimerRef = useRef(null);
     const navBarRef = useRef(null);
     const navBarHideTimerRef = useRef(null);
+    const copyToastTimerRef = useRef(null);
     const practiceAdvanceTimerRef = useRef(null);
     const usageTrackingRef = useRef({ startedAt: 0 });
     const timeTrackingRef = useRef(normalizeTimeTrackingData((stored == null ? void 0 : stored.timeTrackingData) || {}));
@@ -5175,9 +5187,15 @@ ${marker} `);
       var _a2;
       const payload = String(text || "");
       if (!payload.trim()) return false;
+      const showCopiedToast = () => {
+        if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+        setCopyToast(joinLocalizedText("Copied", "\u06A9\u0627\u067E\u06CC \u06C1\u0648 \u06AF\u06CC\u0627", language));
+        copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1600);
+      };
       try {
         if ((_a2 = navigator.clipboard) == null ? void 0 : _a2.writeText) {
           await navigator.clipboard.writeText(payload);
+          showCopiedToast();
           return true;
         }
       } catch (error) {
@@ -5192,11 +5210,12 @@ ${marker} `);
         helper.select();
         document.execCommand("copy");
         document.body.removeChild(helper);
+        showCopiedToast();
         return true;
       } catch (error) {
         return false;
       }
-    }, []);
+    }, [language]);
     const speakInlineText = useCallback((text, languageHint = null) => {
       var _a2, _b2;
       const content = String(text || "").trim();
@@ -5313,6 +5332,9 @@ ${marker} `);
       if (!wordMeaningPopover) return;
       speakInlineText(buildWordMeaningSpeakText(wordMeaningPopover), "ur");
     }, [speakInlineText, wordMeaningPopover]);
+    useEffect(() => () => {
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+    }, []);
     const [dbLoaded, setDbLoaded] = useState(false);
     const [dbPos, setDbPos] = useState({});
     const [dbTenses, setDbTenses] = useState({});
@@ -6318,7 +6340,7 @@ ${marker} `);
             if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
             if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
             if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
-            if (typeof storedPreferences.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(storedPreferences.wordMeaningPriority)) setWordMeaningPriority(storedPreferences.wordMeaningPriority);
+            if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
             if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
             if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
             if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
@@ -7663,7 +7685,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
         if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
         if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
-        if (typeof nextState.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(nextState.wordMeaningPriority)) setWordMeaningPriority(nextState.wordMeaningPriority);
+        if (typeof nextState.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(nextState.wordMeaningPriority));
         if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
         if (nextState.reviewSrsSettings) setReviewSrsSettings({
           masteryThreshold: Math.max(3, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || 5)),
@@ -7736,7 +7758,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
       if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
       if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
       if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
-      if (typeof nextState.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(nextState.wordMeaningPriority)) setWordMeaningPriority((current) => current || nextState.wordMeaningPriority);
+      if (typeof nextState.wordMeaningPriority !== "undefined") setWordMeaningPriority((current) => normalizeWordMeaningPriority(current || nextState.wordMeaningPriority));
       if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
       if (nextState.reviewSrsSettings) setReviewSrsSettings((current) => ({
         masteryThreshold: Math.max(current.masteryThreshold || 5, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || current.masteryThreshold || 5)),
@@ -8592,6 +8614,11 @@ ${error.message || error}`);
       var _a2;
       return String(((_a2 = aiProviderConfigs[providerId]) == null ? void 0 : _a2.apiKey) || "").trim();
     });
+    const selectedMeaningAiProviderId = (() => {
+      var _a2;
+      if (String(((_a2 = aiProviderConfigs[selectedAiProvider]) == null ? void 0 : _a2.apiKey) || "").trim()) return selectedAiProvider;
+      return aiMeaningProviderIds[0] || "";
+    })();
     const requestWordMeaningFromAi = useCallback(async (providerId, word) => {
       const providerConfig = aiProviderConfigs[providerId];
       const providerDefinition = AI_PROVIDER_DEFS[providerId];
@@ -8659,68 +8686,51 @@ ${error.message || error}`);
           entry.explanationUr && orderedMeanings.length > 0 || sourceLabel && sourceLabel !== "local" && orderedMeanings.length > 1
         );
       };
-      let shouldEnrichFromAi = true;
-      let hasInlineMeaning = false;
-      if (wordMeaningPriority === "local-first") {
-        if (hasWordMeaningContent(localEntry)) {
-          hasInlineMeaning = true;
-          shouldEnrichFromAi = !applyMeaningEntry(localEntry, "Local", true);
-          if (!shouldEnrichFromAi) return;
-        }
-        if (!hasInlineMeaning && hasWordMeaningContent(cacheEntry)) {
-          hasInlineMeaning = true;
-          shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache", true);
-          if (!shouldEnrichFromAi) return;
-        }
-      } else if (hasWordMeaningContent(cacheEntry)) {
-        hasInlineMeaning = true;
-        shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache", true);
-        if (!shouldEnrichFromAi) return;
-      }
-      const providerOrder = ["gemini", ...aiMeaningProviderIds.filter((providerId) => providerId !== "gemini")];
       let lastError = null;
-      for (const providerId of providerOrder) {
-        try {
-          const details = await requestWordMeaningFromAi(providerId, rawWord);
-          const meaningsUr = Array.isArray(details == null ? void 0 : details.meaningsUr) ? details.meaningsUr.filter(Boolean) : [];
-          const explanationUr = String((details == null ? void 0 : details.explanationUr) || "").trim();
-          const meaningUr = meaningsUr[0] || "";
-          if (!meaningUr && !explanationUr) continue;
-          const existingEntry = wordMeaningCache[normalizedWord] || localEntry || {};
-          const mergedMeanings = Array.from(/* @__PURE__ */ new Set([...meaningsUr || [], ...(existingEntry.meaningsUr || []).filter(Boolean)])).slice(0, 6);
-          const mergedExplanation = explanationUr || existingEntry.explanationUr || "";
-          const cacheRecord = normalizeWordMeaningCache({
-            ...wordMeaningCache,
-            [normalizedWord]: {
-              meaningUr: mergedMeanings[0] || meaningUr || existingEntry.meaningUr || "",
-              meaningsUr: mergedMeanings,
-              explanationUr: mergedExplanation,
-              source: providerId === "gemini" ? "Gemini" : ((_d2 = AI_PROVIDER_DEFS[providerId]) == null ? void 0 : _d2.name) || "AI",
-              fetchedAt: Date.now()
-            }
-          });
-          setWordMeaningCache(cacheRecord);
-          setPopupState({
-            loading: false,
-            meaningUr: ((_e2 = cacheRecord[normalizedWord]) == null ? void 0 : _e2.meaningUr) || "",
-            meaningsUr: ((_f2 = cacheRecord[normalizedWord]) == null ? void 0 : _f2.meaningsUr) || [],
-            explanationUr: ((_g2 = cacheRecord[normalizedWord]) == null ? void 0 : _g2.explanationUr) || "",
-            source: ((_h2 = cacheRecord[normalizedWord]) == null ? void 0 : _h2.source) || "AI",
-            error: ""
-          });
+      const sourceOrder = getWordMeaningSourceOrder(wordMeaningPriority);
+      for (const sourceId of sourceOrder) {
+        if (sourceId === "local" && hasWordMeaningContent(localEntry)) {
+          applyMeaningEntry(localEntry, "Local");
           return;
-        } catch (error) {
-          lastError = error;
         }
-      }
-      if (!hasInlineMeaning && wordMeaningPriority === "ai-first" && hasWordMeaningContent(localEntry)) {
-        hasInlineMeaning = true;
-        applyMeaningEntry(localEntry, "Local");
-        return;
-      }
-      if (hasInlineMeaning) {
-        setPopupState({ loading: false, error: "" });
-        return;
+        if (sourceId === "cache" && hasWordMeaningContent(cacheEntry)) {
+          applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
+          return;
+        }
+        if (sourceId === "ai" && selectedMeaningAiProviderId) {
+          try {
+            const details = await requestWordMeaningFromAi(selectedMeaningAiProviderId, rawWord);
+            const meaningsUr = Array.isArray(details == null ? void 0 : details.meaningsUr) ? details.meaningsUr.filter(Boolean) : [];
+            const explanationUr = String((details == null ? void 0 : details.explanationUr) || "").trim();
+            const meaningUr = meaningsUr[0] || "";
+            if (!meaningUr && !explanationUr) continue;
+            const existingEntry = wordMeaningCache[normalizedWord] || {};
+            const mergedMeanings = Array.from(/* @__PURE__ */ new Set([...meaningsUr || [], ...(existingEntry.meaningsUr || []).filter(Boolean)])).slice(0, 6);
+            const mergedExplanation = explanationUr || existingEntry.explanationUr || "";
+            const cacheRecord = normalizeWordMeaningCache({
+              ...wordMeaningCache,
+              [normalizedWord]: {
+                meaningUr: mergedMeanings[0] || meaningUr || existingEntry.meaningUr || "",
+                meaningsUr: mergedMeanings,
+                explanationUr: mergedExplanation,
+                source: selectedMeaningAiProviderId === "gemini" ? "Gemini" : ((_d2 = AI_PROVIDER_DEFS[selectedMeaningAiProviderId]) == null ? void 0 : _d2.name) || "AI",
+                fetchedAt: Date.now()
+              }
+            });
+            setWordMeaningCache(cacheRecord);
+            setPopupState({
+              loading: false,
+              meaningUr: ((_e2 = cacheRecord[normalizedWord]) == null ? void 0 : _e2.meaningUr) || "",
+              meaningsUr: ((_f2 = cacheRecord[normalizedWord]) == null ? void 0 : _f2.meaningsUr) || [],
+              explanationUr: ((_g2 = cacheRecord[normalizedWord]) == null ? void 0 : _g2.explanationUr) || "",
+              source: ((_h2 = cacheRecord[normalizedWord]) == null ? void 0 : _h2.source) || "AI",
+              error: ""
+            });
+            return;
+          } catch (error) {
+            lastError = error;
+          }
+        }
       }
       const blockedReason = canUseDirectAiFromBrowser();
       setPopupState({
@@ -8728,7 +8738,7 @@ ${error.message || error}`);
         error: blockedReason.ok ? (lastError == null ? void 0 : lastError.message) ? String(lastError.message) : joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "\u0627\u0633 \u0648\u0642\u062A \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4 \u062A\u06BE\u0648\u0691\u06CC \u062F\u06CC\u0631 \u0628\u0639\u062F \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4", language) : ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
         source: lastError ? "Unavailable" : ""
       });
-    }, [aiMeaningProviderIds, language, localWordMeaningLookup, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
+    }, [language, localWordMeaningLookup, requestWordMeaningFromAi, selectedMeaningAiProviderId, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
     useEffect(() => {
       if (!wordMeaningPopover) return void 0;
       const handleDismiss = (event) => {
@@ -9784,10 +9794,10 @@ ${error.message || error}`);
         onPointerDown: (event) => event.stopPropagation(),
         onClick: (event) => event.stopPropagation()
       },
-      /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-head" }, /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-word" }, wordMeaningPopover.word), /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "word-meaning-popover-icon", onClick: handleCopyWordMeaning, title: joinLocalizedText("Copy meaning", "\u0645\u0639\u0646\u06CC \u06A9\u0627\u067E\u06CC \u06A9\u0631\u06CC\u06BA", language) }, "\u29C9"), /* @__PURE__ */ React.createElement("button", { type: "button", className: "word-meaning-popover-icon", onClick: handleSpeakWordMeaning, title: joinLocalizedText("Listen meaning", "\u0645\u0639\u0646\u06CC \u0633\u0646\u06CC\u06BA", language) }, "\u{1F50A}"))),
+      /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-head" }, /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-word" }, wordMeaningPopover.word), /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "word-meaning-popover-icon", onClick: handleCopyWordMeaning, title: joinLocalizedText("Copy meaning", "\u0645\u0639\u0646\u06CC \u06A9\u0627\u067E\u06CC \u06A9\u0631\u06CC\u06BA", language) }, renderIconGlyph("copy")), /* @__PURE__ */ React.createElement("button", { type: "button", className: "word-meaning-popover-icon", onClick: handleSpeakWordMeaning, title: joinLocalizedText("Listen meaning", "\u0645\u0639\u0646\u06CC \u0633\u0646\u06CC\u06BA", language) }, renderIconGlyph("listen")))),
       wordMeaningPopover.loading ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(joinLocalizedText("Looking up meaning...", "\u0645\u0639\u0646\u06CC \u062A\u0644\u0627\u0634 \u06A9\u06CC\u06D2 \u062C\u0627 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA...", language), language)) : wordMeaningPopover.meaningUr || (wordMeaningPopover.meaningsUr || []).length > 0 || wordMeaningPopover.explanationUr ? /* @__PURE__ */ React.createElement(React.Fragment, null, (wordMeaningPopover.meaningsUr || []).length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-list" }, (wordMeaningPopover.meaningsUr || []).map((meaning, index) => /* @__PURE__ */ React.createElement("div", { key: `${meaning}_${index}`, className: "word-meaning-popover-meaning" }, /* @__PURE__ */ React.createElement("span", { className: "word-meaning-popover-order" }, index + 1, "."), /* @__PURE__ */ React.createElement("span", null, meaning)))) : /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-meaning" }, /* @__PURE__ */ React.createElement("span", null, wordMeaningPopover.meaningUr)), wordMeaningPopover.explanationUr ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-explanation" }, wordMeaningPopover.explanationUr) : null) : /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(wordMeaningPopover.error || joinLocalizedText("Meaning not found yet.", "\u0627\u0628\u06BE\u06CC \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)),
       wordMeaningPopover.source ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-source" }, wordMeaningPopover.source) : null
-    ) : null, celebrationQueue[0] ? /* @__PURE__ */ React.createElement("div", { className: "celebration-overlay", onClick: dismissCelebration }, /* @__PURE__ */ React.createElement("div", { className: "celebration-card", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null }, /* @__PURE__ */ React.createElement("div", { className: "celebration-icon", "aria-hidden": "true" }, celebrationQueue[0].icon), /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].titleEn, celebrationQueue[0].titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].bodyEn, celebrationQueue[0].bodyUr, language), language)), /* @__PURE__ */ React.createElement("div", { className: "celebration-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: dismissCelebration }, renderLocalizedTextNode(joinLocalizedText("Nice!", "\u0628\u06C1\u062A \u062E\u0648\u0628!", language), language))))) : null, importReviewState ? /* @__PURE__ */ React.createElement("div", { className: "import-review-overlay", onClick: () => setImportReviewState(null) }, /* @__PURE__ */ React.createElement("div", { className: "import-review-dialog", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head", style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)), /* @__PURE__ */ React.createElement("p", null, importReviewState.fileName))), importReviewState.newerVersion ? /* @__PURE__ */ React.createElement("div", { className: "import-review-warning" }, renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)) : null, /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)), /* @__PURE__ */ React.createElement("div", { className: "import-review-grid" }, (importReviewState.summaryRows || []).map((row) => /* @__PURE__ */ React.createElement("div", { key: row.label, className: "import-review-cell" }, /* @__PURE__ */ React.createElement("span", null, row.label), /* @__PURE__ */ React.createElement("strong", null, row.value))))), /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)), (importReviewState.conflicts || []).length > 0 ? /* @__PURE__ */ React.createElement("ul", { className: "import-review-list" }, importReviewState.conflicts.map((key) => /* @__PURE__ */ React.createElement("li", { key }, renderLocalizedTextNode(importConflictLabels[key] || key, language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "\u06A9\u0648\u0626\u06CC \u0628\u0691\u0627 \u0641\u0631\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 \u0639\u0627\u0645 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u0627 \u062F\u06CC\u0646\u0627 \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "import-review-actions" }, /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setImportReviewState(null) }, renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn", onClick: () => executeImportReview(importReviewState, "merge") }, renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)), /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: () => executeImportReview(importReviewState, "replace") }, renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language))))) : null)));
+    ) : null, copyToast ? /* @__PURE__ */ React.createElement("div", { className: "copy-toast", role: "status", "aria-live": "polite" }, renderIconGlyph("copy"), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(copyToast, language))) : null, celebrationQueue[0] ? /* @__PURE__ */ React.createElement("div", { className: "celebration-overlay", onClick: dismissCelebration }, /* @__PURE__ */ React.createElement("div", { className: "celebration-card", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null }, /* @__PURE__ */ React.createElement("div", { className: "celebration-icon", "aria-hidden": "true" }, celebrationQueue[0].icon), /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].titleEn, celebrationQueue[0].titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].bodyEn, celebrationQueue[0].bodyUr, language), language)), /* @__PURE__ */ React.createElement("div", { className: "celebration-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: dismissCelebration }, renderLocalizedTextNode(joinLocalizedText("Nice!", "\u0628\u06C1\u062A \u062E\u0648\u0628!", language), language))))) : null, importReviewState ? /* @__PURE__ */ React.createElement("div", { className: "import-review-overlay", onClick: () => setImportReviewState(null) }, /* @__PURE__ */ React.createElement("div", { className: "import-review-dialog", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head", style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)), /* @__PURE__ */ React.createElement("p", null, importReviewState.fileName))), importReviewState.newerVersion ? /* @__PURE__ */ React.createElement("div", { className: "import-review-warning" }, renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)) : null, /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)), /* @__PURE__ */ React.createElement("div", { className: "import-review-grid" }, (importReviewState.summaryRows || []).map((row) => /* @__PURE__ */ React.createElement("div", { key: row.label, className: "import-review-cell" }, /* @__PURE__ */ React.createElement("span", null, row.label), /* @__PURE__ */ React.createElement("strong", null, row.value))))), /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)), (importReviewState.conflicts || []).length > 0 ? /* @__PURE__ */ React.createElement("ul", { className: "import-review-list" }, importReviewState.conflicts.map((key) => /* @__PURE__ */ React.createElement("li", { key }, renderLocalizedTextNode(importConflictLabels[key] || key, language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "\u06A9\u0648\u0626\u06CC \u0628\u0691\u0627 \u0641\u0631\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 \u0639\u0627\u0645 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u0627 \u062F\u06CC\u0646\u0627 \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "import-review-actions" }, /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setImportReviewState(null) }, renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn", onClick: () => executeImportReview(importReviewState, "merge") }, renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)), /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: () => executeImportReview(importReviewState, "replace") }, renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language))))) : null)));
   }
   window.HomeSchoolAppModule = { HomeschoolApp };
   if (!window.__HOME_SCHOOL_BOOTSTRAPPED__ && document.getElementById("root")) {

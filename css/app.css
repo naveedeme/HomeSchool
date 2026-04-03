@@ -435,6 +435,7 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .word-meaning-popover-word{font-family:var(--font);font-size:12px;font-weight:800;letter-spacing:.02em;color:var(--text-secondary);direction:ltr;unicode-bidi:isolate}
 .word-meaning-popover-actions{display:flex;align-items:center;gap:8px}
 .word-meaning-popover-icon{width:30px;height:30px;border-radius:10px;border:1px solid var(--border);background:color-mix(in srgb,var(--bg-card) 84%,transparent);color:var(--text-secondary);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .16s ease,border-color .18s ease}
+.word-meaning-popover-icon svg{width:16px;height:16px}
 .word-meaning-popover-icon:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 30%,var(--border))}
 .word-meaning-popover-list{display:flex;flex-direction:column;gap:8px}
 .word-meaning-popover-meaning{display:flex;align-items:flex-start;gap:8px;font-family:var(--font-ur);font-size:18px;line-height:1.85;color:var(--text-primary);direction:rtl;text-align:right;unicode-bidi:isolate}
@@ -442,6 +443,9 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .word-meaning-popover-explanation{margin-top:8px;padding-top:8px;border-top:1px dashed color-mix(in srgb,var(--accent) 18%,var(--border));font-family:var(--font-ur);font-size:15px;line-height:1.95;color:var(--text-secondary);direction:rtl;text-align:right}
 .word-meaning-popover-loading{font-size:12px;line-height:1.6;color:var(--text-secondary)}
 .word-meaning-popover-source{display:inline-flex;align-items:center;justify-content:center;margin-top:8px;padding:5px 9px;border-radius:999px;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.18);color:var(--accent);font-size:11px;font-weight:800}
+.copy-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent) 24%,var(--border));background:color-mix(in srgb,var(--bg-card) 94%,transparent);color:var(--text-primary);box-shadow:0 14px 28px rgba(2,6,23,.16);font-size:12px;font-weight:800;z-index:1200;animation:copyToastIn .22s ease}
+.copy-toast svg{width:16px;height:16px;color:var(--accent)}
+@keyframes copyToastIn{from{opacity:0;transform:translateX(-50%) translateY(8px) scale(.96)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
 @media (max-width: 860px){
   .tutor-shell{grid-template-columns:1fr}
   .tutor-sidebar{order:2}

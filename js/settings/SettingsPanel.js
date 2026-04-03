@@ -540,14 +540,16 @@
       React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" } },
         React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.meaningLookupPriority || (language === "ur" ? "معنی تلاش کی ترجیح" : "Meaning Lookup Priority"), language)),
         React.createElement("select", {
-          value: wordMeaningPriority || "local-first",
+          value: wordMeaningPriority || "local-cache-ai",
           onChange: (event) => onWordMeaningPriorityChange(event.target.value),
           style: selectStyle,
         },
-          React.createElement("option", { value: "local-first" }, renderLocalizedText(ui.meaningPriorityLocalFirst || (language === "ur" ? "پہلے مقامی" : "Local first"), language)),
-          React.createElement("option", { value: "ai-first" }, renderLocalizedText(ui.meaningPriorityAiFirst || (language === "ur" ? "پہلے اے آئی" : "AI first"), language)))),
+          React.createElement("option", { value: "local-cache-ai" }, renderLocalizedText(language === "ur" ? "مقامی → کیش → اے آئی" : "Local -> Cache -> AI", language)),
+          React.createElement("option", { value: "cache-local-ai" }, renderLocalizedText(language === "ur" ? "کیش → مقامی → اے آئی" : "Cache -> Local -> AI", language)),
+          React.createElement("option", { value: "ai-cache-local" }, renderLocalizedText(language === "ur" ? "اے آئی → کیش → مقامی" : "AI -> Cache -> Local", language)),
+          React.createElement("option", { value: "ai-local-cache" }, renderLocalizedText(language === "ur" ? "اے آئی → مقامی → کیش" : "AI -> Local -> Cache", language)))),
       React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6, fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)", direction: language === "ur" ? "rtl" : "ltr", textAlign: language === "ur" ? "right" : "left" } },
-        renderLocalizedText(ui.meaningLookupPriorityHelp || (language === "ur" ? "منتخب کریں کہ لفظوں کے معنی پہلے مقامی ذخیرہ الفاظ سے لیے جائیں یا دستیاب ہونے پر پہلے اے آئی سے پوچھا جائے۔" : "Choose whether word meanings should prefer local vocabulary first or try AI first when available."), language)))),
+        renderLocalizedText(ui.meaningLookupPriorityHelp || (language === "ur" ? "منتخب کریں کہ معنی کس ترتیب سے تلاش ہوں۔ اے آئی مرحلہ صرف ایک منتخب یا محفوظ فراہم کنندہ استعمال کرے گا۔" : "Choose the meaning lookup order. The AI step uses only one selected or saved provider."), language)))),
     (Array.isArray(aiProviders) ? aiProviders : []).forEach((provider) => {
       aiChildren.push(renderAiProviderCard(provider, ui, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider));
     });

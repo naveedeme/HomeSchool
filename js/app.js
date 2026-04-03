@@ -579,6 +579,7 @@ const DAY_SECTION_META = {
 };
 
 const AI_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "cohere", "nvidia", "mistral", "groq", "openrouter", "deepseek", "huggingface", "zsky", "ollama"];
+const WORD_MEANING_PRIORITY_OPTIONS = ["local-cache-ai", "cache-local-ai", "ai-cache-local", "ai-local-cache"];
 const AI_PROVIDER_DEFS = {
   openai: {
     id: "openai",
@@ -786,6 +787,17 @@ function normalizeAiModelList(providerId, models, preferredModel) {
   const definition = AI_PROVIDER_DEFS[providerId];
   const merged = new Set([...(definition?.modelHints || []), ...(Array.isArray(models) ? models : []), preferredModel || definition?.defaultModel]);
   return Array.from(merged).map((entry) => String(entry || "").trim()).filter(Boolean);
+}
+
+function normalizeWordMeaningPriority(value) {
+  const raw = String(value || "").trim();
+  if (WORD_MEANING_PRIORITY_OPTIONS.includes(raw)) return raw;
+  if (raw === "ai-first") return "ai-cache-local";
+  return "local-cache-ai";
+}
+
+function getWordMeaningSourceOrder(priorityValue) {
+  return normalizeWordMeaningPriority(priorityValue).split("-").filter(Boolean);
 }
 
 function getOpenAiCompatibleMeta(providerId) {
@@ -6807,7 +6819,7 @@ function HomeschoolApp() {
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [audioMuted, setAudioMuted] = useState(Boolean(stored?.audioMuted));
   const [autoPlayNext, setAutoPlayNext] = useState(Boolean(stored?.autoPlayNext));
-  const [wordMeaningPriority, setWordMeaningPriority] = useState(["local-first", "ai-first"].includes(stored?.wordMeaningPriority) ? stored.wordMeaningPriority : "local-first");
+  const [wordMeaningPriority, setWordMeaningPriority] = useState(normalizeWordMeaningPriority(stored?.wordMeaningPriority));
   const [ttsRate, setTtsRate] = useState(Math.max(0.6, Math.min(1.3, Number(stored?.ttsRate) || 0.85)));
   const [availableVoices, setAvailableVoices] = useState([]);
   const [ttsVoiceSelections, setTtsVoiceSelections] = useState(stored?.ttsVoiceSelections || { en: "", ur: "" });
@@ -6881,6 +6893,7 @@ function HomeschoolApp() {
   const [wordBankSubjectFilter, setWordBankSubjectFilter] = useState("all");
   const [wordMeaningCache, setWordMeaningCache] = useState(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
   const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
+  const [copyToast, setCopyToast] = useState(null);
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
   const [tutorSetupOpen, setTutorSetupOpen] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "dark"));
@@ -6898,6 +6911,7 @@ function HomeschoolApp() {
   const headerHideTimerRef = useRef(null);
   const navBarRef = useRef(null);
   const navBarHideTimerRef = useRef(null);
+  const copyToastTimerRef = useRef(null);
   const practiceAdvanceTimerRef = useRef(null);
   const usageTrackingRef = useRef({ startedAt: 0 });
   const timeTrackingRef = useRef(normalizeTimeTrackingData(stored?.timeTrackingData || {}));
@@ -6978,9 +6992,15 @@ function HomeschoolApp() {
   const copyTextToClipboard = useCallback(async (text) => {
     const payload = String(text || "");
     if (!payload.trim()) return false;
+    const showCopiedToast = () => {
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+      setCopyToast(joinLocalizedText("Copied", "کاپی ہو گیا", language));
+      copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1600);
+    };
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(payload);
+        showCopiedToast();
         return true;
       }
     } catch (error) {
@@ -6996,11 +7016,12 @@ function HomeschoolApp() {
       helper.select();
       document.execCommand("copy");
       document.body.removeChild(helper);
+      showCopiedToast();
       return true;
     } catch (error) {
       return false;
     }
-  }, []);
+  }, [language]);
 
   const speakInlineText = useCallback((text, languageHint = null) => {
     const content = String(text || "").trim();
@@ -7121,6 +7142,9 @@ function HomeschoolApp() {
     if (!wordMeaningPopover) return;
     speakInlineText(buildWordMeaningSpeakText(wordMeaningPopover), "ur");
   }, [speakInlineText, wordMeaningPopover]);
+  useEffect(() => () => {
+    if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+  }, []);
 
   // ─── DB-backed data state ───
   const [dbLoaded, setDbLoaded] = useState(false);
@@ -8173,7 +8197,7 @@ function HomeschoolApp() {
         if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
         if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
         if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
-        if (typeof storedPreferences.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(storedPreferences.wordMeaningPriority)) setWordMeaningPriority(storedPreferences.wordMeaningPriority);
+        if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
         if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
         if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
         if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
@@ -9541,7 +9565,7 @@ function HomeschoolApp() {
       if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide(Boolean(nextState.navAutoHide));
       if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(nextState.navBarAutoHide));
       if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode(nextState.transitionMode);
-      if (typeof nextState.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(nextState.wordMeaningPriority)) setWordMeaningPriority(nextState.wordMeaningPriority);
+      if (typeof nextState.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(nextState.wordMeaningPriority));
       if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap(Math.max(5, Math.min(50, Number(nextState.dailyReviewCap) || 20)));
       if (nextState.reviewSrsSettings) setReviewSrsSettings({
         masteryThreshold: Math.max(3, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || 5)),
@@ -9615,7 +9639,7 @@ function HomeschoolApp() {
     if (typeof nextState.navAutoHide !== "undefined") setNavAutoHide((current) => current || Boolean(nextState.navAutoHide));
     if (typeof nextState.navBarAutoHide !== "undefined") setNavBarAutoHide((current) => current || Boolean(nextState.navBarAutoHide));
     if (typeof nextState.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(nextState.transitionMode)) setTransitionMode((current) => current || nextState.transitionMode);
-    if (typeof nextState.wordMeaningPriority !== "undefined" && ["local-first", "ai-first"].includes(nextState.wordMeaningPriority)) setWordMeaningPriority((current) => current || nextState.wordMeaningPriority);
+    if (typeof nextState.wordMeaningPriority !== "undefined") setWordMeaningPriority((current) => normalizeWordMeaningPriority(current || nextState.wordMeaningPriority));
     if (typeof nextState.dailyReviewCap !== "undefined") setDailyReviewCap((current) => Math.max(current, Math.min(50, Number(nextState.dailyReviewCap) || current)));
     if (nextState.reviewSrsSettings) setReviewSrsSettings((current) => ({
       masteryThreshold: Math.max(current.masteryThreshold || 5, Math.min(7, Number(nextState.reviewSrsSettings.masteryThreshold) || current.masteryThreshold || 5)),
@@ -10530,6 +10554,10 @@ function HomeschoolApp() {
     setWordMeaningPopover(null);
   }, []);
   const aiMeaningProviderIds = AI_PROVIDER_ORDER.filter((providerId) => String(aiProviderConfigs[providerId]?.apiKey || "").trim());
+  const selectedMeaningAiProviderId = (() => {
+    if (String(aiProviderConfigs[selectedAiProvider]?.apiKey || "").trim()) return selectedAiProvider;
+    return aiMeaningProviderIds[0] || "";
+  })();
   const requestWordMeaningFromAi = useCallback(async (providerId, word) => {
     const providerConfig = aiProviderConfigs[providerId];
     const providerDefinition = AI_PROVIDER_DEFS[providerId];
@@ -10605,72 +10633,51 @@ function HomeschoolApp() {
         || (sourceLabel && sourceLabel !== "local" && orderedMeanings.length > 1),
       );
     };
-    let shouldEnrichFromAi = true;
-    let hasInlineMeaning = false;
-
-    if (wordMeaningPriority === "local-first") {
-      if (hasWordMeaningContent(localEntry)) {
-        hasInlineMeaning = true;
-        shouldEnrichFromAi = !applyMeaningEntry(localEntry, "Local", true);
-        if (!shouldEnrichFromAi) return;
-      }
-      if (!hasInlineMeaning && hasWordMeaningContent(cacheEntry)) {
-        hasInlineMeaning = true;
-        shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache", true);
-        if (!shouldEnrichFromAi) return;
-      }
-    } else if (hasWordMeaningContent(cacheEntry)) {
-      hasInlineMeaning = true;
-      shouldEnrichFromAi = !applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache", true);
-      if (!shouldEnrichFromAi) return;
-    }
-
-    const providerOrder = ["gemini", ...aiMeaningProviderIds.filter((providerId) => providerId !== "gemini")];
     let lastError = null;
-    for (const providerId of providerOrder) {
-      try {
-        const details = await requestWordMeaningFromAi(providerId, rawWord);
-        const meaningsUr = Array.isArray(details?.meaningsUr) ? details.meaningsUr.filter(Boolean) : [];
-        const explanationUr = String(details?.explanationUr || "").trim();
-        const meaningUr = meaningsUr[0] || "";
-        if (!meaningUr && !explanationUr) continue;
-        const existingEntry = wordMeaningCache[normalizedWord] || localEntry || {};
-        const mergedMeanings = Array.from(new Set([...(meaningsUr || []), ...((existingEntry.meaningsUr || []).filter(Boolean))])).slice(0, 6);
-        const mergedExplanation = explanationUr || existingEntry.explanationUr || "";
-        const cacheRecord = normalizeWordMeaningCache({
-          ...wordMeaningCache,
-          [normalizedWord]: {
-            meaningUr: mergedMeanings[0] || meaningUr || existingEntry.meaningUr || "",
-            meaningsUr: mergedMeanings,
-            explanationUr: mergedExplanation,
-            source: providerId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[providerId]?.name || "AI",
-            fetchedAt: Date.now(),
-          },
-        });
-        setWordMeaningCache(cacheRecord);
-        setPopupState({
-          loading: false,
-          meaningUr: cacheRecord[normalizedWord]?.meaningUr || "",
-          meaningsUr: cacheRecord[normalizedWord]?.meaningsUr || [],
-          explanationUr: cacheRecord[normalizedWord]?.explanationUr || "",
-          source: cacheRecord[normalizedWord]?.source || "AI",
-          error: "",
-        });
+    const sourceOrder = getWordMeaningSourceOrder(wordMeaningPriority);
+    for (const sourceId of sourceOrder) {
+      if (sourceId === "local" && hasWordMeaningContent(localEntry)) {
+        applyMeaningEntry(localEntry, "Local");
         return;
-      } catch (error) {
-        lastError = error;
       }
-    }
-
-    if (!hasInlineMeaning && wordMeaningPriority === "ai-first" && hasWordMeaningContent(localEntry)) {
-      hasInlineMeaning = true;
-      applyMeaningEntry(localEntry, "Local");
-      return;
-    }
-
-    if (hasInlineMeaning) {
-      setPopupState({ loading: false, error: "" });
-      return;
+      if (sourceId === "cache" && hasWordMeaningContent(cacheEntry)) {
+        applyMeaningEntry(cacheEntry, cacheEntry.source || "Cache");
+        return;
+      }
+      if (sourceId === "ai" && selectedMeaningAiProviderId) {
+        try {
+          const details = await requestWordMeaningFromAi(selectedMeaningAiProviderId, rawWord);
+          const meaningsUr = Array.isArray(details?.meaningsUr) ? details.meaningsUr.filter(Boolean) : [];
+          const explanationUr = String(details?.explanationUr || "").trim();
+          const meaningUr = meaningsUr[0] || "";
+          if (!meaningUr && !explanationUr) continue;
+          const existingEntry = wordMeaningCache[normalizedWord] || {};
+          const mergedMeanings = Array.from(new Set([...(meaningsUr || []), ...((existingEntry.meaningsUr || []).filter(Boolean))])).slice(0, 6);
+          const mergedExplanation = explanationUr || existingEntry.explanationUr || "";
+          const cacheRecord = normalizeWordMeaningCache({
+            ...wordMeaningCache,
+            [normalizedWord]: {
+              meaningUr: mergedMeanings[0] || meaningUr || existingEntry.meaningUr || "",
+              meaningsUr: mergedMeanings,
+              explanationUr: mergedExplanation,
+              source: selectedMeaningAiProviderId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI",
+              fetchedAt: Date.now(),
+            },
+          });
+          setWordMeaningCache(cacheRecord);
+          setPopupState({
+            loading: false,
+            meaningUr: cacheRecord[normalizedWord]?.meaningUr || "",
+            meaningsUr: cacheRecord[normalizedWord]?.meaningsUr || [],
+            explanationUr: cacheRecord[normalizedWord]?.explanationUr || "",
+            source: cacheRecord[normalizedWord]?.source || "AI",
+            error: "",
+          });
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
     }
 
     const blockedReason = canUseDirectAiFromBrowser();
@@ -10683,7 +10690,7 @@ function HomeschoolApp() {
         : (ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode."),
       source: lastError ? "Unavailable" : "",
     });
-  }, [aiMeaningProviderIds, language, localWordMeaningLookup, requestWordMeaningFromAi, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
+  }, [language, localWordMeaningLookup, requestWordMeaningFromAi, selectedMeaningAiProviderId, ui.aiBrowserBlocked, wordMeaningCache, wordMeaningPriority]);
   useEffect(() => {
     if (!wordMeaningPopover) return undefined;
     const handleDismiss = (event) => {
@@ -13268,8 +13275,8 @@ function HomeschoolApp() {
         <div className="word-meaning-popover-head">
           <div className="word-meaning-popover-word">{wordMeaningPopover.word}</div>
           <div className="word-meaning-popover-actions">
-            <button type="button" className="word-meaning-popover-icon" onClick={handleCopyWordMeaning} title={joinLocalizedText("Copy meaning", "معنی کاپی کریں", language)}>⧉</button>
-            <button type="button" className="word-meaning-popover-icon" onClick={handleSpeakWordMeaning} title={joinLocalizedText("Listen meaning", "معنی سنیں", language)}>🔊</button>
+            <button type="button" className="word-meaning-popover-icon" onClick={handleCopyWordMeaning} title={joinLocalizedText("Copy meaning", "معنی کاپی کریں", language)}>{renderIconGlyph("copy")}</button>
+            <button type="button" className="word-meaning-popover-icon" onClick={handleSpeakWordMeaning} title={joinLocalizedText("Listen meaning", "معنی سنیں", language)}>{renderIconGlyph("listen")}</button>
           </div>
         </div>
         {wordMeaningPopover.loading ? (
@@ -13300,6 +13307,12 @@ function HomeschoolApp() {
           <div className="word-meaning-popover-loading">{renderLocalizedTextNode(wordMeaningPopover.error || joinLocalizedText("Meaning not found yet.", "ابھی معنی دستیاب نہیں۔", language), language)}</div>
         )}
         {wordMeaningPopover.source ? <div className="word-meaning-popover-source">{wordMeaningPopover.source}</div> : null}
+      </div>
+    ) : null}
+    {copyToast ? (
+      <div className="copy-toast" role="status" aria-live="polite">
+        {renderIconGlyph("copy")}
+        <span>{renderLocalizedTextNode(copyToast, language)}</span>
       </div>
     ) : null}
     {celebrationQueue[0] ? (
