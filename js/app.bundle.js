@@ -7186,6 +7186,28 @@ ${marker} `);
         [langCode]: voiceId || ""
       }));
     }, []);
+    const handlePreviewTtsVoice = useCallback((langCode) => {
+      if (typeof window === "undefined" || !window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== "function") return;
+      const sampleText = langCode === "ur" ? "\u0627\u0644\u0633\u0644\u0627\u0645 \u0639\u0644\u06CC\u06A9\u0645! \u06CC\u06C1 \u0622\u067E \u06A9\u06CC \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u062F\u06C1 \u0627\u0631\u062F\u0648 \u0622\u0648\u0627\u0632 \u06C1\u06D2\u06D4" : "Hello! This is your selected English voice.";
+      const selectedVoiceId = (ttsVoiceSelections == null ? void 0 : ttsVoiceSelections[langCode]) || "";
+      const voices = typeof window.speechSynthesis.getVoices === "function" ? window.speechSynthesis.getVoices() : [];
+      const speechConfig = getSpeechConfig(langCode, voices);
+      const matchedVoice = selectedVoiceId ? voices.find((voice) => (voice.voiceURI || voice.name) === selectedVoiceId) : null;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new window.SpeechSynthesisUtterance(sampleText);
+        utterance.lang = (matchedVoice == null ? void 0 : matchedVoice.lang) || (speechConfig == null ? void 0 : speechConfig.lang) || (langCode === "ur" ? "ur-PK" : "en-US");
+        utterance.rate = Number(ttsRate) || (speechConfig == null ? void 0 : speechConfig.rate) || 0.85;
+        if (matchedVoice) {
+          utterance.voice = matchedVoice;
+        } else if (speechConfig == null ? void 0 : speechConfig.voice) {
+          utterance.voice = speechConfig.voice;
+        }
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.warn("Unable to preview selected TTS voice:", error);
+      }
+    }, [ttsRate, ttsVoiceSelections]);
     const handleStudyGoalChange = useCallback((key, value) => {
       setStudyGoals((current) => ({
         ...current,
@@ -9729,6 +9751,7 @@ ${error.message || error}`);
         urduVoiceOptions,
         ttsVoiceSelections,
         onTtsVoiceSelectionChange: handleTtsVoiceSelectionChange,
+        onPreviewTtsVoice: handlePreviewTtsVoice,
         language,
         onLanguageChange: setLanguage,
         themeMode,

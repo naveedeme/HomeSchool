@@ -9060,6 +9060,33 @@ function HomeschoolApp() {
     }));
   }, []);
 
+  const handlePreviewTtsVoice = useCallback((langCode) => {
+    if (typeof window === "undefined" || !window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== "function") return;
+    const sampleText = langCode === "ur"
+      ? "السلام علیکم! یہ آپ کی منتخب کردہ اردو آواز ہے۔"
+      : "Hello! This is your selected English voice.";
+    const selectedVoiceId = ttsVoiceSelections?.[langCode] || "";
+    const voices = typeof window.speechSynthesis.getVoices === "function" ? window.speechSynthesis.getVoices() : [];
+    const speechConfig = getSpeechConfig(langCode, voices);
+    const matchedVoice = selectedVoiceId
+      ? voices.find((voice) => (voice.voiceURI || voice.name) === selectedVoiceId)
+      : null;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new window.SpeechSynthesisUtterance(sampleText);
+      utterance.lang = matchedVoice?.lang || speechConfig?.lang || (langCode === "ur" ? "ur-PK" : "en-US");
+      utterance.rate = Number(ttsRate) || speechConfig?.rate || 0.85;
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
+      } else if (speechConfig?.voice) {
+        utterance.voice = speechConfig.voice;
+      }
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      console.warn("Unable to preview selected TTS voice:", error);
+    }
+  }, [ttsRate, ttsVoiceSelections]);
+
   const handleStudyGoalChange = useCallback((key, value) => {
     setStudyGoals((current) => ({
       ...current,
@@ -13200,6 +13227,7 @@ function HomeschoolApp() {
             urduVoiceOptions={urduVoiceOptions}
             ttsVoiceSelections={ttsVoiceSelections}
             onTtsVoiceSelectionChange={handleTtsVoiceSelectionChange}
+            onPreviewTtsVoice={handlePreviewTtsVoice}
             language={language}
             onLanguageChange={setLanguage}
             themeMode={themeMode}
