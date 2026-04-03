@@ -7595,6 +7595,28 @@ ${marker} `);
       });
     }, [activeStudentProfileId, grade, studentName, studentNameUr, supabaseRolePreference]);
     useEffect(() => {
+      const fallbackProfile = {
+        grade,
+        studentName,
+        studentNameUr,
+        role: supabaseRolePreference
+      };
+      const normalizedVisibleProfiles = filterProfilesByDeletedIds(studentProfiles, deletedStudentProfileIds, fallbackProfile);
+      const currentIds = (Array.isArray(studentProfiles) ? studentProfiles : []).map((profile) => String((profile == null ? void 0 : profile.id) || "").trim()).join("|");
+      const visibleIds = normalizedVisibleProfiles.map((profile) => String((profile == null ? void 0 : profile.id) || "").trim()).join("|");
+      if (currentIds !== visibleIds) {
+        studentProfilesRef.current = normalizedVisibleProfiles;
+        setStudentProfiles(normalizedVisibleProfiles);
+        return;
+      }
+      studentProfilesRef.current = normalizedVisibleProfiles;
+      const nextActiveId = resolveActiveStudentProfileId(normalizedVisibleProfiles, activeStudentProfileId);
+      if (nextActiveId && nextActiveId !== activeStudentProfileId) {
+        activeStudentProfileIdRef.current = nextActiveId;
+        setActiveStudentProfileId(nextActiveId);
+      }
+    }, [activeStudentProfileId, deletedStudentProfileIds, grade, studentName, studentNameUr, studentProfiles, supabaseRolePreference]);
+    useEffect(() => {
       localStorageFallback(SUPABASE_SYNC_STORAGE_KEY, buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync));
     }, [supabaseDictionarySync]);
     useEffect(() => {
