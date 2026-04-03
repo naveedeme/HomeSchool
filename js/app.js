@@ -7601,6 +7601,8 @@ function HomeschoolApp() {
   const [supabaseSyncBusy, setSupabaseSyncBusy] = useState(false);
   const [supabaseSyncPulse, setSupabaseSyncPulse] = useState(0);
   const [supabaseSyncActivity, setSupabaseSyncActivity] = useState(createDefaultSupabaseSyncActivitySummary());
+  const [supabaseSyncPendingRows, setSupabaseSyncPendingRows] = useState({ dictionary: [], cloud: [] });
+  const [syncPendingDetailsOpen, setSyncPendingDetailsOpen] = useState(false);
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
   const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
   const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -7673,13 +7675,21 @@ function HomeschoolApp() {
   const refreshSupabaseSyncActivity = useCallback(async (overrides = null) => {
     if (!window.HomeSchoolDB?.getCloudSyncStatusSummary) return;
     try {
-      const summary = await window.HomeSchoolDB.getCloudSyncStatusSummary();
+      const [summary, dictionaryPendingRows, cloudPendingRows] = await Promise.all([
+        window.HomeSchoolDB.getCloudSyncStatusSummary(),
+        window.HomeSchoolDB?.getDictionaryOutboxEntries ? window.HomeSchoolDB.getDictionaryOutboxEntries(24) : Promise.resolve([]),
+        window.HomeSchoolDB?.getCloudSyncOutboxEntries ? window.HomeSchoolDB.getCloudSyncOutboxEntries(40) : Promise.resolve([]),
+      ]);
       setSupabaseSyncActivity((current) => ({
         ...createDefaultSupabaseSyncActivitySummary(),
         ...(current || {}),
         ...(summary || {}),
         ...(overrides && typeof overrides === "object" ? overrides : {}),
       }));
+      setSupabaseSyncPendingRows({
+        dictionary: Array.isArray(dictionaryPendingRows) ? dictionaryPendingRows : [],
+        cloud: Array.isArray(cloudPendingRows) ? cloudPendingRows : [],
+      });
     } catch (error) {
       console.log("Unable to refresh Supabase sync activity:", error);
     }
@@ -13521,6 +13531,39 @@ function HomeschoolApp() {
         label: datasetLabels[dataset] || dataset,
       }));
   }, [language, supabaseSyncActivity.pendingCloudDatasets]);
+  const syncPendingDetails = useMemo(() => {
+    const datasetLabels = {
+      customization: joinLocalizedText("Settings", "ترتیبات", language),
+      wordMeta: joinLocalizedText("Favorites & Notes", "پسندیدہ اور نوٹس", language),
+      customList: joinLocalizedText("Lists", "فہرستیں", language),
+      customListItem: joinLocalizedText("List items", "فہرست کی اشیا", language),
+      progress: joinLocalizedText("Lesson progress", "سبق پیش رفت", language),
+      reviewCard: joinLocalizedText("Review cards", "ریویو کارڈز", language),
+      reviewHistory: joinLocalizedText("Review history", "ریویو تاریخ", language),
+      userStat: joinLocalizedText("XP & stats", "ایکس پی اور اعداد", language),
+    };
+    const dictionaryRows = (supabaseSyncPendingRows.dictionary || []).map((row) => ({
+      key: `dictionary_${row.normalized}`,
+      type: "dictionary",
+      title: row.word || row.normalized,
+      subtitle: joinLocalizedText("Dictionary entry waiting to sync", "لغت اندراج سنک کے لیے منتظر ہے", language),
+      badge: joinLocalizedText("Dictionary", "لغت", language),
+      updatedAt: Number(row.updatedAt) || 0,
+    }));
+    const cloudRows = (supabaseSyncPendingRows.cloud || []).map((row) => ({
+      key: `cloud_${row.syncKey || `${row.dataset}_${row.rowId}`}`,
+      type: "cloud",
+      title: datasetLabels[row.dataset] || row.dataset,
+      subtitle: String(row.rowId || "").trim(),
+      badge: String(row.profileId || "").trim() === "__global__"
+        ? joinLocalizedText("Global", "گلوبل", language)
+        : joinLocalizedText("Profile", "پروفائل", language),
+      updatedAt: Number(row.updatedAt) || 0,
+    }));
+    return [...dictionaryRows, ...cloudRows]
+      .sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0))
+      .slice(0, 24);
+  }, [language, supabaseSyncPendingRows.cloud, supabaseSyncPendingRows.dictionary]);
   const syncActivityStatusText = syncPendingTotal > 0
     ? joinLocalizedText(`${syncPendingTotal} local changes waiting`, `${syncPendingTotal} مقامی تبدیلیاں منتظر`, language)
     : joinLocalizedText("Everything is caught up locally", "مقامی طور پر سب کچھ تازہ ہے", language);
@@ -13903,7 +13946,7 @@ function HomeschoolApp() {
   };
   const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
   const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
@@ -13949,6 +13992,7 @@ function HomeschoolApp() {
   };
   const navItems = [
     { id: "home", icon: "🏠", label: ui.home },
+    { id: "profiles", icon: "👤", label: joinLocalizedText("Profiles", "پروفائلز", language) },
     { id: "progress", icon: "📊", label: ui.progress },
     { id: "review", icon: "🧠", label: ui.review },
     { id: "favorites", icon: "⭐", label: ui.favorites },
@@ -14142,8 +14186,7 @@ function HomeschoolApp() {
                 style={{ width: "100%", marginTop: 10 }}
                 onClick={() => {
                   setProfileSwitcherOpen(false);
-                  setProfileDisclosureOpen(true);
-                  setTab("settings");
+                  handleNavItemSelect("profiles");
                 }}
               >
                 {renderLocalizedTextNode(joinLocalizedText("Manage Profiles", "پروفائل منظم کریں", language), language)}
@@ -14226,107 +14269,8 @@ function HomeschoolApp() {
             language)}</p>
           </div>
         </button>
-        <div className="review-panel profile-switcher-panel" data-ui-language={language} style={{ marginTop: 16 }}>
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(joinLocalizedText("Profiles", "پروفائلز", language), language)}</h3>
-              <p>{renderLocalizedTextNode(joinLocalizedText("Switch quickly between learners on this device. Each profile keeps its own study history and cloud sync scope.", "اسی ڈیوائس پر مختلف سیکھنے والوں کے درمیان فوراً بدلیں۔ ہر پروفائل اپنی الگ مطالعہ تاریخ اور کلاؤڈ سنک دائرہ رکھتا ہے۔", language), language)}</p>
-            </div>
-            <span className="goal-progress-badge">{studentProfiles.length}</span>
-          </div>
-          <div className="profile-switcher-summary-card">
-            <div className="profile-switcher-summary-main">
-              <span className="profile-switcher-avatar" aria-hidden="true">{activeStudentProfileInitials}</span>
-              <div className="profile-switcher-summary-copy">
-                <strong>{renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("Student", "طالب علم", language), language)}</strong>
-                <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${grade || "—"} • ${activeProfileRoleLabel}`, `جماعت ${grade || "—"} • ${activeProfileRoleLabel}`, language), language)}</span>
-              </div>
-            </div>
-            <span className="goal-progress-badge">{renderLocalizedTextNode(profileSyncScopeLabel, language)}</span>
-          </div>
-          <div className="profile-switcher-chip-row">
-            {studentProfiles.map((profile) => (
-              <button
-                key={`home_profile_${profile.id}`}
-                type="button"
-                className={`profile-switcher-chip${profile.id === activeStudentProfileId ? " active" : ""}`}
-                onClick={() => handleSwitchStudentProfile(profile.id)}
-                disabled={profileSwitchBusy}
-              >
-                <span className="profile-switcher-chip-avatar" aria-hidden="true">{getStudentProfileInitials(profile)}</span>
-                <span className="profile-switcher-chip-copy">
-                  <strong>{renderLocalizedTextNode(getStudentProfileDisplayName(profile, language), language)}</strong>
-                  <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${profile.grade || "—"}`, `جماعت ${profile.grade || "—"}`, language), language)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="profile-switcher-actions">
-            <button
-              type="button"
-              className="ghost-cta"
-              onClick={() => {
-                setProfileDisclosureOpen(true);
-                setTab("settings");
-              }}
-            >
-              {renderLocalizedTextNode(joinLocalizedText("Manage Profiles", "پروفائل منظم کریں", language), language)}
-            </button>
-            <span className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Cross-device validation steps are now listed in Settings -> Account & Cloud Sign-In.", "کراس ڈیوائس جانچ کے مراحل اب ترتیبات -> اکاؤنٹ اور کلاؤڈ سائن اِن میں درج ہیں۔", language), language)}</span>
-          </div>
-        </div>
-        <div className="review-panel home-support-panel profile-report-panel" data-ui-language={language} style={{ marginTop: 16 }}>
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(joinLocalizedText("Profile Reports", "پروفائل رپورٹس", language), language)}</h3>
-              <p>{renderLocalizedTextNode(joinLocalizedText("Everything below belongs to the active student profile only, so siblings and separate learners stay cleanly separated.", "نیچے دیا گیا تمام ڈیٹا صرف فعال طالب علم پروفائل کا ہے، اس لیے بہن بھائیوں اور الگ سیکھنے والوں کا ریکارڈ صاف الگ رہتا ہے۔", language), language)}</p>
-            </div>
-          </div>
-          <div className="stat-grid">
-            <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{formatNumberLabel(profileLessonTotals.completed)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText(`Lessons done of ${profileLessonTotals.total || 0}`, `${profileLessonTotals.total || 0} میں سے مکمل اسباق`, language), language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">🧠</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(weeklyStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("This week", "اس ہفتے", language), language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">📖</div><div className="stat-value">{formatNumberLabel(dictionaryStats.total || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Dictionary entries", "لغت اندراجات", language), language)}</div></div>
-          </div>
-          <div className="goal-progress-card">
-            <div className="goal-progress-row">
-              <div>
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Lesson completion", "سبق تکمیل", language), language)}</strong>
-                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${profileLessonTotals.completed} of ${profileLessonTotals.total || 0} lessons`, `${profileLessonTotals.completed} از ${profileLessonTotals.total || 0} اسباق`, language), language)}</div>
-              </div>
-              <span className="goal-progress-badge">{profileLessonCompletion}%</span>
-            </div>
-            <div className="goal-progress-bar"><span style={{ width: `${profileLessonCompletion}%` }} /></div>
-            <div className="goal-progress-row" style={{ marginTop: 14 }}>
-              <div>
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Review mastery", "ریویو مہارت", language), language)}</strong>
-                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${reviewStats.mastered || 0} mastered • ${reviewStats.learning || 0} learning`, `${reviewStats.mastered || 0} مکمل • ${reviewStats.learning || 0} سیکھنے میں`, language), language)}</div>
-              </div>
-              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${streak} day streak`, `${streak} دن تسلسل`, language), language)}</span>
-            </div>
-          </div>
-          <div className="profile-report-summary-row">
-            <div className="profile-report-summary-card">
-              <strong>{renderLocalizedTextNode(joinLocalizedText("Strongest subject", "سب سے مضبوط مضمون", language), language)}</strong>
-              <span>{renderLocalizedTextNode(profileStrongestSubject?.label || joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language), language)}</span>
-            </div>
-            <div className="profile-report-summary-card">
-              <strong>{renderLocalizedTextNode(joinLocalizedText("Needs support", "مزید توجہ درکار", language), language)}</strong>
-              <span>{renderLocalizedTextNode(profileSupportSubject?.label || joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language), language)}</span>
-            </div>
-          </div>
-          <div className="profile-report-list">
-            {profileSubjectSummaries.map((entry) => (
-              <div key={`profile_report_${entry.id}`} className="profile-report-item">
-                <div className="profile-report-item-head">
-                  <strong>{entry.icon} {renderLocalizedTextNode(entry.label, language)}</strong>
-                  <span>{entry.completed}/{entry.total || 0}</span>
-                </div>
-                <div className="goal-progress-bar"><span style={{ width: `${entry.percent}%`, background: entry.color }} /></div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
+        <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
         <div className="review-panel home-support-panel sync-activity-panel" data-ui-language={language} style={{ marginTop: 16 }}>
           <div className="review-panel-head">
             <div>
@@ -14341,7 +14285,23 @@ function HomeschoolApp() {
             </div>
           </div>
           <div className="stat-grid">
-            <div className="stat-card"><div className="stat-icon">⏳</div><div className="stat-value">{formatNumberLabel(syncPendingTotal)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending changes", "منتظر تبدیلیاں", language), language)}</div></div>
+            <div
+              className="stat-card"
+              role="button"
+              tabIndex={0}
+              style={{ cursor: "pointer" }}
+              onClick={() => setSyncPendingDetailsOpen((current) => !current)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSyncPendingDetailsOpen((current) => !current);
+                }
+              }}
+            >
+              <div className="stat-icon">⏳</div>
+              <div className="stat-value">{formatNumberLabel(syncPendingTotal)}</div>
+              <div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending changes", "منتظر تبدیلیاں", language), language)}</div>
+            </div>
             <div className="stat-card"><div className="stat-icon">⬆️</div><div className="stat-value">{renderLocalizedTextNode(syncLastPushLabel, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Last push", "آخری اپ لوڈ", language), language)}</div></div>
             <div className="stat-card"><div className="stat-icon">⬇️</div><div className="stat-value">{renderLocalizedTextNode(syncLastPullLabel, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Last pull", "آخری ڈاؤن لوڈ", language), language)}</div></div>
             <div className="stat-card"><div className="stat-icon">📘</div><div className="stat-value">{formatNumberLabel(supabaseSyncActivity.dictionaryEntries || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Dictionary in cloud scope", "کلاؤڈ دائرہ کی لغت", language), language)}</div></div>
@@ -14371,90 +14331,38 @@ function HomeschoolApp() {
           ) : (
             <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(joinLocalizedText("No queued cloud datasets right now.", "اس وقت کوئی کلاؤڈ قطار باقی نہیں۔", language), language)}</p>
           )}
+          {syncPendingDetailsOpen ? (
+            <div className="profile-report-list" style={{ marginTop: 14 }}>
+              {syncPendingDetails.length ? syncPendingDetails.map((entry) => (
+                <div key={entry.key} className="profile-report-item">
+                  <div className="profile-report-item-head">
+                    <strong>{renderLocalizedTextNode(entry.title, language)}</strong>
+                    <span>{renderLocalizedTextNode(entry.badge, language)}</span>
+                  </div>
+                  <div className="goal-progress-meta">
+                    {renderLocalizedTextNode(
+                      joinLocalizedText(
+                        `${entry.subtitle || "Pending row"} • ${entry.updatedAt ? formatDate(entry.updatedAt) : "waiting"}`,
+                        `${entry.subtitle || "منتظر قطار"} • ${entry.updatedAt ? formatDate(entry.updatedAt) : "منتظر"}`,
+                        language,
+                      ),
+                      language,
+                    )}
+                  </div>
+                </div>
+              )) : (
+                <div className="profile-report-item">
+                  <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("No pending rows right now.", "اس وقت کوئی منتظر قطار موجود نہیں۔", language), language)}</div>
+                </div>
+              )}
+            </div>
+          ) : null}
           {supabaseSyncActivity.lastErrorMessage ? (
             <div className="practice-feedback-panel" style={{ marginTop: 12 }}>
               {renderLocalizedTextNode(joinLocalizedText(`Last sync issue: ${supabaseSyncActivity.lastErrorMessage}`, `آخری سنک مسئلہ: ${supabaseSyncActivity.lastErrorMessage}`, language), language)}
             </div>
           ) : null}
         </div>
-        {activeProfileRole === "parent" ? (
-          <div className="review-panel home-support-panel role-overview-panel" data-ui-language={language} style={{ marginTop: 16 }}>
-            <div className="review-panel-head">
-              <div>
-                <h3>{renderLocalizedTextNode(joinLocalizedText("Parent View", "والدین منظر", language), language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText("A calm, read-only summary of this learner's current progress so you can guide without disturbing their study setup.", "اس سیکھنے والے کی موجودہ پیش رفت کا پُرسکون، صرف مطالعہ والا خلاصہ تاکہ آپ مدد کر سکیں مگر ان کی سیٹنگ نہ بگڑے۔", language), language)}</p>
-              </div>
-              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText("Read only", "صرف دیکھیں", language), language)}</span>
-            </div>
-            <div className="goal-progress-card">
-              <div className="goal-progress-row">
-                <div>
-                  <strong>{renderLocalizedTextNode(activeStudentProfileLabel, language)}</strong>
-                  <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`Best next support: ${profileSupportSubject?.label || "Keep reviewing"}`, `اگلی بہترین مدد: ${profileSupportSubject?.label || "ریویو جاری رکھیں"}`, language), language)}</div>
-                </div>
-                <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${completedDailyChallenges}/${dailyChallenges.length} daily goals`, `${completedDailyChallenges}/${dailyChallenges.length} روزانہ اہداف`, language), language)}</span>
-              </div>
-            </div>
-            <div className="stat-grid" style={{ marginTop: 14 }}>
-              <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(weeklyStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Weekly study", "ہفتہ وار مطالعہ", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">🧠</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{profileLessonCompletion}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Lesson completion", "سبق تکمیل", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{formatNumberLabel(streak || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Current streak", "موجودہ تسلسل", language), language)}</div></div>
-            </div>
-            <div className="profile-report-summary-row" style={{ marginTop: 14 }}>
-              <div className="profile-report-summary-card">
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Strongest subject", "سب سے مضبوط مضمون", language), language)}</strong>
-                <span>{renderLocalizedTextNode(profileStrongestSubject?.label || joinLocalizedText("Still emerging", "ابھی سامنے آ رہا ہے", language), language)}</span>
-              </div>
-              <div className="profile-report-summary-card">
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Support next", "اگلی مدد", language), language)}</strong>
-                <span>{renderLocalizedTextNode(profileSupportSubject?.label || joinLocalizedText("Keep reviewing", "ریویو جاری رکھیں", language), language)}</span>
-              </div>
-            </div>
-          </div>
-        ) : null}
-        {activeProfileRole === "teacher" ? (
-          <div className="review-panel home-support-panel role-overview-panel" data-ui-language={language} style={{ marginTop: 16 }}>
-            <div className="review-panel-head">
-              <div>
-                <h3>{renderLocalizedTextNode(joinLocalizedText("Teacher Ready", "استاد کے لیے تیار", language), language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText("This learner already has profile-scoped cloud data, progress, and dictionary growth ready for future classroom dashboards.", "اس سیکھنے والے کے لیے پروفائل-اسکوپڈ کلاؤڈ ڈیٹا، پیش رفت، اور لغت کی بڑھوتری آئندہ کلاس روم ڈیش بورڈز کے لیے پہلے ہی تیار ہے۔", language), language)}</p>
-              </div>
-              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText("Groundwork ready", "بنیاد تیار", language), language)}</span>
-            </div>
-            <div className="stat-grid">
-              <div className="stat-card"><div className="stat-icon">👥</div><div className="stat-value">{formatNumberLabel(studentProfiles.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Profiles on device", "ڈیوائس پر پروفائلز", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">☁️</div><div className="stat-value">{renderLocalizedTextNode(supabaseDictionarySync.enabled ? joinLocalizedText("On", "آن", language) : joinLocalizedText("Off", "بند", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Cloud sync", "کلاؤڈ سنک", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">🧾</div><div className="stat-value">{formatNumberLabel(cloudSyncConflicts.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending sync reviews", "زیرِ جائزہ سنک", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">🗂️</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.customLists?.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Custom lists", "اپنی فہرستیں", language), language)}</div></div>
-            </div>
-            <div className="profile-report-list" style={{ marginTop: 14 }}>
-              <div className="profile-report-item">
-                <div className="profile-report-item-head">
-                  <strong>{renderLocalizedTextNode(joinLocalizedText("Current learner focus", "موجودہ سیکھنے والے کی توجہ", language), language)}</strong>
-                  <span>{renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("No active profile", "کوئی فعال پروفائل نہیں", language), language)}</span>
-                </div>
-                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`Support subject: ${profileSupportSubject?.label || "Keep reviewing"}`, `مدد والا مضمون: ${profileSupportSubject?.label || "ریویو جاری رکھیں"}`, language), language)}</div>
-              </div>
-              <div className="profile-report-item">
-                <div className="profile-report-item-head">
-                  <strong>{renderLocalizedTextNode(joinLocalizedText("Cloud readiness", "کلاؤڈ تیاری", language), language)}</strong>
-                  <span>{renderLocalizedTextNode(syncPendingTotal ? joinLocalizedText("Needs push", "اپ لوڈ درکار", language) : joinLocalizedText("Current", "تازہ", language), language)}</span>
-                </div>
-                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${syncPendingTotal} pending changes • ${supabaseSyncActivity.dictionaryEntries || 0} dictionary rows`, `${syncPendingTotal} منتظر تبدیلیاں • ${supabaseSyncActivity.dictionaryEntries || 0} لغت قطار`, language), language)}</div>
-              </div>
-              <div className="profile-report-item">
-                <div className="profile-report-item-head">
-                  <strong>{renderLocalizedTextNode(joinLocalizedText("Classroom-ready summary", "کلاس روم کے لیے خلاصہ", language), language)}</strong>
-                  <span>{renderLocalizedTextNode(joinLocalizedText("Groundwork", "بنیاد", language), language)}</span>
-                </div>
-                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Profiles, review, dictionary, and cloud merge rules are now prepared for future class and assignment views.", "پروفائلز، ریویو، لغت، اور کلاؤڈ ضم قوانین اب آئندہ کلاس اور اسائنمنٹ مناظر کے لیے تیار ہیں۔", language), language)}</div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
-        <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
         <div className="review-panel challenge-panel" style={{ marginTop: 16 }}>
           <div className="review-panel-head">
             <div>
@@ -14912,7 +14820,187 @@ function HomeschoolApp() {
             </div>
           </div>
         </div>
-        {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
+      {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
+      </>)}
+
+      {tab === "profiles" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
+        <div className="review-panel profile-switcher-panel" data-ui-language={language}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Profiles", "پروفائلز", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Switch quickly between learners on this device. Each profile keeps its own study history and cloud sync scope.", "اسی ڈیوائس پر مختلف سیکھنے والوں کے درمیان فوراً بدلیں۔ ہر پروفائل اپنی الگ مطالعہ تاریخ اور کلاؤڈ سنک دائرہ رکھتا ہے۔", language), language)}</p>
+            </div>
+            <span className="goal-progress-badge">{studentProfiles.length}</span>
+          </div>
+          <div className="profile-switcher-summary-card">
+            <div className="profile-switcher-summary-main">
+              <span className="profile-switcher-avatar" aria-hidden="true">{activeStudentProfileInitials}</span>
+              <div className="profile-switcher-summary-copy">
+                <strong>{renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("Student", "طالب علم", language), language)}</strong>
+                <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${grade || "—"} • ${activeProfileRoleLabel}`, `جماعت ${grade || "—"} • ${activeProfileRoleLabel}`, language), language)}</span>
+              </div>
+            </div>
+            <span className="goal-progress-badge">{renderLocalizedTextNode(profileSyncScopeLabel, language)}</span>
+          </div>
+          <div className="profile-switcher-chip-row">
+            {studentProfiles.map((profile) => (
+              <button
+                key={`profile_tab_${profile.id}`}
+                type="button"
+                className={`profile-switcher-chip${profile.id === activeStudentProfileId ? " active" : ""}`}
+                onClick={() => handleSwitchStudentProfile(profile.id)}
+                disabled={profileSwitchBusy}
+              >
+                <span className="profile-switcher-chip-avatar" aria-hidden="true">{getStudentProfileInitials(profile)}</span>
+                <span className="profile-switcher-chip-copy">
+                  <strong>{renderLocalizedTextNode(getStudentProfileDisplayName(profile, language), language)}</strong>
+                  <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${profile.grade || "—"}`, `جماعت ${profile.grade || "—"}`, language), language)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="profile-switcher-actions">
+            <button
+              type="button"
+              className="ghost-cta"
+              onClick={() => {
+                setProfileDisclosureOpen(true);
+                setTab("settings");
+              }}
+            >
+              {renderLocalizedTextNode(joinLocalizedText("Manage Profiles", "پروفائل منظم کریں", language), language)}
+            </button>
+            <span className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Cross-device validation steps are now listed in Settings -> Account & Cloud Sign-In.", "کراس ڈیوائس جانچ کے مراحل اب ترتیبات -> اکاؤنٹ اور کلاؤڈ سائن اِن میں درج ہیں۔", language), language)}</span>
+          </div>
+        </div>
+        <div className="review-panel home-support-panel profile-report-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Profile Reports", "پروفائل رپورٹس", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Everything below belongs to the active student profile only, so siblings and separate learners stay cleanly separated.", "نیچے دیا گیا تمام ڈیٹا صرف فعال طالب علم پروفائل کا ہے، اس لیے بہن بھائیوں اور الگ سیکھنے والوں کا ریکارڈ صاف الگ رہتا ہے۔", language), language)}</p>
+            </div>
+          </div>
+          <div className="stat-grid">
+            <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{formatNumberLabel(profileLessonTotals.completed)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText(`Lessons done of ${profileLessonTotals.total || 0}`, `${profileLessonTotals.total || 0} میں سے مکمل اسباق`, language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">🧠</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(weeklyStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("This week", "اس ہفتے", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📖</div><div className="stat-value">{formatNumberLabel(dictionaryStats.total || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Dictionary entries", "لغت اندراجات", language), language)}</div></div>
+          </div>
+          <div className="goal-progress-card">
+            <div className="goal-progress-row">
+              <div>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Lesson completion", "سبق تکمیل", language), language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${profileLessonTotals.completed} of ${profileLessonTotals.total || 0} lessons`, `${profileLessonTotals.completed} از ${profileLessonTotals.total || 0} اسباق`, language), language)}</div>
+              </div>
+              <span className="goal-progress-badge">{profileLessonCompletion}%</span>
+            </div>
+            <div className="goal-progress-bar"><span style={{ width: `${profileLessonCompletion}%` }} /></div>
+            <div className="goal-progress-row" style={{ marginTop: 14 }}>
+              <div>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Review mastery", "ریویو مہارت", language), language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${reviewStats.mastered || 0} mastered • ${reviewStats.learning || 0} learning`, `${reviewStats.mastered || 0} مکمل • ${reviewStats.learning || 0} سیکھنے میں`, language), language)}</div>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${streak} day streak`, `${streak} دن تسلسل`, language), language)}</span>
+            </div>
+          </div>
+          <div className="profile-report-summary-row">
+            <div className="profile-report-summary-card">
+              <strong>{renderLocalizedTextNode(joinLocalizedText("Strongest subject", "سب سے مضبوط مضمون", language), language)}</strong>
+              <span>{renderLocalizedTextNode(profileStrongestSubject?.label || joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language), language)}</span>
+            </div>
+            <div className="profile-report-summary-card">
+              <strong>{renderLocalizedTextNode(joinLocalizedText("Needs support", "مزید توجہ درکار", language), language)}</strong>
+              <span>{renderLocalizedTextNode(profileSupportSubject?.label || joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language), language)}</span>
+            </div>
+          </div>
+          <div className="profile-report-list">
+            {profileSubjectSummaries.map((entry) => (
+              <div key={`profile_report_${entry.id}`} className="profile-report-item">
+                <div className="profile-report-item-head">
+                  <strong>{entry.icon} {renderLocalizedTextNode(entry.label, language)}</strong>
+                  <span>{entry.completed}/{entry.total || 0}</span>
+                </div>
+                <div className="goal-progress-bar"><span style={{ width: `${entry.percent}%`, background: entry.color }} /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {activeProfileRole === "parent" ? (
+          <div className="review-panel home-support-panel role-overview-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Parent View", "والدین منظر", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("A calm, read-only summary of this learner's current progress so you can guide without disturbing their study setup.", "اس سیکھنے والے کی موجودہ پیش رفت کا پُرسکون، صرف مطالعہ والا خلاصہ تاکہ آپ مدد کر سکیں مگر ان کی سیٹنگ نہ بگڑے۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText("Read only", "صرف دیکھیں", language), language)}</span>
+            </div>
+            <div className="goal-progress-card">
+              <div className="goal-progress-row">
+                <div>
+                  <strong>{renderLocalizedTextNode(activeStudentProfileLabel, language)}</strong>
+                  <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`Best next support: ${profileSupportSubject?.label || "Keep reviewing"}`, `اگلی بہترین مدد: ${profileSupportSubject?.label || "ریویو جاری رکھیں"}`, language), language)}</div>
+                </div>
+                <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${completedDailyChallenges}/${dailyChallenges.length} daily goals`, `${completedDailyChallenges}/${dailyChallenges.length} روزانہ اہداف`, language), language)}</span>
+              </div>
+            </div>
+            <div className="stat-grid" style={{ marginTop: 14 }}>
+              <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(weeklyStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Weekly study", "ہفتہ وار مطالعہ", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🧠</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{profileLessonCompletion}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Lesson completion", "سبق تکمیل", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{formatNumberLabel(streak || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Current streak", "موجودہ تسلسل", language), language)}</div></div>
+            </div>
+            <div className="profile-report-summary-row" style={{ marginTop: 14 }}>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Strongest subject", "سب سے مضبوط مضمون", language), language)}</strong>
+                <span>{renderLocalizedTextNode(profileStrongestSubject?.label || joinLocalizedText("Still emerging", "ابھی سامنے آ رہا ہے", language), language)}</span>
+              </div>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Support next", "اگلی مدد", language), language)}</strong>
+                <span>{renderLocalizedTextNode(profileSupportSubject?.label || joinLocalizedText("Keep reviewing", "ریویو جاری رکھیں", language), language)}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {activeProfileRole === "teacher" ? (
+          <div className="review-panel home-support-panel role-overview-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Teacher Ready", "استاد کے لیے تیار", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("This learner already has profile-scoped cloud data, progress, and dictionary growth ready for future classroom dashboards.", "اس سیکھنے والے کے لیے پروفائل-اسکوپڈ کلاؤڈ ڈیٹا، پیش رفت، اور لغت کی بڑھوتری آئندہ کلاس روم ڈیش بورڈز کے لیے پہلے ہی تیار ہے۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText("Groundwork ready", "بنیاد تیار", language), language)}</span>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-icon">👥</div><div className="stat-value">{formatNumberLabel(studentProfiles.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Profiles on device", "ڈیوائس پر پروفائلز", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">☁️</div><div className="stat-value">{renderLocalizedTextNode(supabaseDictionarySync.enabled ? joinLocalizedText("On", "آن", language) : joinLocalizedText("Off", "بند", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Cloud sync", "کلاؤڈ سنک", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🧾</div><div className="stat-value">{formatNumberLabel(cloudSyncConflicts.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending sync reviews", "زیرِ جائزہ سنک", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🗂️</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.customLists?.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Custom lists", "اپنی فہرستیں", language), language)}</div></div>
+            </div>
+            <div className="profile-report-list" style={{ marginTop: 14 }}>
+              <div className="profile-report-item">
+                <div className="profile-report-item-head">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Current learner focus", "موجودہ سیکھنے والے کی توجہ", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("No active profile", "کوئی فعال پروفائل نہیں", language), language)}</span>
+                </div>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`Support subject: ${profileSupportSubject?.label || "Keep reviewing"}`, `مدد والا مضمون: ${profileSupportSubject?.label || "ریویو جاری رکھیں"}`, language), language)}</div>
+              </div>
+              <div className="profile-report-item">
+                <div className="profile-report-item-head">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Cloud readiness", "کلاؤڈ تیاری", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(syncPendingTotal ? joinLocalizedText("Needs push", "اپ لوڈ درکار", language) : joinLocalizedText("Current", "تازہ", language), language)}</span>
+                </div>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${syncPendingTotal} pending changes • ${supabaseSyncActivity.dictionaryEntries || 0} dictionary rows`, `${syncPendingTotal} منتظر تبدیلیاں • ${supabaseSyncActivity.dictionaryEntries || 0} لغت قطار`, language), language)}</div>
+              </div>
+              <div className="profile-report-item">
+                <div className="profile-report-item-head">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Classroom-ready summary", "کلاس روم کے لیے خلاصہ", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Groundwork", "بنیاد", language), language)}</span>
+                </div>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Profiles, review, dictionary, and cloud merge rules are now prepared for future class and assignment views.", "پروفائلز، ریویو، لغت، اور کلاؤڈ ضم قوانین اب آئندہ کلاس اور اسائنمنٹ مناظر کے لیے تیار ہیں۔", language), language)}</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </>)}
 
 
