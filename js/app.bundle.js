@@ -5351,6 +5351,15 @@ ${marker} `);
     const speechRecognitionSupported = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
     const currentTutorProviderId = selectedAiProvider && AI_PROVIDER_ORDER.includes(selectedAiProvider) ? selectedAiProvider : "openai";
     const tutorSupportsMedia = currentTutorProviderId === "gemini";
+    const showAppToast = useCallback((text, icon = "copy") => {
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+      setCopyToast({
+        id: Date.now() + Math.random(),
+        text: String(text || ""),
+        icon: icon || "copy"
+      });
+      copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1800);
+    }, []);
     const persistTutorHistory = useCallback((sessions, sessionId) => {
       const safeSessions = normalizeTutorSessions(sessions, language).slice(0, 30).map((session) => ({
         ...session,
@@ -5408,18 +5417,10 @@ ${marker} `);
       var _a2;
       const payload = String(text || "");
       if (!payload.trim()) return false;
-      const showCopiedToast = () => {
-        if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
-        setCopyToast({
-          id: Date.now() + Math.random(),
-          text: joinLocalizedText("Copied", "\u06A9\u0627\u067E\u06CC \u06C1\u0648 \u06AF\u06CC\u0627", language)
-        });
-        copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1600);
-      };
       try {
         if ((_a2 = navigator.clipboard) == null ? void 0 : _a2.writeText) {
           await navigator.clipboard.writeText(payload);
-          showCopiedToast();
+          showAppToast(joinLocalizedText("Copied", "\u06A9\u0627\u067E\u06CC \u06C1\u0648 \u06AF\u06CC\u0627", language), "copy");
           return true;
         }
       } catch (error) {
@@ -5434,12 +5435,12 @@ ${marker} `);
         helper.select();
         document.execCommand("copy");
         document.body.removeChild(helper);
-        showCopiedToast();
+        showAppToast(joinLocalizedText("Copied", "\u06A9\u0627\u067E\u06CC \u06C1\u0648 \u06AF\u06CC\u0627", language), "copy");
         return true;
       } catch (error) {
         return false;
       }
-    }, [language]);
+    }, [language, showAppToast]);
     const speakInlineText = useCallback((text, languageHint = null) => {
       var _a2, _b2;
       const content = String(text || "").trim();
@@ -6176,17 +6177,19 @@ ${marker} `);
           email,
           message: joinLocalizedText("Magic link sent. Open it on this app to connect sync.", "\u0645\u06CC\u062C\u06A9 \u0644\u0646\u06A9 \u0628\u06BE\u06CC\u062C \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4 \u0627\u0633\u06CC \u0627\u06CC\u067E \u0645\u06CC\u06BA \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644 \u06A9\u0631 sync \u062C\u0648\u0691\u06CC\u06BA\u06D4", language)
         }));
+        showAppToast(joinLocalizedText("Magic link sent", "\u0645\u06CC\u062C\u06A9 \u0644\u0646\u06A9 \u0628\u06BE\u06CC\u062C \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "send");
       } catch (error) {
         setSupabaseAuthState((current) => ({
           ...current,
           status: "error",
           message: (error == null ? void 0 : error.message) || String(error)
         }));
+        showAppToast(joinLocalizedText("Unable to send magic link", "\u0645\u06CC\u062C\u06A9 \u0644\u0646\u06A9 \u0646\u06C1\u06CC\u06BA \u0628\u06BE\u06CC\u062C\u0627 \u062C\u0627 \u0633\u06A9\u0627", language), "alert");
         alert(joinLocalizedText(`Unable to send the sign-in link: ${error.message || error}`, `\u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u0644\u0646\u06A9 \u0646\u06C1\u06CC\u06BA \u0628\u06BE\u06CC\u062C\u0627 \u062C\u0627 \u0633\u06A9\u0627: ${error.message || error}`, language));
       } finally {
         setSupabaseSyncBusy(false);
       }
-    }, [ensureSupabaseClient, language, supabaseDictionarySync.authEmail]);
+    }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail]);
     const handleSupabaseSignOut = useCallback(async () => {
       try {
         const client = ensureSupabaseClient();
@@ -9263,16 +9266,19 @@ ${error.message || error}`);
     })();
     const handleSupabaseSyncNow = useCallback(async () => {
       try {
+        showAppToast(joinLocalizedText("Syncing dictionary...", "\u0644\u063A\u062A \u0633\u0646\u06A9 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2...", language), "sync");
         await performSupabaseDictionarySync("manual");
+        showAppToast(joinLocalizedText("Dictionary synced", "\u0644\u063A\u062A \u0633\u0646\u06A9 \u06C1\u0648 \u06AF\u0626\u06CC", language), "sync");
       } catch (error) {
         setSupabaseAuthState((current) => ({
           ...current,
           status: "error",
           message: (error == null ? void 0 : error.message) || String(error)
         }));
+        showAppToast(joinLocalizedText("Dictionary sync failed", "\u0644\u063A\u062A \u0633\u0646\u06A9 \u0646\u0627\u06A9\u0627\u0645 \u06C1\u0648\u0626\u06CC", language), "alert");
         alert(joinLocalizedText(`Dictionary sync failed: ${(error == null ? void 0 : error.message) || error}`, `Dictionary sync \u0646\u0627\u06A9\u0627\u0645 \u06C1\u0648\u0626\u06CC: ${(error == null ? void 0 : error.message) || error}`, language));
       }
-    }, [language, performSupabaseDictionarySync]);
+    }, [language, performSupabaseDictionarySync, showAppToast]);
     const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
       const definition = AI_PROVIDER_DEFS[providerId];
       const saved = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
@@ -9706,6 +9712,18 @@ ${error.message || error}`);
       }
       if (iconId === "settings") {
         return /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { fill: "currentColor", d: "M19.4 13a7.8 7.8 0 0 0 .1-1 7.8 7.8 0 0 0-.1-1l2.1-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.1 7.1 0 0 0-1.7-1l-.4-2.7a.5.5 0 0 0-.5-.4H10a.5.5 0 0 0-.5.4l-.4 2.7a7.1 7.1 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.7L4.6 11a7.8 7.8 0 0 0-.1 1 7.8 7.8 0 0 0 .1 1l-2.1 1.6a.5.5 0 0 0-.1.7l2 3.4a.5.5 0 0 0 .6.2l2.5-1a7.1 7.1 0 0 0 1.7 1l.4 2.7a.5.5 0 0 0 .5.4h4a.5.5 0 0 0 .5-.4l.4-2.7a7.1 7.1 0 0 0 1.7-1l2.5 1a.5.5 0 0 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 13ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z" }));
+      }
+      if (iconId === "send") {
+        return /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { fill: "currentColor", d: "M3 11.5 20.2 4c.9-.4 1.8.6 1.3 1.5L14 21c-.4.9-1.7.8-2-.1l-1.6-5.2-5.2-1.6c-.9-.3-1-.6-.2-1.1Zm8.2 2.1 1.1 3.6 5.4-11.3-11.3 5.4 3.6 1.1 4.8-4.8.9.9-4.5 5.1Z" }));
+      }
+      if (iconId === "sync") {
+        return /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { fill: "currentColor", d: "M12 5a7 7 0 0 1 6.4 4.2H16v2h5V6h-2v2.1A9 9 0 0 0 3 12h2a7 7 0 0 1 7-7Zm7 0h2v2h-2zm-1 7a7 7 0 0 1-12.4 4.5H8v-2H3v5h2v-2.1A9 9 0 0 0 21 12h-2a7 7 0 0 1-1 0Z" }));
+      }
+      if (iconId === "check") {
+        return /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { fill: "currentColor", d: "m9.6 16.2-3.8-3.8-1.4 1.4 5.2 5.2L20 8.6l-1.4-1.4-9 9Z" }));
+      }
+      if (iconId === "alert") {
+        return /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { fill: "currentColor", d: "M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V9h2v4Z" }));
       }
       return /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, "\u2022");
     };
@@ -10502,7 +10520,7 @@ ${error.message || error}`);
       /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-head" }, /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-word" }, wordMeaningPopover.word), /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "word-meaning-popover-icon", onClick: handleCopyWordMeaning, title: joinLocalizedText("Copy meaning", "\u0645\u0639\u0646\u06CC \u06A9\u0627\u067E\u06CC \u06A9\u0631\u06CC\u06BA", language) }, renderIconGlyph("copy")), /* @__PURE__ */ React.createElement("button", { type: "button", className: "word-meaning-popover-icon", onClick: handleSpeakWordMeaning, title: joinLocalizedText("Listen meaning", "\u0645\u0639\u0646\u06CC \u0633\u0646\u06CC\u06BA", language) }, renderIconGlyph("listen")))),
       wordMeaningPopover.loading ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(joinLocalizedText("Looking up meaning...", "\u0645\u0639\u0646\u06CC \u062A\u0644\u0627\u0634 \u06A9\u06CC\u06D2 \u062C\u0627 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA...", language), language)) : wordMeaningPopover.meaningUr || (wordMeaningPopover.meaningsUr || []).length > 0 || wordMeaningPopover.explanationUr ? /* @__PURE__ */ React.createElement(React.Fragment, null, (wordMeaningPopover.meaningsUr || []).length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-list" }, (wordMeaningPopover.meaningsUr || []).map((meaning, index) => /* @__PURE__ */ React.createElement("div", { key: `${meaning}_${index}`, className: "word-meaning-popover-meaning" }, /* @__PURE__ */ React.createElement("span", { className: "word-meaning-popover-order" }, index + 1, "."), /* @__PURE__ */ React.createElement("span", null, meaning)))) : /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-meaning" }, /* @__PURE__ */ React.createElement("span", null, wordMeaningPopover.meaningUr)), wordMeaningPopover.explanationUr ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-explanation" }, wordMeaningPopover.explanationUr) : null) : /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-loading" }, renderLocalizedTextNode(wordMeaningPopover.error || joinLocalizedText("Meaning not found yet.", "\u0627\u0628\u06BE\u06CC \u0645\u0639\u0646\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)),
       wordMeaningPopover.source ? /* @__PURE__ */ React.createElement("div", { className: "word-meaning-popover-source" }, wordMeaningPopover.source) : null
-    ) : null, copyToast ? /* @__PURE__ */ React.createElement("div", { key: copyToast.id, className: "copy-toast", role: "status", "aria-live": "polite" }, renderIconGlyph("copy"), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(copyToast.text, language))) : null, celebrationQueue[0] ? /* @__PURE__ */ React.createElement("div", { className: "celebration-overlay", onClick: dismissCelebration }, /* @__PURE__ */ React.createElement("div", { className: "celebration-card", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null }, /* @__PURE__ */ React.createElement("div", { className: "celebration-icon", "aria-hidden": "true" }, celebrationQueue[0].icon), /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].titleEn, celebrationQueue[0].titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].bodyEn, celebrationQueue[0].bodyUr, language), language)), /* @__PURE__ */ React.createElement("div", { className: "celebration-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: dismissCelebration }, renderLocalizedTextNode(joinLocalizedText("Nice!", "\u0628\u06C1\u062A \u062E\u0648\u0628!", language), language))))) : null, importReviewState ? /* @__PURE__ */ React.createElement("div", { className: "import-review-overlay", onClick: () => setImportReviewState(null) }, /* @__PURE__ */ React.createElement("div", { className: "import-review-dialog", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head", style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)), /* @__PURE__ */ React.createElement("p", null, importReviewState.fileName))), importReviewState.newerVersion ? /* @__PURE__ */ React.createElement("div", { className: "import-review-warning" }, renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)) : null, /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)), /* @__PURE__ */ React.createElement("div", { className: "import-review-grid" }, (importReviewState.summaryRows || []).map((row) => /* @__PURE__ */ React.createElement("div", { key: row.label, className: "import-review-cell" }, /* @__PURE__ */ React.createElement("span", null, row.label), /* @__PURE__ */ React.createElement("strong", null, row.value))))), /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)), (importReviewState.conflicts || []).length > 0 ? /* @__PURE__ */ React.createElement("ul", { className: "import-review-list" }, importReviewState.conflicts.map((key) => /* @__PURE__ */ React.createElement("li", { key }, renderLocalizedTextNode(importConflictLabels[key] || key, language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "\u06A9\u0648\u0626\u06CC \u0628\u0691\u0627 \u0641\u0631\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 \u0639\u0627\u0645 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u0627 \u062F\u06CC\u0646\u0627 \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "import-review-actions" }, /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setImportReviewState(null) }, renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn", onClick: () => executeImportReview(importReviewState, "merge") }, renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)), /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: () => executeImportReview(importReviewState, "replace") }, renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language))))) : null)));
+    ) : null, copyToast ? /* @__PURE__ */ React.createElement("div", { key: copyToast.id, className: "copy-toast", role: "status", "aria-live": "polite" }, renderIconGlyph(copyToast.icon || "copy"), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(copyToast.text, language))) : null, celebrationQueue[0] ? /* @__PURE__ */ React.createElement("div", { className: "celebration-overlay", onClick: dismissCelebration }, /* @__PURE__ */ React.createElement("div", { className: "celebration-card", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null }, /* @__PURE__ */ React.createElement("div", { className: "celebration-icon", "aria-hidden": "true" }, celebrationQueue[0].icon), /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].titleEn, celebrationQueue[0].titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(celebrationQueue[0].bodyEn, celebrationQueue[0].bodyUr, language), language)), /* @__PURE__ */ React.createElement("div", { className: "celebration-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: dismissCelebration }, renderLocalizedTextNode(joinLocalizedText("Nice!", "\u0628\u06C1\u062A \u062E\u0648\u0628!", language), language))))) : null, importReviewState ? /* @__PURE__ */ React.createElement("div", { className: "import-review-overlay", onClick: () => setImportReviewState(null) }, /* @__PURE__ */ React.createElement("div", { className: "import-review-dialog", onClick: (event) => event.stopPropagation(), style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head", style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.importReviewTitle || "Review Backup Import", language)), /* @__PURE__ */ React.createElement("p", null, importReviewState.fileName))), importReviewState.newerVersion ? /* @__PURE__ */ React.createElement("div", { className: "import-review-warning" }, renderLocalizedTextNode(ui.importVersionWarning || "This backup was created from a newer curriculum version.", language)) : null, /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewSummary || "Backup Summary", language)), /* @__PURE__ */ React.createElement("div", { className: "import-review-grid" }, (importReviewState.summaryRows || []).map((row) => /* @__PURE__ */ React.createElement("div", { key: row.label, className: "import-review-cell" }, /* @__PURE__ */ React.createElement("span", null, row.label), /* @__PURE__ */ React.createElement("strong", null, row.value))))), /* @__PURE__ */ React.createElement("div", { className: "import-review-section" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.importReviewConflicts || "Possible Conflicts", language)), (importReviewState.conflicts || []).length > 0 ? /* @__PURE__ */ React.createElement("ul", { className: "import-review-list" }, importReviewState.conflicts.map((key) => /* @__PURE__ */ React.createElement("li", { key }, renderLocalizedTextNode(importConflictLabels[key] || key, language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("No major conflicts detected. Merge is usually safe.", "\u06A9\u0648\u0626\u06CC \u0628\u0691\u0627 \u0641\u0631\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 \u0639\u0627\u0645 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u0627 \u062F\u06CC\u0646\u0627 \u0645\u062D\u0641\u0648\u0638 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "import-review-actions" }, /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: () => setImportReviewState(null) }, renderLocalizedTextNode(ui.importCancel || "Cancel Import", language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn", onClick: () => executeImportReview(importReviewState, "merge") }, renderLocalizedTextNode(ui.importModeMerge || "Merge with Current Data", language)), /* @__PURE__ */ React.createElement("button", { className: "install-cta", onClick: () => executeImportReview(importReviewState, "replace") }, renderLocalizedTextNode(ui.importModeReplace || "Replace Current Data", language))))) : null)));
   }
   window.HomeSchoolAppModule = { HomeschoolApp };
   if (!window.__HOME_SCHOOL_BOOTSTRAPPED__ && document.getElementById("root")) {

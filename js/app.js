@@ -7166,6 +7166,16 @@ function HomeschoolApp() {
   const currentTutorProviderId = selectedAiProvider && AI_PROVIDER_ORDER.includes(selectedAiProvider) ? selectedAiProvider : "openai";
   const tutorSupportsMedia = currentTutorProviderId === "gemini";
 
+  const showAppToast = useCallback((text, icon = "copy") => {
+    if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
+    setCopyToast({
+      id: Date.now() + Math.random(),
+      text: String(text || ""),
+      icon: icon || "copy",
+    });
+    copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1800);
+  }, []);
+
   const persistTutorHistory = useCallback((sessions, sessionId) => {
     const safeSessions = normalizeTutorSessions(sessions, language)
       .slice(0, 30)
@@ -7228,18 +7238,10 @@ function HomeschoolApp() {
   const copyTextToClipboard = useCallback(async (text) => {
     const payload = String(text || "");
     if (!payload.trim()) return false;
-    const showCopiedToast = () => {
-      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
-      setCopyToast({
-        id: Date.now() + Math.random(),
-        text: joinLocalizedText("Copied", "کاپی ہو گیا", language),
-      });
-      copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1600);
-    };
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(payload);
-        showCopiedToast();
+        showAppToast(joinLocalizedText("Copied", "کاپی ہو گیا", language), "copy");
         return true;
       }
     } catch (error) {
@@ -7255,12 +7257,12 @@ function HomeschoolApp() {
       helper.select();
       document.execCommand("copy");
       document.body.removeChild(helper);
-      showCopiedToast();
+      showAppToast(joinLocalizedText("Copied", "کاپی ہو گیا", language), "copy");
       return true;
     } catch (error) {
       return false;
     }
-  }, [language]);
+  }, [language, showAppToast]);
 
   const speakInlineText = useCallback((text, languageHint = null) => {
     const content = String(text || "").trim();
@@ -8036,17 +8038,19 @@ function HomeschoolApp() {
         email,
         message: joinLocalizedText("Magic link sent. Open it on this app to connect sync.", "میجک لنک بھیج دیا گیا ہے۔ اسی ایپ میں اسے کھول کر sync جوڑیں۔", language),
       }));
+      showAppToast(joinLocalizedText("Magic link sent", "میجک لنک بھیج دیا گیا", language), "send");
     } catch (error) {
       setSupabaseAuthState((current) => ({
         ...current,
         status: "error",
         message: error?.message || String(error),
       }));
+      showAppToast(joinLocalizedText("Unable to send magic link", "میجک لنک نہیں بھیجا جا سکا", language), "alert");
       alert(joinLocalizedText(`Unable to send the sign-in link: ${error.message || error}`, `سائن اِن لنک نہیں بھیجا جا سکا: ${error.message || error}`, language));
     } finally {
       setSupabaseSyncBusy(false);
     }
-  }, [ensureSupabaseClient, language, supabaseDictionarySync.authEmail]);
+  }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail]);
 
   const handleSupabaseSignOut = useCallback(async () => {
     try {
@@ -11234,16 +11238,19 @@ function HomeschoolApp() {
   })();
   const handleSupabaseSyncNow = useCallback(async () => {
     try {
+      showAppToast(joinLocalizedText("Syncing dictionary...", "لغت سنک ہو رہی ہے...", language), "sync");
       await performSupabaseDictionarySync("manual");
+      showAppToast(joinLocalizedText("Dictionary synced", "لغت سنک ہو گئی", language), "sync");
     } catch (error) {
       setSupabaseAuthState((current) => ({
         ...current,
         status: "error",
         message: error?.message || String(error),
       }));
+      showAppToast(joinLocalizedText("Dictionary sync failed", "لغت سنک ناکام ہوئی", language), "alert");
       alert(joinLocalizedText(`Dictionary sync failed: ${error?.message || error}`, `Dictionary sync ناکام ہوئی: ${error?.message || error}`, language));
     }
-  }, [language, performSupabaseDictionarySync]);
+  }, [language, performSupabaseDictionarySync, showAppToast]);
   const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
     const definition = AI_PROVIDER_DEFS[providerId];
     const saved = aiProviderConfigs[providerId] || createDefaultAiProviderConfigs()[providerId];
@@ -11640,6 +11647,18 @@ function HomeschoolApp() {
     }
     if (iconId === "settings") {
       return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.8 7.8 0 0 0 .1-1 7.8 7.8 0 0 0-.1-1l2.1-1.6a.5.5 0 0 0 .1-.7l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.1 7.1 0 0 0-1.7-1l-.4-2.7a.5.5 0 0 0-.5-.4H10a.5.5 0 0 0-.5.4l-.4 2.7a7.1 7.1 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.7L4.6 11a7.8 7.8 0 0 0-.1 1 7.8 7.8 0 0 0 .1 1l-2.1 1.6a.5.5 0 0 0-.1.7l2 3.4a.5.5 0 0 0 .6.2l2.5-1a7.1 7.1 0 0 0 1.7 1l.4 2.7a.5.5 0 0 0 .5.4h4a.5.5 0 0 0 .5-.4l.4-2.7a7.1 7.1 0 0 0 1.7-1l2.5 1a.5.5 0 0 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.7L19.4 13ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/></svg>;
+    }
+    if (iconId === "send") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 11.5 20.2 4c.9-.4 1.8.6 1.3 1.5L14 21c-.4.9-1.7.8-2-.1l-1.6-5.2-5.2-1.6c-.9-.3-1-.6-.2-1.1Zm8.2 2.1 1.1 3.6 5.4-11.3-11.3 5.4 3.6 1.1 4.8-4.8.9.9-4.5 5.1Z"/></svg>;
+    }
+    if (iconId === "sync") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5a7 7 0 0 1 6.4 4.2H16v2h5V6h-2v2.1A9 9 0 0 0 3 12h2a7 7 0 0 1 7-7Zm7 0h2v2h-2zm-1 7a7 7 0 0 1-12.4 4.5H8v-2H3v5h2v-2.1A9 9 0 0 0 21 12h-2a7 7 0 0 1-1 0Z"/></svg>;
+    }
+    if (iconId === "check") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m9.6 16.2-3.8-3.8-1.4 1.4 5.2 5.2L20 8.6l-1.4-1.4-9 9Z"/></svg>;
+    }
+    if (iconId === "alert") {
+      return <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V9h2v4Z"/></svg>;
     }
     return <span aria-hidden="true">•</span>;
   };
@@ -14057,7 +14076,7 @@ function HomeschoolApp() {
     ) : null}
     {copyToast ? (
       <div key={copyToast.id} className="copy-toast" role="status" aria-live="polite">
-        {renderIconGlyph("copy")}
+        {renderIconGlyph(copyToast.icon || "copy")}
         <span>{renderLocalizedTextNode(copyToast.text, language)}</span>
       </div>
     ) : null}
