@@ -53,6 +53,27 @@
     customizations: "++id, type, ts",
   });
 
+  db.version(8).stores({
+    coreData: "id, type, subject, grade, lessonKey",
+    posData: "id, type, day",
+    tensesData: "id, main, sub",
+    vocabData: "id, day",
+    mathChapters: "id, key, grade",
+    quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt, prompt",
+    reviewHistory: "id, cardId, dayKey, reviewedAt, subject, section, rating",
+    wordMeta: "id, subject, section, favorite, updatedAt",
+    customLists: "id, updatedAt, name",
+    customListItems: "id, listId, cardId, updatedAt",
+    progress: "id, subject, lessonId, grade, completed, timestamp",
+    userStats: "id",
+    dataVersion: "id, version, lastUpdated",
+    customizations: "++id, type, ts",
+    dictionaryEntries: "&normalized, updatedAt, deletedAt",
+    dictionaryOutbox: "&normalized, updatedAt",
+    dictionarySyncMeta: "&key, updatedAt",
+  });
+
   function getStatsDefaults() {
     return {
       id: "main",
@@ -336,6 +357,103 @@
       }
       return acc;
     }, {});
+  }
+
+  function normalizeDictionaryEntryRecord(entry) {
+    const normalized = String(entry?.normalized || entry?.word || "").trim().toLowerCase();
+    if (!normalized) return null;
+    return {
+      normalized,
+      word: String(entry?.word || normalized),
+      payload: entry?.payload && typeof entry.payload === "object" ? entry.payload : {},
+      sourceRank: Number.isFinite(Number(entry?.sourceRank)) ? Number(entry.sourceRank) : 0,
+      updatedAt: Number(entry?.updatedAt) || Date.now(),
+      deletedAt: entry?.deletedAt ? Number(entry.deletedAt) || Date.now() : null,
+      deviceId: entry?.deviceId ? String(entry.deviceId) : "",
+    };
+  }
+
+  async function getDictionaryEntries() {
+    if (!db.dictionaryEntries) return [];
+    return db.dictionaryEntries.toArray();
+  }
+
+  async function getDictionaryEntriesMap() {
+    const rows = await getDictionaryEntries();
+    return rows.reduce((acc, row) => {
+      if (!row?.normalized || row.deletedAt) return acc;
+      acc[row.normalized] = row;
+      return acc;
+    }, {});
+  }
+
+  async function upsertDictionaryEntries(entries, options = {}) {
+    if (!db.dictionaryEntries) return { saved: 0, queued: 0 };
+    const queue = options.queue !== false;
+    const normalizedEntries = (Array.isArray(entries) ? entries : [])
+      .map((entry) => normalizeDictionaryEntryRecord(entry))
+      .filter(Boolean);
+    if (!normalizedEntries.length) return { saved: 0, queued: 0 };
+    await db.dictionaryEntries.bulkPut(normalizedEntries);
+    if (queue && db.dictionaryOutbox) {
+      const outboxRows = normalizedEntries.map((entry) => ({
+        normalized: entry.normalized,
+        updatedAt: entry.updatedAt,
+        payload: entry.payload,
+        deletedAt: entry.deletedAt,
+        sourceRank: entry.sourceRank,
+        word: entry.word,
+        deviceId: entry.deviceId || "",
+      }));
+      await db.dictionaryOutbox.bulkPut(outboxRows);
+    }
+    return { saved: normalizedEntries.length, queued: queue ? normalizedEntries.length : 0 };
+  }
+
+  async function replaceDictionaryEntries(entries, options = {}) {
+    if (!db.dictionaryEntries) return { saved: 0, queued: 0 };
+    await db.transaction("rw", [db.dictionaryEntries, db.dictionaryOutbox], async () => {
+      await db.dictionaryEntries.clear();
+      if (db.dictionaryOutbox) await db.dictionaryOutbox.clear();
+      if (Array.isArray(entries) && entries.length > 0) {
+        await upsertDictionaryEntries(entries, options);
+      }
+    });
+    return { saved: Array.isArray(entries) ? entries.length : 0, queued: options.queue === false ? 0 : Array.isArray(entries) ? entries.length : 0 };
+  }
+
+  async function getDictionaryOutboxEntries(limit = 250) {
+    if (!db.dictionaryOutbox) return [];
+    const safeLimit = Math.max(1, Number(limit) || 250);
+    return db.dictionaryOutbox.orderBy("updatedAt").reverse().limit(safeLimit).toArray();
+  }
+
+  async function clearDictionaryOutboxEntries(normalizedWords = []) {
+    if (!db.dictionaryOutbox) return 0;
+    const keys = (Array.isArray(normalizedWords) ? normalizedWords : [])
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+    if (!keys.length) return 0;
+    await db.dictionaryOutbox.bulkDelete(keys);
+    return keys.length;
+  }
+
+  async function getDictionarySyncMeta(key) {
+    if (!db.dictionarySyncMeta) return null;
+    return db.dictionarySyncMeta.get(String(key || "").trim());
+  }
+
+  async function saveDictionarySyncMeta(key, data) {
+    if (!db.dictionarySyncMeta) return null;
+    const safeKey = String(key || "").trim();
+    if (!safeKey) return null;
+    const record = {
+      key: safeKey,
+      data: data && typeof data === "object" ? data : {},
+      updatedAt: Date.now(),
+    };
+    await db.dictionarySyncMeta.put(record);
+    return record;
   }
 
   function normalizeImportPayload(progressData) {
@@ -1461,6 +1579,38 @@
       return getCustomizationsMap();
     },
 
+    async getDictionaryEntries() {
+      return getDictionaryEntries();
+    },
+
+    async getDictionaryEntriesMap() {
+      return getDictionaryEntriesMap();
+    },
+
+    async upsertDictionaryEntries(entries, options = {}) {
+      return upsertDictionaryEntries(entries, options);
+    },
+
+    async replaceDictionaryEntries(entries, options = {}) {
+      return replaceDictionaryEntries(entries, options);
+    },
+
+    async getDictionaryOutboxEntries(limit = 250) {
+      return getDictionaryOutboxEntries(limit);
+    },
+
+    async clearDictionaryOutboxEntries(normalizedWords = []) {
+      return clearDictionaryOutboxEntries(normalizedWords);
+    },
+
+    async getDictionarySyncMeta(key) {
+      return getDictionarySyncMeta(key);
+    },
+
+    async saveDictionarySyncMeta(key, data) {
+      return saveDictionarySyncMeta(key, data);
+    },
+
     async getProgressMap() {
       const records = await db.progress.toArray();
       return records.reduce((acc, record) => {
@@ -1655,6 +1805,9 @@
         progress: await db.progress.toArray(),
         userStats: await db.userStats.toArray(),
         customizations: (await db.customizations.toArray()).filter((row) => !isSensitiveCustomizationType(row?.type)),
+        dictionaryEntries: db.dictionaryEntries ? await db.dictionaryEntries.toArray() : [],
+        dictionaryOutbox: db.dictionaryOutbox ? await db.dictionaryOutbox.toArray() : [],
+        dictionarySyncMeta: db.dictionarySyncMeta ? await db.dictionarySyncMeta.toArray() : [],
         dataVersion: await db.dataVersion.toArray(),
       };
     },
@@ -1674,6 +1827,8 @@
         customListItems: await db.customListItems.count(),
         progress: await db.progress.count(),
         customizations: await db.customizations.count(),
+        dictionaryEntries: db.dictionaryEntries ? await db.dictionaryEntries.count() : 0,
+        dictionaryOutbox: db.dictionaryOutbox ? await db.dictionaryOutbox.count() : 0,
       };
     },
 
