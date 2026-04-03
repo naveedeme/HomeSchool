@@ -8866,9 +8866,12 @@ function HomeschoolApp() {
         throw new Error(language === "ur" ? "پہلے Supabase سے سائن اِن کریں۔" : "Sign in to Supabase first.");
       }
 
-      const dirtyRows = await window.HomeSchoolDB.getDictionaryOutboxEntries(500);
-      if (dirtyRows.length) {
-        const payload = dirtyRows.map((row) => ({
+      let dictionaryRowsToPush = await window.HomeSchoolDB.getDictionaryOutboxEntries(500);
+      if (!dictionaryRowsToPush.length && reason === "manual" && window.HomeSchoolDB?.getDictionaryEntries) {
+        dictionaryRowsToPush = await window.HomeSchoolDB.getDictionaryEntries();
+      }
+      if (dictionaryRowsToPush.length) {
+        const payload = dictionaryRowsToPush.map((row) => ({
           user_id: user.id,
           normalized: row.normalized,
           word: row.word || row.normalized,
@@ -8882,7 +8885,7 @@ function HomeschoolApp() {
           .from(SUPABASE_DICTIONARY_TABLE)
           .upsert(payload, { onConflict: "user_id,normalized" });
         if (pushError) throw pushError;
-        await window.HomeSchoolDB.clearDictionaryOutboxEntries(dirtyRows.map((row) => row.normalized));
+        await window.HomeSchoolDB.clearDictionaryOutboxEntries(dictionaryRowsToPush.map((row) => row.normalized));
       }
 
       const cloudSeedMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloudSeeded");

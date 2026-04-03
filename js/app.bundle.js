@@ -6923,7 +6923,7 @@ ${marker} `);
       }));
     }, [language, supabaseDictionarySync.authEmail]);
     const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
-      var _a2, _b2, _c2, _d2, _e2, _f2;
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2;
       if (!window.HomeSchoolDB) {
         throw new Error(language === "ur" ? "\u0645\u0642\u0627\u0645\u06CC \u0688\u06CC\u0679\u0627\u0628\u06CC\u0633 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4" : "The local database is not available.");
       }
@@ -6942,9 +6942,12 @@ ${marker} `);
         if (!(user == null ? void 0 : user.id)) {
           throw new Error(language === "ur" ? "\u067E\u06C1\u0644\u06D2 Supabase \u0633\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4" : "Sign in to Supabase first.");
         }
-        const dirtyRows = await window.HomeSchoolDB.getDictionaryOutboxEntries(500);
-        if (dirtyRows.length) {
-          const payload = dirtyRows.map((row) => ({
+        let dictionaryRowsToPush = await window.HomeSchoolDB.getDictionaryOutboxEntries(500);
+        if (!dictionaryRowsToPush.length && reason === "manual" && ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.getDictionaryEntries)) {
+          dictionaryRowsToPush = await window.HomeSchoolDB.getDictionaryEntries();
+        }
+        if (dictionaryRowsToPush.length) {
+          const payload = dictionaryRowsToPush.map((row) => ({
             user_id: user.id,
             normalized: row.normalized,
             word: row.word || row.normalized,
@@ -6956,7 +6959,7 @@ ${marker} `);
           }));
           const { error: pushError } = await client.from(SUPABASE_DICTIONARY_TABLE).upsert(payload, { onConflict: "user_id,normalized" });
           if (pushError) throw pushError;
-          await window.HomeSchoolDB.clearDictionaryOutboxEntries(dirtyRows.map((row) => row.normalized));
+          await window.HomeSchoolDB.clearDictionaryOutboxEntries(dictionaryRowsToPush.map((row) => row.normalized));
         }
         const cloudSeedMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloudSeeded");
         let cloudRowsToPush = await window.HomeSchoolDB.getCloudSyncOutboxEntries(2e3);
@@ -6964,11 +6967,11 @@ ${marker} `);
           var _a3;
           return String((row == null ? void 0 : row.dataset) || "").trim() === "customization" && String((row == null ? void 0 : row.rowId) || ((_a3 = row == null ? void 0 : row.payload) == null ? void 0 : _a3.type) || "").trim() === "activeStudentProfileId";
         });
-        if (staleLocalOnlyCloudRows.length && ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.clearCloudSyncOutboxEntries)) {
+        if (staleLocalOnlyCloudRows.length && ((_c2 = window.HomeSchoolDB) == null ? void 0 : _c2.clearCloudSyncOutboxEntries)) {
           await window.HomeSchoolDB.clearCloudSyncOutboxEntries(staleLocalOnlyCloudRows.map((row) => String(row.syncKey || "")));
           cloudRowsToPush = cloudRowsToPush.filter((row) => !staleLocalOnlyCloudRows.includes(row));
         }
-        if (!cloudRowsToPush.length && !((_c2 = cloudSeedMeta == null ? void 0 : cloudSeedMeta.data) == null ? void 0 : _c2.done)) {
+        if (!cloudRowsToPush.length && !((_d2 = cloudSeedMeta == null ? void 0 : cloudSeedMeta.data) == null ? void 0 : _d2.done)) {
           cloudRowsToPush = await window.HomeSchoolDB.getAllCloudSyncRows();
         }
         if (cloudRowsToPush.length) {
@@ -6985,7 +6988,7 @@ ${marker} `);
           if (cloudPayload.length) {
             const { error: cloudPushError } = await client.from(SUPABASE_CLOUD_DATA_TABLE).upsert(cloudPayload, { onConflict: "user_id,profile_id,dataset,row_id" });
             if (cloudPushError) throw cloudPushError;
-            if ((_d2 = window.HomeSchoolDB) == null ? void 0 : _d2.clearCloudSyncOutboxEntries) {
+            if ((_e2 = window.HomeSchoolDB) == null ? void 0 : _e2.clearCloudSyncOutboxEntries) {
               await window.HomeSchoolDB.clearCloudSyncOutboxEntries(cloudRowsToPush.map((row) => String(row.syncKey || `${String(row.dataset || "").trim()}::${String(row.profileId || activeStudentProfileIdRef.current || "default").trim()}::${String(row.rowId || "").trim()}`)));
             }
             await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloudSeeded", {
@@ -6997,7 +7000,7 @@ ${marker} `);
         const useIncrementalPulls = reason !== "manual";
         const lastPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:lastPull");
         let pullQuery = client.from(SUPABASE_DICTIONARY_TABLE).select("normalized, word, payload, updated_at, deleted_at, source_rank, device_id").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(1e3);
-        const lastPullAt = Number((_e2 = lastPullMeta == null ? void 0 : lastPullMeta.data) == null ? void 0 : _e2.timestamp) || 0;
+        const lastPullAt = Number((_f2 = lastPullMeta == null ? void 0 : lastPullMeta.data) == null ? void 0 : _f2.timestamp) || 0;
         if (useIncrementalPulls && lastPullAt > 0) {
           pullQuery = pullQuery.gt("updated_at", new Date(lastPullAt).toISOString());
         }
@@ -7019,7 +7022,7 @@ ${marker} `);
         }
         const lastCloudPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloud:lastPull");
         let cloudPullQuery = client.from(SUPABASE_CLOUD_DATA_TABLE).select("profile_id, dataset, row_id, payload, updated_at, deleted_at, device_id").eq("user_id", user.id).in("profile_id", [String(activeStudentProfileIdRef.current || "default"), "__global__"]).order("updated_at", { ascending: false }).limit(3e3);
-        const lastCloudPullAt = Number((_f2 = lastCloudPullMeta == null ? void 0 : lastCloudPullMeta.data) == null ? void 0 : _f2.timestamp) || 0;
+        const lastCloudPullAt = Number((_g2 = lastCloudPullMeta == null ? void 0 : lastCloudPullMeta.data) == null ? void 0 : _g2.timestamp) || 0;
         if (useIncrementalPulls && lastCloudPullAt > 0) {
           cloudPullQuery = cloudPullQuery.gt("updated_at", new Date(lastCloudPullAt).toISOString());
         }
