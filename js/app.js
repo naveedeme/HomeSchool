@@ -8949,6 +8949,23 @@ function HomeschoolApp() {
     }
   }, [applyIncomingCloudSyncRows, applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
 
+  const updateSupabaseDictionarySyncField = useCallback((field, value) => {
+    setSupabaseDictionarySync((current) => sanitizeSupabaseDictionarySyncSettings({
+      ...current,
+      [field]: typeof value === "function" ? value(current?.[field]) : value,
+    }));
+    if (field === "authEmail") {
+      const nextValue = typeof value === "function" ? value(supabasePendingEmail) : value;
+      setSupabasePendingEmail(String(nextValue || "").trim());
+    }
+  }, [supabasePendingEmail]);
+
+  const handleSupabasePendingEmailChange = useCallback((value) => {
+    const nextEmail = String(value || "").trim();
+    setSupabasePendingEmail(nextEmail);
+    updateSupabaseDictionarySyncField("authEmail", nextEmail);
+  }, [updateSupabaseDictionarySyncField]);
+
   const handleSupabaseSendMagicLink = useCallback(async () => {
     const email = String(supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim();
     if (!email) {
@@ -11544,23 +11561,6 @@ function HomeschoolApp() {
       },
     }));
   }, []);
-
-  const updateSupabaseDictionarySyncField = useCallback((field, value) => {
-    setSupabaseDictionarySync((current) => sanitizeSupabaseDictionarySyncSettings({
-      ...current,
-      [field]: typeof value === "function" ? value(current?.[field]) : value,
-    }));
-    if (field === "authEmail") {
-      const nextValue = typeof value === "function" ? value(supabasePendingEmail) : value;
-      setSupabasePendingEmail(String(nextValue || "").trim());
-    }
-  }, [supabasePendingEmail]);
-
-  const handleSupabasePendingEmailChange = useCallback((value) => {
-    const nextEmail = String(value || "").trim();
-    setSupabasePendingEmail(nextEmail);
-    updateSupabaseDictionarySyncField("authEmail", nextEmail);
-  }, [updateSupabaseDictionarySyncField]);
 
   const finishQuiz = async (ans, qs) => {
     const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
