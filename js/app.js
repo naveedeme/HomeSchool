@@ -14127,14 +14127,6 @@ function HomeschoolApp() {
     <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} data-tab={tab} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
       <div className="header-leading">
         <span className="back-btn-slot">{showBack ? <button className="back-btn" onClick={goBack}>←</button> : null}</span>
-        <button type="button" className="header-mark" title="HomeSchool" aria-label="Go home" onClick={goHome}>
-          <img src="img/ui/header-hs.png" alt="HomeSchool" className="header-mark-img" />
-        </button>
-      </div>
-      {navPosition === "top"
-        ? renderNavBar("top", true)
-        : <h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1>}
-      <div className="header-actions">
         <div className="header-profile-shell">
           <button
             ref={profileSwitcherButtonRef}
@@ -14194,6 +14186,11 @@ function HomeschoolApp() {
             </div>
           ) : null}
         </div>
+      </div>
+      {navPosition === "top"
+        ? renderNavBar("top", true)
+        : <h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1>}
+      <div className="header-actions">
         <button
           type="button"
           className={`header-pin-btn${!navAutoHide ? " active" : ""}`}
