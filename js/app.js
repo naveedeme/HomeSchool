@@ -13992,12 +13992,12 @@ function HomeschoolApp() {
   };
   const navItems = [
     { id: "home", icon: "🏠", label: ui.home },
-    { id: "profiles", icon: "👤", label: joinLocalizedText("Profiles", "پروفائلز", language) },
     { id: "progress", icon: "📊", label: ui.progress },
     { id: "review", icon: "🧠", label: ui.review },
     { id: "favorites", icon: "⭐", label: ui.favorites },
     { id: "badges", icon: "🏆", label: ui.badges },
     ...(readyAiProviderIds.length > 0 ? [{ id: "tutor", icon: "🤖", label: ui.tutor }] : []),
+    { id: "profiles", icon: "👤", label: joinLocalizedText("Profiles", "پروفائلز", language) },
     { id: "settings", icon: "⚙️", label: ui.settings },
   ];
   const handleNavItemSelect = (nextTab) => {
@@ -14271,98 +14271,6 @@ function HomeschoolApp() {
         </button>
         <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
         <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
-        <div className="review-panel home-support-panel sync-activity-panel" data-ui-language={language} style={{ marginTop: 16 }}>
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(joinLocalizedText("Cloud Sync Activity", "کلاؤڈ سنک سرگرمی", language), language)}</h3>
-              <p>{renderLocalizedTextNode(joinLocalizedText("Local study still saves instantly. This panel shows what is already pushed, what is still waiting, and whether realtime cloud sync is helping this profile stay current.", "مقامی مطالعہ فوراً محفوظ ہوتا رہتا ہے۔ یہ پینل دکھاتا ہے کہ کیا چیز اپ لوڈ ہو چکی ہے، کیا ابھی باقی ہے، اور آیا ریئل ٹائم کلاؤڈ سنک اس پروفائل کو تازہ رکھنے میں مدد دے رہی ہے۔", language), language)}</p>
-            </div>
-            <div className="result-actions" style={{ marginTop: 0 }}>
-              <span className="goal-progress-badge">{renderLocalizedTextNode(supabaseDictionarySync.realtimeEnabled ? joinLocalizedText("Realtime on", "ریئل ٹائم آن", language) : joinLocalizedText("Realtime off", "ریئل ٹائم بند", language), language)}</span>
-              <button type="button" className="ghost-cta" onClick={handleSupabaseSyncNow} disabled={supabaseSyncBusy}>
-                {renderLocalizedTextNode(supabaseSyncBusy ? joinLocalizedText("Syncing...", "سنک ہو رہی ہے...", language) : joinLocalizedText("Sync now", "ابھی سنک کریں", language), language)}
-              </button>
-            </div>
-          </div>
-          <div className="stat-grid">
-            <div
-              className="stat-card"
-              role="button"
-              tabIndex={0}
-              style={{ cursor: "pointer" }}
-              onClick={() => setSyncPendingDetailsOpen((current) => !current)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setSyncPendingDetailsOpen((current) => !current);
-                }
-              }}
-            >
-              <div className="stat-icon">⏳</div>
-              <div className="stat-value">{formatNumberLabel(syncPendingTotal)}</div>
-              <div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending changes", "منتظر تبدیلیاں", language), language)}</div>
-            </div>
-            <div className="stat-card"><div className="stat-icon">⬆️</div><div className="stat-value">{renderLocalizedTextNode(syncLastPushLabel, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Last push", "آخری اپ لوڈ", language), language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">⬇️</div><div className="stat-value">{renderLocalizedTextNode(syncLastPullLabel, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Last pull", "آخری ڈاؤن لوڈ", language), language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">📘</div><div className="stat-value">{formatNumberLabel(supabaseSyncActivity.dictionaryEntries || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Dictionary in cloud scope", "کلاؤڈ دائرہ کی لغت", language), language)}</div></div>
-          </div>
-          <div className="goal-progress-card">
-            <div className="goal-progress-row">
-              <div>
-                <strong>{renderLocalizedTextNode(syncActivityStatusText, language)}</strong>
-                <div className="goal-progress-meta">{renderLocalizedTextNode(supabaseSyncStatusLabel, language)}</div>
-              </div>
-              <span className="goal-progress-badge">{renderLocalizedTextNode(profileSyncScopeLabel, language)}</span>
-            </div>
-            <div className="goal-progress-row" style={{ marginTop: 12 }}>
-              <div>
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Dictionary queue", "لغت قطار", language), language)}</strong>
-                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.dictionaryPendingCount || 0} entries waiting`, `${supabaseSyncActivity.dictionaryPendingCount || 0} اندراجات منتظر`, language), language)}</div>
-              </div>
-              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.cloudPendingCount || 0} cloud rows`, `${supabaseSyncActivity.cloudPendingCount || 0} کلاؤڈ قطار`, language), language)}</span>
-            </div>
-          </div>
-          {syncDatasetSummary.length ? (
-            <div className="dictionary-entry-badges" style={{ marginTop: 12 }}>
-              {syncDatasetSummary.map((entry) => (
-                <span key={`sync_dataset_${entry.dataset}`} className="discovery-tag muted">{renderLocalizedTextNode(joinLocalizedText(`${entry.label} • ${entry.count}`, `${entry.label} • ${entry.count}`, language), language)}</span>
-              ))}
-            </div>
-          ) : (
-            <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(joinLocalizedText("No queued cloud datasets right now.", "اس وقت کوئی کلاؤڈ قطار باقی نہیں۔", language), language)}</p>
-          )}
-          {syncPendingDetailsOpen ? (
-            <div className="profile-report-list" style={{ marginTop: 14 }}>
-              {syncPendingDetails.length ? syncPendingDetails.map((entry) => (
-                <div key={entry.key} className="profile-report-item">
-                  <div className="profile-report-item-head">
-                    <strong>{renderLocalizedTextNode(entry.title, language)}</strong>
-                    <span>{renderLocalizedTextNode(entry.badge, language)}</span>
-                  </div>
-                  <div className="goal-progress-meta">
-                    {renderLocalizedTextNode(
-                      joinLocalizedText(
-                        `${entry.subtitle || "Pending row"} • ${entry.updatedAt ? formatDate(entry.updatedAt) : "waiting"}`,
-                        `${entry.subtitle || "منتظر قطار"} • ${entry.updatedAt ? formatDate(entry.updatedAt) : "منتظر"}`,
-                        language,
-                      ),
-                      language,
-                    )}
-                  </div>
-                </div>
-              )) : (
-                <div className="profile-report-item">
-                  <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("No pending rows right now.", "اس وقت کوئی منتظر قطار موجود نہیں۔", language), language)}</div>
-                </div>
-              )}
-            </div>
-          ) : null}
-          {supabaseSyncActivity.lastErrorMessage ? (
-            <div className="practice-feedback-panel" style={{ marginTop: 12 }}>
-              {renderLocalizedTextNode(joinLocalizedText(`Last sync issue: ${supabaseSyncActivity.lastErrorMessage}`, `آخری سنک مسئلہ: ${supabaseSyncActivity.lastErrorMessage}`, language), language)}
-            </div>
-          ) : null}
-        </div>
         <div className="review-panel challenge-panel" style={{ marginTop: 16 }}>
           <div className="review-panel-head">
             <div>
@@ -14493,27 +14401,6 @@ function HomeschoolApp() {
             </div>
             {reminderDueNow ? <p className="empty-state" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "آپ کی مطالعہ یاد دہانی ابھی کی ہے۔", language), language)}</p> : null}
           </div>
-        </div>
-        <div className="review-panel home-support-panel">
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(ui.notificationHistory, language)}</h3>
-              <p>{renderLocalizedTextNode(ui.notificationHistoryHint, language)}</p>
-            </div>
-          </div>
-          {recentNotificationHistory.length > 0 ? (
-            <div className="notification-history-list">
-              {recentNotificationHistory.map((entry) => (
-                <div key={entry.id} className="notification-history-item">
-                  <div className="notification-history-top">
-                    <strong>{renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)}</strong>
-                    <span>{renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language)}</span>
-                  </div>
-                  <p>{renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)}</p>
-                </div>
-              ))}
-            </div>
-          ) : <p className="empty-state">{renderLocalizedTextNode(ui.noNotificationsYet, language)}</p>}
         </div>
         <div className="review-panel home-support-panel">
           <div className="review-panel-head">
@@ -14924,6 +14811,119 @@ function HomeschoolApp() {
               </div>
             ))}
           </div>
+        </div>
+        <div className="review-panel home-support-panel sync-activity-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Cloud Sync Activity", "کلاؤڈ سنک سرگرمی", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Local study still saves instantly. This panel shows what is already pushed, what is still waiting, and whether realtime cloud sync is helping this profile stay current.", "مقامی مطالعہ فوراً محفوظ ہوتا رہتا ہے۔ یہ پینل دکھاتا ہے کہ کیا چیز اپ لوڈ ہو چکی ہے، کیا ابھی باقی ہے، اور آیا ریئل ٹائم کلاؤڈ سنک اس پروفائل کو تازہ رکھنے میں مدد دے رہی ہے۔", language), language)}</p>
+            </div>
+            <div className="result-actions" style={{ marginTop: 0 }}>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(supabaseDictionarySync.realtimeEnabled ? joinLocalizedText("Realtime on", "ریئل ٹائم آن", language) : joinLocalizedText("Realtime off", "ریئل ٹائم بند", language), language)}</span>
+              <button type="button" className="ghost-cta" onClick={handleSupabaseSyncNow} disabled={supabaseSyncBusy}>
+                {renderLocalizedTextNode(supabaseSyncBusy ? joinLocalizedText("Syncing...", "سنک ہو رہی ہے...", language) : joinLocalizedText("Sync now", "ابھی سنک کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          <div className="stat-grid">
+            <div
+              className="stat-card"
+              role="button"
+              tabIndex={0}
+              style={{ cursor: "pointer" }}
+              onClick={() => setSyncPendingDetailsOpen((current) => !current)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSyncPendingDetailsOpen((current) => !current);
+                }
+              }}
+            >
+              <div className="stat-icon">⏳</div>
+              <div className="stat-value">{formatNumberLabel(syncPendingTotal)}</div>
+              <div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending changes", "منتظر تبدیلیاں", language), language)}</div>
+            </div>
+            <div className="stat-card"><div className="stat-icon">⬆️</div><div className="stat-value">{renderLocalizedTextNode(syncLastPushLabel, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Last push", "آخری اپ لوڈ", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">⬇️</div><div className="stat-value">{renderLocalizedTextNode(syncLastPullLabel, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Last pull", "آخری ڈاؤن لوڈ", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📘</div><div className="stat-value">{formatNumberLabel(supabaseSyncActivity.dictionaryEntries || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Dictionary in cloud scope", "کلاؤڈ دائرہ کی لغت", language), language)}</div></div>
+          </div>
+          <div className="goal-progress-card">
+            <div className="goal-progress-row">
+              <div>
+                <strong>{renderLocalizedTextNode(syncActivityStatusText, language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(supabaseSyncStatusLabel, language)}</div>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(profileSyncScopeLabel, language)}</span>
+            </div>
+            <div className="goal-progress-row" style={{ marginTop: 12 }}>
+              <div>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Dictionary queue", "لغت قطار", language), language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.dictionaryPendingCount || 0} entries waiting`, `${supabaseSyncActivity.dictionaryPendingCount || 0} اندراجات منتظر`, language), language)}</div>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.cloudPendingCount || 0} cloud rows`, `${supabaseSyncActivity.cloudPendingCount || 0} کلاؤڈ قطار`, language), language)}</span>
+            </div>
+          </div>
+          {syncDatasetSummary.length ? (
+            <div className="dictionary-entry-badges" style={{ marginTop: 12 }}>
+              {syncDatasetSummary.map((entry) => (
+                <span key={`sync_dataset_${entry.dataset}`} className="discovery-tag muted">{renderLocalizedTextNode(joinLocalizedText(`${entry.label} • ${entry.count}`, `${entry.label} • ${entry.count}`, language), language)}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(joinLocalizedText("No queued cloud datasets right now.", "اس وقت کوئی کلاؤڈ قطار باقی نہیں۔", language), language)}</p>
+          )}
+          {syncPendingDetailsOpen ? (
+            <div className="profile-report-list" style={{ marginTop: 14 }}>
+              {syncPendingDetails.length ? syncPendingDetails.map((entry) => (
+                <div key={entry.key} className="profile-report-item">
+                  <div className="profile-report-item-head">
+                    <strong>{renderLocalizedTextNode(entry.title, language)}</strong>
+                    <span>{renderLocalizedTextNode(entry.badge, language)}</span>
+                  </div>
+                  <div className="goal-progress-meta">
+                    {renderLocalizedTextNode(
+                      joinLocalizedText(
+                        `${entry.subtitle || "Pending row"} • ${entry.updatedAt ? formatDate(entry.updatedAt) : "waiting"}`,
+                        `${entry.subtitle || "منتظر قطار"} • ${entry.updatedAt ? formatDate(entry.updatedAt) : "منتظر"}`,
+                        language,
+                      ),
+                      language,
+                    )}
+                  </div>
+                </div>
+              )) : (
+                <div className="profile-report-item">
+                  <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("No pending rows right now.", "اس وقت کوئی منتظر قطار موجود نہیں۔", language), language)}</div>
+                </div>
+              )}
+            </div>
+          ) : null}
+          {supabaseSyncActivity.lastErrorMessage ? (
+            <div className="practice-feedback-panel" style={{ marginTop: 12 }}>
+              {renderLocalizedTextNode(joinLocalizedText(`Last sync issue: ${supabaseSyncActivity.lastErrorMessage}`, `آخری سنک مسئلہ: ${supabaseSyncActivity.lastErrorMessage}`, language), language)}
+            </div>
+          ) : null}
+        </div>
+        <div className="review-panel home-support-panel" style={{ marginTop: 16 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(ui.notificationHistory, language)}</h3>
+              <p>{renderLocalizedTextNode(ui.notificationHistoryHint, language)}</p>
+            </div>
+          </div>
+          {recentNotificationHistory.length > 0 ? (
+            <div className="notification-history-list">
+              {recentNotificationHistory.map((entry) => (
+                <div key={entry.id} className="notification-history-item">
+                  <div className="notification-history-top">
+                    <strong>{renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)}</strong>
+                    <span>{renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language)}</span>
+                  </div>
+                  <p>{renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)}</p>
+                </div>
+              ))}
+            </div>
+          ) : <p className="empty-state">{renderLocalizedTextNode(ui.noNotificationsYet, language)}</p>}
         </div>
         {activeProfileRole === "parent" ? (
           <div className="review-panel home-support-panel role-overview-panel" data-ui-language={language} style={{ marginTop: 16 }}>
