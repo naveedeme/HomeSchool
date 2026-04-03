@@ -385,6 +385,7 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .app-status-card[data-ui-language="bilingual"] .app-status-actions{justify-content:flex-start}
 .install-cta{padding:10px 14px;border:none;border-radius:10px;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#F8FAFC;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer}
 .ghost-cta{padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer}
+.ghost-cta.active{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--bg-elevated))}
 .review-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px}
 .review-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
 .review-panel-head h3{font-size:16px;font-weight:800;margin-bottom:4px}
@@ -489,6 +490,12 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .discovery-word-answer{font-size:16px;color:var(--text-secondary);line-height:1.6}
 .discovery-word-meta{font-size:12px;color:var(--text-muted);margin-top:8px}
 .word-bank-shell{margin-top:16px;padding-top:4px}
+.dictionary-browser-shell{margin-top:18px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
+.dictionary-browser-controls{display:flex;flex-direction:column;gap:10px}
+.dictionary-toolbar-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.dictionary-select{min-width:220px;max-width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-panel);color:var(--text-primary);font-family:var(--font)}
+.dictionary-inline-filters{flex:1 1 320px}
+.dictionary-stat-strip{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .discovery-filter-shell{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
 .discovery-filter-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .discovery-filter-row.compact{gap:8px}
@@ -496,6 +503,26 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .discovery-filter-row > .study-tool-btn.compact{width:100%;min-height:56px}
 .discovery-filter-row > .practice-subject-chip{justify-content:flex-start}
 .discovery-filter-row > .study-tool-btn.compact{display:inline-flex;align-items:center;justify-content:center;padding:0 14px}
+.dictionary-entry-list{display:grid;gap:12px;margin-top:14px}
+.dictionary-entry-card{padding:14px 15px;border-radius:16px;border:1px solid var(--border);background:color-mix(in srgb,var(--bg-card) 88%,var(--bg-elevated));box-shadow:0 10px 24px rgba(15,23,42,.08)}
+.dictionary-entry-card.deleted{opacity:.92;background:color-mix(in srgb,var(--bg-elevated) 92%,transparent)}
+.dictionary-entry-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.dictionary-entry-word{font-size:18px;font-weight:800;color:var(--text-primary);line-height:1.2}
+.dictionary-entry-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.discovery-tag.trusted{border-color:rgba(34,197,94,.28);background:rgba(34,197,94,.10);color:#16A34A}
+.discovery-tag.weak{border-color:rgba(245,158,11,.28);background:rgba(245,158,11,.12);color:#D97706}
+.discovery-tag.deleted{border-color:rgba(148,163,184,.28);background:rgba(148,163,184,.12);color:var(--text-secondary)}
+.dictionary-entry-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.dictionary-entry-meaning-list{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.dictionary-entry-meaning-line{display:flex;align-items:flex-start;gap:8px;font-family:var(--font-ur);font-size:15px;direction:rtl;text-align:right;line-height:1.9}
+.dictionary-entry-order{font-size:12px;font-weight:800;color:var(--accent);line-height:2.2}
+.dictionary-entry-explanation{margin-top:10px;color:var(--text-secondary);line-height:1.7;font-size:13px}
+.dictionary-entry-example-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.dictionary-entry-example{font-size:12px;color:var(--text-secondary);line-height:1.6}
+.dictionary-editor-card{display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-top:12px;border-top:1px dashed color-mix(in srgb,var(--border) 80%,transparent)}
+.dictionary-editor-textarea{min-height:84px;resize:vertical}
+.dictionary-editor-textarea.urdu{direction:rtl;text-align:right;font-family:var(--font-ur)}
+.dictionary-action-row{gap:10px;flex-wrap:wrap}
 .discovery-result-list{display:flex;flex-direction:column;gap:10px}
 .discovery-result-card{width:100%;padding:14px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);text-align:left;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
 .discovery-result-card:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 26%,var(--border));box-shadow:0 14px 28px color-mix(in srgb,var(--bg-primary) 14%,transparent)}
@@ -735,6 +762,11 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .math-visual-stack{display:flex;flex-direction:column;gap:16px;margin-top:12px}
 .math-visual-panel{padding:14px;border-radius:18px;background:var(--bg-card);border:1px solid var(--border);box-shadow:0 14px 30px color-mix(in srgb,var(--text-primary) 10%,transparent)}
 .math-visual-label{font-family:'Baloo 2',sans-serif;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#F59E0B;margin-bottom:4px}
+@media(max-width:900px){
+  .dictionary-entry-head{flex-direction:column}
+  .dictionary-entry-actions{justify-content:flex-start}
+  .dictionary-select{width:100%}
+}
 @keyframes studyFocusPulse{0%{transform:scale(.985);opacity:.82}35%{transform:scale(1.01);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes pageFocusFlash{0%{filter:brightness(1)}25%{filter:brightness(1.06)}100%{filter:brightness(1)}}
 

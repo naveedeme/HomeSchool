@@ -1387,6 +1387,7 @@ function normalizeWordMeaningEntry(rawWord, value, options = {}) {
     source: sources[0] || String(options.defaultSource || value.source || "cache").trim() || "cache",
     sources,
     origins,
+    deletedAt: value.deletedAt ? (Number(value.deletedAt) || Date.now()) : null,
     fetchedAt: Number(value.fetchedAt) || Number(value.updatedAt) || now,
     createdAt: Number(value.createdAt) || Number(value.fetchedAt) || now,
     updatedAt: Number(value.updatedAt) || Number(value.fetchedAt) || now,
@@ -1419,6 +1420,9 @@ function mergeWordMeaningEntry(baseEntry, nextEntry) {
     source: next.source || base.source || sources[0] || "cache",
     sources,
     origins,
+    deletedAt: Object.prototype.hasOwnProperty.call(next, "deletedAt")
+      ? (next.deletedAt ? Number(next.deletedAt) || Date.now() : null)
+      : (base.deletedAt || null),
     createdAt: Math.min(Number(base.createdAt) || Date.now(), Number(next.createdAt) || Date.now()),
     fetchedAt: Math.max(Number(base.fetchedAt) || 0, Number(next.fetchedAt) || 0, Date.now()),
     updatedAt: Math.max(Number(base.updatedAt) || 0, Number(next.updatedAt) || 0, Date.now()),
@@ -7340,7 +7344,15 @@ function HomeschoolApp() {
   const [wordSearch, setWordSearch] = useState("");
   const [wordBankSubjectFilter, setWordBankSubjectFilter] = useState("all");
   const [wordMeaningCache, setWordMeaningCache] = useState(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
+  const [dictionaryDeletedArchive, setDictionaryDeletedArchive] = useState(normalizeWordMeaningCache(stored?.dictionaryDeletedArchive || {}));
   const [dictionaryImportUrl, setDictionaryImportUrl] = useState(String(stored?.dictionaryImportUrl || ""));
+  const [dictionarySearch, setDictionarySearch] = useState("");
+  const [dictionarySubjectFilter, setDictionarySubjectFilter] = useState("all");
+  const [dictionaryLessonFilter, setDictionaryLessonFilter] = useState("all");
+  const [dictionarySourceFilter, setDictionarySourceFilter] = useState("all");
+  const [dictionaryShowDeleted, setDictionaryShowDeleted] = useState(false);
+  const [dictionaryEditorState, setDictionaryEditorState] = useState(null);
+  const [dictionaryBatchBusy, setDictionaryBatchBusy] = useState("");
   const [supabaseDictionarySync, setSupabaseDictionarySync] = useState(storedSupabaseSyncSettings);
   const [supabaseAuthState, setSupabaseAuthState] = useState({
     status: "idle",
@@ -8111,13 +8123,17 @@ function HomeschoolApp() {
     }).slice(0, 18);
   }, [wordBankIndex, wordBankSubjectFilter, wordSearch]);
   const localWordMeaningLookup = useMemo(() => buildWordMeaningLookupFromIndex(wordBankIndex), [wordBankIndex]);
-  const effectiveWordMeaningDictionary = useMemo(() => mergeWordMeaningMaps(localWordMeaningLookup, wordMeaningCache), [localWordMeaningLookup, wordMeaningCache]);
+  const mergedWordMeaningDictionary = useMemo(() => mergeWordMeaningMaps(localWordMeaningLookup, wordMeaningCache), [localWordMeaningLookup, wordMeaningCache]);
+  const effectiveWordMeaningDictionary = useMemo(() => Object.fromEntries(
+    Object.entries(mergedWordMeaningDictionary).filter(([, entry]) => !entry?.deletedAt),
+  ), [mergedWordMeaningDictionary]);
   const dictionaryStats = useMemo(() => {
     const learnedEntries = Object.values(normalizeWordMeaningCache(wordMeaningCache));
     const effectiveEntries = Object.values(effectiveWordMeaningDictionary);
     const countByOrigin = (originKey) => learnedEntries.filter((entry) => Array.isArray(entry.origins) && entry.origins.includes(originKey)).length;
     return {
       total: effectiveEntries.length,
+      deleted: Object.keys(normalizeWordMeaningCache(dictionaryDeletedArchive)).length,
       curriculum: Object.keys(localWordMeaningLookup).length,
       learned: learnedEntries.length,
       imported: countByOrigin("imported"),
@@ -8125,7 +8141,92 @@ function HomeschoolApp() {
       bilingual: effectiveEntries.filter((entry) => (entry.meaningsEn || []).length > 0 || entry.explanationEng || (entry.examplesEng || []).length > 0).length,
       descriptive: effectiveEntries.filter((entry) => String(entry.explanationUr || "").trim() || String(entry.explanationEng || "").trim()).length,
     };
-  }, [effectiveWordMeaningDictionary, localWordMeaningLookup, wordMeaningCache]);
+  }, [dictionaryDeletedArchive, effectiveWordMeaningDictionary, localWordMeaningLookup, wordMeaningCache]);
+  const dictionaryMetaLookup = useMemo(() => {
+    const subjectLookup = Object.fromEntries(SUBJECTS.map((subject) => [subject.id, subject]));
+    return (Array.isArray(wordBankIndex) ? wordBankIndex : []).reduce((acc, item) => {
+      const prompt = normalizeText(item?.prompt || "");
+      if (!prompt || containsUrduText(prompt)) return acc;
+      const lessonKey = String(item?.lessonKey || item?.source?.lessonKey || "").trim();
+      const lessonLabel = String(item?.source?.lessonTitle || item?.sectionLabel || item?.lessonTitle || lessonKey || "").trim();
+      const subjectId = String(item?.subjectId || item?.subject || "english").trim();
+      const subjectInfo = subjectLookup[subjectId] || {};
+      getLookupWordCandidates(prompt).forEach((candidate) => {
+        if (!acc[candidate]) {
+          acc[candidate] = {
+            subjectIds: [],
+            lessonKeys: [],
+            lessonLabels: [],
+            badges: [],
+          };
+        }
+        if (subjectId && !acc[candidate].subjectIds.includes(subjectId)) acc[candidate].subjectIds.push(subjectId);
+        if (lessonKey && !acc[candidate].lessonKeys.includes(lessonKey)) acc[candidate].lessonKeys.push(lessonKey);
+        if (lessonLabel && !acc[candidate].lessonLabels.includes(lessonLabel)) acc[candidate].lessonLabels.push(lessonLabel);
+        const subjectBadge = subjectId === "urdu"
+          ? "اردو"
+          : joinLocalizedText(subjectInfo.name || subjectId, subjectInfo.nameUr || subjectId, language);
+        if (subjectBadge && !acc[candidate].badges.includes(subjectBadge)) acc[candidate].badges.push(subjectBadge);
+      });
+      return acc;
+    }, {});
+  }, [language, wordBankIndex]);
+  const dictionaryLessonOptions = useMemo(() => {
+    if (!dictionarySubjectFilter || dictionarySubjectFilter === "all" || !window.HomeSchoolData?.getLessons) return [];
+    return (window.HomeSchoolData.getLessons(dictionarySubjectFilter, grade) || []).map((lesson) => ({
+      key: lesson.key,
+      label: lesson.title,
+    }));
+  }, [dictionarySubjectFilter, grade]);
+  const dictionaryBrowserEntries = useMemo(() => {
+    const searchNeedle = normalizeText(dictionarySearch).toLowerCase();
+    const archiveEntries = dictionaryShowDeleted
+      ? Object.values(normalizeWordMeaningCache(dictionaryDeletedArchive)).map((entry) => ({ ...entry, deletedAt: entry.deletedAt || entry.updatedAt || Date.now(), browserDeleted: true }))
+      : [];
+    const liveEntries = Object.values(effectiveWordMeaningDictionary).map((entry) => ({ ...entry, browserDeleted: false }));
+    const combined = [...liveEntries];
+    archiveEntries.forEach((entry) => {
+      if (!combined.some((candidate) => candidate.normalizedWord === entry.normalizedWord)) combined.push(entry);
+    });
+    const matchesOriginFilter = (entry) => {
+      if (dictionarySourceFilter === "all") return true;
+      const origins = new Set([...(entry.origins || []), ...(entry.sources || []), entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+      if (dictionarySourceFilter === "trusted") return origins.has("trusted");
+      if (dictionarySourceFilter === "weak") return origins.has("weak");
+      if (dictionarySourceFilter === "ai") return origins.has("ai") || origins.has("gemini");
+      return origins.has(dictionarySourceFilter);
+    };
+    return combined.filter((entry) => {
+      const meta = dictionaryMetaLookup[entry.normalizedWord] || {};
+      if (dictionarySubjectFilter !== "all" && !(meta.subjectIds || []).includes(dictionarySubjectFilter)) return false;
+      if (dictionaryLessonFilter !== "all" && !(meta.lessonKeys || []).includes(dictionaryLessonFilter)) return false;
+      if (!matchesOriginFilter(entry)) return false;
+      if (!searchNeedle) return true;
+      const haystack = [
+        entry.word,
+        entry.meaningUr,
+        ...(entry.meaningsUr || []),
+        entry.explanationUr,
+        ...(entry.meaningsEn || []),
+        entry.explanationEng,
+        ...(entry.examplesEng || []),
+        ...((meta.badges || [])),
+        ...((meta.lessonLabels || [])),
+      ].join(" ").toLowerCase();
+      return haystack.includes(searchNeedle);
+    }).sort((left, right) => {
+      const leftTrusted = Array.isArray(left.origins) && left.origins.includes("trusted") ? 1 : 0;
+      const rightTrusted = Array.isArray(right.origins) && right.origins.includes("trusted") ? 1 : 0;
+      if (leftTrusted !== rightTrusted) return rightTrusted - leftTrusted;
+      return String(left.word || left.normalizedWord || "").localeCompare(String(right.word || right.normalizedWord || ""));
+    }).slice(0, 40);
+  }, [dictionaryDeletedArchive, dictionaryLessonFilter, dictionaryMetaLookup, dictionarySearch, dictionaryShowDeleted, dictionarySourceFilter, dictionarySubjectFilter, effectiveWordMeaningDictionary]);
+  useEffect(() => {
+    if (dictionaryLessonFilter === "all") return;
+    if (!dictionaryLessonOptions.some((lesson) => lesson.key === dictionaryLessonFilter)) {
+      setDictionaryLessonFilter("all");
+    }
+  }, [dictionaryLessonFilter, dictionaryLessonOptions]);
 
   const applyIncomingDictionaryRows = useCallback(async (incomingRows, reason = "sync") => {
     const normalizedRows = (Array.isArray(incomingRows) ? incomingRows : [])
@@ -8147,6 +8248,7 @@ function HomeschoolApp() {
     const rowsToPersist = [];
     const mergedMap = {};
     const deletedWords = [];
+    const archivedDeletedMap = {};
     const detectedConflicts = [];
     const processedWords = new Set();
 
@@ -8156,6 +8258,17 @@ function HomeschoolApp() {
       if (remoteRow.deletedAt) {
         rowsToPersist.push(remoteRow);
         deletedWords.push(remoteRow.normalized);
+        const localEntry = normalizeWordMeaningEntry(localRow?.word || remoteRow.word || remoteRow.normalized, localRow?.payload || {}, {
+          defaultSource: localRow?.payload?.source || "Dictionary",
+          defaultOrigins: ["remote"],
+        });
+        if (localEntry) {
+          archivedDeletedMap[remoteRow.normalized] = {
+            ...localEntry,
+            deletedAt: remoteRow.deletedAt,
+            updatedAt: Number(remoteRow.updatedAt) || Date.now(),
+          };
+        }
         return;
       }
       if (!localRow || localRow.deletedAt) {
@@ -8185,6 +8298,9 @@ function HomeschoolApp() {
         dictionaryPersistedSnapshotRef.current = normalizeWordMeaningCache(next);
         return next;
       });
+    }
+    if (deletedWords.length) {
+      setDictionaryDeletedArchive((current) => mergeWordMeaningMaps(current, archivedDeletedMap));
     }
 
     if (processedWords.size || detectedConflicts.length) {
@@ -8464,7 +8580,9 @@ function HomeschoolApp() {
     let cancelled = false;
     (async () => {
       try {
-        const storedDictionaryMap = await window.HomeSchoolDB.getDictionaryEntriesMap();
+        const storedDictionaryRows = await window.HomeSchoolDB.getDictionaryEntries();
+        const storedDictionaryMap = createDictionaryMapFromRows((storedDictionaryRows || []).filter((row) => !row?.deletedAt));
+        const deletedDictionaryMap = createDictionaryMapFromRows((storedDictionaryRows || []).filter((row) => row?.deletedAt));
         const storedConflictMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:conflicts");
         if (cancelled) return;
         if (storedDictionaryMap && Object.keys(storedDictionaryMap).length) {
@@ -8477,6 +8595,9 @@ function HomeschoolApp() {
           });
         } else {
           dictionaryPersistedSnapshotRef.current = normalizeWordMeaningCache(wordMeaningCache);
+        }
+        if (deletedDictionaryMap && Object.keys(deletedDictionaryMap).length) {
+          setDictionaryDeletedArchive((current) => mergeWordMeaningMaps(current, deletedDictionaryMap));
         }
         if (Array.isArray(storedConflictMeta?.data?.records)) {
           setDictionarySyncConflicts(sanitizeDictionaryConflictRecords(storedConflictMeta.data.records));
@@ -8506,6 +8627,22 @@ function HomeschoolApp() {
     if (!changedKeys.length) return;
     const changedRows = changedKeys.map((key) => normalizedCurrent[key]).filter(Boolean);
     const removedKeys = changedKeys.filter((key) => !normalizedCurrent[key]);
+    if (removedKeys.length) {
+      const removedArchive = removedKeys.reduce((acc, key) => {
+        const previousEntry = previous[key];
+        if (previousEntry) {
+          acc[key] = {
+            ...previousEntry,
+            deletedAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+        }
+        return acc;
+      }, {});
+      if (Object.keys(removedArchive).length) {
+        setDictionaryDeletedArchive((current) => mergeWordMeaningMaps(current, removedArchive));
+      }
+    }
     dictionaryPersistedSnapshotRef.current = normalizedCurrent;
     (async () => {
       try {
@@ -9731,8 +9868,8 @@ function HomeschoolApp() {
     });
 }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-  if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
+  if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -10702,6 +10839,7 @@ function HomeschoolApp() {
         setGamificationState(normalizedGamification);
       }
       if (nextState.wordMeaningCache) setWordMeaningCache(normalizeWordMeaningCache(nextState.wordMeaningCache));
+      if (nextState.dictionaryDeletedArchive) setDictionaryDeletedArchive(normalizeWordMeaningCache(nextState.dictionaryDeletedArchive));
       if (Array.isArray(nextState.dictionarySyncConflicts)) setDictionarySyncConflicts(sanitizeDictionaryConflictRecords(nextState.dictionarySyncConflicts));
       if (typeof nextState.dictionaryImportUrl !== "undefined") setDictionaryImportUrl(String(nextState.dictionaryImportUrl || ""));
       return;
@@ -10789,6 +10927,12 @@ function HomeschoolApp() {
         ...nextState.wordMeaningCache,
       }));
     }
+    if (nextState.dictionaryDeletedArchive) {
+      setDictionaryDeletedArchive((current) => normalizeWordMeaningCache({
+        ...current,
+        ...nextState.dictionaryDeletedArchive,
+      }));
+    }
     if (Array.isArray(nextState.dictionarySyncConflicts)) {
       setDictionarySyncConflicts((current) => mergeDictionaryConflictRecords(current, nextState.dictionarySyncConflicts));
     }
@@ -10858,6 +11002,7 @@ function HomeschoolApp() {
         notificationHistory,
         gamificationState,
         wordMeaningCache,
+        dictionaryDeletedArchive,
         dictionarySyncConflicts,
       },
       dbProgress,
@@ -10867,7 +11012,7 @@ function HomeschoolApp() {
       lastBackupAt: exportedAt,
       lastPromptDay: getLocalDayKey(exportedAt),
     }));
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts]);
+  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts]);
 
   const handleExportDictionary = useCallback(() => {
     const exportedAt = Date.now();
@@ -10888,11 +11033,154 @@ function HomeschoolApp() {
       defaultOrigins: ["imported"],
       defaultSource: "Imported",
     });
-    const count = Object.keys(normalizedIncoming).length;
-    if (!count) return 0;
-    setWordMeaningCache((current) => mergeWordMeaningMaps(current, normalizedIncoming));
-    return count;
+    const incomingKeys = Object.keys(normalizedIncoming);
+    if (!incomingKeys.length) {
+      return { total: 0, added: 0, updated: 0, restored: 0 };
+    }
+    const normalizedCurrent = normalizeWordMeaningCache(wordMeaningCache || {});
+    const normalizedArchive = normalizeWordMeaningCache(dictionaryDeletedArchive || {});
+    const stats = incomingKeys.reduce((acc, key) => {
+      if (!normalizedCurrent[key]) acc.added += 1;
+      else acc.updated += 1;
+      if (normalizedArchive[key]) acc.restored += 1;
+      return acc;
+    }, { total: incomingKeys.length, added: 0, updated: 0, restored: 0 });
+    setWordMeaningCache(mergeWordMeaningMaps(normalizedCurrent, normalizedIncoming));
+    setDictionaryDeletedArchive(removeDictionaryEntriesFromMap(normalizedArchive, incomingKeys));
+    return stats;
+  }, [dictionaryDeletedArchive, wordMeaningCache]);
+
+  const openDictionaryEditor = useCallback((entry) => {
+    const normalized = normalizeLookupWord(entry?.normalizedWord || entry?.word);
+    if (!normalized) return;
+    setDictionaryEditorState({
+      normalized,
+      draft: {
+        word: String(entry?.word || normalized).trim(),
+        meaningsUr: Array.isArray(entry?.meaningsUr) && entry.meaningsUr.length ? entry.meaningsUr.join("\n") : String(entry?.meaningUr || "").trim(),
+        explanationUr: String(entry?.explanationUr || "").trim(),
+        meaningsEn: Array.isArray(entry?.meaningsEn) ? entry.meaningsEn.join("\n") : "",
+        explanationEng: String(entry?.explanationEng || "").trim(),
+        examplesEng: Array.isArray(entry?.examplesEng) ? entry.examplesEng.join("\n") : "",
+        partOfSpeech: String(entry?.partOfSpeech || "").trim(),
+      },
+    });
   }, []);
+
+  const updateDictionaryEditorField = useCallback((field, value) => {
+    setDictionaryEditorState((current) => current ? ({
+      ...current,
+      draft: {
+        ...(current.draft || {}),
+        [field]: value,
+      },
+    }) : current);
+  }, []);
+
+  const handleSaveDictionaryEntry = useCallback(() => {
+    const normalized = dictionaryEditorState?.normalized;
+    if (!normalized) return;
+    const currentEntry = mergeWordMeaningEntry(
+      effectiveWordMeaningDictionary[normalized],
+      normalizeWordMeaningCache(dictionaryDeletedArchive || {})[normalized],
+    );
+    const draft = dictionaryEditorState?.draft || {};
+    const nextEntry = normalizeWordMeaningEntry(draft.word || currentEntry?.word || normalized, {
+      ...currentEntry,
+      word: String(draft.word || currentEntry?.word || normalized).trim() || normalized,
+      meaningsUr: String(draft.meaningsUr || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
+      explanationUr: String(draft.explanationUr || "").trim(),
+      meaningsEn: String(draft.meaningsEn || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
+      explanationEng: String(draft.explanationEng || "").trim(),
+      examplesEng: String(draft.examplesEng || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
+      partOfSpeech: String(draft.partOfSpeech || "").trim(),
+      source: currentEntry?.source || "Manual",
+      sources: Array.from(new Set([...(currentEntry?.sources || []), currentEntry?.source || "Manual"])),
+      origins: Array.from(new Set([...(currentEntry?.origins || []), "user"])),
+      deletedAt: null,
+      updatedAt: Date.now(),
+    }, {
+      defaultOrigins: ["user"],
+      defaultSource: currentEntry?.source || "Manual",
+    });
+    if (!nextEntry) {
+      showAppToast(joinLocalizedText("Dictionary entry needs at least one meaning or explanation.", "لغت اندراج میں کم از کم ایک معنی یا وضاحت ہونی چاہیے۔", language), "alert");
+      return;
+    }
+    setWordMeaningCache((current) => mergeWordMeaningMaps(current, { [normalized]: nextEntry }));
+    setDictionaryDeletedArchive((current) => removeDictionaryEntriesFromMap(current, [normalized]));
+    setDictionaryEditorState(null);
+    showAppToast(joinLocalizedText("Dictionary entry saved", "لغت اندراج محفوظ ہو گیا", language), "check");
+  }, [dictionaryDeletedArchive, dictionaryEditorState, effectiveWordMeaningDictionary, language, showAppToast]);
+
+  const handleDeleteDictionaryEntry = useCallback((entry) => {
+    const normalized = normalizeLookupWord(entry?.normalizedWord || entry?.word);
+    if (!normalized) return;
+    if (!wordMeaningCache[normalized]) {
+      showAppToast(joinLocalizedText("Only learned or imported dictionary entries can be removed here.", "یہاں صرف سیکھی گئی یا درآمد شدہ لغت اندراجات حذف کی جا سکتی ہیں۔", language), "alert");
+      return;
+    }
+    const archivedEntry = mergeWordMeaningEntry(entry, wordMeaningCache[normalized]);
+    setDictionaryDeletedArchive((current) => mergeWordMeaningMaps(current, {
+      [normalized]: {
+        ...archivedEntry,
+        deletedAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    }));
+    setWordMeaningCache((current) => removeDictionaryEntriesFromMap(current, [normalized]));
+    setDictionaryEditorState((current) => current?.normalized === normalized ? null : current);
+    showAppToast(joinLocalizedText("Dictionary entry removed", "لغت اندراج حذف کر دیا گیا", language), "alert");
+  }, [language, showAppToast, wordMeaningCache]);
+
+  const handleRestoreDictionaryEntry = useCallback((entry) => {
+    const normalized = normalizeLookupWord(entry?.normalizedWord || entry?.word);
+    if (!normalized) return;
+    const restoredEntry = normalizeWordMeaningEntry(entry.word || normalized, {
+      ...entry,
+      deletedAt: null,
+      updatedAt: Date.now(),
+    }, {
+      defaultOrigins: entry?.origins || ["restored"],
+      defaultSource: entry?.source || "Dictionary",
+    });
+    if (!restoredEntry) return;
+    setWordMeaningCache((current) => mergeWordMeaningMaps(current, { [normalized]: restoredEntry }));
+    setDictionaryDeletedArchive((current) => removeDictionaryEntriesFromMap(current, [normalized]));
+    showAppToast(joinLocalizedText("Dictionary entry restored", "لغت اندراج بحال ہو گیا", language), "check");
+  }, [language, showAppToast]);
+
+  const handleSetDictionaryTrust = useCallback((entry, trustMode) => {
+    const normalized = normalizeLookupWord(entry?.normalizedWord || entry?.word);
+    if (!normalized || !["trusted", "weak", "clear"].includes(trustMode)) return;
+    const baseEntry = mergeWordMeaningEntry(effectiveWordMeaningDictionary[normalized], entry);
+    if (!baseEntry) return;
+    const nextOrigins = new Set(baseEntry.origins || []);
+    nextOrigins.delete("trusted");
+    nextOrigins.delete("weak");
+    if (trustMode === "trusted") nextOrigins.add("trusted");
+    if (trustMode === "weak") nextOrigins.add("weak");
+    const nextEntry = normalizeWordMeaningEntry(baseEntry.word || normalized, {
+      ...baseEntry,
+      origins: Array.from(nextOrigins),
+      updatedAt: Date.now(),
+      deletedAt: null,
+    }, {
+      defaultOrigins: Array.from(nextOrigins),
+      defaultSource: baseEntry.source || "Dictionary",
+    });
+    if (!nextEntry) return;
+    setWordMeaningCache((current) => mergeWordMeaningMaps(current, { [normalized]: nextEntry }));
+    setDictionaryDeletedArchive((current) => removeDictionaryEntriesFromMap(current, [normalized]));
+    showAppToast(
+      trustMode === "trusted"
+        ? joinLocalizedText("Marked as trusted", "قابلِ اعتماد کے طور پر نشان زد", language)
+        : trustMode === "weak"
+          ? joinLocalizedText("Marked for review", "جائزے کے لیے نشان زد", language)
+          : joinLocalizedText("Trust flag cleared", "اعتماد کا نشان ہٹا دیا گیا", language),
+      "check",
+    );
+  }, [effectiveWordMeaningDictionary, language, showAppToast]);
 
   const handleImportDictionary = useCallback(async (event) => {
     const file = event?.target?.files?.[0];
@@ -10900,12 +11188,16 @@ function HomeschoolApp() {
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const importedCount = mergeImportedDictionaryEntries(normalizeDictionaryImportPayload(parsed));
-      if (!importedCount) {
+      const importStats = mergeImportedDictionaryEntries(normalizeDictionaryImportPayload(parsed));
+      if (!importStats.total) {
         alert(joinLocalizedText("No dictionary entries were found in this file.", "اس فائل میں لغت کے اندراجات نہیں ملے۔", language));
         return;
       }
-      alert(joinLocalizedText(`${importedCount} dictionary entries were merged.`, `${importedCount} لغت اندراجات ضم کر دیے گئے۔`, language));
+      alert(joinLocalizedText(
+        `${importStats.total} dictionary entries were merged. ${importStats.added} new, ${importStats.updated} updated${importStats.restored ? `, ${importStats.restored} restored` : ""}.`,
+        `${importStats.total} لغت اندراجات ضم ہو گئے۔ ${importStats.added} نئے، ${importStats.updated} تازہ${importStats.restored ? `، ${importStats.restored} بحال` : ""}۔`,
+        language,
+      ));
     } catch (error) {
       alert(joinLocalizedText(`Dictionary import failed: ${error.message || error}`, `لغت درآمد ناکام ہوئی: ${error.message || error}`, language));
     } finally {
@@ -10923,12 +11215,16 @@ function HomeschoolApp() {
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const parsed = await response.json();
-      const importedCount = mergeImportedDictionaryEntries(normalizeDictionaryImportPayload(parsed));
-      if (!importedCount) {
+      const importStats = mergeImportedDictionaryEntries(normalizeDictionaryImportPayload(parsed));
+      if (!importStats.total) {
         alert(joinLocalizedText("No dictionary entries were found at that link.", "اس لنک پر لغت کے اندراجات نہیں ملے۔", language));
         return;
       }
-      alert(joinLocalizedText(`${importedCount} dictionary entries were imported from the link.`, `${importedCount} لغت اندراجات لنک سے درآمد ہو گئے۔`, language));
+      alert(joinLocalizedText(
+        `${importStats.total} dictionary entries were imported from the link. ${importStats.added} new, ${importStats.updated} updated${importStats.restored ? `, ${importStats.restored} restored` : ""}.`,
+        `${importStats.total} لغت اندراجات لنک سے درآمد ہو گئے۔ ${importStats.added} نئے، ${importStats.updated} تازہ${importStats.restored ? `، ${importStats.restored} بحال` : ""}۔`,
+        language,
+      ));
     } catch (error) {
       alert(joinLocalizedText(`Unable to import dictionary from the link: ${error.message || error}`, `لنک سے لغت درآمد نہ ہو سکی: ${error.message || error}`, language));
     }
@@ -11773,6 +12069,83 @@ function HomeschoolApp() {
     );
     return extractWordMeaningDetails(response);
   }, [aiProviderConfigs]);
+  const handleBatchBuildDictionary = useCallback(async (scope = "subject") => {
+    const subjectId = dictionarySubjectFilter !== "all" ? dictionarySubjectFilter : "";
+    if (!subjectId) {
+      showAppToast(joinLocalizedText("Choose a subject first.", "پہلے ایک مضمون منتخب کریں۔", language), "alert");
+      return;
+    }
+    const scopedLessonKey = scope === "lesson" ? dictionaryLessonFilter : "all";
+    if (scope === "lesson" && (!scopedLessonKey || scopedLessonKey === "all")) {
+      showAppToast(joinLocalizedText("Choose a lesson first.", "پہلے ایک سبق منتخب کریں۔", language), "alert");
+      return;
+    }
+    const scopedItems = wordBankIndex.filter((item) => item.subjectId === subjectId && (scope !== "lesson" || item.lessonKey === scopedLessonKey));
+    const candidateWords = Array.from(new Set(scopedItems.map((item) => normalizeText(item.prompt)).filter(Boolean))).slice(0, scope === "lesson" ? 18 : 32);
+    if (!candidateWords.length) {
+      showAppToast(joinLocalizedText("No dictionary words were found in this scope yet.", "اس دائرہ کار میں ابھی لغت کے الفاظ نہیں ملے۔", language), "alert");
+      return;
+    }
+    const browserCapability = canUseDirectAiFromBrowser();
+    const canEnrichWithAi = Boolean(selectedMeaningAiProviderId) && browserCapability.ok;
+    setDictionaryBatchBusy(scope);
+    showAppToast(
+      scope === "lesson"
+        ? joinLocalizedText("Building dictionary for this lesson...", "اس سبق کے لیے لغت تیار ہو رہی ہے...", language)
+        : joinLocalizedText("Building dictionary for this subject...", "اس مضمون کے لیے لغت تیار ہو رہی ہے...", language),
+      "sync",
+    );
+    try {
+      let nextCache = normalizeWordMeaningCache(wordMeaningCache);
+      let promoted = 0;
+      let enriched = 0;
+      let skipped = 0;
+      for (const word of candidateWords) {
+        const normalized = normalizeLookupWord(word);
+        if (!normalized) {
+          skipped += 1;
+          continue;
+        }
+        const localEntry = localWordMeaningLookup[normalized];
+        if (localEntry) {
+          const existed = Boolean(nextCache[normalized]);
+          nextCache = mergeWordMeaningMaps(nextCache, { [normalized]: localEntry });
+          if (!existed) promoted += 1;
+        }
+        const candidateEntry = mergeWordMeaningEntry(localEntry, nextCache[normalized]);
+        if (!canEnrichWithAi || !needsWordMeaningEnrichment(candidateEntry) || enriched >= (scope === "lesson" ? 8 : 12)) continue;
+        try {
+          const details = await requestWordMeaningFromAi(selectedMeaningAiProviderId, word);
+          const aiEntry = normalizeWordMeaningEntry(word, {
+            ...details,
+            source: selectedMeaningAiProviderId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI",
+            sources: [selectedMeaningAiProviderId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI"],
+            origins: ["ai"],
+            updatedAt: Date.now(),
+          }, {
+            defaultOrigins: ["ai"],
+            defaultSource: selectedMeaningAiProviderId === "gemini" ? "Gemini" : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI",
+          });
+          if (!aiEntry) continue;
+          nextCache = mergeWordMeaningMaps(nextCache, { [normalized]: aiEntry });
+          enriched += 1;
+        } catch (error) {
+          skipped += 1;
+        }
+      }
+      setWordMeaningCache(nextCache);
+      showAppToast(
+        joinLocalizedText(
+          `Dictionary ready: ${promoted} added, ${enriched} enriched${skipped ? `, ${skipped} skipped` : ""}.`,
+          `لغت تیار: ${promoted} شامل، ${enriched} بہتر${skipped ? `، ${skipped} چھوڑے گئے` : ""}۔`,
+          language,
+        ),
+        "check",
+      );
+    } finally {
+      setDictionaryBatchBusy("");
+    }
+  }, [dictionaryLessonFilter, dictionarySubjectFilter, language, localWordMeaningLookup, requestWordMeaningFromAi, selectedMeaningAiProviderId, showAppToast, wordBankIndex, wordMeaningCache]);
   const handleLookupWordMeaning = useCallback(async (rawWord, anchorNode) => {
     const normalizedWord = normalizeLookupWord(rawWord);
     if (!normalizedWord) return;
@@ -12498,6 +12871,155 @@ function HomeschoolApp() {
                 })}
               </div>
             ) : <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(ui.noWordResults, language)}</p>}
+            <div className="dictionary-browser-shell">
+              <div className="review-panel-head" style={{ marginTop: 18 }}>
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Local Dictionary", "مقامی لغت", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Browse, edit, trust, restore, and batch-build the bilingual dictionary that now grows with your study.", "اس دو لسانی لغت کو براؤز، ترمیم، معتبر، بحال، اور بیچ میں تیار کریں جو اب آپ کی پڑھائی کے ساتھ بڑھتی ہے۔", language), language)}</p>
+                </div>
+                <div className="dictionary-stat-strip">
+                  <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.total} active`, `${dictionaryStats.total} فعال`, language), language)}</span>
+                  <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.deleted} deleted`, `${dictionaryStats.deleted} حذف`, language), language)}</span>
+                </div>
+              </div>
+              <div className="dictionary-browser-controls">
+                <input
+                  className="review-list-input"
+                  value={dictionarySearch}
+                  onChange={(event) => setDictionarySearch(event.target.value)}
+                  placeholder={renderLocalizedTextNode(joinLocalizedText("Search the dictionary", "لغت میں تلاش کریں", language), language)}
+                  style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
+                />
+                <div className="discovery-filter-row compact" style={{ marginTop: 10 }}>
+                  <button className={`study-tool-btn compact${dictionarySubjectFilter === "all" ? " active" : ""}`} onClick={() => setDictionarySubjectFilter("all")} type="button">
+                    {renderLocalizedTextNode(ui.discoveryAllSubjects, language)}
+                  </button>
+                  {SUBJECTS.map((subject) => (
+                    <button key={`dictionary_subject_${subject.id}`} className={`study-tool-btn compact${dictionarySubjectFilter === subject.id ? " active" : ""}`} onClick={() => setDictionarySubjectFilter(subject.id)} type="button">
+                      {renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)}
+                    </button>
+                  ))}
+                </div>
+                <div className="dictionary-toolbar-row">
+                  <select
+                    className="dictionary-select"
+                    value={dictionaryLessonFilter}
+                    onChange={(event) => setDictionaryLessonFilter(event.target.value)}
+                    disabled={dictionarySubjectFilter === "all" || !dictionaryLessonOptions.length}
+                    style={language === "ur" ? { fontFamily: "var(--font-ur)" } : null}
+                  >
+                    <option value="all">{renderLocalizedTextNode(joinLocalizedText("All lessons", "تمام اسباق", language), language)}</option>
+                    {dictionaryLessonOptions.map((lesson) => (
+                      <option key={`dictionary_lesson_${lesson.key}`} value={lesson.key}>{lesson.label}</option>
+                    ))}
+                  </select>
+                  <div className="discovery-filter-row compact dictionary-inline-filters">
+                    {[
+                      { id: "all", label: joinLocalizedText("All sources", "تمام ذرائع", language) },
+                      { id: "curriculum", label: joinLocalizedText("Curriculum", "کریکولم", language) },
+                      { id: "trusted", label: joinLocalizedText("Trusted", "قابلِ اعتماد", language) },
+                      { id: "ai", label: "AI" },
+                      { id: "imported", label: joinLocalizedText("Imported", "درآمد شدہ", language) },
+                      { id: "weak", label: joinLocalizedText("Needs review", "جائزہ درکار", language) },
+                    ].map((option) => (
+                      <button key={`dictionary_source_${option.id}`} type="button" className={`study-tool-btn compact${dictionarySourceFilter === option.id ? " active" : ""}`} onClick={() => setDictionarySourceFilter(option.id)}>
+                        {renderLocalizedTextNode(option.label, language)}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className={`study-tool-btn compact${dictionaryShowDeleted ? " active" : ""}`} onClick={() => setDictionaryShowDeleted((current) => !current)}>
+                    {renderLocalizedTextNode(dictionaryShowDeleted ? joinLocalizedText("Hide deleted", "حذف شدہ چھپائیں", language) : joinLocalizedText("Show deleted", "حذف شدہ دکھائیں", language), language)}
+                  </button>
+                </div>
+                <div className="result-actions dictionary-action-row">
+                  <button className="retry-btn" type="button" disabled={!dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryBatchBusy === "subject"} onClick={() => handleBatchBuildDictionary("subject")}>
+                    {renderLocalizedTextNode(dictionaryBatchBusy === "subject" ? joinLocalizedText("Building...", "تیار ہو رہی ہے...", language) : joinLocalizedText("Build selected subject", "منتخب مضمون تیار کریں", language), language)}
+                  </button>
+                  <button className="next-btn" type="button" disabled={!dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryLessonFilter === "all" || dictionaryBatchBusy === "lesson"} onClick={() => handleBatchBuildDictionary("lesson")}>
+                    {renderLocalizedTextNode(dictionaryBatchBusy === "lesson" ? joinLocalizedText("Building...", "تیار ہو رہی ہے...", language) : joinLocalizedText("Build selected lesson", "منتخب سبق تیار کریں", language), language)}
+                  </button>
+                </div>
+              </div>
+              {dictionaryBrowserEntries.length ? (
+                <div className="dictionary-entry-list">
+                  {dictionaryBrowserEntries.map((entry) => {
+                    const meta = dictionaryMetaLookup[entry.normalizedWord] || {};
+                    const isEditing = dictionaryEditorState?.normalized === entry.normalizedWord;
+                    const origins = new Set([...(entry.origins || []), ...(entry.sources || []), entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+                    const isTrusted = origins.has("trusted");
+                    const isWeak = origins.has("weak");
+                    const canDelete = Boolean(wordMeaningCache[entry.normalizedWord]);
+                    return (
+                      <div key={`dictionary_entry_${entry.normalizedWord}`} className={`dictionary-entry-card${entry.browserDeleted ? " deleted" : ""}`}>
+                        <div className="dictionary-entry-head">
+                          <div>
+                            <div className="dictionary-entry-word">{entry.word}</div>
+                            <div className="dictionary-entry-badges">
+                              {(meta.badges || []).slice(0, 2).map((badge) => <span key={`${entry.normalizedWord}_${badge}`} className="discovery-tag">{renderLocalizedTextNode(badge, language)}</span>)}
+                              {(meta.lessonLabels || []).slice(0, 1).map((label) => <span key={`${entry.normalizedWord}_${label}`} className="discovery-tag">{renderLocalizedTextNode(label, language)}</span>)}
+                              {isTrusted ? <span className="discovery-tag trusted">{renderLocalizedTextNode(joinLocalizedText("Trusted", "قابلِ اعتماد", language), language)}</span> : null}
+                              {isWeak ? <span className="discovery-tag weak">{renderLocalizedTextNode(joinLocalizedText("Needs review", "جائزہ درکار", language), language)}</span> : null}
+                              {entry.browserDeleted ? <span className="discovery-tag deleted">{renderLocalizedTextNode(joinLocalizedText("Deleted", "حذف شدہ", language), language)}</span> : null}
+                            </div>
+                          </div>
+                          <div className="dictionary-entry-actions">
+                            {entry.browserDeleted ? (
+                              <button type="button" className="study-tool-btn compact" onClick={() => handleRestoreDictionaryEntry(entry)}>
+                                {renderLocalizedTextNode(joinLocalizedText("Restore", "بحال کریں", language), language)}
+                              </button>
+                            ) : (
+                              <>
+                                <button type="button" className="ghost-cta" onClick={() => openDictionaryEditor(entry)}>{renderLocalizedTextNode(joinLocalizedText("Edit", "ترمیم", language), language)}</button>
+                                <button type="button" className={`ghost-cta${isTrusted ? " active" : ""}`} onClick={() => handleSetDictionaryTrust(entry, isTrusted ? "clear" : "trusted")}>{renderLocalizedTextNode(isTrusted ? joinLocalizedText("Trusted", "قابلِ اعتماد", language) : joinLocalizedText("Trust", "اعتماد", language), language)}</button>
+                                <button type="button" className={`ghost-cta${isWeak ? " active" : ""}`} onClick={() => handleSetDictionaryTrust(entry, isWeak ? "clear" : "weak")}>{renderLocalizedTextNode(isWeak ? joinLocalizedText("Weak", "کمزور", language) : joinLocalizedText("Flag", "نشان", language), language)}</button>
+                                <button type="button" className="ghost-cta" disabled={!canDelete} onClick={() => handleDeleteDictionaryEntry(entry)}>{renderLocalizedTextNode(joinLocalizedText("Delete", "حذف", language), language)}</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {isEditing ? (
+                          <div className="dictionary-editor-card">
+                            <input className="settings-text-input" value={dictionaryEditorState.draft.word} onChange={(event) => updateDictionaryEditorField("word", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Word", "لفظ", language), language)} />
+                            <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.meaningsUr} onChange={(event) => updateDictionaryEditorField("meaningsUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Urdu meanings, one per line", "اردو معانی، ایک فی سطر", language), language)} />
+                            <textarea className="chat-input dictionary-editor-textarea urdu" value={dictionaryEditorState.draft.explanationUr} onChange={(event) => updateDictionaryEditorField("explanationUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Simple Urdu explanation", "سادہ اردو وضاحت", language), language)} />
+                            <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.meaningsEn} onChange={(event) => updateDictionaryEditorField("meaningsEn", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English meanings, one per line", "انگریزی meanings، ایک فی سطر", language), language)} />
+                            <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.explanationEng} onChange={(event) => updateDictionaryEditorField("explanationEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Plain English explanation", "سادہ انگریزی وضاحت", language), language)} />
+                            <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.examplesEng} onChange={(event) => updateDictionaryEditorField("examplesEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English examples, one per line", "انگریزی مثالیں، ایک فی سطر", language), language)} />
+                            <div className="result-actions dictionary-action-row">
+                              <button type="button" className="retry-btn" onClick={handleSaveDictionaryEntry}>{renderLocalizedTextNode(joinLocalizedText("Save entry", "اندراج محفوظ کریں", language), language)}</button>
+                              <button type="button" className="next-btn" onClick={() => setDictionaryEditorState(null)}>{renderLocalizedTextNode(joinLocalizedText("Cancel", "منسوخ", language), language)}</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {(entry.meaningsUr || []).length ? (
+                              <div className="dictionary-entry-meaning-list">
+                                {(entry.meaningsUr || []).slice(0, 4).map((meaning, index) => (
+                                  <div key={`${entry.normalizedWord}_meaning_${index}`} className="dictionary-entry-meaning-line">
+                                    <span className="dictionary-entry-order">{index + 1}.</span>
+                                    <span>{meaning}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                            {entry.explanationUr ? <p className="dictionary-entry-explanation urdu-copy">{entry.explanationUr}</p> : null}
+                            {(entry.meaningsEn || []).length ? <p className="dictionary-entry-explanation">{(entry.meaningsEn || []).join(" • ")}</p> : null}
+                            {entry.explanationEng ? <p className="dictionary-entry-explanation">{entry.explanationEng}</p> : null}
+                            {(entry.examplesEng || []).length ? (
+                              <div className="dictionary-entry-example-list">
+                                {(entry.examplesEng || []).slice(0, 2).map((example, index) => (
+                                  <div key={`${entry.normalizedWord}_example_${index}`} className="dictionary-entry-example">• {example}</div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(joinLocalizedText("No dictionary entries match this filter yet.", "ابھی اس فلٹر کے مطابق لغت اندراجات نہیں ملے۔", language), language)}</p>}
+            </div>
           </div>
         </div>
         {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
