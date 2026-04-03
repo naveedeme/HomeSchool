@@ -470,17 +470,23 @@
 
 async function saveCustomization(type, data) {
   const existing = await getLatestCustomization(type);
+  const normalizedType = String(type || "").trim();
+  const nextData = normalizeCloudSyncPayload(data);
+  const existingData = normalizeCloudSyncPayload(existing?.data);
+  if (existing && JSON.stringify(existingData) === JSON.stringify(nextData)) {
+    return existing;
+  }
   const record = {
       ...(existing || {}),
-      type,
-      data,
+      type: normalizedType,
+      data: nextData,
       ts: Date.now(),
     };
   await db.customizations.put(record);
-  if (shouldSyncCustomizationType(type)) {
-    await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customization, type, record, {
+  if (shouldSyncCustomizationType(normalizedType)) {
+    await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customization, normalizedType, record, {
       updatedAt: record.ts,
-      profileId: getCloudProfileScopeForCustomization(type),
+      profileId: getCloudProfileScopeForCustomization(normalizedType),
     });
   }
   return record;
