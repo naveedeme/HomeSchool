@@ -615,7 +615,7 @@
         },
       }, renderLocalizedText(language === "ur"
         ? "ہر طالب علم کے لیے ایک الگ کلاؤڈ اکاؤنٹ رکھیں تاکہ مختلف ڈیوائسز پر پروگریس، لغت، اور مستقبل کے سنک کیے گئے ریکارڈ واضح رہیں۔"
-        : "Use one cloud account per student so progress, dictionary data, and future synced records stay clearly separated across devices.", language)),
+          : "Use one cloud account for your family or learner, then separate progress cleanly with student profiles inside the app.", language)),
       React.createElement("div", { style: { marginBottom: 10 } },
         React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.supabaseUrl || (language === "ur" ? "Supabase URL" : "Supabase URL"), language)),
         React.createElement("input", {

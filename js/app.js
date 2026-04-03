@@ -1278,6 +1278,35 @@ function getLocalizedNamePair(studentName, studentNameUr) {
   };
 }
 
+function createStudentProfileDraft(base = {}) {
+  const now = Date.now();
+  const id = String(base.id || `profile_${now}_${Math.random().toString(36).slice(2, 8)}`).trim();
+  return {
+    id,
+    grade: typeof base.grade !== "undefined" && base.grade !== null ? Number(base.grade) : null,
+    studentName: String(base.studentName || base.name || "").trim(),
+    studentNameUr: String(base.studentNameUr || base.nameUr || "").trim(),
+    role: ["student", "parent", "teacher"].includes(base.role) ? base.role : "student",
+    createdAt: Number(base.createdAt) || now,
+    updatedAt: Number(base.updatedAt) || now,
+  };
+}
+
+function normalizeStudentProfiles(profiles = [], fallbackProfile = {}) {
+  const safeProfiles = Array.isArray(profiles) ? profiles : [];
+  const normalized = safeProfiles
+    .map((profile) => createStudentProfileDraft(profile))
+    .filter((profile, index, list) => profile.id && list.findIndex((entry) => entry.id === profile.id) === index);
+  if (normalized.length) return normalized;
+  return [createStudentProfileDraft(fallbackProfile)];
+}
+
+function resolveActiveStudentProfileId(profiles = [], preferredId = "") {
+  const safeProfiles = Array.isArray(profiles) ? profiles : [];
+  const matched = safeProfiles.find((profile) => profile.id === preferredId);
+  return matched?.id || safeProfiles[0]?.id || "";
+}
+
 function sanitizeUrduInput(value) {
   return String(value || "")
     .replace(/[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s\u060C\u061B\u061F\u0640\u0660-\u0669\u06F0-\u06F9]/g, "")
@@ -1693,17 +1722,18 @@ using ((select auth.uid()) = user_id);
 
 create table if not exists public.user_data_rows (
   user_id uuid not null,
+  profile_id text not null default '__global__',
   dataset text not null,
   row_id text not null,
   payload jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now(),
   deleted_at timestamptz null,
   device_id text null,
-  primary key (user_id, dataset, row_id)
+  primary key (user_id, profile_id, dataset, row_id)
 );
 
 create index if not exists user_data_rows_user_dataset_updated_idx
-  on public.user_data_rows (user_id, dataset, updated_at desc);
+  on public.user_data_rows (user_id, profile_id, dataset, updated_at desc);
 
 alter table public.user_data_rows enable row level security;
 
@@ -7256,6 +7286,20 @@ function HomeschoolApp() {
   const initialActiveTutorSessionId = initialTutorSessions.some((session) => session.id === storedAiTutorHistory.activeSessionId)
     ? storedAiTutorHistory.activeSessionId
     : initialTutorSessions[0]?.id;
+  const initialStudentProfiles = normalizeStudentProfiles(
+    stored?.studentProfiles || localStorageFallback("hs_student_profiles_registry") || [],
+    {
+      grade: stored?.grade || null,
+      studentName: stored?.studentName || "",
+      studentNameUr: stored?.studentNameUr || "",
+      role: "student",
+    },
+  );
+  const initialActiveStudentProfileId = resolveActiveStudentProfileId(
+    initialStudentProfiles,
+    stored?.activeStudentProfileId || localStorageFallback("hs_active_student_profile_id") || initialStudentProfiles[0]?.id,
+  );
+  const initialActiveStudentProfile = initialStudentProfiles.find((profile) => profile.id === initialActiveStudentProfileId) || initialStudentProfiles[0];
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
   const persistCustomizationRef = useRef(null);
   const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
@@ -7275,9 +7319,18 @@ function HomeschoolApp() {
     intervalScale: Math.max(0.5, Math.min(2.5, Number(stored?.reviewSrsSettings?.intervalScale) || 1)),
     againMinutes: Math.max(5, Math.min(180, Number(stored?.reviewSrsSettings?.againMinutes) || 10)),
   });
-  const [grade, setGrade] = useState(stored?.grade || null);
-  const [studentName, setStudentName] = useState(stored?.studentName || "");
-  const [studentNameUr, setStudentNameUr] = useState(stored?.studentNameUr || "");
+  const [studentProfiles, setStudentProfiles] = useState(initialStudentProfiles);
+  const [activeStudentProfileId, setActiveStudentProfileId] = useState(initialActiveStudentProfileId);
+  const [profileSwitchBusy, setProfileSwitchBusy] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({
+    studentName: "",
+    studentNameUr: "",
+    grade: initialActiveStudentProfile?.grade || 5,
+    role: "student",
+  });
+  const [grade, setGrade] = useState(initialActiveStudentProfile?.grade ?? stored?.grade ?? null);
+  const [studentName, setStudentName] = useState(initialActiveStudentProfile?.studentName || stored?.studentName || "");
+  const [studentNameUr, setStudentNameUr] = useState(initialActiveStudentProfile?.studentNameUr || stored?.studentNameUr || "");
   const [tab, setTab] = useState("home");
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
@@ -7425,6 +7478,8 @@ function HomeschoolApp() {
   const [supabaseSyncBusy, setSupabaseSyncBusy] = useState(false);
   const [supabaseSyncPulse, setSupabaseSyncPulse] = useState(0);
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
+  const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
+  const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
   const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
   const [copyToast, setCopyToast] = useState(null);
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
@@ -7440,6 +7495,8 @@ function HomeschoolApp() {
   const chatTextareaRef = useRef(null);
   const chatFileInputRef = useRef(null);
   const speechRecognitionRef = useRef(null);
+  const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
+  const studentProfilesRef = useRef(initialStudentProfiles);
   const headerRef = useRef(null);
   const headerHideTimerRef = useRef(null);
   const navBarRef = useRef(null);
@@ -7462,6 +7519,7 @@ function HomeschoolApp() {
   const gamificationStateRef = useRef(normalizeGamificationState(stored?.gamificationState || {}));
   const [headerHideOffset, setHeaderHideOffset] = useState(0);
   const [navBarOffset, setNavBarOffset] = useState(0);
+  const activeStudentProfile = studentProfiles.find((profile) => profile.id === activeStudentProfileId) || studentProfiles[0] || null;
 
   const activeTutorSession = useMemo(
     () => tutorSessions.find((session) => session.id === activeTutorSessionId) || tutorSessions[0] || null,
@@ -8398,6 +8456,9 @@ function HomeschoolApp() {
     const storedGamification = source.gamificationState?.data || null;
     const storedDictionaryPreferences = source.dictionaryPreferences?.data || null;
     const storedProfile = source.studentProfile?.data || null;
+    const storedProfiles = source.studentProfiles?.data || null;
+    const storedActiveProfileId = source.activeStudentProfileId?.data?.id || source.activeStudentProfileId?.data || null;
+    const storedAccountPreferences = source.accountPreferences?.data || null;
     const storedPracticeProgress = source.practiceProgress?.data || null;
 
     if (storedPreferences) {
@@ -8491,24 +8552,83 @@ function HomeschoolApp() {
     if (Array.isArray(storedNotificationHistory)) setNotificationHistory(storedNotificationHistory.slice(0, 40));
     if (storedGamification && typeof storedGamification === "object") setGamificationState(normalizeGamificationState(storedGamification));
     if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || "").trim());
+    if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
+      setSupabaseRolePreference(storedAccountPreferences.rolePreference);
+    }
+    if (storedProfiles) {
+      const normalizedProfiles = normalizeStudentProfiles(storedProfiles, storedProfile || {
+        grade,
+        studentName,
+        studentNameUr,
+      });
+      const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || activeStudentProfileIdRef.current);
+      studentProfilesRef.current = normalizedProfiles;
+      activeStudentProfileIdRef.current = nextActiveId;
+      setStudentProfiles(normalizedProfiles);
+      setActiveStudentProfileId(nextActiveId);
+      const activeProfile = normalizedProfiles.find((profile) => profile.id === nextActiveId) || normalizedProfiles[0];
+      if (activeProfile) {
+        if (typeof activeProfile.grade !== "undefined") setGrade(activeProfile.grade);
+        if (typeof activeProfile.studentName !== "undefined") setStudentName(activeProfile.studentName || "");
+        if (typeof activeProfile.studentNameUr !== "undefined") setStudentNameUr(activeProfile.studentNameUr || "");
+      }
+    }
     if (storedProfile && typeof storedProfile === "object") {
       if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
       if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
       if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
     }
-  }, []);
+  }, [grade, studentName, studentNameUr]);
 
   const applyIncomingCloudSyncRows = useCallback(async (incomingRows, reason = "sync") => {
     const normalizedRows = (Array.isArray(incomingRows) ? incomingRows : [])
       .map((row) => ({
+        profileId: String(row?.profileId || "").trim(),
         dataset: String(row?.dataset || "").trim(),
         rowId: String(row?.rowId || "").trim(),
         payload: row?.payload && typeof row.payload === "object" ? row.payload : {},
         updatedAt: Number(row?.updatedAt) || Date.now(),
         deletedAt: row?.deletedAt ? (Number(row.deletedAt) || Date.now()) : null,
       }))
-      .filter((row) => row.dataset && row.rowId);
+      .filter((row) => row.dataset && row.rowId && (!row.profileId || row.profileId === "__global__" || row.profileId === activeStudentProfileIdRef.current));
     if (!normalizedRows.length || !window.HomeSchoolDB?.applyCloudSyncRows) return { applied: 0 };
+    if (reason !== "local" && window.HomeSchoolDB?.getCloudSyncOutboxEntries) {
+      try {
+        const pendingRows = await window.HomeSchoolDB.getCloudSyncOutboxEntries(500);
+        const nextConflicts = [];
+        normalizedRows.forEach((row) => {
+          const pendingMatch = (pendingRows || []).find((entry) =>
+            String(entry?.dataset || "").trim() === row.dataset
+            && String(entry?.rowId || "").trim() === row.rowId
+            && String(entry?.profileId || "").trim() === String(row.profileId || activeStudentProfileIdRef.current || "")
+            && Number(entry?.updatedAt || 0) > 0
+            && JSON.stringify(entry?.payload || {}) !== JSON.stringify(row.payload || {}));
+          if (!pendingMatch) return;
+          nextConflicts.push({
+            id: `${row.profileId || "__global__"}::${row.dataset}::${row.rowId}`,
+            profileId: row.profileId || "__global__",
+            dataset: row.dataset,
+            rowId: row.rowId,
+            localPayload: pendingMatch.payload || {},
+            remotePayload: row.payload || {},
+            localUpdatedAt: Number(pendingMatch.updatedAt) || Date.now(),
+            remoteUpdatedAt: Number(row.updatedAt) || Date.now(),
+            title: `${row.dataset} • ${row.rowId}`,
+          });
+        });
+        if (nextConflicts.length) {
+          setCloudSyncConflicts((current) => {
+            const merged = [...(Array.isArray(current) ? current : [])];
+            nextConflicts.forEach((record) => {
+              if (!merged.some((entry) => entry.id === record.id)) merged.push(record);
+            });
+            return merged.slice(-40);
+          });
+        }
+      } catch (error) {
+        console.log("Unable to inspect cloud sync conflicts:", error);
+      }
+    }
     const applied = await window.HomeSchoolDB.applyCloudSyncRows(normalizedRows);
     if (reason !== "local") {
       try {
@@ -8618,20 +8738,21 @@ function HomeschoolApp() {
       if (cloudRowsToPush.length) {
         const cloudPayload = cloudRowsToPush.map((row) => ({
           user_id: user.id,
+          profile_id: String(row.profileId || activeStudentProfileIdRef.current || "default").trim(),
           dataset: String(row.dataset || "").trim(),
           row_id: String(row.rowId || "").trim(),
           payload: row.payload || {},
           updated_at: new Date(Number(row.updatedAt) || Date.now()).toISOString(),
           deleted_at: row.deletedAt ? new Date(Number(row.deletedAt) || Date.now()).toISOString() : null,
           device_id: row.deviceId || dictionaryDeviceIdRef.current,
-        })).filter((row) => row.dataset && row.row_id);
+        })).filter((row) => row.profile_id && row.dataset && row.row_id);
         if (cloudPayload.length) {
           const { error: cloudPushError } = await client
             .from(SUPABASE_CLOUD_DATA_TABLE)
-            .upsert(cloudPayload, { onConflict: "user_id,dataset,row_id" });
+            .upsert(cloudPayload, { onConflict: "user_id,profile_id,dataset,row_id" });
           if (cloudPushError) throw cloudPushError;
           if (window.HomeSchoolDB?.clearCloudSyncOutboxEntries) {
-            await window.HomeSchoolDB.clearCloudSyncOutboxEntries(cloudRowsToPush.map((row) => `${String(row.dataset || "").trim()}::${String(row.rowId || "").trim()}`));
+            await window.HomeSchoolDB.clearCloudSyncOutboxEntries(cloudRowsToPush.map((row) => String(row.syncKey || `${String(row.dataset || "").trim()}::${String(row.profileId || activeStudentProfileIdRef.current || "default").trim()}::${String(row.rowId || "").trim()}`)));
           }
           await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloudSeeded", {
             done: true,
@@ -8672,8 +8793,9 @@ function HomeschoolApp() {
       const lastCloudPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloud:lastPull");
       let cloudPullQuery = client
         .from(SUPABASE_CLOUD_DATA_TABLE)
-        .select("dataset, row_id, payload, updated_at, deleted_at, device_id")
+        .select("profile_id, dataset, row_id, payload, updated_at, deleted_at, device_id")
         .eq("user_id", user.id)
+        .in("profile_id", [String(activeStudentProfileIdRef.current || "default"), "__global__"])
         .order("updated_at", { ascending: false })
         .limit(3000);
       const lastCloudPullAt = Number(lastCloudPullMeta?.data?.timestamp) || 0;
@@ -8685,6 +8807,7 @@ function HomeschoolApp() {
 
       if (remoteCloudRows.length) {
         const normalizedRemoteCloudRows = remoteCloudRows.map((row) => ({
+          profileId: String(row.profile_id || "").trim(),
           dataset: String(row.dataset || "").trim(),
           rowId: String(row.row_id || "").trim(),
           payload: row.payload || {},
@@ -8787,7 +8910,7 @@ function HomeschoolApp() {
     } finally {
       setSupabaseAuthBusy(false);
     }
-  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail]);
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail, supabaseRolePreference]);
 
   const handleSupabaseCreateAccount = useCallback(async () => {
     const email = String(supabaseDictionarySync.authEmail || "").trim();
@@ -8802,7 +8925,9 @@ function HomeschoolApp() {
       const { data, error } = await client.auth.signUp({
         email,
         password,
-        options: getSupabaseAuthRedirectUrl() ? { emailRedirectTo: getSupabaseAuthRedirectUrl(), data: { role: "student" } } : { data: { role: "student" } },
+        options: getSupabaseAuthRedirectUrl()
+          ? { emailRedirectTo: getSupabaseAuthRedirectUrl(), data: { role: supabaseRolePreference, homeschoolRole: supabaseRolePreference } }
+          : { data: { role: supabaseRolePreference, homeschoolRole: supabaseRolePreference } },
       });
       if (error) throw error;
       applySupabaseSessionState(data?.session || null, {
@@ -8935,7 +9060,8 @@ function HomeschoolApp() {
       const { count: cloudCount, error: cloudQueryError } = await client
         .from(SUPABASE_CLOUD_DATA_TABLE)
         .select("row_id", { head: true, count: "exact" })
-        .eq("user_id", session.user.id);
+        .eq("user_id", session.user.id)
+        .in("profile_id", [String(activeStudentProfileIdRef.current || "default"), "__global__"]);
       if (cloudQueryError) throw cloudQueryError;
       applySupabaseSessionState(session, {
         status: "ready",
@@ -9005,6 +9131,72 @@ function HomeschoolApp() {
       "check",
     );
   }, [dictionarySyncConflicts, language, showAppToast, wordMeaningCache]);
+
+  const handleResolveCloudSyncConflict = useCallback(async (conflictId, mode = "merge") => {
+    const record = (Array.isArray(cloudSyncConflicts) ? cloudSyncConflicts : []).find((entry) => entry.id === conflictId);
+    if (!record) return;
+    const mergedPayload = mode === "local"
+      ? (record.localPayload || {})
+      : mode === "remote"
+        ? (record.remotePayload || {})
+        : {
+          ...(record.remotePayload || {}),
+          ...(record.localPayload || {}),
+        };
+    try {
+      if (mode !== "remote" && window.HomeSchoolDB?.applyCloudSyncRows) {
+        await window.HomeSchoolDB.applyCloudSyncRows([{
+          profileId: record.profileId || activeStudentProfileIdRef.current || "default",
+          dataset: record.dataset,
+          rowId: record.rowId,
+          payload: mergedPayload,
+          updatedAt: Date.now(),
+          deletedAt: null,
+        }]);
+      }
+      if (mode !== "remote" && window.HomeSchoolDB?.queueCloudSyncRecord) {
+        await window.HomeSchoolDB.queueCloudSyncRecord(record.dataset, record.rowId, mergedPayload, {
+          updatedAt: Date.now(),
+          profileId: record.profileId || activeStudentProfileIdRef.current || "default",
+          deviceId: dictionaryDeviceIdRef.current,
+        });
+      }
+      setCloudSyncConflicts((current) => (Array.isArray(current) ? current.filter((entry) => entry.id !== conflictId) : []));
+      setSupabaseSyncPulse(Date.now());
+      showAppToast(
+        mode === "local"
+          ? joinLocalizedText("Kept local cloud change", "مقامی کلاؤڈ تبدیلی محفوظ کر دی", language)
+          : mode === "remote"
+            ? joinLocalizedText("Kept synced cloud change", "سنک شدہ کلاؤڈ تبدیلی محفوظ کر دی", language)
+            : joinLocalizedText("Merged cloud changes", "کلاؤڈ تبدیلیاں ضم کر دی گئیں", language),
+        "check",
+      );
+    } catch (error) {
+      console.log("Unable to resolve cloud sync conflict:", error);
+      showAppToast(joinLocalizedText("Unable to resolve cloud conflict", "کلاؤڈ تنازع حل نہیں ہو سکا", language), "alert");
+    }
+  }, [cloudSyncConflicts, language, showAppToast]);
+
+  const handleSupabaseRolePreferenceChange = useCallback(async (nextRole) => {
+    const safeRole = ["student", "parent", "teacher"].includes(nextRole) ? nextRole : "student";
+    setSupabaseRolePreference(safeRole);
+    setSupabaseAuthState((current) => ({ ...current, role: safeRole }));
+    if (!supabaseAuthState.userId) return;
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.auth.updateUser({
+        data: {
+          role: safeRole,
+          homeschoolRole: safeRole,
+        },
+      });
+      if (error) throw error;
+      showAppToast(joinLocalizedText("Cloud role updated", "کلاؤڈ کردار تازہ ہو گیا", language), "check");
+    } catch (error) {
+      console.log("Unable to update Supabase role preference:", error);
+      showAppToast(joinLocalizedText("Unable to update cloud role", "کلاؤڈ کردار تازہ نہیں ہو سکا", language), "alert");
+    }
+  }, [ensureSupabaseClient, language, showAppToast, supabaseAuthState.userId]);
 
   useEffect(() => {
     localStorageFallback("hs_dictionary_device_id", dictionaryDeviceIdRef.current);
@@ -9108,6 +9300,48 @@ function HomeschoolApp() {
       console.log("Unable to persist dictionary conflict metadata:", error);
     });
   }, [dbLoaded, dictionarySyncConflicts]);
+
+  useEffect(() => {
+    studentProfilesRef.current = studentProfiles;
+    activeStudentProfileIdRef.current = activeStudentProfileId;
+    localStorageFallback("hs_student_profiles_registry", studentProfiles);
+    localStorageFallback("hs_active_student_profile_id", activeStudentProfileId);
+    if (window.HomeSchoolDB?.setActiveCloudProfile) {
+      window.HomeSchoolDB.setActiveCloudProfile(activeStudentProfileId).catch((error) => {
+        console.log("Unable to update active cloud profile:", error);
+      });
+    }
+  }, [activeStudentProfileId, studentProfiles]);
+
+  useEffect(() => {
+    setStudentProfiles((current) => {
+      const safeProfiles = Array.isArray(current) && current.length
+        ? current
+        : normalizeStudentProfiles(current, {
+          grade,
+          studentName,
+          studentNameUr,
+          role: supabaseRolePreference,
+        });
+      const changed = safeProfiles.some((profile) => profile.id === activeStudentProfileId && (
+        profile.grade !== grade
+        || String(profile.studentName || "") !== String(studentName || "")
+        || String(profile.studentNameUr || "") !== String(studentNameUr || "")
+      ));
+      if (!changed) return current;
+      return safeProfiles.map((profile) => (
+        profile.id === activeStudentProfileId
+          ? {
+            ...profile,
+            grade,
+            studentName: String(studentName || "").trim(),
+            studentNameUr: String(studentNameUr || "").trim(),
+            updatedAt: Date.now(),
+          }
+          : profile
+      ));
+    });
+  }, [activeStudentProfileId, grade, studentName, studentNameUr, supabaseRolePreference]);
 
   useEffect(() => {
     localStorageFallback(SUPABASE_SYNC_STORAGE_KEY, buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync));
@@ -9258,7 +9492,10 @@ function HomeschoolApp() {
           if (!active) return;
           const incoming = payload?.new || payload?.record || null;
           if (!incoming?.dataset || !incoming?.row_id) return;
+          const incomingProfileId = String(incoming.profile_id || "").trim();
+          if (incomingProfileId && incomingProfileId !== "__global__" && incomingProfileId !== activeStudentProfileIdRef.current) return;
           applyIncomingCloudSyncRows([{
+            profileId: incomingProfileId,
             dataset: String(incoming.dataset || "").trim(),
             rowId: String(incoming.row_id || "").trim(),
             payload: incoming.payload || {},
@@ -9711,6 +9948,13 @@ function HomeschoolApp() {
             studentName: nextPayload.studentName,
             studentNameUr: nextPayload.studentNameUr,
           });
+          await window.HomeSchoolDB.saveCustomization("studentProfiles", nextPayload.studentProfiles || []);
+          await window.HomeSchoolDB.saveCustomization("activeStudentProfileId", {
+            id: nextPayload.activeStudentProfileId || "",
+          });
+          await window.HomeSchoolDB.saveCustomization("accountPreferences", {
+            rolePreference: nextPayload.supabaseRolePreference || "student",
+          });
           await window.HomeSchoolDB.saveCustomization("aiProviderConfigs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
           await window.HomeSchoolDB.saveCustomization("aiTutorPreferences", {
             providerId: nextPayload.selectedAiProvider || "openai",
@@ -9765,6 +10009,13 @@ function HomeschoolApp() {
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
               studentNameUr: nextPayload.studentNameUr,
+            },
+            studentProfiles: nextPayload.studentProfiles || [],
+            activeStudentProfileId: {
+              id: nextPayload.activeStudentProfileId || "",
+            },
+            accountPreferences: {
+              rolePreference: nextPayload.supabaseRolePreference || "student",
             },
           });
           localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
@@ -9824,6 +10075,13 @@ function HomeschoolApp() {
             studentName: nextPayload.studentName,
             studentNameUr: nextPayload.studentNameUr,
           },
+          studentProfiles: nextPayload.studentProfiles || [],
+          activeStudentProfileId: {
+            id: nextPayload.activeStudentProfileId || "",
+          },
+          accountPreferences: {
+            rolePreference: nextPayload.supabaseRolePreference || "student",
+          },
         });
         localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
         localStorageFallback("hs_ai_tutor_preferences", {
@@ -9874,6 +10132,9 @@ function HomeschoolApp() {
         const storedDictionaryPreferences = customizations.dictionaryPreferences?.data || null;
         const storedSupabaseDictionarySync = customizations.supabaseDictionarySync?.data || null;
         const storedProfile = customizations.studentProfile?.data || null;
+        const storedProfiles = customizations.studentProfiles?.data || null;
+        const storedActiveProfileId = customizations.activeStudentProfileId?.data?.id || customizations.activeStudentProfileId?.data || null;
+        const storedAccountPreferences = customizations.accountPreferences?.data || null;
         const storedPracticeProgress = customizations.practiceProgress?.data || null;
         const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
         const storedAiTutor = customizations.aiTutorPreferences?.data || null;
@@ -9991,6 +10252,27 @@ function HomeschoolApp() {
         }
         if (storedSupabaseDictionarySync && typeof storedSupabaseDictionarySync === "object") {
           setSupabaseDictionarySync(sanitizeSupabaseDictionarySyncSettings(storedSupabaseDictionarySync));
+        }
+        if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
+          setSupabaseRolePreference(storedAccountPreferences.rolePreference);
+        }
+        if (storedProfiles) {
+          const normalizedProfiles = normalizeStudentProfiles(storedProfiles, storedProfile || {
+            grade: stored?.grade || null,
+            studentName: stored?.studentName || "",
+            studentNameUr: stored?.studentNameUr || "",
+          });
+          const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || initialActiveStudentProfileId);
+          studentProfilesRef.current = normalizedProfiles;
+          activeStudentProfileIdRef.current = nextActiveId;
+          setStudentProfiles(normalizedProfiles);
+          setActiveStudentProfileId(nextActiveId);
+          const nextActiveProfile = normalizedProfiles.find((profile) => profile.id === nextActiveId) || normalizedProfiles[0];
+          if (nextActiveProfile) {
+            if (typeof nextActiveProfile.grade !== "undefined") setGrade(nextActiveProfile.grade);
+            if (typeof nextActiveProfile.studentName !== "undefined") setStudentName(nextActiveProfile.studentName || "");
+            if (typeof nextActiveProfile.studentNameUr !== "undefined") setStudentNameUr(nextActiveProfile.studentNameUr || "");
+          }
         }
         if (storedProfile) {
           if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
@@ -10361,16 +10643,19 @@ function HomeschoolApp() {
       dictionarySyncConflicts,
       dictionaryImportUrl,
       supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync),
+      studentProfiles,
+      activeStudentProfileId,
+      supabaseRolePreference,
       grade,
       studentName,
       studentNameUr,
       aiProviderConfigs,
       selectedAiProvider,
     });
-}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, activeStudentProfileId, supabaseRolePreference, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-  if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
+  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -11269,6 +11554,13 @@ function HomeschoolApp() {
 
   const applyImportedAppState = useCallback((nextState = {}, mode = "replace") => {
     if (mode === "replace") {
+      if (Array.isArray(nextState.studentProfiles)) setStudentProfiles(normalizeStudentProfiles(nextState.studentProfiles, {
+        grade: nextState.grade,
+        studentName: nextState.studentName,
+        studentNameUr: nextState.studentNameUr,
+      }));
+      if (typeof nextState.activeStudentProfileId !== "undefined") setActiveStudentProfileId(nextState.activeStudentProfileId || "");
+      if (typeof nextState.supabaseRolePreference !== "undefined" && ["student", "parent", "teacher"].includes(nextState.supabaseRolePreference)) setSupabaseRolePreference(nextState.supabaseRolePreference);
       if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
       if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
       if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr(nextState.studentNameUr);
@@ -11342,10 +11634,18 @@ function HomeschoolApp() {
       if (nextState.wordMeaningCache) setWordMeaningCache(normalizeWordMeaningCache(nextState.wordMeaningCache));
       if (nextState.dictionaryDeletedArchive) setDictionaryDeletedArchive(normalizeWordMeaningCache(nextState.dictionaryDeletedArchive));
       if (Array.isArray(nextState.dictionarySyncConflicts)) setDictionarySyncConflicts(sanitizeDictionaryConflictRecords(nextState.dictionarySyncConflicts));
+      if (Array.isArray(nextState.cloudSyncConflicts)) setCloudSyncConflicts(nextState.cloudSyncConflicts.slice(-40));
       if (typeof nextState.dictionaryImportUrl !== "undefined") setDictionaryImportUrl(String(nextState.dictionaryImportUrl || ""));
       return;
     }
 
+    if (Array.isArray(nextState.studentProfiles)) setStudentProfiles((current) => normalizeStudentProfiles([...(current || []), ...nextState.studentProfiles], {
+      grade: nextState.grade,
+      studentName: nextState.studentName,
+      studentNameUr: nextState.studentNameUr,
+    }));
+    if (typeof nextState.activeStudentProfileId !== "undefined") setActiveStudentProfileId((current) => current || nextState.activeStudentProfileId || "");
+    if (typeof nextState.supabaseRolePreference !== "undefined" && ["student", "parent", "teacher"].includes(nextState.supabaseRolePreference)) setSupabaseRolePreference((current) => current || nextState.supabaseRolePreference);
     if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
     if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
     if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr((current) => current || nextState.studentNameUr);
@@ -11437,10 +11737,233 @@ function HomeschoolApp() {
     if (Array.isArray(nextState.dictionarySyncConflicts)) {
       setDictionarySyncConflicts((current) => mergeDictionaryConflictRecords(current, nextState.dictionarySyncConflicts));
     }
+    if (Array.isArray(nextState.cloudSyncConflicts)) {
+      setCloudSyncConflicts((current) => [...(Array.isArray(current) ? current : []), ...nextState.cloudSyncConflicts].slice(-40));
+    }
     if (typeof nextState.dictionaryImportUrl !== "undefined") {
       setDictionaryImportUrl((current) => current || String(nextState.dictionaryImportUrl || ""));
     }
   }, []);
+
+  const buildProfileAppStateSnapshot = useCallback(() => ({
+    grade,
+    studentName,
+    studentNameUr,
+    completedQuizzes,
+    totalScore,
+    totalQuizzesDone,
+    streak,
+    lastQuizDate,
+    earnedBadges,
+    xp,
+    ttsEnabled,
+    audioMuted,
+    autoPlayNext,
+    wordMeaningPriority,
+    ttsRate,
+    ttsVoiceSelections,
+    language,
+    themeMode,
+    fontSizeMode,
+    reducedMotion,
+    highContrast,
+    focusMode,
+    readingMode,
+    keyboardShortcutsEnabled,
+    navPosition,
+    navAutoHide,
+    navBarAutoHide,
+    transitionMode,
+    dailyReviewCap,
+    reviewSrsSettings,
+    practiceSubjectId,
+    practiceFiltersBySubject,
+    practiceTimedSettings,
+    practiceLessonProgress,
+    daySectionOverrides,
+    studyGoals,
+    focusTimerSettings,
+    reminderSettings,
+    backupReminderSettings,
+    classScheduleSettings,
+    timeTrackingData,
+    notificationHistory,
+    gamificationState,
+  }), [audioMuted, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
+
+  const buildBlankProfileAppState = useCallback((profile) => {
+    const safeProfile = createStudentProfileDraft(profile);
+    return {
+      ...buildProfileAppStateSnapshot(),
+      grade: safeProfile.grade,
+      studentName: safeProfile.studentName,
+      studentNameUr: safeProfile.studentNameUr,
+      completedQuizzes: {},
+      totalScore: 0,
+      totalQuizzesDone: 0,
+      streak: 0,
+      lastQuizDate: null,
+      earnedBadges: [],
+      xp: 0,
+      practiceLessonProgress: {},
+      notificationHistory: [],
+      timeTrackingData: normalizeTimeTrackingData({}),
+      gamificationState: normalizeGamificationState({}),
+    };
+  }, [buildProfileAppStateSnapshot]);
+
+  const getEmptyProfileDbProgress = useCallback(() => ({
+    exportedAt: new Date().toISOString(),
+    progress: [],
+    reviewCards: [],
+    reviewHistory: [],
+    userStats: [],
+    wordMeta: [],
+    customLists: [],
+    customListItems: [],
+    customizations: [],
+    dataVersion: window.HomeSchoolData.VERSION,
+    changedSubjects: [],
+  }), []);
+
+  const saveCurrentProfileSnapshot = useCallback(async (profileOverride = null) => {
+    if (!window.HomeSchoolDB?.saveProfileSnapshot) return null;
+    const currentProfile = createStudentProfileDraft({
+      ...(profileOverride || activeStudentProfile || {}),
+      grade,
+      studentName,
+      studentNameUr,
+      updatedAt: Date.now(),
+    });
+    const dbProgress = window.HomeSchoolDB?.exportProgress ? await window.HomeSchoolDB.exportProgress() : getEmptyProfileDbProgress();
+    await window.HomeSchoolDB.saveProfileSnapshot(currentProfile.id, {
+      profile: currentProfile,
+      appState: buildProfileAppStateSnapshot(),
+      dbProgress,
+      savedAt: Date.now(),
+    });
+    return currentProfile;
+  }, [activeStudentProfile, buildProfileAppStateSnapshot, getEmptyProfileDbProgress, grade, studentName, studentNameUr]);
+
+  const loadStudentProfileSnapshot = useCallback(async (profile) => {
+    const safeProfile = createStudentProfileDraft(profile);
+    const storedSnapshot = window.HomeSchoolDB?.getProfileSnapshot ? await window.HomeSchoolDB.getProfileSnapshot(safeProfile.id) : null;
+    const snapshot = storedSnapshot?.snapshot || null;
+    const nextAppState = snapshot?.appState || buildBlankProfileAppState(safeProfile);
+    const nextDbProgress = snapshot?.dbProgress || getEmptyProfileDbProgress();
+    applyImportedAppState(nextAppState, "replace");
+    if (window.HomeSchoolDB?.importProgress) {
+      await window.HomeSchoolDB.importProgress(nextDbProgress, { mode: "replace", preserveCustomizations: true });
+    }
+    await refreshStorageLabel();
+    await refreshReviewWorkspace();
+    clearLessonSelections();
+    setSelectedSubject(null);
+    setSelectedLesson(null);
+    setTab("home");
+  }, [applyImportedAppState, buildBlankProfileAppState, clearLessonSelections, getEmptyProfileDbProgress, refreshReviewWorkspace, refreshStorageLabel]);
+
+  const handleSwitchStudentProfile = useCallback(async (profileId) => {
+    const nextProfileId = String(profileId || "").trim();
+    if (!nextProfileId || nextProfileId === activeStudentProfileIdRef.current || profileSwitchBusy) return;
+    const nextProfile = studentProfilesRef.current.find((profile) => profile.id === nextProfileId);
+    if (!nextProfile) return;
+    setProfileSwitchBusy(true);
+    try {
+      await saveCurrentProfileSnapshot();
+      if (window.HomeSchoolDB?.setActiveCloudProfile) {
+        await window.HomeSchoolDB.setActiveCloudProfile(nextProfile.id);
+      }
+      activeStudentProfileIdRef.current = nextProfile.id;
+      setActiveStudentProfileId(nextProfile.id);
+      await loadStudentProfileSnapshot(nextProfile);
+      showAppToast(joinLocalizedText("Profile switched", "پروفائل بدل دیا گیا", language), "check");
+    } catch (error) {
+      console.log("Unable to switch student profile:", error);
+      showAppToast(joinLocalizedText("Unable to switch profile", "پروفائل نہیں بدلا جا سکا", language), "alert");
+    } finally {
+      setProfileSwitchBusy(false);
+    }
+  }, [language, loadStudentProfileSnapshot, profileSwitchBusy, saveCurrentProfileSnapshot, showAppToast]);
+
+  const handleCreateStudentProfile = useCallback(async () => {
+    const nextProfile = createStudentProfileDraft({
+      studentName: profileDraft.studentName,
+      studentNameUr: profileDraft.studentNameUr,
+      grade: profileDraft.grade || 5,
+      role: profileDraft.role || "student",
+    });
+    if (!nextProfile.studentName && !nextProfile.studentNameUr) {
+      alert(joinLocalizedText("Enter at least one name before creating a new profile.", "نیا پروفائل بنانے سے پہلے کم از کم ایک نام درج کریں۔", language));
+      return;
+    }
+    setProfileSwitchBusy(true);
+    try {
+      await saveCurrentProfileSnapshot();
+      const nextProfiles = normalizeStudentProfiles([...studentProfilesRef.current, nextProfile], nextProfile);
+      studentProfilesRef.current = nextProfiles;
+      setStudentProfiles(nextProfiles);
+      setProfileDraft({
+        studentName: "",
+        studentNameUr: "",
+        grade: nextProfile.grade || 5,
+        role: nextProfile.role || "student",
+      });
+      if (window.HomeSchoolDB?.setActiveCloudProfile) {
+        await window.HomeSchoolDB.setActiveCloudProfile(nextProfile.id);
+      }
+      activeStudentProfileIdRef.current = nextProfile.id;
+      setActiveStudentProfileId(nextProfile.id);
+      await loadStudentProfileSnapshot(nextProfile);
+      showAppToast(joinLocalizedText("New profile created", "نیا پروفائل بنا دیا گیا", language), "check");
+    } catch (error) {
+      console.log("Unable to create student profile:", error);
+      showAppToast(joinLocalizedText("Unable to create profile", "پروفائل نہیں بنایا جا سکا", language), "alert");
+    } finally {
+      setProfileSwitchBusy(false);
+    }
+  }, [language, loadStudentProfileSnapshot, profileDraft.grade, profileDraft.role, profileDraft.studentName, profileDraft.studentNameUr, saveCurrentProfileSnapshot, showAppToast]);
+
+  const handleDeleteStudentProfile = useCallback(async (profileId) => {
+    const targetId = String(profileId || "").trim();
+    if (!targetId) return;
+    if ((studentProfilesRef.current || []).length <= 1) {
+      alert(joinLocalizedText("Keep at least one student profile in the app.", "ایپ میں کم از کم ایک طالب علم پروفائل رکھیں۔", language));
+      return;
+    }
+    const targetProfile = studentProfilesRef.current.find((profile) => profile.id === targetId);
+    if (!targetProfile) return;
+    setProfileSwitchBusy(true);
+    try {
+      if (targetId === activeStudentProfileIdRef.current) {
+        await saveCurrentProfileSnapshot();
+      }
+      if (window.HomeSchoolDB?.deleteProfileSnapshot) {
+        await window.HomeSchoolDB.deleteProfileSnapshot(targetId);
+      }
+      const nextProfiles = studentProfilesRef.current.filter((profile) => profile.id !== targetId);
+      const nextActiveId = resolveActiveStudentProfileId(nextProfiles, targetId === activeStudentProfileIdRef.current ? nextProfiles[0]?.id : activeStudentProfileIdRef.current);
+      studentProfilesRef.current = nextProfiles;
+      setStudentProfiles(nextProfiles);
+      if (targetId === activeStudentProfileIdRef.current) {
+        const nextProfile = nextProfiles.find((profile) => profile.id === nextActiveId) || nextProfiles[0];
+        if (window.HomeSchoolDB?.setActiveCloudProfile) {
+          await window.HomeSchoolDB.setActiveCloudProfile(nextActiveId);
+        }
+        activeStudentProfileIdRef.current = nextActiveId;
+        setActiveStudentProfileId(nextActiveId);
+        if (nextProfile) {
+          await loadStudentProfileSnapshot(nextProfile);
+        }
+      }
+      showAppToast(joinLocalizedText("Profile removed", "پروفائل حذف کر دیا گیا", language), "check");
+    } catch (error) {
+      console.log("Unable to delete student profile:", error);
+      showAppToast(joinLocalizedText("Unable to delete profile", "پروفائل حذف نہیں ہو سکا", language), "alert");
+    } finally {
+      setProfileSwitchBusy(false);
+    }
+  }, [language, loadStudentProfileSnapshot, saveCurrentProfileSnapshot, showAppToast]);
 
   const executeImportReview = useCallback(async (previewState, mode) => {
     if (!previewState?.parsed) return;
@@ -11466,6 +11989,9 @@ function HomeschoolApp() {
         grade,
         studentName,
         studentNameUr,
+        studentProfiles,
+        activeStudentProfileId,
+        supabaseRolePreference,
         completedQuizzes,
         totalScore,
         totalQuizzesDone,
@@ -11505,6 +12031,7 @@ function HomeschoolApp() {
         wordMeaningCache,
         dictionaryDeletedArchive,
         dictionarySyncConflicts,
+        cloudSyncConflicts,
       },
       dbProgress,
     });
@@ -11513,7 +12040,7 @@ function HomeschoolApp() {
       lastBackupAt: exportedAt,
       lastPromptDay: getLocalDayKey(exportedAt),
     }));
-  }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts]);
+  }, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts]);
 
   const handleExportDictionary = useCallback(() => {
     const exportedAt = Date.now();
@@ -12504,8 +13031,8 @@ function HomeschoolApp() {
     return joinLocalizedText("Ready to sign in", "سائن اِن کے لیے تیار", language);
   })();
   const supabaseAccountRoleLabel = joinLocalizedText(
-    supabaseAuthState.role === "teacher" ? "Teacher" : supabaseAuthState.role === "parent" ? "Parent" : "Student",
-    supabaseAuthState.role === "teacher" ? "استاد" : supabaseAuthState.role === "parent" ? "والدین" : "طالب علم",
+    (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "teacher" ? "Teacher" : (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "parent" ? "Parent" : "Student",
+    (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "teacher" ? "استاد" : (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "parent" ? "والدین" : "طالب علم",
     language,
   );
   const handleSupabaseSyncNow = useCallback(async () => {
@@ -15386,6 +15913,35 @@ function HomeschoolApp() {
               <span className="si-value">{localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("درج نہیں", "ur")}</span>
             </div>}
             <div className="settings-profile-card" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {}}>
+              <div style={{ marginBottom: 14 }}>
+                <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("Student Profiles", "طالب علم پروفائل", language), language)}</label>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {studentProfiles.map((profile) => (
+                    <div key={profile.id} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className={`grade-btn${profile.id === activeStudentProfileId ? " active" : ""}`}
+                        onClick={() => handleSwitchStudentProfile(profile.id)}
+                        disabled={profileSwitchBusy}
+                        style={{ flex: 1, minWidth: 180, justifyContent: "space-between" }}
+                      >
+                        <span>{renderLocalizedTextNode(joinLocalizedText(profile.studentName || "Student", profile.studentNameUr || "طالب علم", language), language)}</span>
+                        <span style={{ opacity: 0.8 }}>{profile.grade ? `G${profile.grade}` : "—"}</span>
+                      </button>
+                      {studentProfiles.length > 1 ? (
+                        <button
+                          type="button"
+                          className="ghost-cta"
+                          onClick={() => handleDeleteStudentProfile(profile.id)}
+                          disabled={profileSwitchBusy}
+                        >
+                          {renderLocalizedTextNode(joinLocalizedText("Delete", "حذف", language), language)}
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div style={{ marginBottom: 12 }}>
                 <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("English Name", "انگریزی نام", language), language)}</label>
                 <input
@@ -15406,12 +15962,72 @@ function HomeschoolApp() {
                   style={{ direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" }}
                 />
               </div>
+              <div style={{ marginTop: 12 }}>
+                <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("Cloud Role Preparation", "کلاؤڈ کردار تیاری", language), language)}</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[
+                    { id: "student", label: joinLocalizedText("Student", "طالب علم", language) },
+                    { id: "parent", label: joinLocalizedText("Parent", "والدین", language) },
+                    { id: "teacher", label: joinLocalizedText("Teacher", "استاد", language) },
+                  ].map((roleOption) => (
+                    <button
+                      key={roleOption.id}
+                      type="button"
+                      className={`grade-btn${supabaseRolePreference === roleOption.id ? " active" : ""}`}
+                      onClick={() => handleSupabaseRolePreferenceChange(roleOption.id)}
+                    >
+                      {renderLocalizedTextNode(roleOption.label, language)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="settings-item" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {}}>
               <span className="si-label">📚 {renderLocalizedTextNode(ui.currentGrade, language)}</span>
               <span className="si-value">{renderGradeValueNode(ui.grade, grade, language)}</span>
             </div>
             <div className="grade-grid">{GRADES.map(g => <button key={g.id} className={"grade-btn " + (g.id === grade ? "active" : "")} onClick={() => setGrade(g.id)}>{g.id}</button>)}</div>
+            <div className="settings-profile-card" style={{ marginTop: 12, ...(isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {}) }}>
+              <div style={{ marginBottom: 12, color: "var(--text-secondary)", fontSize: 13 }}>
+                {renderLocalizedTextNode(joinLocalizedText("Create another student profile for siblings or separate study tracks on this device.", "اسی ڈیوائس پر بہن بھائیوں یا الگ مطالعہ ٹریک کے لیے نیا پروفائل بنائیں۔", language), language)}
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("New English Name", "نیا انگریزی نام", language), language)}</label>
+                <input
+                  className="settings-text-input"
+                  value={profileDraft.studentName}
+                  onChange={(event) => setProfileDraft((current) => ({ ...current, studentName: event.target.value }))}
+                  placeholder={language === "ur" ? "انگریزی نام درج کریں..." : "Enter English name..."}
+                  style={{ direction: "ltr", textAlign: "left", fontFamily: "var(--font)" }}
+                />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("New Urdu Name", "نیا اردو نام", language), language)}</label>
+                <input
+                  className="settings-text-input"
+                  value={profileDraft.studentNameUr}
+                  onChange={(event) => setProfileDraft((current) => ({ ...current, studentNameUr: sanitizeUrduInput(event.target.value) }))}
+                  placeholder="اپنا نام درج کریں"
+                  style={{ direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span className="settings-input-label" style={{ marginBottom: 0 }}>{renderLocalizedTextNode(joinLocalizedText("Grade", "جماعت", language), language)}</span>
+                {GRADES.map((gradeOption) => (
+                  <button
+                    key={`new-${gradeOption.id}`}
+                    type="button"
+                    className={`grade-btn${Number(profileDraft.grade) === Number(gradeOption.id) ? " active" : ""}`}
+                    onClick={() => setProfileDraft((current) => ({ ...current, grade: gradeOption.id }))}
+                  >
+                    {gradeOption.id}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="study-tool-btn" style={{ marginTop: 12 }} onClick={handleCreateStudentProfile} disabled={profileSwitchBusy}>
+                {renderLocalizedTextNode(joinLocalizedText("Create Profile", "پروفائل بنائیں", language), language)}
+              </button>
+            </div>
           </div>
             </div>
           </div>
@@ -15533,6 +16149,29 @@ function HomeschoolApp() {
             aiBrowserBlocked={!aiBrowserCapability.ok}
             labels={ui}
           />
+        ) : null}
+        {cloudSyncConflicts.length > 0 ? (
+          <div className="review-panel" style={{ marginTop: 18 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Cloud Sync Review", "کلاؤڈ سنک جائزہ", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Only true overlaps are shown here. Resolve them once, and future sync can stay quiet.", "صرف حقیقی ٹکراؤ یہاں دکھائے جاتے ہیں۔ ایک بار حل کریں، پھر آئندہ سنک خاموش رہ سکتی ہے۔", language), language)}</p>
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 10 }}>
+              {cloudSyncConflicts.slice(-8).reverse().map((record) => (
+                <div key={record.id} className="settings-profile-card" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>{record.title}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>{renderLocalizedTextNode(joinLocalizedText("Local and synced copies both changed before sync completed.", "لوکل اور سنک شدہ دونوں نقول سنک مکمل ہونے سے پہلے بدل گئیں۔", language), language)}</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button type="button" className="ghost-cta" onClick={() => handleResolveCloudSyncConflict(record.id, "local")}>{renderLocalizedTextNode(joinLocalizedText("Keep Local", "لوکل رکھیں", language), language)}</button>
+                    <button type="button" className="ghost-cta" onClick={() => handleResolveCloudSyncConflict(record.id, "remote")}>{renderLocalizedTextNode(joinLocalizedText("Keep Synced", "سنک شدہ رکھیں", language), language)}</button>
+                    <button type="button" className="study-tool-btn" onClick={() => handleResolveCloudSyncConflict(record.id, "merge")}>{renderLocalizedTextNode(joinLocalizedText("Merge Both", "دونوں ضم کریں", language), language)}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : null}
       </>)}
       </div>

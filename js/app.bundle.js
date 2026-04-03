@@ -1216,6 +1216,31 @@
       ur: String(studentNameUr || studentName || "").trim()
     };
   }
+  function createStudentProfileDraft(base = {}) {
+    const now = Date.now();
+    const id = String(base.id || `profile_${now}_${Math.random().toString(36).slice(2, 8)}`).trim();
+    return {
+      id,
+      grade: typeof base.grade !== "undefined" && base.grade !== null ? Number(base.grade) : null,
+      studentName: String(base.studentName || base.name || "").trim(),
+      studentNameUr: String(base.studentNameUr || base.nameUr || "").trim(),
+      role: ["student", "parent", "teacher"].includes(base.role) ? base.role : "student",
+      createdAt: Number(base.createdAt) || now,
+      updatedAt: Number(base.updatedAt) || now
+    };
+  }
+  function normalizeStudentProfiles(profiles = [], fallbackProfile = {}) {
+    const safeProfiles = Array.isArray(profiles) ? profiles : [];
+    const normalized = safeProfiles.map((profile) => createStudentProfileDraft(profile)).filter((profile, index, list) => profile.id && list.findIndex((entry) => entry.id === profile.id) === index);
+    if (normalized.length) return normalized;
+    return [createStudentProfileDraft(fallbackProfile)];
+  }
+  function resolveActiveStudentProfileId(profiles = [], preferredId = "") {
+    var _a;
+    const safeProfiles = Array.isArray(profiles) ? profiles : [];
+    const matched = safeProfiles.find((profile) => profile.id === preferredId);
+    return (matched == null ? void 0 : matched.id) || ((_a = safeProfiles[0]) == null ? void 0 : _a.id) || "";
+  }
   function sanitizeUrduInput(value) {
     return String(value || "").replace(/[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s\u060C\u061B\u061F\u0640\u0660-\u0669\u06F0-\u06F9]/g, "").replace(/\s{2,}/g, " ").trimStart();
   }
@@ -1628,17 +1653,18 @@ using ((select auth.uid()) = user_id);
 
 create table if not exists public.user_data_rows (
   user_id uuid not null,
+  profile_id text not null default '__global__',
   dataset text not null,
   row_id text not null,
   payload jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now(),
   deleted_at timestamptz null,
   device_id text null,
-  primary key (user_id, dataset, row_id)
+  primary key (user_id, profile_id, dataset, row_id)
 );
 
 create index if not exists user_data_rows_user_dataset_updated_idx
-  on public.user_data_rows (user_id, dataset, updated_at desc);
+  on public.user_data_rows (user_id, profile_id, dataset, updated_at desc);
 
 alter table public.user_data_rows enable row level security;
 
@@ -5400,7 +5426,7 @@ ${marker} `);
     return /* @__PURE__ */ React.createElement("div", { ...focusProps, style: { cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } }, /* @__PURE__ */ React.createElement("span", { onClick: speakEn, style: { cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 } }, en, " \u2192 ", v2, " \u2192 ", v3, " ", sEn ? "\u{1F50A}" : "\u{1F508}"), /* @__PURE__ */ React.createElement("span", { onClick: speakUr, style: { cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 } }, sUr ? "\u{1F50A}" : "\u{1F508}", " ", ur), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" } })));
   }
   function HomeschoolApp() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
     const stored = loadState();
     const storedAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
     const storedSupabaseSyncSettings = sanitizeSupabaseDictionarySyncSettings(
@@ -5412,6 +5438,20 @@ ${marker} `);
     const initialTutorLanguage = (stored == null ? void 0 : stored.language) || "en";
     const initialTutorSessions = normalizeTutorSessions(storedAiTutorHistory.sessions, initialTutorLanguage);
     const initialActiveTutorSessionId = initialTutorSessions.some((session) => session.id === storedAiTutorHistory.activeSessionId) ? storedAiTutorHistory.activeSessionId : (_a = initialTutorSessions[0]) == null ? void 0 : _a.id;
+    const initialStudentProfiles = normalizeStudentProfiles(
+      (stored == null ? void 0 : stored.studentProfiles) || localStorageFallback("hs_student_profiles_registry") || [],
+      {
+        grade: (stored == null ? void 0 : stored.grade) || null,
+        studentName: (stored == null ? void 0 : stored.studentName) || "",
+        studentNameUr: (stored == null ? void 0 : stored.studentNameUr) || "",
+        role: "student"
+      }
+    );
+    const initialActiveStudentProfileId = resolveActiveStudentProfileId(
+      initialStudentProfiles,
+      (stored == null ? void 0 : stored.activeStudentProfileId) || localStorageFallback("hs_active_student_profile_id") || ((_b = initialStudentProfiles[0]) == null ? void 0 : _b.id)
+    );
+    const initialActiveStudentProfile = initialStudentProfiles.find((profile) => profile.id === initialActiveStudentProfileId) || initialStudentProfiles[0];
     const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
     const persistCustomizationRef = useRef(null);
     const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
@@ -5427,13 +5467,22 @@ ${marker} `);
     const [daySectionOverrides, setDaySectionOverrides] = useState((stored == null ? void 0 : stored.daySectionOverrides) || {});
     const [dailyReviewCap, setDailyReviewCap] = useState(Math.max(5, Math.min(50, Number(stored == null ? void 0 : stored.dailyReviewCap) || 20)));
     const [reviewSrsSettings, setReviewSrsSettings] = useState({
-      masteryThreshold: Math.max(3, Math.min(7, Number((_b = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _b.masteryThreshold) || 5)),
-      intervalScale: Math.max(0.5, Math.min(2.5, Number((_c = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _c.intervalScale) || 1)),
-      againMinutes: Math.max(5, Math.min(180, Number((_d = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _d.againMinutes) || 10))
+      masteryThreshold: Math.max(3, Math.min(7, Number((_c = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _c.masteryThreshold) || 5)),
+      intervalScale: Math.max(0.5, Math.min(2.5, Number((_d = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _d.intervalScale) || 1)),
+      againMinutes: Math.max(5, Math.min(180, Number((_e = stored == null ? void 0 : stored.reviewSrsSettings) == null ? void 0 : _e.againMinutes) || 10))
     });
-    const [grade, setGrade] = useState((stored == null ? void 0 : stored.grade) || null);
-    const [studentName, setStudentName] = useState((stored == null ? void 0 : stored.studentName) || "");
-    const [studentNameUr, setStudentNameUr] = useState((stored == null ? void 0 : stored.studentNameUr) || "");
+    const [studentProfiles, setStudentProfiles] = useState(initialStudentProfiles);
+    const [activeStudentProfileId, setActiveStudentProfileId] = useState(initialActiveStudentProfileId);
+    const [profileSwitchBusy, setProfileSwitchBusy] = useState(false);
+    const [profileDraft, setProfileDraft] = useState({
+      studentName: "",
+      studentNameUr: "",
+      grade: (initialActiveStudentProfile == null ? void 0 : initialActiveStudentProfile.grade) || 5,
+      role: "student"
+    });
+    const [grade, setGrade] = useState((_g = (_f = initialActiveStudentProfile == null ? void 0 : initialActiveStudentProfile.grade) != null ? _f : stored == null ? void 0 : stored.grade) != null ? _g : null);
+    const [studentName, setStudentName] = useState((initialActiveStudentProfile == null ? void 0 : initialActiveStudentProfile.studentName) || (stored == null ? void 0 : stored.studentName) || "");
+    const [studentNameUr, setStudentNameUr] = useState((initialActiveStudentProfile == null ? void 0 : initialActiveStudentProfile.studentNameUr) || (stored == null ? void 0 : stored.studentNameUr) || "");
     const [tab, setTab] = useState("home");
     const [selectedSubject, setSelectedSubject] = useState(null);
     const [selectedLesson, setSelectedLesson] = useState(null);
@@ -5481,7 +5530,7 @@ ${marker} `);
     const [selectedAiProvider, setSelectedAiProvider] = useState((storedAiTutorPreferences == null ? void 0 : storedAiTutorPreferences.providerId) || "openai");
     const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
     const [updateAvailable, setUpdateAvailable] = useState(false);
-    const [ttsEnabled, setTtsEnabled] = useState((_e = stored == null ? void 0 : stored.ttsEnabled) != null ? _e : true);
+    const [ttsEnabled, setTtsEnabled] = useState((_h = stored == null ? void 0 : stored.ttsEnabled) != null ? _h : true);
     const [audioMuted, setAudioMuted] = useState(Boolean(stored == null ? void 0 : stored.audioMuted));
     const [autoPlayNext, setAutoPlayNext] = useState(Boolean(stored == null ? void 0 : stored.autoPlayNext));
     const [wordMeaningPriority, setWordMeaningPriority] = useState(normalizeWordMeaningPriority(stored == null ? void 0 : stored.wordMeaningPriority));
@@ -5535,7 +5584,7 @@ ${marker} `);
     const [customListDraft, setCustomListDraft] = useState("");
     const [studyGoals, setStudyGoals] = useState((stored == null ? void 0 : stored.studyGoals) || { dailyReviews: 20, weeklyWords: 40 });
     const [focusTimerSettings, setFocusTimerSettings] = useState((stored == null ? void 0 : stored.focusTimerSettings) || { durationMinutes: 20, autoStartBreak: false });
-    const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number((_f = stored == null ? void 0 : stored.focusTimerSettings) == null ? void 0 : _f.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
+    const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number((_i = stored == null ? void 0 : stored.focusTimerSettings) == null ? void 0 : _i.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
     const [reminderSettings, setReminderSettings] = useState((stored == null ? void 0 : stored.reminderSettings) || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
     const [classScheduleSettings, setClassScheduleSettings] = useState((stored == null ? void 0 : stored.classScheduleSettings) || { enabled: false, startTime: "08:00", endTime: "13:00" });
     const [timeTrackingData, setTimeTrackingData] = useState(normalizeTimeTrackingData((stored == null ? void 0 : stored.timeTrackingData) || {}));
@@ -5581,6 +5630,8 @@ ${marker} `);
     const [supabaseSyncBusy, setSupabaseSyncBusy] = useState(false);
     const [supabaseSyncPulse, setSupabaseSyncPulse] = useState(0);
     const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
+    const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored == null ? void 0 : stored.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
+    const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored == null ? void 0 : stored.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
     const [wordMeaningPopover, setWordMeaningPopover] = useState(null);
     const [copyToast, setCopyToast] = useState(null);
     const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
@@ -5596,6 +5647,8 @@ ${marker} `);
     const chatTextareaRef = useRef(null);
     const chatFileInputRef = useRef(null);
     const speechRecognitionRef = useRef(null);
+    const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
+    const studentProfilesRef = useRef(initialStudentProfiles);
     const headerRef = useRef(null);
     const headerHideTimerRef = useRef(null);
     const navBarRef = useRef(null);
@@ -5618,11 +5671,12 @@ ${marker} `);
     const gamificationStateRef = useRef(normalizeGamificationState((stored == null ? void 0 : stored.gamificationState) || {}));
     const [headerHideOffset, setHeaderHideOffset] = useState(0);
     const [navBarOffset, setNavBarOffset] = useState(0);
+    const activeStudentProfile = studentProfiles.find((profile) => profile.id === activeStudentProfileId) || studentProfiles[0] || null;
     const activeTutorSession = useMemo(
       () => tutorSessions.find((session) => session.id === activeTutorSessionId) || tutorSessions[0] || null,
       [activeTutorSessionId, tutorSessions]
     );
-    const currentTutorSessionId = (activeTutorSession == null ? void 0 : activeTutorSession.id) || activeTutorSessionId || ((_g = tutorSessions[0]) == null ? void 0 : _g.id) || null;
+    const currentTutorSessionId = (activeTutorSession == null ? void 0 : activeTutorSession.id) || activeTutorSessionId || ((_j = tutorSessions[0]) == null ? void 0 : _j.id) || null;
     const chatMessages = (activeTutorSession == null ? void 0 : activeTutorSession.messages) || [];
     const chatInputWordCount = chatInput.trim() ? chatInput.trim().split(/\s+/).filter(Boolean).length : 0;
     const speechRecognitionSupported = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -6162,7 +6216,7 @@ ${marker} `);
     const timeTrackingStatusLabel = classScheduleSettings.enabled ? (todayTimeEntry == null ? void 0 : todayTimeEntry.status) === "on-time" ? ui.classStatusOnTime : (todayTimeEntry == null ? void 0 : todayTimeEntry.status) === "late" ? ui.classStatusLate : ui.classStatusNotStarted : ui.classStatusOff;
     const recentTimeHistory = useMemo(() => (timeTrackingData.history || []).slice(0, 7), [timeTrackingData]);
     const todayKey = getLocalDayKey();
-    const todayGamificationEntry = ((_h = gamificationState.activityByDay) == null ? void 0 : _h[todayKey]) || createDefaultDailyActivityEntry();
+    const todayGamificationEntry = ((_k = gamificationState.activityByDay) == null ? void 0 : _k[todayKey]) || createDefaultDailyActivityEntry();
     const dailyReviewChallengeTarget = Math.max(6, Math.min(15, Math.round((studyGoals.dailyReviews || 20) * 0.4)));
     const dailyPracticeChallengeTarget = 4;
     const dailyFocusChallengeTarget = Math.max(15, Math.min(30, Number(focusTimerSettings.durationMinutes) || 20));
@@ -6492,7 +6546,7 @@ ${marker} `);
       };
     }, []);
     const applyCloudCustomizationState = useCallback((customizations) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2;
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2;
       const source = customizations && typeof customizations === "object" ? customizations : {};
       const storedPreferences = ((_a2 = source.preferences) == null ? void 0 : _a2.data) || null;
       const storedAudioPreferences = ((_b2 = source.audioPreferences) == null ? void 0 : _b2.data) || null;
@@ -6508,7 +6562,10 @@ ${marker} `);
       const storedGamification = ((_l2 = source.gamificationState) == null ? void 0 : _l2.data) || null;
       const storedDictionaryPreferences = ((_m2 = source.dictionaryPreferences) == null ? void 0 : _m2.data) || null;
       const storedProfile = ((_n2 = source.studentProfile) == null ? void 0 : _n2.data) || null;
-      const storedPracticeProgress = ((_o2 = source.practiceProgress) == null ? void 0 : _o2.data) || null;
+      const storedProfiles = ((_o2 = source.studentProfiles) == null ? void 0 : _o2.data) || null;
+      const storedActiveProfileId = ((_q2 = (_p2 = source.activeStudentProfileId) == null ? void 0 : _p2.data) == null ? void 0 : _q2.id) || ((_r2 = source.activeStudentProfileId) == null ? void 0 : _r2.data) || null;
+      const storedAccountPreferences = ((_s2 = source.accountPreferences) == null ? void 0 : _s2.data) || null;
+      const storedPracticeProgress = ((_t2 = source.practiceProgress) == null ? void 0 : _t2.data) || null;
       if (storedPreferences) {
         if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
         if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(Boolean(storedPreferences.ttsEnabled));
@@ -6600,26 +6657,80 @@ ${marker} `);
       if (Array.isArray(storedNotificationHistory)) setNotificationHistory(storedNotificationHistory.slice(0, 40));
       if (storedGamification && typeof storedGamification === "object") setGamificationState(normalizeGamificationState(storedGamification));
       if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || "").trim());
+      if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
+        setSupabaseRolePreference(storedAccountPreferences.rolePreference);
+      }
+      if (storedProfiles) {
+        const normalizedProfiles = normalizeStudentProfiles(storedProfiles, storedProfile || {
+          grade,
+          studentName,
+          studentNameUr
+        });
+        const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || activeStudentProfileIdRef.current);
+        studentProfilesRef.current = normalizedProfiles;
+        activeStudentProfileIdRef.current = nextActiveId;
+        setStudentProfiles(normalizedProfiles);
+        setActiveStudentProfileId(nextActiveId);
+        const activeProfile = normalizedProfiles.find((profile) => profile.id === nextActiveId) || normalizedProfiles[0];
+        if (activeProfile) {
+          if (typeof activeProfile.grade !== "undefined") setGrade(activeProfile.grade);
+          if (typeof activeProfile.studentName !== "undefined") setStudentName(activeProfile.studentName || "");
+          if (typeof activeProfile.studentNameUr !== "undefined") setStudentNameUr(activeProfile.studentNameUr || "");
+        }
+      }
       if (storedProfile && typeof storedProfile === "object") {
         if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
         if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
         if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
       }
-    }, []);
+    }, [grade, studentName, studentNameUr]);
     const applyIncomingCloudSyncRows = useCallback(async (incomingRows, reason = "sync") => {
-      var _a2, _b2;
+      var _a2, _b2, _c2;
       const normalizedRows = (Array.isArray(incomingRows) ? incomingRows : []).map((row) => ({
+        profileId: String((row == null ? void 0 : row.profileId) || "").trim(),
         dataset: String((row == null ? void 0 : row.dataset) || "").trim(),
         rowId: String((row == null ? void 0 : row.rowId) || "").trim(),
         payload: (row == null ? void 0 : row.payload) && typeof row.payload === "object" ? row.payload : {},
         updatedAt: Number(row == null ? void 0 : row.updatedAt) || Date.now(),
         deletedAt: (row == null ? void 0 : row.deletedAt) ? Number(row.deletedAt) || Date.now() : null
-      })).filter((row) => row.dataset && row.rowId);
+      })).filter((row) => row.dataset && row.rowId && (!row.profileId || row.profileId === "__global__" || row.profileId === activeStudentProfileIdRef.current));
       if (!normalizedRows.length || !((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.applyCloudSyncRows)) return { applied: 0 };
+      if (reason !== "local" && ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.getCloudSyncOutboxEntries)) {
+        try {
+          const pendingRows = await window.HomeSchoolDB.getCloudSyncOutboxEntries(500);
+          const nextConflicts = [];
+          normalizedRows.forEach((row) => {
+            const pendingMatch = (pendingRows || []).find((entry) => String((entry == null ? void 0 : entry.dataset) || "").trim() === row.dataset && String((entry == null ? void 0 : entry.rowId) || "").trim() === row.rowId && String((entry == null ? void 0 : entry.profileId) || "").trim() === String(row.profileId || activeStudentProfileIdRef.current || "") && Number((entry == null ? void 0 : entry.updatedAt) || 0) > 0 && JSON.stringify((entry == null ? void 0 : entry.payload) || {}) !== JSON.stringify(row.payload || {}));
+            if (!pendingMatch) return;
+            nextConflicts.push({
+              id: `${row.profileId || "__global__"}::${row.dataset}::${row.rowId}`,
+              profileId: row.profileId || "__global__",
+              dataset: row.dataset,
+              rowId: row.rowId,
+              localPayload: pendingMatch.payload || {},
+              remotePayload: row.payload || {},
+              localUpdatedAt: Number(pendingMatch.updatedAt) || Date.now(),
+              remoteUpdatedAt: Number(row.updatedAt) || Date.now(),
+              title: `${row.dataset} \u2022 ${row.rowId}`
+            });
+          });
+          if (nextConflicts.length) {
+            setCloudSyncConflicts((current) => {
+              const merged = [...Array.isArray(current) ? current : []];
+              nextConflicts.forEach((record) => {
+                if (!merged.some((entry) => entry.id === record.id)) merged.push(record);
+              });
+              return merged.slice(-40);
+            });
+          }
+        } catch (error) {
+          console.log("Unable to inspect cloud sync conflicts:", error);
+        }
+      }
       const applied = await window.HomeSchoolDB.applyCloudSyncRows(normalizedRows);
       if (reason !== "local") {
         try {
-          const customizationMap = ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.getCustomizationsMap) ? await window.HomeSchoolDB.getCustomizationsMap() : {};
+          const customizationMap = ((_c2 = window.HomeSchoolDB) == null ? void 0 : _c2.getCustomizationsMap) ? await window.HomeSchoolDB.getCustomizationsMap() : {};
           applyCloudCustomizationState(customizationMap || {});
         } catch (error) {
           console.log("Unable to refresh synced customizations:", error);
@@ -6716,18 +6827,19 @@ ${marker} `);
         if (cloudRowsToPush.length) {
           const cloudPayload = cloudRowsToPush.map((row) => ({
             user_id: user.id,
+            profile_id: String(row.profileId || activeStudentProfileIdRef.current || "default").trim(),
             dataset: String(row.dataset || "").trim(),
             row_id: String(row.rowId || "").trim(),
             payload: row.payload || {},
             updated_at: new Date(Number(row.updatedAt) || Date.now()).toISOString(),
             deleted_at: row.deletedAt ? new Date(Number(row.deletedAt) || Date.now()).toISOString() : null,
             device_id: row.deviceId || dictionaryDeviceIdRef.current
-          })).filter((row) => row.dataset && row.row_id);
+          })).filter((row) => row.profile_id && row.dataset && row.row_id);
           if (cloudPayload.length) {
-            const { error: cloudPushError } = await client.from(SUPABASE_CLOUD_DATA_TABLE).upsert(cloudPayload, { onConflict: "user_id,dataset,row_id" });
+            const { error: cloudPushError } = await client.from(SUPABASE_CLOUD_DATA_TABLE).upsert(cloudPayload, { onConflict: "user_id,profile_id,dataset,row_id" });
             if (cloudPushError) throw cloudPushError;
             if ((_c2 = window.HomeSchoolDB) == null ? void 0 : _c2.clearCloudSyncOutboxEntries) {
-              await window.HomeSchoolDB.clearCloudSyncOutboxEntries(cloudRowsToPush.map((row) => `${String(row.dataset || "").trim()}::${String(row.rowId || "").trim()}`));
+              await window.HomeSchoolDB.clearCloudSyncOutboxEntries(cloudRowsToPush.map((row) => String(row.syncKey || `${String(row.dataset || "").trim()}::${String(row.profileId || activeStudentProfileIdRef.current || "default").trim()}::${String(row.rowId || "").trim()}`)));
             }
             await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloudSeeded", {
               done: true,
@@ -6758,7 +6870,7 @@ ${marker} `);
           }
         }
         const lastCloudPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloud:lastPull");
-        let cloudPullQuery = client.from(SUPABASE_CLOUD_DATA_TABLE).select("dataset, row_id, payload, updated_at, deleted_at, device_id").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(3e3);
+        let cloudPullQuery = client.from(SUPABASE_CLOUD_DATA_TABLE).select("profile_id, dataset, row_id, payload, updated_at, deleted_at, device_id").eq("user_id", user.id).in("profile_id", [String(activeStudentProfileIdRef.current || "default"), "__global__"]).order("updated_at", { ascending: false }).limit(3e3);
         const lastCloudPullAt = Number((_e2 = lastCloudPullMeta == null ? void 0 : lastCloudPullMeta.data) == null ? void 0 : _e2.timestamp) || 0;
         if (lastCloudPullAt > 0) {
           cloudPullQuery = cloudPullQuery.gt("updated_at", new Date(lastCloudPullAt).toISOString());
@@ -6767,6 +6879,7 @@ ${marker} `);
         if (cloudPullError) throw cloudPullError;
         if (remoteCloudRows.length) {
           const normalizedRemoteCloudRows = remoteCloudRows.map((row) => ({
+            profileId: String(row.profile_id || "").trim(),
             dataset: String(row.dataset || "").trim(),
             rowId: String(row.row_id || "").trim(),
             payload: row.payload || {},
@@ -6866,7 +6979,7 @@ ${marker} `);
       } finally {
         setSupabaseAuthBusy(false);
       }
-    }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail]);
+    }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail, supabaseRolePreference]);
     const handleSupabaseCreateAccount = useCallback(async () => {
       var _a2, _b2, _c2, _d2;
       const email = String(supabaseDictionarySync.authEmail || "").trim();
@@ -6881,7 +6994,7 @@ ${marker} `);
         const { data, error } = await client.auth.signUp({
           email,
           password,
-          options: getSupabaseAuthRedirectUrl() ? { emailRedirectTo: getSupabaseAuthRedirectUrl(), data: { role: "student" } } : { data: { role: "student" } }
+          options: getSupabaseAuthRedirectUrl() ? { emailRedirectTo: getSupabaseAuthRedirectUrl(), data: { role: supabaseRolePreference, homeschoolRole: supabaseRolePreference } } : { data: { role: supabaseRolePreference, homeschoolRole: supabaseRolePreference } }
         });
         if (error) throw error;
         applySupabaseSessionState((data == null ? void 0 : data.session) || null, {
@@ -7000,7 +7113,7 @@ ${marker} `);
         }
         const { count, error: queryError } = await client.from(SUPABASE_DICTIONARY_TABLE).select("normalized", { head: true, count: "exact" }).eq("user_id", session.user.id);
         if (queryError) throw queryError;
-        const { count: cloudCount, error: cloudQueryError } = await client.from(SUPABASE_CLOUD_DATA_TABLE).select("row_id", { head: true, count: "exact" }).eq("user_id", session.user.id);
+        const { count: cloudCount, error: cloudQueryError } = await client.from(SUPABASE_CLOUD_DATA_TABLE).select("row_id", { head: true, count: "exact" }).eq("user_id", session.user.id).in("profile_id", [String(activeStudentProfileIdRef.current || "default"), "__global__"]);
         if (cloudQueryError) throw cloudQueryError;
         applySupabaseSessionState(session, {
           status: "ready",
@@ -7061,6 +7174,63 @@ ${marker} `);
         "check"
       );
     }, [dictionarySyncConflicts, language, showAppToast, wordMeaningCache]);
+    const handleResolveCloudSyncConflict = useCallback(async (conflictId, mode = "merge") => {
+      var _a2, _b2;
+      const record = (Array.isArray(cloudSyncConflicts) ? cloudSyncConflicts : []).find((entry) => entry.id === conflictId);
+      if (!record) return;
+      const mergedPayload = mode === "local" ? record.localPayload || {} : mode === "remote" ? record.remotePayload || {} : {
+        ...record.remotePayload || {},
+        ...record.localPayload || {}
+      };
+      try {
+        if (mode !== "remote" && ((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.applyCloudSyncRows)) {
+          await window.HomeSchoolDB.applyCloudSyncRows([{
+            profileId: record.profileId || activeStudentProfileIdRef.current || "default",
+            dataset: record.dataset,
+            rowId: record.rowId,
+            payload: mergedPayload,
+            updatedAt: Date.now(),
+            deletedAt: null
+          }]);
+        }
+        if (mode !== "remote" && ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.queueCloudSyncRecord)) {
+          await window.HomeSchoolDB.queueCloudSyncRecord(record.dataset, record.rowId, mergedPayload, {
+            updatedAt: Date.now(),
+            profileId: record.profileId || activeStudentProfileIdRef.current || "default",
+            deviceId: dictionaryDeviceIdRef.current
+          });
+        }
+        setCloudSyncConflicts((current) => Array.isArray(current) ? current.filter((entry) => entry.id !== conflictId) : []);
+        setSupabaseSyncPulse(Date.now());
+        showAppToast(
+          mode === "local" ? joinLocalizedText("Kept local cloud change", "\u0645\u0642\u0627\u0645\u06CC \u06A9\u0644\u0627\u0624\u0688 \u062A\u0628\u062F\u06CC\u0644\u06CC \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631 \u062F\u06CC", language) : mode === "remote" ? joinLocalizedText("Kept synced cloud change", "\u0633\u0646\u06A9 \u0634\u062F\u06C1 \u06A9\u0644\u0627\u0624\u0688 \u062A\u0628\u062F\u06CC\u0644\u06CC \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631 \u062F\u06CC", language) : joinLocalizedText("Merged cloud changes", "\u06A9\u0644\u0627\u0624\u0688 \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0636\u0645 \u06A9\u0631 \u062F\u06CC \u06AF\u0626\u06CC\u06BA", language),
+          "check"
+        );
+      } catch (error) {
+        console.log("Unable to resolve cloud sync conflict:", error);
+        showAppToast(joinLocalizedText("Unable to resolve cloud conflict", "\u06A9\u0644\u0627\u0624\u0688 \u062A\u0646\u0627\u0632\u0639 \u062D\u0644 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627", language), "alert");
+      }
+    }, [cloudSyncConflicts, language, showAppToast]);
+    const handleSupabaseRolePreferenceChange = useCallback(async (nextRole) => {
+      const safeRole = ["student", "parent", "teacher"].includes(nextRole) ? nextRole : "student";
+      setSupabaseRolePreference(safeRole);
+      setSupabaseAuthState((current) => ({ ...current, role: safeRole }));
+      if (!supabaseAuthState.userId) return;
+      try {
+        const client = ensureSupabaseClient();
+        const { error } = await client.auth.updateUser({
+          data: {
+            role: safeRole,
+            homeschoolRole: safeRole
+          }
+        });
+        if (error) throw error;
+        showAppToast(joinLocalizedText("Cloud role updated", "\u06A9\u0644\u0627\u0624\u0688 \u06A9\u0631\u062F\u0627\u0631 \u062A\u0627\u0632\u06C1 \u06C1\u0648 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        console.log("Unable to update Supabase role preference:", error);
+        showAppToast(joinLocalizedText("Unable to update cloud role", "\u06A9\u0644\u0627\u0624\u0688 \u06A9\u0631\u062F\u0627\u0631 \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627", language), "alert");
+      }
+    }, [ensureSupabaseClient, language, showAppToast, supabaseAuthState.userId]);
     useEffect(() => {
       localStorageFallback("hs_dictionary_device_id", dictionaryDeviceIdRef.current);
     }, []);
@@ -7161,6 +7331,37 @@ ${marker} `);
         console.log("Unable to persist dictionary conflict metadata:", error);
       });
     }, [dbLoaded, dictionarySyncConflicts]);
+    useEffect(() => {
+      var _a2;
+      studentProfilesRef.current = studentProfiles;
+      activeStudentProfileIdRef.current = activeStudentProfileId;
+      localStorageFallback("hs_student_profiles_registry", studentProfiles);
+      localStorageFallback("hs_active_student_profile_id", activeStudentProfileId);
+      if ((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.setActiveCloudProfile) {
+        window.HomeSchoolDB.setActiveCloudProfile(activeStudentProfileId).catch((error) => {
+          console.log("Unable to update active cloud profile:", error);
+        });
+      }
+    }, [activeStudentProfileId, studentProfiles]);
+    useEffect(() => {
+      setStudentProfiles((current) => {
+        const safeProfiles = Array.isArray(current) && current.length ? current : normalizeStudentProfiles(current, {
+          grade,
+          studentName,
+          studentNameUr,
+          role: supabaseRolePreference
+        });
+        const changed = safeProfiles.some((profile) => profile.id === activeStudentProfileId && (profile.grade !== grade || String(profile.studentName || "") !== String(studentName || "") || String(profile.studentNameUr || "") !== String(studentNameUr || "")));
+        if (!changed) return current;
+        return safeProfiles.map((profile) => profile.id === activeStudentProfileId ? {
+          ...profile,
+          grade,
+          studentName: String(studentName || "").trim(),
+          studentNameUr: String(studentNameUr || "").trim(),
+          updatedAt: Date.now()
+        } : profile);
+      });
+    }, [activeStudentProfileId, grade, studentName, studentNameUr, supabaseRolePreference]);
     useEffect(() => {
       localStorageFallback(SUPABASE_SYNC_STORAGE_KEY, buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync));
     }, [supabaseDictionarySync]);
@@ -7301,7 +7502,10 @@ ${marker} `);
           if (!active) return;
           const incoming = (payload == null ? void 0 : payload.new) || (payload == null ? void 0 : payload.record) || null;
           if (!(incoming == null ? void 0 : incoming.dataset) || !(incoming == null ? void 0 : incoming.row_id)) return;
+          const incomingProfileId = String(incoming.profile_id || "").trim();
+          if (incomingProfileId && incomingProfileId !== "__global__" && incomingProfileId !== activeStudentProfileIdRef.current) return;
           applyIncomingCloudSyncRows([{
+            profileId: incomingProfileId,
             dataset: String(incoming.dataset || "").trim(),
             rowId: String(incoming.row_id || "").trim(),
             payload: incoming.payload || {},
@@ -7729,6 +7933,13 @@ ${marker} `);
               studentName: nextPayload.studentName,
               studentNameUr: nextPayload.studentNameUr
             });
+            await window.HomeSchoolDB.saveCustomization("studentProfiles", nextPayload.studentProfiles || []);
+            await window.HomeSchoolDB.saveCustomization("activeStudentProfileId", {
+              id: nextPayload.activeStudentProfileId || ""
+            });
+            await window.HomeSchoolDB.saveCustomization("accountPreferences", {
+              rolePreference: nextPayload.supabaseRolePreference || "student"
+            });
             await window.HomeSchoolDB.saveCustomization("aiProviderConfigs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
             await window.HomeSchoolDB.saveCustomization("aiTutorPreferences", {
               providerId: nextPayload.selectedAiProvider || "openai"
@@ -7783,6 +7994,13 @@ ${marker} `);
                 grade: nextPayload.grade,
                 studentName: nextPayload.studentName,
                 studentNameUr: nextPayload.studentNameUr
+              },
+              studentProfiles: nextPayload.studentProfiles || [],
+              activeStudentProfileId: {
+                id: nextPayload.activeStudentProfileId || ""
+              },
+              accountPreferences: {
+                rolePreference: nextPayload.supabaseRolePreference || "student"
               }
             });
             localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
@@ -7841,6 +8059,13 @@ ${marker} `);
               grade: nextPayload.grade,
               studentName: nextPayload.studentName,
               studentNameUr: nextPayload.studentNameUr
+            },
+            studentProfiles: nextPayload.studentProfiles || [],
+            activeStudentProfileId: {
+              id: nextPayload.activeStudentProfileId || ""
+            },
+            accountPreferences: {
+              rolePreference: nextPayload.supabaseRolePreference || "student"
             }
           });
           localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
@@ -7865,7 +8090,7 @@ ${marker} `);
         return;
       }
       (async () => {
-        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2;
+        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2, _v2, _w2, _x;
         try {
           await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
           const pos = await window.HomeSchoolDB.getAllPosTypes();
@@ -7891,9 +8116,12 @@ ${marker} `);
           const storedDictionaryPreferences = ((_n2 = customizations.dictionaryPreferences) == null ? void 0 : _n2.data) || null;
           const storedSupabaseDictionarySync = ((_o2 = customizations.supabaseDictionarySync) == null ? void 0 : _o2.data) || null;
           const storedProfile = ((_p2 = customizations.studentProfile) == null ? void 0 : _p2.data) || null;
-          const storedPracticeProgress = ((_q2 = customizations.practiceProgress) == null ? void 0 : _q2.data) || null;
-          const storedAiProviders = sanitizeAiProviderConfigs(((_r2 = customizations.aiProviderConfigs) == null ? void 0 : _r2.data) || {});
-          const storedAiTutor = ((_s2 = customizations.aiTutorPreferences) == null ? void 0 : _s2.data) || null;
+          const storedProfiles = ((_q2 = customizations.studentProfiles) == null ? void 0 : _q2.data) || null;
+          const storedActiveProfileId = ((_s2 = (_r2 = customizations.activeStudentProfileId) == null ? void 0 : _r2.data) == null ? void 0 : _s2.id) || ((_t2 = customizations.activeStudentProfileId) == null ? void 0 : _t2.data) || null;
+          const storedAccountPreferences = ((_u2 = customizations.accountPreferences) == null ? void 0 : _u2.data) || null;
+          const storedPracticeProgress = ((_v2 = customizations.practiceProgress) == null ? void 0 : _v2.data) || null;
+          const storedAiProviders = sanitizeAiProviderConfigs(((_w2 = customizations.aiProviderConfigs) == null ? void 0 : _w2.data) || {});
+          const storedAiTutor = ((_x = customizations.aiTutorPreferences) == null ? void 0 : _x.data) || null;
           if (storedPreferences) {
             if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
             if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
@@ -8008,6 +8236,27 @@ ${marker} `);
           }
           if (storedSupabaseDictionarySync && typeof storedSupabaseDictionarySync === "object") {
             setSupabaseDictionarySync(sanitizeSupabaseDictionarySyncSettings(storedSupabaseDictionarySync));
+          }
+          if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
+            setSupabaseRolePreference(storedAccountPreferences.rolePreference);
+          }
+          if (storedProfiles) {
+            const normalizedProfiles = normalizeStudentProfiles(storedProfiles, storedProfile || {
+              grade: (stored == null ? void 0 : stored.grade) || null,
+              studentName: (stored == null ? void 0 : stored.studentName) || "",
+              studentNameUr: (stored == null ? void 0 : stored.studentNameUr) || ""
+            });
+            const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || initialActiveStudentProfileId);
+            studentProfilesRef.current = normalizedProfiles;
+            activeStudentProfileIdRef.current = nextActiveId;
+            setStudentProfiles(normalizedProfiles);
+            setActiveStudentProfileId(nextActiveId);
+            const nextActiveProfile = normalizedProfiles.find((profile) => profile.id === nextActiveId) || normalizedProfiles[0];
+            if (nextActiveProfile) {
+              if (typeof nextActiveProfile.grade !== "undefined") setGrade(nextActiveProfile.grade);
+              if (typeof nextActiveProfile.studentName !== "undefined") setStudentName(nextActiveProfile.studentName || "");
+              if (typeof nextActiveProfile.studentNameUr !== "undefined") setStudentNameUr(nextActiveProfile.studentNameUr || "");
+            }
           }
           if (storedProfile) {
             if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
@@ -8358,16 +8607,19 @@ ${marker} `);
         dictionarySyncConflicts,
         dictionaryImportUrl,
         supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync),
+        studentProfiles,
+        activeStudentProfileId,
+        supabaseRolePreference,
         grade,
         studentName,
         studentNameUr,
         aiProviderConfigs,
         selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, activeStudentProfileId, supabaseRolePreference, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
+      if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+    }, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
     useEffect(() => {
       setNavHidden(Boolean(navAutoHide));
     }, [navPosition, navAutoHide]);
@@ -9257,6 +9509,13 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
     }, [refreshReviewWorkspace, refreshStorageLabel, ui.changedSubjects, ui.refreshConfirm, ui.refreshNoChanges, ui.refreshSuccess]);
     const applyImportedAppState = useCallback((nextState = {}, mode = "replace") => {
       if (mode === "replace") {
+        if (Array.isArray(nextState.studentProfiles)) setStudentProfiles(normalizeStudentProfiles(nextState.studentProfiles, {
+          grade: nextState.grade,
+          studentName: nextState.studentName,
+          studentNameUr: nextState.studentNameUr
+        }));
+        if (typeof nextState.activeStudentProfileId !== "undefined") setActiveStudentProfileId(nextState.activeStudentProfileId || "");
+        if (typeof nextState.supabaseRolePreference !== "undefined" && ["student", "parent", "teacher"].includes(nextState.supabaseRolePreference)) setSupabaseRolePreference(nextState.supabaseRolePreference);
         if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
         if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
         if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr(nextState.studentNameUr);
@@ -9330,9 +9589,17 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         if (nextState.wordMeaningCache) setWordMeaningCache(normalizeWordMeaningCache(nextState.wordMeaningCache));
         if (nextState.dictionaryDeletedArchive) setDictionaryDeletedArchive(normalizeWordMeaningCache(nextState.dictionaryDeletedArchive));
         if (Array.isArray(nextState.dictionarySyncConflicts)) setDictionarySyncConflicts(sanitizeDictionaryConflictRecords(nextState.dictionarySyncConflicts));
+        if (Array.isArray(nextState.cloudSyncConflicts)) setCloudSyncConflicts(nextState.cloudSyncConflicts.slice(-40));
         if (typeof nextState.dictionaryImportUrl !== "undefined") setDictionaryImportUrl(String(nextState.dictionaryImportUrl || ""));
         return;
       }
+      if (Array.isArray(nextState.studentProfiles)) setStudentProfiles((current) => normalizeStudentProfiles([...current || [], ...nextState.studentProfiles], {
+        grade: nextState.grade,
+        studentName: nextState.studentName,
+        studentNameUr: nextState.studentNameUr
+      }));
+      if (typeof nextState.activeStudentProfileId !== "undefined") setActiveStudentProfileId((current) => current || nextState.activeStudentProfileId || "");
+      if (typeof nextState.supabaseRolePreference !== "undefined" && ["student", "parent", "teacher"].includes(nextState.supabaseRolePreference)) setSupabaseRolePreference((current) => current || nextState.supabaseRolePreference);
       if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
       if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
       if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr((current) => current || nextState.studentNameUr);
@@ -9427,10 +9694,230 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
       if (Array.isArray(nextState.dictionarySyncConflicts)) {
         setDictionarySyncConflicts((current) => mergeDictionaryConflictRecords(current, nextState.dictionarySyncConflicts));
       }
+      if (Array.isArray(nextState.cloudSyncConflicts)) {
+        setCloudSyncConflicts((current) => [...Array.isArray(current) ? current : [], ...nextState.cloudSyncConflicts].slice(-40));
+      }
       if (typeof nextState.dictionaryImportUrl !== "undefined") {
         setDictionaryImportUrl((current) => current || String(nextState.dictionaryImportUrl || ""));
       }
     }, []);
+    const buildProfileAppStateSnapshot = useCallback(() => ({
+      grade,
+      studentName,
+      studentNameUr,
+      completedQuizzes,
+      totalScore,
+      totalQuizzesDone,
+      streak,
+      lastQuizDate,
+      earnedBadges,
+      xp,
+      ttsEnabled,
+      audioMuted,
+      autoPlayNext,
+      wordMeaningPriority,
+      ttsRate,
+      ttsVoiceSelections,
+      language,
+      themeMode,
+      fontSizeMode,
+      reducedMotion,
+      highContrast,
+      focusMode,
+      readingMode,
+      keyboardShortcutsEnabled,
+      navPosition,
+      navAutoHide,
+      navBarAutoHide,
+      transitionMode,
+      dailyReviewCap,
+      reviewSrsSettings,
+      practiceSubjectId,
+      practiceFiltersBySubject,
+      practiceTimedSettings,
+      practiceLessonProgress,
+      daySectionOverrides,
+      studyGoals,
+      focusTimerSettings,
+      reminderSettings,
+      backupReminderSettings,
+      classScheduleSettings,
+      timeTrackingData,
+      notificationHistory,
+      gamificationState
+    }), [audioMuted, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
+    const buildBlankProfileAppState = useCallback((profile) => {
+      const safeProfile = createStudentProfileDraft(profile);
+      return {
+        ...buildProfileAppStateSnapshot(),
+        grade: safeProfile.grade,
+        studentName: safeProfile.studentName,
+        studentNameUr: safeProfile.studentNameUr,
+        completedQuizzes: {},
+        totalScore: 0,
+        totalQuizzesDone: 0,
+        streak: 0,
+        lastQuizDate: null,
+        earnedBadges: [],
+        xp: 0,
+        practiceLessonProgress: {},
+        notificationHistory: [],
+        timeTrackingData: normalizeTimeTrackingData({}),
+        gamificationState: normalizeGamificationState({})
+      };
+    }, [buildProfileAppStateSnapshot]);
+    const getEmptyProfileDbProgress = useCallback(() => ({
+      exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      progress: [],
+      reviewCards: [],
+      reviewHistory: [],
+      userStats: [],
+      wordMeta: [],
+      customLists: [],
+      customListItems: [],
+      customizations: [],
+      dataVersion: window.HomeSchoolData.VERSION,
+      changedSubjects: []
+    }), []);
+    const saveCurrentProfileSnapshot = useCallback(async (profileOverride = null) => {
+      var _a2, _b2;
+      if (!((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.saveProfileSnapshot)) return null;
+      const currentProfile = createStudentProfileDraft({
+        ...profileOverride || activeStudentProfile || {},
+        grade,
+        studentName,
+        studentNameUr,
+        updatedAt: Date.now()
+      });
+      const dbProgress = ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.exportProgress) ? await window.HomeSchoolDB.exportProgress() : getEmptyProfileDbProgress();
+      await window.HomeSchoolDB.saveProfileSnapshot(currentProfile.id, {
+        profile: currentProfile,
+        appState: buildProfileAppStateSnapshot(),
+        dbProgress,
+        savedAt: Date.now()
+      });
+      return currentProfile;
+    }, [activeStudentProfile, buildProfileAppStateSnapshot, getEmptyProfileDbProgress, grade, studentName, studentNameUr]);
+    const loadStudentProfileSnapshot = useCallback(async (profile) => {
+      var _a2, _b2;
+      const safeProfile = createStudentProfileDraft(profile);
+      const storedSnapshot = ((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.getProfileSnapshot) ? await window.HomeSchoolDB.getProfileSnapshot(safeProfile.id) : null;
+      const snapshot = (storedSnapshot == null ? void 0 : storedSnapshot.snapshot) || null;
+      const nextAppState = (snapshot == null ? void 0 : snapshot.appState) || buildBlankProfileAppState(safeProfile);
+      const nextDbProgress = (snapshot == null ? void 0 : snapshot.dbProgress) || getEmptyProfileDbProgress();
+      applyImportedAppState(nextAppState, "replace");
+      if ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.importProgress) {
+        await window.HomeSchoolDB.importProgress(nextDbProgress, { mode: "replace", preserveCustomizations: true });
+      }
+      await refreshStorageLabel();
+      await refreshReviewWorkspace();
+      clearLessonSelections();
+      setSelectedSubject(null);
+      setSelectedLesson(null);
+      setTab("home");
+    }, [applyImportedAppState, buildBlankProfileAppState, clearLessonSelections, getEmptyProfileDbProgress, refreshReviewWorkspace, refreshStorageLabel]);
+    const handleSwitchStudentProfile = useCallback(async (profileId) => {
+      var _a2;
+      const nextProfileId = String(profileId || "").trim();
+      if (!nextProfileId || nextProfileId === activeStudentProfileIdRef.current || profileSwitchBusy) return;
+      const nextProfile = studentProfilesRef.current.find((profile) => profile.id === nextProfileId);
+      if (!nextProfile) return;
+      setProfileSwitchBusy(true);
+      try {
+        await saveCurrentProfileSnapshot();
+        if ((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.setActiveCloudProfile) {
+          await window.HomeSchoolDB.setActiveCloudProfile(nextProfile.id);
+        }
+        activeStudentProfileIdRef.current = nextProfile.id;
+        setActiveStudentProfileId(nextProfile.id);
+        await loadStudentProfileSnapshot(nextProfile);
+        showAppToast(joinLocalizedText("Profile switched", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0628\u062F\u0644 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        console.log("Unable to switch student profile:", error);
+        showAppToast(joinLocalizedText("Unable to switch profile", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0646\u06C1\u06CC\u06BA \u0628\u062F\u0644\u0627 \u062C\u0627 \u0633\u06A9\u0627", language), "alert");
+      } finally {
+        setProfileSwitchBusy(false);
+      }
+    }, [language, loadStudentProfileSnapshot, profileSwitchBusy, saveCurrentProfileSnapshot, showAppToast]);
+    const handleCreateStudentProfile = useCallback(async () => {
+      var _a2;
+      const nextProfile = createStudentProfileDraft({
+        studentName: profileDraft.studentName,
+        studentNameUr: profileDraft.studentNameUr,
+        grade: profileDraft.grade || 5,
+        role: profileDraft.role || "student"
+      });
+      if (!nextProfile.studentName && !nextProfile.studentNameUr) {
+        alert(joinLocalizedText("Enter at least one name before creating a new profile.", "\u0646\u06CC\u0627 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0628\u0646\u0627\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0646\u0627\u0645 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA\u06D4", language));
+        return;
+      }
+      setProfileSwitchBusy(true);
+      try {
+        await saveCurrentProfileSnapshot();
+        const nextProfiles = normalizeStudentProfiles([...studentProfilesRef.current, nextProfile], nextProfile);
+        studentProfilesRef.current = nextProfiles;
+        setStudentProfiles(nextProfiles);
+        setProfileDraft({
+          studentName: "",
+          studentNameUr: "",
+          grade: nextProfile.grade || 5,
+          role: nextProfile.role || "student"
+        });
+        if ((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.setActiveCloudProfile) {
+          await window.HomeSchoolDB.setActiveCloudProfile(nextProfile.id);
+        }
+        activeStudentProfileIdRef.current = nextProfile.id;
+        setActiveStudentProfileId(nextProfile.id);
+        await loadStudentProfileSnapshot(nextProfile);
+        showAppToast(joinLocalizedText("New profile created", "\u0646\u06CC\u0627 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0628\u0646\u0627 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        console.log("Unable to create student profile:", error);
+        showAppToast(joinLocalizedText("Unable to create profile", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0646\u06C1\u06CC\u06BA \u0628\u0646\u0627\u06CC\u0627 \u062C\u0627 \u0633\u06A9\u0627", language), "alert");
+      } finally {
+        setProfileSwitchBusy(false);
+      }
+    }, [language, loadStudentProfileSnapshot, profileDraft.grade, profileDraft.role, profileDraft.studentName, profileDraft.studentNameUr, saveCurrentProfileSnapshot, showAppToast]);
+    const handleDeleteStudentProfile = useCallback(async (profileId) => {
+      var _a2, _b2, _c2;
+      const targetId = String(profileId || "").trim();
+      if (!targetId) return;
+      if ((studentProfilesRef.current || []).length <= 1) {
+        alert(joinLocalizedText("Keep at least one student profile in the app.", "\u0627\u06CC\u067E \u0645\u06CC\u06BA \u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language));
+        return;
+      }
+      const targetProfile = studentProfilesRef.current.find((profile) => profile.id === targetId);
+      if (!targetProfile) return;
+      setProfileSwitchBusy(true);
+      try {
+        if (targetId === activeStudentProfileIdRef.current) {
+          await saveCurrentProfileSnapshot();
+        }
+        if ((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.deleteProfileSnapshot) {
+          await window.HomeSchoolDB.deleteProfileSnapshot(targetId);
+        }
+        const nextProfiles = studentProfilesRef.current.filter((profile) => profile.id !== targetId);
+        const nextActiveId = resolveActiveStudentProfileId(nextProfiles, targetId === activeStudentProfileIdRef.current ? (_b2 = nextProfiles[0]) == null ? void 0 : _b2.id : activeStudentProfileIdRef.current);
+        studentProfilesRef.current = nextProfiles;
+        setStudentProfiles(nextProfiles);
+        if (targetId === activeStudentProfileIdRef.current) {
+          const nextProfile = nextProfiles.find((profile) => profile.id === nextActiveId) || nextProfiles[0];
+          if ((_c2 = window.HomeSchoolDB) == null ? void 0 : _c2.setActiveCloudProfile) {
+            await window.HomeSchoolDB.setActiveCloudProfile(nextActiveId);
+          }
+          activeStudentProfileIdRef.current = nextActiveId;
+          setActiveStudentProfileId(nextActiveId);
+          if (nextProfile) {
+            await loadStudentProfileSnapshot(nextProfile);
+          }
+        }
+        showAppToast(joinLocalizedText("Profile removed", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u062D\u0630\u0641 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        console.log("Unable to delete student profile:", error);
+        showAppToast(joinLocalizedText("Unable to delete profile", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u062D\u0630\u0641 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627", language), "alert");
+      } finally {
+        setProfileSwitchBusy(false);
+      }
+    }, [language, loadStudentProfileSnapshot, saveCurrentProfileSnapshot, showAppToast]);
     const executeImportReview = useCallback(async (previewState, mode) => {
       if (!(previewState == null ? void 0 : previewState.parsed)) return;
       const parsed = previewState.parsed;
@@ -9454,6 +9941,9 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           grade,
           studentName,
           studentNameUr,
+          studentProfiles,
+          activeStudentProfileId,
+          supabaseRolePreference,
           completedQuizzes,
           totalScore,
           totalQuizzesDone,
@@ -9492,7 +9982,8 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           gamificationState,
           wordMeaningCache,
           dictionaryDeletedArchive,
-          dictionarySyncConflicts
+          dictionarySyncConflicts,
+          cloudSyncConflicts
         },
         dbProgress
       });
@@ -9501,7 +9992,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         lastBackupAt: exportedAt,
         lastPromptDay: getLocalDayKey(exportedAt)
       }));
-    }, [grade, studentName, studentNameUr, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts]);
+    }, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts]);
     const handleExportDictionary = useCallback(() => {
       const exportedAt = Date.now();
       const entries = Object.values(effectiveWordMeaningDictionary).sort((left, right) => String(left.word || left.normalizedWord || "").localeCompare(String(right.word || right.normalizedWord || "")));
@@ -10427,8 +10918,8 @@ ${error.message || error}`);
       return joinLocalizedText("Ready to sign in", "\u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631", language);
     })();
     const supabaseAccountRoleLabel = joinLocalizedText(
-      supabaseAuthState.role === "teacher" ? "Teacher" : supabaseAuthState.role === "parent" ? "Parent" : "Student",
-      supabaseAuthState.role === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : supabaseAuthState.role === "parent" ? "\u0648\u0627\u0644\u062F\u06CC\u0646" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
+      (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "teacher" ? "Teacher" : (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "parent" ? "Parent" : "Student",
+      (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "parent" ? "\u0648\u0627\u0644\u062F\u06CC\u0646" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
       language
     );
     const handleSupabaseSyncNow = useCallback(async () => {
@@ -11020,7 +11511,7 @@ ${error.message || error}`);
     })), /* @__PURE__ */ React.createElement("div", { className: `perfect-day-card${perfectDayReady ? " ready" : ""}` }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Perfect Day Bonus", "\u067E\u0631\u0641\u06CC\u06A9\u0679 \u0688\u06D2 \u0628\u0648\u0646\u0633", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(
       todayGamificationEntry.perfectDayAwarded ? joinLocalizedText("Today's bonus has already been collected. Beautiful work.", "\u0622\u062C \u06A9\u0627 \u0628\u0648\u0646\u0633 \u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u0644 \u0686\u06A9\u0627 \u06C1\u06D2\u06D4 \u0628\u06C1\u062A \u062E\u0648\u0628\u06D4", language) : perfectDayReady ? joinLocalizedText("All daily challenges are complete. The 120 XP bonus is yours.", "\u0622\u062C \u06A9\u06D2 \u062A\u0645\u0627\u0645 \u0686\u06CC\u0644\u0646\u062C \u0645\u06A9\u0645\u0644 \u06C1\u0648 \u06AF\u0626\u06D2\u06D4 120 \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u0628\u0648\u0646\u0633 \u0622\u067E \u06A9\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText("Complete all three daily challenges to unlock a 120 XP bonus.", "120 \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u0628\u0648\u0646\u0633 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0646\u0648\u06BA \u0631\u0648\u0632\u0627\u0646\u06C1 \u0686\u06CC\u0644\u0646\u062C \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language),
       language
-    ))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, todayGamificationEntry.perfectDayAwarded ? "+120 XP" : `${completedDailyChallenges}/${dailyChallenges.length}`))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Study Goals", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u06C1\u062F\u0627\u0641", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track your daily review target and weekly vocabulary momentum.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u062F\u0641 \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0631\u0641\u062A\u0627\u0631 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Daily reviews", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewStats.reviewedToday || 0} of ${studyGoals.dailyReviews}`, `${reviewStats.reviewedToday || 0} \u0627\u0632 ${studyGoals.dailyReviews}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, dailyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${dailyGoalProgress}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly words", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewAnalytics.totals.uniqueReviewedLast7 || 0} of ${studyGoals.weeklyWords}`, `${reviewAnalytics.totals.uniqueReviewedLast7 || 0} \u0627\u0632 ${studyGoals.weeklyWords}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, weeklyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${weeklyGoalProgress}%` } })))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.timeManagement, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.timeTrackingHelp, language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(todaySpentMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.timeSpentToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F6B6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, classScheduleSettings.enabled ? formatMinutesLabel(todayLatenessMinutes, language) : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.latenessToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F558}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.punctualityStreak || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.punctualityStreak, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C1}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.classSessionsMet || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.classSessionsMet, language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`${ui.classStartTime}: ${classScheduleSettings.startTime}`, `${ui.classStartTime}: ${classScheduleSettings.startTime}`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${ui.classEndTime}: ${classScheduleSettings.endTime}`, `${ui.classEndTime}: ${classScheduleSettings.endTime}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(timeTrackingStatusLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.classDuration, language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${formatMinutesLabel(scheduleDurationMinutes, "en")} scheduled \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "en")} this week`, `${formatMinutesLabel(scheduleDurationMinutes, "ur")} \u0645\u0642\u0631\u0631 \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "ur")} \u0627\u0633 \u06C1\u0641\u062A\u06D2`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, timeGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${timeGoalProgress}%` } })), !classScheduleSettings.enabled ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.classTrackingDisabled, language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "\u0641\u0648\u06A9\u0633 \u0679\u0627\u0626\u0645\u0631 \u0627\u0648\u0631 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Start a quiet study sprint and keep your reminder schedule visible.", "\u0627\u06CC\u06A9 \u0645\u062E\u062A\u0635\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0633\u06CC\u0634\u0646 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u067E\u0646\u06CC \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u06A9\u06CC \u062D\u0627\u0644\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "timer-card" }, /* @__PURE__ */ React.createElement("div", { className: "timer-clock" }, formatClockTime(focusTimerState.remainingSeconds)), /* @__PURE__ */ React.createElement("div", { className: "timer-meta" }, renderLocalizedTextNode(joinLocalizedText(`${focusTimerSettings.durationMinutes} min focus block`, `${focusTimerSettings.durationMinutes} \u0645\u0646\u0679 \u0641\u0648\u06A9\u0633 \u0648\u0642\u062A`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: !current.active || (current.remainingSeconds || 0) === 0, remainingSeconds: (current.remainingSeconds || 0) === 0 ? (focusTimerSettings.durationMinutes || 20) * 60 : current.remainingSeconds, startedAt: Date.now() })) }, renderLocalizedTextNode(focusTimerState.active ? joinLocalizedText("Pause", "\u0631\u0648\u06A9\u06CC\u06BA", language) : joinLocalizedText("Start", "\u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: false, remainingSeconds: (focusTimerSettings.durationMinutes || 20) * 60 })) }, renderLocalizedTextNode(joinLocalizedText("Reset", "\u062F\u0648\u0628\u0627\u0631\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "timer-reminder-status" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Reminder", "\u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC", language), language)), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(currentReminderLabel, language))), reminderDueNow ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "\u0622\u067E \u06A9\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u0627\u0628\u06BE\u06CC \u06A9\u06CC \u06C1\u06D2\u06D4", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notificationHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.notificationHistoryHint, language)))), recentNotificationHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentNotificationHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotificationsYet, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.contentDiscovery, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Search your current grade lessons by subject, type, and difficulty, and keep a daily word in view.", "\u0627\u067E\u0646\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0636\u0645\u0648\u0646\u060C \u0642\u0633\u0645\u060C \u0627\u0648\u0631 \u062F\u0631\u062C\u06C1 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06CC\u06A9 \u0644\u0641\u0638 \u0633\u0627\u0645\u0646\u06D2 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), wordOfDayCard ? /* @__PURE__ */ React.createElement("div", { className: "discovery-word-card" }, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-label" }, renderLocalizedTextNode(ui.wordOfDay, language)), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-prompt" }, wordOfDayCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-answer", style: containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null }, wordOfDayCard.answer || wordOfDayCard.meaning), getPhoneticBreakdown(wordOfDayCard.prompt) ? /* @__PURE__ */ React.createElement("div", { className: "phonics-card", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "phonics-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.phoneticSpelling, language)), /* @__PURE__ */ React.createElement("span", null, getPhoneticBreakdown(wordOfDayCard.prompt).phonetic)), /* @__PURE__ */ React.createElement("div", { className: "phonics-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.syllableBreakdown, language)), /* @__PURE__ */ React.createElement("span", null, getPhoneticBreakdown(wordOfDayCard.prompt).syllables))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-meta" }, renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", ((_i = SUBJECTS.find((subject) => subject.id === (wordOfDayCard.subject || ""))) == null ? void 0 : _i.nameUr) || "\u0645\u0636\u0645\u0648\u0646", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-shell" }, /* @__PURE__ */ React.createElement("input", { className: "review-list-input", value: contentSearch, onChange: (event) => setContentSearch(event.target.value), placeholder: ui.contentSearch, style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null }), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row" }, /* @__PURE__ */ React.createElement("button", { className: `practice-subject-chip${discoverySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter("all"), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.discoveryAllSubjects, language)))), SUBJECTS.map((subject) => /* @__PURE__ */ React.createElement("button", { key: subject.id, className: `practice-subject-chip${discoverySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter(subject.id), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-icon" }, subject.icon), /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))))), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact" }, [
+    ))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, todayGamificationEntry.perfectDayAwarded ? "+120 XP" : `${completedDailyChallenges}/${dailyChallenges.length}`))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Study Goals", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u06C1\u062F\u0627\u0641", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track your daily review target and weekly vocabulary momentum.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u062F\u0641 \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0631\u0641\u062A\u0627\u0631 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Daily reviews", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewStats.reviewedToday || 0} of ${studyGoals.dailyReviews}`, `${reviewStats.reviewedToday || 0} \u0627\u0632 ${studyGoals.dailyReviews}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, dailyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${dailyGoalProgress}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly words", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewAnalytics.totals.uniqueReviewedLast7 || 0} of ${studyGoals.weeklyWords}`, `${reviewAnalytics.totals.uniqueReviewedLast7 || 0} \u0627\u0632 ${studyGoals.weeklyWords}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, weeklyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${weeklyGoalProgress}%` } })))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.timeManagement, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.timeTrackingHelp, language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(todaySpentMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.timeSpentToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F6B6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, classScheduleSettings.enabled ? formatMinutesLabel(todayLatenessMinutes, language) : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.latenessToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F558}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.punctualityStreak || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.punctualityStreak, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C1}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.classSessionsMet || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.classSessionsMet, language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`${ui.classStartTime}: ${classScheduleSettings.startTime}`, `${ui.classStartTime}: ${classScheduleSettings.startTime}`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${ui.classEndTime}: ${classScheduleSettings.endTime}`, `${ui.classEndTime}: ${classScheduleSettings.endTime}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(timeTrackingStatusLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.classDuration, language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${formatMinutesLabel(scheduleDurationMinutes, "en")} scheduled \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "en")} this week`, `${formatMinutesLabel(scheduleDurationMinutes, "ur")} \u0645\u0642\u0631\u0631 \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "ur")} \u0627\u0633 \u06C1\u0641\u062A\u06D2`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, timeGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${timeGoalProgress}%` } })), !classScheduleSettings.enabled ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.classTrackingDisabled, language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "\u0641\u0648\u06A9\u0633 \u0679\u0627\u0626\u0645\u0631 \u0627\u0648\u0631 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Start a quiet study sprint and keep your reminder schedule visible.", "\u0627\u06CC\u06A9 \u0645\u062E\u062A\u0635\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0633\u06CC\u0634\u0646 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u067E\u0646\u06CC \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u06A9\u06CC \u062D\u0627\u0644\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "timer-card" }, /* @__PURE__ */ React.createElement("div", { className: "timer-clock" }, formatClockTime(focusTimerState.remainingSeconds)), /* @__PURE__ */ React.createElement("div", { className: "timer-meta" }, renderLocalizedTextNode(joinLocalizedText(`${focusTimerSettings.durationMinutes} min focus block`, `${focusTimerSettings.durationMinutes} \u0645\u0646\u0679 \u0641\u0648\u06A9\u0633 \u0648\u0642\u062A`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: !current.active || (current.remainingSeconds || 0) === 0, remainingSeconds: (current.remainingSeconds || 0) === 0 ? (focusTimerSettings.durationMinutes || 20) * 60 : current.remainingSeconds, startedAt: Date.now() })) }, renderLocalizedTextNode(focusTimerState.active ? joinLocalizedText("Pause", "\u0631\u0648\u06A9\u06CC\u06BA", language) : joinLocalizedText("Start", "\u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: false, remainingSeconds: (focusTimerSettings.durationMinutes || 20) * 60 })) }, renderLocalizedTextNode(joinLocalizedText("Reset", "\u062F\u0648\u0628\u0627\u0631\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "timer-reminder-status" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Reminder", "\u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC", language), language)), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(currentReminderLabel, language))), reminderDueNow ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "\u0622\u067E \u06A9\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u0627\u0628\u06BE\u06CC \u06A9\u06CC \u06C1\u06D2\u06D4", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notificationHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.notificationHistoryHint, language)))), recentNotificationHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentNotificationHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotificationsYet, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.contentDiscovery, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Search your current grade lessons by subject, type, and difficulty, and keep a daily word in view.", "\u0627\u067E\u0646\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0636\u0645\u0648\u0646\u060C \u0642\u0633\u0645\u060C \u0627\u0648\u0631 \u062F\u0631\u062C\u06C1 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06CC\u06A9 \u0644\u0641\u0638 \u0633\u0627\u0645\u0646\u06D2 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), wordOfDayCard ? /* @__PURE__ */ React.createElement("div", { className: "discovery-word-card" }, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-label" }, renderLocalizedTextNode(ui.wordOfDay, language)), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-prompt" }, wordOfDayCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-answer", style: containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null }, wordOfDayCard.answer || wordOfDayCard.meaning), getPhoneticBreakdown(wordOfDayCard.prompt) ? /* @__PURE__ */ React.createElement("div", { className: "phonics-card", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "phonics-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.phoneticSpelling, language)), /* @__PURE__ */ React.createElement("span", null, getPhoneticBreakdown(wordOfDayCard.prompt).phonetic)), /* @__PURE__ */ React.createElement("div", { className: "phonics-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.syllableBreakdown, language)), /* @__PURE__ */ React.createElement("span", null, getPhoneticBreakdown(wordOfDayCard.prompt).syllables))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-meta" }, renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", ((_l = SUBJECTS.find((subject) => subject.id === (wordOfDayCard.subject || ""))) == null ? void 0 : _l.nameUr) || "\u0645\u0636\u0645\u0648\u0646", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-shell" }, /* @__PURE__ */ React.createElement("input", { className: "review-list-input", value: contentSearch, onChange: (event) => setContentSearch(event.target.value), placeholder: ui.contentSearch, style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null }), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row" }, /* @__PURE__ */ React.createElement("button", { className: `practice-subject-chip${discoverySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter("all"), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.discoveryAllSubjects, language)))), SUBJECTS.map((subject) => /* @__PURE__ */ React.createElement("button", { key: subject.id, className: `practice-subject-chip${discoverySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter(subject.id), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-icon" }, subject.icon), /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))))), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact" }, [
       { id: "all", label: ui.discoveryAllTypes },
       { id: "lesson", label: ui.discoveryTypeLesson },
       { id: "interactive", label: ui.discoveryTypeInteractive },
@@ -11468,16 +11959,16 @@ ${error.message || error}`);
       const isMasteredBox = Number(entry.box) >= Number(reviewSrsSettings.masteryThreshold || 5);
       return /* @__PURE__ */ React.createElement("div", { key: `leitner_${entry.box}`, className: "leitner-box-row" }, /* @__PURE__ */ React.createElement("div", { className: "leitner-box-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(isMasteredBox ? joinLocalizedText("Mastered", "\u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644", language) : joinLocalizedText(`Box ${entry.box}`, `\u0628\u0627\u06A9\u0633 ${entry.box}`, language), language)), /* @__PURE__ */ React.createElement("span", null, formatNumberLabel(entry.count || 0))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar leitner-progress" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, (Number(entry.count) || 0) / reviewLeitnerMax * 100))}%` } })));
     })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few reviews to fill the Leitner boxes.", "\u06A9\u0686\u06BE \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0644\u0627\u0626\u0679\u0646\u0631 \u0628\u0627\u06A9\u0633 \u0628\u06BE\u0631 \u0633\u06A9\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Predicted Mastery", "\u0645\u062A\u0648\u0642\u0639 \u0645\u06C1\u0627\u0631\u062A", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Estimated finish date if you keep answering \u201CGood\u201D consistently.", "\u0627\u06AF\u0631 \u0622\u067E \u0645\u0633\u0644\u0633\u0644 \u201C\u0627\u0686\u06BE\u0627\u201D \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u062A\u06D2 \u0631\u06C1\u06CC\u06BA \u062A\u0648 \u0627\u0646\u062F\u0627\u0632\u0627\u064B \u06A9\u0628 \u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644 \u06C1\u0648\u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "mastery-prediction-callout" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Overall deck", "\u0645\u06A9\u0645\u0644 \u0645\u062C\u0645\u0648\u0639\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(
-      Number(((_j = reviewAnalytics.predictedMastery) == null ? void 0 : _j.cardsRemaining) || 0) > 0 ? formatProjectedDateLabel((_k = reviewAnalytics.predictedMastery) == null ? void 0 : _k.projectedAt, language) : joinLocalizedText("Already mastered", "\u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u06A9\u0645\u0644", language),
+      Number(((_m = reviewAnalytics.predictedMastery) == null ? void 0 : _m.cardsRemaining) || 0) > 0 ? formatProjectedDateLabel((_n = reviewAnalytics.predictedMastery) == null ? void 0 : _n.projectedAt, language) : joinLocalizedText("Already mastered", "\u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u06A9\u0645\u0644", language),
       language
-    )), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${((_l = reviewAnalytics.predictedMastery) == null ? void 0 : _l.cardsRemaining) || 0} cards remaining`, `${((_m = reviewAnalytics.predictedMastery) == null ? void 0 : _m.cardsRemaining) || 0} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))), (((_n = reviewAnalytics.predictedMastery) == null ? void 0 : _n.sections) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "mastery-section-list" }, reviewAnalytics.predictedMastery.sections.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "mastery-section-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, formatProjectedDateLabel(entry.projectedAt, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.cardsRemaining} cards left`, `${entry.cardsRemaining} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Predictions will appear after your review boxes start moving.", "\u067E\u06CC\u0634 \u06AF\u0648\u0626\u06CC\u0627\u06BA \u062A\u0628 \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC \u062C\u0628 \u0622\u067E \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u06A9\u0633 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Forgetting Curve", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Accuracy by review delay shows how recall changes over longer gaps.", "\u0631\u06CC\u0648\u06CC\u0648 \u06A9\u06D2 \u0648\u0642\u0641\u06D2 \u06A9\u06D2 \u0644\u062D\u0627\u0638 \u0633\u06D2 \u062F\u0631\u0633\u062A\u06AF\u06CC \u062F\u06A9\u06BE\u0627\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u0632\u06CC\u0627\u062F\u06C1 \u0648\u0642\u0641\u0648\u06BA \u067E\u0631 \u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u06A9\u06CC\u0633\u06D2 \u0628\u062F\u0644\u062A\u06CC \u06C1\u06D2\u06D4", language), language)))), (reviewAnalytics.forgettingCurve || []).some((entry) => entry.reviews > 0) ? /* @__PURE__ */ React.createElement("div", { className: "forgetting-curve-list" }, (reviewAnalytics.forgettingCurve || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "forgetting-curve-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getForgettingCurveLabel(entry.id, language), language)), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, Number(entry.accuracy) || 0))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("More review history is needed to draw the forgetting curve.", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646 \u062F\u06A9\u06BE\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Upcoming Reviews", "\u0622\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See the next two weeks of due reviews before they pile up.", "\u0627\u06AF\u0644\u06D2 \u062F\u0648 \u06C1\u0641\u062A\u0648\u06BA \u06A9\u06D2 \u0628\u0627\u0642\u06CC \u0631\u06CC\u0648\u06CC\u0648\u0632 \u067E\u06C1\u0644\u06D2 \u0633\u06D2 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0648\u062C\u06BE \u062C\u0645\u0639 \u0646\u06C1 \u06C1\u0648\u06D4", language), language)))), (reviewAnalytics.upcomingCalendar || []).length ? /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-grid" }, (reviewAnalytics.upcomingCalendar || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: `upcoming-calendar-cell${entry.isToday ? " today" : ""}` }, /* @__PURE__ */ React.createElement("strong", null, entry.weekday), /* @__PURE__ */ React.createElement("span", null, entry.label), /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-count" }, formatNumberLabel(entry.dueCount || 0)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar upcoming-calendar-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(6, Math.min(100, (Number(entry.dueCount) || 0) / upcomingCalendarMax * 100))}%` } }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Upcoming review dates will appear once cards are scheduled ahead.", "\u06A9\u0627\u0631\u0688\u0632 \u0622\u06AF\u06D2 \u0634\u06CC\u0688\u0648\u0644 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u0622\u0646\u06D2 \u0648\u0627\u0644\u06CC \u062A\u0627\u0631\u06CC\u062E\u06CC\u06BA \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewHeatmap, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHeatmapHint, language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setHeatmapExpanded((value) => !value) }, renderLocalizedTextNode(heatmapExpanded ? joinLocalizedText("Show Less", "\u06A9\u0645 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show Heatmap", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), heatmapExpanded ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-heatmap-grid" }, reviewAnalytics.heatmap.map((cell) => /* @__PURE__ */ React.createElement(
+    )), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${((_o = reviewAnalytics.predictedMastery) == null ? void 0 : _o.cardsRemaining) || 0} cards remaining`, `${((_p = reviewAnalytics.predictedMastery) == null ? void 0 : _p.cardsRemaining) || 0} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))), (((_q = reviewAnalytics.predictedMastery) == null ? void 0 : _q.sections) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "mastery-section-list" }, reviewAnalytics.predictedMastery.sections.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "mastery-section-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, formatProjectedDateLabel(entry.projectedAt, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.cardsRemaining} cards left`, `${entry.cardsRemaining} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Predictions will appear after your review boxes start moving.", "\u067E\u06CC\u0634 \u06AF\u0648\u0626\u06CC\u0627\u06BA \u062A\u0628 \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC \u062C\u0628 \u0622\u067E \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u06A9\u0633 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Forgetting Curve", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Accuracy by review delay shows how recall changes over longer gaps.", "\u0631\u06CC\u0648\u06CC\u0648 \u06A9\u06D2 \u0648\u0642\u0641\u06D2 \u06A9\u06D2 \u0644\u062D\u0627\u0638 \u0633\u06D2 \u062F\u0631\u0633\u062A\u06AF\u06CC \u062F\u06A9\u06BE\u0627\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u0632\u06CC\u0627\u062F\u06C1 \u0648\u0642\u0641\u0648\u06BA \u067E\u0631 \u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u06A9\u06CC\u0633\u06D2 \u0628\u062F\u0644\u062A\u06CC \u06C1\u06D2\u06D4", language), language)))), (reviewAnalytics.forgettingCurve || []).some((entry) => entry.reviews > 0) ? /* @__PURE__ */ React.createElement("div", { className: "forgetting-curve-list" }, (reviewAnalytics.forgettingCurve || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "forgetting-curve-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getForgettingCurveLabel(entry.id, language), language)), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, Number(entry.accuracy) || 0))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("More review history is needed to draw the forgetting curve.", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646 \u062F\u06A9\u06BE\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Upcoming Reviews", "\u0622\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See the next two weeks of due reviews before they pile up.", "\u0627\u06AF\u0644\u06D2 \u062F\u0648 \u06C1\u0641\u062A\u0648\u06BA \u06A9\u06D2 \u0628\u0627\u0642\u06CC \u0631\u06CC\u0648\u06CC\u0648\u0632 \u067E\u06C1\u0644\u06D2 \u0633\u06D2 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0648\u062C\u06BE \u062C\u0645\u0639 \u0646\u06C1 \u06C1\u0648\u06D4", language), language)))), (reviewAnalytics.upcomingCalendar || []).length ? /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-grid" }, (reviewAnalytics.upcomingCalendar || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: `upcoming-calendar-cell${entry.isToday ? " today" : ""}` }, /* @__PURE__ */ React.createElement("strong", null, entry.weekday), /* @__PURE__ */ React.createElement("span", null, entry.label), /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-count" }, formatNumberLabel(entry.dueCount || 0)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar upcoming-calendar-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(6, Math.min(100, (Number(entry.dueCount) || 0) / upcomingCalendarMax * 100))}%` } }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Upcoming review dates will appear once cards are scheduled ahead.", "\u06A9\u0627\u0631\u0688\u0632 \u0622\u06AF\u06D2 \u0634\u06CC\u0688\u0648\u0644 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u0622\u0646\u06D2 \u0648\u0627\u0644\u06CC \u062A\u0627\u0631\u06CC\u062E\u06CC\u06BA \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewHeatmap, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHeatmapHint, language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setHeatmapExpanded((value) => !value) }, renderLocalizedTextNode(heatmapExpanded ? joinLocalizedText("Show Less", "\u06A9\u0645 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show Heatmap", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), heatmapExpanded ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-heatmap-grid" }, reviewAnalytics.heatmap.map((cell) => /* @__PURE__ */ React.createElement(
       "div",
       {
         key: cell.dayKey,
         className: `review-heat-cell level-${cell.level}`,
         title: `${cell.dateLabel}: ${cell.count} reviews`
       }
-    ))), /* @__PURE__ */ React.createElement("div", { className: "review-heat-legend" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Less", "\u06A9\u0645", language), language)), [0, 1, 2, 3, 4].map((level) => /* @__PURE__ */ React.createElement("span", { key: level, className: `review-heat-cell level-${level}` })), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("More", "\u0632\u06CC\u0627\u062F\u06C1", language), language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Heatmap is hidden. Open it when you want a weekly review overview.", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u0641\u06CC \u0627\u0644\u062D\u0627\u0644 \u0628\u0646\u062F \u06C1\u06D2\u06D4 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u062C\u0627\u0626\u0632\u06C1 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Growth", "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Weekly review volume and unique cards over the recent study streak.", "\u062D\u0627\u0644\u06CC\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0648\u0631\u0627\u0646 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0627\u0648\u0631 \u0645\u0646\u0641\u0631\u062F \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F\u06D4", language), language)))), ((_o = reviewAnalytics.wordGrowth) == null ? void 0 : _o.length) ? /* @__PURE__ */ React.createElement("div", { className: "growth-chart" }, reviewAnalytics.wordGrowth.map((bucket) => /* @__PURE__ */ React.createElement("div", { key: bucket.weekKey, className: "growth-bar-col" }, /* @__PURE__ */ React.createElement("div", { className: "growth-bar-stack" }, /* @__PURE__ */ React.createElement("span", { className: "growth-bar reviews", style: { height: `${Math.max(12, Math.min(100, bucket.reviews * 6))}%` } }), /* @__PURE__ */ React.createElement("span", { className: "growth-bar unique", style: { height: `${Math.max(8, Math.min(84, bucket.uniqueCards * 8))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "growth-bar-label" }, bucket.label)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few review sessions to unlock this chart.", "\u06CC\u06C1 \u0686\u0627\u0631\u0679 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0686\u0646\u062F \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance by Category", "\u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See which sections are strongest and which still need attention.", "\u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0633\u06CC\u06A9\u0634\u0646 \u0645\u0636\u0628\u0648\u0637 \u06C1\u06CC\u06BA \u0627\u0648\u0631 \u06A9\u0646\u06C1\u06CC\u06BA \u0645\u0632\u06CC\u062F \u062A\u0648\u062C\u06C1 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), language)))), ((_p = reviewAnalytics.categoryPerformance) == null ? void 0 : _p.length) ? /* @__PURE__ */ React.createElement("div", { className: "category-performance-list" }, reviewAnalytics.categoryPerformance.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "category-performance-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${entry.accuracy}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews \u2022 ${entry.uniqueCards} cards`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632 \u2022 ${entry.uniqueCards} \u06A9\u0627\u0631\u0688\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Category performance will appear after more review history builds up.", "\u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u0628\u0646\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.weakWordsReport, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.weakWordsHint, language)))), reviewAnalytics.weakWords.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, reviewAnalytics.weakWords.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card }))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noWeakWords, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.studyCollections, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Create focused word packs for revision, dictation, or tricky vocabulary.", "\u0631\u06CC\u0648\u06CC\u0698\u0646\u060C \u0627\u0645\u0644\u0627\u060C \u06CC\u0627 \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u06CC \u0627\u0644\u06AF \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-list-creator" }, /* @__PURE__ */ React.createElement(
+    ))), /* @__PURE__ */ React.createElement("div", { className: "review-heat-legend" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Less", "\u06A9\u0645", language), language)), [0, 1, 2, 3, 4].map((level) => /* @__PURE__ */ React.createElement("span", { key: level, className: `review-heat-cell level-${level}` })), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("More", "\u0632\u06CC\u0627\u062F\u06C1", language), language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Heatmap is hidden. Open it when you want a weekly review overview.", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u0641\u06CC \u0627\u0644\u062D\u0627\u0644 \u0628\u0646\u062F \u06C1\u06D2\u06D4 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u062C\u0627\u0626\u0632\u06C1 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Growth", "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Weekly review volume and unique cards over the recent study streak.", "\u062D\u0627\u0644\u06CC\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0648\u0631\u0627\u0646 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0627\u0648\u0631 \u0645\u0646\u0641\u0631\u062F \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F\u06D4", language), language)))), ((_r = reviewAnalytics.wordGrowth) == null ? void 0 : _r.length) ? /* @__PURE__ */ React.createElement("div", { className: "growth-chart" }, reviewAnalytics.wordGrowth.map((bucket) => /* @__PURE__ */ React.createElement("div", { key: bucket.weekKey, className: "growth-bar-col" }, /* @__PURE__ */ React.createElement("div", { className: "growth-bar-stack" }, /* @__PURE__ */ React.createElement("span", { className: "growth-bar reviews", style: { height: `${Math.max(12, Math.min(100, bucket.reviews * 6))}%` } }), /* @__PURE__ */ React.createElement("span", { className: "growth-bar unique", style: { height: `${Math.max(8, Math.min(84, bucket.uniqueCards * 8))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "growth-bar-label" }, bucket.label)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few review sessions to unlock this chart.", "\u06CC\u06C1 \u0686\u0627\u0631\u0679 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0686\u0646\u062F \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance by Category", "\u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See which sections are strongest and which still need attention.", "\u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0633\u06CC\u06A9\u0634\u0646 \u0645\u0636\u0628\u0648\u0637 \u06C1\u06CC\u06BA \u0627\u0648\u0631 \u06A9\u0646\u06C1\u06CC\u06BA \u0645\u0632\u06CC\u062F \u062A\u0648\u062C\u06C1 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), language)))), ((_s = reviewAnalytics.categoryPerformance) == null ? void 0 : _s.length) ? /* @__PURE__ */ React.createElement("div", { className: "category-performance-list" }, reviewAnalytics.categoryPerformance.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "category-performance-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${entry.accuracy}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews \u2022 ${entry.uniqueCards} cards`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632 \u2022 ${entry.uniqueCards} \u06A9\u0627\u0631\u0688\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Category performance will appear after more review history builds up.", "\u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u0628\u0646\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.weakWordsReport, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.weakWordsHint, language)))), reviewAnalytics.weakWords.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, reviewAnalytics.weakWords.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card }))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noWeakWords, language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.studyCollections, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Create focused word packs for revision, dictation, or tricky vocabulary.", "\u0631\u06CC\u0648\u06CC\u0698\u0646\u060C \u0627\u0645\u0644\u0627\u060C \u06CC\u0627 \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u06CC \u0627\u0644\u06AF \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-list-creator" }, /* @__PURE__ */ React.createElement(
       "input",
       {
         value: customListDraft,
@@ -11569,7 +12060,7 @@ ${error.message || error}`);
       const isCorrect = optionIndex === Number(activePracticeCard.quizCorrectIndex);
       const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
       return /* @__PURE__ */ React.createElement("button", { key: `${option}_${optionIndex}`, className: optionClass, disabled: practiceTimerFinished || practiceTimedChoice !== null, onClick: () => handleTimedQuizChoice(optionIndex), style: getPracticeTextStyle(option, {}, activePracticeCard.practiceLang) }, option);
-    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}`, style: getPracticeTextStyle(((_q = activePracticeCard.quizOptions) == null ? void 0 : _q[Number(activePracticeCard.quizCorrectIndex)]) || "", {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", ((_r = activePracticeCard.quizOptions) == null ? void 0 : _r[Number(activePracticeCard.quizCorrectIndex)]) || "") : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Question", "\u0627\u06AF\u0644\u0627 \u0633\u0648\u0627\u0644", language), language)))), practiceMode === "timedtruefalse" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Decide whether the statement is true or false before the timer ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0641\u06CC\u0635\u0644\u06C1 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0633\u0648\u0627\u0644 \u062F\u0631\u0633\u062A \u06C1\u06D2 \u06CC\u0627 \u063A\u0644\u0637\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.trueFalseStatement, {}, activePracticeCard.practiceLang) }, activePracticeCard.trueFalseStatement), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, [{ key: "true", label: joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language), value: true }, { key: "false", label: joinLocalizedText("False", "\u063A\u0644\u0637", language), value: false }].map((option) => {
+    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}`, style: getPracticeTextStyle(((_t = activePracticeCard.quizOptions) == null ? void 0 : _t[Number(activePracticeCard.quizCorrectIndex)]) || "", {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", ((_u = activePracticeCard.quizOptions) == null ? void 0 : _u[Number(activePracticeCard.quizCorrectIndex)]) || "") : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Question", "\u0627\u06AF\u0644\u0627 \u0633\u0648\u0627\u0644", language), language)))), practiceMode === "timedtruefalse" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Decide whether the statement is true or false before the timer ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0641\u06CC\u0635\u0644\u06C1 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0633\u0648\u0627\u0644 \u062F\u0631\u0633\u062A \u06C1\u06D2 \u06CC\u0627 \u063A\u0644\u0637\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.trueFalseStatement, {}, activePracticeCard.practiceLang) }, activePracticeCard.trueFalseStatement), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, [{ key: "true", label: joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language), value: true }, { key: "false", label: joinLocalizedText("False", "\u063A\u0644\u0637", language), value: false }].map((option) => {
       const isSelected = practiceTimedChoice === option.key;
       const isCorrect = Boolean(activePracticeCard.trueFalseAnswer) === option.value;
       const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
@@ -11664,7 +12155,27 @@ ${error.message || error}`);
       },
       /* @__PURE__ */ React.createElement("span", { className: "settings-disclosure-label" }, renderLocalizedTextNode(joinLocalizedText("Profile & Grade", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0627\u0648\u0631 \u06AF\u0631\u06CC\u0688", language), language)),
       /* @__PURE__ */ React.createElement("span", { className: "settings-disclosure-icon", "aria-hidden": "true" }, profileDisclosureOpen ? "\u2212" : "+")
-    ), /* @__PURE__ */ React.createElement("div", { className: "settings-disclosure-body-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "settings-disclosure-body-clip" }, /* @__PURE__ */ React.createElement("div", { className: "settings-disclosure-body" }, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-profile-card", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("English Name", "\u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0646\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { className: "settings-disclosure-body-wrap" }, /* @__PURE__ */ React.createElement("div", { className: "settings-disclosure-body-clip" }, /* @__PURE__ */ React.createElement("div", { className: "settings-disclosure-body" }, /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Student Name", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, studentName ? renderDirectionalName(studentName, "ltr", isUrduUi(language) ? { fontFamily: "var(--font)" } : {}) : renderLocalizedTextNode(joinLocalizedText("Not set", "\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", language), language))), (studentNameUr || language !== "en") && /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, renderLocalizedTextNode(joinLocalizedText("Urdu Name", "\u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language), ":"), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, localizedNames.ur ? renderDirectionalName(localizedNames.ur, "rtl", { fontFamily: "var(--font-ur)" }) : renderLocalizedTextNode("\u062F\u0631\u062C \u0646\u06C1\u06CC\u06BA", "ur"))), /* @__PURE__ */ React.createElement("div", { className: "settings-profile-card", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("Student Profiles", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u067E\u0631\u0648\u0641\u0627\u0626\u0644", language), language)), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: 8 } }, studentProfiles.map((profile) => /* @__PURE__ */ React.createElement("div", { key: profile.id, style: { display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        className: `grade-btn${profile.id === activeStudentProfileId ? " active" : ""}`,
+        onClick: () => handleSwitchStudentProfile(profile.id),
+        disabled: profileSwitchBusy,
+        style: { flex: 1, minWidth: 180, justifyContent: "space-between" }
+      },
+      /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(profile.studentName || "Student", profile.studentNameUr || "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language)),
+      /* @__PURE__ */ React.createElement("span", { style: { opacity: 0.8 } }, profile.grade ? `G${profile.grade}` : "\u2014")
+    ), studentProfiles.length > 1 ? /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        className: "ghost-cta",
+        onClick: () => handleDeleteStudentProfile(profile.id),
+        disabled: profileSwitchBusy
+      },
+      renderLocalizedTextNode(joinLocalizedText("Delete", "\u062D\u0630\u0641", language), language)
+    ) : null)))), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("English Name", "\u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0646\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement(
       "input",
       {
         className: "settings-text-input",
@@ -11682,7 +12193,47 @@ ${error.message || error}`);
         placeholder: "\u0627\u067E\u0646\u0627 \u0646\u0627\u0645 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA",
         style: { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" }
       }
-    ))), /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderGradeValueNode(ui.grade, grade, language))), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn " + (g.id === grade ? "active" : ""), onClick: () => setGrade(g.id) }, g.id))))))), SettingsPanel ? /* @__PURE__ */ React.createElement(
+    )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("Cloud Role Preparation", "\u06A9\u0644\u0627\u0624\u0688 \u06A9\u0631\u062F\u0627\u0631 \u062A\u06CC\u0627\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, [
+      { id: "student", label: joinLocalizedText("Student", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language) },
+      { id: "parent", label: joinLocalizedText("Parent", "\u0648\u0627\u0644\u062F\u06CC\u0646", language) },
+      { id: "teacher", label: joinLocalizedText("Teacher", "\u0627\u0633\u062A\u0627\u062F", language) }
+    ].map((roleOption) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: roleOption.id,
+        type: "button",
+        className: `grade-btn${supabaseRolePreference === roleOption.id ? " active" : ""}`,
+        onClick: () => handleSupabaseRolePreferenceChange(roleOption.id)
+      },
+      renderLocalizedTextNode(roleOption.label, language)
+    ))))), /* @__PURE__ */ React.createElement("div", { className: "settings-item", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", flexDirection: "row" } : {} }, /* @__PURE__ */ React.createElement("span", { className: "si-label" }, "\u{1F4DA} ", renderLocalizedTextNode(ui.currentGrade, language)), /* @__PURE__ */ React.createElement("span", { className: "si-value" }, renderGradeValueNode(ui.grade, grade, language))), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn " + (g.id === grade ? "active" : ""), onClick: () => setGrade(g.id) }, g.id))), /* @__PURE__ */ React.createElement("div", { className: "settings-profile-card", style: { marginTop: 12, ...isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {} } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12, color: "var(--text-secondary)", fontSize: 13 } }, renderLocalizedTextNode(joinLocalizedText("Create another student profile for siblings or separate study tracks on this device.", "\u0627\u0633\u06CC \u0688\u06CC\u0648\u0627\u0626\u0633 \u067E\u0631 \u0628\u06C1\u0646 \u0628\u06BE\u0627\u0626\u06CC\u0648\u06BA \u06CC\u0627 \u0627\u0644\u06AF \u0645\u0637\u0627\u0644\u0639\u06C1 \u0679\u0631\u06CC\u06A9 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u06CC\u0627 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("New English Name", "\u0646\u06CC\u0627 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0646\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        className: "settings-text-input",
+        value: profileDraft.studentName,
+        onChange: (event) => setProfileDraft((current) => ({ ...current, studentName: event.target.value })),
+        placeholder: language === "ur" ? "\u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC \u0646\u0627\u0645 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA..." : "Enter English name...",
+        style: { direction: "ltr", textAlign: "left", fontFamily: "var(--font)" }
+      }
+    )), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("label", { className: "settings-input-label" }, renderLocalizedTextNode(joinLocalizedText("New Urdu Name", "\u0646\u06CC\u0627 \u0627\u0631\u062F\u0648 \u0646\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        className: "settings-text-input",
+        value: profileDraft.studentNameUr,
+        onChange: (event) => setProfileDraft((current) => ({ ...current, studentNameUr: sanitizeUrduInput(event.target.value) })),
+        placeholder: "\u0627\u067E\u0646\u0627 \u0646\u0627\u0645 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA",
+        style: { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" }
+      }
+    )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" } }, /* @__PURE__ */ React.createElement("span", { className: "settings-input-label", style: { marginBottom: 0 } }, renderLocalizedTextNode(joinLocalizedText("Grade", "\u062C\u0645\u0627\u0639\u062A", language), language)), GRADES.map((gradeOption) => /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        key: `new-${gradeOption.id}`,
+        type: "button",
+        className: `grade-btn${Number(profileDraft.grade) === Number(gradeOption.id) ? " active" : ""}`,
+        onClick: () => setProfileDraft((current) => ({ ...current, grade: gradeOption.id }))
+      },
+      gradeOption.id
+    ))), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", style: { marginTop: 12 }, onClick: handleCreateStudentProfile, disabled: profileSwitchBusy }, renderLocalizedTextNode(joinLocalizedText("Create Profile", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language))))))), SettingsPanel ? /* @__PURE__ */ React.createElement(
       SettingsPanel,
       {
         currentVersion,
@@ -11710,7 +12261,7 @@ ${error.message || error}`);
         onSupabaseCopySql: handleCopySupabaseSqlHelper,
         onSupabaseSignOut: handleSupabaseSignOut,
         onResolveDictionaryConflict: handleResolveDictionaryConflict,
-        versionInfo: (_t = (_s = versionManagerRef.current) == null ? void 0 : _s.getVersionInfo) == null ? void 0 : _t.call(_s),
+        versionInfo: (_w = (_v = versionManagerRef.current) == null ? void 0 : _v.getVersionInfo) == null ? void 0 : _w.call(_v),
         onCheckUpdates: handleCheckUpdates,
         onRefreshData: handleRefreshData,
         onExportProgress: handleExportProgress,
@@ -11800,7 +12351,7 @@ ${error.message || error}`);
         aiBrowserBlocked: !aiBrowserCapability.ok,
         labels: ui
       }
-    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, wordMeaningPopover ? /* @__PURE__ */ React.createElement(
+    ) : null, cloudSyncConflicts.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Cloud Sync Review", "\u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9 \u062C\u0627\u0626\u0632\u06C1", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Only true overlaps are shown here. Resolve them once, and future sync can stay quiet.", "\u0635\u0631\u0641 \u062D\u0642\u06CC\u0642\u06CC \u0679\u06A9\u0631\u0627\u0624 \u06CC\u06C1\u0627\u06BA \u062F\u06A9\u06BE\u0627\u0626\u06D2 \u062C\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062D\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0622\u0626\u0646\u062F\u06C1 \u0633\u0646\u06A9 \u062E\u0627\u0645\u0648\u0634 \u0631\u06C1 \u0633\u06A9\u062A\u06CC \u06C1\u06D2\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gap: 10 } }, cloudSyncConflicts.slice(-8).reverse().map((record) => /* @__PURE__ */ React.createElement("div", { key: record.id, className: "settings-profile-card", style: isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 } }, record.title), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 } }, renderLocalizedTextNode(joinLocalizedText("Local and synced copies both changed before sync completed.", "\u0644\u0648\u06A9\u0644 \u0627\u0648\u0631 \u0633\u0646\u06A9 \u0634\u062F\u06C1 \u062F\u0648\u0646\u0648\u06BA \u0646\u0642\u0648\u0644 \u0633\u0646\u06A9 \u0645\u06A9\u0645\u0644 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0628\u062F\u0644 \u06AF\u0626\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleResolveCloudSyncConflict(record.id, "local") }, renderLocalizedTextNode(joinLocalizedText("Keep Local", "\u0644\u0648\u06A9\u0644 \u0631\u06A9\u06BE\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleResolveCloudSyncConflict(record.id, "remote") }, renderLocalizedTextNode(joinLocalizedText("Keep Synced", "\u0633\u0646\u06A9 \u0634\u062F\u06C1 \u0631\u06A9\u06BE\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: () => handleResolveCloudSyncConflict(record.id, "merge") }, renderLocalizedTextNode(joinLocalizedText("Merge Both", "\u062F\u0648\u0646\u0648\u06BA \u0636\u0645 \u06A9\u0631\u06CC\u06BA", language), language))))))) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, wordMeaningPopover ? /* @__PURE__ */ React.createElement(
       "div",
       {
         className: `word-meaning-popover word-meaning-popover-${wordMeaningPopover.placement || "above"}`,

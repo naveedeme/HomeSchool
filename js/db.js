@@ -96,7 +96,32 @@
     cloudSyncOutbox: "&syncKey, dataset, updatedAt",
   });
 
+  db.version(10).stores({
+    coreData: "id, type, subject, grade, lessonKey",
+    posData: "id, type, day",
+    tensesData: "id, main, sub",
+    vocabData: "id, day",
+    mathChapters: "id, key, grade",
+    quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt, prompt",
+    reviewHistory: "id, cardId, dayKey, reviewedAt, subject, section, rating",
+    wordMeta: "id, subject, section, favorite, updatedAt",
+    customLists: "id, updatedAt, name",
+    customListItems: "id, listId, cardId, updatedAt",
+    progress: "id, subject, lessonId, grade, completed, timestamp",
+    userStats: "id",
+    dataVersion: "id, version, lastUpdated",
+    customizations: "++id, type, ts",
+    dictionaryEntries: "&normalized, updatedAt, deletedAt",
+    dictionaryOutbox: "&normalized, updatedAt",
+    dictionarySyncMeta: "&key, updatedAt",
+    cloudSyncOutbox: "&syncKey, dataset, updatedAt",
+    profileSnapshots: "&id, updatedAt",
+  });
+
   const CLOUD_SYNC_SIGNAL_KEY = "hs_cloud_sync_signal";
+  const GLOBAL_CLOUD_PROFILE_ID = "__global__";
+  let activeCloudProfileId = "default";
   const CLOUD_SYNC_DATASETS = Object.freeze({
     customization: "customization",
     wordMeta: "wordMeta",
@@ -122,7 +147,15 @@
     "notificationHistory",
     "gamificationState",
     "studentProfile",
+    "studentProfiles",
+    "activeStudentProfileId",
+    "accountPreferences",
     "dictionaryPreferences",
+  ]);
+  const GLOBAL_CLOUD_CUSTOMIZATION_TYPES = new Set([
+    "studentProfiles",
+    "activeStudentProfileId",
+    "accountPreferences",
   ]);
 
   function getStatsDefaults() {
@@ -189,7 +222,7 @@
   }
 
   function buildCloudSyncKey(dataset, rowId) {
-    return `${String(dataset || "").trim()}::${String(rowId || "").trim()}`;
+    return `${String(dataset || "").trim()}::${String(activeCloudProfileId || "default").trim()}::${String(rowId || "").trim()}`;
   }
 
   function sanitizeCloudSyncDataset(dataset) {
@@ -199,6 +232,16 @@
 
   function shouldSyncCustomizationType(type) {
     return CLOUD_SYNC_CUSTOMIZATION_TYPES.has(String(type || "").trim());
+  }
+
+  function normalizeProfileScopeId(profileId) {
+    const safeValue = String(profileId || "").trim();
+    return safeValue || String(activeCloudProfileId || "default").trim() || "default";
+  }
+
+  function getCloudProfileScopeForCustomization(type) {
+    const safeType = String(type || "").trim();
+    return GLOBAL_CLOUD_CUSTOMIZATION_TYPES.has(safeType) ? GLOBAL_CLOUD_PROFILE_ID : normalizeProfileScopeId();
   }
 
   function normalizeCloudSyncPayload(value) {
@@ -425,22 +468,23 @@
     return rows.sort((left, right) => (right.ts || 0) - (left.ts || 0))[0];
   }
 
-  async function saveCustomization(type, data) {
-    const existing = await getLatestCustomization(type);
-    const record = {
+async function saveCustomization(type, data) {
+  const existing = await getLatestCustomization(type);
+  const record = {
       ...(existing || {}),
       type,
       data,
       ts: Date.now(),
     };
-    await db.customizations.put(record);
-    if (shouldSyncCustomizationType(type)) {
-      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customization, type, record, {
-        updatedAt: record.ts,
-      });
-    }
-    return record;
+  await db.customizations.put(record);
+  if (shouldSyncCustomizationType(type)) {
+    await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customization, type, record, {
+      updatedAt: record.ts,
+      profileId: getCloudProfileScopeForCustomization(type),
+    });
   }
+  return record;
+}
 
   async function getCustomizationsMap() {
     const rows = await db.customizations.toArray();
@@ -460,14 +504,16 @@
     if (!safeDataset || !safeRowId) return null;
     const updatedAt = Number(options.updatedAt) || Date.now();
     const deletedAt = options.deletedAt ? Number(options.deletedAt) || Date.now() : null;
+    const profileId = normalizeProfileScopeId(options.profileId);
     const record = {
-      syncKey: buildCloudSyncKey(safeDataset, safeRowId),
+      syncKey: `${safeDataset}::${profileId}::${safeRowId}`,
       dataset: safeDataset,
       rowId: safeRowId,
       payload: normalizeCloudSyncPayload(payload),
       updatedAt,
       deletedAt,
       deviceId: String(options.deviceId || "").trim(),
+      profileId,
     };
     await db.cloudSyncOutbox.put(record);
     emitCloudSyncSignal(safeDataset);
@@ -500,6 +546,7 @@
       payload: normalizeCloudSyncPayload(payload),
       updatedAt: Number(updatedAt) || Date.now(),
       deletedAt: deletedAt ? Number(deletedAt) || Date.now() : null,
+      profileId: normalizeProfileScopeId(payload?.profileId),
     };
   }
 
@@ -525,14 +572,19 @@
     }, {});
 
     return [
-      ...Object.values(customizationMap).map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.customization, row.type, row, row.ts || Date.now())),
-      ...wordMetaRows.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.wordMeta, row.id, row, row.updatedAt || Date.now())),
-      ...customLists.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.customList, row.id, row, row.updatedAt || row.createdAt || Date.now())),
-      ...customListItems.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.customListItem, row.id, row, row.updatedAt || Date.now())),
-      ...progressRows.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.progress, row.id, row, row.timestamp || Date.now())),
-      ...reviewCards.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.reviewCard, row.id, row, row.updatedAt || Date.now())),
-      ...reviewHistory.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.reviewHistory, row.id, row, row.reviewedAt || Date.now())),
-      ...userStats.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.userStat, row.id, row, row.updatedAt || Date.now())),
+      ...Object.values(customizationMap).map((row) => createCloudSyncRow(
+        CLOUD_SYNC_DATASETS.customization,
+        row.type,
+        { ...row, profileId: getCloudProfileScopeForCustomization(row.type) },
+        row.ts || Date.now(),
+      )),
+      ...wordMetaRows.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.wordMeta, row.id, { ...row, profileId: normalizeProfileScopeId() }, row.updatedAt || Date.now())),
+      ...customLists.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.customList, row.id, { ...row, profileId: normalizeProfileScopeId() }, row.updatedAt || row.createdAt || Date.now())),
+      ...customListItems.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.customListItem, row.id, { ...row, profileId: normalizeProfileScopeId() }, row.updatedAt || Date.now())),
+      ...progressRows.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.progress, row.id, { ...row, profileId: normalizeProfileScopeId() }, row.timestamp || Date.now())),
+      ...reviewCards.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.reviewCard, row.id, { ...row, profileId: normalizeProfileScopeId() }, row.updatedAt || Date.now())),
+      ...reviewHistory.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.reviewHistory, row.id, { ...row, profileId: normalizeProfileScopeId() }, row.reviewedAt || Date.now())),
+      ...userStats.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.userStat, row.id, { ...row, profileId: normalizeProfileScopeId() }, row.updatedAt || Date.now())),
     ].filter(Boolean);
   }
 
@@ -548,6 +600,7 @@
           payload: row?.payload && typeof row.payload === "object" ? row.payload : {},
           updatedAt: Number(row?.updatedAt) || Date.now(),
           deletedAt: row?.deletedAt ? Number(row.deletedAt) || Date.now() : null,
+          profileId: normalizeProfileScopeId(row?.profileId),
         };
       })
       .filter(Boolean);
@@ -1199,6 +1252,31 @@
         });
       },
     );
+  }
+
+  async function saveProfileSnapshot(profileId, snapshot) {
+    const safeProfileId = String(profileId || "").trim();
+    if (!safeProfileId || !db.profileSnapshots) return null;
+    const record = {
+      id: safeProfileId,
+      snapshot: snapshot && typeof snapshot === "object" ? snapshot : {},
+      updatedAt: Date.now(),
+    };
+    await db.profileSnapshots.put(record);
+    return record;
+  }
+
+  async function getProfileSnapshot(profileId) {
+    const safeProfileId = String(profileId || "").trim();
+    if (!safeProfileId || !db.profileSnapshots) return null;
+    return db.profileSnapshots.get(safeProfileId);
+  }
+
+  async function deleteProfileSnapshot(profileId) {
+    const safeProfileId = String(profileId || "").trim();
+    if (!safeProfileId || !db.profileSnapshots) return false;
+    await db.profileSnapshots.delete(safeProfileId);
+    return true;
   }
 
   window.HomeSchoolDB = {
@@ -2023,8 +2101,21 @@
       return getCloudSyncOutboxEntries(limit);
     },
 
+    async queueCloudSyncRecord(dataset, rowId, payload, options = {}) {
+      return queueCloudSyncRecord(dataset, rowId, payload, options);
+    },
+
     async clearCloudSyncOutboxEntries(syncKeys = []) {
       return clearCloudSyncOutboxEntries(syncKeys);
+    },
+
+    async setActiveCloudProfile(profileId) {
+      activeCloudProfileId = normalizeProfileScopeId(profileId);
+      return activeCloudProfileId;
+    },
+
+    async getActiveCloudProfile() {
+      return normalizeProfileScopeId(activeCloudProfileId);
     },
 
     async getAllCloudSyncRows() {
@@ -2033,6 +2124,18 @@
 
     async applyCloudSyncRows(rows = []) {
       return applyCloudSyncRows(rows);
+    },
+
+    async saveProfileSnapshot(profileId, snapshot) {
+      return saveProfileSnapshot(profileId, snapshot);
+    },
+
+    async getProfileSnapshot(profileId) {
+      return getProfileSnapshot(profileId);
+    },
+
+    async deleteProfileSnapshot(profileId) {
+      return deleteProfileSnapshot(profileId);
     },
 
     async getProgressMap() {
@@ -2080,6 +2183,7 @@
 
     async importProgress(progressData, options = {}) {
       const mode = options.mode === "merge" ? "merge" : "replace";
+      const preserveCustomizations = Boolean(options.preserveCustomizations);
       const normalized = normalizeImportPayload(progressData);
 
       await db.transaction("rw", [db.progress, db.reviewCards, db.reviewHistory, db.userStats, db.wordMeta, db.customLists, db.customListItems, db.customizations], async () => {
@@ -2091,7 +2195,9 @@
           await db.wordMeta.clear();
           await db.customLists.clear();
           await db.customListItems.clear();
-          await db.customizations.clear();
+          if (!preserveCustomizations) {
+            await db.customizations.clear();
+          }
 
           if (normalized.progress.length > 0) await db.progress.bulkPut(normalized.progress);
           if (normalized.reviewCards.length > 0) await db.reviewCards.bulkPut(normalized.reviewCards);
@@ -2100,7 +2206,7 @@
           if (normalized.wordMeta.length > 0) await db.wordMeta.bulkPut(normalized.wordMeta);
           if (normalized.customLists.length > 0) await db.customLists.bulkPut(normalized.customLists);
           if (normalized.customListItems.length > 0) await db.customListItems.bulkPut(normalized.customListItems);
-          if (normalized.customizations.length > 0) await db.customizations.bulkPut(normalized.customizations);
+          if (!preserveCustomizations && normalized.customizations.length > 0) await db.customizations.bulkPut(normalized.customizations);
           return;
         }
 
@@ -2111,7 +2217,7 @@
         const existingWordMeta = await db.wordMeta.toArray();
         const existingCustomLists = await db.customLists.toArray();
         const existingCustomListItems = await db.customListItems.toArray();
-        const existingCustomizations = await db.customizations.toArray();
+        const existingCustomizations = preserveCustomizations ? [] : await db.customizations.toArray();
 
         const mergedProgress = mergeUniqueRows(existingProgress, normalized.progress);
         const mergedReviewCards = mergeUniqueRows(existingReviewCards, normalized.reviewCards);
@@ -2129,7 +2235,9 @@
         await db.wordMeta.clear();
         await db.customLists.clear();
         await db.customListItems.clear();
-        await db.customizations.clear();
+        if (!preserveCustomizations) {
+          await db.customizations.clear();
+        }
 
         if (mergedProgress.length > 0) await db.progress.bulkPut(mergedProgress);
         if (mergedReviewCards.length > 0) await db.reviewCards.bulkPut(mergedReviewCards);
@@ -2137,7 +2245,7 @@
         if (mergedWordMeta.length > 0) await db.wordMeta.bulkPut(mergedWordMeta);
         if (mergedCustomLists.length > 0) await db.customLists.bulkPut(mergedCustomLists);
         if (mergedCustomListItems.length > 0) await db.customListItems.bulkPut(mergedCustomListItems);
-        if (mergedCustomizations.length > 0) await db.customizations.bulkPut(mergedCustomizations);
+        if (!preserveCustomizations && mergedCustomizations.length > 0) await db.customizations.bulkPut(mergedCustomizations);
         if (mergedMain) await db.userStats.put(mergedMain);
       });
 
