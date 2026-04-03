@@ -1283,6 +1283,7 @@ function createStudentProfileDraft(base = {}) {
   const id = String(base.id || `profile_${now}_${Math.random().toString(36).slice(2, 8)}`).trim();
   return {
     id,
+    nickname: String(base.nickname || base.profileNickname || "").trim(),
     grade: typeof base.grade !== "undefined" && base.grade !== null ? Number(base.grade) : null,
     studentName: String(base.studentName || base.name || "").trim(),
     studentNameUr: String(base.studentNameUr || base.nameUr || "").trim(),
@@ -1305,6 +1306,84 @@ function resolveActiveStudentProfileId(profiles = [], preferredId = "") {
   const safeProfiles = Array.isArray(profiles) ? profiles : [];
   const matched = safeProfiles.find((profile) => profile.id === preferredId);
   return matched?.id || safeProfiles[0]?.id || "";
+}
+
+function getStudentProfileDisplayName(profile = {}, language = "en") {
+  const safeProfile = createStudentProfileDraft(profile);
+  const primary = String(safeProfile.nickname || "").trim();
+  const fallbackEn = String(safeProfile.studentName || "").trim();
+  const fallbackUr = String(safeProfile.studentNameUr || "").trim();
+  if (language === "ur") return primary || fallbackUr || fallbackEn || "طالب علم";
+  if (language === "bilingual") {
+    if (primary && (fallbackEn || fallbackUr)) {
+      return joinLocalizedText(primary, fallbackUr || fallbackEn || primary, language);
+    }
+    return joinLocalizedText(fallbackEn || primary || "Student", fallbackUr || primary || fallbackEn || "طالب علم", language);
+  }
+  return primary || fallbackEn || fallbackUr || "Student";
+}
+
+function getStudentProfileInitials(profile = {}) {
+  const safeProfile = createStudentProfileDraft(profile);
+  const seed = String(safeProfile.nickname || safeProfile.studentName || safeProfile.studentNameUr || "S").trim();
+  const parts = seed.replace(/\s+/g, " ").split(" ").filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+  }
+  return seed.slice(0, 2).toUpperCase();
+}
+
+function sanitizeAccountUsername(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "")
+    .slice(0, 32);
+}
+
+function stableSerialize(value) {
+  if (Array.isArray(value)) return value.map(stableSerialize);
+  if (!value || typeof value !== "object") return value;
+  return Object.keys(value).sort().reduce((acc, key) => {
+    acc[key] = stableSerialize(value[key]);
+    return acc;
+  }, {});
+}
+
+function getCloudConflictTitle(dataset, rowId, payload = {}, language = "en") {
+  const safeDataset = String(dataset || "").trim();
+  if (safeDataset === "customization") {
+    const type = String(payload?.type || rowId || "").trim();
+    const labels = {
+      preferences: ["Display & navigation settings", "ڈسپلے اور نیویگیشن سیٹنگز"],
+      audioPreferences: ["Audio settings", "آڈیو سیٹنگز"],
+      reviewPreferences: ["Review settings", "ریویو سیٹنگز"],
+      practiceProgress: ["Practice progress", "پریکٹس پیش رفت"],
+      reminderSettings: ["Reminder settings", "یاد دہانی سیٹنگز"],
+      classScheduleSettings: ["Class schedule", "کلاس شیڈول"],
+      studentProfiles: ["Student profiles", "طالب علم پروفائل"],
+      activeStudentProfileId: ["Active profile", "فعال پروفائل"],
+      accountPreferences: ["Account preferences", "اکاؤنٹ ترجیحات"],
+    };
+    const pair = labels[type] || ["Settings change", "سیٹنگ تبدیلی"];
+    return joinLocalizedText(pair[0], pair[1], language);
+  }
+  if (safeDataset === "wordMeta") {
+    return joinLocalizedText("Favorite / note", "پسندیدہ / نوٹ", language);
+  }
+  if (safeDataset === "customList") {
+    return joinLocalizedText("Custom list", "کسٹم فہرست", language);
+  }
+  if (safeDataset === "customListItem") {
+    return joinLocalizedText("Custom list item", "کسٹم فہرست آئٹم", language);
+  }
+  if (safeDataset === "progress" || safeDataset === "reviewCard" || safeDataset === "reviewHistory") {
+    return joinLocalizedText("Review progress", "ریویو پیش رفت", language);
+  }
+  if (safeDataset === "userStat") {
+    return joinLocalizedText("Study totals", "مطالعہ مجموعے", language);
+  }
+  return `${safeDataset} • ${rowId}`;
 }
 
 function sanitizeUrduInput(value) {
@@ -1732,7 +1811,9 @@ create table if not exists public.user_data_rows (
   primary key (user_id, profile_id, dataset, row_id)
 );
 
-create index if not exists user_data_rows_user_dataset_updated_idx
+drop index if exists public.user_data_rows_user_dataset_updated_idx;
+
+create index if not exists user_data_rows_user_profile_dataset_updated_idx
   on public.user_data_rows (user_id, profile_id, dataset, updated_at desc);
 
 alter table public.user_data_rows enable row level security;
@@ -7322,7 +7403,9 @@ function HomeschoolApp() {
   const [studentProfiles, setStudentProfiles] = useState(initialStudentProfiles);
   const [activeStudentProfileId, setActiveStudentProfileId] = useState(initialActiveStudentProfileId);
   const [profileSwitchBusy, setProfileSwitchBusy] = useState(false);
+  const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState({
+    nickname: "",
     studentName: "",
     studentNameUr: "",
     grade: initialActiveStudentProfile?.grade || 5,
@@ -7475,6 +7558,9 @@ function HomeschoolApp() {
   });
   const [supabaseAuthBusy, setSupabaseAuthBusy] = useState(false);
   const [supabaseAccountPassword, setSupabaseAccountPassword] = useState("");
+  const [supabaseAccountPasswordVisible, setSupabaseAccountPasswordVisible] = useState(false);
+  const [supabaseAccountUsername, setSupabaseAccountUsername] = useState(sanitizeAccountUsername(stored?.supabaseAccountUsername || ""));
+  const [supabasePendingEmail, setSupabasePendingEmail] = useState(String(stored?.supabasePendingEmail || storedSupabaseSyncSettings.authEmail || "").trim());
   const [supabaseSyncBusy, setSupabaseSyncBusy] = useState(false);
   const [supabaseSyncPulse, setSupabaseSyncPulse] = useState(0);
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
@@ -7497,6 +7583,8 @@ function HomeschoolApp() {
   const speechRecognitionRef = useRef(null);
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
+  const profileSwitcherButtonRef = useRef(null);
+  const profileSwitcherMenuRef = useRef(null);
   const headerRef = useRef(null);
   const headerHideTimerRef = useRef(null);
   const navBarRef = useRef(null);
@@ -7540,7 +7628,7 @@ function HomeschoolApp() {
       icon: icon || "copy",
     });
     copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1800);
-  }, []);
+  }, [supabasePendingEmail]);
 
   const persistTutorHistory = useCallback((sessions, sessionId) => {
     const safeSessions = normalizeTutorSessions(sessions, language)
@@ -8554,6 +8642,8 @@ function HomeschoolApp() {
     if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || "").trim());
     if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
       setSupabaseRolePreference(storedAccountPreferences.rolePreference);
+      if (typeof storedAccountPreferences.username !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(storedAccountPreferences.username));
+      if (typeof storedAccountPreferences.pendingEmail !== "undefined") setSupabasePendingEmail(String(storedAccountPreferences.pendingEmail || ""));
     }
     if (storedProfiles) {
       const normalizedProfiles = normalizeStudentProfiles(storedProfiles, storedProfile || {
@@ -8604,6 +8694,15 @@ function HomeschoolApp() {
             && Number(entry?.updatedAt || 0) > 0
             && JSON.stringify(entry?.payload || {}) !== JSON.stringify(row.payload || {}));
           if (!pendingMatch) return;
+          const mergedPayload = window.HomeSchoolDB?.previewCloudMerge
+            ? window.HomeSchoolDB.previewCloudMerge(row.dataset, pendingMatch.payload || {}, row.payload || {})
+            : { ...(pendingMatch.payload || {}), ...(row.payload || {}) };
+          const mergedComparable = JSON.stringify(stableSerialize(mergedPayload?.data ?? mergedPayload ?? {}));
+          const localComparable = JSON.stringify(stableSerialize((pendingMatch.payload || {}).data ?? (pendingMatch.payload || {})));
+          const remoteComparable = JSON.stringify(stableSerialize((row.payload || {}).data ?? (row.payload || {})));
+          if (mergedComparable === localComparable || mergedComparable === remoteComparable) {
+            return;
+          }
           nextConflicts.push({
             id: `${row.profileId || "__global__"}::${row.dataset}::${row.rowId}`,
             profileId: row.profileId || "__global__",
@@ -8613,7 +8712,7 @@ function HomeschoolApp() {
             remotePayload: row.payload || {},
             localUpdatedAt: Number(pendingMatch.updatedAt) || Date.now(),
             remoteUpdatedAt: Number(row.updatedAt) || Date.now(),
-            title: `${row.dataset} • ${row.rowId}`,
+            title: getCloudConflictTitle(row.dataset, row.rowId, row.payload || {}, language),
           });
         });
         if (nextConflicts.length) {
@@ -8674,11 +8773,16 @@ function HomeschoolApp() {
   const applySupabaseSessionState = useCallback((session, options = {}) => {
     const user = session?.user || null;
     const signedIn = Boolean(user?.id);
+    const metadataUsername = sanitizeAccountUsername(user?.user_metadata?.username || user?.user_metadata?.accountUsername || "");
     const nextMessage = typeof options.message === "string"
       ? options.message
       : signedIn
         ? joinLocalizedText("Connected to Supabase.", "Supabase کے ساتھ جڑ گیا۔", language)
         : "";
+    if (signedIn) {
+      if (metadataUsername) setSupabaseAccountUsername(metadataUsername);
+      if (user?.email) setSupabasePendingEmail(String(user.email || ""));
+    }
     setSupabaseAuthState((current) => ({
       ...current,
       status: options.status || (signedIn ? "ready" : "idle"),
@@ -8846,7 +8950,7 @@ function HomeschoolApp() {
   }, [applyIncomingCloudSyncRows, applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
 
   const handleSupabaseSendMagicLink = useCallback(async () => {
-    const email = String(supabaseDictionarySync.authEmail || "").trim();
+    const email = String(supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim();
     if (!email) {
       alert(joinLocalizedText("Enter your email first.", "پہلے اپنا ای میل درج کریں۔", language));
       return;
@@ -8880,10 +8984,10 @@ function HomeschoolApp() {
     } finally {
       setSupabaseAuthBusy(false);
     }
-  }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail]);
+  }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail, supabasePendingEmail]);
 
   const handleSupabasePasswordSignIn = useCallback(async () => {
-    const email = String(supabaseDictionarySync.authEmail || "").trim();
+    const email = String(supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim();
     const password = String(supabaseAccountPassword || "");
     if (!email || !password) {
       alert(joinLocalizedText("Enter your email and password first.", "پہلے اپنا ای میل اور پاس ورڈ درج کریں۔", language));
@@ -8910,10 +9014,10 @@ function HomeschoolApp() {
     } finally {
       setSupabaseAuthBusy(false);
     }
-  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail, supabaseRolePreference]);
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail, supabasePendingEmail, supabaseRolePreference]);
 
   const handleSupabaseCreateAccount = useCallback(async () => {
-    const email = String(supabaseDictionarySync.authEmail || "").trim();
+    const email = String(supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim();
     const password = String(supabaseAccountPassword || "");
     if (!email || !password) {
       alert(joinLocalizedText("Enter your email and password first.", "پہلے اپنا ای میل اور پاس ورڈ درج کریں۔", language));
@@ -8926,8 +9030,8 @@ function HomeschoolApp() {
         email,
         password,
         options: getSupabaseAuthRedirectUrl()
-          ? { emailRedirectTo: getSupabaseAuthRedirectUrl(), data: { role: supabaseRolePreference, homeschoolRole: supabaseRolePreference } }
-          : { data: { role: supabaseRolePreference, homeschoolRole: supabaseRolePreference } },
+          ? { emailRedirectTo: getSupabaseAuthRedirectUrl(), data: { role: supabaseRolePreference, homeschoolRole: supabaseRolePreference, username: sanitizeAccountUsername(supabaseAccountUsername) || undefined } }
+          : { data: { role: supabaseRolePreference, homeschoolRole: supabaseRolePreference, username: sanitizeAccountUsername(supabaseAccountUsername) || undefined } },
       });
       if (error) throw error;
       applySupabaseSessionState(data?.session || null, {
@@ -8949,10 +9053,10 @@ function HomeschoolApp() {
     } finally {
       setSupabaseAuthBusy(false);
     }
-  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail]);
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseAccountUsername, supabaseDictionarySync.authEmail, supabasePendingEmail, supabaseRolePreference]);
 
   const handleSupabasePasswordReset = useCallback(async () => {
-    const email = String(supabaseDictionarySync.authEmail || "").trim();
+    const email = String(supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim();
     if (!email) {
       alert(joinLocalizedText("Enter your email first.", "پہلے اپنا ای میل درج کریں۔", language));
       return;
@@ -8982,7 +9086,7 @@ function HomeschoolApp() {
     } finally {
       setSupabaseAuthBusy(false);
     }
-  }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail]);
+  }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail, supabasePendingEmail]);
 
   const handleSupabaseRefreshSession = useCallback(async () => {
     setSupabaseAuthBusy(true);
@@ -9197,6 +9301,71 @@ function HomeschoolApp() {
       showAppToast(joinLocalizedText("Unable to update cloud role", "کلاؤڈ کردار تازہ نہیں ہو سکا", language), "alert");
     }
   }, [ensureSupabaseClient, language, showAppToast, supabaseAuthState.userId]);
+
+  const handleSupabaseSaveUsername = useCallback(async () => {
+    const nextUsername = sanitizeAccountUsername(supabaseAccountUsername);
+    if (!nextUsername) {
+      alert(joinLocalizedText("Enter a username first.", "پہلے یوزرنیم درج کریں۔", language));
+      return;
+    }
+    setSupabaseAccountUsername(nextUsername);
+    if (!supabaseAuthState.userId) {
+      showAppToast(joinLocalizedText("Username saved locally", "یوزرنیم مقامی طور پر محفوظ ہو گیا", language), "check");
+      return;
+    }
+    setSupabaseAuthBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.auth.updateUser({
+        data: {
+          username: nextUsername,
+          accountUsername: nextUsername,
+          role: supabaseAuthState.role || supabaseRolePreference,
+          homeschoolRole: supabaseAuthState.role || supabaseRolePreference,
+        },
+      });
+      if (error) throw error;
+      showAppToast(joinLocalizedText("Username updated", "یوزرنیم تازہ ہو گیا", language), "check");
+    } catch (error) {
+      console.log("Unable to update Supabase username:", error);
+      showAppToast(joinLocalizedText("Unable to update username", "یوزرنیم تازہ نہیں ہو سکا", language), "alert");
+    } finally {
+      setSupabaseAuthBusy(false);
+    }
+  }, [ensureSupabaseClient, language, showAppToast, supabaseAccountUsername, supabaseAuthState.role, supabaseAuthState.userId, supabaseRolePreference]);
+
+  const handleSupabaseChangeEmail = useCallback(async () => {
+    const nextEmail = String(supabasePendingEmail || "").trim();
+    if (!nextEmail) {
+      alert(joinLocalizedText("Enter the new email first.", "پہلے نیا ای میل درج کریں۔", language));
+      return;
+    }
+    if (!supabaseAuthState.userId) {
+      updateSupabaseDictionarySyncField("authEmail", nextEmail);
+      showAppToast(joinLocalizedText("Email saved locally", "ای میل مقامی طور پر محفوظ ہو گیا", language), "check");
+      return;
+    }
+    setSupabaseAuthBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.auth.updateUser({
+        email: nextEmail,
+      });
+      if (error) throw error;
+      updateSupabaseDictionarySyncField("authEmail", nextEmail);
+      setSupabaseAuthState((current) => ({
+        ...current,
+        message: joinLocalizedText("Check the new email to confirm the change.", "تبدیلی کی تصدیق کے لیے نیا ای میل دیکھیں۔", language),
+        lastCheckedAt: Date.now(),
+      }));
+      showAppToast(joinLocalizedText("Email change sent", "ای میل تبدیلی بھیج دی گئی", language), "send");
+    } catch (error) {
+      console.log("Unable to update Supabase email:", error);
+      showAppToast(joinLocalizedText("Unable to change email", "ای میل تبدیل نہیں ہو سکا", language), "alert");
+    } finally {
+      setSupabaseAuthBusy(false);
+    }
+  }, [ensureSupabaseClient, language, showAppToast, supabaseAuthState.userId, supabasePendingEmail, updateSupabaseDictionarySyncField]);
 
   useEffect(() => {
     localStorageFallback("hs_dictionary_device_id", dictionaryDeviceIdRef.current);
@@ -9954,6 +10123,8 @@ function HomeschoolApp() {
           });
           await window.HomeSchoolDB.saveCustomization("accountPreferences", {
             rolePreference: nextPayload.supabaseRolePreference || "student",
+            username: sanitizeAccountUsername(nextPayload.supabaseAccountUsername || ""),
+            pendingEmail: String(nextPayload.supabasePendingEmail || "").trim(),
           });
           await window.HomeSchoolDB.saveCustomization("aiProviderConfigs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
           await window.HomeSchoolDB.saveCustomization("aiTutorPreferences", {
@@ -10016,6 +10187,8 @@ function HomeschoolApp() {
             },
             accountPreferences: {
               rolePreference: nextPayload.supabaseRolePreference || "student",
+              username: sanitizeAccountUsername(nextPayload.supabaseAccountUsername || ""),
+              pendingEmail: String(nextPayload.supabasePendingEmail || "").trim(),
             },
           });
           localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
@@ -10081,6 +10254,8 @@ function HomeschoolApp() {
           },
           accountPreferences: {
             rolePreference: nextPayload.supabaseRolePreference || "student",
+            username: sanitizeAccountUsername(nextPayload.supabaseAccountUsername || ""),
+            pendingEmail: String(nextPayload.supabasePendingEmail || "").trim(),
           },
         });
         localStorageFallback("hs_ai_provider_configs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
@@ -10255,6 +10430,8 @@ function HomeschoolApp() {
         }
         if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
           setSupabaseRolePreference(storedAccountPreferences.rolePreference);
+          if (typeof storedAccountPreferences.username !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(storedAccountPreferences.username));
+          if (typeof storedAccountPreferences.pendingEmail !== "undefined") setSupabasePendingEmail(String(storedAccountPreferences.pendingEmail || ""));
         }
         if (storedProfiles) {
           const normalizedProfiles = normalizeStudentProfiles(storedProfiles, storedProfile || {
@@ -10646,16 +10823,18 @@ function HomeschoolApp() {
       studentProfiles,
       activeStudentProfileId,
       supabaseRolePreference,
+      supabaseAccountUsername,
+      supabasePendingEmail,
       grade,
       studentName,
       studentNameUr,
       aiProviderConfigs,
       selectedAiProvider,
     });
-}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, activeStudentProfileId, supabaseRolePreference, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
+  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -10727,6 +10906,19 @@ function HomeschoolApp() {
     setNavHidden(Boolean(navAutoHide));
     setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
   }, [tab, selectedSubject, selectedLesson, selectedAdverbDay, selectedPrepDay, selectedAdjDay, selectedConjDay, selectedPronDay, selectedNounDay, selectedVerbDay, selectedTensePara, selectedVocabDay, quizActive, quizDone, subExerciseGroupIdx, subQuizGroupIdx, mathSubIdx, practiceMode, reviewIdx, reviewSessionDone, navAutoHide, navBarAutoHide, navPosition]);
+  useEffect(() => {
+    setProfileSwitcherOpen(false);
+  }, [activeStudentProfileId, selectedLesson, selectedSubject, tab]);
+  useEffect(() => {
+    if (!profileSwitcherOpen) return undefined;
+    const handlePointerDown = (event) => {
+      const target = event.target;
+      if (profileSwitcherButtonRef.current?.contains?.(target) || profileSwitcherMenuRef.current?.contains?.(target)) return;
+      setProfileSwitcherOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [profileSwitcherOpen]);
   useEffect(() => () => {
     if (headerHideTimerRef.current) {
       window.clearTimeout(headerHideTimerRef.current);
@@ -11358,7 +11550,17 @@ function HomeschoolApp() {
       ...current,
       [field]: typeof value === "function" ? value(current?.[field]) : value,
     }));
-  }, []);
+    if (field === "authEmail") {
+      const nextValue = typeof value === "function" ? value(supabasePendingEmail) : value;
+      setSupabasePendingEmail(String(nextValue || "").trim());
+    }
+  }, [supabasePendingEmail]);
+
+  const handleSupabasePendingEmailChange = useCallback((value) => {
+    const nextEmail = String(value || "").trim();
+    setSupabasePendingEmail(nextEmail);
+    updateSupabaseDictionarySyncField("authEmail", nextEmail);
+  }, [updateSupabaseDictionarySyncField]);
 
   const finishQuiz = async (ans, qs) => {
     const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
@@ -11561,6 +11763,8 @@ function HomeschoolApp() {
       }));
       if (typeof nextState.activeStudentProfileId !== "undefined") setActiveStudentProfileId(nextState.activeStudentProfileId || "");
       if (typeof nextState.supabaseRolePreference !== "undefined" && ["student", "parent", "teacher"].includes(nextState.supabaseRolePreference)) setSupabaseRolePreference(nextState.supabaseRolePreference);
+      if (typeof nextState.supabaseAccountUsername !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(nextState.supabaseAccountUsername));
+      if (typeof nextState.supabasePendingEmail !== "undefined") setSupabasePendingEmail(String(nextState.supabasePendingEmail || ""));
       if (typeof nextState.grade !== "undefined") setGrade(nextState.grade);
       if (typeof nextState.studentName !== "undefined") setStudentName(nextState.studentName);
       if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr(nextState.studentNameUr);
@@ -11646,6 +11850,8 @@ function HomeschoolApp() {
     }));
     if (typeof nextState.activeStudentProfileId !== "undefined") setActiveStudentProfileId((current) => current || nextState.activeStudentProfileId || "");
     if (typeof nextState.supabaseRolePreference !== "undefined" && ["student", "parent", "teacher"].includes(nextState.supabaseRolePreference)) setSupabaseRolePreference((current) => current || nextState.supabaseRolePreference);
+    if (typeof nextState.supabaseAccountUsername !== "undefined") setSupabaseAccountUsername((current) => current || sanitizeAccountUsername(nextState.supabaseAccountUsername));
+    if (typeof nextState.supabasePendingEmail !== "undefined") setSupabasePendingEmail((current) => current || String(nextState.supabasePendingEmail || ""));
     if (typeof nextState.grade !== "undefined") setGrade((current) => current || nextState.grade);
     if (typeof nextState.studentName !== "undefined") setStudentName((current) => current || nextState.studentName);
     if (typeof nextState.studentNameUr !== "undefined") setStudentNameUr((current) => current || nextState.studentNameUr);
@@ -11888,6 +12094,7 @@ function HomeschoolApp() {
 
   const handleCreateStudentProfile = useCallback(async () => {
     const nextProfile = createStudentProfileDraft({
+      nickname: profileDraft.nickname,
       studentName: profileDraft.studentName,
       studentNameUr: profileDraft.studentNameUr,
       grade: profileDraft.grade || 5,
@@ -11904,6 +12111,7 @@ function HomeschoolApp() {
       studentProfilesRef.current = nextProfiles;
       setStudentProfiles(nextProfiles);
       setProfileDraft({
+        nickname: "",
         studentName: "",
         studentNameUr: "",
         grade: nextProfile.grade || 5,
@@ -11922,7 +12130,7 @@ function HomeschoolApp() {
     } finally {
       setProfileSwitchBusy(false);
     }
-  }, [language, loadStudentProfileSnapshot, profileDraft.grade, profileDraft.role, profileDraft.studentName, profileDraft.studentNameUr, saveCurrentProfileSnapshot, showAppToast]);
+  }, [language, loadStudentProfileSnapshot, profileDraft.grade, profileDraft.nickname, profileDraft.role, profileDraft.studentName, profileDraft.studentNameUr, saveCurrentProfileSnapshot, showAppToast]);
 
   const handleDeleteStudentProfile = useCallback(async (profileId) => {
     const targetId = String(profileId || "").trim();
@@ -11965,6 +12173,15 @@ function HomeschoolApp() {
     }
   }, [language, loadStudentProfileSnapshot, saveCurrentProfileSnapshot, showAppToast]);
 
+  const handleActiveProfileNicknameChange = useCallback((value) => {
+    const nextNickname = String(value || "").trimStart();
+    setStudentProfiles((current) => (Array.isArray(current) ? current.map((profile) => (
+      profile.id === activeStudentProfileId
+        ? { ...profile, nickname: nextNickname, updatedAt: Date.now() }
+        : profile
+    )) : current));
+  }, [activeStudentProfileId]);
+
   const executeImportReview = useCallback(async (previewState, mode) => {
     if (!previewState?.parsed) return;
     const parsed = previewState.parsed;
@@ -11992,6 +12209,8 @@ function HomeschoolApp() {
         studentProfiles,
         activeStudentProfileId,
         supabaseRolePreference,
+        supabaseAccountUsername,
+        supabasePendingEmail,
         completedQuizzes,
         totalScore,
         totalQuizzesDone,
@@ -12040,7 +12259,7 @@ function HomeschoolApp() {
       lastBackupAt: exportedAt,
       lastPromptDay: getLocalDayKey(exportedAt),
     }));
-  }, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts]);
+  }, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts]);
 
   const handleExportDictionary = useCallback(() => {
     const exportedAt = Date.now();
@@ -13030,6 +13249,54 @@ function HomeschoolApp() {
     if (supabaseAuthBusy) return joinLocalizedText("Working...", "کام ہو رہا ہے...", language);
     return joinLocalizedText("Ready to sign in", "سائن اِن کے لیے تیار", language);
   })();
+  const activeStudentProfileLabel = activeStudentProfile
+    ? (activeStudentProfile.nickname || activeStudentProfile.studentNameUr || activeStudentProfile.studentName || `${joinLocalizedText("Grade", "جماعت", language)} ${activeStudentProfile.grade || ""}`).trim()
+    : "";
+  const activeProfileRole = ["student", "parent", "teacher"].includes(activeStudentProfile?.role)
+    ? activeStudentProfile.role
+    : (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) || "student";
+  const activeProfileRoleLabel = joinLocalizedText(
+    activeProfileRole === "teacher" ? "Teacher" : activeProfileRole === "parent" ? "Parent" : "Student",
+    activeProfileRole === "teacher" ? "استاد" : activeProfileRole === "parent" ? "والدین" : "طالب علم",
+    language,
+  );
+  const activeStudentProfileInitials = getStudentProfileInitials(activeStudentProfile);
+  const profileSubjectSummaries = useMemo(() => SUBJECTS.map((subject) => {
+    const lessons = grade ? (getLessons(subject.id, grade) || []) : [];
+    const completed = lessons.filter((lesson) => completedQuizzes?.[lesson.id]).length;
+    const total = lessons.length;
+    return {
+      id: subject.id,
+      icon: subject.icon,
+      color: subject.color,
+      label: getSubjectDisplayName(subject, language),
+      completed,
+      total,
+      percent: total > 0 ? Math.round((completed / total) * 100) : 0,
+    };
+  }), [completedQuizzes, getLessons, grade, language]);
+  const profileLessonTotals = useMemo(() => profileSubjectSummaries.reduce((acc, entry) => ({
+    completed: acc.completed + (entry.completed || 0),
+    total: acc.total + (entry.total || 0),
+  }), { completed: 0, total: 0 }), [profileSubjectSummaries]);
+  const profileLessonCompletion = profileLessonTotals.total > 0 ? Math.round((profileLessonTotals.completed / profileLessonTotals.total) * 100) : 0;
+  const profileStrongestSubject = useMemo(
+    () => profileSubjectSummaries.filter((entry) => entry.total > 0).sort((left, right) => right.percent - left.percent)[0] || null,
+    [profileSubjectSummaries],
+  );
+  const profileSupportSubject = useMemo(
+    () => profileSubjectSummaries.filter((entry) => entry.total > 0).sort((left, right) => left.percent - right.percent)[0] || null,
+    [profileSubjectSummaries],
+  );
+  const profileSyncScopeLabel = joinLocalizedText(
+    supabaseDictionarySync.enabled
+      ? `${activeStudentProfileLabel || "Current profile"} syncs separately`
+      : "Cloud sync stays local until you enable it",
+    supabaseDictionarySync.enabled
+      ? `${activeStudentProfileLabel || "موجودہ پروفائل"} الگ سنک ہوتا ہے`
+      : "کلاؤڈ سنک آن ہونے تک سب کچھ مقامی رہے گا",
+    language,
+  );
   const supabaseAccountRoleLabel = joinLocalizedText(
     (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "teacher" ? "Teacher" : (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "parent" ? "Parent" : "Student",
     (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "teacher" ? "استاد" : (supabaseAuthState.userId ? supabaseAuthState.role : supabaseRolePreference) === "parent" ? "والدین" : "طالب علم",
@@ -13551,6 +13818,66 @@ function HomeschoolApp() {
         ? renderNavBar("top", true)
         : <h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1>}
       <div className="header-actions">
+        <div className="header-profile-shell">
+          <button
+            ref={profileSwitcherButtonRef}
+            type="button"
+            className={`header-profile-btn${profileSwitcherOpen ? " active" : ""}`}
+            title={joinLocalizedText("Switch profile", "پروفائل بدلیں", language)}
+            aria-label={joinLocalizedText("Switch profile", "پروفائل بدلیں", language)}
+            aria-expanded={profileSwitcherOpen ? "true" : "false"}
+            onClick={(event) => {
+              event.stopPropagation();
+              setProfileSwitcherOpen((current) => !current);
+            }}
+          >
+            <span className="header-profile-avatar" aria-hidden="true">{activeStudentProfileInitials}</span>
+            <span className="header-profile-copy">
+              <strong>{renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("Student", "طالب علم", language), language)}</strong>
+              <span>{renderLocalizedTextNode(activeProfileRoleLabel, language)}</span>
+            </span>
+          </button>
+          {profileSwitcherOpen ? (
+            <div ref={profileSwitcherMenuRef} className="header-profile-popover" data-ui-language={language}>
+              <div className="header-profile-popover-head">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Profiles", "پروفائلز", language), language)}</strong>
+                <span>{renderLocalizedTextNode(profileSyncScopeLabel, language)}</span>
+              </div>
+              <div className="header-profile-list">
+                {studentProfiles.map((profile) => (
+                  <button
+                    key={`header_profile_${profile.id}`}
+                    type="button"
+                    className={`header-profile-item${profile.id === activeStudentProfileId ? " active" : ""}`}
+                    onClick={() => {
+                      setProfileSwitcherOpen(false);
+                      handleSwitchStudentProfile(profile.id);
+                    }}
+                    disabled={profileSwitchBusy}
+                  >
+                    <span className="header-profile-avatar small" aria-hidden="true">{getStudentProfileInitials(profile)}</span>
+                    <span className="header-profile-item-copy">
+                      <strong>{renderLocalizedTextNode(getStudentProfileDisplayName(profile, language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${profile.grade || "—"} • ${profile.role || "student"}`, `جماعت ${profile.grade || "—"} • ${profile.role === "teacher" ? "استاد" : profile.role === "parent" ? "والدین" : "طالب علم"}`, language), language)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="ghost-cta"
+                style={{ width: "100%", marginTop: 10 }}
+                onClick={() => {
+                  setProfileSwitcherOpen(false);
+                  setProfileDisclosureOpen(true);
+                  setTab("settings");
+                }}
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Manage Profiles", "پروفائل منظم کریں", language), language)}
+              </button>
+            </div>
+          ) : null}
+        </div>
         <button
           type="button"
           className={`header-pin-btn${!navAutoHide ? " active" : ""}`}
@@ -13626,6 +13953,144 @@ function HomeschoolApp() {
             language)}</p>
           </div>
         </button>
+        <div className="review-panel profile-switcher-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Profiles", "پروفائلز", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Switch quickly between learners on this device. Each profile keeps its own study history and cloud sync scope.", "اسی ڈیوائس پر مختلف سیکھنے والوں کے درمیان فوراً بدلیں۔ ہر پروفائل اپنی الگ مطالعہ تاریخ اور کلاؤڈ سنک دائرہ رکھتا ہے۔", language), language)}</p>
+            </div>
+            <span className="goal-progress-badge">{studentProfiles.length}</span>
+          </div>
+          <div className="profile-switcher-summary-card">
+            <div className="profile-switcher-summary-main">
+              <span className="profile-switcher-avatar" aria-hidden="true">{activeStudentProfileInitials}</span>
+              <div className="profile-switcher-summary-copy">
+                <strong>{renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("Student", "طالب علم", language), language)}</strong>
+                <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${grade || "—"} • ${activeProfileRoleLabel}`, `جماعت ${grade || "—"} • ${activeProfileRoleLabel}`, language), language)}</span>
+              </div>
+            </div>
+            <span className="goal-progress-badge">{renderLocalizedTextNode(profileSyncScopeLabel, language)}</span>
+          </div>
+          <div className="profile-switcher-chip-row">
+            {studentProfiles.map((profile) => (
+              <button
+                key={`home_profile_${profile.id}`}
+                type="button"
+                className={`profile-switcher-chip${profile.id === activeStudentProfileId ? " active" : ""}`}
+                onClick={() => handleSwitchStudentProfile(profile.id)}
+                disabled={profileSwitchBusy}
+              >
+                <span className="profile-switcher-chip-avatar" aria-hidden="true">{getStudentProfileInitials(profile)}</span>
+                <span className="profile-switcher-chip-copy">
+                  <strong>{renderLocalizedTextNode(getStudentProfileDisplayName(profile, language), language)}</strong>
+                  <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${profile.grade || "—"}`, `جماعت ${profile.grade || "—"}`, language), language)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="profile-switcher-actions">
+            <button
+              type="button"
+              className="ghost-cta"
+              onClick={() => {
+                setProfileDisclosureOpen(true);
+                setTab("settings");
+              }}
+            >
+              {renderLocalizedTextNode(joinLocalizedText("Manage Profiles", "پروفائل منظم کریں", language), language)}
+            </button>
+            <span className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Cross-device validation steps are now listed in Settings -> Account & Cloud Sign-In.", "کراس ڈیوائس جانچ کے مراحل اب ترتیبات -> اکاؤنٹ اور کلاؤڈ سائن اِن میں درج ہیں۔", language), language)}</span>
+          </div>
+        </div>
+        <div className="review-panel home-support-panel profile-report-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Profile Reports", "پروفائل رپورٹس", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Everything below belongs to the active student profile only, so siblings and separate learners stay cleanly separated.", "نیچے دیا گیا تمام ڈیٹا صرف فعال طالب علم پروفائل کا ہے، اس لیے بہن بھائیوں اور الگ سیکھنے والوں کا ریکارڈ صاف الگ رہتا ہے۔", language), language)}</p>
+            </div>
+          </div>
+          <div className="stat-grid">
+            <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{formatNumberLabel(profileLessonTotals.completed)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText(`Lessons done of ${profileLessonTotals.total || 0}`, `${profileLessonTotals.total || 0} میں سے مکمل اسباق`, language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">🧠</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(weeklyStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("This week", "اس ہفتے", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📖</div><div className="stat-value">{formatNumberLabel(dictionaryStats.total || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Dictionary entries", "لغت اندراجات", language), language)}</div></div>
+          </div>
+          <div className="goal-progress-card">
+            <div className="goal-progress-row">
+              <div>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Lesson completion", "سبق تکمیل", language), language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${profileLessonTotals.completed} of ${profileLessonTotals.total || 0} lessons`, `${profileLessonTotals.completed} از ${profileLessonTotals.total || 0} اسباق`, language), language)}</div>
+              </div>
+              <span className="goal-progress-badge">{profileLessonCompletion}%</span>
+            </div>
+            <div className="goal-progress-bar"><span style={{ width: `${profileLessonCompletion}%` }} /></div>
+            <div className="goal-progress-row" style={{ marginTop: 14 }}>
+              <div>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Review mastery", "ریویو مہارت", language), language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${reviewStats.mastered || 0} mastered • ${reviewStats.learning || 0} learning`, `${reviewStats.mastered || 0} مکمل • ${reviewStats.learning || 0} سیکھنے میں`, language), language)}</div>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${streak} day streak`, `${streak} دن تسلسل`, language), language)}</span>
+            </div>
+          </div>
+          <div className="profile-report-summary-row">
+            <div className="profile-report-summary-card">
+              <strong>{renderLocalizedTextNode(joinLocalizedText("Strongest subject", "سب سے مضبوط مضمون", language), language)}</strong>
+              <span>{renderLocalizedTextNode(profileStrongestSubject?.label || joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language), language)}</span>
+            </div>
+            <div className="profile-report-summary-card">
+              <strong>{renderLocalizedTextNode(joinLocalizedText("Needs support", "مزید توجہ درکار", language), language)}</strong>
+              <span>{renderLocalizedTextNode(profileSupportSubject?.label || joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language), language)}</span>
+            </div>
+          </div>
+          <div className="profile-report-list">
+            {profileSubjectSummaries.map((entry) => (
+              <div key={`profile_report_${entry.id}`} className="profile-report-item">
+                <div className="profile-report-item-head">
+                  <strong>{entry.icon} {renderLocalizedTextNode(entry.label, language)}</strong>
+                  <span>{entry.completed}/{entry.total || 0}</span>
+                </div>
+                <div className="goal-progress-bar"><span style={{ width: `${entry.percent}%`, background: entry.color }} /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {activeProfileRole === "parent" ? (
+          <div className="review-panel home-support-panel role-overview-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Parent View", "والدین منظر", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("A calm, read-only summary of this learner's current progress so you can guide without disturbing their study setup.", "اس سیکھنے والے کی موجودہ پیش رفت کا پُرسکون، صرف مطالعہ والا خلاصہ تاکہ آپ مدد کر سکیں مگر ان کی سیٹنگ نہ بگڑے۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText("Read only", "صرف دیکھیں", language), language)}</span>
+            </div>
+            <div className="goal-progress-card">
+              <div className="goal-progress-row">
+                <div>
+                  <strong>{renderLocalizedTextNode(activeStudentProfileLabel, language)}</strong>
+                  <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`Best next support: ${profileSupportSubject?.label || "Keep reviewing"}`, `اگلی بہترین مدد: ${profileSupportSubject?.label || "ریویو جاری رکھیں"}`, language), language)}</div>
+                </div>
+                <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${completedDailyChallenges}/${dailyChallenges.length} daily goals`, `${completedDailyChallenges}/${dailyChallenges.length} روزانہ اہداف`, language), language)}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {activeProfileRole === "teacher" ? (
+          <div className="review-panel home-support-panel role-overview-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Teacher Ready", "استاد کے لیے تیار", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("This learner already has profile-scoped cloud data, progress, and dictionary growth ready for future classroom dashboards.", "اس سیکھنے والے کے لیے پروفائل-اسکوپڈ کلاؤڈ ڈیٹا، پیش رفت، اور لغت کی بڑھوتری آئندہ کلاس روم ڈیش بورڈز کے لیے پہلے ہی تیار ہے۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText("Groundwork ready", "بنیاد تیار", language), language)}</span>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-icon">👥</div><div className="stat-value">{formatNumberLabel(studentProfiles.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Profiles on device", "ڈیوائس پر پروفائلز", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">☁️</div><div className="stat-value">{renderLocalizedTextNode(supabaseDictionarySync.enabled ? joinLocalizedText("On", "آن", language) : joinLocalizedText("Off", "بند", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Cloud sync", "کلاؤڈ سنک", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🧾</div><div className="stat-value">{formatNumberLabel(cloudSyncConflicts.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending sync reviews", "زیرِ جائزہ سنک", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🗂️</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.customLists?.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Custom lists", "اپنی فہرستیں", language), language)}</div></div>
+            </div>
+          </div>
+        ) : null}
         <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
         <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
         <div className="review-panel challenge-panel" style={{ marginTop: 16 }}>
@@ -15925,7 +16390,7 @@ function HomeschoolApp() {
                         disabled={profileSwitchBusy}
                         style={{ flex: 1, minWidth: 180, justifyContent: "space-between" }}
                       >
-                        <span>{renderLocalizedTextNode(joinLocalizedText(profile.studentName || "Student", profile.studentNameUr || "طالب علم", language), language)}</span>
+                        <span>{renderLocalizedTextNode(joinLocalizedText(profile.nickname || profile.studentName || "Student", profile.studentNameUr || profile.nickname || "طالب علم", language), language)}</span>
                         <span style={{ opacity: 0.8 }}>{profile.grade ? `G${profile.grade}` : "—"}</span>
                       </button>
                       {studentProfiles.length > 1 ? (
@@ -15941,6 +16406,16 @@ function HomeschoolApp() {
                     </div>
                   ))}
                 </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("Profile Nickname", "پروفائل عرفی نام", language), language)}</label>
+                <input
+                  className="settings-text-input"
+                  value={activeStudentProfile?.nickname || ""}
+                  onChange={(event) => handleActiveProfileNicknameChange(event.target.value)}
+                  placeholder={language === "ur" ? "مثلاً علی - جماعت 5" : "For example: Ali - Grade 5"}
+                  style={{ direction: containsUrduText(activeStudentProfile?.nickname) ? "rtl" : "ltr", textAlign: containsUrduText(activeStudentProfile?.nickname) ? "right" : "left", fontFamily: containsUrduText(activeStudentProfile?.nickname) ? "var(--font-ur)" : "var(--font)" }}
+                />
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("English Name", "انگریزی نام", language), language)}</label>
@@ -15961,6 +16436,29 @@ function HomeschoolApp() {
                   placeholder="اپنا نام درج کریں"
                   style={{ direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" }}
                 />
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("Profile Role", "پروفائل کردار", language), language)}</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[
+                    { id: "student", label: joinLocalizedText("Student", "طالب علم", language) },
+                    { id: "parent", label: joinLocalizedText("Parent", "والدین", language) },
+                    { id: "teacher", label: joinLocalizedText("Teacher", "استاد", language) },
+                  ].map((roleOption) => (
+                    <button
+                      key={`active-role-${roleOption.id}`}
+                      type="button"
+                      className={`grade-btn${(activeStudentProfile?.role || "student") === roleOption.id ? " active" : ""}`}
+                      onClick={() => setStudentProfiles((current) => (Array.isArray(current) ? current.map((profile) => (
+                        profile.id === activeStudentProfileId
+                          ? { ...profile, role: roleOption.id, updatedAt: Date.now() }
+                          : profile
+                      )) : current))}
+                    >
+                      {renderLocalizedTextNode(roleOption.label, language)}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div style={{ marginTop: 12 }}>
                 <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("Cloud Role Preparation", "کلاؤڈ کردار تیاری", language), language)}</label>
@@ -15990,6 +16488,16 @@ function HomeschoolApp() {
             <div className="settings-profile-card" style={{ marginTop: 12, ...(isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : {}) }}>
               <div style={{ marginBottom: 12, color: "var(--text-secondary)", fontSize: 13 }}>
                 {renderLocalizedTextNode(joinLocalizedText("Create another student profile for siblings or separate study tracks on this device.", "اسی ڈیوائس پر بہن بھائیوں یا الگ مطالعہ ٹریک کے لیے نیا پروفائل بنائیں۔", language), language)}
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("New Profile Nickname", "نیا پروفائل عرفی نام", language), language)}</label>
+                <input
+                  className="settings-text-input"
+                  value={profileDraft.nickname}
+                  onChange={(event) => setProfileDraft((current) => ({ ...current, nickname: event.target.value }))}
+                  placeholder={language === "ur" ? "مثلاً فاطمہ - جماعت 3" : "For example: Fatima - Grade 3"}
+                  style={{ direction: containsUrduText(profileDraft.nickname) ? "rtl" : "ltr", textAlign: containsUrduText(profileDraft.nickname) ? "right" : "left", fontFamily: containsUrduText(profileDraft.nickname) ? "var(--font-ur)" : "var(--font)" }}
+                />
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label className="settings-input-label">{renderLocalizedTextNode(joinLocalizedText("New English Name", "نیا انگریزی نام", language), language)}</label>
@@ -16024,6 +16532,23 @@ function HomeschoolApp() {
                   </button>
                 ))}
               </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
+                <span className="settings-input-label" style={{ marginBottom: 0 }}>{renderLocalizedTextNode(joinLocalizedText("Profile Role", "پروفائل کردار", language), language)}</span>
+                {[
+                  { id: "student", label: joinLocalizedText("Student", "طالب علم", language) },
+                  { id: "parent", label: joinLocalizedText("Parent", "والدین", language) },
+                  { id: "teacher", label: joinLocalizedText("Teacher", "استاد", language) },
+                ].map((roleOption) => (
+                  <button
+                    key={`new-role-${roleOption.id}`}
+                    type="button"
+                    className={`grade-btn${profileDraft.role === roleOption.id ? " active" : ""}`}
+                    onClick={() => setProfileDraft((current) => ({ ...current, role: roleOption.id }))}
+                  >
+                    {renderLocalizedTextNode(roleOption.label, language)}
+                  </button>
+                ))}
+              </div>
               <button type="button" className="study-tool-btn" style={{ marginTop: 12 }} onClick={handleCreateStudentProfile} disabled={profileSwitchBusy}>
                 {renderLocalizedTextNode(joinLocalizedText("Create Profile", "پروفائل بنائیں", language), language)}
               </button>
@@ -16040,25 +16565,37 @@ function HomeschoolApp() {
             dictionaryStats={dictionaryStats}
             supabaseDictionarySync={supabaseDictionarySync}
             dictionarySyncConflicts={dictionarySyncConflicts}
+            cloudSyncConflicts={cloudSyncConflicts}
             supabaseAuthBusy={supabaseAuthBusy}
             supabaseSyncBusy={supabaseSyncBusy}
             supabaseSyncStatusLabel={supabaseSyncStatusLabel}
             supabaseAccountStatusLabel={supabaseAccountStatusLabel}
             supabaseSyncUserEmail={supabaseAuthState.email || ""}
             supabaseAccountRoleLabel={supabaseAccountRoleLabel}
+            activeProfileRoleLabel={activeProfileRoleLabel}
             supabaseAccountPassword={supabaseAccountPassword}
+            supabaseAccountUsername={supabaseAccountUsername}
+            supabasePendingEmail={supabasePendingEmail}
+            supabasePasswordVisible={supabaseAccountPasswordVisible}
+            activeStudentProfileLabel={activeStudentProfileLabel}
             onSupabaseDictionarySyncChange={updateSupabaseDictionarySyncField}
             onSupabaseAccountPasswordChange={setSupabaseAccountPassword}
+            onSupabaseAccountUsernameChange={(value) => setSupabaseAccountUsername(sanitizeAccountUsername(value))}
+            onSupabasePendingEmailChange={handleSupabasePendingEmailChange}
             onSupabaseSendMagicLink={handleSupabaseSendMagicLink}
             onSupabasePasswordSignIn={handleSupabasePasswordSignIn}
             onSupabaseCreateAccount={handleSupabaseCreateAccount}
             onSupabasePasswordReset={handleSupabasePasswordReset}
+            onSupabaseSaveUsername={handleSupabaseSaveUsername}
+            onSupabaseChangeEmail={handleSupabaseChangeEmail}
+            onSupabaseTogglePasswordVisibility={() => setSupabaseAccountPasswordVisible((value) => !value)}
             onSupabaseRefreshSession={handleSupabaseRefreshSession}
             onSupabaseTestConnection={handleSupabaseTestConnection}
             onSupabaseSyncNow={handleSupabaseSyncNow}
             onSupabaseCopySql={handleCopySupabaseSqlHelper}
             onSupabaseSignOut={handleSupabaseSignOut}
             onResolveDictionaryConflict={handleResolveDictionaryConflict}
+            onResolveCloudSyncConflict={handleResolveCloudSyncConflict}
             versionInfo={versionManagerRef.current?.getVersionInfo?.()}
             onCheckUpdates={handleCheckUpdates}
             onRefreshData={handleRefreshData}
@@ -16149,29 +16686,6 @@ function HomeschoolApp() {
             aiBrowserBlocked={!aiBrowserCapability.ok}
             labels={ui}
           />
-        ) : null}
-        {cloudSyncConflicts.length > 0 ? (
-          <div className="review-panel" style={{ marginTop: 18 }}>
-            <div className="review-panel-head">
-              <div>
-                <h3>{renderLocalizedTextNode(joinLocalizedText("Cloud Sync Review", "کلاؤڈ سنک جائزہ", language), language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText("Only true overlaps are shown here. Resolve them once, and future sync can stay quiet.", "صرف حقیقی ٹکراؤ یہاں دکھائے جاتے ہیں۔ ایک بار حل کریں، پھر آئندہ سنک خاموش رہ سکتی ہے۔", language), language)}</p>
-              </div>
-            </div>
-            <div style={{ display: "grid", gap: 10 }}>
-              {cloudSyncConflicts.slice(-8).reverse().map((record) => (
-                <div key={record.id} className="settings-profile-card" style={isUrduUi(language) ? { direction: "rtl", textAlign: "right" } : null}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>{record.title}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 }}>{renderLocalizedTextNode(joinLocalizedText("Local and synced copies both changed before sync completed.", "لوکل اور سنک شدہ دونوں نقول سنک مکمل ہونے سے پہلے بدل گئیں۔", language), language)}</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button type="button" className="ghost-cta" onClick={() => handleResolveCloudSyncConflict(record.id, "local")}>{renderLocalizedTextNode(joinLocalizedText("Keep Local", "لوکل رکھیں", language), language)}</button>
-                    <button type="button" className="ghost-cta" onClick={() => handleResolveCloudSyncConflict(record.id, "remote")}>{renderLocalizedTextNode(joinLocalizedText("Keep Synced", "سنک شدہ رکھیں", language), language)}</button>
-                    <button type="button" className="study-tool-btn" onClick={() => handleResolveCloudSyncConflict(record.id, "merge")}>{renderLocalizedTextNode(joinLocalizedText("Merge Both", "دونوں ضم کریں", language), language)}</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         ) : null}
       </>)}
       </div>

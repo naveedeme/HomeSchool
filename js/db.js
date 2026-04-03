@@ -621,12 +621,10 @@ async function saveCustomization(type, data) {
           continue;
         }
         const existing = await getLatestCustomization(type);
-        const nextRecord = {
-          ...(existing || {}),
-          ...payload,
+        const nextRecord = mergeCloudDatasetRecord(CLOUD_SYNC_DATASETS.customization, existing, {
+          ...(payload || {}),
           type,
-          ts: row.updatedAt,
-        };
+        }, row.updatedAt);
         await db.customizations.put(nextRecord);
         applied += 1;
         continue;
@@ -635,7 +633,11 @@ async function saveCustomization(type, data) {
         if (row.deletedAt) {
           await db.wordMeta.delete(row.rowId);
         } else {
-          await db.wordMeta.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+          const existing = await db.wordMeta.get(row.rowId);
+          await db.wordMeta.put({
+            ...mergeCloudDatasetRecord(CLOUD_SYNC_DATASETS.wordMeta, existing, { ...payload, id: row.rowId }, Number(payload.updatedAt) || row.updatedAt),
+            id: row.rowId,
+          });
         }
         applied += 1;
         continue;
@@ -650,7 +652,9 @@ async function saveCustomization(type, data) {
             }
           });
         } else {
-          await db.customLists.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+          const existing = await db.customLists.get(row.rowId);
+          const nextRecord = mergeCloudDatasetRecord(CLOUD_SYNC_DATASETS.customList, existing, { ...payload, id: row.rowId }, Number(payload.updatedAt) || row.updatedAt);
+          await db.customLists.put({ ...nextRecord, id: row.rowId });
         }
         applied += 1;
         continue;
@@ -659,7 +663,9 @@ async function saveCustomization(type, data) {
         if (row.deletedAt) {
           await db.customListItems.delete(row.rowId);
         } else {
-          await db.customListItems.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+          const existing = await db.customListItems.get(row.rowId);
+          const nextRecord = mergeCloudDatasetRecord(CLOUD_SYNC_DATASETS.customListItem, existing, { ...payload, id: row.rowId }, Number(payload.updatedAt) || row.updatedAt);
+          await db.customListItems.put({ ...nextRecord, id: row.rowId });
         }
         applied += 1;
         continue;
@@ -668,7 +674,9 @@ async function saveCustomization(type, data) {
         if (row.deletedAt) {
           await db.progress.delete(row.rowId);
         } else {
-          await db.progress.put({ ...payload, id: row.rowId, timestamp: Number(payload.timestamp) || row.updatedAt });
+          const existing = await db.progress.get(row.rowId);
+          const nextRecord = mergeCloudDatasetRecord(CLOUD_SYNC_DATASETS.progress, existing, { ...payload, id: row.rowId }, Number(payload.timestamp) || row.updatedAt);
+          await db.progress.put({ ...nextRecord, id: row.rowId });
         }
         applied += 1;
         continue;
@@ -677,7 +685,9 @@ async function saveCustomization(type, data) {
         if (row.deletedAt) {
           await db.reviewCards.delete(row.rowId);
         } else {
-          await db.reviewCards.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+          const existing = await db.reviewCards.get(row.rowId);
+          const nextRecord = mergeCloudDatasetRecord(CLOUD_SYNC_DATASETS.reviewCard, existing, { ...payload, id: row.rowId }, Number(payload.updatedAt) || row.updatedAt);
+          await db.reviewCards.put({ ...nextRecord, id: row.rowId });
         }
         applied += 1;
         continue;
@@ -686,7 +696,9 @@ async function saveCustomization(type, data) {
         if (row.deletedAt) {
           await db.reviewHistory.delete(row.rowId);
         } else {
-          await db.reviewHistory.put({ ...payload, id: row.rowId, reviewedAt: Number(payload.reviewedAt) || row.updatedAt });
+          const existing = await db.reviewHistory.get(row.rowId);
+          const nextRecord = mergeCloudDatasetRecord(CLOUD_SYNC_DATASETS.reviewHistory, existing, { ...payload, id: row.rowId }, Number(payload.reviewedAt) || row.updatedAt);
+          await db.reviewHistory.put({ ...nextRecord, id: row.rowId, reviewedAt: Number(nextRecord.reviewedAt) || Number(payload.reviewedAt) || row.updatedAt });
         }
         applied += 1;
         continue;
@@ -695,7 +707,9 @@ async function saveCustomization(type, data) {
         if (row.deletedAt) {
           await db.userStats.delete(row.rowId);
         } else {
-          await db.userStats.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+          const existing = await db.userStats.get(row.rowId);
+          const nextRecord = mergeCloudDatasetRecord(CLOUD_SYNC_DATASETS.userStat, existing, { ...payload, id: row.rowId }, Number(payload.updatedAt) || row.updatedAt);
+          await db.userStats.put({ ...nextRecord, id: row.rowId, updatedAt: Number(nextRecord.updatedAt) || Number(payload.updatedAt) || row.updatedAt });
         }
         applied += 1;
       }
@@ -927,6 +941,154 @@ async function saveCustomization(type, data) {
       merged.set(key, (row.ts || row.updatedAt || 0) >= (previous.ts || previous.updatedAt || 0) ? row : previous);
     });
     return Array.from(merged.values());
+  }
+
+  function mergeStringArrays(left, right) {
+    return Array.from(new Set([...(Array.isArray(left) ? left : []), ...(Array.isArray(right) ? right : [])].filter(Boolean)));
+  }
+
+  function mergeStudentProfilesPayload(existingValue, incomingValue) {
+    const merged = new Map();
+    [...(Array.isArray(existingValue) ? existingValue : []), ...(Array.isArray(incomingValue) ? incomingValue : [])].forEach((profile) => {
+      if (!profile || typeof profile !== "object") return;
+      const id = String(profile.id || "").trim();
+      if (!id) return;
+      const previous = merged.get(id);
+      const candidate = {
+        ...(previous || {}),
+        ...profile,
+        id,
+        nickname: String(profile.nickname || previous?.nickname || "").trim(),
+        studentName: String(profile.studentName || previous?.studentName || "").trim(),
+        studentNameUr: String(profile.studentNameUr || previous?.studentNameUr || "").trim(),
+        role: ["student", "parent", "teacher"].includes(profile.role) ? profile.role : (previous?.role || "student"),
+        grade: typeof profile.grade !== "undefined" ? profile.grade : previous?.grade,
+        updatedAt: Math.max(Number(previous?.updatedAt || 0), Number(profile.updatedAt || 0)),
+        createdAt: Number(previous?.createdAt || profile.createdAt || Date.now()),
+      };
+      merged.set(id, candidate);
+    });
+    return Array.from(merged.values()).sort((left, right) => Number(left.createdAt || 0) - Number(right.createdAt || 0));
+  }
+
+  function mergeNotificationHistory(existingValue, incomingValue) {
+    const merged = new Map();
+    [...(Array.isArray(existingValue) ? existingValue : []), ...(Array.isArray(incomingValue) ? incomingValue : [])].forEach((entry) => {
+      if (!entry || typeof entry !== "object") return;
+      const key = String(entry.id || `${entry.type || "notice"}_${entry.createdAt || Date.now()}_${entry.titleEn || entry.titleUr || ""}`).trim();
+      const previous = merged.get(key);
+      if (!previous || Number(entry.createdAt || 0) >= Number(previous.createdAt || 0)) {
+        merged.set(key, entry);
+      }
+    });
+    return Array.from(merged.values())
+      .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+      .slice(0, 40);
+  }
+
+  function mergeCustomizationPayload(type, existingValue, incomingValue) {
+    const safeType = String(type || "").trim();
+    const existing = existingValue && typeof existingValue === "object" ? existingValue : existingValue ?? {};
+    const incoming = incomingValue && typeof incomingValue === "object" ? incomingValue : incomingValue ?? {};
+    if (safeType === "notificationHistory") {
+      return mergeNotificationHistory(existingValue, incomingValue);
+    }
+    if (safeType === "studentProfiles") {
+      return mergeStudentProfilesPayload(existingValue, incomingValue);
+    }
+    if (safeType === "practiceProgress" || safeType === "daySectionPacing" || safeType === "studyGoals" || safeType === "focusTimerSettings" || safeType === "reminderSettings" || safeType === "backupReminderSettings" || safeType === "classScheduleSettings" || safeType === "dictionaryPreferences" || safeType === "accountPreferences") {
+      return { ...existing, ...incoming };
+    }
+    if (safeType === "gamificationState") {
+      return {
+        ...existing,
+        ...incoming,
+        xpMilestones: mergeStringArrays(existing?.xpMilestones, incoming?.xpMilestones),
+        streakMilestones: mergeStringArrays(existing?.streakMilestones, incoming?.streakMilestones),
+      };
+    }
+    if (safeType === "preferences" || safeType === "audioPreferences" || safeType === "reviewPreferences" || safeType === "studentProfile" || safeType === "activeStudentProfileId" || safeType === "timeTrackingData") {
+      return { ...existing, ...incoming };
+    }
+    return { ...existing, ...incoming };
+  }
+
+  function mergeWordMetaRecord(existing, incoming, updatedAt) {
+    const existingRecord = existing && typeof existing === "object" ? existing : {};
+    const incomingRecord = incoming && typeof incoming === "object" ? incoming : {};
+    const incomingNote = String(incomingRecord.note || "").trim();
+    const existingNote = String(existingRecord.note || "").trim();
+    const latest = (Number(incomingRecord.updatedAt || updatedAt) || 0) >= (Number(existingRecord.updatedAt || 0) || 0) ? incomingRecord : existingRecord;
+    return {
+      ...existingRecord,
+      ...latest,
+      ...incomingRecord,
+      favorite: typeof incomingRecord.favorite !== "undefined"
+        ? Boolean(incomingRecord.favorite)
+        : Boolean(existingRecord.favorite),
+      note: incomingNote && incomingNote.length >= existingNote.length ? incomingNote : (existingNote || incomingNote || ""),
+      updatedAt,
+    };
+  }
+
+  function mergeProgressRecord(existing, incoming, updatedAt) {
+    const existingRecord = existing && typeof existing === "object" ? existing : {};
+    const incomingRecord = incoming && typeof incoming === "object" ? incoming : {};
+    const existingRatio = Number(existingRecord.total || 0) > 0 ? Number(existingRecord.score || 0) / Number(existingRecord.total || 1) : 0;
+    const incomingRatio = Number(incomingRecord.total || 0) > 0 ? Number(incomingRecord.score || 0) / Number(incomingRecord.total || 1) : 0;
+    const bestRecord = incomingRatio >= existingRatio ? incomingRecord : existingRecord;
+    return {
+      ...existingRecord,
+      ...incomingRecord,
+      ...bestRecord,
+      completed: Boolean(existingRecord.completed || incomingRecord.completed),
+      score: Number(bestRecord.score) || 0,
+      total: Number(bestRecord.total) || Number(existingRecord.total) || Number(incomingRecord.total) || 0,
+      timestamp: Math.max(Number(existingRecord.timestamp || 0), Number(incomingRecord.timestamp || 0), updatedAt),
+    };
+  }
+
+  function mergeReviewCardRecord(existing, incoming, updatedAt) {
+    const existingRecord = existing && typeof existing === "object" ? existing : {};
+    const incomingRecord = incoming && typeof incoming === "object" ? incoming : {};
+    const latest = (Number(incomingRecord.updatedAt || updatedAt) || 0) >= (Number(existingRecord.updatedAt || 0) || 0) ? incomingRecord : existingRecord;
+    return {
+      ...existingRecord,
+      ...latest,
+      id: latest.id || existingRecord.id || incomingRecord.id,
+      box: Math.max(Number(existingRecord.box || 0), Number(incomingRecord.box || 0)),
+      intervalDays: Math.max(Number(existingRecord.intervalDays || 0), Number(incomingRecord.intervalDays || 0)),
+      dueAt: Math.max(Number(existingRecord.dueAt || 0), Number(incomingRecord.dueAt || 0)),
+      mastered: Boolean(existingRecord.mastered || incomingRecord.mastered),
+      lapses: Math.max(Number(existingRecord.lapses || 0), Number(incomingRecord.lapses || 0)),
+      lastReviewedAt: Math.max(Number(existingRecord.lastReviewedAt || 0), Number(incomingRecord.lastReviewedAt || 0)),
+      totalReviews: Math.max(Number(existingRecord.totalReviews || 0), Number(incomingRecord.totalReviews || 0)),
+      correctReviews: Math.max(Number(existingRecord.correctReviews || 0), Number(incomingRecord.correctReviews || 0)),
+      updatedAt,
+    };
+  }
+
+  function mergeCloudDatasetRecord(dataset, existing, incoming, updatedAt) {
+    const safeDataset = sanitizeCloudSyncDataset(dataset);
+    if (safeDataset === CLOUD_SYNC_DATASETS.customization) {
+      const type = String(incoming?.type || existing?.type || "").trim();
+      return {
+        ...(existing || {}),
+        ...(incoming || {}),
+        data: mergeCustomizationPayload(type, existing?.data, incoming?.data),
+        type,
+        ts: Math.max(Number(existing?.ts || 0), Number(incoming?.ts || 0), updatedAt),
+      };
+    }
+    if (safeDataset === CLOUD_SYNC_DATASETS.wordMeta) return mergeWordMetaRecord(existing, incoming, updatedAt);
+    if (safeDataset === CLOUD_SYNC_DATASETS.progress) return mergeProgressRecord(existing, incoming, updatedAt);
+    if (safeDataset === CLOUD_SYNC_DATASETS.reviewCard) return mergeReviewCardRecord(existing, incoming, updatedAt);
+    if (safeDataset === CLOUD_SYNC_DATASETS.userStat) return mergeMainStats(existing, incoming);
+    if (safeDataset === CLOUD_SYNC_DATASETS.customList || safeDataset === CLOUD_SYNC_DATASETS.customListItem || safeDataset === CLOUD_SYNC_DATASETS.reviewHistory) {
+      const latest = (Number(incoming?.updatedAt || incoming?.reviewedAt || updatedAt) || 0) >= (Number(existing?.updatedAt || existing?.reviewedAt || 0) || 0) ? incoming : existing;
+      return { ...(existing || {}), ...(latest || {}), updatedAt };
+    }
+    return { ...(existing || {}), ...(incoming || {}) };
   }
 
   function normalizeAnswerToken(value) {
@@ -2103,6 +2265,10 @@ async function saveCustomization(type, data) {
 
     async queueCloudSyncRecord(dataset, rowId, payload, options = {}) {
       return queueCloudSyncRecord(dataset, rowId, payload, options);
+    },
+
+    previewCloudMerge(dataset, localPayload = {}, remotePayload = {}) {
+      return mergeCloudDatasetRecord(dataset, localPayload, remotePayload, Date.now());
     },
 
     async clearCloudSyncOutboxEntries(syncKeys = []) {
