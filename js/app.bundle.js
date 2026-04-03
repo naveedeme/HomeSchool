@@ -6819,6 +6819,11 @@ ${marker} `);
       const applied = await window.HomeSchoolDB.applyCloudSyncRows(normalizedRows);
       if (reason !== "local") {
         try {
+          await refreshSyncedStudyState();
+        } catch (error) {
+          console.log("Unable to refresh synced study state:", error);
+        }
+        try {
           const customizationMap = ((_c2 = window.HomeSchoolDB) == null ? void 0 : _c2.getCustomizationsMap) ? await window.HomeSchoolDB.getCustomizationsMap() : {};
           applyCloudCustomizationState(customizationMap || {});
         } catch (error) {
@@ -6833,7 +6838,7 @@ ${marker} `);
         }
       }
       return { applied };
-    }, [applyCloudCustomizationState]);
+    }, [applyCloudCustomizationState, refreshSyncedStudyState]);
     const ensureSupabaseClient = useCallback(() => {
       var _a2, _b2, _c2;
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
@@ -6879,7 +6884,7 @@ ${marker} `);
       }));
     }, [language, supabaseDictionarySync.authEmail]);
     const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
-      var _a2, _b2, _c2, _d2, _e2;
+      var _a2, _b2, _c2, _d2, _e2, _f2;
       if (!window.HomeSchoolDB) {
         throw new Error(language === "ur" ? "\u0645\u0642\u0627\u0645\u06CC \u0688\u06CC\u0679\u0627\u0628\u06CC\u0633 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4" : "The local database is not available.");
       }
@@ -6916,7 +6921,15 @@ ${marker} `);
         }
         const cloudSeedMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloudSeeded");
         let cloudRowsToPush = await window.HomeSchoolDB.getCloudSyncOutboxEntries(2e3);
-        if (!cloudRowsToPush.length && !((_b2 = cloudSeedMeta == null ? void 0 : cloudSeedMeta.data) == null ? void 0 : _b2.done)) {
+        const staleLocalOnlyCloudRows = cloudRowsToPush.filter((row) => {
+          var _a3;
+          return String((row == null ? void 0 : row.dataset) || "").trim() === "customization" && String((row == null ? void 0 : row.rowId) || ((_a3 = row == null ? void 0 : row.payload) == null ? void 0 : _a3.type) || "").trim() === "activeStudentProfileId";
+        });
+        if (staleLocalOnlyCloudRows.length && ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.clearCloudSyncOutboxEntries)) {
+          await window.HomeSchoolDB.clearCloudSyncOutboxEntries(staleLocalOnlyCloudRows.map((row) => String(row.syncKey || "")));
+          cloudRowsToPush = cloudRowsToPush.filter((row) => !staleLocalOnlyCloudRows.includes(row));
+        }
+        if (!cloudRowsToPush.length && !((_c2 = cloudSeedMeta == null ? void 0 : cloudSeedMeta.data) == null ? void 0 : _c2.done)) {
           cloudRowsToPush = await window.HomeSchoolDB.getAllCloudSyncRows();
         }
         if (cloudRowsToPush.length) {
@@ -6933,7 +6946,7 @@ ${marker} `);
           if (cloudPayload.length) {
             const { error: cloudPushError } = await client.from(SUPABASE_CLOUD_DATA_TABLE).upsert(cloudPayload, { onConflict: "user_id,profile_id,dataset,row_id" });
             if (cloudPushError) throw cloudPushError;
-            if ((_c2 = window.HomeSchoolDB) == null ? void 0 : _c2.clearCloudSyncOutboxEntries) {
+            if ((_d2 = window.HomeSchoolDB) == null ? void 0 : _d2.clearCloudSyncOutboxEntries) {
               await window.HomeSchoolDB.clearCloudSyncOutboxEntries(cloudRowsToPush.map((row) => String(row.syncKey || `${String(row.dataset || "").trim()}::${String(row.profileId || activeStudentProfileIdRef.current || "default").trim()}::${String(row.rowId || "").trim()}`)));
             }
             await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloudSeeded", {
@@ -6942,10 +6955,11 @@ ${marker} `);
             });
           }
         }
+        const useIncrementalPulls = reason !== "manual";
         const lastPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:lastPull");
         let pullQuery = client.from(SUPABASE_DICTIONARY_TABLE).select("normalized, word, payload, updated_at, deleted_at, source_rank, device_id").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(1e3);
-        const lastPullAt = Number((_d2 = lastPullMeta == null ? void 0 : lastPullMeta.data) == null ? void 0 : _d2.timestamp) || 0;
-        if (lastPullAt > 0) {
+        const lastPullAt = Number((_e2 = lastPullMeta == null ? void 0 : lastPullMeta.data) == null ? void 0 : _e2.timestamp) || 0;
+        if (useIncrementalPulls && lastPullAt > 0) {
           pullQuery = pullQuery.gt("updated_at", new Date(lastPullAt).toISOString());
         }
         const { data: remoteRows = [], error: pullError } = await pullQuery;
@@ -6966,8 +6980,8 @@ ${marker} `);
         }
         const lastCloudPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloud:lastPull");
         let cloudPullQuery = client.from(SUPABASE_CLOUD_DATA_TABLE).select("profile_id, dataset, row_id, payload, updated_at, deleted_at, device_id").eq("user_id", user.id).in("profile_id", [String(activeStudentProfileIdRef.current || "default"), "__global__"]).order("updated_at", { ascending: false }).limit(3e3);
-        const lastCloudPullAt = Number((_e2 = lastCloudPullMeta == null ? void 0 : lastCloudPullMeta.data) == null ? void 0 : _e2.timestamp) || 0;
-        if (lastCloudPullAt > 0) {
+        const lastCloudPullAt = Number((_f2 = lastCloudPullMeta == null ? void 0 : lastCloudPullMeta.data) == null ? void 0 : _f2.timestamp) || 0;
+        if (useIncrementalPulls && lastCloudPullAt > 0) {
           cloudPullQuery = cloudPullQuery.gt("updated_at", new Date(lastCloudPullAt).toISOString());
         }
         const { data: remoteCloudRows = [], error: cloudPullError } = await cloudPullQuery;
@@ -7871,6 +7885,21 @@ ${marker} `);
     useEffect(() => {
       refreshReviewWorkspaceRef.current = refreshReviewWorkspace;
     }, [refreshReviewWorkspace]);
+    const refreshSyncedStudyState = useCallback(async () => {
+      if (!window.HomeSchoolDB) return;
+      const [progressMap, persistedStats] = await Promise.all([
+        window.HomeSchoolDB.getProgressMap().catch(() => ({})),
+        window.HomeSchoolDB.getUserStats().catch(() => null)
+      ]);
+      setCompletedQuizzes(progressMap && typeof progressMap === "object" ? progressMap : {});
+      const nextStats = persistedStats || {};
+      setTotalQuizzesDone(Math.max(0, Number(nextStats.totalQuizzes) || 0));
+      setTotalScore(Math.max(0, Number(nextStats.totalScore) || 0));
+      setStreak(Math.max(0, Number(nextStats.streak) || 0));
+      setLastQuizDate(nextStats.lastQuizDate || null);
+      setEarnedBadges(Array.from(new Set(Array.isArray(nextStats.badges) ? nextStats.badges : [])));
+      setXp(Math.max(0, Number(nextStats.xp) || 0));
+    }, []);
     const pushNotificationHistoryEntry = useCallback((entry) => {
       if (!entry) return;
       setNotificationHistory((current) => {
@@ -9993,12 +10022,17 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
       });
       return currentProfile;
     }, [activeStudentProfile, buildProfileAppStateSnapshot, getEmptyProfileDbProgress, grade, studentName, studentNameUr]);
-    const loadStudentProfileSnapshot = useCallback(async (profile) => {
+    const loadStudentProfileSnapshot = useCallback(async (profile, options = {}) => {
       var _a2, _b2;
       const safeProfile = createStudentProfileDraft(profile);
       const storedSnapshot = ((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.getProfileSnapshot) ? await window.HomeSchoolDB.getProfileSnapshot(safeProfile.id) : null;
       const snapshot = (storedSnapshot == null ? void 0 : storedSnapshot.snapshot) || null;
-      const nextAppState = (snapshot == null ? void 0 : snapshot.appState) || buildBlankProfileAppState(safeProfile);
+      const snapshotAppState = (snapshot == null ? void 0 : snapshot.appState) || buildBlankProfileAppState(safeProfile);
+      const nextAppState = (options == null ? void 0 : options.preserveProfileRegistry) === false ? snapshotAppState : {
+        ...snapshotAppState,
+        studentProfiles: studentProfilesRef.current,
+        activeStudentProfileId: safeProfile.id
+      };
       const nextDbProgress = (snapshot == null ? void 0 : snapshot.dbProgress) || getEmptyProfileDbProgress();
       applyImportedAppState(nextAppState, "replace");
       if ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.importProgress) {
@@ -10025,7 +10059,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         }
         activeStudentProfileIdRef.current = nextProfile.id;
         setActiveStudentProfileId(nextProfile.id);
-        await loadStudentProfileSnapshot(nextProfile);
+        await loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true });
         showAppToast(joinLocalizedText("Profile switched", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0628\u062F\u0644 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
       } catch (error) {
         console.log("Unable to switch student profile:", error);
@@ -10065,7 +10099,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         }
         activeStudentProfileIdRef.current = nextProfile.id;
         setActiveStudentProfileId(nextProfile.id);
-        await loadStudentProfileSnapshot(nextProfile);
+        await loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true });
         showAppToast(joinLocalizedText("New profile created", "\u0646\u06CC\u0627 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0628\u0646\u0627 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
       } catch (error) {
         console.log("Unable to create student profile:", error);
@@ -10104,7 +10138,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           activeStudentProfileIdRef.current = nextActiveId;
           setActiveStudentProfileId(nextActiveId);
           if (nextProfile) {
-            await loadStudentProfileSnapshot(nextProfile);
+            await loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true });
           }
         }
         showAppToast(joinLocalizedText("Profile removed", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u062D\u0630\u0641 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");

@@ -148,13 +148,11 @@
     "gamificationState",
     "studentProfile",
     "studentProfiles",
-    "activeStudentProfileId",
     "accountPreferences",
     "dictionaryPreferences",
   ]);
   const GLOBAL_CLOUD_CUSTOMIZATION_TYPES = new Set([
     "studentProfiles",
-    "activeStudentProfileId",
     "accountPreferences",
   ]);
 
@@ -1072,6 +1070,18 @@ async function saveCustomization(type, data) {
     const safeDataset = sanitizeCloudSyncDataset(dataset);
     if (safeDataset === CLOUD_SYNC_DATASETS.customization) {
       const type = String(incoming?.type || existing?.type || "").trim();
+      const existingRowTime = Math.max(Number(existing?.ts || 0), Number(existing?.updatedAt || 0));
+      const incomingRowTime = Math.max(Number(incoming?.ts || 0), Number(incoming?.updatedAt || 0), Number(updatedAt || 0));
+      if (type === "studentProfiles") {
+        const latestRow = incomingRowTime >= existingRowTime ? incoming : existing;
+        return {
+          ...(existing || {}),
+          ...(latestRow || {}),
+          type,
+          data: Array.isArray(latestRow?.data) ? latestRow.data : [],
+          ts: Math.max(existingRowTime, incomingRowTime),
+        };
+      }
       return {
         ...(existing || {}),
         ...(incoming || {}),

@@ -8731,6 +8731,11 @@ function HomeschoolApp() {
     const applied = await window.HomeSchoolDB.applyCloudSyncRows(normalizedRows);
     if (reason !== "local") {
       try {
+        await refreshSyncedStudyState();
+      } catch (error) {
+        console.log("Unable to refresh synced study state:", error);
+      }
+      try {
         const customizationMap = window.HomeSchoolDB?.getCustomizationsMap ? await window.HomeSchoolDB.getCustomizationsMap() : {};
         applyCloudCustomizationState(customizationMap || {});
       } catch (error) {
@@ -8745,7 +8750,7 @@ function HomeschoolApp() {
       }
     }
     return { applied };
-  }, [applyCloudCustomizationState]);
+  }, [applyCloudCustomizationState, refreshSyncedStudyState]);
 
   const ensureSupabaseClient = useCallback(() => {
     const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
@@ -8836,6 +8841,13 @@ function HomeschoolApp() {
 
       const cloudSeedMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloudSeeded");
       let cloudRowsToPush = await window.HomeSchoolDB.getCloudSyncOutboxEntries(2000);
+      const staleLocalOnlyCloudRows = cloudRowsToPush.filter((row) =>
+        String(row?.dataset || "").trim() === "customization"
+        && String(row?.rowId || row?.payload?.type || "").trim() === "activeStudentProfileId");
+      if (staleLocalOnlyCloudRows.length && window.HomeSchoolDB?.clearCloudSyncOutboxEntries) {
+        await window.HomeSchoolDB.clearCloudSyncOutboxEntries(staleLocalOnlyCloudRows.map((row) => String(row.syncKey || "")));
+        cloudRowsToPush = cloudRowsToPush.filter((row) => !staleLocalOnlyCloudRows.includes(row));
+      }
       if (!cloudRowsToPush.length && !cloudSeedMeta?.data?.done) {
         cloudRowsToPush = await window.HomeSchoolDB.getAllCloudSyncRows();
       }
@@ -8865,6 +8877,7 @@ function HomeschoolApp() {
         }
       }
 
+      const useIncrementalPulls = reason !== "manual";
       const lastPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:lastPull");
       let pullQuery = client
         .from(SUPABASE_DICTIONARY_TABLE)
@@ -8873,7 +8886,7 @@ function HomeschoolApp() {
         .order("updated_at", { ascending: false })
         .limit(1000);
       const lastPullAt = Number(lastPullMeta?.data?.timestamp) || 0;
-      if (lastPullAt > 0) {
+      if (useIncrementalPulls && lastPullAt > 0) {
         pullQuery = pullQuery.gt("updated_at", new Date(lastPullAt).toISOString());
       }
       const { data: remoteRows = [], error: pullError } = await pullQuery;
@@ -8903,7 +8916,7 @@ function HomeschoolApp() {
         .order("updated_at", { ascending: false })
         .limit(3000);
       const lastCloudPullAt = Number(lastCloudPullMeta?.data?.timestamp) || 0;
-      if (lastCloudPullAt > 0) {
+      if (useIncrementalPulls && lastCloudPullAt > 0) {
         cloudPullQuery = cloudPullQuery.gt("updated_at", new Date(lastCloudPullAt).toISOString());
       }
       const { data: remoteCloudRows = [], error: cloudPullError } = await cloudPullQuery;
@@ -9891,6 +9904,22 @@ function HomeschoolApp() {
   useEffect(() => {
     refreshReviewWorkspaceRef.current = refreshReviewWorkspace;
   }, [refreshReviewWorkspace]);
+
+  const refreshSyncedStudyState = useCallback(async () => {
+    if (!window.HomeSchoolDB) return;
+    const [progressMap, persistedStats] = await Promise.all([
+      window.HomeSchoolDB.getProgressMap().catch(() => ({})),
+      window.HomeSchoolDB.getUserStats().catch(() => null),
+    ]);
+    setCompletedQuizzes(progressMap && typeof progressMap === "object" ? progressMap : {});
+    const nextStats = persistedStats || {};
+    setTotalQuizzesDone(Math.max(0, Number(nextStats.totalQuizzes) || 0));
+    setTotalScore(Math.max(0, Number(nextStats.totalScore) || 0));
+    setStreak(Math.max(0, Number(nextStats.streak) || 0));
+    setLastQuizDate(nextStats.lastQuizDate || null);
+    setEarnedBadges(Array.from(new Set(Array.isArray(nextStats.badges) ? nextStats.badges : [])));
+    setXp(Math.max(0, Number(nextStats.xp) || 0));
+  }, []);
 
   const pushNotificationHistoryEntry = useCallback((entry) => {
     if (!entry) return;
@@ -12051,11 +12080,18 @@ function HomeschoolApp() {
     return currentProfile;
   }, [activeStudentProfile, buildProfileAppStateSnapshot, getEmptyProfileDbProgress, grade, studentName, studentNameUr]);
 
-  const loadStudentProfileSnapshot = useCallback(async (profile) => {
+  const loadStudentProfileSnapshot = useCallback(async (profile, options = {}) => {
     const safeProfile = createStudentProfileDraft(profile);
     const storedSnapshot = window.HomeSchoolDB?.getProfileSnapshot ? await window.HomeSchoolDB.getProfileSnapshot(safeProfile.id) : null;
     const snapshot = storedSnapshot?.snapshot || null;
-    const nextAppState = snapshot?.appState || buildBlankProfileAppState(safeProfile);
+    const snapshotAppState = snapshot?.appState || buildBlankProfileAppState(safeProfile);
+    const nextAppState = options?.preserveProfileRegistry === false
+      ? snapshotAppState
+      : {
+        ...snapshotAppState,
+        studentProfiles: studentProfilesRef.current,
+        activeStudentProfileId: safeProfile.id,
+      };
     const nextDbProgress = snapshot?.dbProgress || getEmptyProfileDbProgress();
     applyImportedAppState(nextAppState, "replace");
     if (window.HomeSchoolDB?.importProgress) {
@@ -12082,7 +12118,7 @@ function HomeschoolApp() {
       }
       activeStudentProfileIdRef.current = nextProfile.id;
       setActiveStudentProfileId(nextProfile.id);
-      await loadStudentProfileSnapshot(nextProfile);
+    await loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true });
       showAppToast(joinLocalizedText("Profile switched", "پروفائل بدل دیا گیا", language), "check");
     } catch (error) {
       console.log("Unable to switch student profile:", error);
@@ -12122,7 +12158,7 @@ function HomeschoolApp() {
       }
       activeStudentProfileIdRef.current = nextProfile.id;
       setActiveStudentProfileId(nextProfile.id);
-      await loadStudentProfileSnapshot(nextProfile);
+      await loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true });
       showAppToast(joinLocalizedText("New profile created", "نیا پروفائل بنا دیا گیا", language), "check");
     } catch (error) {
       console.log("Unable to create student profile:", error);
@@ -12161,7 +12197,7 @@ function HomeschoolApp() {
         activeStudentProfileIdRef.current = nextActiveId;
         setActiveStudentProfileId(nextActiveId);
         if (nextProfile) {
-          await loadStudentProfileSnapshot(nextProfile);
+          await loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true });
         }
       }
       showAppToast(joinLocalizedText("Profile removed", "پروفائل حذف کر دیا گیا", language), "check");
