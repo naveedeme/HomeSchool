@@ -6994,7 +6994,10 @@ function HomeschoolApp() {
     if (!payload.trim()) return false;
     const showCopiedToast = () => {
       if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
-      setCopyToast(joinLocalizedText("Copied", "کاپی ہو گیا", language));
+      setCopyToast({
+        id: Date.now() + Math.random(),
+        text: joinLocalizedText("Copied", "کاپی ہو گیا", language),
+      });
       copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1600);
     };
     try {
@@ -13310,9 +13313,9 @@ function HomeschoolApp() {
       </div>
     ) : null}
     {copyToast ? (
-      <div className="copy-toast" role="status" aria-live="polite">
+      <div key={copyToast.id} className="copy-toast" role="status" aria-live="polite">
         {renderIconGlyph("copy")}
-        <span>{renderLocalizedTextNode(copyToast, language)}</span>
+        <span>{renderLocalizedTextNode(copyToast.text, language)}</span>
       </div>
     ) : null}
     {celebrationQueue[0] ? (
