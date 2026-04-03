@@ -468,7 +468,7 @@
     return rows.sort((left, right) => (right.ts || 0) - (left.ts || 0))[0];
   }
 
-async function saveCustomization(type, data) {
+async function saveCustomization(type, data, options = {}) {
   const existing = await getLatestCustomization(type);
   const normalizedType = String(type || "").trim();
   const nextData = normalizeCloudSyncPayload(data);
@@ -483,7 +483,7 @@ async function saveCustomization(type, data) {
       ts: Date.now(),
     };
   await db.customizations.put(record);
-  if (shouldSyncCustomizationType(normalizedType)) {
+  if (options.queue !== false && shouldSyncCustomizationType(normalizedType)) {
     await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customization, normalizedType, record, {
       updatedAt: record.ts,
       profileId: getCloudProfileScopeForCustomization(normalizedType),

@@ -7637,6 +7637,8 @@ function HomeschoolApp() {
   const dictionaryHydratedFromDbRef = useRef(false);
   const dictionaryPersistedSnapshotRef = useRef(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
   const skipNextDictionaryQueueRef = useRef(false);
+  const skipCustomizationCloudQueueRef = useRef(false);
+  const skipCustomizationCloudQueueTimerRef = useRef(null);
   const dictionarySyncTimerRef = useRef(null);
   const dictionarySyncInFlightRef = useRef(false);
   const dictionaryDeviceIdRef = useRef(localStorageFallback("hs_dictionary_device_id") || `device_${simpleHash(`${Date.now()}_${Math.random()}`)}`);
@@ -8822,9 +8824,19 @@ function HomeschoolApp() {
         console.log("Unable to refresh synced study state:", error);
       }
       try {
+        skipCustomizationCloudQueueRef.current = true;
+        if (skipCustomizationCloudQueueTimerRef.current) {
+          window.clearTimeout(skipCustomizationCloudQueueTimerRef.current);
+          skipCustomizationCloudQueueTimerRef.current = null;
+        }
         const customizationMap = window.HomeSchoolDB?.getCustomizationsMap ? await window.HomeSchoolDB.getCustomizationsMap() : {};
         applyCloudCustomizationState(customizationMap || {});
+        skipCustomizationCloudQueueTimerRef.current = window.setTimeout(() => {
+          skipCustomizationCloudQueueRef.current = false;
+          skipCustomizationCloudQueueTimerRef.current = null;
+        }, 1800);
       } catch (error) {
+        skipCustomizationCloudQueueRef.current = false;
         console.log("Unable to refresh synced customizations:", error);
       }
       try {
@@ -9910,6 +9922,13 @@ function HomeschoolApp() {
     };
   }, [dbLoaded, performSupabaseDictionarySync, supabaseAuthState.userId, supabaseDictionarySync.autoSync, supabaseDictionarySync.enabled, supabaseSyncPulse]);
 
+  useEffect(() => () => {
+    if (skipCustomizationCloudQueueTimerRef.current) {
+      window.clearTimeout(skipCustomizationCloudQueueTimerRef.current);
+      skipCustomizationCloudQueueTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     timeTrackingRef.current = timeTrackingData;
   }, [timeTrackingData]);
@@ -10269,6 +10288,8 @@ function HomeschoolApp() {
     persistCustomizationRef.current = debounce(async (nextPayload) => {
       try {
         if (window.HomeSchoolDB && customizationDbEnabledRef.current) {
+          const queueCustomizationCloud = !skipCustomizationCloudQueueRef.current;
+          const saveCustomizationOptions = { queue: queueCustomizationCloud };
           await window.HomeSchoolDB.saveCustomization("preferences", {
             ttsEnabled: nextPayload.ttsEnabled,
             audioMuted: nextPayload.audioMuted,
@@ -10286,40 +10307,40 @@ function HomeschoolApp() {
             navAutoHide: nextPayload.navAutoHide,
             navBarAutoHide: nextPayload.navBarAutoHide,
             transitionMode: nextPayload.transitionMode,
-          });
+          }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("audioPreferences", {
             ttsRate: nextPayload.ttsRate,
             ttsVoiceSelections: nextPayload.ttsVoiceSelections || { en: "", ur: "" },
-          });
+          }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("reviewPreferences", {
             dailyReviewCap: nextPayload.dailyReviewCap,
             reviewSrsSettings: nextPayload.reviewSrsSettings || { masteryThreshold: 5, intervalScale: 1, againMinutes: 10 },
             practiceSubjectId: nextPayload.practiceSubjectId || "english",
             practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
             practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 },
-          });
-          await window.HomeSchoolDB.saveCustomization("practiceProgress", nextPayload.practiceLessonProgress || {});
-          await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {});
-          await window.HomeSchoolDB.saveCustomization("studyGoals", nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 });
-          await window.HomeSchoolDB.saveCustomization("focusTimerSettings", nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false });
-          await window.HomeSchoolDB.saveCustomization("reminderSettings", nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
-          await window.HomeSchoolDB.saveCustomization("backupReminderSettings", normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}));
-          await window.HomeSchoolDB.saveCustomization("classScheduleSettings", nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" });
-          await window.HomeSchoolDB.saveCustomization("timeTrackingData", normalizeTimeTrackingData(nextPayload.timeTrackingData || {}));
-          await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40));
-          await window.HomeSchoolDB.saveCustomization("gamificationState", normalizeGamificationState(nextPayload.gamificationState || {}));
-          await window.HomeSchoolDB.saveCustomization("wordMeaningCache", normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}));
+          }, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("practiceProgress", nextPayload.practiceLessonProgress || {}, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {}, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("studyGoals", nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 }, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("focusTimerSettings", nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false }, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("reminderSettings", nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null }, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("backupReminderSettings", normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}), saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("classScheduleSettings", nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" }, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("timeTrackingData", normalizeTimeTrackingData(nextPayload.timeTrackingData || {}), saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("notificationHistory", (nextPayload.notificationHistory || []).slice(0, 40), saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("gamificationState", normalizeGamificationState(nextPayload.gamificationState || {}), saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("wordMeaningCache", normalizeWordMeaningCache(nextPayload.wordMeaningCache || {}), saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("dictionaryPreferences", {
             importUrl: String(nextPayload.dictionaryImportUrl || "").trim(),
-          });
+          }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("supabaseDictionarySync", buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}));
           await window.HomeSchoolDB.saveCustomization("studentProfile", {
             grade: nextPayload.grade,
             studentName: nextPayload.studentName,
             studentNameUr: nextPayload.studentNameUr,
-          });
-          await window.HomeSchoolDB.saveCustomization("studentProfiles", nextPayload.studentProfiles || []);
-          await window.HomeSchoolDB.saveCustomization("deletedStudentProfiles", normalizeDeletedStudentProfileIds(nextPayload.deletedStudentProfileIds || []));
+          }, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("studentProfiles", nextPayload.studentProfiles || [], saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("deletedStudentProfiles", normalizeDeletedStudentProfileIds(nextPayload.deletedStudentProfileIds || []), saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("activeStudentProfileId", {
             id: nextPayload.activeStudentProfileId || "",
           });
@@ -10327,7 +10348,7 @@ function HomeschoolApp() {
             rolePreference: nextPayload.supabaseRolePreference || "student",
             username: sanitizeAccountUsername(nextPayload.supabaseAccountUsername || ""),
             pendingEmail: String(nextPayload.supabasePendingEmail || "").trim(),
-          });
+          }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("aiProviderConfigs", nextPayload.aiProviderConfigs || createDefaultAiProviderConfigs());
           await window.HomeSchoolDB.saveCustomization("aiTutorPreferences", {
             providerId: nextPayload.selectedAiProvider || "openai",
