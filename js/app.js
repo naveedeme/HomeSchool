@@ -7892,6 +7892,177 @@ function HomeschoolApp() {
     };
   }, [effectiveWordMeaningDictionary, localWordMeaningLookup, wordMeaningCache]);
 
+  const ensureSupabaseClient = useCallback(() => {
+    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
+    if (!settings.url || !settings.anonKey) {
+      throw new Error(language === "ur" ? "پہلے Supabase URL اور Anon Key درج کریں۔" : "Add the Supabase URL and anon key first.");
+    }
+    if (!window.supabase?.createClient) {
+      throw new Error(language === "ur" ? "Supabase کلائنٹ لوڈ نہیں ہو سکا۔" : "The Supabase client is not available yet.");
+    }
+    const cacheKey = `${settings.url}::${settings.anonKey}`;
+    if (supabaseClientRef.current?.key === cacheKey && supabaseClientRef.current?.client) {
+      return supabaseClientRef.current.client;
+    }
+    const client = window.supabase.createClient(settings.url, settings.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+    supabaseClientRef.current = { key: cacheKey, client };
+    return client;
+  }, [language, supabaseDictionarySync]);
+
+  const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
+    if (!window.HomeSchoolDB) {
+      throw new Error(language === "ur" ? "مقامی ڈیٹابیس دستیاب نہیں ہے۔" : "The local database is not available.");
+    }
+    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
+    if (!settings.enabled) {
+      throw new Error(language === "ur" ? "پہلے Supabase dictionary sync آن کریں۔" : "Enable Supabase dictionary sync first.");
+    }
+    if (dictionarySyncInFlightRef.current) return false;
+    dictionarySyncInFlightRef.current = true;
+    setSupabaseSyncBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const sessionResult = await client.auth.getSession();
+      const session = sessionResult?.data?.session || null;
+      const user = session?.user || null;
+      if (!user?.id) {
+        throw new Error(language === "ur" ? "پہلے Supabase سے سائن اِن کریں۔" : "Sign in to Supabase first.");
+      }
+
+      const dirtyRows = await window.HomeSchoolDB.getDictionaryOutboxEntries(500);
+      if (dirtyRows.length) {
+        const payload = dirtyRows.map((row) => ({
+          user_id: user.id,
+          normalized: row.normalized,
+          word: row.word || row.normalized,
+          payload: row.payload || {},
+          source_rank: Number(row.sourceRank) || 0,
+          updated_at: new Date(Number(row.updatedAt) || Date.now()).toISOString(),
+          deleted_at: row.deletedAt ? new Date(Number(row.deletedAt)).toISOString() : null,
+          device_id: row.deviceId || dictionaryDeviceIdRef.current,
+        }));
+        const { error: pushError } = await client
+          .from(SUPABASE_DICTIONARY_TABLE)
+          .upsert(payload, { onConflict: "user_id,normalized" });
+        if (pushError) throw pushError;
+        await window.HomeSchoolDB.clearDictionaryOutboxEntries(dirtyRows.map((row) => row.normalized));
+      }
+
+      const lastPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:lastPull");
+      let pullQuery = client
+        .from(SUPABASE_DICTIONARY_TABLE)
+        .select("normalized, word, payload, updated_at, deleted_at, source_rank, device_id")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(1000);
+      const lastPullAt = Number(lastPullMeta?.data?.timestamp) || 0;
+      if (lastPullAt > 0) {
+        pullQuery = pullQuery.gt("updated_at", new Date(lastPullAt).toISOString());
+      }
+      const { data: remoteRows = [], error: pullError } = await pullQuery;
+      if (pullError) throw pullError;
+
+      if (remoteRows.length) {
+        const normalizedRemoteRows = remoteRows.map((row) => ({
+          normalized: String(row.normalized || "").trim().toLowerCase(),
+          word: String(row.word || row.normalized || "").trim(),
+          payload: row.payload || {},
+          sourceRank: Number(row.source_rank) || 0,
+          updatedAt: Date.parse(row.updated_at) || Date.now(),
+          deletedAt: row.deleted_at ? (Date.parse(row.deleted_at) || Date.now()) : null,
+          deviceId: String(row.device_id || ""),
+        })).filter((row) => row.normalized);
+        if (normalizedRemoteRows.length) {
+          await window.HomeSchoolDB.upsertDictionaryEntries(normalizedRemoteRows, { queue: false });
+          const remoteMap = createDictionaryMapFromRows(normalizedRemoteRows);
+          if (Object.keys(remoteMap).length) {
+            skipNextDictionaryQueueRef.current = true;
+            setWordMeaningCache((current) => {
+              const merged = mergeWordMeaningMaps(current, remoteMap);
+              dictionaryPersistedSnapshotRef.current = normalizeWordMeaningCache(merged);
+              return merged;
+            });
+          }
+        }
+      }
+
+      const syncedAt = Date.now();
+      await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:lastPull", {
+        timestamp: syncedAt,
+        reason,
+      });
+      setSupabaseDictionarySync((current) => sanitizeSupabaseDictionarySyncSettings({
+        ...current,
+        lastSyncedAt: syncedAt,
+      }));
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: "ready",
+        userId: user.id,
+        email: user.email || current.email || settings.authEmail,
+        message: language === "ur" ? "Dictionary sync مکمل ہو گئی۔" : "Dictionary sync completed.",
+        lastSyncedAt: syncedAt,
+      }));
+      return true;
+    } finally {
+      dictionarySyncInFlightRef.current = false;
+      setSupabaseSyncBusy(false);
+    }
+  }, [ensureSupabaseClient, language, supabaseDictionarySync]);
+
+  const handleSupabaseSendMagicLink = useCallback(async () => {
+    const email = String(supabaseDictionarySync.authEmail || "").trim();
+    if (!email) {
+      alert(joinLocalizedText("Enter your email first.", "پہلے اپنا ای میل درج کریں۔", language));
+      return;
+    }
+    setSupabaseSyncBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.auth.signInWithOtp({
+        email,
+        options: location.protocol === "file:" ? undefined : { emailRedirectTo: location.href },
+      });
+      if (error) throw error;
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: "pending",
+        email,
+        message: joinLocalizedText("Magic link sent. Open it on this app to connect sync.", "میجک لنک بھیج دیا گیا ہے۔ اسی ایپ میں اسے کھول کر sync جوڑیں۔", language),
+      }));
+    } catch (error) {
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: "error",
+        message: error?.message || String(error),
+      }));
+      alert(joinLocalizedText(`Unable to send the sign-in link: ${error.message || error}`, `سائن اِن لنک نہیں بھیجا جا سکا: ${error.message || error}`, language));
+    } finally {
+      setSupabaseSyncBusy(false);
+    }
+  }, [ensureSupabaseClient, language, supabaseDictionarySync.authEmail]);
+
+  const handleSupabaseSignOut = useCallback(async () => {
+    try {
+      const client = ensureSupabaseClient();
+      await client.auth.signOut();
+    } catch (error) {
+      console.log("Unable to sign out from Supabase:", error);
+    }
+    setSupabaseAuthState((current) => ({
+      ...current,
+      status: "idle",
+      userId: "",
+      message: "",
+    }));
+  }, [ensureSupabaseClient]);
+
   useEffect(() => {
     localStorageFallback("hs_dictionary_device_id", dictionaryDeviceIdRef.current);
   }, []);
@@ -9804,177 +9975,6 @@ function HomeschoolApp() {
       [field]: typeof value === "function" ? value(current?.[field]) : value,
     }));
   }, []);
-
-  const ensureSupabaseClient = useCallback(() => {
-    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
-    if (!settings.url || !settings.anonKey) {
-      throw new Error(language === "ur" ? "پہلے Supabase URL اور Anon Key درج کریں۔" : "Add the Supabase URL and anon key first.");
-    }
-    if (!window.supabase?.createClient) {
-      throw new Error(language === "ur" ? "Supabase کلائنٹ لوڈ نہیں ہو سکا۔" : "The Supabase client is not available yet.");
-    }
-    const cacheKey = `${settings.url}::${settings.anonKey}`;
-    if (supabaseClientRef.current?.key === cacheKey && supabaseClientRef.current?.client) {
-      return supabaseClientRef.current.client;
-    }
-    const client = window.supabase.createClient(settings.url, settings.anonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-    });
-    supabaseClientRef.current = { key: cacheKey, client };
-    return client;
-  }, [language, supabaseDictionarySync]);
-
-  const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
-    if (!window.HomeSchoolDB) {
-      throw new Error(language === "ur" ? "مقامی ڈیٹابیس دستیاب نہیں ہے۔" : "The local database is not available.");
-    }
-    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
-    if (!settings.enabled) {
-      throw new Error(language === "ur" ? "پہلے Supabase dictionary sync آن کریں۔" : "Enable Supabase dictionary sync first.");
-    }
-    if (dictionarySyncInFlightRef.current) return false;
-    dictionarySyncInFlightRef.current = true;
-    setSupabaseSyncBusy(true);
-    try {
-      const client = ensureSupabaseClient();
-      const sessionResult = await client.auth.getSession();
-      const session = sessionResult?.data?.session || null;
-      const user = session?.user || null;
-      if (!user?.id) {
-        throw new Error(language === "ur" ? "پہلے Supabase سے سائن اِن کریں۔" : "Sign in to Supabase first.");
-      }
-
-      const dirtyRows = await window.HomeSchoolDB.getDictionaryOutboxEntries(500);
-      if (dirtyRows.length) {
-        const payload = dirtyRows.map((row) => ({
-          user_id: user.id,
-          normalized: row.normalized,
-          word: row.word || row.normalized,
-          payload: row.payload || {},
-          source_rank: Number(row.sourceRank) || 0,
-          updated_at: new Date(Number(row.updatedAt) || Date.now()).toISOString(),
-          deleted_at: row.deletedAt ? new Date(Number(row.deletedAt)).toISOString() : null,
-          device_id: row.deviceId || dictionaryDeviceIdRef.current,
-        }));
-        const { error: pushError } = await client
-          .from(SUPABASE_DICTIONARY_TABLE)
-          .upsert(payload, { onConflict: "user_id,normalized" });
-        if (pushError) throw pushError;
-        await window.HomeSchoolDB.clearDictionaryOutboxEntries(dirtyRows.map((row) => row.normalized));
-      }
-
-      const lastPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:lastPull");
-      let pullQuery = client
-        .from(SUPABASE_DICTIONARY_TABLE)
-        .select("normalized, word, payload, updated_at, deleted_at, source_rank, device_id")
-        .eq("user_id", user.id)
-        .order("updated_at", { ascending: false })
-        .limit(1000);
-      const lastPullAt = Number(lastPullMeta?.data?.timestamp) || 0;
-      if (lastPullAt > 0) {
-        pullQuery = pullQuery.gt("updated_at", new Date(lastPullAt).toISOString());
-      }
-      const { data: remoteRows = [], error: pullError } = await pullQuery;
-      if (pullError) throw pullError;
-
-      if (remoteRows.length) {
-        const normalizedRemoteRows = remoteRows.map((row) => ({
-          normalized: String(row.normalized || "").trim().toLowerCase(),
-          word: String(row.word || row.normalized || "").trim(),
-          payload: row.payload || {},
-          sourceRank: Number(row.source_rank) || 0,
-          updatedAt: Date.parse(row.updated_at) || Date.now(),
-          deletedAt: row.deleted_at ? (Date.parse(row.deleted_at) || Date.now()) : null,
-          deviceId: String(row.device_id || ""),
-        })).filter((row) => row.normalized);
-        if (normalizedRemoteRows.length) {
-          await window.HomeSchoolDB.upsertDictionaryEntries(normalizedRemoteRows, { queue: false });
-          const remoteMap = createDictionaryMapFromRows(normalizedRemoteRows);
-          if (Object.keys(remoteMap).length) {
-            skipNextDictionaryQueueRef.current = true;
-            setWordMeaningCache((current) => {
-              const merged = mergeWordMeaningMaps(current, remoteMap);
-              dictionaryPersistedSnapshotRef.current = normalizeWordMeaningCache(merged);
-              return merged;
-            });
-          }
-        }
-      }
-
-      const syncedAt = Date.now();
-      await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:lastPull", {
-        timestamp: syncedAt,
-        reason,
-      });
-      setSupabaseDictionarySync((current) => sanitizeSupabaseDictionarySyncSettings({
-        ...current,
-        lastSyncedAt: syncedAt,
-      }));
-      setSupabaseAuthState((current) => ({
-        ...current,
-        status: "ready",
-        userId: user.id,
-        email: user.email || current.email || settings.authEmail,
-        message: language === "ur" ? "Dictionary sync مکمل ہو گئی۔" : "Dictionary sync completed.",
-        lastSyncedAt: syncedAt,
-      }));
-      return true;
-    } finally {
-      dictionarySyncInFlightRef.current = false;
-      setSupabaseSyncBusy(false);
-    }
-  }, [ensureSupabaseClient, language, supabaseDictionarySync]);
-
-  const handleSupabaseSendMagicLink = useCallback(async () => {
-    const email = String(supabaseDictionarySync.authEmail || "").trim();
-    if (!email) {
-      alert(joinLocalizedText("Enter your email first.", "پہلے اپنا ای میل درج کریں۔", language));
-      return;
-    }
-    setSupabaseSyncBusy(true);
-    try {
-      const client = ensureSupabaseClient();
-      const { error } = await client.auth.signInWithOtp({
-        email,
-        options: location.protocol === "file:" ? undefined : { emailRedirectTo: location.href },
-      });
-      if (error) throw error;
-      setSupabaseAuthState((current) => ({
-        ...current,
-        status: "pending",
-        email,
-        message: joinLocalizedText("Magic link sent. Open it on this app to connect sync.", "میجک لنک بھیج دیا گیا ہے۔ اسی ایپ میں اسے کھول کر sync جوڑیں۔", language),
-      }));
-    } catch (error) {
-      setSupabaseAuthState((current) => ({
-        ...current,
-        status: "error",
-        message: error?.message || String(error),
-      }));
-      alert(joinLocalizedText(`Unable to send the sign-in link: ${error.message || error}`, `سائن اِن لنک نہیں بھیجا جا سکا: ${error.message || error}`, language));
-    } finally {
-      setSupabaseSyncBusy(false);
-    }
-  }, [ensureSupabaseClient, language, supabaseDictionarySync.authEmail]);
-
-  const handleSupabaseSignOut = useCallback(async () => {
-    try {
-      const client = ensureSupabaseClient();
-      await client.auth.signOut();
-    } catch (error) {
-      console.log("Unable to sign out from Supabase:", error);
-    }
-    setSupabaseAuthState((current) => ({
-      ...current,
-      status: "idle",
-      userId: "",
-      message: "",
-    }));
-  }, [ensureSupabaseClient]);
 
   const finishQuiz = async (ans, qs) => {
     const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
