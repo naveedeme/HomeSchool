@@ -5740,7 +5740,6 @@ ${marker} `);
     const speechRecognitionRef = useRef(null);
     const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
     const studentProfilesRef = useRef(initialStudentProfiles);
-    const pendingRemoteProfileHydrationRef = useRef(false);
     const profileSwitcherButtonRef = useRef(null);
     const profileSwitcherMenuRef = useRef(null);
     const headerRef = useRef(null);
@@ -6640,7 +6639,7 @@ ${marker} `);
       };
     }, []);
     const applyCloudCustomizationState = useCallback(async (customizations) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2, _v2;
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2;
       const source = customizations && typeof customizations === "object" ? customizations : {};
       const storedPreferences = ((_a2 = source.preferences) == null ? void 0 : _a2.data) || null;
       const storedAudioPreferences = ((_b2 = source.audioPreferences) == null ? void 0 : _b2.data) || null;
@@ -6658,9 +6657,8 @@ ${marker} `);
       const storedProfile = ((_n2 = source.studentProfile) == null ? void 0 : _n2.data) || null;
       const storedProfiles = ((_o2 = source.studentProfiles) == null ? void 0 : _o2.data) || null;
       const storedDeletedProfiles = ((_p2 = source.deletedStudentProfiles) == null ? void 0 : _p2.data) || null;
-      const storedActiveProfileId = ((_r2 = (_q2 = source.activeStudentProfileId) == null ? void 0 : _q2.data) == null ? void 0 : _r2.id) || ((_s2 = source.activeStudentProfileId) == null ? void 0 : _s2.data) || null;
-      const storedAccountPreferences = ((_t2 = source.accountPreferences) == null ? void 0 : _t2.data) || null;
-      const storedPracticeProgress = ((_u2 = source.practiceProgress) == null ? void 0 : _u2.data) || null;
+      const storedAccountPreferences = ((_q2 = source.accountPreferences) == null ? void 0 : _q2.data) || null;
+      const storedPracticeProgress = ((_r2 = source.practiceProgress) == null ? void 0 : _r2.data) || null;
       if (storedPreferences) {
         if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
         if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(Boolean(storedPreferences.ttsEnabled));
@@ -6761,7 +6759,7 @@ ${marker} `);
       if (storedDeletedProfiles) {
         setDeletedStudentProfileIds(normalizedDeletedProfileIds);
         localStorageFallback("hs_deleted_student_profile_ids", normalizedDeletedProfileIds);
-        if ((_v2 = window.HomeSchoolDB) == null ? void 0 : _v2.deleteProfileSnapshot) {
+        if ((_s2 = window.HomeSchoolDB) == null ? void 0 : _s2.deleteProfileSnapshot) {
           await Promise.all(normalizedDeletedProfileIds.map((profileId) => window.HomeSchoolDB.deleteProfileSnapshot(profileId).catch((error) => {
             console.log("Unable to delete synced profile snapshot:", error);
           })));
@@ -6773,10 +6771,7 @@ ${marker} `);
           studentName,
           studentNameUr
         });
-        const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || activeStudentProfileIdRef.current);
-        if (nextActiveId !== activeStudentProfileIdRef.current) {
-          pendingRemoteProfileHydrationRef.current = true;
-        }
+        const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, activeStudentProfileIdRef.current);
         studentProfilesRef.current = normalizedProfiles;
         activeStudentProfileIdRef.current = nextActiveId;
         setStudentProfiles(normalizedProfiles);
@@ -8352,7 +8347,7 @@ ${marker} `);
         return;
       }
       (async () => {
-        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2, _v2, _w2, _x2, _y, _z;
+        var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2, _v2, _w2;
         try {
           await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
           const pos = await window.HomeSchoolDB.getAllPosTypes();
@@ -8380,11 +8375,10 @@ ${marker} `);
           const storedProfile = ((_p2 = customizations.studentProfile) == null ? void 0 : _p2.data) || null;
           const storedProfiles = ((_q2 = customizations.studentProfiles) == null ? void 0 : _q2.data) || null;
           const storedDeletedProfiles = ((_r2 = customizations.deletedStudentProfiles) == null ? void 0 : _r2.data) || null;
-          const storedActiveProfileId = ((_t2 = (_s2 = customizations.activeStudentProfileId) == null ? void 0 : _s2.data) == null ? void 0 : _t2.id) || ((_u2 = customizations.activeStudentProfileId) == null ? void 0 : _u2.data) || null;
-          const storedAccountPreferences = ((_v2 = customizations.accountPreferences) == null ? void 0 : _v2.data) || null;
-          const storedPracticeProgress = ((_w2 = customizations.practiceProgress) == null ? void 0 : _w2.data) || null;
-          const storedAiProviders = sanitizeAiProviderConfigs(((_x2 = customizations.aiProviderConfigs) == null ? void 0 : _x2.data) || {});
-          const storedAiTutor = ((_y = customizations.aiTutorPreferences) == null ? void 0 : _y.data) || null;
+          const storedAccountPreferences = ((_s2 = customizations.accountPreferences) == null ? void 0 : _s2.data) || null;
+          const storedPracticeProgress = ((_t2 = customizations.practiceProgress) == null ? void 0 : _t2.data) || null;
+          const storedAiProviders = sanitizeAiProviderConfigs(((_u2 = customizations.aiProviderConfigs) == null ? void 0 : _u2.data) || {});
+          const storedAiTutor = ((_v2 = customizations.aiTutorPreferences) == null ? void 0 : _v2.data) || null;
           if (storedPreferences) {
             if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
             if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
@@ -8509,7 +8503,7 @@ ${marker} `);
             const normalizedDeletedProfileIds = normalizeDeletedStudentProfileIds(storedDeletedProfiles);
             setDeletedStudentProfileIds(normalizedDeletedProfileIds);
             localStorageFallback("hs_deleted_student_profile_ids", normalizedDeletedProfileIds);
-            if ((_z = window.HomeSchoolDB) == null ? void 0 : _z.deleteProfileSnapshot) {
+            if ((_w2 = window.HomeSchoolDB) == null ? void 0 : _w2.deleteProfileSnapshot) {
               await Promise.all(normalizedDeletedProfileIds.map((profileId) => window.HomeSchoolDB.deleteProfileSnapshot(profileId).catch((error) => {
                 console.log("Unable to delete stored profile snapshot:", error);
               })));
@@ -8521,7 +8515,7 @@ ${marker} `);
               studentName: (stored == null ? void 0 : stored.studentName) || "",
               studentNameUr: (stored == null ? void 0 : stored.studentNameUr) || ""
             });
-            const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || initialActiveStudentProfileId);
+            const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, initialActiveStudentProfileId);
             studentProfilesRef.current = normalizedProfiles;
             activeStudentProfileIdRef.current = nextActiveId;
             setStudentProfiles(normalizedProfiles);
@@ -10116,18 +10110,6 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
       setSelectedLesson(null);
       setTab("home");
     }, [applyImportedAppState, buildBlankProfileAppState, clearLessonSelections, getEmptyProfileDbProgress, refreshReviewWorkspace, refreshStorageLabel]);
-    useEffect(() => {
-      if (!pendingRemoteProfileHydrationRef.current || profileSwitchBusy) return;
-      const nextProfile = studentProfiles.find((profile) => profile.id === activeStudentProfileId) || null;
-      if (!nextProfile) {
-        pendingRemoteProfileHydrationRef.current = false;
-        return;
-      }
-      pendingRemoteProfileHydrationRef.current = false;
-      loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true }).catch((error) => {
-        console.log("Unable to hydrate remotely switched profile:", error);
-      });
-    }, [activeStudentProfileId, loadStudentProfileSnapshot, profileSwitchBusy, studentProfiles]);
     const handleSwitchStudentProfile = useCallback(async (profileId) => {
       var _a2;
       const nextProfileId = String(profileId || "").trim();

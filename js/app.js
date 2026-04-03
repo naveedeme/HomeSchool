@@ -7602,7 +7602,6 @@ function HomeschoolApp() {
   const speechRecognitionRef = useRef(null);
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
-  const pendingRemoteProfileHydrationRef = useRef(false);
   const profileSwitcherButtonRef = useRef(null);
   const profileSwitcherMenuRef = useRef(null);
   const headerRef = useRef(null);
@@ -8566,7 +8565,6 @@ function HomeschoolApp() {
     const storedProfile = source.studentProfile?.data || null;
     const storedProfiles = source.studentProfiles?.data || null;
     const storedDeletedProfiles = source.deletedStudentProfiles?.data || null;
-    const storedActiveProfileId = source.activeStudentProfileId?.data?.id || source.activeStudentProfileId?.data || null;
     const storedAccountPreferences = source.accountPreferences?.data || null;
     const storedPracticeProgress = source.practiceProgress?.data || null;
 
@@ -8683,10 +8681,7 @@ function HomeschoolApp() {
         studentName,
         studentNameUr,
       });
-      const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || activeStudentProfileIdRef.current);
-      if (nextActiveId !== activeStudentProfileIdRef.current) {
-        pendingRemoteProfileHydrationRef.current = true;
-      }
+      const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, activeStudentProfileIdRef.current);
       studentProfilesRef.current = normalizedProfiles;
       activeStudentProfileIdRef.current = nextActiveId;
       setStudentProfiles(normalizedProfiles);
@@ -10416,7 +10411,6 @@ function HomeschoolApp() {
         const storedProfile = customizations.studentProfile?.data || null;
         const storedProfiles = customizations.studentProfiles?.data || null;
         const storedDeletedProfiles = customizations.deletedStudentProfiles?.data || null;
-        const storedActiveProfileId = customizations.activeStudentProfileId?.data?.id || customizations.activeStudentProfileId?.data || null;
         const storedAccountPreferences = customizations.accountPreferences?.data || null;
         const storedPracticeProgress = customizations.practiceProgress?.data || null;
         const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
@@ -10558,7 +10552,7 @@ function HomeschoolApp() {
             studentName: stored?.studentName || "",
             studentNameUr: stored?.studentNameUr || "",
           });
-          const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || initialActiveStudentProfileId);
+          const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, initialActiveStudentProfileId);
           studentProfilesRef.current = normalizedProfiles;
           activeStudentProfileIdRef.current = nextActiveId;
           setStudentProfiles(normalizedProfiles);
@@ -12183,19 +12177,6 @@ function HomeschoolApp() {
     setSelectedLesson(null);
     setTab("home");
   }, [applyImportedAppState, buildBlankProfileAppState, clearLessonSelections, getEmptyProfileDbProgress, refreshReviewWorkspace, refreshStorageLabel]);
-
-  useEffect(() => {
-    if (!pendingRemoteProfileHydrationRef.current || profileSwitchBusy) return;
-    const nextProfile = studentProfiles.find((profile) => profile.id === activeStudentProfileId) || null;
-    if (!nextProfile) {
-      pendingRemoteProfileHydrationRef.current = false;
-      return;
-    }
-    pendingRemoteProfileHydrationRef.current = false;
-    loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true }).catch((error) => {
-      console.log("Unable to hydrate remotely switched profile:", error);
-    });
-  }, [activeStudentProfileId, loadStudentProfileSnapshot, profileSwitchBusy, studentProfiles]);
 
   const handleSwitchStudentProfile = useCallback(async (profileId) => {
     const nextProfileId = String(profileId || "").trim();
