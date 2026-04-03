@@ -245,6 +245,59 @@
       React.createElement("div", { className: "settings-group-body" }, ...childList));
   }
 
+  function renderDictionaryConflictCard(record, language, ui, onResolveDictionaryConflict) {
+    return React.createElement("div", {
+      key: record.id,
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: "1px solid var(--border)",
+        background: "var(--bg-panel)",
+        marginBottom: 10,
+      },
+    },
+    React.createElement("div", {
+      style: {
+        color: "var(--text-primary)",
+        fontSize: 13,
+        fontWeight: 700,
+        marginBottom: 8,
+      },
+    }, record.word || record.normalizedWord),
+    React.createElement("div", {
+      style: {
+        color: "var(--text-secondary)",
+        fontSize: 12,
+        lineHeight: 1.6,
+        marginBottom: 6,
+        fontFamily: "var(--font-ur)",
+        direction: "rtl",
+        textAlign: "right",
+      },
+    },
+    React.createElement("strong", null, renderLocalizedText(ui.localMeaning || (language === "ur" ? "مقامی" : "Local"), language)),
+    " : ",
+    (record.localEntry?.meaningsUr || []).slice(0, 3).join("، ") || record.localEntry?.meaningUr || "—"),
+    React.createElement("div", {
+      style: {
+        color: "var(--text-secondary)",
+        fontSize: 12,
+        lineHeight: 1.6,
+        marginBottom: 10,
+        fontFamily: "var(--font-ur)",
+        direction: "rtl",
+        textAlign: "right",
+      },
+    },
+    React.createElement("strong", null, renderLocalizedText(ui.syncedMeaning || (language === "ur" ? "سنک شدہ" : "Synced"), language)),
+    " : ",
+    (record.remoteEntry?.meaningsUr || []).slice(0, 3).join("، ") || record.remoteEntry?.meaningUr || "—"),
+    React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+      React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => onResolveDictionaryConflict && onResolveDictionaryConflict(record.normalizedWord, "local") }, renderLocalizedText(ui.keepLocal || (language === "ur" ? "مقامی رکھیں" : "Keep Local"), language)),
+      React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => onResolveDictionaryConflict && onResolveDictionaryConflict(record.normalizedWord, "remote") }, renderLocalizedText(ui.keepSynced || (language === "ur" ? "سنک شدہ رکھیں" : "Keep Synced"), language)),
+      React.createElement("button", { type: "button", className: "study-tool-btn", onClick: () => onResolveDictionaryConflict && onResolveDictionaryConflict(record.normalizedWord, "merge") }, renderLocalizedText(ui.mergeBoth || (language === "ur" ? "دونوں ضم کریں" : "Merge Both"), language))));
+  }
+
   function getNoticeText(entry, key, language) {
     if (language === "ur") return entry?.[`${key}Ur`] || entry?.[`${key}En`] || "";
     if (language === "bilingual") return `${entry?.[`${key}En`] || ""} / ${entry?.[`${key}Ur`] || entry?.[`${key}En`] || ""}`;
@@ -258,6 +311,7 @@
       storageLabel,
       dictionaryStats,
       supabaseDictionarySync,
+      dictionarySyncConflicts,
       supabaseSyncBusy,
       supabaseSyncStatusLabel,
       supabaseSyncUserEmail,
@@ -271,8 +325,11 @@
       onImportDictionaryFromUrl,
       onSupabaseDictionarySyncChange,
       onSupabaseSendMagicLink,
+      onSupabaseTestConnection,
       onSupabaseSyncNow,
+      onSupabaseCopySql,
       onSupabaseSignOut,
+      onResolveDictionaryConflict,
       onResetProgress,
       onFullReset,
       onResetReviewSystem,
@@ -676,6 +733,36 @@
           textAlign: language === "ur" ? "right" : "left",
         },
       }, renderLocalizedText(ui.dictionaryHelp || (language === "ur" ? "یہ لغت ہر نئے لفظ کے ساتھ بڑھتی رہتی ہے۔ کریکولم، درآمد شدہ فائلوں اور اے آئی سے بہتر شدہ معانی ایک ہی مقامی لغت میں ضم ہوتے ہیں۔" : "This dictionary keeps growing as students look up new words. Curriculum meanings, imported files, and AI-enriched results merge into one local dictionary."), language))));
+    const dictionaryConflictChildren = Array.isArray(dictionarySyncConflicts) && dictionarySyncConflicts.length > 0
+      ? [React.createElement("div", {
+        key: "dictionary-conflicts-wrap",
+        style: {
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: "1px solid var(--border)",
+        },
+      },
+      React.createElement("div", {
+        style: {
+          color: "var(--text-primary)",
+          fontSize: 13,
+          fontWeight: 700,
+          marginBottom: 10,
+        },
+      }, renderLocalizedText(ui.dictionaryConflicts || (language === "ur" ? "Dictionary Conflicts" : "Dictionary Conflicts"), language)),
+      React.createElement("div", {
+        style: {
+          color: "var(--text-muted)",
+          fontSize: 12,
+          lineHeight: 1.6,
+          marginBottom: 10,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+          direction: language === "ur" ? "rtl" : "ltr",
+          textAlign: language === "ur" ? "right" : "left",
+        },
+      }, renderLocalizedText(ui.dictionaryConflictsHelp || (language === "ur" ? "اگر ایک ہی لفظ کو دو مختلف ڈیوائسز پر مختلف انداز میں بہتر کیا گیا ہو تو یہاں فیصلہ کریں۔" : "Review rare cases where the same word was enriched differently on two devices."), language)),
+      ...dictionarySyncConflicts.slice(0, 8).map((record) => renderDictionaryConflictCard(record, language, ui, onResolveDictionaryConflict)))]
+      : [];
     aiChildren.push(React.createElement("div", {
       key: "dictionary-sync",
       style: {
@@ -701,6 +788,13 @@
           style: { width: 120 },
           onClick: () => onSupabaseDictionarySyncChange("autoSync", !(supabaseDictionarySync?.autoSync !== false)),
         }, renderLocalizedText(((supabaseDictionarySync?.autoSync !== false) ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled")), language))),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.realtimeSync || (language === "ur" ? "Realtime Sync" : "Realtime Sync"), language)),
+        React.createElement("button", {
+          className: "grade-btn active",
+          style: { width: 120 },
+          onClick: () => onSupabaseDictionarySyncChange("realtimeEnabled", !supabaseDictionarySync?.realtimeEnabled),
+        }, renderLocalizedText((supabaseDictionarySync?.realtimeEnabled ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled")), language))),
       React.createElement("div", { style: { marginBottom: 10 } },
         React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.supabaseUrl || (language === "ur" ? "Supabase URL" : "Supabase URL"), language)),
         React.createElement("input", {
@@ -750,9 +844,20 @@
         React.createElement("button", {
           type: "button",
           className: "ghost-cta",
+          onClick: onSupabaseTestConnection,
+          disabled: supabaseSyncBusy,
+        }, renderLocalizedText(ui.testConnection || (language === "ur" ? "کنکشن ٹیسٹ" : "Test Connection"), language)),
+        React.createElement("button", {
+          type: "button",
+          className: "ghost-cta",
           onClick: onSupabaseSyncNow,
           disabled: supabaseSyncBusy,
         }, renderLocalizedText(ui.syncNow || (language === "ur" ? "ابھی سنک کریں" : "Sync Now"), language)),
+        React.createElement("button", {
+          type: "button",
+          className: "ghost-cta",
+          onClick: onSupabaseCopySql,
+        }, renderLocalizedText(ui.copySqlHelper || (language === "ur" ? "Setup SQL کاپی کریں" : "Copy Setup SQL"), language)),
         React.createElement("button", {
           type: "button",
           className: "study-tool-btn",
@@ -769,7 +874,8 @@
         },
       }, renderLocalizedText(ui.supabaseSyncHelp || (language === "ur"
         ? "یہ صرف لغت کو sync کرتا ہے۔ Supabase میں dictionary_entries ٹیبل اور RLS policies درکار ہوں گی۔ HTTPS یا localhost پر یہ سب سے بہتر کام کرتا ہے۔"
-        : "This syncs only the dictionary. You will need a dictionary_entries table plus RLS policies in Supabase. It works best on HTTPS or localhost."), language))));
+        : "This syncs only the dictionary. You will need a dictionary_entries table plus RLS policies in Supabase. It works best on HTTPS or localhost."), language)),
+      ...dictionaryConflictChildren));
     (Array.isArray(aiProviders) ? aiProviders : []).forEach((provider) => {
       aiChildren.push(renderAiProviderCard(provider, ui, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider));
     });

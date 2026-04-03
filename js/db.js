@@ -422,6 +422,55 @@
     return { saved: Array.isArray(entries) ? entries.length : 0, queued: options.queue === false ? 0 : Array.isArray(entries) ? entries.length : 0 };
   }
 
+  async function softDeleteDictionaryEntries(normalizedWords = [], options = {}) {
+    if (!db.dictionaryEntries) return { deleted: 0, queued: 0 };
+    const queue = options.queue !== false;
+    const deviceId = options.deviceId ? String(options.deviceId) : "";
+    const keys = (Array.isArray(normalizedWords) ? normalizedWords : [])
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean);
+    if (!keys.length) return { deleted: 0, queued: 0 };
+    const timestamp = Number(options.deletedAt) || Date.now();
+    const existingRows = await db.dictionaryEntries.bulkGet(keys);
+    const rowsToDelete = existingRows
+      .map((row, index) => {
+        const normalized = keys[index];
+        const existing = row && typeof row === "object" ? row : null;
+        return normalizeDictionaryEntryRecord({
+          normalized,
+          word: existing?.word || normalized,
+          payload: existing?.payload || {},
+          sourceRank: existing?.sourceRank || 0,
+          updatedAt: Math.max(Number(existing?.updatedAt) || 0, timestamp),
+          deletedAt: timestamp,
+          deviceId: deviceId || existing?.deviceId || "",
+        });
+      })
+      .filter(Boolean);
+    if (!rowsToDelete.length) return { deleted: 0, queued: 0 };
+    await db.dictionaryEntries.bulkPut(rowsToDelete);
+    if (queue && db.dictionaryOutbox) {
+      await db.dictionaryOutbox.bulkPut(rowsToDelete.map((entry) => ({
+        normalized: entry.normalized,
+        updatedAt: entry.updatedAt,
+        payload: entry.payload,
+        deletedAt: entry.deletedAt,
+        sourceRank: entry.sourceRank,
+        word: entry.word,
+        deviceId: entry.deviceId || "",
+      })));
+    }
+    return { deleted: rowsToDelete.length, queued: queue ? rowsToDelete.length : 0 };
+  }
+
+  async function restoreDictionaryEntries(entries, options = {}) {
+    return upsertDictionaryEntries((Array.isArray(entries) ? entries : []).map((entry) => ({
+      ...entry,
+      deletedAt: null,
+      updatedAt: Number(entry?.updatedAt) || Date.now(),
+    })), options);
+  }
+
   async function getDictionaryOutboxEntries(limit = 250) {
     if (!db.dictionaryOutbox) return [];
     const safeLimit = Math.max(1, Number(limit) || 250);
@@ -1593,6 +1642,14 @@
 
     async replaceDictionaryEntries(entries, options = {}) {
       return replaceDictionaryEntries(entries, options);
+    },
+
+    async softDeleteDictionaryEntries(normalizedWords = [], options = {}) {
+      return softDeleteDictionaryEntries(normalizedWords, options);
+    },
+
+    async restoreDictionaryEntries(entries, options = {}) {
+      return restoreDictionaryEntries(entries, options);
     },
 
     async getDictionaryOutboxEntries(limit = 250) {
