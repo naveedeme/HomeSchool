@@ -1642,6 +1642,7 @@ function normalizeDictionaryImportPayload(rawPayload, options = {}) {
 }
 
 const SUPABASE_DICTIONARY_TABLE = "dictionary_entries";
+const SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
 const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
 const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -1686,6 +1687,52 @@ with check ((select auth.uid()) = user_id);
 
 create policy "Users can delete own dictionary rows"
 on public.dictionary_entries
+for delete
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create table if not exists public.user_data_rows (
+  user_id uuid not null,
+  dataset text not null,
+  row_id text not null,
+  payload jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz null,
+  device_id text null,
+  primary key (user_id, dataset, row_id)
+);
+
+create index if not exists user_data_rows_user_dataset_updated_idx
+  on public.user_data_rows (user_id, dataset, updated_at desc);
+
+alter table public.user_data_rows enable row level security;
+
+drop policy if exists "Users can read own user data rows" on public.user_data_rows;
+drop policy if exists "Users can insert own user data rows" on public.user_data_rows;
+drop policy if exists "Users can update own user data rows" on public.user_data_rows;
+drop policy if exists "Users can delete own user data rows" on public.user_data_rows;
+
+create policy "Users can read own user data rows"
+on public.user_data_rows
+for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create policy "Users can insert own user data rows"
+on public.user_data_rows
+for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+create policy "Users can update own user data rows"
+on public.user_data_rows
+for update
+to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+create policy "Users can delete own user data rows"
+on public.user_data_rows
 for delete
 to authenticated
 using ((select auth.uid()) = user_id);`;
@@ -7399,9 +7446,11 @@ function HomeschoolApp() {
   const navBarHideTimerRef = useRef(null);
   const copyToastTimerRef = useRef(null);
   const practiceAdvanceTimerRef = useRef(null);
+  const refreshReviewWorkspaceRef = useRef(null);
   const supabaseClientRef = useRef(null);
   const supabaseAuthSubscriptionRef = useRef(null);
   const supabaseRealtimeChannelRef = useRef(null);
+  const supabaseCloudRealtimeChannelRef = useRef(null);
   const dictionaryHydratedFromDbRef = useRef(false);
   const dictionaryPersistedSnapshotRef = useRef(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
   const skipNextDictionaryQueueRef = useRef(false);
@@ -8333,6 +8382,152 @@ function HomeschoolApp() {
     };
   }, []);
 
+  const applyCloudCustomizationState = useCallback((customizations) => {
+    const source = customizations && typeof customizations === "object" ? customizations : {};
+    const storedPreferences = source.preferences?.data || null;
+    const storedAudioPreferences = source.audioPreferences?.data || null;
+    const storedReviewPreferences = source.reviewPreferences?.data || null;
+    const storedPacing = source.daySectionPacing?.data || null;
+    const storedGoals = source.studyGoals?.data || null;
+    const storedFocusTimer = source.focusTimerSettings?.data || null;
+    const storedReminderSettings = source.reminderSettings?.data || null;
+    const storedBackupReminderSettings = source.backupReminderSettings?.data || null;
+    const storedClassSchedule = source.classScheduleSettings?.data || null;
+    const storedTimeTracking = source.timeTrackingData?.data || null;
+    const storedNotificationHistory = source.notificationHistory?.data || null;
+    const storedGamification = source.gamificationState?.data || null;
+    const storedDictionaryPreferences = source.dictionaryPreferences?.data || null;
+    const storedProfile = source.studentProfile?.data || null;
+    const storedPracticeProgress = source.practiceProgress?.data || null;
+
+    if (storedPreferences) {
+      if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
+      if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(Boolean(storedPreferences.ttsEnabled));
+      if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
+      if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
+      if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+      if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
+      if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
+      if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
+      if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
+      if (typeof storedPreferences.focusMode !== "undefined") setFocusMode(Boolean(storedPreferences.focusMode));
+      if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
+      if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
+      if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
+      if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
+      if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
+      if (typeof storedPreferences.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(storedPreferences.transitionMode)) setTransitionMode(storedPreferences.transitionMode);
+    }
+    if (storedAudioPreferences) {
+      if (typeof storedAudioPreferences.ttsRate !== "undefined") {
+        setTtsRate(Math.max(0.6, Math.min(1.3, Number(storedAudioPreferences.ttsRate) || 0.85)));
+      }
+      if (storedAudioPreferences.ttsVoiceSelections && typeof storedAudioPreferences.ttsVoiceSelections === "object") {
+        setTtsVoiceSelections({
+          en: storedAudioPreferences.ttsVoiceSelections.en || "",
+          ur: storedAudioPreferences.ttsVoiceSelections.ur || "",
+        });
+      }
+    }
+    if (storedReviewPreferences) {
+      if (typeof storedReviewPreferences.dailyReviewCap !== "undefined") {
+        setDailyReviewCap(Math.max(5, Math.min(50, Number(storedReviewPreferences.dailyReviewCap) || 20)));
+      }
+      if (typeof storedReviewPreferences.practiceSubjectId !== "undefined") setPracticeSubjectId(storedReviewPreferences.practiceSubjectId || "english");
+      if (storedReviewPreferences.practiceFiltersBySubject && typeof storedReviewPreferences.practiceFiltersBySubject === "object") {
+        setPracticeFiltersBySubject(storedReviewPreferences.practiceFiltersBySubject);
+      }
+      if (storedReviewPreferences.practiceTimedSettings && typeof storedReviewPreferences.practiceTimedSettings === "object") {
+        setPracticeTimedSettings((current) => ({ ...current, ...storedReviewPreferences.practiceTimedSettings }));
+      }
+      if (storedReviewPreferences.reviewSrsSettings && typeof storedReviewPreferences.reviewSrsSettings === "object") {
+        setReviewSrsSettings({
+          masteryThreshold: Math.max(3, Math.min(7, Number(storedReviewPreferences.reviewSrsSettings.masteryThreshold) || 5)),
+          intervalScale: Math.max(0.5, Math.min(2.5, Number(storedReviewPreferences.reviewSrsSettings.intervalScale) || 1)),
+          againMinutes: Math.max(5, Math.min(180, Number(storedReviewPreferences.reviewSrsSettings.againMinutes) || 10)),
+        });
+      }
+    }
+    if (storedPacing && typeof storedPacing === "object") setDaySectionOverrides(storedPacing);
+    if (storedPracticeProgress && typeof storedPracticeProgress === "object") setPracticeLessonProgress(storedPracticeProgress);
+    if (storedGoals && typeof storedGoals === "object") {
+      setStudyGoals({
+        dailyReviews: Math.max(5, Math.min(60, Number(storedGoals.dailyReviews) || 20)),
+        weeklyWords: Math.max(10, Math.min(140, Number(storedGoals.weeklyWords) || 40)),
+      });
+    }
+    if (storedFocusTimer && typeof storedFocusTimer === "object") {
+      const nextMinutes = Math.max(5, Math.min(60, Number(storedFocusTimer.durationMinutes) || 20));
+      setFocusTimerSettings({
+        durationMinutes: nextMinutes,
+        autoStartBreak: Boolean(storedFocusTimer.autoStartBreak),
+      });
+      setFocusTimerState((current) => ({
+        ...current,
+        remainingSeconds: nextMinutes * 60,
+      }));
+    }
+    if (storedReminderSettings && typeof storedReminderSettings === "object") {
+      setReminderSettings({
+        enabled: Boolean(storedReminderSettings.enabled),
+        time: storedReminderSettings.time || "18:00",
+        notifications: Boolean(storedReminderSettings.notifications),
+        lastShownDay: storedReminderSettings.lastShownDay || null,
+      });
+    }
+    if (storedBackupReminderSettings && typeof storedBackupReminderSettings === "object") setBackupReminderSettings(normalizeBackupReminderSettings(storedBackupReminderSettings));
+    if (storedClassSchedule && typeof storedClassSchedule === "object") {
+      setClassScheduleSettings({
+        enabled: Boolean(storedClassSchedule.enabled),
+        startTime: storedClassSchedule.startTime || "08:00",
+        endTime: storedClassSchedule.endTime || "13:00",
+      });
+    }
+    if (storedTimeTracking && typeof storedTimeTracking === "object") {
+      const normalizedTracking = normalizeTimeTrackingData(storedTimeTracking);
+      timeTrackingRef.current = normalizedTracking;
+      setTimeTrackingData(normalizedTracking);
+    }
+    if (Array.isArray(storedNotificationHistory)) setNotificationHistory(storedNotificationHistory.slice(0, 40));
+    if (storedGamification && typeof storedGamification === "object") setGamificationState(normalizeGamificationState(storedGamification));
+    if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || "").trim());
+    if (storedProfile && typeof storedProfile === "object") {
+      if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
+      if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
+      if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
+    }
+  }, []);
+
+  const applyIncomingCloudSyncRows = useCallback(async (incomingRows, reason = "sync") => {
+    const normalizedRows = (Array.isArray(incomingRows) ? incomingRows : [])
+      .map((row) => ({
+        dataset: String(row?.dataset || "").trim(),
+        rowId: String(row?.rowId || "").trim(),
+        payload: row?.payload && typeof row.payload === "object" ? row.payload : {},
+        updatedAt: Number(row?.updatedAt) || Date.now(),
+        deletedAt: row?.deletedAt ? (Number(row.deletedAt) || Date.now()) : null,
+      }))
+      .filter((row) => row.dataset && row.rowId);
+    if (!normalizedRows.length || !window.HomeSchoolDB?.applyCloudSyncRows) return { applied: 0 };
+    const applied = await window.HomeSchoolDB.applyCloudSyncRows(normalizedRows);
+    if (reason !== "local") {
+      try {
+        const customizationMap = window.HomeSchoolDB?.getCustomizationsMap ? await window.HomeSchoolDB.getCustomizationsMap() : {};
+        applyCloudCustomizationState(customizationMap || {});
+      } catch (error) {
+        console.log("Unable to refresh synced customizations:", error);
+      }
+      try {
+        if (refreshReviewWorkspaceRef.current) {
+          await refreshReviewWorkspaceRef.current();
+        }
+      } catch (error) {
+        console.log("Unable to refresh review workspace after cloud sync:", error);
+      }
+    }
+    return { applied };
+  }, [applyCloudCustomizationState]);
+
   const ensureSupabaseClient = useCallback(() => {
     const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
     if (!settings.url || !settings.anonKey) {
@@ -8382,7 +8577,7 @@ function HomeschoolApp() {
     }
     const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
     if (!settings.enabled) {
-      throw new Error(language === "ur" ? "پہلے Supabase dictionary sync آن کریں۔" : "Enable Supabase dictionary sync first.");
+      throw new Error(language === "ur" ? "پہلے Supabase cloud sync آن کریں۔" : "Enable Supabase cloud sync first.");
     }
     if (dictionarySyncInFlightRef.current) return false;
     dictionarySyncInFlightRef.current = true;
@@ -8415,6 +8610,36 @@ function HomeschoolApp() {
         await window.HomeSchoolDB.clearDictionaryOutboxEntries(dirtyRows.map((row) => row.normalized));
       }
 
+      const cloudSeedMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloudSeeded");
+      let cloudRowsToPush = await window.HomeSchoolDB.getCloudSyncOutboxEntries(2000);
+      if (!cloudRowsToPush.length && !cloudSeedMeta?.data?.done) {
+        cloudRowsToPush = await window.HomeSchoolDB.getAllCloudSyncRows();
+      }
+      if (cloudRowsToPush.length) {
+        const cloudPayload = cloudRowsToPush.map((row) => ({
+          user_id: user.id,
+          dataset: String(row.dataset || "").trim(),
+          row_id: String(row.rowId || "").trim(),
+          payload: row.payload || {},
+          updated_at: new Date(Number(row.updatedAt) || Date.now()).toISOString(),
+          deleted_at: row.deletedAt ? new Date(Number(row.deletedAt) || Date.now()).toISOString() : null,
+          device_id: row.deviceId || dictionaryDeviceIdRef.current,
+        })).filter((row) => row.dataset && row.row_id);
+        if (cloudPayload.length) {
+          const { error: cloudPushError } = await client
+            .from(SUPABASE_CLOUD_DATA_TABLE)
+            .upsert(cloudPayload, { onConflict: "user_id,dataset,row_id" });
+          if (cloudPushError) throw cloudPushError;
+          if (window.HomeSchoolDB?.clearCloudSyncOutboxEntries) {
+            await window.HomeSchoolDB.clearCloudSyncOutboxEntries(cloudRowsToPush.map((row) => `${String(row.dataset || "").trim()}::${String(row.rowId || "").trim()}`));
+          }
+          await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloudSeeded", {
+            done: true,
+            timestamp: Date.now(),
+          });
+        }
+      }
+
       const lastPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:lastPull");
       let pullQuery = client
         .from(SUPABASE_DICTIONARY_TABLE)
@@ -8444,8 +8669,40 @@ function HomeschoolApp() {
         }
       }
 
+      const lastCloudPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloud:lastPull");
+      let cloudPullQuery = client
+        .from(SUPABASE_CLOUD_DATA_TABLE)
+        .select("dataset, row_id, payload, updated_at, deleted_at, device_id")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(3000);
+      const lastCloudPullAt = Number(lastCloudPullMeta?.data?.timestamp) || 0;
+      if (lastCloudPullAt > 0) {
+        cloudPullQuery = cloudPullQuery.gt("updated_at", new Date(lastCloudPullAt).toISOString());
+      }
+      const { data: remoteCloudRows = [], error: cloudPullError } = await cloudPullQuery;
+      if (cloudPullError) throw cloudPullError;
+
+      if (remoteCloudRows.length) {
+        const normalizedRemoteCloudRows = remoteCloudRows.map((row) => ({
+          dataset: String(row.dataset || "").trim(),
+          rowId: String(row.row_id || "").trim(),
+          payload: row.payload || {},
+          updatedAt: Date.parse(row.updated_at) || Date.now(),
+          deletedAt: row.deleted_at ? (Date.parse(row.deleted_at) || Date.now()) : null,
+          deviceId: String(row.device_id || ""),
+        })).filter((row) => row.dataset && row.rowId);
+        if (normalizedRemoteCloudRows.length) {
+          await applyIncomingCloudSyncRows(normalizedRemoteCloudRows, reason);
+        }
+      }
+
       const syncedAt = Date.now();
       await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:lastPull", {
+        timestamp: syncedAt,
+        reason,
+      });
+      await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloud:lastPull", {
         timestamp: syncedAt,
         reason,
       });
@@ -8455,7 +8712,7 @@ function HomeschoolApp() {
       }));
       applySupabaseSessionState(session, {
         status: "ready",
-        message: language === "ur" ? "Dictionary sync مکمل ہو گئی۔" : "Dictionary sync completed.",
+        message: language === "ur" ? "Cloud sync مکمل ہو گئی۔" : "Cloud sync completed.",
         lastSyncedAt: syncedAt,
       });
       return true;
@@ -8463,7 +8720,7 @@ function HomeschoolApp() {
       dictionarySyncInFlightRef.current = false;
       setSupabaseSyncBusy(false);
     }
-  }, [applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
+  }, [applyIncomingCloudSyncRows, applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
 
   const handleSupabaseSendMagicLink = useCallback(async () => {
     const email = String(supabaseDictionarySync.authEmail || "").trim();
@@ -8675,9 +8932,18 @@ function HomeschoolApp() {
         .select("normalized", { head: true, count: "exact" })
         .eq("user_id", session.user.id);
       if (queryError) throw queryError;
+      const { count: cloudCount, error: cloudQueryError } = await client
+        .from(SUPABASE_CLOUD_DATA_TABLE)
+        .select("row_id", { head: true, count: "exact" })
+        .eq("user_id", session.user.id);
+      if (cloudQueryError) throw cloudQueryError;
       applySupabaseSessionState(session, {
         status: "ready",
-        message: joinLocalizedText(`Connection ok • ${Number(count) || 0} rows visible`, `کنکشن درست • ${Number(count) || 0} قطاریں نظر آ رہی ہیں`, language),
+        message: joinLocalizedText(
+          `Connection ok • ${Number(count) || 0} dictionary + ${Number(cloudCount) || 0} cloud rows`,
+          `کنکشن درست • ${Number(count) || 0} لغت + ${Number(cloudCount) || 0} کلاؤڈ قطاریں`,
+          language,
+        ),
       });
       showAppToast(joinLocalizedText("Connection test passed", "کنکشن ٹیسٹ کامیاب", language), "check");
       return true;
@@ -8848,6 +9114,27 @@ function HomeschoolApp() {
   }, [supabaseDictionarySync]);
 
   useEffect(() => {
+    const handleCloudSyncSignal = () => {
+      setSupabaseSyncPulse(Date.now());
+    };
+    const handleStorageSignal = (event) => {
+      if (event?.key === "hs_cloud_sync_signal") {
+        setSupabaseSyncPulse(Date.now());
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("hs-cloud-sync-change", handleCloudSyncSignal);
+      window.addEventListener("storage", handleStorageSignal);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("hs-cloud-sync-change", handleCloudSyncSignal);
+        window.removeEventListener("storage", handleStorageSignal);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
       setSupabaseAuthState((current) => ({
         ...current,
@@ -8947,6 +9234,53 @@ function HomeschoolApp() {
       supabaseRealtimeChannelRef.current = null;
     };
   }, [applyIncomingDictionaryRows, ensureSupabaseClient, supabaseAuthState.userId, supabaseDictionarySync.enabled, supabaseDictionarySync.realtimeEnabled]);
+
+  useEffect(() => {
+    const existingChannel = supabaseCloudRealtimeChannelRef.current;
+    if (existingChannel?.unsubscribe) {
+      existingChannel.unsubscribe();
+      supabaseCloudRealtimeChannelRef.current = null;
+    }
+    if (!supabaseDictionarySync.enabled || !supabaseDictionarySync.realtimeEnabled || !supabaseAuthState.userId) {
+      return undefined;
+    }
+    let active = true;
+    try {
+      const client = ensureSupabaseClient();
+      const channel = client
+        .channel(`cloud-sync-${supabaseAuthState.userId}`)
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CLOUD_DATA_TABLE,
+          filter: `user_id=eq.${supabaseAuthState.userId}`,
+        }, (payload) => {
+          if (!active) return;
+          const incoming = payload?.new || payload?.record || null;
+          if (!incoming?.dataset || !incoming?.row_id) return;
+          applyIncomingCloudSyncRows([{
+            dataset: String(incoming.dataset || "").trim(),
+            rowId: String(incoming.row_id || "").trim(),
+            payload: incoming.payload || {},
+            updatedAt: Date.parse(incoming.updated_at) || Date.now(),
+            deletedAt: incoming.deleted_at ? (Date.parse(incoming.deleted_at) || Date.now()) : null,
+            deviceId: String(incoming.device_id || ""),
+          }], "realtime").catch((error) => {
+            console.log("Unable to apply realtime cloud row:", error);
+          });
+        })
+        .subscribe();
+      supabaseCloudRealtimeChannelRef.current = channel;
+    } catch (error) {
+      console.log("Unable to start Supabase realtime cloud sync:", error);
+    }
+    return () => {
+      active = false;
+      const channel = supabaseCloudRealtimeChannelRef.current;
+      if (channel?.unsubscribe) channel.unsubscribe();
+      supabaseCloudRealtimeChannelRef.current = null;
+    };
+  }, [applyIncomingCloudSyncRows, ensureSupabaseClient, supabaseAuthState.userId, supabaseDictionarySync.enabled, supabaseDictionarySync.realtimeEnabled]);
 
   useEffect(() => {
     if (!dbLoaded || !supabaseDictionarySync.enabled || !supabaseDictionarySync.autoSync || !supabaseAuthState.userId) return undefined;
@@ -9131,6 +9465,9 @@ function HomeschoolApp() {
     }, {}));
     setReviewStats(buildReviewStatsFallback(statsResult.status === "fulfilled" ? statsResult.value : {}, nextLibrary, nextAnalytics, { masteryThreshold: reviewSrsSettings.masteryThreshold }));
   }, [reviewSrsSettings.intervalScale, reviewSrsSettings.masteryThreshold]);
+  useEffect(() => {
+    refreshReviewWorkspaceRef.current = refreshReviewWorkspace;
+  }, [refreshReviewWorkspace]);
 
   const pushNotificationHistoryEntry = useCallback((entry) => {
     if (!entry) return;
@@ -12173,17 +12510,17 @@ function HomeschoolApp() {
   );
   const handleSupabaseSyncNow = useCallback(async () => {
     try {
-      showAppToast(joinLocalizedText("Syncing dictionary...", "لغت سنک ہو رہی ہے...", language), "sync");
+      showAppToast(joinLocalizedText("Syncing cloud data...", "کلاؤڈ ڈیٹا سنک ہو رہا ہے...", language), "sync");
       await performSupabaseDictionarySync("manual");
-      showAppToast(joinLocalizedText("Dictionary synced", "لغت سنک ہو گئی", language), "sync");
+      showAppToast(joinLocalizedText("Cloud data synced", "کلاؤڈ ڈیٹا سنک ہو گیا", language), "sync");
     } catch (error) {
       setSupabaseAuthState((current) => ({
         ...current,
         status: "error",
         message: error?.message || String(error),
       }));
-      showAppToast(joinLocalizedText("Dictionary sync failed", "لغت سنک ناکام ہوئی", language), "alert");
-      alert(joinLocalizedText(`Dictionary sync failed: ${error?.message || error}`, `Dictionary sync ناکام ہوئی: ${error?.message || error}`, language));
+      showAppToast(joinLocalizedText("Cloud sync failed", "کلاؤڈ سنک ناکام ہوئی", language), "alert");
+      alert(joinLocalizedText(`Cloud sync failed: ${error?.message || error}`, `Cloud sync ناکام ہوئی: ${error?.message || error}`, language));
     }
   }, [language, performSupabaseDictionarySync, showAppToast]);
   const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {

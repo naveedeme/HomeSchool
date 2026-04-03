@@ -74,6 +74,57 @@
     dictionarySyncMeta: "&key, updatedAt",
   });
 
+  db.version(9).stores({
+    coreData: "id, type, subject, grade, lessonKey",
+    posData: "id, type, day",
+    tensesData: "id, main, sub",
+    vocabData: "id, day",
+    mathChapters: "id, key, grade",
+    quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt, prompt",
+    reviewHistory: "id, cardId, dayKey, reviewedAt, subject, section, rating",
+    wordMeta: "id, subject, section, favorite, updatedAt",
+    customLists: "id, updatedAt, name",
+    customListItems: "id, listId, cardId, updatedAt",
+    progress: "id, subject, lessonId, grade, completed, timestamp",
+    userStats: "id",
+    dataVersion: "id, version, lastUpdated",
+    customizations: "++id, type, ts",
+    dictionaryEntries: "&normalized, updatedAt, deletedAt",
+    dictionaryOutbox: "&normalized, updatedAt",
+    dictionarySyncMeta: "&key, updatedAt",
+    cloudSyncOutbox: "&syncKey, dataset, updatedAt",
+  });
+
+  const CLOUD_SYNC_SIGNAL_KEY = "hs_cloud_sync_signal";
+  const CLOUD_SYNC_DATASETS = Object.freeze({
+    customization: "customization",
+    wordMeta: "wordMeta",
+    customList: "customList",
+    customListItem: "customListItem",
+    progress: "progress",
+    reviewCard: "reviewCard",
+    reviewHistory: "reviewHistory",
+    userStat: "userStat",
+  });
+  const CLOUD_SYNC_CUSTOMIZATION_TYPES = new Set([
+    "preferences",
+    "audioPreferences",
+    "reviewPreferences",
+    "practiceProgress",
+    "daySectionPacing",
+    "studyGoals",
+    "focusTimerSettings",
+    "reminderSettings",
+    "backupReminderSettings",
+    "classScheduleSettings",
+    "timeTrackingData",
+    "notificationHistory",
+    "gamificationState",
+    "studentProfile",
+    "dictionaryPreferences",
+  ]);
+
   function getStatsDefaults() {
     return {
       id: "main",
@@ -114,6 +165,44 @@
       hash |= 0;
     }
     return `h${Math.abs(hash)}`;
+  }
+
+  function emitCloudSyncSignal(dataset = "") {
+    const detail = {
+      dataset: String(dataset || "").trim(),
+      timestamp: Date.now(),
+    };
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(CLOUD_SYNC_SIGNAL_KEY, JSON.stringify(detail));
+      }
+    } catch (error) {
+      // Ignore storage failures and still dispatch the in-page signal below.
+    }
+    try {
+      if (typeof window !== "undefined" && typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+        window.dispatchEvent(new CustomEvent("hs-cloud-sync-change", { detail }));
+      }
+    } catch (error) {
+      console.log("Unable to dispatch cloud sync signal:", error);
+    }
+  }
+
+  function buildCloudSyncKey(dataset, rowId) {
+    return `${String(dataset || "").trim()}::${String(rowId || "").trim()}`;
+  }
+
+  function sanitizeCloudSyncDataset(dataset) {
+    const safeDataset = String(dataset || "").trim();
+    return Object.values(CLOUD_SYNC_DATASETS).includes(safeDataset) ? safeDataset : "";
+  }
+
+  function shouldSyncCustomizationType(type) {
+    return CLOUD_SYNC_CUSTOMIZATION_TYPES.has(String(type || "").trim());
+  }
+
+  function normalizeCloudSyncPayload(value) {
+    return stableSort(value == null ? {} : value);
   }
 
   function buildSubjectPayload(dataLoader, subjectId) {
@@ -345,6 +434,11 @@
       ts: Date.now(),
     };
     await db.customizations.put(record);
+    if (shouldSyncCustomizationType(type)) {
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customization, type, record, {
+        updatedAt: record.ts,
+      });
+    }
     return record;
   }
 
@@ -357,6 +451,203 @@
       }
       return acc;
     }, {});
+  }
+
+  async function queueCloudSyncRecord(dataset, rowId, payload, options = {}) {
+    if (!db.cloudSyncOutbox) return null;
+    const safeDataset = sanitizeCloudSyncDataset(dataset);
+    const safeRowId = String(rowId || "").trim();
+    if (!safeDataset || !safeRowId) return null;
+    const updatedAt = Number(options.updatedAt) || Date.now();
+    const deletedAt = options.deletedAt ? Number(options.deletedAt) || Date.now() : null;
+    const record = {
+      syncKey: buildCloudSyncKey(safeDataset, safeRowId),
+      dataset: safeDataset,
+      rowId: safeRowId,
+      payload: normalizeCloudSyncPayload(payload),
+      updatedAt,
+      deletedAt,
+      deviceId: String(options.deviceId || "").trim(),
+    };
+    await db.cloudSyncOutbox.put(record);
+    emitCloudSyncSignal(safeDataset);
+    return record;
+  }
+
+  async function getCloudSyncOutboxEntries(limit = 500) {
+    if (!db.cloudSyncOutbox) return [];
+    const safeLimit = Math.max(1, Number(limit) || 500);
+    return db.cloudSyncOutbox.orderBy("updatedAt").reverse().limit(safeLimit).toArray();
+  }
+
+  async function clearCloudSyncOutboxEntries(syncKeys = []) {
+    if (!db.cloudSyncOutbox) return 0;
+    const keys = (Array.isArray(syncKeys) ? syncKeys : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+    if (!keys.length) return 0;
+    await db.cloudSyncOutbox.bulkDelete(keys);
+    return keys.length;
+  }
+
+  function createCloudSyncRow(dataset, rowId, payload, updatedAt, deletedAt = null) {
+    const safeDataset = sanitizeCloudSyncDataset(dataset);
+    const safeRowId = String(rowId || "").trim();
+    if (!safeDataset || !safeRowId) return null;
+    return {
+      dataset: safeDataset,
+      rowId: safeRowId,
+      payload: normalizeCloudSyncPayload(payload),
+      updatedAt: Number(updatedAt) || Date.now(),
+      deletedAt: deletedAt ? Number(deletedAt) || Date.now() : null,
+    };
+  }
+
+  async function getAllCloudSyncRows() {
+    const [customizationRows, wordMetaRows, customLists, customListItems, progressRows, reviewCards, reviewHistory, userStats] = await Promise.all([
+      db.customizations.toArray(),
+      db.wordMeta.toArray(),
+      db.customLists.toArray(),
+      db.customListItems.toArray(),
+      db.progress.toArray(),
+      db.reviewCards.toArray(),
+      db.reviewHistory.toArray(),
+      db.userStats.toArray(),
+    ]);
+
+    const customizationMap = customizationRows.reduce((acc, row) => {
+      const type = String(row?.type || "").trim();
+      if (!type || !shouldSyncCustomizationType(type)) return acc;
+      if (!acc[type] || Number(row?.ts || 0) >= Number(acc[type]?.ts || 0)) {
+        acc[type] = row;
+      }
+      return acc;
+    }, {});
+
+    return [
+      ...Object.values(customizationMap).map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.customization, row.type, row, row.ts || Date.now())),
+      ...wordMetaRows.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.wordMeta, row.id, row, row.updatedAt || Date.now())),
+      ...customLists.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.customList, row.id, row, row.updatedAt || row.createdAt || Date.now())),
+      ...customListItems.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.customListItem, row.id, row, row.updatedAt || Date.now())),
+      ...progressRows.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.progress, row.id, row, row.timestamp || Date.now())),
+      ...reviewCards.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.reviewCard, row.id, row, row.updatedAt || Date.now())),
+      ...reviewHistory.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.reviewHistory, row.id, row, row.reviewedAt || Date.now())),
+      ...userStats.map((row) => createCloudSyncRow(CLOUD_SYNC_DATASETS.userStat, row.id, row, row.updatedAt || Date.now())),
+    ].filter(Boolean);
+  }
+
+  async function applyCloudSyncRows(rows = []) {
+    const safeRows = (Array.isArray(rows) ? rows : [])
+      .map((row) => {
+        const dataset = sanitizeCloudSyncDataset(row?.dataset);
+        const rowId = String(row?.rowId || "").trim();
+        if (!dataset || !rowId) return null;
+        return {
+          dataset,
+          rowId,
+          payload: row?.payload && typeof row.payload === "object" ? row.payload : {},
+          updatedAt: Number(row?.updatedAt) || Date.now(),
+          deletedAt: row?.deletedAt ? Number(row.deletedAt) || Date.now() : null,
+        };
+      })
+      .filter(Boolean);
+    if (!safeRows.length) return 0;
+
+    let applied = 0;
+    for (const row of safeRows) {
+      const payload = normalizeCloudSyncPayload(row.payload);
+      if (row.dataset === CLOUD_SYNC_DATASETS.customization) {
+        const type = String(payload?.type || row.rowId || "").trim();
+        if (!type || !shouldSyncCustomizationType(type)) continue;
+        if (row.deletedAt) {
+          const records = await db.customizations.where("type").equals(type).toArray();
+          if (records.length) {
+            await db.customizations.bulkDelete(records.map((entry) => entry.id).filter((id) => typeof id !== "undefined"));
+            applied += 1;
+          }
+          continue;
+        }
+        const existing = await getLatestCustomization(type);
+        const nextRecord = {
+          ...(existing || {}),
+          ...payload,
+          type,
+          ts: row.updatedAt,
+        };
+        await db.customizations.put(nextRecord);
+        applied += 1;
+        continue;
+      }
+      if (row.dataset === CLOUD_SYNC_DATASETS.wordMeta) {
+        if (row.deletedAt) {
+          await db.wordMeta.delete(row.rowId);
+        } else {
+          await db.wordMeta.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+        }
+        applied += 1;
+        continue;
+      }
+      if (row.dataset === CLOUD_SYNC_DATASETS.customList) {
+        if (row.deletedAt) {
+          const relatedItems = await db.customListItems.where("listId").equals(row.rowId).toArray();
+          await db.transaction("rw", [db.customLists, db.customListItems], async () => {
+            await db.customLists.delete(row.rowId);
+            if (relatedItems.length) {
+              await db.customListItems.bulkDelete(relatedItems.map((item) => item.id));
+            }
+          });
+        } else {
+          await db.customLists.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+        }
+        applied += 1;
+        continue;
+      }
+      if (row.dataset === CLOUD_SYNC_DATASETS.customListItem) {
+        if (row.deletedAt) {
+          await db.customListItems.delete(row.rowId);
+        } else {
+          await db.customListItems.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+        }
+        applied += 1;
+        continue;
+      }
+      if (row.dataset === CLOUD_SYNC_DATASETS.progress) {
+        if (row.deletedAt) {
+          await db.progress.delete(row.rowId);
+        } else {
+          await db.progress.put({ ...payload, id: row.rowId, timestamp: Number(payload.timestamp) || row.updatedAt });
+        }
+        applied += 1;
+        continue;
+      }
+      if (row.dataset === CLOUD_SYNC_DATASETS.reviewCard) {
+        if (row.deletedAt) {
+          await db.reviewCards.delete(row.rowId);
+        } else {
+          await db.reviewCards.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+        }
+        applied += 1;
+        continue;
+      }
+      if (row.dataset === CLOUD_SYNC_DATASETS.reviewHistory) {
+        if (row.deletedAt) {
+          await db.reviewHistory.delete(row.rowId);
+        } else {
+          await db.reviewHistory.put({ ...payload, id: row.rowId, reviewedAt: Number(payload.reviewedAt) || row.updatedAt });
+        }
+        applied += 1;
+        continue;
+      }
+      if (row.dataset === CLOUD_SYNC_DATASETS.userStat) {
+        if (row.deletedAt) {
+          await db.userStats.delete(row.rowId);
+        } else {
+          await db.userStats.put({ ...payload, id: row.rowId, updatedAt: Number(payload.updatedAt) || row.updatedAt });
+        }
+        applied += 1;
+      }
+    }
+    return applied;
   }
 
   function normalizeDictionaryEntryRecord(entry) {
@@ -1443,6 +1734,21 @@
       };
 
       await db.userStats.put(nextStats);
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.progress, lessonId, {
+        id: lessonId,
+        subject,
+        lessonId,
+        grade,
+        score,
+        total,
+        completed: true,
+        timestamp: Date.now(),
+      }, {
+        updatedAt: Date.now(),
+      });
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.userStat, nextStats.id, nextStats, {
+        updatedAt: nextStats.updatedAt,
+      });
       return nextStats;
     },
 
@@ -1511,6 +1817,15 @@
         await db.userStats.put(nextStats);
         await db.reviewHistory.put(reviewEvent);
       });
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.reviewCard, nextCard.id, nextCard, {
+        updatedAt: nextCard.updatedAt,
+      });
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.reviewHistory, reviewEvent.id, reviewEvent, {
+        updatedAt: reviewEvent.reviewedAt,
+      });
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.userStat, nextStats.id, nextStats, {
+        updatedAt: nextStats.updatedAt,
+      });
 
       return {
         card: nextCard,
@@ -1529,6 +1844,9 @@
         updatedAt: Date.now(),
       };
       await db.wordMeta.put(next);
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.wordMeta, next.id, next, {
+        updatedAt: next.updatedAt,
+      });
       return next;
     },
 
@@ -1541,6 +1859,9 @@
         updatedAt: Date.now(),
       };
       await db.wordMeta.put(next);
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.wordMeta, next.id, next, {
+        updatedAt: next.updatedAt,
+      });
       return next;
     },
 
@@ -1554,6 +1875,9 @@
         updatedAt: Date.now(),
       };
       await db.customLists.put(list);
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customList, list.id, list, {
+        updatedAt: list.updatedAt,
+      });
       return list;
     },
 
@@ -1568,17 +1892,31 @@
         updatedAt: Date.now(),
       };
       await db.customLists.put(next);
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customList, next.id, next, {
+        updatedAt: next.updatedAt,
+      });
       return next;
     },
 
     async deleteCustomList(listId) {
       const relatedItems = await db.customListItems.where("listId").equals(listId).toArray();
+      const deletedAt = Date.now();
       await db.transaction("rw", [db.customLists, db.customListItems], async () => {
         await db.customLists.delete(listId);
         if (relatedItems.length > 0) {
           await db.customListItems.bulkDelete(relatedItems.map((item) => item.id));
         }
       });
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customList, listId, { id: listId }, {
+        updatedAt: deletedAt,
+        deletedAt,
+      });
+      for (const item of relatedItems) {
+        await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customListItem, item.id, item, {
+          updatedAt: deletedAt,
+          deletedAt,
+        });
+      }
       return true;
     },
 
@@ -1588,21 +1926,34 @@
       if (!list || !card) return null;
       const itemId = buildCustomListItemId(listId, cardId);
       const existing = await db.customListItems.get(itemId);
+      const updatedAt = Date.now();
       if (existing) {
         await db.customListItems.delete(itemId);
+        await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customListItem, itemId, existing, {
+          updatedAt,
+          deletedAt: updatedAt,
+        });
       } else {
-        await db.customListItems.put({
+        const nextItem = {
           id: itemId,
           listId,
           cardId,
           prompt: card.prompt,
           answer: card.answer,
-          updatedAt: Date.now(),
+          updatedAt,
+        };
+        await db.customListItems.put(nextItem);
+        await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customListItem, itemId, nextItem, {
+          updatedAt,
         });
       }
-      await db.customLists.put({
+      const nextList = {
         ...list,
-        updatedAt: Date.now(),
+        updatedAt,
+      };
+      await db.customLists.put(nextList);
+      await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customList, nextList.id, nextList, {
+        updatedAt,
       });
       return !existing;
     },
@@ -1666,6 +2017,22 @@
 
     async saveDictionarySyncMeta(key, data) {
       return saveDictionarySyncMeta(key, data);
+    },
+
+    async getCloudSyncOutboxEntries(limit = 500) {
+      return getCloudSyncOutboxEntries(limit);
+    },
+
+    async clearCloudSyncOutboxEntries(syncKeys = []) {
+      return clearCloudSyncOutboxEntries(syncKeys);
+    },
+
+    async getAllCloudSyncRows() {
+      return getAllCloudSyncRows();
+    },
+
+    async applyCloudSyncRows(rows = []) {
+      return applyCloudSyncRows(rows);
     },
 
     async getProgressMap() {

@@ -905,9 +905,9 @@
         marginBottom: 10,
       },
     },
-      React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 10 } }, renderLocalizedText(ui.dictionarySync || (language === "ur" ? "Supabase Dictionary Sync" : "Supabase Dictionary Sync"), language)),
+      React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 10 } }, renderLocalizedText(ui.dictionarySync || (language === "ur" ? "Supabase Cloud Sync" : "Supabase Cloud Sync"), language)),
       React.createElement("div", { className: "settings-item" },
-        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.dictionarySyncEnabled || (language === "ur" ? "Dictionary Sync" : "Dictionary Sync"), language)),
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.dictionarySyncEnabled || (language === "ur" ? "Cloud Sync" : "Cloud Sync"), language)),
         React.createElement("button", {
           className: "grade-btn active",
           style: { width: 120 },
@@ -964,8 +964,8 @@
           textAlign: language === "ur" ? "right" : "left",
         },
       }, renderLocalizedText(ui.supabaseSyncHelp || (language === "ur"
-        ? "یہ صرف لغت کو sync کرتا ہے۔ اکاؤنٹ لاگ اِن اور بازیافت Account سیکشن میں سنبھالی جاتی ہے۔ Supabase میں dictionary_entries ٹیبل اور RLS policies درکار ہوں گی۔"
-        : "This syncs only the dictionary. Account sign-in and recovery live in the Account section. You will need a dictionary_entries table plus RLS policies in Supabase."), language)),
+        ? "یہ لغت، پسندیدہ/نوٹس/فہرستیں، ریویو پیش رفت، اور منتخب سیٹنگز کو sync کرتا ہے۔ اکاؤنٹ لاگ اِن اور بازیافت Account سیکشن میں سنبھالی جاتی ہے۔ Supabase میں dictionary_entries اور user_data_rows ٹیبل درکار ہوں گی۔"
+        : "This syncs dictionary data, favorites/notes/lists, review progress, and selected preferences. Account sign-in and recovery live in the Account section. You will need both dictionary_entries and user_data_rows tables in Supabase."), language)),
       ...dictionaryConflictChildren));
     (Array.isArray(aiProviders) ? aiProviders : []).forEach((provider) => {
       aiChildren.push(renderAiProviderCard(provider, ui, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider));

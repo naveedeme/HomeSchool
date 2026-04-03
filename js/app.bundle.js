@@ -1577,6 +1577,7 @@
     return {};
   }
   const SUPABASE_DICTIONARY_TABLE = "dictionary_entries";
+  const SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
   const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
   const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -1621,6 +1622,52 @@ with check ((select auth.uid()) = user_id);
 
 create policy "Users can delete own dictionary rows"
 on public.dictionary_entries
+for delete
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create table if not exists public.user_data_rows (
+  user_id uuid not null,
+  dataset text not null,
+  row_id text not null,
+  payload jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz null,
+  device_id text null,
+  primary key (user_id, dataset, row_id)
+);
+
+create index if not exists user_data_rows_user_dataset_updated_idx
+  on public.user_data_rows (user_id, dataset, updated_at desc);
+
+alter table public.user_data_rows enable row level security;
+
+drop policy if exists "Users can read own user data rows" on public.user_data_rows;
+drop policy if exists "Users can insert own user data rows" on public.user_data_rows;
+drop policy if exists "Users can update own user data rows" on public.user_data_rows;
+drop policy if exists "Users can delete own user data rows" on public.user_data_rows;
+
+create policy "Users can read own user data rows"
+on public.user_data_rows
+for select
+to authenticated
+using ((select auth.uid()) = user_id);
+
+create policy "Users can insert own user data rows"
+on public.user_data_rows
+for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+create policy "Users can update own user data rows"
+on public.user_data_rows
+for update
+to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+create policy "Users can delete own user data rows"
+on public.user_data_rows
 for delete
 to authenticated
 using ((select auth.uid()) = user_id);`;
@@ -5555,9 +5602,11 @@ ${marker} `);
     const navBarHideTimerRef = useRef(null);
     const copyToastTimerRef = useRef(null);
     const practiceAdvanceTimerRef = useRef(null);
+    const refreshReviewWorkspaceRef = useRef(null);
     const supabaseClientRef = useRef(null);
     const supabaseAuthSubscriptionRef = useRef(null);
     const supabaseRealtimeChannelRef = useRef(null);
+    const supabaseCloudRealtimeChannelRef = useRef(null);
     const dictionaryHydratedFromDbRef = useRef(false);
     const dictionaryPersistedSnapshotRef = useRef(normalizeWordMeaningCache((stored == null ? void 0 : stored.wordMeaningCache) || {}));
     const skipNextDictionaryQueueRef = useRef(false);
@@ -6442,6 +6491,149 @@ ${marker} `);
         conflicts: detectedConflicts.length
       };
     }, []);
+    const applyCloudCustomizationState = useCallback((customizations) => {
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2;
+      const source = customizations && typeof customizations === "object" ? customizations : {};
+      const storedPreferences = ((_a2 = source.preferences) == null ? void 0 : _a2.data) || null;
+      const storedAudioPreferences = ((_b2 = source.audioPreferences) == null ? void 0 : _b2.data) || null;
+      const storedReviewPreferences = ((_c2 = source.reviewPreferences) == null ? void 0 : _c2.data) || null;
+      const storedPacing = ((_d2 = source.daySectionPacing) == null ? void 0 : _d2.data) || null;
+      const storedGoals = ((_e2 = source.studyGoals) == null ? void 0 : _e2.data) || null;
+      const storedFocusTimer = ((_f2 = source.focusTimerSettings) == null ? void 0 : _f2.data) || null;
+      const storedReminderSettings = ((_g2 = source.reminderSettings) == null ? void 0 : _g2.data) || null;
+      const storedBackupReminderSettings = ((_h2 = source.backupReminderSettings) == null ? void 0 : _h2.data) || null;
+      const storedClassSchedule = ((_i2 = source.classScheduleSettings) == null ? void 0 : _i2.data) || null;
+      const storedTimeTracking = ((_j2 = source.timeTrackingData) == null ? void 0 : _j2.data) || null;
+      const storedNotificationHistory = ((_k2 = source.notificationHistory) == null ? void 0 : _k2.data) || null;
+      const storedGamification = ((_l2 = source.gamificationState) == null ? void 0 : _l2.data) || null;
+      const storedDictionaryPreferences = ((_m2 = source.dictionaryPreferences) == null ? void 0 : _m2.data) || null;
+      const storedProfile = ((_n2 = source.studentProfile) == null ? void 0 : _n2.data) || null;
+      const storedPracticeProgress = ((_o2 = source.practiceProgress) == null ? void 0 : _o2.data) || null;
+      if (storedPreferences) {
+        if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
+        if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(Boolean(storedPreferences.ttsEnabled));
+        if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
+        if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
+        if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+        if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
+        if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
+        if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
+        if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
+        if (typeof storedPreferences.focusMode !== "undefined") setFocusMode(Boolean(storedPreferences.focusMode));
+        if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
+        if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
+        if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
+        if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
+        if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
+        if (typeof storedPreferences.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(storedPreferences.transitionMode)) setTransitionMode(storedPreferences.transitionMode);
+      }
+      if (storedAudioPreferences) {
+        if (typeof storedAudioPreferences.ttsRate !== "undefined") {
+          setTtsRate(Math.max(0.6, Math.min(1.3, Number(storedAudioPreferences.ttsRate) || 0.85)));
+        }
+        if (storedAudioPreferences.ttsVoiceSelections && typeof storedAudioPreferences.ttsVoiceSelections === "object") {
+          setTtsVoiceSelections({
+            en: storedAudioPreferences.ttsVoiceSelections.en || "",
+            ur: storedAudioPreferences.ttsVoiceSelections.ur || ""
+          });
+        }
+      }
+      if (storedReviewPreferences) {
+        if (typeof storedReviewPreferences.dailyReviewCap !== "undefined") {
+          setDailyReviewCap(Math.max(5, Math.min(50, Number(storedReviewPreferences.dailyReviewCap) || 20)));
+        }
+        if (typeof storedReviewPreferences.practiceSubjectId !== "undefined") setPracticeSubjectId(storedReviewPreferences.practiceSubjectId || "english");
+        if (storedReviewPreferences.practiceFiltersBySubject && typeof storedReviewPreferences.practiceFiltersBySubject === "object") {
+          setPracticeFiltersBySubject(storedReviewPreferences.practiceFiltersBySubject);
+        }
+        if (storedReviewPreferences.practiceTimedSettings && typeof storedReviewPreferences.practiceTimedSettings === "object") {
+          setPracticeTimedSettings((current) => ({ ...current, ...storedReviewPreferences.practiceTimedSettings }));
+        }
+        if (storedReviewPreferences.reviewSrsSettings && typeof storedReviewPreferences.reviewSrsSettings === "object") {
+          setReviewSrsSettings({
+            masteryThreshold: Math.max(3, Math.min(7, Number(storedReviewPreferences.reviewSrsSettings.masteryThreshold) || 5)),
+            intervalScale: Math.max(0.5, Math.min(2.5, Number(storedReviewPreferences.reviewSrsSettings.intervalScale) || 1)),
+            againMinutes: Math.max(5, Math.min(180, Number(storedReviewPreferences.reviewSrsSettings.againMinutes) || 10))
+          });
+        }
+      }
+      if (storedPacing && typeof storedPacing === "object") setDaySectionOverrides(storedPacing);
+      if (storedPracticeProgress && typeof storedPracticeProgress === "object") setPracticeLessonProgress(storedPracticeProgress);
+      if (storedGoals && typeof storedGoals === "object") {
+        setStudyGoals({
+          dailyReviews: Math.max(5, Math.min(60, Number(storedGoals.dailyReviews) || 20)),
+          weeklyWords: Math.max(10, Math.min(140, Number(storedGoals.weeklyWords) || 40))
+        });
+      }
+      if (storedFocusTimer && typeof storedFocusTimer === "object") {
+        const nextMinutes = Math.max(5, Math.min(60, Number(storedFocusTimer.durationMinutes) || 20));
+        setFocusTimerSettings({
+          durationMinutes: nextMinutes,
+          autoStartBreak: Boolean(storedFocusTimer.autoStartBreak)
+        });
+        setFocusTimerState((current) => ({
+          ...current,
+          remainingSeconds: nextMinutes * 60
+        }));
+      }
+      if (storedReminderSettings && typeof storedReminderSettings === "object") {
+        setReminderSettings({
+          enabled: Boolean(storedReminderSettings.enabled),
+          time: storedReminderSettings.time || "18:00",
+          notifications: Boolean(storedReminderSettings.notifications),
+          lastShownDay: storedReminderSettings.lastShownDay || null
+        });
+      }
+      if (storedBackupReminderSettings && typeof storedBackupReminderSettings === "object") setBackupReminderSettings(normalizeBackupReminderSettings(storedBackupReminderSettings));
+      if (storedClassSchedule && typeof storedClassSchedule === "object") {
+        setClassScheduleSettings({
+          enabled: Boolean(storedClassSchedule.enabled),
+          startTime: storedClassSchedule.startTime || "08:00",
+          endTime: storedClassSchedule.endTime || "13:00"
+        });
+      }
+      if (storedTimeTracking && typeof storedTimeTracking === "object") {
+        const normalizedTracking = normalizeTimeTrackingData(storedTimeTracking);
+        timeTrackingRef.current = normalizedTracking;
+        setTimeTrackingData(normalizedTracking);
+      }
+      if (Array.isArray(storedNotificationHistory)) setNotificationHistory(storedNotificationHistory.slice(0, 40));
+      if (storedGamification && typeof storedGamification === "object") setGamificationState(normalizeGamificationState(storedGamification));
+      if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || "").trim());
+      if (storedProfile && typeof storedProfile === "object") {
+        if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
+        if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
+        if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
+      }
+    }, []);
+    const applyIncomingCloudSyncRows = useCallback(async (incomingRows, reason = "sync") => {
+      var _a2, _b2;
+      const normalizedRows = (Array.isArray(incomingRows) ? incomingRows : []).map((row) => ({
+        dataset: String((row == null ? void 0 : row.dataset) || "").trim(),
+        rowId: String((row == null ? void 0 : row.rowId) || "").trim(),
+        payload: (row == null ? void 0 : row.payload) && typeof row.payload === "object" ? row.payload : {},
+        updatedAt: Number(row == null ? void 0 : row.updatedAt) || Date.now(),
+        deletedAt: (row == null ? void 0 : row.deletedAt) ? Number(row.deletedAt) || Date.now() : null
+      })).filter((row) => row.dataset && row.rowId);
+      if (!normalizedRows.length || !((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.applyCloudSyncRows)) return { applied: 0 };
+      const applied = await window.HomeSchoolDB.applyCloudSyncRows(normalizedRows);
+      if (reason !== "local") {
+        try {
+          const customizationMap = ((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.getCustomizationsMap) ? await window.HomeSchoolDB.getCustomizationsMap() : {};
+          applyCloudCustomizationState(customizationMap || {});
+        } catch (error) {
+          console.log("Unable to refresh synced customizations:", error);
+        }
+        try {
+          if (refreshReviewWorkspaceRef.current) {
+            await refreshReviewWorkspaceRef.current();
+          }
+        } catch (error) {
+          console.log("Unable to refresh review workspace after cloud sync:", error);
+        }
+      }
+      return { applied };
+    }, [applyCloudCustomizationState]);
     const ensureSupabaseClient = useCallback(() => {
       var _a2, _b2, _c2;
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
@@ -6481,13 +6673,13 @@ ${marker} `);
       }));
     }, [language, supabaseDictionarySync.authEmail]);
     const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
-      var _a2, _b2;
+      var _a2, _b2, _c2, _d2, _e2;
       if (!window.HomeSchoolDB) {
         throw new Error(language === "ur" ? "\u0645\u0642\u0627\u0645\u06CC \u0688\u06CC\u0679\u0627\u0628\u06CC\u0633 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA \u06C1\u06D2\u06D4" : "The local database is not available.");
       }
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
       if (!settings.enabled) {
-        throw new Error(language === "ur" ? "\u067E\u06C1\u0644\u06D2 Supabase dictionary sync \u0622\u0646 \u06A9\u0631\u06CC\u06BA\u06D4" : "Enable Supabase dictionary sync first.");
+        throw new Error(language === "ur" ? "\u067E\u06C1\u0644\u06D2 Supabase cloud sync \u0622\u0646 \u06A9\u0631\u06CC\u06BA\u06D4" : "Enable Supabase cloud sync first.");
       }
       if (dictionarySyncInFlightRef.current) return false;
       dictionarySyncInFlightRef.current = true;
@@ -6516,9 +6708,36 @@ ${marker} `);
           if (pushError) throw pushError;
           await window.HomeSchoolDB.clearDictionaryOutboxEntries(dirtyRows.map((row) => row.normalized));
         }
+        const cloudSeedMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloudSeeded");
+        let cloudRowsToPush = await window.HomeSchoolDB.getCloudSyncOutboxEntries(2e3);
+        if (!cloudRowsToPush.length && !((_b2 = cloudSeedMeta == null ? void 0 : cloudSeedMeta.data) == null ? void 0 : _b2.done)) {
+          cloudRowsToPush = await window.HomeSchoolDB.getAllCloudSyncRows();
+        }
+        if (cloudRowsToPush.length) {
+          const cloudPayload = cloudRowsToPush.map((row) => ({
+            user_id: user.id,
+            dataset: String(row.dataset || "").trim(),
+            row_id: String(row.rowId || "").trim(),
+            payload: row.payload || {},
+            updated_at: new Date(Number(row.updatedAt) || Date.now()).toISOString(),
+            deleted_at: row.deletedAt ? new Date(Number(row.deletedAt) || Date.now()).toISOString() : null,
+            device_id: row.deviceId || dictionaryDeviceIdRef.current
+          })).filter((row) => row.dataset && row.row_id);
+          if (cloudPayload.length) {
+            const { error: cloudPushError } = await client.from(SUPABASE_CLOUD_DATA_TABLE).upsert(cloudPayload, { onConflict: "user_id,dataset,row_id" });
+            if (cloudPushError) throw cloudPushError;
+            if ((_c2 = window.HomeSchoolDB) == null ? void 0 : _c2.clearCloudSyncOutboxEntries) {
+              await window.HomeSchoolDB.clearCloudSyncOutboxEntries(cloudRowsToPush.map((row) => `${String(row.dataset || "").trim()}::${String(row.rowId || "").trim()}`));
+            }
+            await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloudSeeded", {
+              done: true,
+              timestamp: Date.now()
+            });
+          }
+        }
         const lastPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:lastPull");
         let pullQuery = client.from(SUPABASE_DICTIONARY_TABLE).select("normalized, word, payload, updated_at, deleted_at, source_rank, device_id").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(1e3);
-        const lastPullAt = Number((_b2 = lastPullMeta == null ? void 0 : lastPullMeta.data) == null ? void 0 : _b2.timestamp) || 0;
+        const lastPullAt = Number((_d2 = lastPullMeta == null ? void 0 : lastPullMeta.data) == null ? void 0 : _d2.timestamp) || 0;
         if (lastPullAt > 0) {
           pullQuery = pullQuery.gt("updated_at", new Date(lastPullAt).toISOString());
         }
@@ -6538,8 +6757,33 @@ ${marker} `);
             await applyIncomingDictionaryRows(normalizedRemoteRows, reason);
           }
         }
+        const lastCloudPullMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloud:lastPull");
+        let cloudPullQuery = client.from(SUPABASE_CLOUD_DATA_TABLE).select("dataset, row_id, payload, updated_at, deleted_at, device_id").eq("user_id", user.id).order("updated_at", { ascending: false }).limit(3e3);
+        const lastCloudPullAt = Number((_e2 = lastCloudPullMeta == null ? void 0 : lastCloudPullMeta.data) == null ? void 0 : _e2.timestamp) || 0;
+        if (lastCloudPullAt > 0) {
+          cloudPullQuery = cloudPullQuery.gt("updated_at", new Date(lastCloudPullAt).toISOString());
+        }
+        const { data: remoteCloudRows = [], error: cloudPullError } = await cloudPullQuery;
+        if (cloudPullError) throw cloudPullError;
+        if (remoteCloudRows.length) {
+          const normalizedRemoteCloudRows = remoteCloudRows.map((row) => ({
+            dataset: String(row.dataset || "").trim(),
+            rowId: String(row.row_id || "").trim(),
+            payload: row.payload || {},
+            updatedAt: Date.parse(row.updated_at) || Date.now(),
+            deletedAt: row.deleted_at ? Date.parse(row.deleted_at) || Date.now() : null,
+            deviceId: String(row.device_id || "")
+          })).filter((row) => row.dataset && row.rowId);
+          if (normalizedRemoteCloudRows.length) {
+            await applyIncomingCloudSyncRows(normalizedRemoteCloudRows, reason);
+          }
+        }
         const syncedAt = Date.now();
         await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:lastPull", {
+          timestamp: syncedAt,
+          reason
+        });
+        await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloud:lastPull", {
           timestamp: syncedAt,
           reason
         });
@@ -6549,7 +6793,7 @@ ${marker} `);
         }));
         applySupabaseSessionState(session, {
           status: "ready",
-          message: language === "ur" ? "Dictionary sync \u0645\u06A9\u0645\u0644 \u06C1\u0648 \u06AF\u0626\u06CC\u06D4" : "Dictionary sync completed.",
+          message: language === "ur" ? "Cloud sync \u0645\u06A9\u0645\u0644 \u06C1\u0648 \u06AF\u0626\u06CC\u06D4" : "Cloud sync completed.",
           lastSyncedAt: syncedAt
         });
         return true;
@@ -6557,7 +6801,7 @@ ${marker} `);
         dictionarySyncInFlightRef.current = false;
         setSupabaseSyncBusy(false);
       }
-    }, [applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
+    }, [applyIncomingCloudSyncRows, applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
     const handleSupabaseSendMagicLink = useCallback(async () => {
       const email = String(supabaseDictionarySync.authEmail || "").trim();
       if (!email) {
@@ -6756,9 +7000,15 @@ ${marker} `);
         }
         const { count, error: queryError } = await client.from(SUPABASE_DICTIONARY_TABLE).select("normalized", { head: true, count: "exact" }).eq("user_id", session.user.id);
         if (queryError) throw queryError;
+        const { count: cloudCount, error: cloudQueryError } = await client.from(SUPABASE_CLOUD_DATA_TABLE).select("row_id", { head: true, count: "exact" }).eq("user_id", session.user.id);
+        if (cloudQueryError) throw cloudQueryError;
         applySupabaseSessionState(session, {
           status: "ready",
-          message: joinLocalizedText(`Connection ok \u2022 ${Number(count) || 0} rows visible`, `\u06A9\u0646\u06A9\u0634\u0646 \u062F\u0631\u0633\u062A \u2022 ${Number(count) || 0} \u0642\u0637\u0627\u0631\u06CC\u06BA \u0646\u0638\u0631 \u0622 \u0631\u06C1\u06CC \u06C1\u06CC\u06BA`, language)
+          message: joinLocalizedText(
+            `Connection ok \u2022 ${Number(count) || 0} dictionary + ${Number(cloudCount) || 0} cloud rows`,
+            `\u06A9\u0646\u06A9\u0634\u0646 \u062F\u0631\u0633\u062A \u2022 ${Number(count) || 0} \u0644\u063A\u062A + ${Number(cloudCount) || 0} \u06A9\u0644\u0627\u0624\u0688 \u0642\u0637\u0627\u0631\u06CC\u06BA`,
+            language
+          )
         });
         showAppToast(joinLocalizedText("Connection test passed", "\u06A9\u0646\u06A9\u0634\u0646 \u0679\u06CC\u0633\u0679 \u06A9\u0627\u0645\u06CC\u0627\u0628", language), "check");
         return true;
@@ -6915,6 +7165,26 @@ ${marker} `);
       localStorageFallback(SUPABASE_SYNC_STORAGE_KEY, buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync));
     }, [supabaseDictionarySync]);
     useEffect(() => {
+      const handleCloudSyncSignal = () => {
+        setSupabaseSyncPulse(Date.now());
+      };
+      const handleStorageSignal = (event) => {
+        if ((event == null ? void 0 : event.key) === "hs_cloud_sync_signal") {
+          setSupabaseSyncPulse(Date.now());
+        }
+      };
+      if (typeof window !== "undefined") {
+        window.addEventListener("hs-cloud-sync-change", handleCloudSyncSignal);
+        window.addEventListener("storage", handleStorageSignal);
+      }
+      return () => {
+        if (typeof window !== "undefined") {
+          window.removeEventListener("hs-cloud-sync-change", handleCloudSyncSignal);
+          window.removeEventListener("storage", handleStorageSignal);
+        }
+      };
+    }, []);
+    useEffect(() => {
       var _a2, _b2;
       if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
         setSupabaseAuthState((current) => ({
@@ -7010,6 +7280,49 @@ ${marker} `);
         supabaseRealtimeChannelRef.current = null;
       };
     }, [applyIncomingDictionaryRows, ensureSupabaseClient, supabaseAuthState.userId, supabaseDictionarySync.enabled, supabaseDictionarySync.realtimeEnabled]);
+    useEffect(() => {
+      const existingChannel = supabaseCloudRealtimeChannelRef.current;
+      if (existingChannel == null ? void 0 : existingChannel.unsubscribe) {
+        existingChannel.unsubscribe();
+        supabaseCloudRealtimeChannelRef.current = null;
+      }
+      if (!supabaseDictionarySync.enabled || !supabaseDictionarySync.realtimeEnabled || !supabaseAuthState.userId) {
+        return void 0;
+      }
+      let active = true;
+      try {
+        const client = ensureSupabaseClient();
+        const channel = client.channel(`cloud-sync-${supabaseAuthState.userId}`).on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CLOUD_DATA_TABLE,
+          filter: `user_id=eq.${supabaseAuthState.userId}`
+        }, (payload) => {
+          if (!active) return;
+          const incoming = (payload == null ? void 0 : payload.new) || (payload == null ? void 0 : payload.record) || null;
+          if (!(incoming == null ? void 0 : incoming.dataset) || !(incoming == null ? void 0 : incoming.row_id)) return;
+          applyIncomingCloudSyncRows([{
+            dataset: String(incoming.dataset || "").trim(),
+            rowId: String(incoming.row_id || "").trim(),
+            payload: incoming.payload || {},
+            updatedAt: Date.parse(incoming.updated_at) || Date.now(),
+            deletedAt: incoming.deleted_at ? Date.parse(incoming.deleted_at) || Date.now() : null,
+            deviceId: String(incoming.device_id || "")
+          }], "realtime").catch((error) => {
+            console.log("Unable to apply realtime cloud row:", error);
+          });
+        }).subscribe();
+        supabaseCloudRealtimeChannelRef.current = channel;
+      } catch (error) {
+        console.log("Unable to start Supabase realtime cloud sync:", error);
+      }
+      return () => {
+        active = false;
+        const channel = supabaseCloudRealtimeChannelRef.current;
+        if (channel == null ? void 0 : channel.unsubscribe) channel.unsubscribe();
+        supabaseCloudRealtimeChannelRef.current = null;
+      };
+    }, [applyIncomingCloudSyncRows, ensureSupabaseClient, supabaseAuthState.userId, supabaseDictionarySync.enabled, supabaseDictionarySync.realtimeEnabled]);
     useEffect(() => {
       if (!dbLoaded || !supabaseDictionarySync.enabled || !supabaseDictionarySync.autoSync || !supabaseAuthState.userId) return void 0;
       if (!supabaseSyncPulse) return void 0;
@@ -7178,6 +7491,9 @@ ${marker} `);
       }, {}));
       setReviewStats(buildReviewStatsFallback(statsResult.status === "fulfilled" ? statsResult.value : {}, nextLibrary, nextAnalytics, { masteryThreshold: reviewSrsSettings.masteryThreshold }));
     }, [reviewSrsSettings.intervalScale, reviewSrsSettings.masteryThreshold]);
+    useEffect(() => {
+      refreshReviewWorkspaceRef.current = refreshReviewWorkspace;
+    }, [refreshReviewWorkspace]);
     const pushNotificationHistoryEntry = useCallback((entry) => {
       if (!entry) return;
       setNotificationHistory((current) => {
@@ -10117,17 +10433,17 @@ ${error.message || error}`);
     );
     const handleSupabaseSyncNow = useCallback(async () => {
       try {
-        showAppToast(joinLocalizedText("Syncing dictionary...", "\u0644\u063A\u062A \u0633\u0646\u06A9 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2...", language), "sync");
+        showAppToast(joinLocalizedText("Syncing cloud data...", "\u06A9\u0644\u0627\u0624\u0688 \u0688\u06CC\u0679\u0627 \u0633\u0646\u06A9 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language), "sync");
         await performSupabaseDictionarySync("manual");
-        showAppToast(joinLocalizedText("Dictionary synced", "\u0644\u063A\u062A \u0633\u0646\u06A9 \u06C1\u0648 \u06AF\u0626\u06CC", language), "sync");
+        showAppToast(joinLocalizedText("Cloud data synced", "\u06A9\u0644\u0627\u0624\u0688 \u0688\u06CC\u0679\u0627 \u0633\u0646\u06A9 \u06C1\u0648 \u06AF\u06CC\u0627", language), "sync");
       } catch (error) {
         setSupabaseAuthState((current) => ({
           ...current,
           status: "error",
           message: (error == null ? void 0 : error.message) || String(error)
         }));
-        showAppToast(joinLocalizedText("Dictionary sync failed", "\u0644\u063A\u062A \u0633\u0646\u06A9 \u0646\u0627\u06A9\u0627\u0645 \u06C1\u0648\u0626\u06CC", language), "alert");
-        alert(joinLocalizedText(`Dictionary sync failed: ${(error == null ? void 0 : error.message) || error}`, `Dictionary sync \u0646\u0627\u06A9\u0627\u0645 \u06C1\u0648\u0626\u06CC: ${(error == null ? void 0 : error.message) || error}`, language));
+        showAppToast(joinLocalizedText("Cloud sync failed", "\u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9 \u0646\u0627\u06A9\u0627\u0645 \u06C1\u0648\u0626\u06CC", language), "alert");
+        alert(joinLocalizedText(`Cloud sync failed: ${(error == null ? void 0 : error.message) || error}`, `Cloud sync \u0646\u0627\u06A9\u0627\u0645 \u06C1\u0648\u0626\u06CC: ${(error == null ? void 0 : error.message) || error}`, language));
       }
     }, [language, performSupabaseDictionarySync, showAppToast]);
     const aiSettingsProviders = AI_PROVIDER_ORDER.map((providerId) => {
