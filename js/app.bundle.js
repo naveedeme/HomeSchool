@@ -1660,6 +1660,15 @@ using ((select auth.uid()) = user_id);`;
       lastSyncedAt: normalized.lastSyncedAt
     };
   }
+  function getSupabaseAuthRedirectUrl() {
+    if (typeof location === "undefined" || location.protocol === "file:") return void 0;
+    return `${location.origin}${location.pathname}${location.search}`;
+  }
+  function getSupabaseUserRole(user) {
+    var _a, _b;
+    const role = String(((_a = user == null ? void 0 : user.app_metadata) == null ? void 0 : _a.role) || ((_b = user == null ? void 0 : user.user_metadata) == null ? void 0 : _b.role) || "student").trim().toLowerCase();
+    return role || "student";
+  }
   function createDictionaryRowsFromMap(rawCache, deviceId = "") {
     return Object.entries(normalizeWordMeaningCache(rawCache || {})).map(([normalizedWord, entry]) => ({
       normalized: normalizedWord,
@@ -5515,9 +5524,13 @@ ${marker} `);
       status: "idle",
       userId: "",
       email: "",
+      role: "student",
       message: "",
-      lastSyncedAt: Number(storedSupabaseSyncSettings.lastSyncedAt) || 0
+      lastSyncedAt: Number(storedSupabaseSyncSettings.lastSyncedAt) || 0,
+      lastCheckedAt: 0
     });
+    const [supabaseAuthBusy, setSupabaseAuthBusy] = useState(false);
+    const [supabaseAccountPassword, setSupabaseAccountPassword] = useState("");
     const [supabaseSyncBusy, setSupabaseSyncBusy] = useState(false);
     const [supabaseSyncPulse, setSupabaseSyncPulse] = useState(0);
     const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
@@ -6452,6 +6465,21 @@ ${marker} `);
       supabaseClientRef.current = { key: cacheKey, client };
       return client;
     }, [language, supabaseDictionarySync]);
+    const applySupabaseSessionState = useCallback((session, options = {}) => {
+      const user = (session == null ? void 0 : session.user) || null;
+      const signedIn = Boolean(user == null ? void 0 : user.id);
+      const nextMessage = typeof options.message === "string" ? options.message : signedIn ? joinLocalizedText("Connected to Supabase.", "Supabase \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u062C\u0691 \u06AF\u06CC\u0627\u06D4", language) : "";
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: options.status || (signedIn ? "ready" : "idle"),
+        userId: (user == null ? void 0 : user.id) || "",
+        email: (user == null ? void 0 : user.email) || current.email || supabaseDictionarySync.authEmail,
+        role: getSupabaseUserRole(user),
+        message: nextMessage || current.message || "",
+        lastCheckedAt: Date.now(),
+        lastSyncedAt: options.lastSyncedAt || current.lastSyncedAt || 0
+      }));
+    }, [language, supabaseDictionarySync.authEmail]);
     const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
       var _a2, _b2;
       if (!window.HomeSchoolDB) {
@@ -6519,54 +6547,179 @@ ${marker} `);
           ...current,
           lastSyncedAt: syncedAt
         }));
-        setSupabaseAuthState((current) => ({
-          ...current,
+        applySupabaseSessionState(session, {
           status: "ready",
-          userId: user.id,
-          email: user.email || current.email || settings.authEmail,
           message: language === "ur" ? "Dictionary sync \u0645\u06A9\u0645\u0644 \u06C1\u0648 \u06AF\u0626\u06CC\u06D4" : "Dictionary sync completed.",
           lastSyncedAt: syncedAt
-        }));
+        });
         return true;
       } finally {
         dictionarySyncInFlightRef.current = false;
         setSupabaseSyncBusy(false);
       }
-    }, [applyIncomingDictionaryRows, ensureSupabaseClient, language, supabaseDictionarySync]);
+    }, [applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
     const handleSupabaseSendMagicLink = useCallback(async () => {
       const email = String(supabaseDictionarySync.authEmail || "").trim();
       if (!email) {
         alert(joinLocalizedText("Enter your email first.", "\u067E\u06C1\u0644\u06D2 \u0627\u067E\u0646\u0627 \u0627\u06CC \u0645\u06CC\u0644 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA\u06D4", language));
         return;
       }
-      setSupabaseSyncBusy(true);
+      setSupabaseAuthBusy(true);
       try {
         const client = ensureSupabaseClient();
         const { error } = await client.auth.signInWithOtp({
           email,
-          options: location.protocol === "file:" ? void 0 : { emailRedirectTo: location.href }
+          options: getSupabaseAuthRedirectUrl() ? { emailRedirectTo: getSupabaseAuthRedirectUrl() } : void 0
         });
         if (error) throw error;
         setSupabaseAuthState((current) => ({
           ...current,
           status: "pending",
           email,
-          message: joinLocalizedText("Magic link sent. Open it on this app to connect sync.", "\u0645\u06CC\u062C\u06A9 \u0644\u0646\u06A9 \u0628\u06BE\u06CC\u062C \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4 \u0627\u0633\u06CC \u0627\u06CC\u067E \u0645\u06CC\u06BA \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644 \u06A9\u0631 sync \u062C\u0648\u0691\u06CC\u06BA\u06D4", language)
+          role: current.role || "student",
+          message: joinLocalizedText("Magic link sent. Open it on this app to connect sync.", "\u0645\u06CC\u062C\u06A9 \u0644\u0646\u06A9 \u0628\u06BE\u06CC\u062C \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4 \u0627\u0633\u06CC \u0627\u06CC\u067E \u0645\u06CC\u06BA \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644 \u06A9\u0631 sync \u062C\u0648\u0691\u06CC\u06BA\u06D4", language),
+          lastCheckedAt: Date.now()
         }));
         showAppToast(joinLocalizedText("Magic link sent", "\u0645\u06CC\u062C\u06A9 \u0644\u0646\u06A9 \u0628\u06BE\u06CC\u062C \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "send");
       } catch (error) {
         setSupabaseAuthState((current) => ({
           ...current,
           status: "error",
-          message: (error == null ? void 0 : error.message) || String(error)
+          message: (error == null ? void 0 : error.message) || String(error),
+          lastCheckedAt: Date.now()
         }));
         showAppToast(joinLocalizedText("Unable to send magic link", "\u0645\u06CC\u062C\u06A9 \u0644\u0646\u06A9 \u0646\u06C1\u06CC\u06BA \u0628\u06BE\u06CC\u062C\u0627 \u062C\u0627 \u0633\u06A9\u0627", language), "alert");
         alert(joinLocalizedText(`Unable to send the sign-in link: ${error.message || error}`, `\u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u0644\u0646\u06A9 \u0646\u06C1\u06CC\u06BA \u0628\u06BE\u06CC\u062C\u0627 \u062C\u0627 \u0633\u06A9\u0627: ${error.message || error}`, language));
       } finally {
-        setSupabaseSyncBusy(false);
+        setSupabaseAuthBusy(false);
       }
     }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail]);
+    const handleSupabasePasswordSignIn = useCallback(async () => {
+      const email = String(supabaseDictionarySync.authEmail || "").trim();
+      const password = String(supabaseAccountPassword || "");
+      if (!email || !password) {
+        alert(joinLocalizedText("Enter your email and password first.", "\u067E\u06C1\u0644\u06D2 \u0627\u067E\u0646\u0627 \u0627\u06CC \u0645\u06CC\u0644 \u0627\u0648\u0631 \u067E\u0627\u0633 \u0648\u0631\u0688 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA\u06D4", language));
+        return;
+      }
+      setSupabaseAuthBusy(true);
+      try {
+        const client = ensureSupabaseClient();
+        const { data, error } = await client.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        applySupabaseSessionState((data == null ? void 0 : data.session) || null, {
+          message: joinLocalizedText("Signed in successfully.", "\u06A9\u0627\u0645\u06CC\u0627\u0628\u06CC \u0633\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4", language)
+        });
+        showAppToast(joinLocalizedText("Signed in", "\u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06C1\u0648 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        setSupabaseAuthState((current) => ({
+          ...current,
+          status: "error",
+          message: (error == null ? void 0 : error.message) || String(error),
+          lastCheckedAt: Date.now()
+        }));
+        showAppToast(joinLocalizedText("Unable to sign in", "\u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627", language), "alert");
+        alert(joinLocalizedText(`Unable to sign in: ${(error == null ? void 0 : error.message) || error}`, `\u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language));
+      } finally {
+        setSupabaseAuthBusy(false);
+      }
+    }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail]);
+    const handleSupabaseCreateAccount = useCallback(async () => {
+      var _a2, _b2, _c2, _d2;
+      const email = String(supabaseDictionarySync.authEmail || "").trim();
+      const password = String(supabaseAccountPassword || "");
+      if (!email || !password) {
+        alert(joinLocalizedText("Enter your email and password first.", "\u067E\u06C1\u0644\u06D2 \u0627\u067E\u0646\u0627 \u0627\u06CC \u0645\u06CC\u0644 \u0627\u0648\u0631 \u067E\u0627\u0633 \u0648\u0631\u0688 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA\u06D4", language));
+        return;
+      }
+      setSupabaseAuthBusy(true);
+      try {
+        const client = ensureSupabaseClient();
+        const { data, error } = await client.auth.signUp({
+          email,
+          password,
+          options: getSupabaseAuthRedirectUrl() ? { emailRedirectTo: getSupabaseAuthRedirectUrl(), data: { role: "student" } } : { data: { role: "student" } }
+        });
+        if (error) throw error;
+        applySupabaseSessionState((data == null ? void 0 : data.session) || null, {
+          status: ((_b2 = (_a2 = data == null ? void 0 : data.session) == null ? void 0 : _a2.user) == null ? void 0 : _b2.id) ? "ready" : "pending",
+          message: ((_d2 = (_c2 = data == null ? void 0 : data.session) == null ? void 0 : _c2.user) == null ? void 0 : _d2.id) ? joinLocalizedText("Account created and signed in.", "\u0627\u06A9\u0627\u0624\u0646\u0679 \u0628\u0646 \u06AF\u06CC\u0627 \u0627\u0648\u0631 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4", language) : joinLocalizedText("Account created. Check your email to confirm it.", "\u0627\u06A9\u0627\u0624\u0646\u0679 \u0628\u0646 \u06AF\u06CC\u0627\u06D4 \u0627\u0633\u06D2 \u062A\u0635\u062F\u06CC\u0642 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u0627 \u0627\u06CC \u0645\u06CC\u0644 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language)
+        });
+        showAppToast(joinLocalizedText("Account created", "\u0627\u06A9\u0627\u0624\u0646\u0679 \u0628\u0646 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        setSupabaseAuthState((current) => ({
+          ...current,
+          status: "error",
+          message: (error == null ? void 0 : error.message) || String(error),
+          lastCheckedAt: Date.now()
+        }));
+        showAppToast(joinLocalizedText("Unable to create account", "\u0627\u06A9\u0627\u0624\u0646\u0679 \u0646\u06C1\u06CC\u06BA \u0628\u0646 \u0633\u06A9\u0627", language), "alert");
+        alert(joinLocalizedText(`Unable to create account: ${(error == null ? void 0 : error.message) || error}`, `\u0627\u06A9\u0627\u0624\u0646\u0679 \u0646\u06C1\u06CC\u06BA \u0628\u0646 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language));
+      } finally {
+        setSupabaseAuthBusy(false);
+      }
+    }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail]);
+    const handleSupabasePasswordReset = useCallback(async () => {
+      const email = String(supabaseDictionarySync.authEmail || "").trim();
+      if (!email) {
+        alert(joinLocalizedText("Enter your email first.", "\u067E\u06C1\u0644\u06D2 \u0627\u067E\u0646\u0627 \u0627\u06CC \u0645\u06CC\u0644 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA\u06D4", language));
+        return;
+      }
+      setSupabaseAuthBusy(true);
+      try {
+        const client = ensureSupabaseClient();
+        const { error } = await client.auth.resetPasswordForEmail(email, getSupabaseAuthRedirectUrl() ? { redirectTo: getSupabaseAuthRedirectUrl() } : void 0);
+        if (error) throw error;
+        setSupabaseAuthState((current) => ({
+          ...current,
+          status: "pending",
+          email,
+          message: joinLocalizedText("Password reset email sent. Open it in this app.", "\u067E\u0627\u0633 \u0648\u0631\u0688 \u0631\u06CC \u0633\u06CC\u0679 \u0627\u06CC \u0645\u06CC\u0644 \u0628\u06BE\u06CC\u062C \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4 \u0627\u0633\u06D2 \u0627\u0633\u06CC \u0627\u06CC\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language),
+          lastCheckedAt: Date.now()
+        }));
+        showAppToast(joinLocalizedText("Password reset sent", "\u067E\u0627\u0633 \u0648\u0631\u0688 \u0631\u06CC \u0633\u06CC\u0679 \u0628\u06BE\u06CC\u062C \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "send");
+      } catch (error) {
+        setSupabaseAuthState((current) => ({
+          ...current,
+          status: "error",
+          message: (error == null ? void 0 : error.message) || String(error),
+          lastCheckedAt: Date.now()
+        }));
+        showAppToast(joinLocalizedText("Unable to send reset email", "\u0631\u06CC \u0633\u06CC\u0679 \u0627\u06CC \u0645\u06CC\u0644 \u0646\u06C1\u06CC\u06BA \u0628\u06BE\u06CC\u062C\u0627 \u062C\u0627 \u0633\u06A9\u0627", language), "alert");
+        alert(joinLocalizedText(`Unable to send reset email: ${(error == null ? void 0 : error.message) || error}`, `\u0631\u06CC \u0633\u06CC\u0679 \u0627\u06CC \u0645\u06CC\u0644 \u0646\u06C1\u06CC\u06BA \u0628\u06BE\u06CC\u062C\u0627 \u062C\u0627 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language));
+      } finally {
+        setSupabaseAuthBusy(false);
+      }
+    }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail]);
+    const handleSupabaseRefreshSession = useCallback(async () => {
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2;
+      setSupabaseAuthBusy(true);
+      try {
+        const client = ensureSupabaseClient();
+        const { data, error } = await client.auth.getSession();
+        if (error) throw error;
+        applySupabaseSessionState((data == null ? void 0 : data.session) || null, {
+          message: ((_b2 = (_a2 = data == null ? void 0 : data.session) == null ? void 0 : _a2.user) == null ? void 0 : _b2.id) ? joinLocalizedText("Session refreshed.", "\u0633\u06CC\u0634\u0646 \u062A\u0627\u0632\u06C1 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4", language) : joinLocalizedText("No active session yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0641\u0639\u0627\u0644 \u0633\u06CC\u0634\u0646 \u0646\u06C1\u06CC\u06BA\u06D4", language)
+        });
+        showAppToast(
+          ((_d2 = (_c2 = data == null ? void 0 : data.session) == null ? void 0 : _c2.user) == null ? void 0 : _d2.id) ? joinLocalizedText("Session restored", "\u0633\u06CC\u0634\u0646 \u0628\u062D\u0627\u0644 \u06C1\u0648 \u06AF\u06CC\u0627", language) : joinLocalizedText("No active session", "\u06A9\u0648\u0626\u06CC \u0641\u0639\u0627\u0644 \u0633\u06CC\u0634\u0646 \u0646\u06C1\u06CC\u06BA", language),
+          ((_f2 = (_e2 = data == null ? void 0 : data.session) == null ? void 0 : _e2.user) == null ? void 0 : _f2.id) ? "check" : "alert"
+        );
+        return Boolean((_h2 = (_g2 = data == null ? void 0 : data.session) == null ? void 0 : _g2.user) == null ? void 0 : _h2.id);
+      } catch (error) {
+        setSupabaseAuthState((current) => ({
+          ...current,
+          status: "error",
+          message: (error == null ? void 0 : error.message) || String(error),
+          lastCheckedAt: Date.now()
+        }));
+        showAppToast(joinLocalizedText("Unable to refresh session", "\u0633\u06CC\u0634\u0646 \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627", language), "alert");
+        return false;
+      } finally {
+        setSupabaseAuthBusy(false);
+      }
+    }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast]);
     const handleSupabaseSignOut = useCallback(async () => {
+      setSupabaseAuthBusy(true);
       try {
         const client = ensureSupabaseClient();
         await client.auth.signOut();
@@ -6577,8 +6730,11 @@ ${marker} `);
         ...current,
         status: "idle",
         userId: "",
-        message: ""
+        role: "student",
+        message: "",
+        lastCheckedAt: Date.now()
       }));
+      setSupabaseAuthBusy(false);
     }, [ensureSupabaseClient]);
     const handleSupabaseTestConnection = useCallback(async () => {
       var _a2;
@@ -6592,27 +6748,26 @@ ${marker} `);
           setSupabaseAuthState((current) => ({
             ...current,
             status: "idle",
-            message: joinLocalizedText("Connection looks good. Sign in to test row access.", "\u06A9\u0646\u06A9\u0634\u0646 \u062F\u0631\u0633\u062A \u0644\u06AF \u0631\u06C1\u0627 \u06C1\u06D2\u06D4 \u0642\u0637\u0627\u0631\u0648\u06BA \u062A\u06A9 \u0631\u0633\u0627\u0626\u06CC \u062C\u0627\u0646\u0686\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language)
+            message: joinLocalizedText("Connection looks good. Sign in to test row access.", "\u06A9\u0646\u06A9\u0634\u0646 \u062F\u0631\u0633\u062A \u0644\u06AF \u0631\u06C1\u0627 \u06C1\u06D2\u06D4 \u0642\u0637\u0627\u0631\u0648\u06BA \u062A\u06A9 \u0631\u0633\u0627\u0626\u06CC \u062C\u0627\u0646\u0686\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language),
+            lastCheckedAt: Date.now()
           }));
           showAppToast(joinLocalizedText("Connection ready", "\u06A9\u0646\u06A9\u0634\u0646 \u062A\u06CC\u0627\u0631 \u06C1\u06D2", language), "check");
           return true;
         }
         const { count, error: queryError } = await client.from(SUPABASE_DICTIONARY_TABLE).select("normalized", { head: true, count: "exact" }).eq("user_id", session.user.id);
         if (queryError) throw queryError;
-        setSupabaseAuthState((current) => ({
-          ...current,
+        applySupabaseSessionState(session, {
           status: "ready",
-          userId: session.user.id,
-          email: session.user.email || current.email,
           message: joinLocalizedText(`Connection ok \u2022 ${Number(count) || 0} rows visible`, `\u06A9\u0646\u06A9\u0634\u0646 \u062F\u0631\u0633\u062A \u2022 ${Number(count) || 0} \u0642\u0637\u0627\u0631\u06CC\u06BA \u0646\u0638\u0631 \u0622 \u0631\u06C1\u06CC \u06C1\u06CC\u06BA`, language)
-        }));
+        });
         showAppToast(joinLocalizedText("Connection test passed", "\u06A9\u0646\u06A9\u0634\u0646 \u0679\u06CC\u0633\u0679 \u06A9\u0627\u0645\u06CC\u0627\u0628", language), "check");
         return true;
       } catch (error) {
         setSupabaseAuthState((current) => ({
           ...current,
           status: "error",
-          message: (error == null ? void 0 : error.message) || String(error)
+          message: (error == null ? void 0 : error.message) || String(error),
+          lastCheckedAt: Date.now()
         }));
         showAppToast(joinLocalizedText("Connection test failed", "\u06A9\u0646\u06A9\u0634\u0646 \u0679\u06CC\u0633\u0679 \u0646\u0627\u06A9\u0627\u0645", language), "alert");
         alert(joinLocalizedText(`Connection test failed: ${(error == null ? void 0 : error.message) || error}`, `\u06A9\u0646\u06A9\u0634\u0646 \u0679\u06CC\u0633\u0679 \u0646\u0627\u06A9\u0627\u0645: ${(error == null ? void 0 : error.message) || error}`, language));
@@ -6620,7 +6775,7 @@ ${marker} `);
       } finally {
         setSupabaseSyncBusy(false);
       }
-    }, [ensureSupabaseClient, language, showAppToast]);
+    }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast]);
     const handleCopySupabaseSqlHelper = useCallback(async () => {
       const copied = await copyTextToClipboard(SUPABASE_DICTIONARY_SETUP_SQL);
       if (!copied) {
@@ -6766,7 +6921,9 @@ ${marker} `);
           ...current,
           status: supabaseDictionarySync.enabled ? "idle" : "disabled",
           userId: "",
-          message: ""
+          role: "student",
+          message: "",
+          lastCheckedAt: Date.now()
         }));
         return void 0;
       }
@@ -6774,47 +6931,33 @@ ${marker} `);
       try {
         const client = ensureSupabaseClient();
         client.auth.getSession().then(({ data, error }) => {
+          var _a3, _b3;
           if (!active) return;
           if (error) {
-            setSupabaseAuthState((current) => ({ ...current, status: "error", message: error.message || String(error) }));
+            setSupabaseAuthState((current) => ({ ...current, status: "error", message: error.message || String(error), lastCheckedAt: Date.now() }));
             return;
           }
-          const session = (data == null ? void 0 : data.session) || null;
-          setSupabaseAuthState((current) => {
-            var _a3, _b3, _c2, _d2;
-            return {
-              ...current,
-              status: ((_a3 = session == null ? void 0 : session.user) == null ? void 0 : _a3.id) ? "ready" : "idle",
-              userId: ((_b3 = session == null ? void 0 : session.user) == null ? void 0 : _b3.id) || "",
-              email: ((_c2 = session == null ? void 0 : session.user) == null ? void 0 : _c2.email) || current.email || supabaseDictionarySync.authEmail,
-              message: ((_d2 = session == null ? void 0 : session.user) == null ? void 0 : _d2.id) ? joinLocalizedText("Connected to Supabase.", "Supabase \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u062C\u0691 \u06AF\u06CC\u0627\u06D4", language) : current.message
-            };
+          applySupabaseSessionState((data == null ? void 0 : data.session) || null, {
+            message: ((_b3 = (_a3 = data == null ? void 0 : data.session) == null ? void 0 : _a3.user) == null ? void 0 : _b3.id) ? joinLocalizedText("Connected to Supabase.", "Supabase \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u062C\u0691 \u06AF\u06CC\u0627\u06D4", language) : ""
           });
         }).catch((error) => {
           if (!active) return;
-          setSupabaseAuthState((current) => ({ ...current, status: "error", message: (error == null ? void 0 : error.message) || String(error) }));
+          setSupabaseAuthState((current) => ({ ...current, status: "error", message: (error == null ? void 0 : error.message) || String(error), lastCheckedAt: Date.now() }));
         });
         if ((_b2 = (_a2 = supabaseAuthSubscriptionRef.current) == null ? void 0 : _a2.subscription) == null ? void 0 : _b2.unsubscribe) {
           supabaseAuthSubscriptionRef.current.subscription.unsubscribe();
         }
         const subscriptionHandle = client.auth.onAuthStateChange((event, session) => {
-          var _a3;
+          var _a3, _b3;
           if (!active) return;
-          const signedIn = Boolean((_a3 = session == null ? void 0 : session.user) == null ? void 0 : _a3.id);
-          setSupabaseAuthState((current) => {
-            var _a4, _b3;
-            return {
-              ...current,
-              status: signedIn ? "ready" : "idle",
-              userId: ((_a4 = session == null ? void 0 : session.user) == null ? void 0 : _a4.id) || "",
-              email: ((_b3 = session == null ? void 0 : session.user) == null ? void 0 : _b3.email) || current.email || supabaseDictionarySync.authEmail,
-              message: signedIn ? joinLocalizedText("Supabase sync is connected.", "Supabase sync \u062C\u0691 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4", language) : event === "SIGNED_OUT" ? joinLocalizedText("Supabase sync signed out.", "Supabase sync \u0633\u06D2 \u0633\u0627\u0626\u0646 \u0622\u0624\u0679 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4", language) : current.message
-            };
+          applySupabaseSessionState(session, {
+            status: ((_a3 = session == null ? void 0 : session.user) == null ? void 0 : _a3.id) ? "ready" : "idle",
+            message: ((_b3 = session == null ? void 0 : session.user) == null ? void 0 : _b3.id) ? joinLocalizedText("Supabase account is connected.", "Supabase \u0627\u06A9\u0627\u0624\u0646\u0679 \u062C\u0691 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4", language) : event === "SIGNED_OUT" ? joinLocalizedText("Supabase account signed out.", "Supabase \u0627\u06A9\u0627\u0624\u0646\u0679 \u0633\u06D2 \u0633\u0627\u0626\u0646 \u0622\u0624\u0679 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4", language) : ""
           });
         });
         supabaseAuthSubscriptionRef.current = (subscriptionHandle == null ? void 0 : subscriptionHandle.data) || subscriptionHandle;
       } catch (error) {
-        setSupabaseAuthState((current) => ({ ...current, status: "error", message: (error == null ? void 0 : error.message) || String(error) }));
+        setSupabaseAuthState((current) => ({ ...current, status: "error", message: (error == null ? void 0 : error.message) || String(error), lastCheckedAt: Date.now() }));
       }
       return () => {
         var _a3;
@@ -6822,7 +6965,7 @@ ${marker} `);
         const subscription = ((_a3 = supabaseAuthSubscriptionRef.current) == null ? void 0 : _a3.subscription) || supabaseAuthSubscriptionRef.current;
         if (subscription == null ? void 0 : subscription.unsubscribe) subscription.unsubscribe();
       };
-    }, [ensureSupabaseClient, language, supabaseDictionarySync.anonKey, supabaseDictionarySync.authEmail, supabaseDictionarySync.enabled, supabaseDictionarySync.url]);
+    }, [applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync.anonKey, supabaseDictionarySync.authEmail, supabaseDictionarySync.enabled, supabaseDictionarySync.url]);
     useEffect(() => {
       const existingChannel = supabaseRealtimeChannelRef.current;
       if (existingChannel == null ? void 0 : existingChannel.unsubscribe) {
@@ -9959,6 +10102,19 @@ ${error.message || error}`);
       if (supabaseAuthState.status === "error") return supabaseAuthState.message || joinLocalizedText("Sync needs attention", "\u0633\u0646\u06A9 \u067E\u0631 \u062A\u0648\u062C\u06C1 \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2", language);
       return joinLocalizedText("Ready to connect", "\u062C\u0691\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631", language);
     })();
+    const supabaseAccountStatusLabel = (() => {
+      if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) return joinLocalizedText("Add Supabase URL and publishable key", "Supabase URL \u0627\u0648\u0631 publishable key \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language);
+      if (supabaseAuthState.status === "pending") return supabaseAuthState.message || joinLocalizedText("Check your email to continue", "\u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u0627 \u0627\u06CC \u0645\u06CC\u0644 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA", language);
+      if (supabaseAuthState.status === "ready" && supabaseAuthState.userId) return joinLocalizedText("Signed in", "\u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06C1\u06D2", language);
+      if (supabaseAuthState.status === "error") return supabaseAuthState.message || joinLocalizedText("Account needs attention", "\u0627\u06A9\u0627\u0624\u0646\u0679 \u067E\u0631 \u062A\u0648\u062C\u06C1 \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2", language);
+      if (supabaseAuthBusy) return joinLocalizedText("Working...", "\u06A9\u0627\u0645 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language);
+      return joinLocalizedText("Ready to sign in", "\u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631", language);
+    })();
+    const supabaseAccountRoleLabel = joinLocalizedText(
+      supabaseAuthState.role === "teacher" ? "Teacher" : supabaseAuthState.role === "parent" ? "Parent" : "Student",
+      supabaseAuthState.role === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : supabaseAuthState.role === "parent" ? "\u0648\u0627\u0644\u062F\u06CC\u0646" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
+      language
+    );
     const handleSupabaseSyncNow = useCallback(async () => {
       try {
         showAppToast(joinLocalizedText("Syncing dictionary...", "\u0644\u063A\u062A \u0633\u0646\u06A9 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2...", language), "sync");
@@ -11219,11 +11375,20 @@ ${error.message || error}`);
         dictionaryStats,
         supabaseDictionarySync,
         dictionarySyncConflicts,
+        supabaseAuthBusy,
         supabaseSyncBusy,
         supabaseSyncStatusLabel,
+        supabaseAccountStatusLabel,
         supabaseSyncUserEmail: supabaseAuthState.email || "",
+        supabaseAccountRoleLabel,
+        supabaseAccountPassword,
         onSupabaseDictionarySyncChange: updateSupabaseDictionarySyncField,
+        onSupabaseAccountPasswordChange: setSupabaseAccountPassword,
         onSupabaseSendMagicLink: handleSupabaseSendMagicLink,
+        onSupabasePasswordSignIn: handleSupabasePasswordSignIn,
+        onSupabaseCreateAccount: handleSupabaseCreateAccount,
+        onSupabasePasswordReset: handleSupabasePasswordReset,
+        onSupabaseRefreshSession: handleSupabaseRefreshSession,
         onSupabaseTestConnection: handleSupabaseTestConnection,
         onSupabaseSyncNow: handleSupabaseSyncNow,
         onSupabaseCopySql: handleCopySupabaseSqlHelper,

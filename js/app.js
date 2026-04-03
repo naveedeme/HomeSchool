@@ -1729,6 +1729,16 @@ function buildCompactSupabaseDictionarySyncSettings(rawSettings) {
   };
 }
 
+function getSupabaseAuthRedirectUrl() {
+  if (typeof location === "undefined" || location.protocol === "file:") return undefined;
+  return `${location.origin}${location.pathname}${location.search}`;
+}
+
+function getSupabaseUserRole(user) {
+  const role = String(user?.app_metadata?.role || user?.user_metadata?.role || "student").trim().toLowerCase();
+  return role || "student";
+}
+
 function createDictionaryRowsFromMap(rawCache, deviceId = "") {
   return Object.entries(normalizeWordMeaningCache(rawCache || {})).map(([normalizedWord, entry]) => ({
     normalized: normalizedWord,
@@ -7358,9 +7368,13 @@ function HomeschoolApp() {
     status: "idle",
     userId: "",
     email: "",
+    role: "student",
     message: "",
     lastSyncedAt: Number(storedSupabaseSyncSettings.lastSyncedAt) || 0,
+    lastCheckedAt: 0,
   });
+  const [supabaseAuthBusy, setSupabaseAuthBusy] = useState(false);
+  const [supabaseAccountPassword, setSupabaseAccountPassword] = useState("");
   const [supabaseSyncBusy, setSupabaseSyncBusy] = useState(false);
   const [supabaseSyncPulse, setSupabaseSyncPulse] = useState(0);
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
@@ -8342,6 +8356,26 @@ function HomeschoolApp() {
     return client;
   }, [language, supabaseDictionarySync]);
 
+  const applySupabaseSessionState = useCallback((session, options = {}) => {
+    const user = session?.user || null;
+    const signedIn = Boolean(user?.id);
+    const nextMessage = typeof options.message === "string"
+      ? options.message
+      : signedIn
+        ? joinLocalizedText("Connected to Supabase.", "Supabase کے ساتھ جڑ گیا۔", language)
+        : "";
+    setSupabaseAuthState((current) => ({
+      ...current,
+      status: options.status || (signedIn ? "ready" : "idle"),
+      userId: user?.id || "",
+      email: user?.email || current.email || supabaseDictionarySync.authEmail,
+      role: getSupabaseUserRole(user),
+      message: nextMessage || current.message || "",
+      lastCheckedAt: Date.now(),
+      lastSyncedAt: options.lastSyncedAt || current.lastSyncedAt || 0,
+    }));
+  }, [language, supabaseDictionarySync.authEmail]);
+
   const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
     if (!window.HomeSchoolDB) {
       throw new Error(language === "ur" ? "مقامی ڈیٹابیس دستیاب نہیں ہے۔" : "The local database is not available.");
@@ -8419,20 +8453,17 @@ function HomeschoolApp() {
         ...current,
         lastSyncedAt: syncedAt,
       }));
-      setSupabaseAuthState((current) => ({
-        ...current,
+      applySupabaseSessionState(session, {
         status: "ready",
-        userId: user.id,
-        email: user.email || current.email || settings.authEmail,
         message: language === "ur" ? "Dictionary sync مکمل ہو گئی۔" : "Dictionary sync completed.",
         lastSyncedAt: syncedAt,
-      }));
+      });
       return true;
     } finally {
       dictionarySyncInFlightRef.current = false;
       setSupabaseSyncBusy(false);
     }
-  }, [applyIncomingDictionaryRows, ensureSupabaseClient, language, supabaseDictionarySync]);
+  }, [applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
 
   const handleSupabaseSendMagicLink = useCallback(async () => {
     const email = String(supabaseDictionarySync.authEmail || "").trim();
@@ -8440,19 +8471,21 @@ function HomeschoolApp() {
       alert(joinLocalizedText("Enter your email first.", "پہلے اپنا ای میل درج کریں۔", language));
       return;
     }
-    setSupabaseSyncBusy(true);
+    setSupabaseAuthBusy(true);
     try {
       const client = ensureSupabaseClient();
       const { error } = await client.auth.signInWithOtp({
         email,
-        options: location.protocol === "file:" ? undefined : { emailRedirectTo: location.href },
+        options: getSupabaseAuthRedirectUrl() ? { emailRedirectTo: getSupabaseAuthRedirectUrl() } : undefined,
       });
       if (error) throw error;
       setSupabaseAuthState((current) => ({
         ...current,
         status: "pending",
         email,
+        role: current.role || "student",
         message: joinLocalizedText("Magic link sent. Open it on this app to connect sync.", "میجک لنک بھیج دیا گیا ہے۔ اسی ایپ میں اسے کھول کر sync جوڑیں۔", language),
+        lastCheckedAt: Date.now(),
       }));
       showAppToast(joinLocalizedText("Magic link sent", "میجک لنک بھیج دیا گیا", language), "send");
     } catch (error) {
@@ -8460,15 +8493,149 @@ function HomeschoolApp() {
         ...current,
         status: "error",
         message: error?.message || String(error),
+        lastCheckedAt: Date.now(),
       }));
       showAppToast(joinLocalizedText("Unable to send magic link", "میجک لنک نہیں بھیجا جا سکا", language), "alert");
       alert(joinLocalizedText(`Unable to send the sign-in link: ${error.message || error}`, `سائن اِن لنک نہیں بھیجا جا سکا: ${error.message || error}`, language));
     } finally {
-      setSupabaseSyncBusy(false);
+      setSupabaseAuthBusy(false);
     }
   }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail]);
 
+  const handleSupabasePasswordSignIn = useCallback(async () => {
+    const email = String(supabaseDictionarySync.authEmail || "").trim();
+    const password = String(supabaseAccountPassword || "");
+    if (!email || !password) {
+      alert(joinLocalizedText("Enter your email and password first.", "پہلے اپنا ای میل اور پاس ورڈ درج کریں۔", language));
+      return;
+    }
+    setSupabaseAuthBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      applySupabaseSessionState(data?.session || null, {
+        message: joinLocalizedText("Signed in successfully.", "کامیابی سے سائن اِن ہو گیا۔", language),
+      });
+      showAppToast(joinLocalizedText("Signed in", "سائن اِن ہو گیا", language), "check");
+    } catch (error) {
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: "error",
+        message: error?.message || String(error),
+        lastCheckedAt: Date.now(),
+      }));
+      showAppToast(joinLocalizedText("Unable to sign in", "سائن اِن نہیں ہو سکا", language), "alert");
+      alert(joinLocalizedText(`Unable to sign in: ${error?.message || error}`, `سائن اِن نہیں ہو سکا: ${error?.message || error}`, language));
+    } finally {
+      setSupabaseAuthBusy(false);
+    }
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail]);
+
+  const handleSupabaseCreateAccount = useCallback(async () => {
+    const email = String(supabaseDictionarySync.authEmail || "").trim();
+    const password = String(supabaseAccountPassword || "");
+    if (!email || !password) {
+      alert(joinLocalizedText("Enter your email and password first.", "پہلے اپنا ای میل اور پاس ورڈ درج کریں۔", language));
+      return;
+    }
+    setSupabaseAuthBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { data, error } = await client.auth.signUp({
+        email,
+        password,
+        options: getSupabaseAuthRedirectUrl() ? { emailRedirectTo: getSupabaseAuthRedirectUrl(), data: { role: "student" } } : { data: { role: "student" } },
+      });
+      if (error) throw error;
+      applySupabaseSessionState(data?.session || null, {
+        status: data?.session?.user?.id ? "ready" : "pending",
+        message: data?.session?.user?.id
+          ? joinLocalizedText("Account created and signed in.", "اکاؤنٹ بن گیا اور سائن اِن ہو گیا۔", language)
+          : joinLocalizedText("Account created. Check your email to confirm it.", "اکاؤنٹ بن گیا۔ اسے تصدیق کرنے کے لیے اپنا ای میل دیکھیں۔", language),
+      });
+      showAppToast(joinLocalizedText("Account created", "اکاؤنٹ بن گیا", language), "check");
+    } catch (error) {
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: "error",
+        message: error?.message || String(error),
+        lastCheckedAt: Date.now(),
+      }));
+      showAppToast(joinLocalizedText("Unable to create account", "اکاؤنٹ نہیں بن سکا", language), "alert");
+      alert(joinLocalizedText(`Unable to create account: ${error?.message || error}`, `اکاؤنٹ نہیں بن سکا: ${error?.message || error}`, language));
+    } finally {
+      setSupabaseAuthBusy(false);
+    }
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast, supabaseAccountPassword, supabaseDictionarySync.authEmail]);
+
+  const handleSupabasePasswordReset = useCallback(async () => {
+    const email = String(supabaseDictionarySync.authEmail || "").trim();
+    if (!email) {
+      alert(joinLocalizedText("Enter your email first.", "پہلے اپنا ای میل درج کریں۔", language));
+      return;
+    }
+    setSupabaseAuthBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.auth.resetPasswordForEmail(email, getSupabaseAuthRedirectUrl() ? { redirectTo: getSupabaseAuthRedirectUrl() } : undefined);
+      if (error) throw error;
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: "pending",
+        email,
+        message: joinLocalizedText("Password reset email sent. Open it in this app.", "پاس ورڈ ری سیٹ ای میل بھیج دیا گیا ہے۔ اسے اسی ایپ میں کھولیں۔", language),
+        lastCheckedAt: Date.now(),
+      }));
+      showAppToast(joinLocalizedText("Password reset sent", "پاس ورڈ ری سیٹ بھیج دیا گیا", language), "send");
+    } catch (error) {
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: "error",
+        message: error?.message || String(error),
+        lastCheckedAt: Date.now(),
+      }));
+      showAppToast(joinLocalizedText("Unable to send reset email", "ری سیٹ ای میل نہیں بھیجا جا سکا", language), "alert");
+      alert(joinLocalizedText(`Unable to send reset email: ${error?.message || error}`, `ری سیٹ ای میل نہیں بھیجا جا سکا: ${error?.message || error}`, language));
+    } finally {
+      setSupabaseAuthBusy(false);
+    }
+  }, [ensureSupabaseClient, language, showAppToast, supabaseDictionarySync.authEmail]);
+
+  const handleSupabaseRefreshSession = useCallback(async () => {
+    setSupabaseAuthBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      applySupabaseSessionState(data?.session || null, {
+        message: data?.session?.user?.id
+          ? joinLocalizedText("Session refreshed.", "سیشن تازہ ہو گیا۔", language)
+          : joinLocalizedText("No active session yet.", "ابھی کوئی فعال سیشن نہیں۔", language),
+      });
+      showAppToast(
+        data?.session?.user?.id
+          ? joinLocalizedText("Session restored", "سیشن بحال ہو گیا", language)
+          : joinLocalizedText("No active session", "کوئی فعال سیشن نہیں", language),
+        data?.session?.user?.id ? "check" : "alert",
+      );
+      return Boolean(data?.session?.user?.id);
+    } catch (error) {
+      setSupabaseAuthState((current) => ({
+        ...current,
+        status: "error",
+        message: error?.message || String(error),
+        lastCheckedAt: Date.now(),
+      }));
+      showAppToast(joinLocalizedText("Unable to refresh session", "سیشن تازہ نہیں ہو سکا", language), "alert");
+      return false;
+    } finally {
+      setSupabaseAuthBusy(false);
+    }
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast]);
+
   const handleSupabaseSignOut = useCallback(async () => {
+    setSupabaseAuthBusy(true);
     try {
       const client = ensureSupabaseClient();
       await client.auth.signOut();
@@ -8479,8 +8646,11 @@ function HomeschoolApp() {
       ...current,
       status: "idle",
       userId: "",
+      role: "student",
       message: "",
+      lastCheckedAt: Date.now(),
     }));
+    setSupabaseAuthBusy(false);
   }, [ensureSupabaseClient]);
 
   const handleSupabaseTestConnection = useCallback(async () => {
@@ -8495,6 +8665,7 @@ function HomeschoolApp() {
           ...current,
           status: "idle",
           message: joinLocalizedText("Connection looks good. Sign in to test row access.", "کنکشن درست لگ رہا ہے۔ قطاروں تک رسائی جانچنے کے لیے سائن اِن کریں۔", language),
+          lastCheckedAt: Date.now(),
         }));
         showAppToast(joinLocalizedText("Connection ready", "کنکشن تیار ہے", language), "check");
         return true;
@@ -8504,13 +8675,10 @@ function HomeschoolApp() {
         .select("normalized", { head: true, count: "exact" })
         .eq("user_id", session.user.id);
       if (queryError) throw queryError;
-      setSupabaseAuthState((current) => ({
-        ...current,
+      applySupabaseSessionState(session, {
         status: "ready",
-        userId: session.user.id,
-        email: session.user.email || current.email,
         message: joinLocalizedText(`Connection ok • ${Number(count) || 0} rows visible`, `کنکشن درست • ${Number(count) || 0} قطاریں نظر آ رہی ہیں`, language),
-      }));
+      });
       showAppToast(joinLocalizedText("Connection test passed", "کنکشن ٹیسٹ کامیاب", language), "check");
       return true;
     } catch (error) {
@@ -8518,6 +8686,7 @@ function HomeschoolApp() {
         ...current,
         status: "error",
         message: error?.message || String(error),
+        lastCheckedAt: Date.now(),
       }));
       showAppToast(joinLocalizedText("Connection test failed", "کنکشن ٹیسٹ ناکام", language), "alert");
       alert(joinLocalizedText(`Connection test failed: ${error?.message || error}`, `کنکشن ٹیسٹ ناکام: ${error?.message || error}`, language));
@@ -8525,7 +8694,7 @@ function HomeschoolApp() {
     } finally {
       setSupabaseSyncBusy(false);
     }
-  }, [ensureSupabaseClient, language, showAppToast]);
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, showAppToast]);
 
   const handleCopySupabaseSqlHelper = useCallback(async () => {
     const copied = await copyTextToClipboard(SUPABASE_DICTIONARY_SETUP_SQL);
@@ -8684,7 +8853,9 @@ function HomeschoolApp() {
         ...current,
         status: supabaseDictionarySync.enabled ? "idle" : "disabled",
         userId: "",
+        role: "student",
         message: "",
+        lastCheckedAt: Date.now(),
       }));
       return undefined;
     }
@@ -8694,47 +8865,40 @@ function HomeschoolApp() {
       client.auth.getSession().then(({ data, error }) => {
         if (!active) return;
         if (error) {
-          setSupabaseAuthState((current) => ({ ...current, status: "error", message: error.message || String(error) }));
+          setSupabaseAuthState((current) => ({ ...current, status: "error", message: error.message || String(error), lastCheckedAt: Date.now() }));
           return;
         }
-        const session = data?.session || null;
-        setSupabaseAuthState((current) => ({
-          ...current,
-          status: session?.user?.id ? "ready" : "idle",
-          userId: session?.user?.id || "",
-          email: session?.user?.email || current.email || supabaseDictionarySync.authEmail,
-          message: session?.user?.id ? joinLocalizedText("Connected to Supabase.", "Supabase کے ساتھ جڑ گیا۔", language) : current.message,
-        }));
+        applySupabaseSessionState(data?.session || null, {
+          message: data?.session?.user?.id
+            ? joinLocalizedText("Connected to Supabase.", "Supabase کے ساتھ جڑ گیا۔", language)
+            : "",
+        });
       }).catch((error) => {
         if (!active) return;
-        setSupabaseAuthState((current) => ({ ...current, status: "error", message: error?.message || String(error) }));
+        setSupabaseAuthState((current) => ({ ...current, status: "error", message: error?.message || String(error), lastCheckedAt: Date.now() }));
       });
       if (supabaseAuthSubscriptionRef.current?.subscription?.unsubscribe) {
         supabaseAuthSubscriptionRef.current.subscription.unsubscribe();
       }
       const subscriptionHandle = client.auth.onAuthStateChange((event, session) => {
         if (!active) return;
-        const signedIn = Boolean(session?.user?.id);
-        setSupabaseAuthState((current) => ({
-          ...current,
-          status: signedIn ? "ready" : "idle",
-          userId: session?.user?.id || "",
-          email: session?.user?.email || current.email || supabaseDictionarySync.authEmail,
-          message: signedIn
-            ? joinLocalizedText("Supabase sync is connected.", "Supabase sync جڑ گیا ہے۔", language)
-            : (event === "SIGNED_OUT" ? joinLocalizedText("Supabase sync signed out.", "Supabase sync سے سائن آؤٹ ہو گیا۔", language) : current.message),
-        }));
+        applySupabaseSessionState(session, {
+          status: session?.user?.id ? "ready" : "idle",
+          message: session?.user?.id
+            ? joinLocalizedText("Supabase account is connected.", "Supabase اکاؤنٹ جڑ گیا ہے۔", language)
+            : (event === "SIGNED_OUT" ? joinLocalizedText("Supabase account signed out.", "Supabase اکاؤنٹ سے سائن آؤٹ ہو گیا۔", language) : ""),
+        });
       });
       supabaseAuthSubscriptionRef.current = subscriptionHandle?.data || subscriptionHandle;
     } catch (error) {
-      setSupabaseAuthState((current) => ({ ...current, status: "error", message: error?.message || String(error) }));
+      setSupabaseAuthState((current) => ({ ...current, status: "error", message: error?.message || String(error), lastCheckedAt: Date.now() }));
     }
     return () => {
       active = false;
       const subscription = supabaseAuthSubscriptionRef.current?.subscription || supabaseAuthSubscriptionRef.current;
       if (subscription?.unsubscribe) subscription.unsubscribe();
     };
-  }, [ensureSupabaseClient, language, supabaseDictionarySync.anonKey, supabaseDictionarySync.authEmail, supabaseDictionarySync.enabled, supabaseDictionarySync.url]);
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync.anonKey, supabaseDictionarySync.authEmail, supabaseDictionarySync.enabled, supabaseDictionarySync.url]);
 
   useEffect(() => {
     const existingChannel = supabaseRealtimeChannelRef.current;
@@ -11994,6 +12158,19 @@ function HomeschoolApp() {
     if (supabaseAuthState.status === "error") return supabaseAuthState.message || joinLocalizedText("Sync needs attention", "سنک پر توجہ درکار ہے", language);
     return joinLocalizedText("Ready to connect", "جڑنے کے لیے تیار", language);
   })();
+  const supabaseAccountStatusLabel = (() => {
+    if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) return joinLocalizedText("Add Supabase URL and publishable key", "Supabase URL اور publishable key شامل کریں", language);
+    if (supabaseAuthState.status === "pending") return supabaseAuthState.message || joinLocalizedText("Check your email to continue", "آگے بڑھنے کے لیے اپنا ای میل دیکھیں", language);
+    if (supabaseAuthState.status === "ready" && supabaseAuthState.userId) return joinLocalizedText("Signed in", "سائن اِن ہے", language);
+    if (supabaseAuthState.status === "error") return supabaseAuthState.message || joinLocalizedText("Account needs attention", "اکاؤنٹ پر توجہ درکار ہے", language);
+    if (supabaseAuthBusy) return joinLocalizedText("Working...", "کام ہو رہا ہے...", language);
+    return joinLocalizedText("Ready to sign in", "سائن اِن کے لیے تیار", language);
+  })();
+  const supabaseAccountRoleLabel = joinLocalizedText(
+    supabaseAuthState.role === "teacher" ? "Teacher" : supabaseAuthState.role === "parent" ? "Parent" : "Student",
+    supabaseAuthState.role === "teacher" ? "استاد" : supabaseAuthState.role === "parent" ? "والدین" : "طالب علم",
+    language,
+  );
   const handleSupabaseSyncNow = useCallback(async () => {
     try {
       showAppToast(joinLocalizedText("Syncing dictionary...", "لغت سنک ہو رہی ہے...", language), "sync");
@@ -14910,11 +15087,20 @@ function HomeschoolApp() {
             dictionaryStats={dictionaryStats}
             supabaseDictionarySync={supabaseDictionarySync}
             dictionarySyncConflicts={dictionarySyncConflicts}
+            supabaseAuthBusy={supabaseAuthBusy}
             supabaseSyncBusy={supabaseSyncBusy}
             supabaseSyncStatusLabel={supabaseSyncStatusLabel}
+            supabaseAccountStatusLabel={supabaseAccountStatusLabel}
             supabaseSyncUserEmail={supabaseAuthState.email || ""}
+            supabaseAccountRoleLabel={supabaseAccountRoleLabel}
+            supabaseAccountPassword={supabaseAccountPassword}
             onSupabaseDictionarySyncChange={updateSupabaseDictionarySyncField}
+            onSupabaseAccountPasswordChange={setSupabaseAccountPassword}
             onSupabaseSendMagicLink={handleSupabaseSendMagicLink}
+            onSupabasePasswordSignIn={handleSupabasePasswordSignIn}
+            onSupabaseCreateAccount={handleSupabaseCreateAccount}
+            onSupabasePasswordReset={handleSupabasePasswordReset}
+            onSupabaseRefreshSession={handleSupabaseRefreshSession}
             onSupabaseTestConnection={handleSupabaseTestConnection}
             onSupabaseSyncNow={handleSupabaseSyncNow}
             onSupabaseCopySql={handleCopySupabaseSqlHelper}

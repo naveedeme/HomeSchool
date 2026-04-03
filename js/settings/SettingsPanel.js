@@ -312,9 +312,13 @@
       dictionaryStats,
       supabaseDictionarySync,
       dictionarySyncConflicts,
+      supabaseAuthBusy,
       supabaseSyncBusy,
       supabaseSyncStatusLabel,
+      supabaseAccountStatusLabel,
       supabaseSyncUserEmail,
+      supabaseAccountRoleLabel,
+      supabaseAccountPassword,
       versionInfo,
       onCheckUpdates,
       onRefreshData,
@@ -324,7 +328,12 @@
       onImportDictionary,
       onImportDictionaryFromUrl,
       onSupabaseDictionarySyncChange,
+      onSupabaseAccountPasswordChange,
       onSupabaseSendMagicLink,
+      onSupabasePasswordSignIn,
+      onSupabaseCreateAccount,
+      onSupabasePasswordReset,
+      onSupabaseRefreshSession,
       onSupabaseTestConnection,
       onSupabaseSyncNow,
       onSupabaseCopySql,
@@ -588,6 +597,129 @@
     if (canInstallApp) experienceChildren.push(actionButton(renderLocalizedText(ui.installApp || "Install App", language), onInstallApp, "#6366F1", { key: "install-btn" }));
     if (canReloadApp) experienceChildren.push(actionButton(renderLocalizedText(ui.refreshToUpdate || "Refresh to Update", language), onReloadApp, "#0EA5E9", { key: "reload-btn" }));
 
+    const accountChildren = [
+      React.createElement("div", {
+        key: "account-help",
+        style: {
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border)",
+          marginBottom: 10,
+          color: "var(--text-secondary)",
+          fontSize: 12,
+          lineHeight: 1.6,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+          direction: language === "ur" ? "rtl" : "ltr",
+          textAlign: language === "ur" ? "right" : "left",
+        },
+      }, renderLocalizedText(language === "ur"
+        ? "ہر طالب علم کے لیے ایک الگ کلاؤڈ اکاؤنٹ رکھیں تاکہ مختلف ڈیوائسز پر پروگریس، لغت، اور مستقبل کے سنک کیے گئے ریکارڈ واضح رہیں۔"
+        : "Use one cloud account per student so progress, dictionary data, and future synced records stay clearly separated across devices.", language)),
+      React.createElement("div", { style: { marginBottom: 10 } },
+        React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.supabaseUrl || (language === "ur" ? "Supabase URL" : "Supabase URL"), language)),
+        React.createElement("input", {
+          className: "settings-text-input",
+          type: "url",
+          value: supabaseDictionarySync?.url || "",
+          onChange: (event) => onSupabaseDictionarySyncChange("url", event.target.value),
+          placeholder: "https://your-project.supabase.co",
+          dir: "ltr",
+          spellCheck: false,
+        })),
+      React.createElement("div", { style: { marginBottom: 10 } },
+        React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.supabaseAnonKey || (language === "ur" ? "Publishable Key" : "Publishable Key"), language)),
+        React.createElement("input", {
+          className: "settings-text-input",
+          type: "password",
+          value: supabaseDictionarySync?.anonKey || "",
+          onChange: (event) => onSupabaseDictionarySyncChange("anonKey", event.target.value),
+          placeholder: language === "ur" ? "اپنی publishable key درج کریں" : "Paste your publishable key",
+          dir: "ltr",
+          spellCheck: false,
+        })),
+      React.createElement("div", { style: { marginBottom: 10 } },
+        React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.syncEmail || (language === "ur" ? "Account Email" : "Account Email"), language)),
+        React.createElement("input", {
+          className: "settings-text-input",
+          type: "email",
+          value: supabaseDictionarySync?.authEmail || "",
+          onChange: (event) => onSupabaseDictionarySyncChange("authEmail", event.target.value),
+          placeholder: language === "ur" ? "وہ ای میل درج کریں جس سے سائن اِن کرنا ہے" : "Enter the email you want to sign in with",
+          dir: "ltr",
+          spellCheck: false,
+        })),
+      React.createElement("div", { style: { marginBottom: 10 } },
+        React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(language === "ur" ? "Password" : "Password", language)),
+        React.createElement("input", {
+          className: "settings-text-input",
+          type: "password",
+          value: supabaseAccountPassword || "",
+          onChange: (event) => onSupabaseAccountPasswordChange(event.target.value),
+          placeholder: language === "ur" ? "پاس ورڈ درج کریں" : "Enter password",
+          dir: "ltr",
+          spellCheck: false,
+        })),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(language === "ur" ? "Account Status" : "Account Status", language)),
+        React.createElement("span", { className: "si-value", style: { maxWidth: 240, textAlign: language === "ur" ? "right" : "left" } }, renderLocalizedText(supabaseAccountStatusLabel || "—", language))),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.connectedUser || (language === "ur" ? "Connected User" : "Connected User"), language)),
+        React.createElement("span", { className: "si-value", style: { maxWidth: 220, textAlign: language === "ur" ? "right" : "left", direction: "ltr" } }, supabaseSyncUserEmail || "—")),
+      React.createElement("div", { className: "settings-item" },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(language === "ur" ? "Cloud Role" : "Cloud Role", language)),
+        React.createElement("span", { className: "si-value" }, renderLocalizedText(supabaseAccountRoleLabel || "Student", language))),
+      React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 } },
+        React.createElement("button", {
+          type: "button",
+          className: "ghost-cta",
+          onClick: onSupabaseSendMagicLink,
+          disabled: supabaseAuthBusy,
+        }, renderLocalizedText(ui.sendMagicLink || (language === "ur" ? "Magic Link بھیجیں" : "Send Magic Link"), language)),
+        React.createElement("button", {
+          type: "button",
+          className: "ghost-cta",
+          onClick: onSupabasePasswordSignIn,
+          disabled: supabaseAuthBusy,
+        }, renderLocalizedText(language === "ur" ? "Password Sign In" : "Password Sign In", language)),
+        React.createElement("button", {
+          type: "button",
+          className: "ghost-cta",
+          onClick: onSupabaseCreateAccount,
+          disabled: supabaseAuthBusy,
+        }, renderLocalizedText(language === "ur" ? "Create Account" : "Create Account", language)),
+        React.createElement("button", {
+          type: "button",
+          className: "ghost-cta",
+          onClick: onSupabasePasswordReset,
+          disabled: supabaseAuthBusy,
+        }, renderLocalizedText(language === "ur" ? "Reset Password" : "Reset Password", language)),
+        React.createElement("button", {
+          type: "button",
+          className: "ghost-cta",
+          onClick: onSupabaseRefreshSession,
+          disabled: supabaseAuthBusy,
+        }, renderLocalizedText(language === "ur" ? "Refresh Session" : "Refresh Session", language)),
+        React.createElement("button", {
+          type: "button",
+          className: "study-tool-btn",
+          onClick: onSupabaseSignOut,
+          disabled: supabaseAuthBusy,
+        }, renderLocalizedText(ui.signOut || (language === "ur" ? "سائن آؤٹ" : "Sign Out"), language))),
+      React.createElement("div", {
+        style: {
+          color: "var(--text-muted)",
+          fontSize: 12,
+          lineHeight: 1.6,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+          direction: language === "ur" ? "rtl" : "ltr",
+          textAlign: language === "ur" ? "right" : "left",
+        },
+      }, renderLocalizedText(language === "ur"
+        ? "Magic link ہلکی لاگ اِن کے لیے اچھا ہے۔ Password sign-in اور reset بہتر بازیافت دیتے ہیں۔ یہی اکاؤنٹ آگے چل کر پروگریس، ریویو، اور سیٹنگز سنک کے لیے بنیاد بنے گا۔"
+        : "Magic link is great for light sign-in. Password sign-in and reset provide stronger recovery. This same account will become the foundation for syncing progress, review state, and settings later.", language)),
+    ];
+
     const aiChildren = [
       React.createElement("div", {
         key: "ai-help",
@@ -795,52 +927,10 @@
           style: { width: 120 },
           onClick: () => onSupabaseDictionarySyncChange("realtimeEnabled", !supabaseDictionarySync?.realtimeEnabled),
         }, renderLocalizedText((supabaseDictionarySync?.realtimeEnabled ? (ui.enabled || "Enabled") : (ui.disabled || "Disabled")), language))),
-      React.createElement("div", { style: { marginBottom: 10 } },
-        React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.supabaseUrl || (language === "ur" ? "Supabase URL" : "Supabase URL"), language)),
-        React.createElement("input", {
-          className: "settings-text-input",
-          type: "url",
-          value: supabaseDictionarySync?.url || "",
-          onChange: (event) => onSupabaseDictionarySyncChange("url", event.target.value),
-          placeholder: "https://your-project.supabase.co",
-          dir: "ltr",
-          spellCheck: false,
-        })),
-      React.createElement("div", { style: { marginBottom: 10 } },
-        React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.supabaseAnonKey || (language === "ur" ? "Publishable / Anon Key" : "Publishable / Anon Key"), language)),
-        React.createElement("input", {
-          className: "settings-text-input",
-          type: "password",
-          value: supabaseDictionarySync?.anonKey || "",
-          onChange: (event) => onSupabaseDictionarySyncChange("anonKey", event.target.value),
-          placeholder: language === "ur" ? "اپنی publishable key درج کریں" : "Paste your publishable key",
-          dir: "ltr",
-          spellCheck: false,
-        })),
-      React.createElement("div", { style: { marginBottom: 10 } },
-        React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.syncEmail || (language === "ur" ? "Sync Email" : "Sync Email"), language)),
-        React.createElement("input", {
-          className: "settings-text-input",
-          type: "email",
-          value: supabaseDictionarySync?.authEmail || "",
-          onChange: (event) => onSupabaseDictionarySyncChange("authEmail", event.target.value),
-          placeholder: language === "ur" ? "وہ ای میل درج کریں جس سے sync کرنا ہے" : "Enter the email you want to sync with",
-          dir: "ltr",
-          spellCheck: false,
-        })),
       React.createElement("div", { className: "settings-item" },
         React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.syncStatus || (language === "ur" ? "Sync Status" : "Sync Status"), language)),
         React.createElement("span", { className: "si-value", style: { maxWidth: 240, textAlign: language === "ur" ? "right" : "left" } }, renderLocalizedText(supabaseSyncStatusLabel || (language === "ur" ? "ابھی تک منسلک نہیں" : "Not connected yet"), language))),
-      React.createElement("div", { className: "settings-item" },
-        React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.connectedUser || (language === "ur" ? "Connected User" : "Connected User"), language)),
-        React.createElement("span", { className: "si-value", style: { maxWidth: 220, textAlign: language === "ur" ? "right" : "left", direction: "ltr" } }, supabaseSyncUserEmail || "—")),
       React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 } },
-        React.createElement("button", {
-          type: "button",
-          className: "ghost-cta",
-          onClick: onSupabaseSendMagicLink,
-          disabled: supabaseSyncBusy,
-        }, renderLocalizedText(ui.sendMagicLink || (language === "ur" ? "Magic Link بھیجیں" : "Send Magic Link"), language)),
         React.createElement("button", {
           type: "button",
           className: "ghost-cta",
@@ -861,8 +951,9 @@
         React.createElement("button", {
           type: "button",
           className: "study-tool-btn",
-          onClick: onSupabaseSignOut,
-        }, renderLocalizedText(ui.signOut || (language === "ur" ? "سائن آؤٹ" : "Sign Out"), language))),
+          onClick: onSupabaseRefreshSession,
+          disabled: supabaseAuthBusy,
+        }, renderLocalizedText(language === "ur" ? "Session دیکھیں" : "Refresh Session", language))),
       React.createElement("div", {
         style: {
           color: "var(--text-muted)",
@@ -873,8 +964,8 @@
           textAlign: language === "ur" ? "right" : "left",
         },
       }, renderLocalizedText(ui.supabaseSyncHelp || (language === "ur"
-        ? "یہ صرف لغت کو sync کرتا ہے۔ Supabase میں dictionary_entries ٹیبل اور RLS policies درکار ہوں گی۔ HTTPS یا localhost پر یہ سب سے بہتر کام کرتا ہے۔"
-        : "This syncs only the dictionary. You will need a dictionary_entries table plus RLS policies in Supabase. It works best on HTTPS or localhost."), language)),
+        ? "یہ صرف لغت کو sync کرتا ہے۔ اکاؤنٹ لاگ اِن اور بازیافت Account سیکشن میں سنبھالی جاتی ہے۔ Supabase میں dictionary_entries ٹیبل اور RLS policies درکار ہوں گی۔"
+        : "This syncs only the dictionary. Account sign-in and recovery live in the Account section. You will need a dictionary_entries table plus RLS policies in Supabase."), language)),
       ...dictionaryConflictChildren));
     (Array.isArray(aiProviders) ? aiProviders : []).forEach((provider) => {
       aiChildren.push(renderAiProviderCard(provider, ui, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider));
@@ -1180,6 +1271,18 @@
         title: joinLocalizedText("Comfort & Accessibility", "آسانی اور رسائی", language),
         language,
       }, ...accessibilityChildren),
+    ));
+    children.push(React.createElement(DisclosureSection, {
+      key: "settings-account",
+      title: joinLocalizedText("Account & Cloud Sign-In", "اکاؤنٹ اور کلاؤڈ سائن اِن", language),
+      language,
+      transitionMode,
+    },
+      React.createElement(SettingsGroup, {
+        key: "settings-group-account",
+        title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language),
+        language,
+      }, ...accountChildren),
     ));
     children.push(React.createElement(DisclosureSection, {
       key: "settings-ai",
