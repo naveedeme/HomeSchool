@@ -8670,6 +8670,22 @@ function HomeschoolApp() {
     }
   }, [grade, studentName, studentNameUr]);
 
+  const refreshSyncedStudyState = useCallback(async () => {
+    if (!window.HomeSchoolDB) return;
+    const [progressMap, persistedStats] = await Promise.all([
+      window.HomeSchoolDB.getProgressMap().catch(() => ({})),
+      window.HomeSchoolDB.getUserStats().catch(() => null),
+    ]);
+    setCompletedQuizzes(progressMap && typeof progressMap === "object" ? progressMap : {});
+    const nextStats = persistedStats || {};
+    setTotalQuizzesDone(Math.max(0, Number(nextStats.totalQuizzes) || 0));
+    setTotalScore(Math.max(0, Number(nextStats.totalScore) || 0));
+    setStreak(Math.max(0, Number(nextStats.streak) || 0));
+    setLastQuizDate(nextStats.lastQuizDate || null);
+    setEarnedBadges(Array.from(new Set(Array.isArray(nextStats.badges) ? nextStats.badges : [])));
+    setXp(Math.max(0, Number(nextStats.xp) || 0));
+  }, []);
+
   const applyIncomingCloudSyncRows = useCallback(async (incomingRows, reason = "sync") => {
     const normalizedRows = (Array.isArray(incomingRows) ? incomingRows : [])
       .map((row) => ({
@@ -9904,22 +9920,6 @@ function HomeschoolApp() {
   useEffect(() => {
     refreshReviewWorkspaceRef.current = refreshReviewWorkspace;
   }, [refreshReviewWorkspace]);
-
-  const refreshSyncedStudyState = useCallback(async () => {
-    if (!window.HomeSchoolDB) return;
-    const [progressMap, persistedStats] = await Promise.all([
-      window.HomeSchoolDB.getProgressMap().catch(() => ({})),
-      window.HomeSchoolDB.getUserStats().catch(() => null),
-    ]);
-    setCompletedQuizzes(progressMap && typeof progressMap === "object" ? progressMap : {});
-    const nextStats = persistedStats || {};
-    setTotalQuizzesDone(Math.max(0, Number(nextStats.totalQuizzes) || 0));
-    setTotalScore(Math.max(0, Number(nextStats.totalScore) || 0));
-    setStreak(Math.max(0, Number(nextStats.streak) || 0));
-    setLastQuizDate(nextStats.lastQuizDate || null);
-    setEarnedBadges(Array.from(new Set(Array.isArray(nextStats.badges) ? nextStats.badges : [])));
-    setXp(Math.max(0, Number(nextStats.xp) || 0));
-  }, []);
 
   const pushNotificationHistoryEntry = useCallback((entry) => {
     if (!entry) return;
