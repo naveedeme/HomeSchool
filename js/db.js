@@ -764,6 +764,7 @@ async function saveCustomization(type, data) {
         deviceId: entry.deviceId || "",
       }));
       await db.dictionaryOutbox.bulkPut(outboxRows);
+      emitCloudSyncSignal("dictionary");
     }
     return { saved: normalizedEntries.length, queued: queue ? normalizedEntries.length : 0 };
   }
@@ -817,6 +818,7 @@ async function saveCustomization(type, data) {
         word: entry.word,
         deviceId: entry.deviceId || "",
       })));
+      emitCloudSyncSignal("dictionary");
     }
     return { deleted: rowsToDelete.length, queued: queue ? rowsToDelete.length : 0 };
   }
@@ -861,6 +863,53 @@ async function saveCustomization(type, data) {
     };
     await db.dictionarySyncMeta.put(record);
     return record;
+  }
+
+  async function getCloudSyncStatusSummary() {
+    const [
+      dictionaryEntries,
+      dictionaryOutboxRows,
+      cloudOutboxRows,
+      lastDictionaryPushMeta,
+      lastDictionaryPullMeta,
+      lastCloudPushMeta,
+      lastCloudPullMeta,
+      lastErrorMeta,
+    ] = await Promise.all([
+      db.dictionaryEntries ? db.dictionaryEntries.toArray() : [],
+      db.dictionaryOutbox ? db.dictionaryOutbox.toArray() : [],
+      db.cloudSyncOutbox ? db.cloudSyncOutbox.toArray() : [],
+      getDictionarySyncMeta("supabase:lastPush"),
+      getDictionarySyncMeta("supabase:lastPull"),
+      getDictionarySyncMeta("supabase:cloud:lastPush"),
+      getDictionarySyncMeta("supabase:cloud:lastPull"),
+      getDictionarySyncMeta("supabase:lastError"),
+    ]);
+
+    const pendingCloudDatasets = (Array.isArray(cloudOutboxRows) ? cloudOutboxRows : []).reduce((acc, row) => {
+      const dataset = sanitizeCloudSyncDataset(row?.dataset);
+      if (!dataset) return acc;
+      acc[dataset] = (acc[dataset] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      dictionaryEntries: (Array.isArray(dictionaryEntries) ? dictionaryEntries : []).filter((entry) => !entry?.deletedAt).length,
+      deletedDictionaryEntries: (Array.isArray(dictionaryEntries) ? dictionaryEntries : []).filter((entry) => Boolean(entry?.deletedAt)).length,
+      dictionaryPendingCount: Array.isArray(dictionaryOutboxRows) ? dictionaryOutboxRows.length : 0,
+      pendingDictionaryKeys: (Array.isArray(dictionaryOutboxRows) ? dictionaryOutboxRows : [])
+        .map((row) => String(row?.normalized || "").trim().toLowerCase())
+        .filter(Boolean),
+      cloudPendingCount: Array.isArray(cloudOutboxRows) ? cloudOutboxRows.length : 0,
+      pendingCloudDatasets,
+      lastDictionaryPushAt: Number(lastDictionaryPushMeta?.data?.timestamp) || 0,
+      lastDictionaryPullAt: Number(lastDictionaryPullMeta?.data?.timestamp) || 0,
+      lastCloudPushAt: Number(lastCloudPushMeta?.data?.timestamp) || 0,
+      lastCloudPullAt: Number(lastCloudPullMeta?.data?.timestamp) || 0,
+      lastReason: String(lastCloudPullMeta?.data?.reason || lastDictionaryPullMeta?.data?.reason || lastCloudPushMeta?.data?.reason || lastDictionaryPushMeta?.data?.reason || "").trim(),
+      lastErrorMessage: String(lastErrorMeta?.data?.message || "").trim(),
+      lastErrorAt: Number(lastErrorMeta?.data?.timestamp) || 0,
+    };
   }
 
   function normalizeImportPayload(progressData) {
@@ -2272,6 +2321,10 @@ async function saveCustomization(type, data) {
 
     async saveDictionarySyncMeta(key, data) {
       return saveDictionarySyncMeta(key, data);
+    },
+
+    async getCloudSyncStatusSummary() {
+      return getCloudSyncStatusSummary();
     },
 
     async getCloudSyncOutboxEntries(limit = 500) {

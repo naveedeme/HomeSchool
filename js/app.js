@@ -1901,6 +1901,24 @@ function buildCompactSupabaseDictionarySyncSettings(rawSettings) {
   };
 }
 
+function createDefaultSupabaseSyncActivitySummary() {
+  return {
+    dictionaryEntries: 0,
+    deletedDictionaryEntries: 0,
+    dictionaryPendingCount: 0,
+    pendingDictionaryKeys: [],
+    cloudPendingCount: 0,
+    pendingCloudDatasets: {},
+    lastDictionaryPushAt: 0,
+    lastDictionaryPullAt: 0,
+    lastCloudPushAt: 0,
+    lastCloudPullAt: 0,
+    lastReason: "",
+    lastErrorMessage: "",
+    lastErrorAt: 0,
+  };
+}
+
 function getSupabaseAuthRedirectUrl() {
   if (typeof location === "undefined" || location.protocol === "file:") return undefined;
   return `${location.origin}${location.pathname}${location.search}`;
@@ -7582,6 +7600,7 @@ function HomeschoolApp() {
   const [supabasePendingEmail, setSupabasePendingEmail] = useState(String(stored?.supabasePendingEmail || storedSupabaseSyncSettings.authEmail || "").trim());
   const [supabaseSyncBusy, setSupabaseSyncBusy] = useState(false);
   const [supabaseSyncPulse, setSupabaseSyncPulse] = useState(0);
+  const [supabaseSyncActivity, setSupabaseSyncActivity] = useState(createDefaultSupabaseSyncActivitySummary());
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
   const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
   const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -7648,6 +7667,21 @@ function HomeschoolApp() {
     });
     copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1800);
   }, [supabasePendingEmail]);
+
+  const refreshSupabaseSyncActivity = useCallback(async (overrides = null) => {
+    if (!window.HomeSchoolDB?.getCloudSyncStatusSummary) return;
+    try {
+      const summary = await window.HomeSchoolDB.getCloudSyncStatusSummary();
+      setSupabaseSyncActivity((current) => ({
+        ...createDefaultSupabaseSyncActivitySummary(),
+        ...(current || {}),
+        ...(summary || {}),
+        ...(overrides && typeof overrides === "object" ? overrides : {}),
+      }));
+    } catch (error) {
+      console.log("Unable to refresh Supabase sync activity:", error);
+    }
+  }, []);
 
   const persistTutorHistory = useCallback((sessions, sessionId) => {
     const safeSessions = normalizeTutorSessions(sessions, language)
@@ -8540,12 +8574,18 @@ function HomeschoolApp() {
       });
     }
 
+    if (reason !== "local") {
+      refreshSupabaseSyncActivity({
+        lastReason: reason,
+      });
+    }
+
     return {
       applied: rowsToPersist.length,
       deleted: deletedWords.length,
       conflicts: detectedConflicts.length,
     };
-  }, []);
+  }, [refreshSupabaseSyncActivity]);
 
   const applyCloudCustomizationState = useCallback(async (customizations) => {
     const source = customizations && typeof customizations === "object" ? customizations : {};
@@ -8794,9 +8834,12 @@ function HomeschoolApp() {
       } catch (error) {
         console.log("Unable to refresh review workspace after cloud sync:", error);
       }
+      refreshSupabaseSyncActivity({
+        lastReason: reason,
+      });
     }
     return { applied };
-  }, [applyCloudCustomizationState, refreshSyncedStudyState]);
+  }, [applyCloudCustomizationState, refreshSupabaseSyncActivity, refreshSyncedStudyState]);
 
   const ensureSupabaseClient = useCallback(() => {
     const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
@@ -8866,6 +8909,12 @@ function HomeschoolApp() {
         throw new Error(language === "ur" ? "پہلے Supabase سے سائن اِن کریں۔" : "Sign in to Supabase first.");
       }
 
+      let dictionaryPushedCount = 0;
+      let cloudPushedCount = 0;
+      let dictionaryPulledCount = 0;
+      let cloudPulledCount = 0;
+      const syncStartedAt = Date.now();
+
       let dictionaryRowsToPush = await window.HomeSchoolDB.getDictionaryOutboxEntries(500);
       if (!dictionaryRowsToPush.length && reason === "manual" && window.HomeSchoolDB?.getDictionaryEntries) {
         dictionaryRowsToPush = await window.HomeSchoolDB.getDictionaryEntries();
@@ -8886,6 +8935,12 @@ function HomeschoolApp() {
           .upsert(payload, { onConflict: "user_id,normalized" });
         if (pushError) throw pushError;
         await window.HomeSchoolDB.clearDictionaryOutboxEntries(dictionaryRowsToPush.map((row) => row.normalized));
+        dictionaryPushedCount = payload.length;
+        await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:lastPush", {
+          timestamp: syncStartedAt,
+          reason,
+          count: dictionaryPushedCount,
+        });
       }
 
       const cloudSeedMeta = await window.HomeSchoolDB.getDictionarySyncMeta("supabase:cloudSeeded");
@@ -8923,6 +8978,12 @@ function HomeschoolApp() {
             done: true,
             timestamp: Date.now(),
           });
+          cloudPushedCount = cloudPayload.length;
+          await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloud:lastPush", {
+            timestamp: syncStartedAt,
+            reason,
+            count: cloudPushedCount,
+          });
         }
       }
 
@@ -8953,6 +9014,7 @@ function HomeschoolApp() {
         })).filter((row) => row.normalized);
         if (normalizedRemoteRows.length) {
           await applyIncomingDictionaryRows(normalizedRemoteRows, reason);
+          dictionaryPulledCount = normalizedRemoteRows.length;
         }
       }
 
@@ -8983,6 +9045,7 @@ function HomeschoolApp() {
         })).filter((row) => row.dataset && row.rowId);
         if (normalizedRemoteCloudRows.length) {
           await applyIncomingCloudSyncRows(normalizedRemoteCloudRows, reason);
+          cloudPulledCount = normalizedRemoteCloudRows.length;
         }
       }
 
@@ -8994,6 +9057,12 @@ function HomeschoolApp() {
       await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:cloud:lastPull", {
         timestamp: syncedAt,
         reason,
+        count: cloudPulledCount,
+      });
+      await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:lastError", {
+        timestamp: 0,
+        reason: "",
+        message: "",
       });
       setSupabaseDictionarySync((current) => sanitizeSupabaseDictionarySyncSettings({
         ...current,
@@ -9004,12 +9073,36 @@ function HomeschoolApp() {
         message: language === "ur" ? "Cloud sync مکمل ہو گئی۔" : "Cloud sync completed.",
         lastSyncedAt: syncedAt,
       });
+      const syncActivityOverrides = {
+        lastDictionaryPullAt: syncedAt,
+        lastCloudPullAt: syncedAt,
+        lastReason: reason,
+        lastErrorMessage: "",
+        lastErrorAt: 0,
+      };
+      if (dictionaryPushedCount) syncActivityOverrides.lastDictionaryPushAt = syncStartedAt;
+      if (cloudPushedCount) syncActivityOverrides.lastCloudPushAt = syncStartedAt;
+      await refreshSupabaseSyncActivity(syncActivityOverrides);
       return true;
+    } catch (error) {
+      if (window.HomeSchoolDB?.saveDictionarySyncMeta) {
+        await window.HomeSchoolDB.saveDictionarySyncMeta("supabase:lastError", {
+          timestamp: Date.now(),
+          reason,
+          message: error?.message || String(error),
+        }).catch(() => null);
+      }
+      refreshSupabaseSyncActivity({
+        lastReason: reason,
+        lastErrorMessage: error?.message || String(error),
+        lastErrorAt: Date.now(),
+      });
+      throw error;
     } finally {
       dictionarySyncInFlightRef.current = false;
       setSupabaseSyncBusy(false);
     }
-  }, [applyIncomingCloudSyncRows, applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync]);
+  }, [applyIncomingCloudSyncRows, applyIncomingDictionaryRows, applySupabaseSessionState, ensureSupabaseClient, language, refreshSupabaseSyncActivity, supabaseDictionarySync]);
 
   const updateSupabaseDictionarySyncField = useCallback((field, value) => {
     setSupabaseDictionarySync((current) => sanitizeSupabaseDictionarySyncSettings({
@@ -9620,6 +9713,10 @@ function HomeschoolApp() {
   }, [supabaseDictionarySync]);
 
   useEffect(() => {
+    refreshSupabaseSyncActivity();
+  }, [dbLoaded, refreshSupabaseSyncActivity, supabaseAuthState.userId, supabaseSyncPulse, supabaseDictionarySync.enabled]);
+
+  useEffect(() => {
     const handleCloudSyncSignal = () => {
       setSupabaseSyncPulse(Date.now());
     };
@@ -9795,6 +9892,7 @@ function HomeschoolApp() {
     if (!dbLoaded || !supabaseDictionarySync.enabled || !supabaseDictionarySync.autoSync || !supabaseAuthState.userId) return undefined;
     if (!supabaseSyncPulse) return undefined;
     if (dictionarySyncTimerRef.current) clearTimeout(dictionarySyncTimerRef.current);
+    const syncDelay = supabaseDictionarySync.realtimeEnabled ? 550 : 900;
     dictionarySyncTimerRef.current = setTimeout(() => {
       performSupabaseDictionarySync("auto").catch((error) => {
         setSupabaseAuthState((current) => ({
@@ -9803,7 +9901,7 @@ function HomeschoolApp() {
           message: error?.message || String(error),
         }));
       });
-    }, 1400);
+    }, syncDelay);
     return () => {
       if (dictionarySyncTimerRef.current) {
         clearTimeout(dictionarySyncTimerRef.current);
@@ -13376,6 +13474,41 @@ function HomeschoolApp() {
     language,
   );
   const activeStudentProfileInitials = getStudentProfileInitials(activeStudentProfile);
+  const dictionaryPendingSet = useMemo(
+    () => new Set(Array.isArray(supabaseSyncActivity.pendingDictionaryKeys) ? supabaseSyncActivity.pendingDictionaryKeys : []),
+    [supabaseSyncActivity.pendingDictionaryKeys],
+  );
+  const syncPendingTotal = Number(supabaseSyncActivity.dictionaryPendingCount || 0) + Number(supabaseSyncActivity.cloudPendingCount || 0);
+  const syncDatasetSummary = useMemo(() => {
+    const datasetLabels = {
+      customization: joinLocalizedText("Settings", "ترتیبات", language),
+      wordMeta: joinLocalizedText("Favorites & Notes", "پسندیدہ اور نوٹس", language),
+      customList: joinLocalizedText("Lists", "فہرستیں", language),
+      customListItem: joinLocalizedText("List Items", "فہرست کی اشیا", language),
+      progress: joinLocalizedText("Lesson Progress", "سبق پیش رفت", language),
+      reviewCard: joinLocalizedText("Review Cards", "ریویو کارڈز", language),
+      reviewHistory: joinLocalizedText("Review History", "ریویو تاریخ", language),
+      userStat: joinLocalizedText("XP & Stats", "ایکس پی اور اعداد", language),
+    };
+    return Object.entries(supabaseSyncActivity.pendingCloudDatasets || {})
+      .filter(([, count]) => Number(count) > 0)
+      .sort((left, right) => Number(right[1] || 0) - Number(left[1] || 0))
+      .slice(0, 5)
+      .map(([dataset, count]) => ({
+        dataset,
+        count: Number(count) || 0,
+        label: datasetLabels[dataset] || dataset,
+      }));
+  }, [language, supabaseSyncActivity.pendingCloudDatasets]);
+  const syncActivityStatusText = syncPendingTotal > 0
+    ? joinLocalizedText(`${syncPendingTotal} local changes waiting`, `${syncPendingTotal} مقامی تبدیلیاں منتظر`, language)
+    : joinLocalizedText("Everything is caught up locally", "مقامی طور پر سب کچھ تازہ ہے", language);
+  const syncLastPushLabel = supabaseSyncActivity.lastCloudPushAt || supabaseSyncActivity.lastDictionaryPushAt
+    ? formatDate(Math.max(Number(supabaseSyncActivity.lastCloudPushAt) || 0, Number(supabaseSyncActivity.lastDictionaryPushAt) || 0))
+    : joinLocalizedText("Not pushed yet", "ابھی اپ لوڈ نہیں ہوا", language);
+  const syncLastPullLabel = supabaseSyncActivity.lastCloudPullAt || supabaseSyncActivity.lastDictionaryPullAt
+    ? formatDate(Math.max(Number(supabaseSyncActivity.lastCloudPullAt) || 0, Number(supabaseSyncActivity.lastDictionaryPullAt) || 0))
+    : joinLocalizedText("Not pulled yet", "ابھی ڈاؤن لوڈ نہیں ہوا", language);
   const profileSubjectSummaries = useMemo(() => SUBJECTS.map((subject) => {
     const lessons = grade ? (getLessons(subject.id, grade) || []) : [];
     const completed = lessons.filter((lesson) => completedQuizzes?.[lesson.id]).length;
@@ -14173,6 +14306,56 @@ function HomeschoolApp() {
             ))}
           </div>
         </div>
+        <div className="review-panel home-support-panel sync-activity-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Cloud Sync Activity", "کلاؤڈ سنک سرگرمی", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Local study still saves instantly. This panel shows what is already pushed, what is still waiting, and whether realtime cloud sync is helping this profile stay current.", "مقامی مطالعہ فوراً محفوظ ہوتا رہتا ہے۔ یہ پینل دکھاتا ہے کہ کیا چیز اپ لوڈ ہو چکی ہے، کیا ابھی باقی ہے، اور آیا ریئل ٹائم کلاؤڈ سنک اس پروفائل کو تازہ رکھنے میں مدد دے رہی ہے۔", language), language)}</p>
+            </div>
+            <div className="result-actions" style={{ marginTop: 0 }}>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(supabaseDictionarySync.realtimeEnabled ? joinLocalizedText("Realtime on", "ریئل ٹائم آن", language) : joinLocalizedText("Realtime off", "ریئل ٹائم بند", language), language)}</span>
+              <button type="button" className="ghost-cta" onClick={handleSupabaseSyncNow} disabled={supabaseSyncBusy}>
+                {renderLocalizedTextNode(supabaseSyncBusy ? joinLocalizedText("Syncing...", "سنک ہو رہی ہے...", language) : joinLocalizedText("Sync now", "ابھی سنک کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          <div className="stat-grid">
+            <div className="stat-card"><div className="stat-icon">⏳</div><div className="stat-value">{formatNumberLabel(syncPendingTotal)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending changes", "منتظر تبدیلیاں", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">⬆️</div><div className="stat-value">{renderLocalizedTextNode(syncLastPushLabel, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Last push", "آخری اپ لوڈ", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">⬇️</div><div className="stat-value">{renderLocalizedTextNode(syncLastPullLabel, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Last pull", "آخری ڈاؤن لوڈ", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📘</div><div className="stat-value">{formatNumberLabel(supabaseSyncActivity.dictionaryEntries || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Dictionary in cloud scope", "کلاؤڈ دائرہ کی لغت", language), language)}</div></div>
+          </div>
+          <div className="goal-progress-card">
+            <div className="goal-progress-row">
+              <div>
+                <strong>{renderLocalizedTextNode(syncActivityStatusText, language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(supabaseSyncStatusLabel, language)}</div>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(profileSyncScopeLabel, language)}</span>
+            </div>
+            <div className="goal-progress-row" style={{ marginTop: 12 }}>
+              <div>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Dictionary queue", "لغت قطار", language), language)}</strong>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.dictionaryPendingCount || 0} entries waiting`, `${supabaseSyncActivity.dictionaryPendingCount || 0} اندراجات منتظر`, language), language)}</div>
+              </div>
+              <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.cloudPendingCount || 0} cloud rows`, `${supabaseSyncActivity.cloudPendingCount || 0} کلاؤڈ قطار`, language), language)}</span>
+            </div>
+          </div>
+          {syncDatasetSummary.length ? (
+            <div className="dictionary-entry-badges" style={{ marginTop: 12 }}>
+              {syncDatasetSummary.map((entry) => (
+                <span key={`sync_dataset_${entry.dataset}`} className="discovery-tag muted">{renderLocalizedTextNode(joinLocalizedText(`${entry.label} • ${entry.count}`, `${entry.label} • ${entry.count}`, language), language)}</span>
+              ))}
+            </div>
+          ) : (
+            <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(joinLocalizedText("No queued cloud datasets right now.", "اس وقت کوئی کلاؤڈ قطار باقی نہیں۔", language), language)}</p>
+          )}
+          {supabaseSyncActivity.lastErrorMessage ? (
+            <div className="practice-feedback-panel" style={{ marginTop: 12 }}>
+              {renderLocalizedTextNode(joinLocalizedText(`Last sync issue: ${supabaseSyncActivity.lastErrorMessage}`, `آخری سنک مسئلہ: ${supabaseSyncActivity.lastErrorMessage}`, language), language)}
+            </div>
+          ) : null}
+        </div>
         {activeProfileRole === "parent" ? (
           <div className="review-panel home-support-panel role-overview-panel" data-ui-language={language} style={{ marginTop: 16 }}>
             <div className="review-panel-head">
@@ -14191,6 +14374,22 @@ function HomeschoolApp() {
                 <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${completedDailyChallenges}/${dailyChallenges.length} daily goals`, `${completedDailyChallenges}/${dailyChallenges.length} روزانہ اہداف`, language), language)}</span>
               </div>
             </div>
+            <div className="stat-grid" style={{ marginTop: 14 }}>
+              <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(weeklyStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Weekly study", "ہفتہ وار مطالعہ", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🧠</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{profileLessonCompletion}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Lesson completion", "سبق تکمیل", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{formatNumberLabel(streak || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Current streak", "موجودہ تسلسل", language), language)}</div></div>
+            </div>
+            <div className="profile-report-summary-row" style={{ marginTop: 14 }}>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Strongest subject", "سب سے مضبوط مضمون", language), language)}</strong>
+                <span>{renderLocalizedTextNode(profileStrongestSubject?.label || joinLocalizedText("Still emerging", "ابھی سامنے آ رہا ہے", language), language)}</span>
+              </div>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Support next", "اگلی مدد", language), language)}</strong>
+                <span>{renderLocalizedTextNode(profileSupportSubject?.label || joinLocalizedText("Keep reviewing", "ریویو جاری رکھیں", language), language)}</span>
+              </div>
+            </div>
           </div>
         ) : null}
         {activeProfileRole === "teacher" ? (
@@ -14207,6 +14406,29 @@ function HomeschoolApp() {
               <div className="stat-card"><div className="stat-icon">☁️</div><div className="stat-value">{renderLocalizedTextNode(supabaseDictionarySync.enabled ? joinLocalizedText("On", "آن", language) : joinLocalizedText("Off", "بند", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Cloud sync", "کلاؤڈ سنک", language), language)}</div></div>
               <div className="stat-card"><div className="stat-icon">🧾</div><div className="stat-value">{formatNumberLabel(cloudSyncConflicts.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Pending sync reviews", "زیرِ جائزہ سنک", language), language)}</div></div>
               <div className="stat-card"><div className="stat-icon">🗂️</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.customLists?.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Custom lists", "اپنی فہرستیں", language), language)}</div></div>
+            </div>
+            <div className="profile-report-list" style={{ marginTop: 14 }}>
+              <div className="profile-report-item">
+                <div className="profile-report-item-head">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Current learner focus", "موجودہ سیکھنے والے کی توجہ", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("No active profile", "کوئی فعال پروفائل نہیں", language), language)}</span>
+                </div>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`Support subject: ${profileSupportSubject?.label || "Keep reviewing"}`, `مدد والا مضمون: ${profileSupportSubject?.label || "ریویو جاری رکھیں"}`, language), language)}</div>
+              </div>
+              <div className="profile-report-item">
+                <div className="profile-report-item-head">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Cloud readiness", "کلاؤڈ تیاری", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(syncPendingTotal ? joinLocalizedText("Needs push", "اپ لوڈ درکار", language) : joinLocalizedText("Current", "تازہ", language), language)}</span>
+                </div>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${syncPendingTotal} pending changes • ${supabaseSyncActivity.dictionaryEntries || 0} dictionary rows`, `${syncPendingTotal} منتظر تبدیلیاں • ${supabaseSyncActivity.dictionaryEntries || 0} لغت قطار`, language), language)}</div>
+              </div>
+              <div className="profile-report-item">
+                <div className="profile-report-item-head">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Classroom-ready summary", "کلاس روم کے لیے خلاصہ", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Groundwork", "بنیاد", language), language)}</span>
+                </div>
+                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Profiles, review, dictionary, and cloud merge rules are now prepared for future class and assignment views.", "پروفائلز، ریویو، لغت، اور کلاؤڈ ضم قوانین اب آئندہ کلاس اور اسائنمنٹ مناظر کے لیے تیار ہیں۔", language), language)}</div>
+              </div>
             </div>
           </div>
         ) : null}
@@ -14505,6 +14727,7 @@ function HomeschoolApp() {
                 <div className="dictionary-stat-strip">
                   <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.total} active`, `${dictionaryStats.total} فعال`, language), language)}</span>
                   <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.deleted} deleted`, `${dictionaryStats.deleted} حذف`, language), language)}</span>
+                  <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.dictionaryPendingCount || 0} pending`, `${supabaseSyncActivity.dictionaryPendingCount || 0} منتظر`, language), language)}</span>
                 </div>
               </div>
               <div className="dictionary-browser-controls">
@@ -14573,17 +14796,38 @@ function HomeschoolApp() {
                     const origins = new Set([...(entry.origins || []), ...(entry.sources || []), entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
                     const isTrusted = origins.has("trusted");
                     const isWeak = origins.has("weak");
+                    const isPendingSync = dictionaryPendingSet.has(entry.normalizedWord);
                     const canDelete = Boolean(wordMeaningCache[entry.normalizedWord]);
+                    const sourceBadges = Array.from(origins)
+                      .filter((origin) => !["trusted", "weak"].includes(origin))
+                      .slice(0, 3)
+                      .map((origin) => {
+                        if (origin === "curriculum") return joinLocalizedText("Curriculum", "کریکولم", language);
+                        if (origin === "imported") return joinLocalizedText("Imported", "درآمد شدہ", language);
+                        if (origin === "ai" || origin === "gemini") return "AI";
+                        if (origin === "remote") return joinLocalizedText("Synced", "سنک شدہ", language);
+                        if (origin === "manual") return joinLocalizedText("Edited", "ترمیم شدہ", language);
+                        return origin;
+                      });
+                    const updatedLabel = entry.updatedAt
+                      ? formatDate(entry.updatedAt)
+                      : joinLocalizedText("Unknown", "نامعلوم", language);
                     return (
                       <div key={`dictionary_entry_${entry.normalizedWord}`} className={`dictionary-entry-card${entry.browserDeleted ? " deleted" : ""}`}>
                         <div className="dictionary-entry-head">
                           <div>
                             <div className="dictionary-entry-word">{entry.word}</div>
+                            <div className="dictionary-entry-meta-row">
+                              <span>{renderLocalizedTextNode(joinLocalizedText(`Updated ${updatedLabel}`, `تازہ ${updatedLabel}`, language), language)}</span>
+                              <span>{renderLocalizedTextNode(isPendingSync ? joinLocalizedText("Pending sync", "سنک منتظر", language) : joinLocalizedText("Synced locally", "مقامی طور پر تازہ", language), language)}</span>
+                            </div>
                             <div className="dictionary-entry-badges">
                               {(meta.badges || []).slice(0, 2).map((badge) => <span key={`${entry.normalizedWord}_${badge}`} className="discovery-tag">{renderLocalizedTextNode(badge, language)}</span>)}
                               {(meta.lessonLabels || []).slice(0, 1).map((label) => <span key={`${entry.normalizedWord}_${label}`} className="discovery-tag">{renderLocalizedTextNode(label, language)}</span>)}
+                              {sourceBadges.map((badge) => <span key={`${entry.normalizedWord}_${badge}`} className="discovery-tag muted">{renderLocalizedTextNode(badge, language)}</span>)}
                               {isTrusted ? <span className="discovery-tag trusted">{renderLocalizedTextNode(joinLocalizedText("Trusted", "قابلِ اعتماد", language), language)}</span> : null}
                               {isWeak ? <span className="discovery-tag weak">{renderLocalizedTextNode(joinLocalizedText("Needs review", "جائزہ درکار", language), language)}</span> : null}
+                              {isPendingSync ? <span className="discovery-tag pending">{renderLocalizedTextNode(joinLocalizedText("Pending sync", "سنک منتظر", language), language)}</span> : null}
                               {entry.browserDeleted ? <span className="discovery-tag deleted">{renderLocalizedTextNode(joinLocalizedText("Deleted", "حذف شدہ", language), language)}</span> : null}
                             </div>
                           </div>
@@ -16688,6 +16932,7 @@ function HomeschoolApp() {
             supabaseAuthBusy={supabaseAuthBusy}
             supabaseSyncBusy={supabaseSyncBusy}
             supabaseSyncStatusLabel={supabaseSyncStatusLabel}
+            supabaseSyncActivity={supabaseSyncActivity}
             supabaseAccountStatusLabel={supabaseAccountStatusLabel}
             supabaseSyncUserEmail={supabaseAuthState.email || ""}
             supabaseAccountRoleLabel={supabaseAccountRoleLabel}

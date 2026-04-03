@@ -316,6 +316,7 @@
       supabaseAuthBusy,
       supabaseSyncBusy,
       supabaseSyncStatusLabel,
+      supabaseSyncActivity,
       supabaseAccountStatusLabel,
       supabaseSyncUserEmail,
       supabaseAccountRoleLabel,
@@ -471,6 +472,8 @@
     const classDurationMinutes = Math.max(0, ((Number((classScheduleSettings?.endTime || "13:00").split(":")[0]) || 0) * 60 + (Number((classScheduleSettings?.endTime || "13:00").split(":")[1]) || 0)) - ((Number((classScheduleSettings?.startTime || "08:00").split(":")[0]) || 0) * 60 + (Number((classScheduleSettings?.startTime || "08:00").split(":")[1]) || 0)));
     const latestTimeEntry = Array.isArray(timeTrackingData?.history) ? timeTrackingData.history[0] : null;
     const latestMinutesSpent = Math.round((latestTimeEntry?.msSpent || 0) / 60000);
+    const syncSummary = supabaseSyncActivity && typeof supabaseSyncActivity === "object" ? supabaseSyncActivity : {};
+    const pendingCloudDatasets = Object.entries(syncSummary.pendingCloudDatasets || {}).filter(([, count]) => Number(count) > 0);
 
     const children = [];
 
@@ -1062,6 +1065,29 @@
       React.createElement("div", { className: "settings-item" },
         React.createElement("span", { className: "si-label" }, renderLocalizedText(ui.syncStatus || (language === "ur" ? "Sync Status" : "Sync Status"), language)),
         React.createElement("span", { className: "si-value", style: { maxWidth: 240, textAlign: language === "ur" ? "right" : "left" } }, renderLocalizedText(supabaseSyncStatusLabel || (language === "ur" ? "ابھی تک منسلک نہیں" : "Not connected yet"), language))),
+      React.createElement("div", {
+        style: {
+          padding: "12px 14px",
+          borderRadius: 12,
+          border: "1px solid var(--border)",
+          background: "var(--bg-elevated)",
+          marginBottom: 10,
+        },
+      },
+      React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 8 } }, renderLocalizedText(language === "ur" ? "Sync Activity" : "Sync Activity", language)),
+      React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 } },
+        React.createElement("div", { className: "settings-group-card", style: { marginBottom: 0 } },
+          React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 11, marginBottom: 4 } }, renderLocalizedText(language === "ur" ? "Pending local rows" : "Pending local rows", language)),
+          React.createElement("strong", { style: { color: "var(--text-primary)", fontSize: 16 } }, `${Number(syncSummary.dictionaryPendingCount || 0) + Number(syncSummary.cloudPendingCount || 0)}`)),
+        React.createElement("div", { className: "settings-group-card", style: { marginBottom: 0 } },
+          React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 11, marginBottom: 4 } }, renderLocalizedText(language === "ur" ? "Last push" : "Last push", language)),
+          React.createElement("strong", { style: { color: "var(--text-primary)", fontSize: 14 } }, (syncSummary.lastCloudPushAt || syncSummary.lastDictionaryPushAt) ? new Date(Math.max(Number(syncSummary.lastCloudPushAt) || 0, Number(syncSummary.lastDictionaryPushAt) || 0)).toLocaleString() : renderLocalizedText(language === "ur" ? "ابھی نہیں" : "Not yet", language))),
+        React.createElement("div", { className: "settings-group-card", style: { marginBottom: 0 } },
+          React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 11, marginBottom: 4 } }, renderLocalizedText(language === "ur" ? "Last pull" : "Last pull", language)),
+          React.createElement("strong", { style: { color: "var(--text-primary)", fontSize: 14 } }, (syncSummary.lastCloudPullAt || syncSummary.lastDictionaryPullAt) ? new Date(Math.max(Number(syncSummary.lastCloudPullAt) || 0, Number(syncSummary.lastDictionaryPullAt) || 0)).toLocaleString() : renderLocalizedText(language === "ur" ? "ابھی نہیں" : "Not yet", language)))),
+      pendingCloudDatasets.length ? React.createElement("div", { style: { marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" } },
+        ...pendingCloudDatasets.slice(0, 6).map(([dataset, count]) => React.createElement("span", { key: `sync_dataset_${dataset}`, className: "discovery-tag muted" }, `${dataset} • ${count}`))) : null,
+      syncSummary.lastErrorMessage ? React.createElement("div", { style: { marginTop: 10, color: "var(--danger)", fontSize: 12, lineHeight: 1.6 } }, renderLocalizedText(`${language === "ur" ? "آخری مسئلہ" : "Last issue"}: ${syncSummary.lastErrorMessage}`, language)) : null),
       React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 } },
         React.createElement("button", {
           type: "button",
