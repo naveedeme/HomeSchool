@@ -1302,6 +1302,20 @@ function normalizeStudentProfiles(profiles = [], fallbackProfile = {}) {
   return [createStudentProfileDraft(fallbackProfile)];
 }
 
+function normalizeDeletedStudentProfileIds(value = []) {
+  return Array.from(new Set((Array.isArray(value) ? value : [])
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean)));
+}
+
+function filterProfilesByDeletedIds(profiles = [], deletedIds = [], fallbackProfile = {}) {
+  const deletedSet = new Set(normalizeDeletedStudentProfileIds(deletedIds));
+  const visibleProfiles = normalizeStudentProfiles(profiles, fallbackProfile)
+    .filter((profile) => !deletedSet.has(String(profile.id || "").trim()));
+  if (visibleProfiles.length) return visibleProfiles;
+  return [createStudentProfileDraft(fallbackProfile)];
+}
+
 function resolveActiveStudentProfileId(profiles = [], preferredId = "") {
   const safeProfiles = Array.isArray(profiles) ? profiles : [];
   const matched = safeProfiles.find((profile) => profile.id === preferredId);
@@ -7367,8 +7381,12 @@ function HomeschoolApp() {
   const initialActiveTutorSessionId = initialTutorSessions.some((session) => session.id === storedAiTutorHistory.activeSessionId)
     ? storedAiTutorHistory.activeSessionId
     : initialTutorSessions[0]?.id;
-  const initialStudentProfiles = normalizeStudentProfiles(
+  const initialDeletedStudentProfileIds = normalizeDeletedStudentProfileIds(
+    stored?.deletedStudentProfileIds || localStorageFallback("hs_deleted_student_profile_ids") || [],
+  );
+  const initialStudentProfiles = filterProfilesByDeletedIds(
     stored?.studentProfiles || localStorageFallback("hs_student_profiles_registry") || [],
+    initialDeletedStudentProfileIds,
     {
       grade: stored?.grade || null,
       studentName: stored?.studentName || "",
@@ -7401,6 +7419,7 @@ function HomeschoolApp() {
     againMinutes: Math.max(5, Math.min(180, Number(stored?.reviewSrsSettings?.againMinutes) || 10)),
   });
   const [studentProfiles, setStudentProfiles] = useState(initialStudentProfiles);
+  const [deletedStudentProfileIds, setDeletedStudentProfileIds] = useState(initialDeletedStudentProfileIds);
   const [activeStudentProfileId, setActiveStudentProfileId] = useState(initialActiveStudentProfileId);
   const [profileSwitchBusy, setProfileSwitchBusy] = useState(false);
   const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
@@ -7583,6 +7602,7 @@ function HomeschoolApp() {
   const speechRecognitionRef = useRef(null);
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
+  const pendingRemoteProfileHydrationRef = useRef(false);
   const profileSwitcherButtonRef = useRef(null);
   const profileSwitcherMenuRef = useRef(null);
   const headerRef = useRef(null);
@@ -8528,7 +8548,7 @@ function HomeschoolApp() {
     };
   }, []);
 
-  const applyCloudCustomizationState = useCallback((customizations) => {
+  const applyCloudCustomizationState = useCallback(async (customizations) => {
     const source = customizations && typeof customizations === "object" ? customizations : {};
     const storedPreferences = source.preferences?.data || null;
     const storedAudioPreferences = source.audioPreferences?.data || null;
@@ -8545,6 +8565,7 @@ function HomeschoolApp() {
     const storedDictionaryPreferences = source.dictionaryPreferences?.data || null;
     const storedProfile = source.studentProfile?.data || null;
     const storedProfiles = source.studentProfiles?.data || null;
+    const storedDeletedProfiles = source.deletedStudentProfiles?.data || null;
     const storedActiveProfileId = source.activeStudentProfileId?.data?.id || source.activeStudentProfileId?.data || null;
     const storedAccountPreferences = source.accountPreferences?.data || null;
     const storedPracticeProgress = source.practiceProgress?.data || null;
@@ -8645,13 +8666,27 @@ function HomeschoolApp() {
       if (typeof storedAccountPreferences.username !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(storedAccountPreferences.username));
       if (typeof storedAccountPreferences.pendingEmail !== "undefined") setSupabasePendingEmail(String(storedAccountPreferences.pendingEmail || ""));
     }
-    if (storedProfiles) {
-      const normalizedProfiles = normalizeStudentProfiles(storedProfiles, storedProfile || {
+    const normalizedDeletedProfileIds = normalizeDeletedStudentProfileIds(storedDeletedProfiles);
+    if (storedDeletedProfiles) {
+      setDeletedStudentProfileIds(normalizedDeletedProfileIds);
+      localStorageFallback("hs_deleted_student_profile_ids", normalizedDeletedProfileIds);
+      if (window.HomeSchoolDB?.deleteProfileSnapshot) {
+        await Promise.all(normalizedDeletedProfileIds.map((profileId) =>
+          window.HomeSchoolDB.deleteProfileSnapshot(profileId).catch((error) => {
+            console.log("Unable to delete synced profile snapshot:", error);
+          })));
+      }
+    }
+    if (storedProfiles || storedDeletedProfiles) {
+      const normalizedProfiles = filterProfilesByDeletedIds(storedProfiles || studentProfilesRef.current, normalizedDeletedProfileIds, storedProfile || {
         grade,
         studentName,
         studentNameUr,
       });
       const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, storedActiveProfileId || activeStudentProfileIdRef.current);
+      if (nextActiveId !== activeStudentProfileIdRef.current) {
+        pendingRemoteProfileHydrationRef.current = true;
+      }
       studentProfilesRef.current = normalizedProfiles;
       activeStudentProfileIdRef.current = nextActiveId;
       setStudentProfiles(normalizedProfiles);
@@ -9520,13 +9555,14 @@ function HomeschoolApp() {
     studentProfilesRef.current = studentProfiles;
     activeStudentProfileIdRef.current = activeStudentProfileId;
     localStorageFallback("hs_student_profiles_registry", studentProfiles);
+    localStorageFallback("hs_deleted_student_profile_ids", deletedStudentProfileIds);
     localStorageFallback("hs_active_student_profile_id", activeStudentProfileId);
     if (window.HomeSchoolDB?.setActiveCloudProfile) {
       window.HomeSchoolDB.setActiveCloudProfile(activeStudentProfileId).catch((error) => {
         console.log("Unable to update active cloud profile:", error);
       });
     }
-  }, [activeStudentProfileId, studentProfiles]);
+  }, [activeStudentProfileId, deletedStudentProfileIds, studentProfiles]);
 
   useEffect(() => {
     setStudentProfiles((current) => {
@@ -10164,6 +10200,7 @@ function HomeschoolApp() {
             studentNameUr: nextPayload.studentNameUr,
           });
           await window.HomeSchoolDB.saveCustomization("studentProfiles", nextPayload.studentProfiles || []);
+          await window.HomeSchoolDB.saveCustomization("deletedStudentProfiles", normalizeDeletedStudentProfileIds(nextPayload.deletedStudentProfileIds || []));
           await window.HomeSchoolDB.saveCustomization("activeStudentProfileId", {
             id: nextPayload.activeStudentProfileId || "",
           });
@@ -10295,6 +10332,7 @@ function HomeschoolApp() {
             studentNameUr: nextPayload.studentNameUr,
           },
           studentProfiles: nextPayload.studentProfiles || [],
+          deletedStudentProfiles: normalizeDeletedStudentProfileIds(nextPayload.deletedStudentProfileIds || []),
           activeStudentProfileId: {
             id: nextPayload.activeStudentProfileId || "",
           },
@@ -10354,6 +10392,7 @@ function HomeschoolApp() {
         const storedSupabaseDictionarySync = customizations.supabaseDictionarySync?.data || null;
         const storedProfile = customizations.studentProfile?.data || null;
         const storedProfiles = customizations.studentProfiles?.data || null;
+        const storedDeletedProfiles = customizations.deletedStudentProfiles?.data || null;
         const storedActiveProfileId = customizations.activeStudentProfileId?.data?.id || customizations.activeStudentProfileId?.data || null;
         const storedAccountPreferences = customizations.accountPreferences?.data || null;
         const storedPracticeProgress = customizations.practiceProgress?.data || null;
@@ -10479,8 +10518,19 @@ function HomeschoolApp() {
           if (typeof storedAccountPreferences.username !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(storedAccountPreferences.username));
           if (typeof storedAccountPreferences.pendingEmail !== "undefined") setSupabasePendingEmail(String(storedAccountPreferences.pendingEmail || ""));
         }
-        if (storedProfiles) {
-          const normalizedProfiles = normalizeStudentProfiles(storedProfiles, storedProfile || {
+        if (storedDeletedProfiles) {
+          const normalizedDeletedProfileIds = normalizeDeletedStudentProfileIds(storedDeletedProfiles);
+          setDeletedStudentProfileIds(normalizedDeletedProfileIds);
+          localStorageFallback("hs_deleted_student_profile_ids", normalizedDeletedProfileIds);
+          if (window.HomeSchoolDB?.deleteProfileSnapshot) {
+            await Promise.all(normalizedDeletedProfileIds.map((profileId) =>
+              window.HomeSchoolDB.deleteProfileSnapshot(profileId).catch((error) => {
+                console.log("Unable to delete stored profile snapshot:", error);
+              })));
+          }
+        }
+        if (storedProfiles || storedDeletedProfiles) {
+          const normalizedProfiles = filterProfilesByDeletedIds(storedProfiles || studentProfilesRef.current, storedDeletedProfiles, storedProfile || {
             grade: stored?.grade || null,
             studentName: stored?.studentName || "",
             studentNameUr: stored?.studentNameUr || "",
@@ -10867,6 +10917,7 @@ function HomeschoolApp() {
       dictionaryImportUrl,
       supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync),
       studentProfiles,
+      deletedStudentProfileIds,
       activeStudentProfileId,
       supabaseRolePreference,
       supabaseAccountUsername,
@@ -10877,10 +10928,10 @@ function HomeschoolApp() {
       aiProviderConfigs,
       selectedAiProvider,
     });
-}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
+  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -11785,11 +11836,12 @@ function HomeschoolApp() {
 
   const applyImportedAppState = useCallback((nextState = {}, mode = "replace") => {
     if (mode === "replace") {
-      if (Array.isArray(nextState.studentProfiles)) setStudentProfiles(normalizeStudentProfiles(nextState.studentProfiles, {
+      if (Array.isArray(nextState.studentProfiles)) setStudentProfiles(filterProfilesByDeletedIds(nextState.studentProfiles, nextState.deletedStudentProfileIds, {
         grade: nextState.grade,
         studentName: nextState.studentName,
         studentNameUr: nextState.studentNameUr,
       }));
+      if (Array.isArray(nextState.deletedStudentProfileIds)) setDeletedStudentProfileIds(normalizeDeletedStudentProfileIds(nextState.deletedStudentProfileIds));
       if (typeof nextState.activeStudentProfileId !== "undefined") setActiveStudentProfileId(nextState.activeStudentProfileId || "");
       if (typeof nextState.supabaseRolePreference !== "undefined" && ["student", "parent", "teacher"].includes(nextState.supabaseRolePreference)) setSupabaseRolePreference(nextState.supabaseRolePreference);
       if (typeof nextState.supabaseAccountUsername !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(nextState.supabaseAccountUsername));
@@ -11872,11 +11924,12 @@ function HomeschoolApp() {
       return;
     }
 
-    if (Array.isArray(nextState.studentProfiles)) setStudentProfiles((current) => normalizeStudentProfiles([...(current || []), ...nextState.studentProfiles], {
+    if (Array.isArray(nextState.studentProfiles)) setStudentProfiles((current) => filterProfilesByDeletedIds([...(current || []), ...nextState.studentProfiles], nextState.deletedStudentProfileIds || deletedStudentProfileIds, {
       grade: nextState.grade,
       studentName: nextState.studentName,
       studentNameUr: nextState.studentNameUr,
     }));
+    if (Array.isArray(nextState.deletedStudentProfileIds)) setDeletedStudentProfileIds((current) => normalizeDeletedStudentProfileIds([...(current || []), ...nextState.deletedStudentProfileIds]));
     if (typeof nextState.activeStudentProfileId !== "undefined") setActiveStudentProfileId((current) => current || nextState.activeStudentProfileId || "");
     if (typeof nextState.supabaseRolePreference !== "undefined" && ["student", "parent", "teacher"].includes(nextState.supabaseRolePreference)) setSupabaseRolePreference((current) => current || nextState.supabaseRolePreference);
     if (typeof nextState.supabaseAccountUsername !== "undefined") setSupabaseAccountUsername((current) => current || sanitizeAccountUsername(nextState.supabaseAccountUsername));
@@ -11978,12 +12031,15 @@ function HomeschoolApp() {
     if (typeof nextState.dictionaryImportUrl !== "undefined") {
       setDictionaryImportUrl((current) => current || String(nextState.dictionaryImportUrl || ""));
     }
-  }, []);
+  }, [deletedStudentProfileIds]);
 
   const buildProfileAppStateSnapshot = useCallback(() => ({
     grade,
     studentName,
     studentNameUr,
+    studentProfiles,
+    deletedStudentProfileIds,
+    activeStudentProfileId,
     completedQuizzes,
     totalScore,
     totalQuizzesDone,
@@ -12024,7 +12080,7 @@ function HomeschoolApp() {
     timeTrackingData,
     notificationHistory,
     gamificationState,
-  }), [audioMuted, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
+  }), [activeStudentProfileId, audioMuted, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
 
   const buildBlankProfileAppState = useCallback((profile) => {
     const safeProfile = createStudentProfileDraft(profile);
@@ -12105,6 +12161,19 @@ function HomeschoolApp() {
     setTab("home");
   }, [applyImportedAppState, buildBlankProfileAppState, clearLessonSelections, getEmptyProfileDbProgress, refreshReviewWorkspace, refreshStorageLabel]);
 
+  useEffect(() => {
+    if (!pendingRemoteProfileHydrationRef.current || profileSwitchBusy) return;
+    const nextProfile = studentProfiles.find((profile) => profile.id === activeStudentProfileId) || null;
+    if (!nextProfile) {
+      pendingRemoteProfileHydrationRef.current = false;
+      return;
+    }
+    pendingRemoteProfileHydrationRef.current = false;
+    loadStudentProfileSnapshot(nextProfile, { preserveProfileRegistry: true }).catch((error) => {
+      console.log("Unable to hydrate remotely switched profile:", error);
+    });
+  }, [activeStudentProfileId, loadStudentProfileSnapshot, profileSwitchBusy, studentProfiles]);
+
   const handleSwitchStudentProfile = useCallback(async (profileId) => {
     const nextProfileId = String(profileId || "").trim();
     if (!nextProfileId || nextProfileId === activeStudentProfileIdRef.current || profileSwitchBusy) return;
@@ -12146,6 +12215,7 @@ function HomeschoolApp() {
       const nextProfiles = normalizeStudentProfiles([...studentProfilesRef.current, nextProfile], nextProfile);
       studentProfilesRef.current = nextProfiles;
       setStudentProfiles(nextProfiles);
+      setDeletedStudentProfileIds((current) => normalizeDeletedStudentProfileIds((current || []).filter((id) => id !== nextProfile.id)));
       setProfileDraft({
         nickname: "",
         studentName: "",
@@ -12186,6 +12256,7 @@ function HomeschoolApp() {
         await window.HomeSchoolDB.deleteProfileSnapshot(targetId);
       }
       const nextProfiles = studentProfilesRef.current.filter((profile) => profile.id !== targetId);
+      setDeletedStudentProfileIds((current) => normalizeDeletedStudentProfileIds([...(current || []), targetId]));
       const nextActiveId = resolveActiveStudentProfileId(nextProfiles, targetId === activeStudentProfileIdRef.current ? nextProfiles[0]?.id : activeStudentProfileIdRef.current);
       studentProfilesRef.current = nextProfiles;
       setStudentProfiles(nextProfiles);
@@ -12243,6 +12314,7 @@ function HomeschoolApp() {
         studentName,
         studentNameUr,
         studentProfiles,
+        deletedStudentProfileIds,
         activeStudentProfileId,
         supabaseRolePreference,
         supabaseAccountUsername,
@@ -12295,7 +12367,7 @@ function HomeschoolApp() {
       lastBackupAt: exportedAt,
       lastPromptDay: getLocalDayKey(exportedAt),
     }));
-  }, [grade, studentName, studentNameUr, studentProfiles, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts]);
+  }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, language, themeMode, fontSizeMode, reducedMotion, highContrast, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts]);
 
   const handleExportDictionary = useCallback(() => {
     const exportedAt = Date.now();

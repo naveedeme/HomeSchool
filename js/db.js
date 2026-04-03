@@ -148,11 +148,13 @@
     "gamificationState",
     "studentProfile",
     "studentProfiles",
+    "deletedStudentProfiles",
     "accountPreferences",
     "dictionaryPreferences",
   ]);
   const GLOBAL_CLOUD_CUSTOMIZATION_TYPES = new Set([
     "studentProfiles",
+    "deletedStudentProfiles",
     "accountPreferences",
   ]);
 
@@ -993,6 +995,9 @@ async function saveCustomization(type, data) {
     }
     if (safeType === "studentProfiles") {
       return mergeStudentProfilesPayload(existingValue, incomingValue);
+    }
+    if (safeType === "deletedStudentProfiles") {
+      return mergeStringArrays(existingValue, incomingValue);
     }
     if (safeType === "practiceProgress" || safeType === "daySectionPacing" || safeType === "studyGoals" || safeType === "focusTimerSettings" || safeType === "reminderSettings" || safeType === "backupReminderSettings" || safeType === "classScheduleSettings" || safeType === "dictionaryPreferences" || safeType === "accountPreferences") {
       return { ...existing, ...incoming };
