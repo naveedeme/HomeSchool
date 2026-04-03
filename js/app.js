@@ -13421,10 +13421,14 @@ function HomeschoolApp() {
   );
   const profileSyncScopeLabel = joinLocalizedText(
     supabaseDictionarySync.enabled
-      ? `${activeStudentProfileLabel || "Current profile"} syncs separately`
+      ? studentProfiles.length > 1
+        ? `${activeStudentProfileLabel || "Current profile"} syncs separately`
+        : "Cloud sync is active for this profile"
       : "Cloud sync stays local until you enable it",
     supabaseDictionarySync.enabled
-      ? `${activeStudentProfileLabel || "موجودہ پروفائل"} الگ سنک ہوتا ہے`
+      ? studentProfiles.length > 1
+        ? `${activeStudentProfileLabel || "موجودہ پروفائل"} الگ سنک ہوتا ہے`
+        : "اس پروفائل کے لیے کلاؤڈ سنک فعال ہے"
       : "کلاؤڈ سنک آن ہونے تک سب کچھ مقامی رہے گا",
     language,
   );

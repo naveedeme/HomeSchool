@@ -11276,8 +11276,8 @@ ${error.message || error}`);
       [profileSubjectSummaries]
     );
     const profileSyncScopeLabel = joinLocalizedText(
-      supabaseDictionarySync.enabled ? `${activeStudentProfileLabel || "Current profile"} syncs separately` : "Cloud sync stays local until you enable it",
-      supabaseDictionarySync.enabled ? `${activeStudentProfileLabel || "\u0645\u0648\u062C\u0648\u062F\u06C1 \u067E\u0631\u0648\u0641\u0627\u0626\u0644"} \u0627\u0644\u06AF \u0633\u0646\u06A9 \u06C1\u0648\u062A\u0627 \u06C1\u06D2` : "\u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9 \u0622\u0646 \u06C1\u0648\u0646\u06D2 \u062A\u06A9 \u0633\u0628 \u06A9\u0686\u06BE \u0645\u0642\u0627\u0645\u06CC \u0631\u06C1\u06D2 \u06AF\u0627",
+      supabaseDictionarySync.enabled ? studentProfiles.length > 1 ? `${activeStudentProfileLabel || "Current profile"} syncs separately` : "Cloud sync is active for this profile" : "Cloud sync stays local until you enable it",
+      supabaseDictionarySync.enabled ? studentProfiles.length > 1 ? `${activeStudentProfileLabel || "\u0645\u0648\u062C\u0648\u062F\u06C1 \u067E\u0631\u0648\u0641\u0627\u0626\u0644"} \u0627\u0644\u06AF \u0633\u0646\u06A9 \u06C1\u0648\u062A\u0627 \u06C1\u06D2` : "\u0627\u0633 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9 \u0641\u0639\u0627\u0644 \u06C1\u06D2" : "\u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9 \u0622\u0646 \u06C1\u0648\u0646\u06D2 \u062A\u06A9 \u0633\u0628 \u06A9\u0686\u06BE \u0645\u0642\u0627\u0645\u06CC \u0631\u06C1\u06D2 \u06AF\u0627",
       language
     );
     const supabaseAccountRoleLabel = joinLocalizedText(
