@@ -248,6 +248,67 @@
     return stableSort(value == null ? {} : value);
   }
 
+  function normalizeTimeTrackingForSync(value) {
+    const safe = value && typeof value === "object" ? value : {};
+    return {
+      history: Array.isArray(safe.history) ? safe.history.map((entry) => ({
+        dayKey: String(entry?.dayKey || "").trim(),
+        msSpent: Math.max(0, Number(entry?.msSpent) || 0),
+        latenessMinutes: Math.max(0, Number(entry?.latenessMinutes) || 0),
+        status: String(entry?.status || "tracked").trim() || "tracked",
+        onTimeAwarded: Boolean(entry?.onTimeAwarded),
+        durationAwarded: Boolean(entry?.durationAwarded),
+        classStartTime: entry?.classStartTime || null,
+        classEndTime: entry?.classEndTime || null,
+      })) : [],
+      totalMsSpent: Math.max(0, Number(safe.totalMsSpent) || 0),
+      totalLateMinutes: Math.max(0, Number(safe.totalLateMinutes) || 0),
+      onTimeStarts: Math.max(0, Number(safe.onTimeStarts) || 0),
+      lateStarts: Math.max(0, Number(safe.lateStarts) || 0),
+      punctualityStreak: Math.max(0, Number(safe.punctualityStreak) || 0),
+      bestPunctualityStreak: Math.max(0, Number(safe.bestPunctualityStreak) || 0),
+      classSessionsMet: Math.max(0, Number(safe.classSessionsMet) || 0),
+    };
+  }
+
+  function shouldQueueTimeTrackingSync(existingValue, nextValue) {
+    const existing = normalizeTimeTrackingForSync(existingValue);
+    const next = normalizeTimeTrackingForSync(nextValue);
+    if (!existing.history.length && !existing.totalMsSpent && !existing.totalLateMinutes && !existing.onTimeStarts && !existing.lateStarts && !existing.classSessionsMet && next.totalMsSpent === 0) {
+      return false;
+    }
+    if (existing.totalLateMinutes !== next.totalLateMinutes
+      || existing.onTimeStarts !== next.onTimeStarts
+      || existing.lateStarts !== next.lateStarts
+      || existing.punctualityStreak !== next.punctualityStreak
+      || existing.bestPunctualityStreak !== next.bestPunctualityStreak
+      || existing.classSessionsMet !== next.classSessionsMet) {
+      return true;
+    }
+    const existingMap = new Map(existing.history.map((entry) => [entry.dayKey, entry]));
+    const nextMap = new Map(next.history.map((entry) => [entry.dayKey, entry]));
+    const allDayKeys = Array.from(new Set([...existingMap.keys(), ...nextMap.keys()]));
+    if (allDayKeys.length !== existingMap.size || allDayKeys.length !== nextMap.size) {
+      return true;
+    }
+    let totalUsageDelta = Math.abs(next.totalMsSpent - existing.totalMsSpent);
+    for (const dayKey of allDayKeys) {
+      const previous = existingMap.get(dayKey);
+      const current = nextMap.get(dayKey);
+      if (!previous || !current) return true;
+      if (previous.latenessMinutes !== current.latenessMinutes
+        || previous.status !== current.status
+        || previous.onTimeAwarded !== current.onTimeAwarded
+        || previous.durationAwarded !== current.durationAwarded
+        || previous.classStartTime !== current.classStartTime
+        || previous.classEndTime !== current.classEndTime) {
+        return true;
+      }
+      totalUsageDelta = Math.max(totalUsageDelta, Math.abs((current.msSpent || 0) - (previous.msSpent || 0)));
+    }
+    return totalUsageDelta >= 300000;
+  }
+
   function buildSubjectPayload(dataLoader, subjectId) {
     const grades = dataLoader.MANIFEST?.[subjectId]?.grades || [];
     const lessonsByGrade = {};
@@ -483,7 +544,10 @@ async function saveCustomization(type, data, options = {}) {
       ts: Date.now(),
     };
   await db.customizations.put(record);
-  if (options.queue !== false && shouldSyncCustomizationType(normalizedType)) {
+  const shouldQueue = options.queue !== false
+    && shouldSyncCustomizationType(normalizedType)
+    && (normalizedType !== "timeTrackingData" || shouldQueueTimeTrackingSync(existing?.data, nextData));
+  if (shouldQueue) {
     await queueCloudSyncRecord(CLOUD_SYNC_DATASETS.customization, normalizedType, record, {
       updatedAt: record.ts,
       profileId: getCloudProfileScopeForCustomization(normalizedType),
