@@ -3460,6 +3460,55 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
       /* @__PURE__ */ React.createElement("span", { style: { paddingRight: lang === "ur" ? 0 : 28, paddingLeft: lang === "ur" ? 28 : 0, ...fillHeight ? { display: "flex", alignItems: "center", minHeight: "100%", width: "100%" } : {}, ...textStyle } }, renderText())
     )), inlineTools ? /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: studyCard, compact: true, iconOnly: true, inline: true, showLists: false }) : null);
   }
+  function getBilingualExercisePromptParts(text) {
+    const raw = String(text || "").trim();
+    if (!raw || !raw.includes(":")) return null;
+    const splitIndex = raw.indexOf(":");
+    const first = raw.slice(0, splitIndex).trim();
+    const second = raw.slice(splitIndex + 1).trim();
+    if (!first || !second) return null;
+    const firstUrdu = isUrduText(first);
+    const secondUrdu = isUrduText(second);
+    if (firstUrdu === secondUrdu) return null;
+    return {
+      english: firstUrdu ? second : first,
+      urdu: firstUrdu ? first : second
+    };
+  }
+  function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
+    const bilingualPair = getBilingualExercisePromptParts(text);
+    if (!bilingualPair) {
+      return /* @__PURE__ */ React.createElement(
+        SpeakableSentence,
+        {
+          text,
+          lang: isUrduText(text) ? "ur" : "en",
+          studyItem,
+          showStudyToolbar: false,
+          buttonStyle
+        }
+      );
+    }
+    return /* @__PURE__ */ React.createElement("div", { className: "exercise-bilingual-prompt" }, /* @__PURE__ */ React.createElement("div", { className: "exercise-bilingual-prompt-side exercise-bilingual-prompt-side-en" }, /* @__PURE__ */ React.createElement("div", { className: "exercise-bilingual-prompt-label" }, "English"), /* @__PURE__ */ React.createElement(
+      SpeakableSentence,
+      {
+        text: bilingualPair.english,
+        lang: "en",
+        studyItem: { ...studyItem || {}, prompt: bilingualPair.english },
+        showStudyToolbar: false,
+        buttonStyle: { marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }
+      }
+    )), /* @__PURE__ */ React.createElement("div", { className: "exercise-bilingual-prompt-side exercise-bilingual-prompt-side-ur" }, /* @__PURE__ */ React.createElement("div", { className: "exercise-bilingual-prompt-label" }, "\u0627\u0631\u062F\u0648"), /* @__PURE__ */ React.createElement(
+      SpeakableSentence,
+      {
+        text: bilingualPair.urdu,
+        lang: "ur",
+        studyItem: { ...studyItem || {}, prompt: bilingualPair.urdu },
+        showStudyToolbar: false,
+        buttonStyle: { marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }
+      }
+    )));
+  }
   function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, showStudyToolbar = true }) {
     const app = useContext(AppContext);
     const studyCard = studyItem ? resolveStudyCard(app, {
@@ -13028,12 +13077,10 @@ ${error.message || error}`);
           const pc = qColors[(ei + pi + 1) % qColors.length];
           const displayP = p.replace(/(\d)̲/g, "[$1]").replace(/(\d)\u0332/g, "[$1]");
           return /* @__PURE__ */ React.createElement("div", { key: "A_" + pi, style: { display: "flex", alignItems: "stretch", gap: 8, marginBottom: 8, paddingLeft: isUr ? 0 : 4, paddingRight: isUr ? 4 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 28, height: 28, borderRadius: 8, background: pc + "18", border: "1.5px solid " + pc + "66", color: pc, fontSize: 11, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, "A", pi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex" } }, /* @__PURE__ */ React.createElement(
-            SpeakableSentence,
+            ExercisePromptContent,
             {
               text: displayP,
-              lang: isUrduText(displayP) ? "ur" : "en",
               studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` },
-              showStudyToolbar: false,
               buttonStyle: { marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }
             }
           )), revealedEx[rk] && ex.ans && ex.ans[pi] && /* @__PURE__ */ React.createElement("div", { style: { flex: "0 1 auto", width: "fit-content", maxWidth: "50%", minWidth: 0, display: "flex", alignSelf: "stretch" } }, /* @__PURE__ */ React.createElement(
@@ -13097,12 +13144,10 @@ ${error.message || error}`);
           const displayP = p.replace(/(\d)̲/g, "[$1]").replace(/(\d)\u0332/g, "[$1]");
           const promptVisual = getSimpleMachinePromptVisual(sub, ex, displayP);
           return /* @__PURE__ */ React.createElement("div", { key: pi, style: { display: "flex", alignItems: "stretch", gap: 8, marginBottom: 8, paddingLeft: isUr ? 0 : 8, paddingRight: isUr ? 8 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 28, height: 28, borderRadius: 8, background: pc + "18", border: "1.5px solid " + pc + "66", color: pc, fontSize: 11, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, String.fromCharCode(97 + pi)), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex", alignItems: "stretch", gap: 8 } }, promptVisual ? /* @__PURE__ */ React.createElement("span", { style: { alignSelf: "center", display: "inline-flex" } }, promptVisual) : null, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex" } }, /* @__PURE__ */ React.createElement(
-            SpeakableSentence,
+            ExercisePromptContent,
             {
               text: displayP,
-              lang: isUrduText(displayP) ? "ur" : "en",
               studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` },
-              showStudyToolbar: false,
               buttonStyle: { marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }
             }
           ))), revealedEx[rk] && ex.ans && ex.ans[pi] && /* @__PURE__ */ React.createElement("div", { style: { flex: "0 1 auto", width: "fit-content", maxWidth: "50%", minWidth: 0, display: "flex", alignSelf: "stretch" } }, /* @__PURE__ */ React.createElement(

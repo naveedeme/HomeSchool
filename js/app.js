@@ -4943,6 +4943,61 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
   );
 }
 
+function getBilingualExercisePromptParts(text) {
+  const raw = String(text || "").trim();
+  if (!raw || !raw.includes(":")) return null;
+  const splitIndex = raw.indexOf(":");
+  const first = raw.slice(0, splitIndex).trim();
+  const second = raw.slice(splitIndex + 1).trim();
+  if (!first || !second) return null;
+  const firstUrdu = isUrduText(first);
+  const secondUrdu = isUrduText(second);
+  if (firstUrdu === secondUrdu) return null;
+  return {
+    english: firstUrdu ? second : first,
+    urdu: firstUrdu ? first : second,
+  };
+}
+
+function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
+  const bilingualPair = getBilingualExercisePromptParts(text);
+  if (!bilingualPair) {
+    return (
+      <SpeakableSentence
+        text={text}
+        lang={isUrduText(text) ? "ur" : "en"}
+        studyItem={studyItem}
+        showStudyToolbar={false}
+        buttonStyle={buttonStyle}
+      />
+    );
+  }
+  return (
+    <div className="exercise-bilingual-prompt">
+      <div className="exercise-bilingual-prompt-side exercise-bilingual-prompt-side-en">
+        <div className="exercise-bilingual-prompt-label">English</div>
+        <SpeakableSentence
+          text={bilingualPair.english}
+          lang="en"
+          studyItem={{ ...(studyItem || {}), prompt: bilingualPair.english }}
+          showStudyToolbar={false}
+          buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+        />
+      </div>
+      <div className="exercise-bilingual-prompt-side exercise-bilingual-prompt-side-ur">
+        <div className="exercise-bilingual-prompt-label">اردو</div>
+        <SpeakableSentence
+          text={bilingualPair.urdu}
+          lang="ur"
+          studyItem={{ ...(studyItem || {}), prompt: bilingualPair.urdu }}
+          showStudyToolbar={false}
+          buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, showStudyToolbar = true }) {
   const app = useContext(AppContext);
   const studyCard = studyItem ? resolveStudyCard(app, {
@@ -16278,11 +16333,9 @@ function HomeschoolApp() {
                       return (<div key={"A_"+pi} style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>A{pi+1}</span>
                         <div style={{flex:1,minWidth:0,display:"flex"}}>
-                          <SpeakableSentence
+                          <ExercisePromptContent
                             text={displayP}
-                            lang={isUrduText(displayP)?"ur":"en"}
                             studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
-                            showStudyToolbar={false}
                             buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
                           />
                         </div>
@@ -16364,11 +16417,9 @@ function HomeschoolApp() {
                   <div style={{flex:1,minWidth:0,display:"flex",alignItems:"stretch",gap:8}}>
                     {promptVisual ? <span style={{alignSelf:"center",display:"inline-flex"}}>{promptVisual}</span> : null}
                     <div style={{flex:1,minWidth:0,display:"flex"}}>
-                      <SpeakableSentence
+                      <ExercisePromptContent
                         text={displayP}
-                        lang={isUrduText(displayP)?"ur":"en"}
                         studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
-                        showStudyToolbar={false}
                         buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
                       />
                     </div>
