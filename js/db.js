@@ -161,6 +161,7 @@
     "preferences",
     "audioPreferences",
     "reviewPreferences",
+    "contentPreferences",
     "practiceProgress",
     "daySectionPacing",
     "studyGoals",

@@ -259,6 +259,26 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .subject-chapter-actions,.subject-chapter-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
 .subject-chapter-actions-copy{font-size:12px;color:var(--text-secondary);line-height:1.5}
 .subject-chapter-toolbar .ghost-cta,.subject-chapter-actions .ghost-cta{display:inline-flex;align-items:center;justify-content:center;min-height:42px}
+.chapter-source-panel{margin-top:0;margin-bottom:16px}
+.chapter-choice-row{display:flex;flex-wrap:wrap;gap:10px}
+.chapter-source-choice{padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:transform .16s ease,border-color .18s ease,background .18s ease,box-shadow .18s ease}
+.chapter-source-choice:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 24%,var(--border));box-shadow:0 10px 18px rgba(15,23,42,.08)}
+.chapter-source-choice.active{border-color:color-mix(in srgb,var(--accent) 36%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--bg-elevated));box-shadow:0 12px 20px rgba(14,165,233,.1)}
+.chapter-management-panel .review-list-input,.chapter-management-panel .dictionary-select{min-height:42px}
+.chapter-browser-filter-row{display:grid;grid-template-columns:minmax(180px,220px) minmax(220px,1fr);gap:12px}
+.chapter-card-panel[data-ui-language="ur"],.chapter-management-panel[data-ui-language="ur"]{direction:rtl;text-align:right}
+.chapter-card-panel[data-ui-language="ur"] .chapter-choice-row,.chapter-management-panel[data-ui-language="ur"] .chapter-browser-filter-row{direction:rtl}
+.chapter-badge-row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px}
+.chapter-badge{display:inline-flex;align-items:center;justify-content:center;padding:5px 10px;border-radius:999px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-secondary);font-size:11px;font-weight:800;line-height:1.2}
+.chapter-badge.verified{background:rgba(14,165,233,.1);border-color:rgba(14,165,233,.24);color:var(--accent)}
+.chapter-badge.trust{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.24);color:#15803D}
+.chapter-badge.local{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.22);color:#B45309}
+.chapter-badge.mine{background:rgba(99,102,241,.12);border-color:rgba(99,102,241,.22);color:#4F46E5}
+.chapter-badge.community{background:rgba(148,163,184,.14);border-color:rgba(148,163,184,.24);color:var(--text-secondary)}
+.chapter-badge.fork{background:rgba(236,72,153,.12);border-color:rgba(236,72,153,.22);color:#BE185D}
+.chapter-badge.active{background:rgba(34,197,94,.14);border-color:rgba(34,197,94,.26);color:#15803D}
+.lesson-source-badges{margin-top:0;margin-bottom:10px}
+.chapter-card-actions{justify-content:flex-start;flex-wrap:wrap}
 .lesson-detail .start-quiz-btn{margin-top:20px;width:100%;padding:14px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--accent),#0EA5E9);color:#0F172A;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;transition:all .2s}
 .quiz-container{animation:fadeSlide .3s ease}@keyframes fadeSlide{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .quiz-progress{display:flex;gap:4px;margin-bottom:20px}.quiz-progress .qp-dot{flex:1;height:4px;background:var(--bg-elevated);border-radius:2px;transition:background .3s}.quiz-progress .qp-dot.done{background:var(--success)}.quiz-progress .qp-dot.current{background:var(--accent)}
@@ -1083,6 +1103,10 @@ direction:ltr;
   .dictionary-entry-head{flex-direction:column}
   .dictionary-entry-actions{justify-content:flex-start}
   .dictionary-select{width:100%}
+}
+@media(max-width:720px){
+  .chapter-browser-filter-row{grid-template-columns:1fr}
+  .chapter-source-choice{width:100%}
 }
 @keyframes studyFocusPulse{0%{transform:scale(.985);opacity:.82}35%{transform:scale(1.01);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes pageFocusFlash{0%{filter:brightness(1)}25%{filter:brightness(1.06)}100%{filter:brightness(1)}}

@@ -1535,9 +1535,9 @@
       {
         key: "settings-account",
         title: joinLocalizedText("Account & Cloud Sign-In", "اکاؤنٹ اور کلاؤڈ سائن اِن", language),
-        tags: ["account", "supabase", "cloud", "sign in", "email", "password", "username", "sync"],
+        tags: ["account", "supabase", "cloud", "sign in", "email", "password", "username", "sync", "sql", "setup sql", "copy sql", "test connection", "published chapter", "published chapters", "content", "publish"],
         groups: [
-          { key: "settings-group-account", title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language), tags: ["login", "email", "password", "username", "role", "cloud"], children: accountChildren },
+          { key: "settings-group-account", title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language), tags: ["login", "email", "password", "username", "role", "cloud", "sql", "setup", "copy sql", "test connection", "sync now", "published chapter", "content"], children: accountChildren },
         ],
       },
       {
