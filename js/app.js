@@ -116,8 +116,6 @@ const UI_TEXT = {
     muteAudio: "Mute Audio",
     autoPlayNext: "Auto-Play Next",
     autoPlayNextHelp: "Automatically play the next prompt when a new practice card opens.",
-    phoneticSpelling: "Phonetic Spelling",
-    syllableBreakdown: "Syllable Breakdown",
     meaningLookupPriority: "Meaning Lookup Priority",
     meaningLookupPriorityHelp: "Choose whether word meanings should prefer local vocabulary first or try AI first when available.",
     meaningPriorityLocalFirst: "Local first",
@@ -384,8 +382,6 @@ const UI_TEXT = {
     muteAudio: "آواز بند کریں",
     autoPlayNext: "اگلا خودکار سنائیں",
     autoPlayNextHelp: "نیا پریکٹس کارڈ کھلتے ہی اگلا پرامپٹ خودکار طور پر سنائیں۔",
-    phoneticSpelling: "صوتی املا",
-    syllableBreakdown: "ہجوں کی تقسیم",
     meaningLookupPriority: "معنی تلاش کی ترجیح",
     meaningLookupPriorityHelp: "منتخب کریں کہ لفظوں کے معنی پہلے مقامی ذخیرہ الفاظ سے لیے جائیں یا دستیاب ہونے پر پہلے اے آئی سے پوچھا جائے۔",
     meaningPriorityLocalFirst: "پہلے مقامی",
@@ -6193,100 +6189,6 @@ function normalizeAnswerText(value) {
     .toLowerCase();
 }
 
-const PHONETIC_EXCEPTIONS = {
-  one: "wun",
-  two: "too",
-  once: "wuns",
-  hour: "our",
-  honest: "on-ist",
-  know: "noh",
-  school: "skool",
-  enough: "ee-nuf",
-  through: "throo",
-  though: "thoh",
-  daughter: "daw-ter",
-  laugh: "laf",
-  great: "grayt",
-  water: "waw-ter",
-};
-
-function isEnglishStudyText(value) {
-  const text = String(value || "").trim();
-  if (!text || containsUrduText(text)) return false;
-  return /^[A-Za-z\s'’-]+$/.test(text);
-}
-
-function splitEnglishWordIntoSyllables(word) {
-  const raw = String(word || "").trim();
-  const cleaned = raw.toLowerCase().replace(/[^a-z]/g, "");
-  if (!cleaned) return [];
-  if (cleaned.length <= 3) return [raw.toLowerCase()];
-  const matches = cleaned.match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy](?=[^aeiouy][aeiouy])|[^aeiouy]?$)?/g);
-  if (!matches || !matches.length) return [raw.toLowerCase()];
-  return matches;
-}
-
-function simplifyPhoneticChunk(chunk = "") {
-  let next = String(chunk || "").toLowerCase();
-  if (!next) return "";
-  if (PHONETIC_EXCEPTIONS[next]) return PHONETIC_EXCEPTIONS[next];
-  next = next
-    .replace(/tion/g, "shun")
-    .replace(/sion/g, "zhun")
-    .replace(/ture/g, "cher")
-    .replace(/ph/g, "f")
-    .replace(/igh/g, "eye")
-    .replace(/eigh/g, "ay")
-    .replace(/ee/g, "ee")
-    .replace(/ea/g, "ee")
-    .replace(/oo/g, "oo")
-    .replace(/ou/g, "ow")
-    .replace(/ow/g, "ow")
-    .replace(/ai/g, "ay")
-    .replace(/ay/g, "ay")
-    .replace(/oa/g, "oh")
-    .replace(/oi/g, "oy")
-    .replace(/oy/g, "oy")
-    .replace(/au/g, "aw")
-    .replace(/aw/g, "aw")
-    .replace(/ir/g, "er")
-    .replace(/er/g, "er")
-    .replace(/ur/g, "er")
-    .replace(/ar/g, "aar")
-    .replace(/or/g, "or")
-    .replace(/qu/g, "kw")
-    .replace(/ck/g, "k")
-    .replace(/x/g, "ks");
-  next = next
-    .replace(/c(?=[eiy])/g, "s")
-    .replace(/c/g, "k")
-    .replace(/g(?=[eiy])/g, "j")
-    .replace(/^kn/g, "n")
-    .replace(/^wr/g, "r")
-    .replace(/mb$/g, "m");
-  if (next.length > 3 && /e$/.test(next) && !/(le|ee|ye)$/.test(next)) next = next.slice(0, -1);
-  return next;
-}
-
-function getPhoneticBreakdown(text) {
-  const trimmed = String(text || "").trim();
-  if (!isEnglishStudyText(trimmed) || trimmed.split(/\s+/).length > 6) return null;
-  const words = trimmed.split(/\s+/).map((word) => word.replace(/[^A-Za-z'’-]/g, "")).filter(Boolean);
-  if (!words.length) return null;
-  const syllables = words.flatMap((word) => splitEnglishWordIntoSyllables(word));
-  const phonetic = words
-    .map((word) => {
-      const lower = word.toLowerCase();
-      if (PHONETIC_EXCEPTIONS[lower]) return PHONETIC_EXCEPTIONS[lower];
-      return splitEnglishWordIntoSyllables(lower).map((chunk) => simplifyPhoneticChunk(chunk)).join("-");
-    })
-    .join(" ");
-  return {
-    phonetic: phonetic || trimmed.toLowerCase(),
-    syllables: syllables.length ? syllables.join(" • ") : trimmed.toLowerCase(),
-  };
-}
-
 function getPracticeAudioPrompt(card, mode) {
   if (!card) return "";
   if (mode === "dictation") return normalizeText(card?.prompt);
@@ -6298,25 +6200,6 @@ function getPracticeAudioPrompt(card, mode) {
   if (mode === "timedquiz") return normalizeText(card?.quizQuestion || "");
   if (mode === "timedtruefalse") return normalizeText(card?.trueFalseStatement || "");
   return normalizeText(card?.practiceFront || card?.prompt || "");
-}
-
-function getPracticePhonicsMeta(card, mode) {
-  if (!card) return null;
-  const candidates = [
-    mode === "typing" ? getPracticeTypingTarget(card) : "",
-    mode === "dictation" ? normalizeText(card?.prompt) : "",
-    mode === "fillblanks" ? normalizeText(card?.prompt) : "",
-    mode === "matching" || mode === "timedmatching" ? getPracticeMatchPrompt(card) : "",
-    mode === "sentencebuilder" ? normalizeText(card?.sentenceBuilderSentence) : "",
-    mode === "timedchallenge" ? normalizeText(card?.prompt) : "",
-    getPracticeFlashFront(card),
-    getPracticeFlashBack(card),
-  ].filter(Boolean);
-  const candidate = candidates.find((entry) => isEnglishStudyText(entry) && String(entry).trim().split(/\s+/).length <= 6);
-  if (!candidate) return null;
-  const breakdown = getPhoneticBreakdown(candidate);
-  if (!breakdown) return null;
-  return { text: candidate, ...breakdown };
 }
 
 function isTypingAnswerCorrect(card, input) {
@@ -7918,7 +7801,6 @@ function HomeschoolApp() {
   const practiceQuestionPrompt = activePracticeCard ? getPracticeQuestionPrompt(activePracticeCard, effectivePracticeMode, language) : "";
   const practiceQuestionPromptUrdu = activePracticeCard ? getPracticeQuestionPrompt(activePracticeCard, effectivePracticeMode, "ur") : "";
   const practiceAudioPrompt = activePracticeCard ? getPracticeAudioPrompt(activePracticeCard, effectivePracticeMode) : "";
-  const practicePhonicsMeta = activePracticeCard ? getPracticePhonicsMeta(activePracticeCard, effectivePracticeMode) : null;
   const isLightTheme = resolvedTheme === "light";
   const revealToggleBaseStyle = {
     padding: "6px 14px",
@@ -14411,12 +14293,6 @@ function HomeschoolApp() {
               <div className="discovery-word-label">{renderLocalizedTextNode(ui.wordOfDay, language)}</div>
               <div className="discovery-word-prompt">{wordOfDayCard.prompt}</div>
               <div className="discovery-word-answer" style={containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null}>{wordOfDayCard.answer || wordOfDayCard.meaning}</div>
-              {getPhoneticBreakdown(wordOfDayCard.prompt) ? (
-                <div className="phonics-card" style={{ marginTop: 10 }}>
-                  <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.phoneticSpelling, language)}</strong><span>{getPhoneticBreakdown(wordOfDayCard.prompt).phonetic}</span></div>
-                  <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.syllableBreakdown, language)}</strong><span>{getPhoneticBreakdown(wordOfDayCard.prompt).syllables}</span></div>
-                </div>
-              ) : null}
               <div className="discovery-word-meta">{renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", SUBJECTS.find((subject) => subject.id === (wordOfDayCard.subject || ""))?.nameUr || "مضمون", language), language)}</div>
             </div>
           ) : null}
@@ -14502,7 +14378,6 @@ function HomeschoolApp() {
             {filteredWordBank.length ? (
               <div className="study-word-grid" style={{ marginTop: 12 }}>
                 {filteredWordBank.map((item) => {
-                  const phonicsMeta = getPhoneticBreakdown(item.prompt);
                   return (
                     <div key={`wordbank_card_${item.id}`} className="study-word-card">
                       <div className="study-word-head">
@@ -14512,12 +14387,6 @@ function HomeschoolApp() {
                         </div>
                         <span className={`grade-tag${item.subjectId === "urdu" ? " discovery-subject-badge-ur" : ""}`} style={{ marginTop: 0 }}>{item.subjectId === "urdu" ? "اردو" : renderLocalizedTextNode(joinLocalizedText(item.subjectName, item.subjectNameUr, language), language)}</span>
                       </div>
-                      {phonicsMeta ? (
-                        <div className="phonics-card">
-                          <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.phoneticSpelling, language)}</strong><span>{phonicsMeta.phonetic}</span></div>
-                          <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.syllableBreakdown, language)}</strong><span>{phonicsMeta.syllables}</span></div>
-                        </div>
-                      ) : null}
                       <div className="study-word-stats">
                         <span>{renderLocalizedTextNode(joinLocalizedText(item.sectionLabel || "Lesson", item.sectionLabel || "سبق", language), language)}</span>
                         {item.day ? <span>{renderLocalizedTextNode(joinLocalizedText(`Day ${item.day}`, `دن ${item.day}`, language), language)}</span> : null}
@@ -16259,12 +16128,6 @@ function HomeschoolApp() {
                 {renderLocalizedTextNode(joinLocalizedText("Hear Prompt", "اشارہ سنیں", language), language)}
               </button>
             </div>
-            {practicePhonicsMeta ? (
-              <div className="phonics-card">
-                <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.phoneticSpelling, language)}</strong><span>{practicePhonicsMeta.phonetic}</span></div>
-                <div className="phonics-row"><strong>{renderLocalizedTextNode(ui.syllableBreakdown, language)}</strong><span>{practicePhonicsMeta.syllables}</span></div>
-              </div>
-            ) : null}
             {showPracticeBreakNudge ? (
               <div className="practice-break-nudge">
                 <span>{renderLocalizedTextNode(joinLocalizedText("You have worked hard. Take a short breath or sip of water, then continue.", "آپ کافی محنت کر چکے ہیں۔ ایک چھوٹا سا وقفہ لیں یا پانی پی لیں، پھر جاری رکھیں۔", language), language)}</span>
