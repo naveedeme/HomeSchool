@@ -144,6 +144,32 @@
     customQuizData: "&id, subject, grade, lessonKey, updatedAt",
   });
 
+  db.version(12).stores({
+    coreData: "id, type, subject, grade, lessonKey",
+    posData: "id, type, day",
+    tensesData: "id, main, sub",
+    vocabData: "id, day",
+    mathChapters: "id, key, grade",
+    quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt, prompt",
+    reviewHistory: "id, cardId, dayKey, reviewedAt, subject, section, rating",
+    wordMeta: "id, subject, section, favorite, updatedAt",
+    customLists: "id, updatedAt, name",
+    customListItems: "id, listId, cardId, updatedAt",
+    progress: "id, subject, lessonId, grade, completed, timestamp",
+    userStats: "id",
+    dataVersion: "id, version, lastUpdated",
+    customizations: "++id, type, ts",
+    dictionaryEntries: "&normalized, updatedAt, deletedAt",
+    dictionaryOutbox: "&normalized, updatedAt",
+    dictionarySyncMeta: "&key, updatedAt",
+    cloudSyncOutbox: "&syncKey, dataset, updatedAt",
+    profileSnapshots: "&id, updatedAt",
+    customLessons: "&id, subject, grade, lessonKey, updatedAt",
+    customQuizData: "&id, subject, grade, lessonKey, updatedAt",
+    customSubjects: "&id, updatedAt",
+  });
+
   const CLOUD_SYNC_SIGNAL_KEY = "hs_cloud_sync_signal";
   const GLOBAL_CLOUD_PROFILE_ID = "__global__";
   let activeCloudProfileId = "default";
@@ -332,6 +358,23 @@
       questions,
       updatedAt: Number(entry.updatedAt) || Date.now(),
       createdAt: Number(entry.createdAt) || Date.now(),
+    };
+  }
+
+  function normalizeCustomSubjectRecord(entry = {}) {
+    const safe = entry && typeof entry === "object" ? entry : {};
+    const subjectId = String(safe.id || safe.subjectId || safe.subject || "").trim().toLowerCase();
+    const icon = String(safe.icon || "📘").trim() || "📘";
+    const color = String(safe.color || "#38BDF8").trim() || "#38BDF8";
+    return {
+      id: subjectId,
+      name: String(safe.name || safe.title || subjectId || "Custom Subject").trim() || "Custom Subject",
+      nameUr: String(safe.nameUr || safe.titleUr || safe.name || subjectId || "کسٹم مضمون").trim() || "کسٹم مضمون",
+      icon,
+      color,
+      source: String(safe.source || "custom").trim() || "custom",
+      updatedAt: Number(safe.updatedAt) || Date.now(),
+      createdAt: Number(safe.createdAt) || Date.now(),
     };
   }
 
@@ -1663,12 +1706,28 @@ async function saveCustomization(type, data, options = {}) {
     });
   }
 
+  async function getCustomSubjectRecords() {
+    if (!db.customSubjects) return [];
+    return db.customSubjects.toArray();
+  }
+
   async function getCustomContentSnapshot() {
-    const [lessons, quizzes] = await Promise.all([
+    const [subjects, lessons, quizzes] = await Promise.all([
+      getCustomSubjectRecords(),
       getCustomLessonRecords(),
       getCustomQuizRecords(),
     ]);
-    return { lessons, quizzes };
+    return { subjects, lessons, quizzes };
+  }
+
+  async function saveCustomSubject(payload = {}) {
+    if (!db.customSubjects) return null;
+    const record = normalizeCustomSubjectRecord(payload);
+    if (!record.id) {
+      throw new Error("Custom subject requires an id.");
+    }
+    await db.customSubjects.put(record);
+    return record;
   }
 
   async function saveCustomChapter(payload = {}) {
@@ -1696,6 +1755,43 @@ async function saveCustomization(type, data, options = {}) {
     return {
       lesson: lessonRecord,
       quiz: Array.isArray(quizRecord.questions) && quizRecord.questions.length > 0 ? quizRecord : null,
+    };
+  }
+
+  async function saveCustomContentBundle(payload = {}) {
+    if (!db.customLessons || !db.customQuizData) return null;
+    const safe = payload && typeof payload === "object" ? payload : {};
+    const subjectRecords = Array.isArray(safe.subjects) ? safe.subjects.map((entry) => normalizeCustomSubjectRecord(entry)).filter((entry) => entry.id) : [];
+    const lessonRecords = Array.isArray(safe.chapters) ? safe.chapters.map((entry) => normalizeCustomLessonRecord(entry)).filter((entry) => entry.subject && Number.isFinite(entry.grade) && entry.lessonKey) : [];
+    const quizRecords = lessonRecords.map((lessonRecord) => normalizeCustomQuizRecord({
+      subject: lessonRecord.subject,
+      grade: lessonRecord.grade,
+      lessonKey: lessonRecord.lessonKey,
+      questions: (Array.isArray(safe.chapters) ? safe.chapters : []).find((entry) => {
+        const subject = String(entry?.subject || lessonRecord.subject || "").trim();
+        const grade = Number(entry?.grade ?? lessonRecord.grade);
+        const lessonKey = String(entry?.lessonKey || entry?.key || entry?.data?.key || "").trim();
+        return subject === lessonRecord.subject && grade === lessonRecord.grade && lessonKey === lessonRecord.lessonKey;
+      })?.questions,
+      updatedAt: lessonRecord.updatedAt,
+      createdAt: lessonRecord.createdAt,
+    }));
+    await db.transaction("rw", [db.customLessons, db.customQuizData, db.customSubjects].filter(Boolean), async () => {
+      if (db.customSubjects && subjectRecords.length) {
+        await db.customSubjects.bulkPut(subjectRecords);
+      }
+      if (lessonRecords.length) {
+        await db.customLessons.bulkPut(lessonRecords);
+        const quizRowsToSave = quizRecords.filter((record) => Array.isArray(record.questions) && record.questions.length > 0);
+        const quizRowsToDelete = quizRecords.filter((record) => !Array.isArray(record.questions) || record.questions.length === 0);
+        if (quizRowsToSave.length) await db.customQuizData.bulkPut(quizRowsToSave);
+        if (quizRowsToDelete.length) await db.customQuizData.bulkDelete(quizRowsToDelete.map((record) => record.id));
+      }
+    });
+    return {
+      subjects: subjectRecords,
+      lessons: lessonRecords,
+      quizzes: quizRecords,
     };
   }
 
@@ -1810,12 +1906,24 @@ async function saveCustomization(type, data, options = {}) {
       return getCustomQuizRecords(subject, grade);
     },
 
+    async getCustomSubjectRecords() {
+      return getCustomSubjectRecords();
+    },
+
     async getCustomContentSnapshot() {
       return getCustomContentSnapshot();
     },
 
+    async saveCustomSubject(payload = {}) {
+      return saveCustomSubject(payload);
+    },
+
     async saveCustomChapter(payload = {}) {
       return saveCustomChapter(payload);
+    },
+
+    async saveCustomContentBundle(payload = {}) {
+      return saveCustomContentBundle(payload);
     },
 
     async deleteCustomChapter(subject, grade, lessonKey) {

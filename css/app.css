@@ -247,6 +247,7 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-list{display:flex;flex-direction:column;gap:12px}
 .lesson-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;text-align:left;font-family:var(--font);color:var(--text-primary)}
 .lesson-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.lesson-card.selected{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--bg-card));box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 28%,transparent)}
 .lesson-card .lesson-num{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px}
 .lesson-card h3{font-size:16px;font-weight:700;margin:4px 0}.lesson-card p{font-size:13px;color:var(--text-secondary);line-height:1.5}
 .lesson-card .lesson-source-copy{font-size:11px;color:var(--accent);font-weight:700;line-height:1.45;margin-bottom:6px}
