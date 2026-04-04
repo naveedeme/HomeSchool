@@ -5637,6 +5637,7 @@ ${marker} `);
     const [dictionaryDeletedArchive, setDictionaryDeletedArchive] = useState(normalizeWordMeaningCache((stored == null ? void 0 : stored.dictionaryDeletedArchive) || {}));
     const [dictionaryImportUrl, setDictionaryImportUrl] = useState(String((stored == null ? void 0 : stored.dictionaryImportUrl) || ""));
     const [dictionarySearch, setDictionarySearch] = useState("");
+    const [dictionarySearchDebounced, setDictionarySearchDebounced] = useState("");
     const [dictionaryAiSearchState, setDictionaryAiSearchState] = useState({
       requestKey: "",
       normalized: "",
@@ -6482,14 +6483,25 @@ ${marker} `);
         label: lesson.title
       }));
     }, [dictionarySubjectFilter, grade]);
+    useEffect(() => {
+      const timer = window.setTimeout(() => {
+        setDictionarySearchDebounced(dictionarySearch);
+      }, 260);
+      return () => window.clearTimeout(timer);
+    }, [dictionarySearch]);
     const dictionaryAiSearchCandidate = useMemo(() => {
-      const raw = normalizeText(dictionarySearch);
+      const raw = normalizeText(dictionarySearchDebounced);
       if (!raw || containsUrduText(raw)) return null;
       if (raw.split(/\s+/).filter(Boolean).length !== 1) return null;
       const normalized = normalizeLookupWord(raw);
       if (!normalized || normalized.length < 3 || WORD_LOOKUP_STOPWORDS.has(normalized)) return null;
       return { raw, normalized };
-    }, [dictionarySearch]);
+    }, [dictionarySearchDebounced]);
+    const dictionaryExactLocalEntry = useMemo(() => {
+      const normalized = (dictionaryAiSearchCandidate == null ? void 0 : dictionaryAiSearchCandidate.normalized) || "";
+      if (!normalized) return null;
+      return effectiveWordMeaningDictionary[normalized] || null;
+    }, [dictionaryAiSearchCandidate, effectiveWordMeaningDictionary]);
     const dictionaryBrowserEntries = useMemo(() => {
       const searchNeedle = normalizeText(dictionarySearch).toLowerCase();
       const archiveEntries = dictionaryShowDeleted ? Object.values(normalizeWordMeaningCache(dictionaryDeletedArchive)).map((entry) => ({ ...entry, deletedAt: entry.deletedAt || entry.updatedAt || Date.now(), browserDeleted: true })) : [];
@@ -6531,10 +6543,20 @@ ${marker} `);
         return String(left.word || left.normalizedWord || "").localeCompare(String(right.word || right.normalizedWord || ""));
       }).slice(0, 40);
     }, [dictionaryDeletedArchive, dictionaryLessonFilter, dictionaryMetaLookup, dictionarySearch, dictionaryShowDeleted, dictionarySourceFilter, dictionarySubjectFilter, effectiveWordMeaningDictionary]);
+    const dictionarySuggestionEntries = useMemo(() => {
+      const suggestions = dictionaryBrowserEntries.slice(0, 8).map((entry) => ({ ...entry, suggestionKind: "local" }));
+      if (dictionaryAiSearchState.entry && dictionaryAiSearchState.normalized && !suggestions.some((entry) => entry.normalizedWord === dictionaryAiSearchState.normalized)) {
+        suggestions.unshift({ ...dictionaryAiSearchState.entry, aiSearchResult: true, suggestionKind: "ai" });
+      }
+      return suggestions;
+    }, [dictionaryAiSearchState.entry, dictionaryAiSearchState.normalized, dictionaryBrowserEntries]);
     const dictionaryDisplayEntries = useMemo(() => {
-      if (dictionaryBrowserEntries.length > 0) return dictionaryBrowserEntries;
-      return dictionarySearchAiState.entry ? [{ ...dictionarySearchAiState.entry, browserDeleted: false, aiSearchResult: true }] : [];
-    }, [dictionaryAiSearchState.entry, dictionaryBrowserEntries]);
+      const entries = dictionaryBrowserEntries.map((entry) => ({ ...entry }));
+      if (dictionaryAiSearchState.entry && dictionaryAiSearchState.normalized && !entries.some((entry) => entry.normalizedWord === dictionaryAiSearchState.normalized)) {
+        entries.unshift({ ...dictionaryAiSearchState.entry, browserDeleted: false, aiSearchResult: true });
+      }
+      return entries;
+    }, [dictionaryAiSearchState.entry, dictionaryAiSearchState.normalized, dictionaryBrowserEntries]);
     useEffect(() => {
       if (dictionaryLessonFilter === "all") return;
       if (!dictionaryLessonOptions.some((lesson) => lesson.key === dictionaryLessonFilter)) {
@@ -11479,7 +11501,7 @@ ${error.message || error}`);
         } : current);
         return void 0;
       }
-      if (dictionaryBrowserEntries.length > 0) {
+      if (dictionaryExactLocalEntry) {
         setDictionaryAiSearchState((current) => current.entry || current.loading || current.error ? {
           requestKey: "",
           normalized: candidate.normalized,
@@ -11569,7 +11591,7 @@ ${error.message || error}`);
       return () => {
         cancelled = true;
       };
-    }, [dictionaryAiSearchCandidate, dictionaryAiSearchState, dictionaryBrowserEntries.length, language, localWordMeaningLookup, requestWordMeaningFromAi, selectedMeaningAiProviderId, tab, ui.aiBrowserBlocked, wordMeaningCache]);
+    }, [dictionaryAiSearchCandidate, dictionaryAiSearchState, dictionaryExactLocalEntry, language, localWordMeaningLookup, requestWordMeaningFromAi, selectedMeaningAiProviderId, tab, ui.aiBrowserBlocked, wordMeaningCache]);
     const handleBatchBuildDictionary = useCallback(async (scope = "subject") => {
       var _a2, _b2, _c2;
       const subjectId = dictionarySubjectFilter !== "all" ? dictionarySubjectFilter : "";
@@ -12174,7 +12196,39 @@ ${error.message || error}`);
         placeholder: renderLocalizedTextNode(joinLocalizedText("Search the dictionary", "\u0644\u063A\u062A \u0645\u06CC\u06BA \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA", language), language),
         style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null
       }
-    ), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { className: `study-tool-btn compact${dictionarySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDictionarySubjectFilter("all"), type: "button" }, renderLocalizedTextNode(ui.discoveryAllSubjects, language)), SUBJECTS.map((subject) => /* @__PURE__ */ React.createElement("button", { key: `dictionary_subject_${subject.id}`, className: `study-tool-btn compact${dictionarySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDictionarySubjectFilter(subject.id), type: "button" }, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "dictionary-toolbar-row" }, /* @__PURE__ */ React.createElement(
+    ), normalizeText(dictionarySearch) ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-dropdown" }, dictionarySuggestionEntries.map((entry) => {
+      var _a2;
+      const entryMeta = dictionaryMetaLookup[entry.normalizedWord] || {};
+      const origins = new Set([...entry.origins || [], ...entry.sources || [], entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+      const sourceLabel = entry.suggestionKind === "ai" ? joinLocalizedText("AI result", "AI \u0646\u062A\u06CC\u062C\u06C1", language) : origins.has("curriculum") ? joinLocalizedText("Curriculum", "\u06A9\u0631\u06CC\u06A9\u0648\u0644\u0645", language) : origins.has("imported") ? joinLocalizedText("Imported", "\u062F\u0631\u0622\u0645\u062F \u0634\u062F\u06C1", language) : origins.has("trusted") ? joinLocalizedText("Trusted", "\u0642\u0627\u0628\u0644\u0650 \u0627\u0639\u062A\u0645\u0627\u062F", language) : origins.has("weak") ? joinLocalizedText("Needs review", "\u062C\u0627\u0626\u0632\u06C1 \u062F\u0631\u06A9\u0627\u0631", language) : origins.has("ai") || origins.has("gemini") ? "AI" : joinLocalizedText("Dictionary", "\u0644\u063A\u062A", language);
+      return /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          key: `dictionary_suggestion_${entry.normalizedWord}_${entry.suggestionKind || "local"}`,
+          type: "button",
+          className: "dictionary-search-suggestion",
+          onClick: () => setDictionarySearch(entry.word || entry.normalizedWord || "")
+        },
+        /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.word || entry.normalizedWord), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(sourceLabel, language))),
+        (entry.meaningsUr || []).length ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-meanings urdu-copy" }, (entry.meaningsUr || []).slice(0, 3).map((meaning, index) => /* @__PURE__ */ React.createElement("div", { key: `dictionary_suggestion_meaning_${entry.normalizedWord}_${index}` }, index + 1, ". ", meaning))) : entry.meaningUr ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-meanings urdu-copy" }, /* @__PURE__ */ React.createElement("div", null, entry.meaningUr)) : null,
+        entry.explanationUr ? /* @__PURE__ */ React.createElement("p", { className: "dictionary-search-suggestion-explanation urdu-copy" }, entry.explanationUr) : null,
+        ((_a2 = entryMeta.lessonLabels) == null ? void 0 : _a2.length) ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-meta" }, renderLocalizedTextNode(entryMeta.lessonLabels[0], language)) : null
+      );
+    }), !dictionarySuggestionEntries.length && dictionaryAiSearchState.loading ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-feedback" }, renderLocalizedTextNode(
+      joinLocalizedText(
+        `Looking up "${(dictionaryAiSearchCandidate == null ? void 0 : dictionaryAiSearchCandidate.raw) || normalizeText(dictionarySearch)}" with AI...`,
+        `"${(dictionaryAiSearchCandidate == null ? void 0 : dictionaryAiSearchCandidate.raw) || normalizeText(dictionarySearch)}" \u06A9\u0648 AI \u0633\u06D2 \u062A\u0644\u0627\u0634 \u06A9\u06CC\u0627 \u062C\u0627 \u0631\u06C1\u0627 \u06C1\u06D2...`,
+        language
+      ),
+      language
+    )) : null, !dictionarySuggestionEntries.length && !dictionaryAiSearchState.loading && dictionaryAiSearchState.error ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-feedback error" }, renderLocalizedTextNode(dictionaryAiSearchState.error, language)) : null) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { className: `study-tool-btn compact${dictionarySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDictionarySubjectFilter("all"), type: "button" }, renderLocalizedTextNode(ui.discoveryAllSubjects, language)), SUBJECTS.map((subject) => /* @__PURE__ */ React.createElement("button", { key: `dictionary_subject_${subject.id}`, className: `study-tool-btn compact${dictionarySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDictionarySubjectFilter(subject.id), type: "button" }, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "dictionary-toolbar-row" }, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact dictionary-inline-filters" }, [
+      { id: "all", label: joinLocalizedText("All sources", "\u062A\u0645\u0627\u0645 \u0630\u0631\u0627\u0626\u0639", language) },
+      { id: "curriculum", label: joinLocalizedText("Curriculum", "\u06A9\u0631\u06CC\u06A9\u0648\u0644\u0645", language) },
+      { id: "trusted", label: joinLocalizedText("Trusted", "\u0642\u0627\u0628\u0644\u0650 \u0627\u0639\u062A\u0645\u0627\u062F", language) },
+      { id: "ai", label: "AI" },
+      { id: "imported", label: joinLocalizedText("Imported", "\u062F\u0631\u0622\u0645\u062F \u0634\u062F\u06C1", language) },
+      { id: "weak", label: joinLocalizedText("Needs review", "\u062C\u0627\u0626\u0632\u06C1 \u062F\u0631\u06A9\u0627\u0631", language) }
+    ].map((option) => /* @__PURE__ */ React.createElement("button", { key: `dictionary_source_${option.id}`, type: "button", className: `study-tool-btn compact${dictionarySourceFilter === option.id ? " active" : ""}`, onClick: () => setDictionarySourceFilter(option.id) }, renderLocalizedTextNode(option.label, language))))), /* @__PURE__ */ React.createElement("div", { className: "dictionary-toolbar-row" }, /* @__PURE__ */ React.createElement(
       "select",
       {
         className: "dictionary-select",
@@ -12185,21 +12239,7 @@ ${error.message || error}`);
       },
       /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("All lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642", language), language)),
       dictionaryLessonOptions.map((lesson) => /* @__PURE__ */ React.createElement("option", { key: `dictionary_lesson_${lesson.key}`, value: lesson.key }, lesson.label))
-    ), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact dictionary-inline-filters" }, [
-      { id: "all", label: joinLocalizedText("All sources", "\u062A\u0645\u0627\u0645 \u0630\u0631\u0627\u0626\u0639", language) },
-      { id: "curriculum", label: joinLocalizedText("Curriculum", "\u06A9\u0631\u06CC\u06A9\u0648\u0644\u0645", language) },
-      { id: "trusted", label: joinLocalizedText("Trusted", "\u0642\u0627\u0628\u0644\u0650 \u0627\u0639\u062A\u0645\u0627\u062F", language) },
-      { id: "ai", label: "AI" },
-      { id: "imported", label: joinLocalizedText("Imported", "\u062F\u0631\u0622\u0645\u062F \u0634\u062F\u06C1", language) },
-      { id: "weak", label: joinLocalizedText("Needs review", "\u062C\u0627\u0626\u0632\u06C1 \u062F\u0631\u06A9\u0627\u0631", language) }
-    ].map((option) => /* @__PURE__ */ React.createElement("button", { key: `dictionary_source_${option.id}`, type: "button", className: `study-tool-btn compact${dictionarySourceFilter === option.id ? " active" : ""}`, onClick: () => setDictionarySourceFilter(option.id) }, renderLocalizedTextNode(option.label, language)))), /* @__PURE__ */ React.createElement("button", { type: "button", className: `study-tool-btn compact${dictionaryShowDeleted ? " active" : ""}`, onClick: () => setDictionaryShowDeleted((current) => !current) }, renderLocalizedTextNode(dictionaryShowDeleted ? joinLocalizedText("Hide deleted", "\u062D\u0630\u0641 \u0634\u062F\u06C1 \u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show deleted", "\u062D\u0630\u0641 \u0634\u062F\u06C1 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions dictionary-action-row" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", type: "button", disabled: !dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryBatchBusy === "subject", onClick: () => handleBatchBuildDictionary("subject") }, renderLocalizedTextNode(dictionaryBatchBusy === "subject" ? joinLocalizedText("Building...", "\u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2...", language) : joinLocalizedText("Build selected subject", "\u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0645\u0648\u0646 \u062A\u06CC\u0627\u0631 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", type: "button", disabled: !dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryLessonFilter === "all" || dictionaryBatchBusy === "lesson", onClick: () => handleBatchBuildDictionary("lesson") }, renderLocalizedTextNode(dictionaryBatchBusy === "lesson" ? joinLocalizedText("Building...", "\u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2...", language) : joinLocalizedText("Build selected lesson", "\u0645\u0646\u062A\u062E\u0628 \u0633\u0628\u0642 \u062A\u06CC\u0627\u0631 \u06A9\u0631\u06CC\u06BA", language), language)))), !dictionaryDisplayEntries.length && dictionaryAiSearchCandidate && (dictionaryAiSearchState.loading || dictionaryAiSearchState.error) ? /* @__PURE__ */ React.createElement("div", { className: "practice-feedback-panel", style: { marginTop: 12 } }, dictionaryAiSearchState.loading ? renderLocalizedTextNode(
-      joinLocalizedText(
-        `No local dictionary match yet. Looking up "${dictionaryAiSearchCandidate.raw}" with AI and saving it here...`,
-        `\u0627\u0628\u06BE\u06CC \u0645\u0642\u0627\u0645\u06CC \u0644\u063A\u062A \u0645\u06CC\u06BA "${dictionaryAiSearchCandidate.raw}" \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4 AI \u0633\u06D2 \u062A\u0644\u0627\u0634 \u06A9\u0631 \u06A9\u06D2 \u0627\u0633\u06D2 \u06CC\u06C1\u0627\u06BA \u0645\u062D\u0641\u0648\u0638 \u06A9\u06CC\u0627 \u062C\u0627 \u0631\u06C1\u0627 \u06C1\u06D2...`,
-        language
-      ),
-      language
-    ) : renderLocalizedTextNode(dictionaryAiSearchState.error, language)) : null, dictionaryDisplayEntries.length ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-entry-list" }, dictionaryDisplayEntries.map((entry) => {
+    ), /* @__PURE__ */ React.createElement("button", { type: "button", className: `study-tool-btn compact${dictionaryShowDeleted ? " active" : ""}`, onClick: () => setDictionaryShowDeleted((current) => !current) }, renderLocalizedTextNode(dictionaryShowDeleted ? joinLocalizedText("Hide deleted", "\u062D\u0630\u0641 \u0634\u062F\u06C1 \u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show deleted", "\u062D\u0630\u0641 \u0634\u062F\u06C1 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions dictionary-action-row" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", type: "button", disabled: !dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryBatchBusy === "subject", onClick: () => handleBatchBuildDictionary("subject") }, renderLocalizedTextNode(dictionaryBatchBusy === "subject" ? joinLocalizedText("Building...", "\u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2...", language) : joinLocalizedText("Build selected subject", "\u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0645\u0648\u0646 \u062A\u06CC\u0627\u0631 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", type: "button", disabled: !dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryLessonFilter === "all" || dictionaryBatchBusy === "lesson", onClick: () => handleBatchBuildDictionary("lesson") }, renderLocalizedTextNode(dictionaryBatchBusy === "lesson" ? joinLocalizedText("Building...", "\u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2...", language) : joinLocalizedText("Build selected lesson", "\u0645\u0646\u062A\u062E\u0628 \u0633\u0628\u0642 \u062A\u06CC\u0627\u0631 \u06A9\u0631\u06CC\u06BA", language), language)))), dictionaryDisplayEntries.length ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-entry-list" }, dictionaryDisplayEntries.map((entry) => {
       const meta = dictionaryMetaLookup[entry.normalizedWord] || {};
       const isEditing = (dictionaryEditorState == null ? void 0 : dictionaryEditorState.normalized) === entry.normalizedWord;
       const origins = new Set([...entry.origins || [], ...entry.sources || [], entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
