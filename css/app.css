@@ -249,6 +249,7 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-card:hover{border-color:var(--accent);transform:translateY(-1px)}
 .lesson-card .lesson-num{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px}
 .lesson-card h3{font-size:16px;font-weight:700;margin:4px 0}.lesson-card p{font-size:13px;color:var(--text-secondary);line-height:1.5}
+.lesson-card .lesson-source-copy{font-size:11px;color:var(--accent);font-weight:700;line-height:1.45;margin-bottom:6px}
 .lesson-card .lesson-status{margin-top:10px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
 .lesson-card .lesson-status-copy{display:inline-flex;align-items:center;min-width:0}
 .lesson-card .urdu-copy{font-family:var(--font-ur);line-height:1.85}

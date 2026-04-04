@@ -31,6 +31,14 @@ function createEmptyCustomContentState() {
   };
 }
 
+function createEmptyPublishedContentState() {
+  return {
+    lessonsBySubjectGrade: {},
+    quizzesByKey: {},
+    loaded: false,
+  };
+}
+
 function normalizeCustomContentSnapshot(snapshot = {}) {
   const nextState = createEmptyCustomContentState();
   const lessons = Array.isArray(snapshot?.lessons) ? snapshot.lessons : [];
@@ -75,6 +83,12 @@ function mergeLessonCollections(baseLessons = [], customLessons = []) {
   return Array.from(merged.values());
 }
 
+function buildPublishedLessonRuntimeKey(canonicalLessonKey, contentId) {
+  const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey: canonicalLessonKey, title: canonicalLessonKey });
+  const suffix = String(contentId || "").trim().slice(0, 8) || "published";
+  return `${safeLessonKey}__pub_${suffix}`;
+}
+
 function slugifyCustomChapterKey(value) {
   return String(value || "")
     .trim()
@@ -114,12 +128,27 @@ function cloneSerializableValue(value) {
   return JSON.parse(JSON.stringify(value == null ? null : value));
 }
 
+function stripRuntimeLessonMarkers(lesson = {}) {
+  const nextLesson = cloneSerializableValue(lesson || {}) || {};
+  delete nextLesson.__custom;
+  delete nextLesson.__published;
+  delete nextLesson.__contentId;
+  delete nextLesson.__contentOwnerId;
+  delete nextLesson.__publishedBy;
+  delete nextLesson.__forkedFromContentId;
+  delete nextLesson.__sourceLabel;
+  return nextLesson;
+}
+
 function buildCustomChapterExportPayload({ subject, grade, lesson, questions, fallbackNumber = null }) {
-  const lessonData = cloneSerializableValue(lesson || {}) || {};
-  delete lessonData.__custom;
+  const lessonData = stripRuntimeLessonMarkers(lesson || {});
   delete lessonData.id;
+  const canonicalLessonKey = lessonData?.publication?.canonicalLessonKey
+    || lesson?.publication?.canonicalLessonKey
+    || lessonData.key
+    || getLessonKeyValue(lesson);
   const lessonKey = resolveCustomChapterLessonKey({
-    lessonKey: lessonData.key || getLessonKeyValue(lesson),
+    lessonKey: canonicalLessonKey,
     title: lessonData.title || lesson?.title || "",
     fallbackNumber,
   });
@@ -134,6 +163,69 @@ function buildCustomChapterExportPayload({ subject, grade, lesson, questions, fa
     lesson: lessonData,
     questions: Array.isArray(questions) ? cloneSerializableValue(questions) : [],
   };
+}
+
+function normalizePublishedContentRows(rows = []) {
+  const nextState = createEmptyPublishedContentState();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const contentId = String(row?.content_id || row?.contentId || "").trim();
+    const subject = String(row?.subject || "").trim();
+    const grade = Number(row?.grade);
+    const canonicalLessonKey = resolveCustomChapterLessonKey({
+      lessonKey: row?.lesson_key || row?.lessonKey || row?.payload?.key || row?.payload?.title || "",
+      title: row?.payload?.title || "",
+    });
+    const lessonPayload = stripRuntimeLessonMarkers(row?.payload || {});
+    if (!contentId || !subject || !Number.isFinite(grade) || !lessonPayload || typeof lessonPayload !== "object") return;
+    const runtimeKey = buildPublishedLessonRuntimeKey(canonicalLessonKey, contentId);
+    const bucketKey = `${subject}::${grade}`;
+    const authorUsername = String(row?.author_username || row?.authorUsername || "").trim();
+    if (!nextState.lessonsBySubjectGrade[bucketKey]) nextState.lessonsBySubjectGrade[bucketKey] = [];
+    nextState.lessonsBySubjectGrade[bucketKey].push({
+      ...lessonPayload,
+      key: runtimeKey,
+      id: `published_${contentId}`,
+      __published: true,
+      __contentId: contentId,
+      __contentOwnerId: String(row?.author_user_id || row?.authorUserId || "").trim(),
+      __publishedBy: authorUsername,
+      __forkedFromContentId: String(row?.forked_from_content_id || row?.forkedFromContentId || "").trim(),
+      __sourceLabel: authorUsername ? `Published by ${authorUsername}` : "Published",
+      publication: {
+        contentId,
+        canonicalLessonKey,
+        authorUserId: String(row?.author_user_id || row?.authorUserId || "").trim(),
+        authorUsername,
+        publishedAt: Number(new Date(row?.published_at || row?.publishedAt || row?.updated_at || row?.updatedAt || Date.now()).getTime()) || Date.now(),
+        updatedAt: Number(new Date(row?.updated_at || row?.updatedAt || Date.now()).getTime()) || Date.now(),
+        forkedFromContentId: String(row?.forked_from_content_id || row?.forkedFromContentId || "").trim(),
+        visibility: "published",
+      },
+    });
+    nextState.quizzesByKey[`${subject}::${grade}::${runtimeKey}`] = Array.isArray(row?.questions) ? cloneSerializableValue(row.questions) : [];
+  });
+  nextState.loaded = true;
+  return nextState;
+}
+
+function getLessonSourceLabel(lesson, language) {
+  if (!lesson || typeof lesson !== "object") return "";
+  if (lesson.__published) {
+    const authorName = String(lesson?.publication?.authorUsername || lesson?.__publishedBy || "").trim();
+    return joinLocalizedText(
+      authorName ? `Published by ${authorName}` : "Published chapter",
+      authorName ? `${authorName} کی شائع کردہ کاپی` : "شائع شدہ باب",
+      language,
+    );
+  }
+  if (lesson.__custom) {
+    return joinLocalizedText(
+      "Local custom chapter",
+      "مقامی ذاتی باب",
+      language,
+    );
+  }
+  return "";
 }
 
 function normalizeCustomChapterImportPayload(payload = {}, context = {}) {
@@ -1933,6 +2025,7 @@ function normalizeDictionaryImportPayload(rawPayload, options = {}) {
 
 const SUPABASE_DICTIONARY_TABLE = "dictionary_entries";
 const SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
+const SUPABASE_PUBLISHED_CONTENT_TABLE = "published_chapters";
 const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
 const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -2028,7 +2121,61 @@ create policy "Users can delete own user data rows"
 on public.user_data_rows
 for delete
 to authenticated
-using ((select auth.uid()) = user_id);`;
+using ((select auth.uid()) = user_id);
+
+create table if not exists public.published_chapters (
+  content_id text primary key,
+  author_user_id uuid not null,
+  author_username text null,
+  subject text not null,
+  grade integer not null,
+  lesson_key text not null,
+  payload jsonb not null default '{}'::jsonb,
+  questions jsonb not null default '[]'::jsonb,
+  forked_from_content_id text null,
+  is_published boolean not null default true,
+  published_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz null
+);
+
+create index if not exists published_chapters_subject_grade_idx
+  on public.published_chapters (subject, grade, published_at desc);
+
+create index if not exists published_chapters_author_idx
+  on public.published_chapters (author_user_id, updated_at desc);
+
+alter table public.published_chapters enable row level security;
+
+drop policy if exists "Anyone can read published chapters" on public.published_chapters;
+drop policy if exists "Users can insert own published chapters" on public.published_chapters;
+drop policy if exists "Users can update own published chapters" on public.published_chapters;
+drop policy if exists "Users can delete own published chapters" on public.published_chapters;
+
+create policy "Anyone can read published chapters"
+on public.published_chapters
+for select
+to anon, authenticated
+using (is_published = true and deleted_at is null);
+
+create policy "Users can insert own published chapters"
+on public.published_chapters
+for insert
+to authenticated
+with check ((select auth.uid()) = author_user_id);
+
+create policy "Users can update own published chapters"
+on public.published_chapters
+for update
+to authenticated
+using ((select auth.uid()) = author_user_id)
+with check ((select auth.uid()) = author_user_id);
+
+create policy "Users can delete own published chapters"
+on public.published_chapters
+for delete
+to authenticated
+using ((select auth.uid()) = author_user_id);`;
 
 function createDefaultSupabaseDictionarySyncSettings() {
   return {
@@ -7903,7 +8050,9 @@ function HomeschoolApp() {
   const [selectedAiProvider, setSelectedAiProvider] = useState(storedAiTutorPreferences?.providerId || "openai");
   const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
   const [customContentState, setCustomContentState] = useState(createEmptyCustomContentState());
+  const [publishedContentState, setPublishedContentState] = useState(createEmptyPublishedContentState());
   const [chapterImportBusy, setChapterImportBusy] = useState(false);
+  const [chapterPublishBusy, setChapterPublishBusy] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [audioMuted, setAudioMuted] = useState(Boolean(stored?.audioMuted));
@@ -8059,6 +8208,7 @@ function HomeschoolApp() {
   const supabaseAuthSubscriptionRef = useRef(null);
   const supabaseRealtimeChannelRef = useRef(null);
   const supabaseCloudRealtimeChannelRef = useRef(null);
+  const supabasePublishedContentRealtimeChannelRef = useRef(null);
   const dictionaryHydratedFromDbRef = useRef(false);
   const dictionaryPersistedSnapshotRef = useRef(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
   const skipNextDictionaryQueueRef = useRef(false);
@@ -8420,14 +8570,20 @@ function HomeschoolApp() {
   const getMergedLessons = useCallback((subjectId, targetGrade) => {
     const baseLessons = getLessons(subjectId, targetGrade) || [];
     const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
-    return mergeLessonCollections(baseLessons, customLessons);
-  }, [customContentState.lessonsBySubjectGrade]);
+    const publishedLessons = publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
+    const localMerged = mergeLessonCollections(baseLessons, customLessons);
+    const localPublicationIds = new Set(localMerged.map((lesson) => String(lesson?.publication?.contentId || "").trim()).filter(Boolean));
+    const filteredPublishedLessons = publishedLessons.filter((lesson) => !localPublicationIds.has(String(lesson?.__contentId || lesson?.publication?.contentId || "").trim()));
+    return mergeLessonCollections(localMerged, filteredPublishedLessons);
+  }, [customContentState.lessonsBySubjectGrade, publishedContentState.lessonsBySubjectGrade]);
   const getMergedQuiz = useCallback((subjectId, targetGrade, lessonKey) => {
     const normalizedLessonKey = String(lessonKey || "").trim();
     const customQuiz = customContentState.quizzesByKey?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
     if (Array.isArray(customQuiz) && customQuiz.length > 0) return customQuiz;
+    const publishedQuiz = publishedContentState.quizzesByKey?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
+    if (Array.isArray(publishedQuiz) && publishedQuiz.length > 0) return publishedQuiz;
     return getQuiz(subjectId, targetGrade, normalizedLessonKey) || [];
-  }, [customContentState.quizzesByKey]);
+  }, [customContentState.quizzesByKey, publishedContentState.quizzesByKey]);
   const contentDataLoader = useMemo(() => ({
     ...window.HomeSchoolData,
     getLessons: getMergedLessons,
@@ -9942,11 +10098,17 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         .eq("user_id", session.user.id)
         .in("profile_id", [String(activeStudentProfileIdRef.current || "default"), "__global__"]);
       if (cloudQueryError) throw cloudQueryError;
+      const { count: publishedCount, error: publishedQueryError } = await client
+        .from(SUPABASE_PUBLISHED_CONTENT_TABLE)
+        .select("content_id", { head: true, count: "exact" })
+        .eq("is_published", true)
+        .is("deleted_at", null);
+      if (publishedQueryError) throw publishedQueryError;
       applySupabaseSessionState(session, {
         status: "ready",
         message: joinLocalizedText(
-          `Connection ok • ${Number(count) || 0} dictionary + ${Number(cloudCount) || 0} cloud rows`,
-          `کنکشن درست • ${Number(count) || 0} لغت + ${Number(cloudCount) || 0} کلاؤڈ قطاریں`,
+          `Connection ok • ${Number(count) || 0} dictionary + ${Number(cloudCount) || 0} cloud rows + ${Number(publishedCount) || 0} published chapters`,
+          `کنکشن درست • ${Number(count) || 0} لغت + ${Number(cloudCount) || 0} کلاؤڈ قطاریں + ${Number(publishedCount) || 0} شائع شدہ ابواب`,
           language,
         ),
       });
@@ -10141,6 +10303,126 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       setSupabaseAuthBusy(false);
     }
   }, [ensureSupabaseClient, language, showAppToast, supabaseAuthState.userId, supabasePendingEmail, updateSupabaseDictionarySyncField]);
+
+  const refreshPublishedContentState = useCallback(async () => {
+    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
+    if (!settings.url || !settings.anonKey) {
+      setPublishedContentState((current) => ({ ...createEmptyPublishedContentState(), loaded: true }));
+      return createEmptyPublishedContentState();
+    }
+    try {
+      const client = ensureSupabaseClient();
+      const { data, error } = await client
+        .from(SUPABASE_PUBLISHED_CONTENT_TABLE)
+        .select("content_id, author_user_id, author_username, subject, grade, lesson_key, payload, questions, forked_from_content_id, is_published, published_at, updated_at, deleted_at")
+        .eq("is_published", true)
+        .is("deleted_at", null)
+        .order("published_at", { ascending: false });
+      if (error) throw error;
+      const normalized = normalizePublishedContentRows(data || []);
+      setPublishedContentState(normalized);
+      return normalized;
+    } catch (error) {
+      console.log("Unable to refresh published chapter content:", error);
+      setPublishedContentState((current) => ({ ...current, loaded: true }));
+      return createEmptyPublishedContentState();
+    }
+  }, [ensureSupabaseClient, supabaseDictionarySync]);
+
+  const handlePublishSelectedChapter = useCallback(async () => {
+    if (!selectedSubject || !selectedLesson || !grade) {
+      showAppToast(joinLocalizedText("Choose a lesson first.", "پہلے ایک سبق منتخب کریں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId) {
+      showAppToast(joinLocalizedText("Sign in to publish chapters.", "ابواب شائع کرنے کے لیے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    setChapterPublishBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const exportedChapter = buildCustomChapterExportPayload({
+        subject: selectedSubject.id,
+        grade,
+        lesson: selectedLesson,
+        questions: activeLessonQuizQuestions,
+        fallbackNumber: Math.max(1, selectedSubjectLessons.findIndex((lesson) => String(getLessonKeyValue(lesson) || "").trim() === String(getLessonKeyValue(selectedLesson) || "").trim()) + 1),
+      });
+      const currentPublication = selectedLesson?.publication && typeof selectedLesson.publication === "object" ? selectedLesson.publication : {};
+      const sameOwner = String(currentPublication.authorUserId || "") === String(supabaseAuthState.userId || "");
+      const existingContentId = sameOwner ? String(currentPublication.contentId || "").trim() : "";
+      const nextContentId = existingContentId || `chapter_${simpleHash(`${supabaseAuthState.userId}_${selectedSubject.id}_${grade}_${exportedChapter.lessonKey}_${Date.now()}_${Math.random()}`)}`;
+      const nextForkedFrom = !sameOwner && String(currentPublication.contentId || "").trim()
+        ? String(currentPublication.contentId || "").trim()
+        : String(currentPublication.forkedFromContentId || "").trim();
+      const authorUsername = sanitizeAccountUsername(supabaseAccountUsername || supabaseAuthState.email || "");
+      const nowIso = new Date().toISOString();
+      const rowPayload = {
+        content_id: nextContentId,
+        author_user_id: supabaseAuthState.userId,
+        author_username: authorUsername,
+        subject: selectedSubject.id,
+        grade: Number(grade),
+        lesson_key: exportedChapter.lessonKey,
+        payload: exportedChapter.lesson,
+        questions: exportedChapter.questions,
+        forked_from_content_id: nextForkedFrom || null,
+        is_published: true,
+        published_at: existingContentId && currentPublication.publishedAt ? new Date(Number(currentPublication.publishedAt)).toISOString() : nowIso,
+        updated_at: nowIso,
+        deleted_at: null,
+      };
+      const { error } = await client
+        .from(SUPABASE_PUBLISHED_CONTENT_TABLE)
+        .upsert(rowPayload, { onConflict: "content_id" });
+      if (error) throw error;
+      const nextLessonData = stripRuntimeLessonMarkers(exportedChapter.lesson);
+      nextLessonData.key = exportedChapter.lessonKey;
+      nextLessonData.id = `${selectedSubject.id}_${grade}_${exportedChapter.lessonKey}`;
+      nextLessonData.publication = {
+        contentId: nextContentId,
+        canonicalLessonKey: exportedChapter.lessonKey,
+        authorUserId: supabaseAuthState.userId,
+        authorUsername,
+        publishedAt: existingContentId && currentPublication.publishedAt ? Number(currentPublication.publishedAt) : Date.now(),
+        updatedAt: Date.now(),
+        forkedFromContentId: nextForkedFrom || "",
+        visibility: "published",
+      };
+      await window.HomeSchoolDB.saveCustomChapter({
+        subject: selectedSubject.id,
+        grade,
+        lessonKey: exportedChapter.lessonKey,
+        data: nextLessonData,
+        questions: exportedChapter.questions,
+      });
+      await refreshCustomContentState();
+      await refreshPublishedContentState();
+      setSelectedLesson((current) => current ? {
+        ...nextLessonData,
+        __custom: true,
+      } : current);
+      showAppToast(
+        existingContentId
+          ? joinLocalizedText("Published chapter updated", "شائع شدہ سبق تازہ ہو گیا", language)
+          : nextForkedFrom
+            ? joinLocalizedText("Chapter copy published", "سبق کی نقل شائع ہو گئی", language)
+            : joinLocalizedText("Chapter published", "سبق شائع ہو گیا", language),
+        "check",
+      );
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(
+          `Unable to publish chapter: ${error?.message || error}`,
+          `سبق شائع نہ ہو سکا: ${error?.message || error}`,
+          language,
+        ),
+        "alert",
+      );
+    } finally {
+      setChapterPublishBusy(false);
+    }
+  }, [activeLessonQuizQuestions, ensureSupabaseClient, grade, language, refreshCustomContentState, refreshPublishedContentState, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
 
   useEffect(() => {
     localStorageFallback("hs_dictionary_device_id", dictionaryDeviceIdRef.current);
@@ -10394,6 +10676,27 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   }, [applySupabaseSessionState, ensureSupabaseClient, language, supabaseDictionarySync.anonKey, supabaseDictionarySync.authEmail, supabaseDictionarySync.enabled, supabaseDictionarySync.url]);
 
   useEffect(() => {
+    if (!dbLoaded) return undefined;
+    if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
+      setPublishedContentState((current) => ({ ...createEmptyPublishedContentState(), loaded: true }));
+      return undefined;
+    }
+    let cancelled = false;
+    refreshPublishedContentState().then((state) => {
+      if (cancelled) return;
+      if (!state?.loaded) {
+        setPublishedContentState((current) => ({ ...current, loaded: true }));
+      }
+    }).catch((error) => {
+      console.log("Unable to load published chapter content:", error);
+      if (!cancelled) setPublishedContentState((current) => ({ ...current, loaded: true }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dbLoaded, refreshPublishedContentState, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
+
+  useEffect(() => {
     const existingChannel = supabaseRealtimeChannelRef.current;
     if (existingChannel?.unsubscribe) {
       existingChannel.unsubscribe();
@@ -10440,6 +10743,44 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       supabaseRealtimeChannelRef.current = null;
     };
   }, [applyIncomingDictionaryRows, ensureSupabaseClient, supabaseAuthState.userId, supabaseDictionarySync.enabled, supabaseDictionarySync.realtimeEnabled]);
+
+  useEffect(() => {
+    const existingChannel = supabasePublishedContentRealtimeChannelRef.current;
+    if (existingChannel?.unsubscribe) {
+      existingChannel.unsubscribe();
+      supabasePublishedContentRealtimeChannelRef.current = null;
+    }
+    if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey || !supabaseDictionarySync.realtimeEnabled) {
+      return undefined;
+    }
+    let active = true;
+    try {
+      const client = ensureSupabaseClient();
+      const channel = client
+        .channel("published-content-sync")
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_PUBLISHED_CONTENT_TABLE,
+          filter: "is_published=eq.true",
+        }, () => {
+          if (!active) return;
+          refreshPublishedContentState().catch((error) => {
+            console.log("Unable to refresh published content from realtime:", error);
+          });
+        })
+        .subscribe();
+      supabasePublishedContentRealtimeChannelRef.current = channel;
+    } catch (error) {
+      console.log("Unable to start published content realtime sync:", error);
+    }
+    return () => {
+      active = false;
+      const channel = supabasePublishedContentRealtimeChannelRef.current;
+      if (channel?.unsubscribe) channel.unsubscribe();
+      supabasePublishedContentRealtimeChannelRef.current = null;
+    };
+  }, [ensureSupabaseClient, refreshPublishedContentState, supabaseDictionarySync.anonKey, supabaseDictionarySync.realtimeEnabled, supabaseDictionarySync.url]);
 
   useEffect(() => {
     const existingChannel = supabaseCloudRealtimeChannelRef.current;
@@ -16256,13 +16597,25 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
   </button>
   <div className="subject-chapter-actions-copy">{renderLocalizedTextNode(joinLocalizedText("Import a chapter JSON into this subject.", "اس مضمون میں باب کا JSON درآمد کریں۔", language), language)}</div>
 </div>
-<div className="lesson-list" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{selectedSubjectLessons.map((l, i) => { const d = completedQuizzes[l.id], isUrduSubject = selectedSubject?.id==="urdu", rtlUi = isUrduSubject || isUrduUi(language), safeContent = String(l.content || ""), previewText = `${safeContent.substring(0, 80)}${safeContent.length > 80 ? "..." : ""}`, titleIsUrdu = isUrduSubject || containsUrduText(l.title), previewIsUrdu = isUrduSubject || containsUrduText(previewText), statusCopy = d ? joinLocalizedText(`Completed • ${d.score}/4`, `مکمل • ${d.score}/4`, language) : joinLocalizedText("Not started", "ابھی شروع نہیں ہوا", language); return (<button key={l.id} className="lesson-card" data-ui-language={language} onClick={() => setSelectedLesson(l)} style={rtlUi?{direction:"rtl",textAlign:"right"}:{}}><span className={`lesson-num${rtlUi ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(joinLocalizedText(`Lesson ${i+1}`, `سبق ${i+1}`, language), language)}</span><h3 className={titleIsUrdu ? "urdu-copy" : ""}>{l.title}</h3><p className={previewIsUrdu ? "urdu-copy" : ""}>{previewText}</p><div className="lesson-status" style={{ color: d ? "var(--success)" : "var(--text-muted)" }}><span aria-hidden="true">{d ? "✅" : "○"}</span><span className={`lesson-status-copy${rtlUi ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(statusCopy, language)}</span></div></button>); })}</div>
+<div className="lesson-list" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{selectedSubjectLessons.map((l, i) => { const d = completedQuizzes[l.id], isUrduSubject = selectedSubject?.id==="urdu", rtlUi = isUrduSubject || isUrduUi(language), safeContent = String(l.content || ""), previewText = `${safeContent.substring(0, 80)}${safeContent.length > 80 ? "..." : ""}`, titleIsUrdu = isUrduSubject || containsUrduText(l.title), previewIsUrdu = isUrduSubject || containsUrduText(previewText), statusCopy = d ? joinLocalizedText(`Completed • ${d.score}/4`, `مکمل • ${d.score}/4`, language) : joinLocalizedText("Not started", "ابھی شروع نہیں ہوا", language), sourceCopy = getLessonSourceLabel(l, language), sourceIsUrdu = containsUrduText(sourceCopy); return (<button key={l.id} className="lesson-card" data-ui-language={language} onClick={() => setSelectedLesson(l)} style={rtlUi?{direction:"rtl",textAlign:"right"}:{}}><span className={`lesson-num${rtlUi ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(joinLocalizedText(`Lesson ${i+1}`, `سبق ${i+1}`, language), language)}</span><h3 className={titleIsUrdu ? "urdu-copy" : ""}>{l.title}</h3>{sourceCopy ? <div className={`lesson-source-copy${sourceIsUrdu ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(sourceCopy, language)}</div> : null}<p className={previewIsUrdu ? "urdu-copy" : ""}>{previewText}</p><div className="lesson-status" style={{ color: d ? "var(--success)" : "var(--text-muted)" }}><span aria-hidden="true">{d ? "✅" : "○"}</span><span className={`lesson-status-copy${rtlUi ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(statusCopy, language)}</span></div></button>); })}</div>
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && (
         <div className="subject-chapter-toolbar" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
           <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
             {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Adding chapter...", "سبق شامل ہو رہا ہے...", language) : joinLocalizedText("Add Chapter", "سبق شامل کریں", language), language)}
+          </button>
+          <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
+            {renderLocalizedTextNode(
+              chapterPublishBusy
+                ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language)
+                : String(selectedLesson?.publication?.authorUserId || "").trim() === String(supabaseAuthState.userId || "").trim()
+                  ? joinLocalizedText("Update Published Chapter", "شائع شدہ سبق تازہ کریں", language)
+                  : selectedLesson?.publication?.contentId
+                    ? joinLocalizedText("Publish Copy", "نقل شائع کریں", language)
+                    : joinLocalizedText("Publish Chapter", "سبق شائع کریں", language),
+              language,
+            )}
           </button>
           <button type="button" className="ghost-cta" onClick={handleExportSelectedChapter}>
             {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
