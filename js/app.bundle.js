@@ -5575,6 +5575,7 @@ ${marker} `);
     const [reviewReveal, setReviewReveal] = useState(false);
     const [reviewSessionDone, setReviewSessionDone] = useState(false);
     const [reviewSessionXp, setReviewSessionXp] = useState(0);
+    const [reviewReturnState, setReviewReturnState] = useState(null);
     const [reviewLoading, setReviewLoading] = useState(false);
     const [practiceMode, setPracticeMode] = useState(null);
     const [practiceSubjectId, setPracticeSubjectId] = useState((stored == null ? void 0 : stored.practiceSubjectId) || "english");
@@ -8841,6 +8842,81 @@ ${marker} `);
       setTenseMain("present");
       setTenseSub("simple");
     }, []);
+    const buildReviewReturnSnapshot = useCallback(() => ({
+      tab,
+      selectedSubject,
+      selectedLesson,
+      selectedAdverbDay,
+      selectedPrepDay,
+      selectedAdjDay,
+      selectedConjDay,
+      selectedPronDay,
+      selectedNounDay,
+      selectedVerbDay,
+      selectedTensePara,
+      selectedVocabDay,
+      mathSubIdx,
+      mathSubTab,
+      subExerciseGroupIdx,
+      subQuizGroupIdx,
+      posTab,
+      tenseMain,
+      tenseSub
+    }), [
+      mathSubIdx,
+      mathSubTab,
+      posTab,
+      selectedAdjDay,
+      selectedAdverbDay,
+      selectedConjDay,
+      selectedLesson,
+      selectedNounDay,
+      selectedPrepDay,
+      selectedPronDay,
+      selectedSubject,
+      selectedTensePara,
+      selectedVerbDay,
+      selectedVocabDay,
+      subExerciseGroupIdx,
+      subQuizGroupIdx,
+      tab,
+      tenseMain,
+      tenseSub
+    ]);
+    const restoreReviewReturnSnapshot = useCallback((snapshot = null) => {
+      var _a2, _b2, _c2;
+      const target = snapshot || reviewReturnState;
+      setReviewQueue([]);
+      setReviewIdx(0);
+      setReviewReveal(false);
+      setReviewSessionDone(false);
+      setReviewSessionXp(0);
+      setReviewReturnState(null);
+      if (!target) {
+        setTab("home");
+        return;
+      }
+      setTab(target.tab || "home");
+      setSelectedSubject(target.selectedSubject || null);
+      setSelectedLesson(target.selectedLesson || null);
+      setSelectedAdverbDay(target.selectedAdverbDay || null);
+      setSelectedPrepDay(target.selectedPrepDay || null);
+      setSelectedAdjDay(target.selectedAdjDay || null);
+      setSelectedConjDay(target.selectedConjDay || null);
+      setSelectedPronDay(target.selectedPronDay || null);
+      setSelectedNounDay(target.selectedNounDay || null);
+      setSelectedVerbDay(target.selectedVerbDay || null);
+      setSelectedTensePara(target.selectedTensePara || null);
+      setSelectedVocabDay(target.selectedVocabDay || null);
+      setMathSubIdx((_a2 = target.mathSubIdx) != null ? _a2 : null);
+      setMathSubTab(target.mathSubTab || "examples");
+      setSubExerciseGroupIdx((_b2 = target.subExerciseGroupIdx) != null ? _b2 : null);
+      setSubQuizGroupIdx((_c2 = target.subQuizGroupIdx) != null ? _c2 : null);
+      setRevealedEx({});
+      setPosTab(target.posTab || "adverbs");
+      setTenseMain(target.tenseMain || "present");
+      setTenseSub(target.tenseSub || "simple");
+    }, [reviewReturnState]);
     useEffect(() => {
       window.speechSynthesis.getVoices();
       window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
@@ -10718,6 +10794,7 @@ ${error.message || error}`);
       if (!window.HomeSchoolDB) return;
       setReviewLoading(true);
       try {
+        setReviewReturnState(buildReviewReturnSnapshot());
         const queue = await window.HomeSchoolDB.getDueReviewCards(dailyReviewCap);
         setReviewQueue(queue);
         setPracticeMode(null);
@@ -10731,12 +10808,27 @@ ${error.message || error}`);
       } finally {
         setReviewLoading(false);
       }
-    }, [dailyReviewCap]);
+    }, [buildReviewReturnSnapshot, dailyReviewCap]);
     const handleReviewResponse = useCallback(async (rating) => {
       if (!window.HomeSchoolDB || !activeReviewCard) return;
       const result = await window.HomeSchoolDB.saveReviewResult(activeReviewCard.id, rating, reviewSrsSettings);
       if (result == null ? void 0 : result.stats) {
         setXp(result.stats.xp || 0);
+        setReviewStats((current) => {
+          var _a2;
+          const nextDue = Math.max(0, Number(current.due || 0) - 1);
+          const wasMastered = Boolean(activeReviewCard.mastered);
+          const isMastered = Boolean((_a2 = result == null ? void 0 : result.card) == null ? void 0 : _a2.mastered);
+          return {
+            ...current,
+            due: nextDue,
+            mastered: Math.max(0, Number(current.mastered || 0) + (isMastered && !wasMastered ? 1 : 0) - (!isMastered && wasMastered ? 1 : 0)),
+            learning: Math.max(0, Number(current.learning || 0) + (!isMastered && wasMastered ? 1 : 0) - (isMastered && !wasMastered ? 1 : 0)),
+            reviewedToday: Math.max(0, Number(current.reviewedToday || 0) + 1),
+            retentionRate: Number(result.stats.retentionRate || current.retentionRate || 0),
+            reviewStreak: Number(result.stats.reviewStreak || current.reviewStreak || 0)
+          };
+        });
       }
       setReviewSessionXp((current) => current + ((result == null ? void 0 : result.xpGain) || 0));
       setReviewReveal(false);
@@ -11834,6 +11926,8 @@ ${error.message || error}`);
         setPracticeLabReturnPending(true);
         resetPracticeSession();
         setTab("review");
+      } else if (tab === "review" && (activeReviewCard || reviewSessionDone)) {
+        restoreReviewReturnSnapshot();
       } else if (quizDone || quizActive) {
         setQuizActive(false);
         setQuizDone(false);
@@ -11882,6 +11976,7 @@ ${error.message || error}`);
     };
     const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || mathSubIdx !== null;
     const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "\u0642\u06CC\u062F", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "\u062D\u0631\u0648\u0641 \u062C\u0627\u0631", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "\u0635\u0641\u0627\u062A", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "\u062D\u0631\u0648\u0641 \u0639\u0637\u0641", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "\u0636\u0645\u0627\u0626\u0631", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "\u0627\u0633\u0645 \u062C\u0645\u0639", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "\u0627\u0641\u0639\u0627\u0644", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "\u0630\u062E\u06CC\u0631\u06C1 \u0627\u0644\u0641\u0627\u0638", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644\u0632", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "\u0644\u063A\u062A", language) : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+    const reviewReturnLabel = (reviewReturnState == null ? void 0 : reviewReturnState.tab) === "review" ? ui.review : (reviewReturnState == null ? void 0 : reviewReturnState.tab) === "profiles" ? joinLocalizedText("Profiles", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644\u0632", language) : (reviewReturnState == null ? void 0 : reviewReturnState.tab) === "dictionary" ? joinLocalizedText("Dictionary", "\u0644\u063A\u062A", language) : (reviewReturnState == null ? void 0 : reviewReturnState.tab) === "progress" ? ui.progress : (reviewReturnState == null ? void 0 : reviewReturnState.tab) === "favorites" ? ui.favorites : (reviewReturnState == null ? void 0 : reviewReturnState.tab) === "badges" ? ui.achievements : (reviewReturnState == null ? void 0 : reviewReturnState.tab) === "tutor" ? ui.tutor : ui.home;
     const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
     const currentQuiz = selectedLesson ? getQuiz(selectedSubject == null ? void 0 : selectedSubject.id, grade, selectedLesson.key) : [];
     const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => {
@@ -12826,10 +12921,7 @@ ${error.message || error}`);
         },
         answer.text
       );
-    }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setPracticeMatchRound(buildMatchRound(practiceDeck.slice(practiceIdx), 4)) }, renderLocalizedTextNode(joinLocalizedText("Shuffle", "\u0628\u062F\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Round", "\u0627\u06AF\u0644\u0627 \u0631\u0627\u0624\u0646\u0688", language), language)))), practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "practice-meta-panel" }, /* @__PURE__ */ React.createElement("div", { className: "practice-confidence-row" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("How sure were you?", "\u0622\u067E \u06A9\u062A\u0646\u06D2 \u067E\u064F\u0631\u06CC\u0642\u06CC\u0646 \u062A\u06BE\u06D2\u061F", language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-confidence-chips" }, [{ id: "low", en: "Not sure", ur: "\u06A9\u0645 \u06CC\u0642\u06CC\u0646" }, { id: "medium", en: "Somewhat sure", ur: "\u06A9\u0686\u06BE \u06CC\u0642\u06CC\u0646" }, { id: "high", en: "Very sure", ur: "\u0628\u06C1\u062A \u06CC\u0642\u06CC\u0646" }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, type: "button", className: `practice-confidence-chip${practiceConfidenceChoice === item.id ? " active" : ""}`, onClick: () => commitConfidenceChoice(item.id), disabled: Boolean(practiceConfidenceChoice) }, renderLocalizedTextNode(joinLocalizedText(item.en, item.ur, language), language))))), practiceTypingResult === "wrong" || practiceDictationResult === "wrong" || practiceBlankResult === "wrong" || practiceSentenceResult === "wrong" || practiceTimedResult === "wrong" || practiceMode === "flashcards" ? /* @__PURE__ */ React.createElement("div", { className: "practice-reflection-box" }, /* @__PURE__ */ React.createElement("label", null, renderLocalizedTextNode(joinLocalizedText("Reflection: why was this tricky?", "\u0633\u0648\u0686\u06CC\u06BA: \u06CC\u06C1 \u0645\u0634\u06A9\u0644 \u06A9\u06CC\u0648\u06BA \u0644\u06AF\u0627\u061F", language), language)), /* @__PURE__ */ React.createElement("textarea", { value: practiceReflectionDraft, onChange: (event) => setPracticeReflectionDraft(event.target.value), placeholder: language === "ur" ? "\u0627\u067E\u0646\u06CC \u0645\u062E\u062A\u0635\u0631 \u0646\u0648\u0679 \u0644\u06A9\u06BE\u06CC\u06BA..." : "Write a short note..." }), /* @__PURE__ */ React.createElement("div", { className: "practice-reflection-actions" }, /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: savePracticeReflection, disabled: !practiceReflectionDraft.trim() }, renderLocalizedTextNode(joinLocalizedText("Save Reflection", "\u0646\u0648\u0679 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null) : null), activeReviewCard && !reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(joinLocalizedText(`Card ${reviewIdx + 1} of ${reviewQueue.length}`, `\u06A9\u0627\u0631\u0688 ${reviewIdx + 1} \u0627\u0632 ${reviewQueue.length}`, language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activeReviewCard.sectionLabel)), /* @__PURE__ */ React.createElement("h2", { style: { marginBottom: 10 } }, activeReviewCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "study-word-stats", style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(getReviewDueLabel(activeReviewCard, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${ui.lapses}: ${activeReviewCard.lapses || 0}`, `${ui.lapses}: ${activeReviewCard.lapses || 0}`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews * 100) : 0}%`, `${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews * 100) : 0}%`, language), language))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "grade-btn active", style: { minWidth: 130 }, onClick: () => window.HomeSchoolUtils.speakText(activeReviewCard.prompt, "en") }, "\u{1F50A} ", renderLocalizedTextNode(joinLocalizedText("Speak", "\u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "grade-btn", style: { minWidth: 170 }, onClick: () => setReviewReveal((value) => !value) }, renderLocalizedTextNode(ui.revealAnswer, language))), /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: activeReviewCard }), reviewReveal && /* @__PURE__ */ React.createElement("div", { style: reviewRevealCardStyle }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.answer, lang: "ur", fullWidth: true, buttonStyle: reviewAnswerButtonStyle, textStyle: { fontSize: 24 } }), activeReviewCard.meaning && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, activeReviewCard.meaning), (activeReviewCard.opposite || activeReviewCard.oppositeUr) && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, renderLocalizedTextNode(joinLocalizedText(`Opposite: ${activeReviewCard.opposite} / ${activeReviewCard.oppositeUr}`, `\u0645\u062A\u0636\u0627\u062F: ${activeReviewCard.oppositeUr} / ${activeReviewCard.opposite}`, language), language)), activeReviewCard.example && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 6, color: "var(--text-secondary)", fontWeight: 700 } }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.reviewExample, language), ":")), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.example, lang: "en", fullWidth: true, buttonStyle: reviewExampleButtonStyle, textStyle: { fontSize: 16, lineHeight: 1.6 } }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => handleReviewResponse("again") }, renderLocalizedTextNode(ui.reviewAgain, language)), /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: { borderColor: "#22C55E55", color: "#22C55E" }, onClick: () => handleReviewResponse("good") }, renderLocalizedTextNode(ui.reviewGood, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => handleReviewResponse("easy") }, renderLocalizedTextNode(ui.reviewEasy, language)))), reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "quiz-result" }, /* @__PURE__ */ React.createElement("div", { className: "result-emoji" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("h2", null, renderLocalizedTextNode(ui.reviewComplete, language)), /* @__PURE__ */ React.createElement("p", { className: "score-text" }, renderLocalizedTextNode(ui.reviewEarnedXp, language)), /* @__PURE__ */ React.createElement("div", { className: "score-big high" }, "+", reviewSessionXp), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
-      resetReviewSession();
-      setTab("home");
-    } }, renderLocalizedTextNode(ui.home, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
+    }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setPracticeMatchRound(buildMatchRound(practiceDeck.slice(practiceIdx), 4)) }, renderLocalizedTextNode(joinLocalizedText("Shuffle", "\u0628\u062F\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Round", "\u0627\u06AF\u0644\u0627 \u0631\u0627\u0624\u0646\u0688", language), language)))), practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "practice-meta-panel" }, /* @__PURE__ */ React.createElement("div", { className: "practice-confidence-row" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("How sure were you?", "\u0622\u067E \u06A9\u062A\u0646\u06D2 \u067E\u064F\u0631\u06CC\u0642\u06CC\u0646 \u062A\u06BE\u06D2\u061F", language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-confidence-chips" }, [{ id: "low", en: "Not sure", ur: "\u06A9\u0645 \u06CC\u0642\u06CC\u0646" }, { id: "medium", en: "Somewhat sure", ur: "\u06A9\u0686\u06BE \u06CC\u0642\u06CC\u0646" }, { id: "high", en: "Very sure", ur: "\u0628\u06C1\u062A \u06CC\u0642\u06CC\u0646" }].map((item) => /* @__PURE__ */ React.createElement("button", { key: item.id, type: "button", className: `practice-confidence-chip${practiceConfidenceChoice === item.id ? " active" : ""}`, onClick: () => commitConfidenceChoice(item.id), disabled: Boolean(practiceConfidenceChoice) }, renderLocalizedTextNode(joinLocalizedText(item.en, item.ur, language), language))))), practiceTypingResult === "wrong" || practiceDictationResult === "wrong" || practiceBlankResult === "wrong" || practiceSentenceResult === "wrong" || practiceTimedResult === "wrong" || practiceMode === "flashcards" ? /* @__PURE__ */ React.createElement("div", { className: "practice-reflection-box" }, /* @__PURE__ */ React.createElement("label", null, renderLocalizedTextNode(joinLocalizedText("Reflection: why was this tricky?", "\u0633\u0648\u0686\u06CC\u06BA: \u06CC\u06C1 \u0645\u0634\u06A9\u0644 \u06A9\u06CC\u0648\u06BA \u0644\u06AF\u0627\u061F", language), language)), /* @__PURE__ */ React.createElement("textarea", { value: practiceReflectionDraft, onChange: (event) => setPracticeReflectionDraft(event.target.value), placeholder: language === "ur" ? "\u0627\u067E\u0646\u06CC \u0645\u062E\u062A\u0635\u0631 \u0646\u0648\u0679 \u0644\u06A9\u06BE\u06CC\u06BA..." : "Write a short note..." }), /* @__PURE__ */ React.createElement("div", { className: "practice-reflection-actions" }, /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: savePracticeReflection, disabled: !practiceReflectionDraft.trim() }, renderLocalizedTextNode(joinLocalizedText("Save Reflection", "\u0646\u0648\u0679 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null) : null), activeReviewCard && !reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(joinLocalizedText(`Card ${reviewIdx + 1} of ${reviewQueue.length}`, `\u06A9\u0627\u0631\u0688 ${reviewIdx + 1} \u0627\u0632 ${reviewQueue.length}`, language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activeReviewCard.sectionLabel)), /* @__PURE__ */ React.createElement("h2", { style: { marginBottom: 10 } }, activeReviewCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "study-word-stats", style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(getReviewDueLabel(activeReviewCard, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${ui.lapses}: ${activeReviewCard.lapses || 0}`, `${ui.lapses}: ${activeReviewCard.lapses || 0}`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews * 100) : 0}%`, `${ui.accuracy}: ${activeReviewCard.totalReviews ? Math.round((activeReviewCard.correctReviews || 0) / activeReviewCard.totalReviews * 100) : 0}%`, language), language))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 } }, /* @__PURE__ */ React.createElement("button", { className: "grade-btn active", style: { minWidth: 130 }, onClick: () => window.HomeSchoolUtils.speakText(activeReviewCard.prompt, "en") }, "\u{1F50A} ", renderLocalizedTextNode(joinLocalizedText("Speak", "\u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "grade-btn", style: { minWidth: 170 }, onClick: () => setReviewReveal((value) => !value) }, renderLocalizedTextNode(ui.revealAnswer, language))), /* @__PURE__ */ React.createElement(WordCollectionToolbar, { card: activeReviewCard }), reviewReveal && /* @__PURE__ */ React.createElement("div", { style: reviewRevealCardStyle }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.answer, lang: "ur", fullWidth: true, buttonStyle: reviewAnswerButtonStyle, textStyle: { fontSize: 24 } }), activeReviewCard.meaning && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, activeReviewCard.meaning), (activeReviewCard.opposite || activeReviewCard.oppositeUr) && /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-secondary)", marginBottom: 8 } }, renderLocalizedTextNode(joinLocalizedText(`Opposite: ${activeReviewCard.opposite} / ${activeReviewCard.oppositeUr}`, `\u0645\u062A\u0636\u0627\u062F: ${activeReviewCard.oppositeUr} / ${activeReviewCard.opposite}`, language), language)), activeReviewCard.example && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 6, color: "var(--text-secondary)", fontWeight: 700 } }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.reviewExample, language), ":")), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: activeReviewCard.example, lang: "en", fullWidth: true, buttonStyle: reviewExampleButtonStyle, textStyle: { fontSize: 16, lineHeight: 1.6 } }))), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => handleReviewResponse("again") }, renderLocalizedTextNode(ui.reviewAgain, language)), /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: { borderColor: "#22C55E55", color: "#22C55E" }, onClick: () => handleReviewResponse("good") }, renderLocalizedTextNode(ui.reviewGood, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => handleReviewResponse("easy") }, renderLocalizedTextNode(ui.reviewEasy, language)))), reviewSessionDone && /* @__PURE__ */ React.createElement("div", { className: "quiz-result" }, /* @__PURE__ */ React.createElement("div", { className: "result-emoji" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("h2", null, renderLocalizedTextNode(ui.reviewComplete, language)), /* @__PURE__ */ React.createElement("p", { className: "score-text" }, renderLocalizedTextNode(ui.reviewEarnedXp, language)), /* @__PURE__ */ React.createElement("div", { className: "score-big high" }, "+", reviewSessionXp), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => restoreReviewReturnSnapshot() }, renderLocalizedTextNode(reviewReturnLabel, language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", style: isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}, onClick: () => {
       resetReviewSession();
       handleStartReview();
     } }, renderLocalizedTextNode(ui.startReview, language))))), tab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Milestones & Momentum", "\u0633\u0646\u06AF\u0650 \u0645\u06CC\u0644 \u0627\u0648\u0631 \u0631\u0641\u062A\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track challenge wins, perfect days, and the next target worth chasing.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0686\u06CC\u0644\u0646\u062C\u060C \u067E\u0631\u0641\u06CC\u06A9\u0679 \u0688\u06CC\u0632\u060C \u0627\u0648\u0631 \u0627\u06AF\u0644\u06D2 \u0627\u06C1\u0645 \u06C1\u062F\u0641 \u06A9\u0648 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F31F}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(perfectDayCount)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Perfect Days", "\u067E\u0631\u0641\u06CC\u06A9\u0679 \u0688\u06CC\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F389}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel((gamificationState.celebrationHistory || []).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Celebrations", "\u062E\u0648\u0634\u06CC\u0648\u06BA \u06A9\u06D2 \u0644\u0645\u062D\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2728"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, nextXpMilestone ? formatNumberLabel(nextXpMilestone) : renderLocalizedTextNode(joinLocalizedText("Max", "\u0645\u06A9\u0645\u0644", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Next XP Target", "\u0627\u06AF\u0644\u0627 \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u06C1\u062F\u0641", language), language)))), (gamificationState.celebrationHistory || []).length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "milestone-history-list" }, (gamificationState.celebrationHistory || []).slice(0, 4).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.key, className: "milestone-history-item" }, /* @__PURE__ */ React.createElement("span", { className: "milestone-history-icon", "aria-hidden": "true" }, entry.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)))))) : null), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))), tab === "tutor" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tutor-shell" }, /* @__PURE__ */ React.createElement("aside", { className: "tutor-sidebar", "data-ui-language": language }, /* @__PURE__ */ React.createElement("button", { className: "tutor-new-chat-btn", onClick: handleNewTutorChat }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, "\uFF0B"), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("New Chat", "\u0646\u0626\u06CC \u0686\u06CC\u0679", language), language))), /* @__PURE__ */ React.createElement("div", { className: "tutor-history-list" }, tutorSessions.map((session) => /* @__PURE__ */ React.createElement(

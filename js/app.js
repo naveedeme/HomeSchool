@@ -7398,6 +7398,7 @@ function HomeschoolApp() {
   const [reviewReveal, setReviewReveal] = useState(false);
   const [reviewSessionDone, setReviewSessionDone] = useState(false);
   const [reviewSessionXp, setReviewSessionXp] = useState(0);
+  const [reviewReturnState, setReviewReturnState] = useState(null);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [practiceMode, setPracticeMode] = useState(null);
   const [practiceSubjectId, setPracticeSubjectId] = useState(stored?.practiceSubjectId || "english");
@@ -10875,6 +10876,80 @@ function HomeschoolApp() {
     setTenseMain("present");
     setTenseSub("simple");
   }, []);
+  const buildReviewReturnSnapshot = useCallback(() => ({
+    tab,
+    selectedSubject,
+    selectedLesson,
+    selectedAdverbDay,
+    selectedPrepDay,
+    selectedAdjDay,
+    selectedConjDay,
+    selectedPronDay,
+    selectedNounDay,
+    selectedVerbDay,
+    selectedTensePara,
+    selectedVocabDay,
+    mathSubIdx,
+    mathSubTab,
+    subExerciseGroupIdx,
+    subQuizGroupIdx,
+    posTab,
+    tenseMain,
+    tenseSub,
+  }), [
+    mathSubIdx,
+    mathSubTab,
+    posTab,
+    selectedAdjDay,
+    selectedAdverbDay,
+    selectedConjDay,
+    selectedLesson,
+    selectedNounDay,
+    selectedPrepDay,
+    selectedPronDay,
+    selectedSubject,
+    selectedTensePara,
+    selectedVerbDay,
+    selectedVocabDay,
+    subExerciseGroupIdx,
+    subQuizGroupIdx,
+    tab,
+    tenseMain,
+    tenseSub,
+  ]);
+  const restoreReviewReturnSnapshot = useCallback((snapshot = null) => {
+    const target = snapshot || reviewReturnState;
+    setReviewQueue([]);
+    setReviewIdx(0);
+    setReviewReveal(false);
+    setReviewSessionDone(false);
+    setReviewSessionXp(0);
+    setReviewReturnState(null);
+    if (!target) {
+      setTab("home");
+      return;
+    }
+    setTab(target.tab || "home");
+    setSelectedSubject(target.selectedSubject || null);
+    setSelectedLesson(target.selectedLesson || null);
+    setSelectedAdverbDay(target.selectedAdverbDay || null);
+    setSelectedPrepDay(target.selectedPrepDay || null);
+    setSelectedAdjDay(target.selectedAdjDay || null);
+    setSelectedConjDay(target.selectedConjDay || null);
+    setSelectedPronDay(target.selectedPronDay || null);
+    setSelectedNounDay(target.selectedNounDay || null);
+    setSelectedVerbDay(target.selectedVerbDay || null);
+    setSelectedTensePara(target.selectedTensePara || null);
+    setSelectedVocabDay(target.selectedVocabDay || null);
+    setMathSubIdx(target.mathSubIdx ?? null);
+    setMathSubTab(target.mathSubTab || "examples");
+    setSubExerciseGroupIdx(target.subExerciseGroupIdx ?? null);
+    setSubQuizGroupIdx(target.subQuizGroupIdx ?? null);
+    setRevealedEx({});
+    setPosTab(target.posTab || "adverbs");
+    setTenseMain(target.tenseMain || "present");
+    setTenseSub(target.tenseSub || "simple");
+  }, [reviewReturnState]);
 
   useEffect(() => { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); return () => window.speechSynthesis.cancel(); }, []);
   useEffect(() => {
@@ -12783,6 +12858,7 @@ function HomeschoolApp() {
     if (!window.HomeSchoolDB) return;
     setReviewLoading(true);
     try {
+      setReviewReturnState(buildReviewReturnSnapshot());
       const queue = await window.HomeSchoolDB.getDueReviewCards(dailyReviewCap);
       setReviewQueue(queue);
       setPracticeMode(null);
@@ -12796,13 +12872,27 @@ function HomeschoolApp() {
     } finally {
       setReviewLoading(false);
     }
-  }, [dailyReviewCap]);
+  }, [buildReviewReturnSnapshot, dailyReviewCap]);
 
   const handleReviewResponse = useCallback(async (rating) => {
     if (!window.HomeSchoolDB || !activeReviewCard) return;
     const result = await window.HomeSchoolDB.saveReviewResult(activeReviewCard.id, rating, reviewSrsSettings);
     if (result?.stats) {
       setXp(result.stats.xp || 0);
+      setReviewStats((current) => {
+        const nextDue = Math.max(0, Number(current.due || 0) - 1);
+        const wasMastered = Boolean(activeReviewCard.mastered);
+        const isMastered = Boolean(result?.card?.mastered);
+        return {
+          ...current,
+          due: nextDue,
+          mastered: Math.max(0, Number(current.mastered || 0) + (isMastered && !wasMastered ? 1 : 0) - (!isMastered && wasMastered ? 1 : 0)),
+          learning: Math.max(0, Number(current.learning || 0) + (!isMastered && wasMastered ? 1 : 0) - (isMastered && !wasMastered ? 1 : 0)),
+          reviewedToday: Math.max(0, Number(current.reviewedToday || 0) + 1),
+          retentionRate: Number(result.stats.retentionRate || current.retentionRate || 0),
+          reviewStreak: Number(result.stats.reviewStreak || current.reviewStreak || 0),
+        };
+      });
     }
     setReviewSessionXp((current) => current + (result?.xpGain || 0));
     setReviewReveal(false);
@@ -14008,9 +14098,24 @@ function HomeschoolApp() {
     resetReviewSession();
     resetPracticeSession();
   };
-  const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
+  const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (tab === "review" && (activeReviewCard || reviewSessionDone)) { restoreReviewReturnSnapshot(); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
   const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+  const reviewReturnLabel = reviewReturnState?.tab === "review"
+    ? ui.review
+    : reviewReturnState?.tab === "profiles"
+      ? joinLocalizedText("Profiles", "پروفائلز", language)
+      : reviewReturnState?.tab === "dictionary"
+        ? joinLocalizedText("Dictionary", "لغت", language)
+        : reviewReturnState?.tab === "progress"
+          ? ui.progress
+          : reviewReturnState?.tab === "favorites"
+            ? ui.favorites
+            : reviewReturnState?.tab === "badges"
+              ? ui.achievements
+              : reviewReturnState?.tab === "tutor"
+                ? ui.tutor
+                : ui.home;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
   const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
@@ -16749,7 +16854,7 @@ function HomeschoolApp() {
             <button className="next-btn" onClick={() => handleReviewResponse("easy")}>{renderLocalizedTextNode(ui.reviewEasy, language)}</button>
           </div>
         </div>}
-      {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">🧠</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); setTab("home"); }}>{renderLocalizedTextNode(ui.home, language)}</button><button className="next-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
+      {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">🧠</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => restoreReviewReturnSnapshot()}>{renderLocalizedTextNode(reviewReturnLabel, language)}</button><button className="next-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
       </>)}
 
       {tab === "badges" && (<>
