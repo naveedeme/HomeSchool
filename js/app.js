@@ -7460,6 +7460,13 @@ function HomeschoolApp() {
   const [dictionaryDeletedArchive, setDictionaryDeletedArchive] = useState(normalizeWordMeaningCache(stored?.dictionaryDeletedArchive || {}));
   const [dictionaryImportUrl, setDictionaryImportUrl] = useState(String(stored?.dictionaryImportUrl || ""));
   const [dictionarySearch, setDictionarySearch] = useState("");
+  const [dictionaryAiSearchState, setDictionaryAiSearchState] = useState({
+    requestKey: "",
+    normalized: "",
+    loading: false,
+    error: "",
+    entry: null,
+  });
   const [dictionarySubjectFilter, setDictionarySubjectFilter] = useState("all");
   const [dictionaryLessonFilter, setDictionaryLessonFilter] = useState("all");
   const [dictionarySourceFilter, setDictionarySourceFilter] = useState("all");
@@ -8334,6 +8341,14 @@ function HomeschoolApp() {
       label: lesson.title,
     }));
   }, [dictionarySubjectFilter, grade]);
+  const dictionaryAiSearchCandidate = useMemo(() => {
+    const raw = normalizeText(dictionarySearch);
+    if (!raw || containsUrduText(raw)) return null;
+    if (raw.split(/\s+/).filter(Boolean).length !== 1) return null;
+    const normalized = normalizeLookupWord(raw);
+    if (!normalized || normalized.length < 3 || WORD_LOOKUP_STOPWORDS.has(normalized)) return null;
+    return { raw, normalized };
+  }, [dictionarySearch]);
   const dictionaryBrowserEntries = useMemo(() => {
     const searchNeedle = normalizeText(dictionarySearch).toLowerCase();
     const archiveEntries = dictionaryShowDeleted
@@ -8377,6 +8392,10 @@ function HomeschoolApp() {
       return String(left.word || left.normalizedWord || "").localeCompare(String(right.word || right.normalizedWord || ""));
     }).slice(0, 40);
   }, [dictionaryDeletedArchive, dictionaryLessonFilter, dictionaryMetaLookup, dictionarySearch, dictionaryShowDeleted, dictionarySourceFilter, dictionarySubjectFilter, effectiveWordMeaningDictionary]);
+  const dictionaryDisplayEntries = useMemo(() => {
+    if (dictionaryBrowserEntries.length > 0) return dictionaryBrowserEntries;
+    return dictionarySearchAiState.entry ? [{ ...dictionarySearchAiState.entry, browserDeleted: false, aiSearchResult: true }] : [];
+  }, [dictionaryAiSearchState.entry, dictionaryBrowserEntries]);
   useEffect(() => {
     if (dictionaryLessonFilter === "all") return;
     if (!dictionaryLessonOptions.some((lesson) => lesson.key === dictionaryLessonFilter)) {
@@ -13575,6 +13594,126 @@ function HomeschoolApp() {
     );
     return extractWordMeaningDetails(response);
   }, [aiProviderConfigs]);
+  useEffect(() => {
+    const candidate = dictionaryAiSearchCandidate;
+    if (tab !== "dictionary" || !candidate) {
+      setDictionaryAiSearchState((current) => (
+        current.requestKey || current.loading || current.error || current.entry
+          ? {
+              requestKey: "",
+              normalized: "",
+              loading: false,
+              error: "",
+              entry: null,
+            }
+          : current
+      ));
+      return undefined;
+    }
+    if (dictionaryBrowserEntries.length > 0) {
+      setDictionaryAiSearchState((current) => (
+        current.entry || current.loading || current.error
+          ? {
+              requestKey: "",
+              normalized: candidate.normalized,
+              loading: false,
+              error: "",
+              entry: null,
+            }
+          : current
+      ));
+      return undefined;
+    }
+    const requestKey = `${selectedMeaningAiProviderId || "none"}:${candidate.normalized}`;
+    if (
+      dictionaryAiSearchState.requestKey === requestKey
+      && (dictionaryAiSearchState.loading || dictionaryAiSearchState.entry || dictionaryAiSearchState.error)
+    ) {
+      return undefined;
+    }
+    if (!selectedMeaningAiProviderId) {
+      setDictionaryAiSearchState({
+        requestKey,
+        normalized: candidate.normalized,
+        loading: false,
+        error: joinLocalizedText("Add an AI provider key to search beyond the local dictionary.", "مقامی لغت سے آگے تلاش کے لیے AI فراہم کنندہ کی شامل کریں۔", language),
+        entry: null,
+      });
+      return undefined;
+    }
+    const browserCapability = canUseDirectAiFromBrowser();
+    if (!browserCapability.ok) {
+      setDictionaryAiSearchState({
+        requestKey,
+        normalized: candidate.normalized,
+        loading: false,
+        error: ui.aiBrowserBlocked || "Direct browser AI access works best on the published HTTPS site or localhost, not from file mode.",
+        entry: null,
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+    setDictionaryAiSearchState({
+      requestKey,
+      normalized: candidate.normalized,
+      loading: true,
+      error: "",
+      entry: null,
+    });
+
+    (async () => {
+      try {
+        const details = await requestWordMeaningFromAi(selectedMeaningAiProviderId, candidate.raw);
+        const aiSourceLabel = selectedMeaningAiProviderId === "gemini"
+          ? "Gemini"
+          : AI_PROVIDER_DEFS[selectedMeaningAiProviderId]?.name || "AI";
+        const aiEntry = normalizeWordMeaningEntry(candidate.raw, {
+          ...details,
+          source: aiSourceLabel,
+          sources: [aiSourceLabel],
+          origins: ["ai"],
+          fetchedAt: Date.now(),
+          updatedAt: Date.now(),
+        }, {
+          defaultOrigins: ["ai"],
+          defaultSource: aiSourceLabel,
+        });
+        if (!hasWordMeaningContent(aiEntry)) {
+          throw new Error(joinLocalizedText("No usable meaning came back for this word yet.", "اس لفظ کے لیے ابھی قابلِ استعمال معنی واپس نہیں آئے۔", language));
+        }
+        const mergedEntry = mergeWordMeaningEntry(
+          mergeWordMeaningEntry(localWordMeaningLookup[candidate.normalized], wordMeaningCache[candidate.normalized]),
+          aiEntry,
+        );
+        if (cancelled) return;
+        setWordMeaningCache((current) => mergeWordMeaningMaps(current, { [candidate.normalized]: mergedEntry }));
+        setDictionaryDeletedArchive((current) => removeDictionaryEntriesFromMap(current, [candidate.normalized]));
+        setDictionaryAiSearchState({
+          requestKey,
+          normalized: candidate.normalized,
+          loading: false,
+          error: "",
+          entry: mergedEntry,
+        });
+      } catch (error) {
+        if (cancelled) return;
+        setDictionaryAiSearchState({
+          requestKey,
+          normalized: candidate.normalized,
+          loading: false,
+          error: error?.message
+            ? String(error.message)
+            : joinLocalizedText("Meaning unavailable right now. Try again in a moment.", "اس وقت معنی دستیاب نہیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔", language),
+          entry: null,
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dictionaryAiSearchCandidate, dictionaryAiSearchState, dictionaryBrowserEntries.length, language, localWordMeaningLookup, requestWordMeaningFromAi, selectedMeaningAiProviderId, tab, ui.aiBrowserBlocked, wordMeaningCache]);
   const handleBatchBuildDictionary = useCallback(async (scope = "subject") => {
     const subjectId = dictionarySubjectFilter !== "all" ? dictionarySubjectFilter : "";
     if (!subjectId) {
@@ -13828,7 +13967,7 @@ function HomeschoolApp() {
   };
   const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "favorites" ? ui.favorites : tab === "badges" ? ui.achievements : tab === "tutor" ? ui.tutor : ui.settings;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
   const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
@@ -13879,6 +14018,7 @@ function HomeschoolApp() {
     { id: "favorites", icon: "⭐", label: ui.favorites },
     { id: "badges", icon: "🏆", label: ui.badges },
     ...(readyAiProviderIds.length > 0 ? [{ id: "tutor", icon: "🤖", label: ui.tutor }] : []),
+    { id: "dictionary", icon: "📚", label: joinLocalizedText("Dictionary", "لغت", language) },
     { id: "profiles", icon: "👤", label: joinLocalizedText("Profiles", "پروفائلز", language) },
     { id: "settings", icon: "⚙️", label: ui.settings },
   ];
@@ -14400,180 +14540,198 @@ function HomeschoolApp() {
                 })}
               </div>
             ) : <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(ui.noWordResults, language)}</p>}
-            <div className="dictionary-browser-shell">
-              <div className="review-panel-head" style={{ marginTop: 18 }}>
-                <div>
-                  <h3>{renderLocalizedTextNode(joinLocalizedText("Local Dictionary", "مقامی لغت", language), language)}</h3>
-                  <p>{renderLocalizedTextNode(joinLocalizedText("Browse, edit, trust, restore, and batch-build the bilingual dictionary that now grows with your study.", "اس دو لسانی لغت کو براؤز، ترمیم، معتبر، بحال، اور بیچ میں تیار کریں جو اب آپ کی پڑھائی کے ساتھ بڑھتی ہے۔", language), language)}</p>
-                </div>
-                <div className="dictionary-stat-strip">
-                  <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.total} active`, `${dictionaryStats.total} فعال`, language), language)}</span>
-                  <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.deleted} deleted`, `${dictionaryStats.deleted} حذف`, language), language)}</span>
-                  <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.dictionaryPendingCount || 0} pending`, `${supabaseSyncActivity.dictionaryPendingCount || 0} منتظر`, language), language)}</span>
-                </div>
-              </div>
-              <div className="dictionary-browser-controls">
-                <input
-                  className="review-list-input"
-                  value={dictionarySearch}
-                  onChange={(event) => setDictionarySearch(event.target.value)}
-                  placeholder={renderLocalizedTextNode(joinLocalizedText("Search the dictionary", "لغت میں تلاش کریں", language), language)}
-                  style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
-                />
-                <div className="discovery-filter-row compact" style={{ marginTop: 10 }}>
-                  <button className={`study-tool-btn compact${dictionarySubjectFilter === "all" ? " active" : ""}`} onClick={() => setDictionarySubjectFilter("all")} type="button">
-                    {renderLocalizedTextNode(ui.discoveryAllSubjects, language)}
-                  </button>
-                  {SUBJECTS.map((subject) => (
-                    <button key={`dictionary_subject_${subject.id}`} className={`study-tool-btn compact${dictionarySubjectFilter === subject.id ? " active" : ""}`} onClick={() => setDictionarySubjectFilter(subject.id)} type="button">
-                      {renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)}
-                    </button>
-                  ))}
-                </div>
-                <div className="dictionary-toolbar-row">
-                  <select
-                    className="dictionary-select"
-                    value={dictionaryLessonFilter}
-                    onChange={(event) => setDictionaryLessonFilter(event.target.value)}
-                    disabled={dictionarySubjectFilter === "all" || !dictionaryLessonOptions.length}
-                    style={language === "ur" ? { fontFamily: "var(--font-ur)" } : null}
-                  >
-                    <option value="all">{renderLocalizedTextNode(joinLocalizedText("All lessons", "تمام اسباق", language), language)}</option>
-                    {dictionaryLessonOptions.map((lesson) => (
-                      <option key={`dictionary_lesson_${lesson.key}`} value={lesson.key}>{lesson.label}</option>
-                    ))}
-                  </select>
-                  <div className="discovery-filter-row compact dictionary-inline-filters">
-                    {[
-                      { id: "all", label: joinLocalizedText("All sources", "تمام ذرائع", language) },
-                      { id: "curriculum", label: joinLocalizedText("Curriculum", "کریکولم", language) },
-                      { id: "trusted", label: joinLocalizedText("Trusted", "قابلِ اعتماد", language) },
-                      { id: "ai", label: "AI" },
-                      { id: "imported", label: joinLocalizedText("Imported", "درآمد شدہ", language) },
-                      { id: "weak", label: joinLocalizedText("Needs review", "جائزہ درکار", language) },
-                    ].map((option) => (
-                      <button key={`dictionary_source_${option.id}`} type="button" className={`study-tool-btn compact${dictionarySourceFilter === option.id ? " active" : ""}`} onClick={() => setDictionarySourceFilter(option.id)}>
-                        {renderLocalizedTextNode(option.label, language)}
-                      </button>
-                    ))}
-                  </div>
-                  <button type="button" className={`study-tool-btn compact${dictionaryShowDeleted ? " active" : ""}`} onClick={() => setDictionaryShowDeleted((current) => !current)}>
-                    {renderLocalizedTextNode(dictionaryShowDeleted ? joinLocalizedText("Hide deleted", "حذف شدہ چھپائیں", language) : joinLocalizedText("Show deleted", "حذف شدہ دکھائیں", language), language)}
-                  </button>
-                </div>
-                <div className="result-actions dictionary-action-row">
-                  <button className="retry-btn" type="button" disabled={!dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryBatchBusy === "subject"} onClick={() => handleBatchBuildDictionary("subject")}>
-                    {renderLocalizedTextNode(dictionaryBatchBusy === "subject" ? joinLocalizedText("Building...", "تیار ہو رہی ہے...", language) : joinLocalizedText("Build selected subject", "منتخب مضمون تیار کریں", language), language)}
-                  </button>
-                  <button className="next-btn" type="button" disabled={!dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryLessonFilter === "all" || dictionaryBatchBusy === "lesson"} onClick={() => handleBatchBuildDictionary("lesson")}>
-                    {renderLocalizedTextNode(dictionaryBatchBusy === "lesson" ? joinLocalizedText("Building...", "تیار ہو رہی ہے...", language) : joinLocalizedText("Build selected lesson", "منتخب سبق تیار کریں", language), language)}
-                  </button>
-                </div>
-              </div>
-              {dictionaryBrowserEntries.length ? (
-                <div className="dictionary-entry-list">
-                  {dictionaryBrowserEntries.map((entry) => {
-                    const meta = dictionaryMetaLookup[entry.normalizedWord] || {};
-                    const isEditing = dictionaryEditorState?.normalized === entry.normalizedWord;
-                    const origins = new Set([...(entry.origins || []), ...(entry.sources || []), entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
-                    const isTrusted = origins.has("trusted");
-                    const isWeak = origins.has("weak");
-                    const isPendingSync = dictionaryPendingSet.has(entry.normalizedWord);
-                    const canDelete = Boolean(wordMeaningCache[entry.normalizedWord]);
-                    const sourceBadges = Array.from(origins)
-                      .filter((origin) => !["trusted", "weak"].includes(origin))
-                      .slice(0, 3)
-                      .map((origin) => {
-                        if (origin === "curriculum") return joinLocalizedText("Curriculum", "کریکولم", language);
-                        if (origin === "imported") return joinLocalizedText("Imported", "درآمد شدہ", language);
-                        if (origin === "ai" || origin === "gemini") return "AI";
-                        if (origin === "remote") return joinLocalizedText("Synced", "سنک شدہ", language);
-                        if (origin === "manual") return joinLocalizedText("Edited", "ترمیم شدہ", language);
-                        return origin;
-                      });
-                    const updatedLabel = entry.updatedAt
-                      ? formatDate(entry.updatedAt)
-                      : joinLocalizedText("Unknown", "نامعلوم", language);
-                    return (
-                      <div key={`dictionary_entry_${entry.normalizedWord}`} className={`dictionary-entry-card${entry.browserDeleted ? " deleted" : ""}`}>
-                        <div className="dictionary-entry-head">
-                          <div>
-                            <div className="dictionary-entry-word">{entry.word}</div>
-                            <div className="dictionary-entry-meta-row">
-                              <span>{renderLocalizedTextNode(joinLocalizedText(`Updated ${updatedLabel}`, `تازہ ${updatedLabel}`, language), language)}</span>
-                              <span>{renderLocalizedTextNode(isPendingSync ? joinLocalizedText("Pending sync", "سنک منتظر", language) : joinLocalizedText("Synced locally", "مقامی طور پر تازہ", language), language)}</span>
-                            </div>
-                            <div className="dictionary-entry-badges">
-                              {(meta.badges || []).slice(0, 2).map((badge) => <span key={`${entry.normalizedWord}_${badge}`} className="discovery-tag">{renderLocalizedTextNode(badge, language)}</span>)}
-                              {(meta.lessonLabels || []).slice(0, 1).map((label) => <span key={`${entry.normalizedWord}_${label}`} className="discovery-tag">{renderLocalizedTextNode(label, language)}</span>)}
-                              {sourceBadges.map((badge) => <span key={`${entry.normalizedWord}_${badge}`} className="discovery-tag muted">{renderLocalizedTextNode(badge, language)}</span>)}
-                              {isTrusted ? <span className="discovery-tag trusted">{renderLocalizedTextNode(joinLocalizedText("Trusted", "قابلِ اعتماد", language), language)}</span> : null}
-                              {isWeak ? <span className="discovery-tag weak">{renderLocalizedTextNode(joinLocalizedText("Needs review", "جائزہ درکار", language), language)}</span> : null}
-                              {isPendingSync ? <span className="discovery-tag pending">{renderLocalizedTextNode(joinLocalizedText("Pending sync", "سنک منتظر", language), language)}</span> : null}
-                              {entry.browserDeleted ? <span className="discovery-tag deleted">{renderLocalizedTextNode(joinLocalizedText("Deleted", "حذف شدہ", language), language)}</span> : null}
-                            </div>
-                          </div>
-                          <div className="dictionary-entry-actions">
-                            {entry.browserDeleted ? (
-                              <button type="button" className="study-tool-btn compact" onClick={() => handleRestoreDictionaryEntry(entry)}>
-                                {renderLocalizedTextNode(joinLocalizedText("Restore", "بحال کریں", language), language)}
-                              </button>
-                            ) : (
-                              <>
-                                <button type="button" className="ghost-cta" onClick={() => openDictionaryEditor(entry)}>{renderLocalizedTextNode(joinLocalizedText("Edit", "ترمیم", language), language)}</button>
-                                <button type="button" className={`ghost-cta${isTrusted ? " active" : ""}`} onClick={() => handleSetDictionaryTrust(entry, isTrusted ? "clear" : "trusted")}>{renderLocalizedTextNode(isTrusted ? joinLocalizedText("Trusted", "قابلِ اعتماد", language) : joinLocalizedText("Trust", "اعتماد", language), language)}</button>
-                                <button type="button" className={`ghost-cta${isWeak ? " active" : ""}`} onClick={() => handleSetDictionaryTrust(entry, isWeak ? "clear" : "weak")}>{renderLocalizedTextNode(isWeak ? joinLocalizedText("Weak", "کمزور", language) : joinLocalizedText("Flag", "نشان", language), language)}</button>
-                                <button type="button" className="ghost-cta" disabled={!canDelete} onClick={() => handleDeleteDictionaryEntry(entry)}>{renderLocalizedTextNode(joinLocalizedText("Delete", "حذف", language), language)}</button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        {isEditing ? (
-                          <div className="dictionary-editor-card">
-                            <input className="settings-text-input" value={dictionaryEditorState.draft.word} onChange={(event) => updateDictionaryEditorField("word", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Word", "لفظ", language), language)} />
-                            <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.meaningsUr} onChange={(event) => updateDictionaryEditorField("meaningsUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Urdu meanings, one per line", "اردو معانی، ایک فی سطر", language), language)} />
-                            <textarea className="chat-input dictionary-editor-textarea urdu" value={dictionaryEditorState.draft.explanationUr} onChange={(event) => updateDictionaryEditorField("explanationUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Simple Urdu explanation", "سادہ اردو وضاحت", language), language)} />
-                            <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.meaningsEn} onChange={(event) => updateDictionaryEditorField("meaningsEn", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English meanings, one per line", "انگریزی meanings، ایک فی سطر", language), language)} />
-                            <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.explanationEng} onChange={(event) => updateDictionaryEditorField("explanationEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Plain English explanation", "سادہ انگریزی وضاحت", language), language)} />
-                            <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.examplesEng} onChange={(event) => updateDictionaryEditorField("examplesEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English examples, one per line", "انگریزی مثالیں، ایک فی سطر", language), language)} />
-                            <div className="result-actions dictionary-action-row">
-                              <button type="button" className="retry-btn" onClick={handleSaveDictionaryEntry}>{renderLocalizedTextNode(joinLocalizedText("Save entry", "اندراج محفوظ کریں", language), language)}</button>
-                              <button type="button" className="next-btn" onClick={() => setDictionaryEditorState(null)}>{renderLocalizedTextNode(joinLocalizedText("Cancel", "منسوخ", language), language)}</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {(entry.meaningsUr || []).length ? (
-                              <div className="dictionary-entry-meaning-list">
-                                {(entry.meaningsUr || []).slice(0, 4).map((meaning, index) => (
-                                  <div key={`${entry.normalizedWord}_meaning_${index}`} className="dictionary-entry-meaning-line">
-                                    <span className="dictionary-entry-order">{index + 1}.</span>
-                                    <span>{meaning}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                            {entry.explanationUr ? <p className="dictionary-entry-explanation urdu-copy">{entry.explanationUr}</p> : null}
-                            {(entry.meaningsEn || []).length ? <p className="dictionary-entry-explanation">{(entry.meaningsEn || []).join(" • ")}</p> : null}
-                            {entry.explanationEng ? <p className="dictionary-entry-explanation">{entry.explanationEng}</p> : null}
-                            {(entry.examplesEng || []).length ? (
-                              <div className="dictionary-entry-example-list">
-                                {(entry.examplesEng || []).slice(0, 2).map((example, index) => (
-                                  <div key={`${entry.normalizedWord}_example_${index}`} className="dictionary-entry-example">• {example}</div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(joinLocalizedText("No dictionary entries match this filter yet.", "ابھی اس فلٹر کے مطابق لغت اندراجات نہیں ملے۔", language), language)}</p>}
-            </div>
           </div>
         </div>
       {streak > 0 && <div className="streak-banner"><span className="streak-fire">🔥</span><div className="streak-info"><h4>{renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} دن کا تسلسل!`, language), language)}</h4><p>{renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "اسی طرح جاری رکھیں، آپ بہت اچھا کر رہے ہیں!", language), language)}</p></div></div>}
+      </>)}
+
+      {tab === "dictionary" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
+        <div className="review-panel home-support-panel" data-ui-language={language}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Local Dictionary", "مقامی لغت", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Browse, edit, trust, restore, and batch-build the bilingual dictionary that now grows with your study.", "اس دو لسانی لغت کو براؤز، ترمیم، معتبر، بحال، اور بیچ میں تیار کریں جو اب آپ کی پڑھائی کے ساتھ بڑھتی ہے۔", language), language)}</p>
+            </div>
+            <div className="dictionary-stat-strip">
+              <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.total} active`, `${dictionaryStats.total} فعال`, language), language)}</span>
+              <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.deleted} deleted`, `${dictionaryStats.deleted} حذف`, language), language)}</span>
+              <span className="grade-tag" style={{ marginTop: 0 }}>{renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.dictionaryPendingCount || 0} pending`, `${supabaseSyncActivity.dictionaryPendingCount || 0} منتظر`, language), language)}</span>
+            </div>
+          </div>
+          <div className="dictionary-browser-controls">
+            <input
+              className="review-list-input"
+              value={dictionarySearch}
+              onChange={(event) => setDictionarySearch(event.target.value)}
+              placeholder={renderLocalizedTextNode(joinLocalizedText("Search the dictionary", "لغت میں تلاش کریں", language), language)}
+              style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
+            />
+            <div className="discovery-filter-row compact" style={{ marginTop: 10 }}>
+              <button className={`study-tool-btn compact${dictionarySubjectFilter === "all" ? " active" : ""}`} onClick={() => setDictionarySubjectFilter("all")} type="button">
+                {renderLocalizedTextNode(ui.discoveryAllSubjects, language)}
+              </button>
+              {SUBJECTS.map((subject) => (
+                <button key={`dictionary_subject_${subject.id}`} className={`study-tool-btn compact${dictionarySubjectFilter === subject.id ? " active" : ""}`} onClick={() => setDictionarySubjectFilter(subject.id)} type="button">
+                  {renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)}
+                </button>
+              ))}
+            </div>
+            <div className="dictionary-toolbar-row">
+              <select
+                className="dictionary-select"
+                value={dictionaryLessonFilter}
+                onChange={(event) => setDictionaryLessonFilter(event.target.value)}
+                disabled={dictionarySubjectFilter === "all" || !dictionaryLessonOptions.length}
+                style={language === "ur" ? { fontFamily: "var(--font-ur)" } : null}
+              >
+                <option value="all">{renderLocalizedTextNode(joinLocalizedText("All lessons", "تمام اسباق", language), language)}</option>
+                {dictionaryLessonOptions.map((lesson) => (
+                  <option key={`dictionary_lesson_${lesson.key}`} value={lesson.key}>{lesson.label}</option>
+                ))}
+              </select>
+              <div className="discovery-filter-row compact dictionary-inline-filters">
+                {[
+                  { id: "all", label: joinLocalizedText("All sources", "تمام ذرائع", language) },
+                  { id: "curriculum", label: joinLocalizedText("Curriculum", "کریکولم", language) },
+                  { id: "trusted", label: joinLocalizedText("Trusted", "قابلِ اعتماد", language) },
+                  { id: "ai", label: "AI" },
+                  { id: "imported", label: joinLocalizedText("Imported", "درآمد شدہ", language) },
+                  { id: "weak", label: joinLocalizedText("Needs review", "جائزہ درکار", language) },
+                ].map((option) => (
+                  <button key={`dictionary_source_${option.id}`} type="button" className={`study-tool-btn compact${dictionarySourceFilter === option.id ? " active" : ""}`} onClick={() => setDictionarySourceFilter(option.id)}>
+                    {renderLocalizedTextNode(option.label, language)}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className={`study-tool-btn compact${dictionaryShowDeleted ? " active" : ""}`} onClick={() => setDictionaryShowDeleted((current) => !current)}>
+                {renderLocalizedTextNode(dictionaryShowDeleted ? joinLocalizedText("Hide deleted", "حذف شدہ چھپائیں", language) : joinLocalizedText("Show deleted", "حذف شدہ دکھائیں", language), language)}
+              </button>
+            </div>
+            <div className="result-actions dictionary-action-row">
+              <button className="retry-btn" type="button" disabled={!dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryBatchBusy === "subject"} onClick={() => handleBatchBuildDictionary("subject")}>
+                {renderLocalizedTextNode(dictionaryBatchBusy === "subject" ? joinLocalizedText("Building...", "تیار ہو رہی ہے...", language) : joinLocalizedText("Build selected subject", "منتخب مضمون تیار کریں", language), language)}
+              </button>
+              <button className="next-btn" type="button" disabled={!dictionarySubjectFilter || dictionarySubjectFilter === "all" || dictionaryLessonFilter === "all" || dictionaryBatchBusy === "lesson"} onClick={() => handleBatchBuildDictionary("lesson")}>
+                {renderLocalizedTextNode(dictionaryBatchBusy === "lesson" ? joinLocalizedText("Building...", "تیار ہو رہی ہے...", language) : joinLocalizedText("Build selected lesson", "منتخب سبق تیار کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          {!dictionaryDisplayEntries.length && dictionaryAiSearchCandidate && (dictionaryAiSearchState.loading || dictionaryAiSearchState.error) ? (
+            <div className="practice-feedback-panel" style={{ marginTop: 12 }}>
+              {dictionaryAiSearchState.loading
+                ? renderLocalizedTextNode(
+                    joinLocalizedText(
+                      `No local dictionary match yet. Looking up "${dictionaryAiSearchCandidate.raw}" with AI and saving it here...`,
+                      `ابھی مقامی لغت میں "${dictionaryAiSearchCandidate.raw}" نہیں ملا۔ AI سے تلاش کر کے اسے یہاں محفوظ کیا جا رہا ہے...`,
+                      language,
+                    ),
+                    language,
+                  )
+                : renderLocalizedTextNode(dictionaryAiSearchState.error, language)}
+            </div>
+          ) : null}
+          {dictionaryDisplayEntries.length ? (
+            <div className="dictionary-entry-list">
+              {dictionaryDisplayEntries.map((entry) => {
+                const meta = dictionaryMetaLookup[entry.normalizedWord] || {};
+                const isEditing = dictionaryEditorState?.normalized === entry.normalizedWord;
+                const origins = new Set([...(entry.origins || []), ...(entry.sources || []), entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+                const isTrusted = origins.has("trusted");
+                const isWeak = origins.has("weak");
+                const isPendingSync = dictionaryPendingSet.has(entry.normalizedWord);
+                const canDelete = Boolean(wordMeaningCache[entry.normalizedWord]);
+                const sourceBadges = Array.from(origins)
+                  .filter((origin) => !["trusted", "weak"].includes(origin))
+                  .slice(0, 3)
+                  .map((origin) => {
+                    if (origin === "curriculum") return joinLocalizedText("Curriculum", "کریکولم", language);
+                    if (origin === "imported") return joinLocalizedText("Imported", "درآمد شدہ", language);
+                    if (origin === "ai" || origin === "gemini") return "AI";
+                    if (origin === "remote") return joinLocalizedText("Synced", "سنک شدہ", language);
+                    if (origin === "manual") return joinLocalizedText("Edited", "ترمیم شدہ", language);
+                    return origin;
+                  });
+                const updatedLabel = entry.updatedAt
+                  ? formatDate(entry.updatedAt)
+                  : joinLocalizedText("Unknown", "نامعلوم", language);
+                return (
+                  <div key={`dictionary_entry_${entry.normalizedWord}`} className={`dictionary-entry-card${entry.browserDeleted ? " deleted" : ""}`}>
+                    <div className="dictionary-entry-head">
+                      <div>
+                        <div className="dictionary-entry-word">{entry.word}</div>
+                        <div className="dictionary-entry-meta-row">
+                          <span>{renderLocalizedTextNode(joinLocalizedText(`Updated ${updatedLabel}`, `تازہ ${updatedLabel}`, language), language)}</span>
+                          <span>{renderLocalizedTextNode(isPendingSync ? joinLocalizedText("Pending sync", "سنک منتظر", language) : joinLocalizedText("Synced locally", "مقامی طور پر تازہ", language), language)}</span>
+                        </div>
+                        <div className="dictionary-entry-badges">
+                          {(meta.badges || []).slice(0, 2).map((badge) => <span key={`${entry.normalizedWord}_${badge}`} className="discovery-tag">{renderLocalizedTextNode(badge, language)}</span>)}
+                          {(meta.lessonLabels || []).slice(0, 1).map((label) => <span key={`${entry.normalizedWord}_${label}`} className="discovery-tag">{renderLocalizedTextNode(label, language)}</span>)}
+                          {sourceBadges.map((badge) => <span key={`${entry.normalizedWord}_${badge}`} className="discovery-tag muted">{renderLocalizedTextNode(badge, language)}</span>)}
+                          {entry.aiSearchResult ? <span className="discovery-tag">{renderLocalizedTextNode(joinLocalizedText("Added from AI search", "AI تلاش سے شامل", language), language)}</span> : null}
+                          {isTrusted ? <span className="discovery-tag trusted">{renderLocalizedTextNode(joinLocalizedText("Trusted", "قابلِ اعتماد", language), language)}</span> : null}
+                          {isWeak ? <span className="discovery-tag weak">{renderLocalizedTextNode(joinLocalizedText("Needs review", "جائزہ درکار", language), language)}</span> : null}
+                          {isPendingSync ? <span className="discovery-tag pending">{renderLocalizedTextNode(joinLocalizedText("Pending sync", "سنک منتظر", language), language)}</span> : null}
+                          {entry.browserDeleted ? <span className="discovery-tag deleted">{renderLocalizedTextNode(joinLocalizedText("Deleted", "حذف شدہ", language), language)}</span> : null}
+                        </div>
+                      </div>
+                      <div className="dictionary-entry-actions">
+                        {entry.browserDeleted ? (
+                          <button type="button" className="study-tool-btn compact" onClick={() => handleRestoreDictionaryEntry(entry)}>
+                            {renderLocalizedTextNode(joinLocalizedText("Restore", "بحال کریں", language), language)}
+                          </button>
+                        ) : (
+                          <>
+                            <button type="button" className="ghost-cta" onClick={() => openDictionaryEditor(entry)}>{renderLocalizedTextNode(joinLocalizedText("Edit", "ترمیم", language), language)}</button>
+                            <button type="button" className={`ghost-cta${isTrusted ? " active" : ""}`} onClick={() => handleSetDictionaryTrust(entry, isTrusted ? "clear" : "trusted")}>{renderLocalizedTextNode(isTrusted ? joinLocalizedText("Trusted", "قابلِ اعتماد", language) : joinLocalizedText("Trust", "اعتماد", language), language)}</button>
+                            <button type="button" className={`ghost-cta${isWeak ? " active" : ""}`} onClick={() => handleSetDictionaryTrust(entry, isWeak ? "clear" : "weak")}>{renderLocalizedTextNode(isWeak ? joinLocalizedText("Weak", "کمزور", language) : joinLocalizedText("Flag", "نشان", language), language)}</button>
+                            <button type="button" className="ghost-cta" disabled={!canDelete} onClick={() => handleDeleteDictionaryEntry(entry)}>{renderLocalizedTextNode(joinLocalizedText("Delete", "حذف", language), language)}</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {isEditing ? (
+                      <div className="dictionary-editor-card">
+                        <input className="settings-text-input" value={dictionaryEditorState.draft.word} onChange={(event) => updateDictionaryEditorField("word", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Word", "لفظ", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.meaningsUr} onChange={(event) => updateDictionaryEditorField("meaningsUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Urdu meanings, one per line", "اردو معانی، ایک فی سطر", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea urdu" value={dictionaryEditorState.draft.explanationUr} onChange={(event) => updateDictionaryEditorField("explanationUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Simple Urdu explanation", "سادہ اردو وضاحت", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.meaningsEn} onChange={(event) => updateDictionaryEditorField("meaningsEn", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English meanings, one per line", "انگریزی meanings، ایک فی سطر", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.explanationEng} onChange={(event) => updateDictionaryEditorField("explanationEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Plain English explanation", "سادہ انگریزی وضاحت", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.examplesEng} onChange={(event) => updateDictionaryEditorField("examplesEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English examples, one per line", "انگریزی مثالیں، ایک فی سطر", language), language)} />
+                        <div className="result-actions dictionary-action-row">
+                          <button type="button" className="retry-btn" onClick={handleSaveDictionaryEntry}>{renderLocalizedTextNode(joinLocalizedText("Save entry", "اندراج محفوظ کریں", language), language)}</button>
+                          <button type="button" className="next-btn" onClick={() => setDictionaryEditorState(null)}>{renderLocalizedTextNode(joinLocalizedText("Cancel", "منسوخ", language), language)}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {(entry.meaningsUr || []).length ? (
+                          <div className="dictionary-entry-meaning-list">
+                            {(entry.meaningsUr || []).slice(0, 4).map((meaning, index) => (
+                              <div key={`${entry.normalizedWord}_meaning_${index}`} className="dictionary-entry-meaning-line">
+                                <span className="dictionary-entry-order">{index + 1}.</span>
+                                <span>{meaning}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {entry.explanationUr ? <p className="dictionary-entry-explanation urdu-copy">{entry.explanationUr}</p> : null}
+                        {(entry.meaningsEn || []).length ? <p className="dictionary-entry-explanation">{(entry.meaningsEn || []).join(" • ")}</p> : null}
+                        {entry.explanationEng ? <p className="dictionary-entry-explanation">{entry.explanationEng}</p> : null}
+                        {(entry.examplesEng || []).length ? (
+                          <div className="dictionary-entry-example-list">
+                            {(entry.examplesEng || []).slice(0, 2).map((example, index) => (
+                              <div key={`${entry.normalizedWord}_example_${index}`} className="dictionary-entry-example">• {example}</div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : <p className="empty-state" style={{ marginTop: 12 }}>{renderLocalizedTextNode(joinLocalizedText("No dictionary entries match this filter yet.", "ابھی اس فلٹر کے مطابق لغت اندراجات نہیں ملے۔", language), language)}</p>}
+        </div>
       </>)}
 
       {tab === "profiles" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
