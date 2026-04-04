@@ -4462,16 +4462,46 @@ function MathVisualDeck({ sub, lessonTitle }) {
 
 // ─── Math Sub-Quiz Component (proper hooks) ───
 function MathSubQuiz({ questions, isUrdu }) {
+  const QUESTION_TIME_LIMIT_SECONDS = 15;
+  const REFLECTION_DELAY_MS = 2000;
   const [mqIdx, setMqIdx] = useState(0);
   const [mqAns, setMqAns] = useState([]);
   const [mqRev, setMqRev] = useState(false);
   const [mqDone, setMqDone] = useState(false);
-  const mq = questions;
+  const [mqTimerRemaining, setMqTimerRemaining] = useState(QUESTION_TIME_LIMIT_SECONDS);
+  const [mqElapsedMs, setMqElapsedMs] = useState([]);
+  const questionStartedAtRef = useRef(Date.now());
+  const advanceTimeoutRef = useRef(null);
+  const mq = Array.isArray(questions) ? questions : [];
   const currentQ = mq[mqIdx] || {};
   const questionIsUrdu = isUrdu || isUrduText(currentQ.q);
   const mqScore = mqDone ? mqAns.reduce((a,v,i) => a + (v === mq[i]?.c ? 1 : 0), 0) : 0;
-  const reset = () => { setMqIdx(0); setMqAns([]); setMqRev(false); setMqDone(false); };
-  const speakText = (txt, e) => {
+  const totalAllowedMs = mq.length * QUESTION_TIME_LIMIT_SECONDS * 1000;
+  const recordedTotalMs = mqElapsedMs.reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const averageQuestionMs = mq.length ? recordedTotalMs / mq.length : 0;
+  const formatDuration = useCallback((ms) => {
+    const totalSeconds = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  }, []);
+  const clearAdvanceTimeout = useCallback(() => {
+    if (advanceTimeoutRef.current) {
+      clearTimeout(advanceTimeoutRef.current);
+      advanceTimeoutRef.current = null;
+    }
+  }, []);
+  const reset = useCallback(() => {
+    clearAdvanceTimeout();
+    questionStartedAtRef.current = Date.now();
+    setMqIdx(0);
+    setMqAns([]);
+    setMqRev(false);
+    setMqDone(false);
+    setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
+    setMqElapsedMs([]);
+  }, [clearAdvanceTimeout]);
+  const speakText = useCallback((txt, e) => {
     if (e) e.stopPropagation();
     if (!isTtsEnabled()) return;
     const ur = isUrduText(txt);
@@ -4482,14 +4512,84 @@ function MathSubQuiz({ questions, isUrdu }) {
     u.rate = speechConfig.rate;
     if (speechConfig.voice) u.voice = speechConfig.voice;
     window.speechSynthesis.speak(u);
-  };
-  const playSound = (correct) => { try { const ac = new (window.AudioContext||window.webkitAudioContext)(); const osc = ac.createOscillator(); const gain = ac.createGain(); osc.connect(gain); gain.connect(ac.destination); gain.gain.value = 0.15; if(correct){ osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ac.currentTime+0.1); osc.frequency.setValueAtTime(784,ac.currentTime+0.2); osc.stop(ac.currentTime+0.35); } else { osc.frequency.value=330; osc.type="square"; osc.start(); osc.frequency.setValueAtTime(277,ac.currentTime+0.15); osc.stop(ac.currentTime+0.3); } } catch(e){} };
+  }, []);
+  const playSound = useCallback((correct) => { try { const ac = new (window.AudioContext||window.webkitAudioContext)(); const osc = ac.createOscillator(); const gain = ac.createGain(); osc.connect(gain); gain.connect(ac.destination); gain.gain.value = 0.15; if(correct){ osc.frequency.value=523; osc.start(); osc.frequency.setValueAtTime(659,ac.currentTime+0.1); osc.frequency.setValueAtTime(784,ac.currentTime+0.2); osc.stop(ac.currentTime+0.35); } else { osc.frequency.value=330; osc.type="square"; osc.start(); osc.frequency.setValueAtTime(277,ac.currentTime+0.15); osc.stop(ac.currentTime+0.3); } } catch(e){} }, []);
+  const recordElapsedForCurrentQuestion = useCallback((forcedMs = null) => {
+    const elapsedMs = typeof forcedMs === "number"
+      ? forcedMs
+      : Math.min(QUESTION_TIME_LIMIT_SECONDS * 1000, Math.max(0, Date.now() - questionStartedAtRef.current));
+    setMqElapsedMs((prev) => {
+      if (typeof prev[mqIdx] === "number") return prev;
+      const next = [...prev];
+      next[mqIdx] = elapsedMs;
+      return next;
+    });
+    return elapsedMs;
+  }, [mqIdx]);
+  const moveToNextQuestion = useCallback(() => {
+    clearAdvanceTimeout();
+    if (mqIdx < mq.length - 1) {
+      setMqIdx(mqIdx + 1);
+      setMqRev(false);
+      setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
+      questionStartedAtRef.current = Date.now();
+      return;
+    }
+    setMqDone(true);
+  }, [clearAdvanceTimeout, mqIdx, mq.length]);
+
+  useEffect(() => {
+    return () => clearAdvanceTimeout();
+  }, [clearAdvanceTimeout]);
+
+  useEffect(() => {
+    if (mqDone || mqRev || !mq.length || mqTimerRemaining <= 0) return undefined;
+    const timerId = setTimeout(() => {
+      setMqTimerRemaining((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => clearTimeout(timerId);
+  }, [mqDone, mqRev, mq.length, mqTimerRemaining, mqIdx]);
+
+  useEffect(() => {
+    if (mqDone || mqRev || !mq.length || mqTimerRemaining > 0) return undefined;
+    const nextAnswers = [...mqAns];
+    if (typeof nextAnswers[mqIdx] !== "number") {
+      nextAnswers[mqIdx] = null;
+      setMqAns(nextAnswers);
+    }
+    setMqRev(true);
+    recordElapsedForCurrentQuestion(QUESTION_TIME_LIMIT_SECONDS * 1000);
+    playSound(false);
+    clearAdvanceTimeout();
+    advanceTimeoutRef.current = setTimeout(() => {
+      moveToNextQuestion();
+    }, REFLECTION_DELAY_MS);
+    return () => clearAdvanceTimeout();
+  }, [clearAdvanceTimeout, moveToNextQuestion, mq.length, mqAns, mqDone, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
+
+  const handleOptionSelect = useCallback((optionIndex) => {
+    if (mqRev || mqTimerRemaining <= 0) return;
+    const nextAnswers = [...mqAns];
+    nextAnswers[mqIdx] = optionIndex;
+    setMqAns(nextAnswers);
+    setMqRev(true);
+    recordElapsedForCurrentQuestion();
+    playSound(optionIndex === mq[mqIdx]?.c);
+    clearAdvanceTimeout();
+    advanceTimeoutRef.current = setTimeout(() => {
+      moveToNextQuestion();
+    }, REFLECTION_DELAY_MS);
+  }, [clearAdvanceTimeout, moveToNextQuestion, mq, mqAns, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
 
   if (mqDone) return (
     <div className="quiz-result">
       <div className="result-emoji">{mqScore >= mq.length - 1 ? "🏆" : mqScore >= mq.length / 2 ? "🌟" : "💪"}</div>
       <h2>{mqScore}/{mq.length} Correct!</h2>
       <p style={{color:"var(--text-secondary)",marginBottom:16,fontFamily:isUrdu?"'Noto Nastaliq Urdu',serif":"inherit",direction:isUrdu?"rtl":"ltr"}}>{mqScore >= mq.length - 1 ? (isUrdu?"شاباش! آپ نے یہ موضوع سیکھ لیا!":"Excellent! You mastered this topic!") : mqScore >= mq.length / 2 ? (isUrdu?"اچھا! غلط جوابات دوبارہ دیکھیں۔":"Good job! Review the ones you missed.") : (isUrdu?"مشق جاری رکھیں!":"Keep practicing! You'll get better.")}</p>
+      <div className="quiz-time-summary" style={{direction:isUrdu?"rtl":"ltr",fontFamily:isUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>
+        <div><strong>{isUrdu ? "لیا گیا وقت" : "Time taken"}</strong> <span>{formatDuration(recordedTotalMs)} / {formatDuration(totalAllowedMs)}</span></div>
+        <div><strong>{isUrdu ? "فی سوال اوسط" : "Average per question"}</strong> <span>{formatDuration(averageQuestionMs)}</span></div>
+      </div>
       <button className="start-quiz-btn" style={isUrdu?{fontFamily:"'Noto Nastaliq Urdu',serif"}:{}} onClick={reset}>{isUrdu?"🔄 دوبارہ کوشش":"🔄 Retry Quiz"}</button>
     </div>
   );
@@ -4498,22 +4598,20 @@ function MathSubQuiz({ questions, isUrdu }) {
     <div className="quiz-container" style={questionIsUrdu?{direction:"rtl"}:{}}>
       <div className="quiz-progress">{mq.map((_, i) => <div key={i} className={"qp-dot" + (i < mqIdx ? " done" : i === mqIdx ? " current" : "")} />)}</div>
       <div className="quiz-question" onClick={()=>speakText(currentQ.q)} style={{cursor:"pointer",direction:questionIsUrdu?"rtl":"ltr",fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit",textAlign:questionIsUrdu?"right":"left"}}>
-        <div className="q-num" style={{textAlign:questionIsUrdu?"right":"left",marginBottom:8,fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{questionIsUrdu?("سوال "+(mqIdx+1)+" از "+mq.length):("Q "+(mqIdx+1)+" of "+mq.length)} <span style={{fontSize:14,opacity:0.5,marginLeft:6}}>🔈</span></div>
+        <div className="quiz-meta-row">
+          <div className="q-num" style={{textAlign:questionIsUrdu?"right":"left",marginBottom:0,fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{questionIsUrdu?("سوال "+(mqIdx+1)+" از "+mq.length):("Q "+(mqIdx+1)+" of "+mq.length)} <span style={{fontSize:14,opacity:0.5,marginLeft:6}}>🔈</span></div>
+          <div className={`quiz-timer-pill${mqTimerRemaining <= 5 ? " danger" : ""}`}>{isUrdu ? `${mqTimerRemaining} سیکنڈ` : `${mqTimerRemaining}s`}</div>
+        </div>
         <h3 style={{marginTop:4,fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{currentQ.q}</h3>
       </div>
-      <div className="quiz-options" style={questionIsUrdu?{direction:"rtl"}:{}}>{currentQ.a.map((opt, oi) => {
+      <div className="quiz-options" style={questionIsUrdu?{direction:"rtl"}:{}}>{(currentQ.a || []).map((opt, oi) => {
         const optionIsUrdu = isUrdu || isUrduText(opt);
         const sel = mqAns[mqIdx] === oi, cor = oi === mq[mqIdx].c;
         let cls = "quiz-option";
         if (mqRev && cor) cls += " correct";
         else if (mqRev && sel && !cor) cls += " wrong";
         else if (sel) cls += " selected";
-        return (<button key={oi} className={cls} disabled={mqRev} style={optionIsUrdu?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}} onClick={() => {
-          if (mqRev) return;
-          const na = [...mqAns]; na[mqIdx] = oi; setMqAns(na); setMqRev(true);
-          playSound(oi === mq[mqIdx].c);
-          setTimeout(() => { if (mqIdx < mq.length - 1) { setMqIdx(mqIdx + 1); setMqRev(false); } else setMqDone(true); }, 1200);
-        }}><span className="opt-letter">{"ABCD"[oi]}</span><span style={{flex:1,fontFamily:optionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit",direction:optionIsUrdu?"rtl":"ltr",textAlign:optionIsUrdu?"right":"left"}}>{opt}</span><span style={{fontSize:13,opacity:0.4,marginLeft:6}} onClick={(e)=>speakText(opt,e)}>🔈</span></button>);
+        return (<button key={oi} className={cls} disabled={mqRev || mqTimerRemaining <= 0} style={optionIsUrdu?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}} onClick={() => handleOptionSelect(oi)}><span className="opt-letter">{"ABCD"[oi]}</span><span style={{flex:1,fontFamily:optionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit",direction:optionIsUrdu?"rtl":"ltr",textAlign:optionIsUrdu?"right":"left"}}>{opt}</span><span style={{fontSize:13,opacity:0.4,marginLeft:6}} onClick={(e)=>speakText(opt,e)}>🔈</span></button>);
       })}</div>
     </div>
   );
@@ -16558,7 +16656,7 @@ function HomeschoolApp() {
                 </label>
               </div>
             ) : null}
-            {effectivePracticeMode !== "flashcards" ? (
+            {(!["flashcards", "typing", "dictation", "fillblanks", "sentencebuilder"].includes(effectivePracticeMode)) ? (
               <>
                 <div className={`practice-instruction${isUrduUi(language) ? " urdu" : ""}`}>
                   {renderLocalizedTextNode(getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, language), language)}
@@ -16568,7 +16666,7 @@ function HomeschoolApp() {
                 </div>
               </>
             ) : null}
-            {practiceQuestionPrompt && effectivePracticeMode !== "flashcards" ? (
+            {practiceQuestionPrompt && !["flashcards", "typing", "dictation", "fillblanks", "sentencebuilder"].includes(effectivePracticeMode) ? (
               <div className="practice-question-stack">
                 <div className={`practice-question-bar${isUrduUi(language) ? " urdu" : ""}`}>
                   {renderLocalizedTextNode(practiceQuestionPrompt, language)}
@@ -16605,7 +16703,7 @@ function HomeschoolApp() {
               <div className="flashcard-stage">
                 <button
                   type="button"
-                  className="flashcard-side-nav flashcard-side-nav-prev"
+                  className="flashcard-side-nav practice-focus-side-nav-prev"
                   onClick={handlePracticePrevious}
                   disabled={practiceIdx <= 0}
                   aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
@@ -16691,140 +16789,264 @@ function HomeschoolApp() {
               </div>
             )}
             {effectivePracticeMode === "dictation" && (
-              <div className="practice-card-shell">
-                <div className="practice-card-face">
-                  <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Listen carefully and type the English word you hear.", "غور سے سنیں اور جو انگریزی لفظ سنیں اسے ٹائپ کریں۔", language), language)}</div>
-                  <div className="dictation-actions">
-                    <button className="dictation-play-btn" onClick={() => window.HomeSchoolUtils.speakText(activePracticeCard.prompt, activePracticeCard.practiceLang || "en")}>
-                      🔊 {renderLocalizedTextNode(joinLocalizedText("Play Again", "دوبارہ سنیں", language), language)}
-                    </button>
-                    <span className={`dictation-hint${containsUrduText(activePracticeCard.answer || activePracticeCard.sectionLabel) ? " urdu" : ""}`}>{renderLocalizedTextNode(joinLocalizedText(`Hint: ${activePracticeCard.answer || activePracticeCard.sectionLabel}`, `اشارہ: ${activePracticeCard.answer || activePracticeCard.sectionLabel}`, language), language)}</span>
-                  </div>
-                  <input
-                    className="review-list-input"
-                    value={practiceDictationInput}
-                    onChange={(event) => setPracticeDictationInput(event.target.value)}
-                    placeholder={language === "ur" ? "جو کچھ سنیں وہ لکھیں..." : "Type what you hear..."}
-                    style={activePracticeCard.practiceLang === "ur" || isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", marginTop: 14 } : { marginTop: 14 }}
-                  />
-                  {practiceDictationResult ? <p className={`practice-result ${practiceDictationResult}`} style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceDictationResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Listen and compare this correction", "سنیں اور اس درست جواب سے ملائیں", language), language)}: {activePracticeCard.prompt}</p> : null}
-                  {practiceReveal ? (
-                    <div className="practice-answer-clue">
-                      <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{activePracticeCard.prompt}</div>
-                      {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+              <div className="flashcard-stage">
+                <button
+                  type="button"
+                  className="flashcard-side-nav flashcard-side-nav-prev"
+                  onClick={handlePracticePrevious}
+                  disabled={practiceIdx <= 0}
+                  aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                  title={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 18 6 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M18 18 12 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div className="practice-card-shell practice-card-shell-focus">
+                  <div className="flashcard-count-pill">{practiceIdx + 1} / {practiceDeck.length}</div>
+                  <div className={`practice-card-face practice-card-face-focus${practiceDictationResult === "correct" ? " correct" : practiceDictationResult === "wrong" ? " review" : ""}`}>
+                    <div className={`flashcard-card-top${isUrduUi(language) ? " urdu" : ""}`}>{renderLocalizedTextNode(joinLocalizedText("Dictation", "املا", language), language)}</div>
+                    <div className="practice-focus-body">
+                      <div className="dictation-actions">
+                        <button className="dictation-play-btn" onClick={() => window.HomeSchoolUtils.speakText(activePracticeCard.prompt, activePracticeCard.practiceLang || "en")}>
+                          🔊 {renderLocalizedTextNode(joinLocalizedText("Play Again", "دوبارہ سنیں", language), language)}
+                        </button>
+                        <span className={`dictation-hint${containsUrduText(activePracticeCard.answer || activePracticeCard.sectionLabel) ? " urdu" : ""}`}>{renderLocalizedTextNode(joinLocalizedText(`Hint: ${activePracticeCard.answer || activePracticeCard.sectionLabel}`, `اشارہ: ${activePracticeCard.answer || activePracticeCard.sectionLabel}`, language), language)}</span>
+                      </div>
+                      <input
+                        className="review-list-input practice-card-input"
+                        value={practiceDictationInput}
+                        onChange={(event) => setPracticeDictationInput(event.target.value)}
+                        placeholder={language === "ur" ? "جو کچھ سنیں وہ لکھیں..." : "Type what you hear..."}
+                        style={activePracticeCard.practiceLang === "ur" || isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : undefined}
+                      />
+                      {practiceDictationResult ? <p className={`practice-result ${practiceDictationResult}`} style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceDictationResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Listen and compare this correction", "سنیں اور اس درست جواب سے ملائیں", language), language)}: {activePracticeCard.prompt}</p> : null}
+                      {practiceReveal ? (
+                        <div className="practice-answer-clue">
+                          <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{activePracticeCard.prompt}</div>
+                          {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
+                    <div className="practice-card-footer">
+                      <button className="retry-btn" onClick={handleCheckDictationAnswer} disabled={!practiceDictationInput.trim()}>{renderLocalizedTextNode(joinLocalizedText("Check", "جانچیں", language), language)}</button>
+                      <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
+                    </div>
+                  </div>
                 </div>
-                <div className="result-actions">
-                  <button className="retry-btn" onClick={handleCheckDictationAnswer} disabled={!practiceDictationInput.trim()}>{renderLocalizedTextNode(joinLocalizedText("Check", "جانچیں", language), language)}</button>
-                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
-                </div>
+                <button
+                  type="button"
+                  className="flashcard-side-nav practice-focus-side-nav-next"
+                  onClick={handlePracticeNext}
+                  disabled={practiceIdx >= practiceDeck.length - 1}
+                  aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                  title={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M6 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
             )}
             {effectivePracticeMode === "typing" && (
-              <div className="practice-card-shell">
-                <div className="practice-card-face">
-                  <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Type the matching word for this clue:", "اس اشارے کے مطابق لفظ ٹائپ کریں:", language), language)}</div>
-                  <div className="study-word-answer" style={getPracticeTextStyle(getPracticeTypingClue(activePracticeCard), { marginTop: 10, fontSize: 17, fontWeight: 700 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{getPracticeTypingClue(activePracticeCard)}</div>
-                  <input
-                    className="review-list-input"
-                    value={practiceTypingInput}
-                    onChange={(event) => setPracticeTypingInput(event.target.value)}
-                    placeholder={language === "ur" ? "جواب لکھیں..." : "Type your answer..."}
-                    style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)", marginTop: 14 } : { marginTop: 14 }}
-                  />
-                  {practiceTypingResult ? <p className={`practice-result ${practiceTypingResult}`} style={getPracticeTextStyle(getPracticeTypingTarget(activePracticeCard), {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceTypingResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Try this correction", "اس درست جواب کو دیکھیں", language), language)}: {getPracticeTypingTarget(activePracticeCard)}</p> : null}
+              <div className="flashcard-stage">
+                <button
+                  type="button"
+                  className="flashcard-side-nav practice-focus-side-nav-prev"
+                  onClick={handlePracticePrevious}
+                  disabled={practiceIdx <= 0}
+                  aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                  title={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 18 6 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M18 18 12 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div className="practice-card-shell practice-card-shell-focus">
+                  <div className="flashcard-count-pill">{practiceIdx + 1} / {practiceDeck.length}</div>
+                  <div className={`practice-card-face practice-card-face-focus${practiceTypingResult === "correct" ? " correct" : practiceTypingResult === "wrong" ? " review" : ""}`}>
+                    <div className={`flashcard-card-top${isUrduUi(language) ? " urdu" : ""}`}>{renderLocalizedTextNode(joinLocalizedText("Type the answer", "جواب ٹائپ کریں", language), language)}</div>
+                    <div className="practice-focus-body">
+                      <div className="study-word-answer practice-card-centered-copy" style={getPracticeTextStyle(getPracticeTypingClue(activePracticeCard), { fontSize: 17, fontWeight: 700 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{getPracticeTypingClue(activePracticeCard)}</div>
+                      <input
+                        className="review-list-input practice-card-input"
+                        value={practiceTypingInput}
+                        onChange={(event) => setPracticeTypingInput(event.target.value)}
+                        placeholder={language === "ur" ? "جواب لکھیں..." : "Type your answer..."}
+                        style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : undefined}
+                      />
+                      {practiceTypingResult ? <p className={`practice-result ${practiceTypingResult}`} style={getPracticeTextStyle(getPracticeTypingTarget(activePracticeCard), {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceTypingResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("Try this correction", "اس درست جواب کو دیکھیں", language), language)}: {getPracticeTypingTarget(activePracticeCard)}</p> : null}
+                    </div>
+                    <div className="practice-card-footer">
+                      <button className="retry-btn" onClick={handleCheckTypedAnswer} disabled={!practiceTypingInput.trim()}>{renderLocalizedTextNode(joinLocalizedText("Check", "جانچیں", language), language)}</button>
+                      <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
+                    </div>
+                  </div>
                 </div>
-                <div className="result-actions">
-                  <button className="retry-btn" onClick={handleCheckTypedAnswer} disabled={!practiceTypingInput.trim()}>{renderLocalizedTextNode(joinLocalizedText("Check", "جانچیں", language), language)}</button>
-                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
-                </div>
+                <button
+                  type="button"
+                  className="flashcard-side-nav practice-focus-side-nav-next"
+                  onClick={handlePracticeNext}
+                  disabled={practiceIdx >= practiceDeck.length - 1}
+                  aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                  title={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M6 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
             )}
             {effectivePracticeMode === "fillblanks" && (
-              <div className="practice-card-shell">
-                <div className="practice-card-face">
-                  <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Choose the correct word to complete the sentence.", "جملہ مکمل کرنے کے لیے درست لفظ منتخب کریں۔", language), language)}</div>
-                  <div className="blank-sentence" style={getPracticeTextStyle(activePracticeCard.blankSentence, {}, activePracticeCard.practiceLang)}>{activePracticeCard.blankSentence}</div>
-                  <div className="blank-option-grid">
-                    {(activePracticeCard.blankOptions || []).map((option) => {
-                      const normalizedOption = normalizeAnswerText(option);
-                      const normalizedPrompt = normalizeAnswerText(activePracticeCard.prompt);
-                      const isSelected = normalizeAnswerText(practiceBlankChoice) === normalizedOption;
-                      const isCorrect = normalizedOption === normalizedPrompt;
-                      const optionClass = [
-                        "blank-option",
-                        isSelected ? "selected" : "",
-                        practiceReveal && isCorrect ? "correct" : "",
-                        practiceReveal && isSelected && !isCorrect ? "wrong" : "",
-                      ].filter(Boolean).join(" ");
-                      return (
-                        <button
-                          key={option}
-                          className={optionClass}
-                          disabled={practiceReveal}
-                          onClick={() => handleBlankChoice(option)}
-                          style={getPracticeTextStyle(option, {}, activePracticeCard.practiceLang)}
-                        >
-                          {option}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {practiceBlankResult ? <p className={`practice-result ${practiceBlankResult}`} style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceBlankResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("The missing word is", "خالی جگہ کا لفظ ہے", language), language)}: {activePracticeCard.prompt}</p> : null}
-                  {practiceReveal ? (
-                    <div className="practice-answer-clue">
-                      <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{activePracticeCard.prompt}</div>
-                      {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+              <div className="flashcard-stage">
+                <button
+                  type="button"
+                  className="flashcard-side-nav practice-focus-side-nav-prev"
+                  onClick={handlePracticePrevious}
+                  disabled={practiceIdx <= 0}
+                  aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                  title={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 18 6 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M18 18 12 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div className="practice-card-shell practice-card-shell-focus">
+                  <div className="flashcard-count-pill">{practiceIdx + 1} / {practiceDeck.length}</div>
+                  <div className={`practice-card-face practice-card-face-focus${practiceBlankResult === "correct" ? " correct" : practiceBlankResult === "wrong" ? " review" : ""}`}>
+                    <div className={`flashcard-card-top${isUrduUi(language) ? " urdu" : ""}`}>{renderLocalizedTextNode(joinLocalizedText("Complete the sentence", "جملہ مکمل کریں", language), language)}</div>
+                    <div className="practice-focus-body">
+                      <div className="blank-sentence practice-card-centered-copy" style={getPracticeTextStyle(activePracticeCard.blankSentence, {}, activePracticeCard.practiceLang)}>{activePracticeCard.blankSentence}</div>
+                      <div className="blank-option-grid">
+                        {(activePracticeCard.blankOptions || []).map((option) => {
+                          const normalizedOption = normalizeAnswerText(option);
+                          const normalizedPrompt = normalizeAnswerText(activePracticeCard.prompt);
+                          const isSelected = normalizeAnswerText(practiceBlankChoice) === normalizedOption;
+                          const isCorrect = normalizedOption === normalizedPrompt;
+                          const optionClass = [
+                            "blank-option",
+                            isSelected ? "selected" : "",
+                            practiceReveal && isCorrect ? "correct" : "",
+                            practiceReveal && isSelected && !isCorrect ? "wrong" : "",
+                          ].filter(Boolean).join(" ");
+                          return (
+                            <button
+                              key={option}
+                              className={optionClass}
+                              disabled={practiceReveal}
+                              onClick={() => handleBlankChoice(option)}
+                              style={getPracticeTextStyle(option, {}, activePracticeCard.practiceLang)}
+                            >
+                              {option}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {practiceBlankResult ? <p className={`practice-result ${practiceBlankResult}`} style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{renderLocalizedTextNode(practiceBlankResult === "correct" ? joinLocalizedText("Correct", "درست", language) : joinLocalizedText("The missing word is", "خالی جگہ کا لفظ ہے", language), language)}: {activePracticeCard.prompt}</p> : null}
+                      {practiceReveal ? (
+                        <div className="practice-answer-clue">
+                          <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang)}>{activePracticeCard.prompt}</div>
+                          {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
+                    <div className="practice-card-footer">
+                      <button className="retry-btn" onClick={() => window.HomeSchoolUtils.speakText(activePracticeCard.blankSentence.replace("_____", activePracticeCard.prompt), "en")}>{renderLocalizedTextNode(joinLocalizedText("Read Sentence", "جملہ سنیں", language), language)}</button>
+                      <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
+                    </div>
+                  </div>
                 </div>
-                <div className="result-actions">
-                  <button className="retry-btn" onClick={() => window.HomeSchoolUtils.speakText(activePracticeCard.blankSentence.replace("_____", activePracticeCard.prompt), "en")}>{renderLocalizedTextNode(joinLocalizedText("Read Sentence", "جملہ سنیں", language), language)}</button>
-                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
-                </div>
+                <button
+                  type="button"
+                  className="flashcard-side-nav practice-focus-side-nav-next"
+                  onClick={handlePracticeNext}
+                  disabled={practiceIdx >= practiceDeck.length - 1}
+                  aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                  title={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M6 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
             )}
             {effectivePracticeMode === "sentencebuilder" && (
-              <div className="practice-card-shell">
-                <div className="practice-card-face">
-                  <div className="practice-typing-prompt">{renderLocalizedTextNode(joinLocalizedText("Tap the pieces in order to rebuild the full sentence.", "مکمل جملہ دوبارہ بنانے کے لیے لفظوں کو ترتیب سے منتخب کریں۔", language), language)}</div>
-                  <div className={`sentence-builder-output${activePracticeCard.sentenceBuilderLang === "ur" ? " urdu" : ""}`}>
-                    {practiceSentenceSelection.length
-                      ? practiceSentenceSelection.map((entry, index) => (
-                        <button key={`${entry.index}_${index}`} className="sentence-builder-token selected" onClick={() => handleSentenceSelectionRemove(index)}>
-                          {entry.text}
-                        </button>
-                      ))
-                      : <span className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Build your sentence here.", "اپنا جملہ یہاں بنائیں۔", language), language)}</span>}
-                  </div>
-                  <div className="sentence-builder-bank">
-                    {(activePracticeCard.sentenceBuilderOptions || []).map((token, index) => {
-                      const selected = practiceSentenceSelection.some((entry) => entry.index === index);
-                      return (
-                        <button
-                          key={token.id || `${token.text}_${index}`}
-                          className={`sentence-builder-token${selected ? " used" : ""}`}
-                          disabled={selected || practiceReveal}
-                          onClick={() => handleSentenceTokenToggle(token.text, index)}
-                        >
-                          {token.text}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {practiceSentenceResult ? <p className={`practice-result ${practiceSentenceResult}`} style={getPracticeTextStyle(activePracticeCard.sentenceBuilderSentence, {}, activePracticeCard.sentenceBuilderLang)}>{renderLocalizedTextNode(practiceSentenceResult === "correct" ? joinLocalizedText("Correct sentence", "درست جملہ", language) : joinLocalizedText("Correct order is", "درست ترتیب یہ ہے", language), language)}: {activePracticeCard.sentenceBuilderSentence}</p> : null}
-                  {practiceReveal ? (
-                    <div className="practice-answer-clue">
-                      <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.sentenceBuilderSentence, {}, activePracticeCard.sentenceBuilderLang)}>{activePracticeCard.sentenceBuilderSentence}</div>
-                      {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.sentenceBuilderLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+              <div className="flashcard-stage">
+                <button
+                  type="button"
+                  className="flashcard-side-nav practice-focus-side-nav-prev"
+                  onClick={handlePracticePrevious}
+                  disabled={practiceIdx <= 0}
+                  aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                  title={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 18 6 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M18 18 12 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div className="practice-card-shell practice-card-shell-focus">
+                  <div className="flashcard-count-pill">{practiceIdx + 1} / {practiceDeck.length}</div>
+                  <div className={`practice-card-face practice-card-face-focus${practiceSentenceResult === "correct" ? " correct" : practiceSentenceResult === "wrong" ? " review" : ""}`}>
+                    <div className={`flashcard-card-top${isUrduUi(language) ? " urdu" : ""}`}>{renderLocalizedTextNode(joinLocalizedText("Build the sentence", "جملہ بنائیں", language), language)}</div>
+                    <div className="practice-focus-body">
+                      <div className={`sentence-builder-output${activePracticeCard.sentenceBuilderLang === "ur" ? " urdu" : ""}`}>
+                        {practiceSentenceSelection.length
+                          ? practiceSentenceSelection.map((entry, index) => (
+                            <button key={`${entry.index}_${index}`} className="sentence-builder-token selected" onClick={() => handleSentenceSelectionRemove(index)}>
+                              {entry.text}
+                            </button>
+                          ))
+                          : <span className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Build your sentence here.", "اپنا جملہ یہاں بنائیں۔", language), language)}</span>}
+                      </div>
+                      <div className="sentence-builder-bank">
+                        {(activePracticeCard.sentenceBuilderOptions || []).map((token, index) => {
+                          const selected = practiceSentenceSelection.some((entry) => entry.index === index);
+                          return (
+                            <button
+                              key={token.id || `${token.text}_${index}`}
+                              className={`sentence-builder-token${selected ? " used" : ""}`}
+                              disabled={selected || practiceReveal}
+                              onClick={() => handleSentenceTokenToggle(token.text, index)}
+                            >
+                              {token.text}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {practiceSentenceResult ? <p className={`practice-result ${practiceSentenceResult}`} style={getPracticeTextStyle(activePracticeCard.sentenceBuilderSentence, {}, activePracticeCard.sentenceBuilderLang)}>{renderLocalizedTextNode(practiceSentenceResult === "correct" ? joinLocalizedText("Correct sentence", "درست جملہ", language) : joinLocalizedText("Correct order is", "درست ترتیب یہ ہے", language), language)}: {activePracticeCard.sentenceBuilderSentence}</p> : null}
+                      {practiceReveal ? (
+                        <div className="practice-answer-clue">
+                          <div className="study-word-prompt" style={getPracticeTextStyle(activePracticeCard.sentenceBuilderSentence, {}, activePracticeCard.sentenceBuilderLang)}>{activePracticeCard.sentenceBuilderSentence}</div>
+                          {activePracticeCard.answer ? <div className="study-word-answer" style={getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.sentenceBuilderLang === "ur" ? "en" : "ur")}>{activePracticeCard.answer}</div> : null}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
+                    <div className="practice-card-footer">
+                      <button className="retry-btn" onClick={handleCheckSentenceBuilder} disabled={practiceSentenceSelection.length !== (activePracticeCard.sentenceBuilderTokens || []).length}>{renderLocalizedTextNode(joinLocalizedText("Check Order", "ترتیب جانچیں", language), language)}</button>
+                      <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
+                    </div>
+                  </div>
                 </div>
-                <div className="result-actions">
-                  <button className="retry-btn" onClick={handleCheckSentenceBuilder} disabled={practiceSentenceSelection.length !== (activePracticeCard.sentenceBuilderTokens || []).length}>{renderLocalizedTextNode(joinLocalizedText("Check Order", "ترتیب جانچیں", language), language)}</button>
-                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
-                </div>
+                <button
+                  type="button"
+                  className="flashcard-side-nav practice-focus-side-nav-next"
+                  onClick={handlePracticeNext}
+                  disabled={practiceIdx >= practiceDeck.length - 1}
+                  aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                  title={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M6 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
             )}
             {practiceMode === "timedchallenge" && (
