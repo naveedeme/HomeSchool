@@ -8892,13 +8892,13 @@ function HomeschoolApp() {
     [allSubjects],
   );
   const allChapterGroups = useMemo(() => (
-    grade
+    dbLoaded && grade
       ? allSubjects.flatMap((subject) => getMergedLessonGroups(subject.id, grade).map((group) => ({
         ...group,
         subject,
       })))
       : []
-  ), [allSubjects, getMergedLessonGroups, grade]);
+  ), [allSubjects, dbLoaded, getMergedLessonGroups, grade]);
   const selectedLessonCanonicalKey = useMemo(
     () => getCanonicalLessonKeyForLesson(selectedLesson),
     [selectedLesson],
@@ -8957,7 +8957,7 @@ function HomeschoolApp() {
       language,
     );
   }, [language]);
-  const gradePracticeItems = useMemo(() => (grade ? buildGradePracticeItems(contentDataLoader, grade) : []), [contentDataLoader, grade]);
+  const gradePracticeItems = useMemo(() => (dbLoaded && grade ? buildGradePracticeItems(contentDataLoader, grade) : []), [contentDataLoader, dbLoaded, grade]);
   const availablePracticeSubjects = useMemo(() => allSubjects.filter((subject) => {
     const hasReviewItems = reviewLibrary.some((card) => (card?.subject || "english") === subject.id && card?.prompt && (card?.answer || card?.meaning));
     const hasSupplementalItems = gradePracticeItems.some((item) => item?.subject === subject.id && item?.prompt && (item?.answer || item?.meaning));
@@ -9631,7 +9631,7 @@ function HomeschoolApp() {
     [backupReminderSettings, hasBackupWorthData, language],
   );
   const discoveryLessonIndex = useMemo(() => {
-    if (!grade) return [];
+    if (!dbLoaded || !grade) return [];
     return allSubjects.flatMap((subject) => {
 const lessons = getMergedLessons(subject.id, grade) || [];
       return lessons.map((lesson, lessonIndex) => ({
@@ -9649,7 +9649,7 @@ const lessons = getMergedLessons(subject.id, grade) || [];
         completed: Boolean(completedQuizzes[lesson.id]),
       }));
     });
-  }, [allSubjects, completedQuizzes, getMergedLessons, grade]);
+  }, [allSubjects, completedQuizzes, dbLoaded, getMergedLessons, grade]);
   const filteredDiscoveryLessons = useMemo(() => {
     const searchNeedle = normalizeText(contentSearch).toLowerCase();
     return discoveryLessonIndex.filter((item) => {
@@ -9681,6 +9681,7 @@ const lessons = getMergedLessons(subject.id, grade) || [];
     return discoveryWordPool[seed % discoveryWordPool.length];
   }, [discoveryWordPool]);
   const wordBankIndex = useMemo(() => {
+    if (!dbLoaded) return [];
     const seen = new Set();
     const items = [...(reviewLibrary || []), ...(gradePracticeItems || [])];
     return items.reduce((acc, item, index) => {
@@ -9713,7 +9714,7 @@ const lessons = getMergedLessons(subject.id, grade) || [];
       });
       return acc;
     }, []);
-  }, [gradePracticeItems, reviewLibrary, subjectLookup]);
+  }, [dbLoaded, gradePracticeItems, reviewLibrary, subjectLookup]);
   const filteredWordBank = useMemo(() => {
     const searchNeedle = normalizeText(wordSearch).toLowerCase();
     return wordBankIndex.filter((item) => {
@@ -15491,7 +15492,7 @@ const lessons = getMergedLessons(subjectId, grade);
   const syncLastPullLabel = supabaseSyncActivity.lastCloudPullAt || supabaseSyncActivity.lastDictionaryPullAt
     ? formatDate(Math.max(Number(supabaseSyncActivity.lastCloudPullAt) || 0, Number(supabaseSyncActivity.lastDictionaryPullAt) || 0))
     : joinLocalizedText("Not pulled yet", "ابھی ڈاؤن لوڈ نہیں ہوا", language);
-  const profileSubjectSummaries = useMemo(() => allSubjects.map((subject) => {
+  const profileSubjectSummaries = useMemo(() => (dbLoaded ? allSubjects.map((subject) => {
 const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     const completed = lessons.filter((lesson) => completedQuizzes?.[lesson.id]).length;
     const total = lessons.length;
@@ -15504,7 +15505,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       total,
       percent: total > 0 ? Math.round((completed / total) * 100) : 0,
     };
-  }), [allSubjects, completedQuizzes, getMergedLessons, grade, language]);
+  }) : []), [allSubjects, completedQuizzes, dbLoaded, getMergedLessons, grade, language]);
   const profileLessonTotals = useMemo(() => profileSubjectSummaries.reduce((acc, entry) => ({
     completed: acc.completed + (entry.completed || 0),
     total: acc.total + (entry.total || 0),

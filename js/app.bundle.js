@@ -6933,10 +6933,10 @@ ${marker} `);
       () => Object.fromEntries(allSubjects.map((subject) => [subject.id, subject])),
       [allSubjects]
     );
-    const allChapterGroups = useMemo(() => grade ? allSubjects.flatMap((subject) => getMergedLessonGroups(subject.id, grade).map((group) => ({
+    const allChapterGroups = useMemo(() => dbLoaded && grade ? allSubjects.flatMap((subject) => getMergedLessonGroups(subject.id, grade).map((group) => ({
       ...group,
       subject
-    }))) : [], [allSubjects, getMergedLessonGroups, grade]);
+    }))) : [], [allSubjects, dbLoaded, getMergedLessonGroups, grade]);
     const selectedLessonCanonicalKey = useMemo(
       () => getCanonicalLessonKeyForLesson(selectedLesson),
       [selectedLesson]
@@ -6990,7 +6990,7 @@ ${marker} `);
         language
       );
     }, [language]);
-    const gradePracticeItems = useMemo(() => grade ? buildGradePracticeItems(contentDataLoader, grade) : [], [contentDataLoader, grade]);
+    const gradePracticeItems = useMemo(() => dbLoaded && grade ? buildGradePracticeItems(contentDataLoader, grade) : [], [contentDataLoader, dbLoaded, grade]);
     const availablePracticeSubjects = useMemo(() => allSubjects.filter((subject) => {
       const hasReviewItems = reviewLibrary.some((card) => ((card == null ? void 0 : card.subject) || "english") === subject.id && (card == null ? void 0 : card.prompt) && ((card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning)));
       const hasSupplementalItems = gradePracticeItems.some((item) => (item == null ? void 0 : item.subject) === subject.id && (item == null ? void 0 : item.prompt) && ((item == null ? void 0 : item.answer) || (item == null ? void 0 : item.meaning)));
@@ -7629,7 +7629,7 @@ ${marker} `);
       [backupReminderSettings, hasBackupWorthData, language]
     );
     const discoveryLessonIndex = useMemo(() => {
-      if (!grade) return [];
+      if (!dbLoaded || !grade) return [];
       return allSubjects.flatMap((subject) => {
         const lessons = getMergedLessons(subject.id, grade) || [];
         return lessons.map((lesson, lessonIndex) => ({
@@ -7647,7 +7647,7 @@ ${marker} `);
           completed: Boolean(completedQuizzes[lesson.id])
         }));
       });
-    }, [allSubjects, completedQuizzes, getMergedLessons, grade]);
+    }, [allSubjects, completedQuizzes, dbLoaded, getMergedLessons, grade]);
     const filteredDiscoveryLessons = useMemo(() => {
       const searchNeedle = normalizeText(contentSearch).toLowerCase();
       return discoveryLessonIndex.filter((item) => {
@@ -7677,6 +7677,7 @@ ${marker} `);
       return discoveryWordPool[seed % discoveryWordPool.length];
     }, [discoveryWordPool]);
     const wordBankIndex = useMemo(() => {
+      if (!dbLoaded) return [];
       const seen = /* @__PURE__ */ new Set();
       const items = [...reviewLibrary || [], ...gradePracticeItems || []];
       return items.reduce((acc, item, index) => {
@@ -7710,7 +7711,7 @@ ${marker} `);
         });
         return acc;
       }, []);
-    }, [gradePracticeItems, reviewLibrary, subjectLookup]);
+    }, [dbLoaded, gradePracticeItems, reviewLibrary, subjectLookup]);
     const filteredWordBank = useMemo(() => {
       const searchNeedle = normalizeText(wordSearch).toLowerCase();
       return wordBankIndex.filter((item) => {
@@ -13168,7 +13169,7 @@ ${error.message || error}`);
     const syncActivityStatusText = syncPendingTotal > 0 ? joinLocalizedText(`${syncPendingTotal} local changes waiting`, `${syncPendingTotal} \u0645\u0642\u0627\u0645\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u0646\u062A\u0638\u0631`, language) : joinLocalizedText("Everything is caught up locally", "\u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0633\u0628 \u06A9\u0686\u06BE \u062A\u0627\u0632\u06C1 \u06C1\u06D2", language);
     const syncLastPushLabel = supabaseSyncActivity.lastCloudPushAt || supabaseSyncActivity.lastDictionaryPushAt ? formatDate(Math.max(Number(supabaseSyncActivity.lastCloudPushAt) || 0, Number(supabaseSyncActivity.lastDictionaryPushAt) || 0)) : joinLocalizedText("Not pushed yet", "\u0627\u0628\u06BE\u06CC \u0627\u067E \u0644\u0648\u0688 \u0646\u06C1\u06CC\u06BA \u06C1\u0648\u0627", language);
     const syncLastPullLabel = supabaseSyncActivity.lastCloudPullAt || supabaseSyncActivity.lastDictionaryPullAt ? formatDate(Math.max(Number(supabaseSyncActivity.lastCloudPullAt) || 0, Number(supabaseSyncActivity.lastDictionaryPullAt) || 0)) : joinLocalizedText("Not pulled yet", "\u0627\u0628\u06BE\u06CC \u0688\u0627\u0624\u0646 \u0644\u0648\u0688 \u0646\u06C1\u06CC\u06BA \u06C1\u0648\u0627", language);
-    const profileSubjectSummaries = useMemo(() => allSubjects.map((subject) => {
+    const profileSubjectSummaries = useMemo(() => dbLoaded ? allSubjects.map((subject) => {
       const lessons = grade ? getMergedLessons(subject.id, grade) || [] : [];
       const completed = lessons.filter((lesson) => completedQuizzes == null ? void 0 : completedQuizzes[lesson.id]).length;
       const total = lessons.length;
@@ -13181,7 +13182,7 @@ ${error.message || error}`);
         total,
         percent: total > 0 ? Math.round(completed / total * 100) : 0
       };
-    }), [allSubjects, completedQuizzes, getMergedLessons, grade, language]);
+    }) : [], [allSubjects, completedQuizzes, dbLoaded, getMergedLessons, grade, language]);
     const profileLessonTotals = useMemo(() => profileSubjectSummaries.reduce((acc, entry) => ({
       completed: acc.completed + (entry.completed || 0),
       total: acc.total + (entry.total || 0)
