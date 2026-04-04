@@ -454,6 +454,12 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .study-word-section{padding:4px 8px;border-radius:999px;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.22);color:var(--accent);font-size:11px;font-weight:700}
 .study-word-meaning{font-size:12px;color:var(--text-secondary);line-height:1.55;margin-bottom:8px}
 .study-word-note{font-size:12px;color:var(--text-primary);line-height:1.55;padding:10px 12px;border-radius:10px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.18);margin-bottom:10px}
+.study-word-prompt.urdu-copy,
+.study-word-answer.urdu-copy,
+.study-word-section.urdu-copy,
+.study-word-meaning.urdu-copy,
+.study-word-note.urdu-copy{font-family:var(--font-ur);direction:rtl;text-align:right;line-height:1.9}
+.study-word-section.urdu-copy{display:inline-flex;justify-content:center}
 .study-word-stats{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .study-word-stats span{padding:4px 9px;border-radius:999px;background:var(--bg-primary);border:1px solid var(--border);font-size:11px;color:var(--text-secondary);font-weight:700}
 .study-tools{display:flex;flex-direction:column;gap:3px;margin:1px 0 1px}

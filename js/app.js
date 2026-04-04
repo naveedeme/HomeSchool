@@ -6979,17 +6979,22 @@ function StudyWordCard({ card, showStats = true, allowView = false }) {
   const app = useContext(AppContext);
   const language = app?.language || "en";
   const accuracy = card.totalReviews ? Math.round(((card.correctReviews || 0) / card.totalReviews) * 100) : 0;
+  const promptHasUrdu = containsUrduText(card?.prompt || "");
+  const answerHasUrdu = containsUrduText(card?.answer || "");
+  const meaningHasUrdu = containsUrduText(card?.meaning || "");
+  const noteHasUrdu = containsUrduText(card?.note || "");
+  const sectionHasUrdu = containsUrduText(card?.sectionLabel || card?.section || "");
   return (
     <div className="study-word-card">
       <div className="study-word-head">
         <div>
-          <div className="study-word-prompt">{card.prompt}</div>
-          {card.answer ? <div className="study-word-answer">{card.answer}</div> : null}
+          <div className={`study-word-prompt${promptHasUrdu ? " urdu-copy" : ""}`}>{card.prompt}</div>
+          {card.answer ? <div className={`study-word-answer${answerHasUrdu ? " urdu-copy" : ""}`}>{card.answer}</div> : null}
         </div>
-        <span className="study-word-section">{card.sectionLabel || card.section}</span>
+        <span className={`study-word-section${sectionHasUrdu ? " urdu-copy" : ""}`}>{card.sectionLabel || card.section}</span>
       </div>
-      {card.meaning ? <div className="study-word-meaning">{card.meaning}</div> : null}
-      {card.note ? <div className="study-word-note">{card.note}</div> : null}
+      {card.meaning ? <div className={`study-word-meaning${meaningHasUrdu ? " urdu-copy" : ""}`}>{card.meaning}</div> : null}
+      {card.note ? <div className={`study-word-note${noteHasUrdu ? " urdu-copy" : ""}`}>{card.note}</div> : null}
       {showStats && (
         <div className="study-word-stats">
           <span>{renderLocalizedTextNode(joinLocalizedText(`${UI_TEXT.en.accuracy}: ${accuracy}%`, `${UI_TEXT.ur.accuracy}: ${accuracy}%`, language), language)}</span>
