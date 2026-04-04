@@ -593,8 +593,19 @@ transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
 .dictionary-entry-example-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .dictionary-entry-example{font-size:12px;color:var(--text-secondary);line-height:1.6}
 .dictionary-editor-card{display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-top:12px;border-top:1px dashed color-mix(in srgb,var(--border) 80%,transparent)}
-.dictionary-editor-textarea{min-height:84px;resize:vertical}
+.dictionary-editor-input,
+.dictionary-editor-textarea{
+background:color-mix(in srgb,var(--bg-card) 94%,var(--bg-elevated));
+color:var(--text-primary);
+border-color:var(--border);
+font-family:var(--font);
+text-align:left;
+direction:ltr;
+}
+.dictionary-editor-input.urdu,
 .dictionary-editor-textarea.urdu{direction:rtl;text-align:right;font-family:var(--font-ur)}
+.dictionary-editor-textarea.english{direction:ltr;text-align:left;font-family:var(--font)}
+.dictionary-editor-textarea{min-height:84px;resize:vertical}
 .dictionary-action-row{gap:10px;flex-wrap:wrap}
 .discovery-result-list{display:flex;flex-direction:column;gap:10px}
 .discovery-result-card{width:100%;padding:14px 16px;border-radius:16px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);text-align:left;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}

@@ -12477,9 +12477,10 @@ function HomeschoolApp() {
       normalizeWordMeaningCache(dictionaryDeletedArchive || {})[normalized],
     );
     const draft = dictionaryEditorState?.draft || {};
-    const nextEntry = normalizeWordMeaningEntry(draft.word || currentEntry?.word || normalized, {
+    const nextNormalized = normalizeLookupWord(draft.word || currentEntry?.word || normalized) || normalized;
+    const nextEntry = normalizeWordMeaningEntry(draft.word || currentEntry?.word || nextNormalized, {
       ...currentEntry,
-      word: String(draft.word || currentEntry?.word || normalized).trim() || normalized,
+      word: String(draft.word || currentEntry?.word || nextNormalized).trim() || nextNormalized,
       meaningsUr: String(draft.meaningsUr || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
       explanationUr: String(draft.explanationUr || "").trim(),
       meaningsEn: String(draft.meaningsEn || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
@@ -12499,8 +12500,11 @@ function HomeschoolApp() {
       showAppToast(joinLocalizedText("Dictionary entry needs at least one meaning or explanation.", "لغت اندراج میں کم از کم ایک معنی یا وضاحت ہونی چاہیے۔", language), "alert");
       return;
     }
-    setWordMeaningCache((current) => mergeWordMeaningMaps(current, { [normalized]: nextEntry }));
-    setDictionaryDeletedArchive((current) => removeDictionaryEntriesFromMap(current, [normalized]));
+    setWordMeaningCache((current) => {
+      const trimmed = removeDictionaryEntriesFromMap(current, [normalized, nextNormalized]);
+      return mergeWordMeaningMaps(trimmed, { [nextNormalized]: { ...nextEntry, deletedAt: null, updatedAt: Date.now() } });
+    });
+    setDictionaryDeletedArchive((current) => removeDictionaryEntriesFromMap(current, [normalized, nextNormalized]));
     setDictionaryEditorState(null);
     showAppToast(joinLocalizedText("Dictionary entry saved", "لغت اندراج محفوظ ہو گیا", language), "check");
   }, [dictionaryDeletedArchive, dictionaryEditorState, effectiveWordMeaningDictionary, language, showAppToast]);
@@ -12508,22 +12512,31 @@ function HomeschoolApp() {
   const handleDeleteDictionaryEntry = useCallback((entry) => {
     const normalized = normalizeLookupWord(entry?.normalizedWord || entry?.word);
     if (!normalized) return;
-    if (!wordMeaningCache[normalized]) {
-      showAppToast(joinLocalizedText("Only learned or imported dictionary entries can be removed here.", "یہاں صرف سیکھی گئی یا درآمد شدہ لغت اندراجات حذف کی جا سکتی ہیں۔", language), "alert");
-      return;
-    }
-    const archivedEntry = mergeWordMeaningEntry(entry, wordMeaningCache[normalized]);
+    const baseEntry = mergeWordMeaningEntry(entry, effectiveWordMeaningDictionary[normalized] || wordMeaningCache[normalized]);
+    if (!baseEntry) return;
+    const archivedEntry = normalizeWordMeaningEntry(baseEntry.word || normalized, {
+      ...baseEntry,
+      deletedAt: Date.now(),
+      updatedAt: Date.now(),
+    }, {
+      defaultOrigins: baseEntry.origins || ["manual"],
+      defaultSource: baseEntry.source || "Dictionary",
+    });
+    const tombstoneEntry = normalizeWordMeaningEntry(baseEntry.word || normalized, {
+      ...baseEntry,
+      deletedAt: Date.now(),
+      updatedAt: Date.now(),
+    }, {
+      defaultOrigins: baseEntry.origins || ["manual"],
+      defaultSource: baseEntry.source || "Dictionary",
+    });
     setDictionaryDeletedArchive((current) => mergeWordMeaningMaps(current, {
-      [normalized]: {
-        ...archivedEntry,
-        deletedAt: Date.now(),
-        updatedAt: Date.now(),
-      },
+      [normalized]: archivedEntry,
     }));
-    setWordMeaningCache((current) => removeDictionaryEntriesFromMap(current, [normalized]));
+    setWordMeaningCache((current) => mergeWordMeaningMaps(current, { [normalized]: tombstoneEntry }));
     setDictionaryEditorState((current) => current?.normalized === normalized ? null : current);
     showAppToast(joinLocalizedText("Dictionary entry removed", "لغت اندراج حذف کر دیا گیا", language), "alert");
-  }, [language, showAppToast, wordMeaningCache]);
+  }, [effectiveWordMeaningDictionary, language, showAppToast, wordMeaningCache]);
 
   const handleRestoreDictionaryEntry = useCallback((entry) => {
     const normalized = normalizeLookupWord(entry?.normalizedWord || entry?.word);
@@ -14691,12 +14704,12 @@ function HomeschoolApp() {
                     </div>
                     {isEditing ? (
                       <div className="dictionary-editor-card">
-                        <input className="settings-text-input" value={dictionaryEditorState.draft.word} onChange={(event) => updateDictionaryEditorField("word", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Word", "لفظ", language), language)} />
-                        <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.meaningsUr} onChange={(event) => updateDictionaryEditorField("meaningsUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Urdu meanings, one per line", "اردو معانی، ایک فی سطر", language), language)} />
+                        <input className={`settings-text-input dictionary-editor-input${containsUrduText(dictionaryEditorState.draft.word) ? " urdu" : ""}`} value={dictionaryEditorState.draft.word} onChange={(event) => updateDictionaryEditorField("word", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Word", "لفظ", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea urdu" value={dictionaryEditorState.draft.meaningsUr} onChange={(event) => updateDictionaryEditorField("meaningsUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Urdu meanings, one per line", "اردو معانی، ایک فی سطر", language), language)} />
                         <textarea className="chat-input dictionary-editor-textarea urdu" value={dictionaryEditorState.draft.explanationUr} onChange={(event) => updateDictionaryEditorField("explanationUr", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Simple Urdu explanation", "سادہ اردو وضاحت", language), language)} />
-                        <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.meaningsEn} onChange={(event) => updateDictionaryEditorField("meaningsEn", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English meanings, one per line", "انگریزی meanings، ایک فی سطر", language), language)} />
-                        <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.explanationEng} onChange={(event) => updateDictionaryEditorField("explanationEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Plain English explanation", "سادہ انگریزی وضاحت", language), language)} />
-                        <textarea className="chat-input dictionary-editor-textarea" value={dictionaryEditorState.draft.examplesEng} onChange={(event) => updateDictionaryEditorField("examplesEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English examples, one per line", "انگریزی مثالیں، ایک فی سطر", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea english" value={dictionaryEditorState.draft.meaningsEn} onChange={(event) => updateDictionaryEditorField("meaningsEn", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English meanings, one per line", "انگریزی meanings، ایک فی سطر", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea english" value={dictionaryEditorState.draft.explanationEng} onChange={(event) => updateDictionaryEditorField("explanationEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("Plain English explanation", "سادہ انگریزی وضاحت", language), language)} />
+                        <textarea className="chat-input dictionary-editor-textarea english" value={dictionaryEditorState.draft.examplesEng} onChange={(event) => updateDictionaryEditorField("examplesEng", event.target.value)} placeholder={renderLocalizedTextNode(joinLocalizedText("English examples, one per line", "انگریزی مثالیں، ایک فی سطر", language), language)} />
                         <div className="result-actions dictionary-action-row">
                           <button type="button" className="retry-btn" onClick={handleSaveDictionaryEntry}>{renderLocalizedTextNode(joinLocalizedText("Save entry", "اندراج محفوظ کریں", language), language)}</button>
                           <button type="button" className="next-btn" onClick={() => setDictionaryEditorState(null)}>{renderLocalizedTextNode(joinLocalizedText("Cancel", "منسوخ", language), language)}</button>
