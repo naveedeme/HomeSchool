@@ -116,6 +116,8 @@ const UI_TEXT = {
     muteAudio: "Mute Audio",
     autoPlayNext: "Auto-Play Next",
     autoPlayNextHelp: "Automatically play the next prompt when a new practice card opens.",
+    autoMoveNext: "Auto-Move Next",
+    autoMoveNextHelp: "Automatically move to the next practice card after an answer is checked.",
     meaningLookupPriority: "Meaning Lookup Priority",
     meaningLookupPriorityHelp: "Choose whether word meanings should prefer local vocabulary first or try AI first when available.",
     meaningPriorityLocalFirst: "Local first",
@@ -382,6 +384,8 @@ const UI_TEXT = {
     muteAudio: "آواز بند کریں",
     autoPlayNext: "اگلا خودکار سنائیں",
     autoPlayNextHelp: "نیا پریکٹس کارڈ کھلتے ہی اگلا پرامپٹ خودکار طور پر سنائیں۔",
+    autoMoveNext: "اگلا خودکار بڑھائیں",
+    autoMoveNextHelp: "جواب جانچنے کے بعد خودکار طور پر اگلے پریکٹس کارڈ پر جائیں۔",
     meaningLookupPriority: "معنی تلاش کی ترجیح",
     meaningLookupPriorityHelp: "منتخب کریں کہ لفظوں کے معنی پہلے مقامی ذخیرہ الفاظ سے لیے جائیں یا دستیاب ہونے پر پہلے اے آئی سے پوچھا جائے۔",
     meaningPriorityLocalFirst: "پہلے مقامی",
@@ -6291,10 +6295,18 @@ function normalizeAnswerText(value) {
 function getPracticeAudioPrompt(card, mode) {
   if (!card) return "";
   if (mode === "dictation") return normalizeText(card?.prompt);
-  if (mode === "fillblanks") return normalizeText(card?.blankSentence || "").replace("_____", normalizeText(card?.prompt || ""));
-  if (mode === "typing") return normalizeText(card?.typingTarget || card?.prompt || "");
+  if (mode === "fillblanks") {
+    const blankLabel = card?.practiceLang === "ur" ? "خالی جگہ" : "blank";
+    return normalizeText(card?.blankSentence || "").replace("_____", blankLabel);
+  }
+  if (mode === "typing") return normalizeText(getPracticeTypingClue(card) || card?.prompt || "");
   if (mode === "matching" || mode === "timedmatching") return normalizeText(card?.matchPrompt || card?.prompt || "");
-  if (mode === "sentencebuilder") return normalizeText(card?.sentenceBuilderSentence || "");
+  if (mode === "sentencebuilder") {
+    const tokenPrompt = Array.isArray(card?.sentenceBuilderOptions)
+      ? card.sentenceBuilderOptions.map((token) => normalizeText(token?.text || "")).filter(Boolean).join(" ")
+      : "";
+    return normalizeText(tokenPrompt || joinLocalizedText("Build the sentence from these words", "ان الفاظ سے جملہ بنائیں", card?.sentenceBuilderLang === "ur" ? "ur" : "en"));
+  }
   if (mode === "timedchallenge") return normalizeText(card?.prompt || "");
   if (mode === "timedquiz") return normalizeText(card?.quizQuestion || "");
   if (mode === "timedtruefalse") return normalizeText(card?.trueFalseStatement || "");
@@ -7535,6 +7547,7 @@ function HomeschoolApp() {
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [audioMuted, setAudioMuted] = useState(Boolean(stored?.audioMuted));
   const [autoPlayNext, setAutoPlayNext] = useState(Boolean(stored?.autoPlayNext));
+  const [autoMoveNext, setAutoMoveNext] = useState(Boolean(stored?.autoMoveNext));
   const [wordMeaningPriority, setWordMeaningPriority] = useState(normalizeWordMeaningPriority(stored?.wordMeaningPriority));
   const [ttsRate, setTtsRate] = useState(Math.max(0.6, Math.min(1.3, Number(stored?.ttsRate) || 0.85)));
   const [availableVoices, setAvailableVoices] = useState([]);
@@ -8711,6 +8724,7 @@ function HomeschoolApp() {
       if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
       if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
       if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+      if (typeof storedPreferences.autoMoveNext !== "undefined") setAutoMoveNext(Boolean(storedPreferences.autoMoveNext));
       if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
       if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
       if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
@@ -10389,6 +10403,7 @@ function HomeschoolApp() {
             ttsEnabled: nextPayload.ttsEnabled,
             audioMuted: nextPayload.audioMuted,
             autoPlayNext: nextPayload.autoPlayNext,
+            autoMoveNext: nextPayload.autoMoveNext,
             wordMeaningPriority: nextPayload.wordMeaningPriority,
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
@@ -10454,6 +10469,7 @@ function HomeschoolApp() {
               ttsEnabled: nextPayload.ttsEnabled,
               audioMuted: nextPayload.audioMuted,
               autoPlayNext: nextPayload.autoPlayNext,
+              autoMoveNext: nextPayload.autoMoveNext,
               wordMeaningPriority: nextPayload.wordMeaningPriority,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
@@ -10522,6 +10538,7 @@ function HomeschoolApp() {
             ttsEnabled: nextPayload.ttsEnabled,
             audioMuted: nextPayload.audioMuted,
             autoPlayNext: nextPayload.autoPlayNext,
+            autoMoveNext: nextPayload.autoMoveNext,
             wordMeaningPriority: nextPayload.wordMeaningPriority,
             language: nextPayload.language,
             themeMode: nextPayload.themeMode,
@@ -10638,6 +10655,7 @@ function HomeschoolApp() {
         if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
         if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
         if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+        if (typeof storedPreferences.autoMoveNext !== "undefined") setAutoMoveNext(Boolean(storedPreferences.autoMoveNext));
         if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
         if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
         if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
@@ -11176,9 +11194,9 @@ function HomeschoolApp() {
     };
   }, [themeMode]);
   useEffect(() => {
-    window.HomeSchoolPrefs = { ttsEnabled, audioMuted, autoPlayNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled };
+    window.HomeSchoolPrefs = { ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled };
     if (!ttsEnabled || audioMuted) window.speechSynthesis.cancel();
-  }, [ttsEnabled, audioMuted, autoPlayNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled]);
+  }, [ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled]);
   useEffect(() => {
     const root = document.documentElement;
     if (!root) return;
@@ -11191,6 +11209,7 @@ function HomeschoolApp() {
       ttsEnabled,
       audioMuted,
       autoPlayNext,
+      autoMoveNext,
       ttsRate,
       ttsVoiceSelections,
       language,
@@ -11236,10 +11255,10 @@ function HomeschoolApp() {
       aiProviderConfigs,
       selectedAiProvider,
     });
-}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
+  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -12173,6 +12192,7 @@ function HomeschoolApp() {
       if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
       if (typeof nextState.audioMuted !== "undefined") setAudioMuted(Boolean(nextState.audioMuted));
       if (typeof nextState.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(nextState.autoPlayNext));
+      if (typeof nextState.autoMoveNext !== "undefined") setAutoMoveNext(Boolean(nextState.autoMoveNext));
       if (typeof nextState.ttsRate !== "undefined") setTtsRate(Math.max(0.6, Math.min(1.3, Number(nextState.ttsRate) || 0.85)));
       if (nextState.ttsVoiceSelections) setTtsVoiceSelections({ en: nextState.ttsVoiceSelections.en || "", ur: nextState.ttsVoiceSelections.ur || "" });
       if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
@@ -12261,6 +12281,7 @@ function HomeschoolApp() {
     if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
     if (typeof nextState.audioMuted !== "undefined") setAudioMuted((current) => current || Boolean(nextState.audioMuted));
     if (typeof nextState.autoPlayNext !== "undefined") setAutoPlayNext((current) => current || Boolean(nextState.autoPlayNext));
+    if (typeof nextState.autoMoveNext !== "undefined") setAutoMoveNext((current) => current || Boolean(nextState.autoMoveNext));
     if (typeof nextState.ttsRate !== "undefined") setTtsRate((current) => Math.max(current, Math.min(1.3, Number(nextState.ttsRate) || current)));
     if (nextState.ttsVoiceSelections) setTtsVoiceSelections((current) => ({ ...current, ...nextState.ttsVoiceSelections }));
     if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
@@ -12364,6 +12385,7 @@ function HomeschoolApp() {
     ttsEnabled,
     audioMuted,
     autoPlayNext,
+    autoMoveNext,
     wordMeaningPriority,
     ttsRate,
     ttsVoiceSelections,
@@ -12394,7 +12416,7 @@ function HomeschoolApp() {
     timeTrackingData,
     notificationHistory,
     gamificationState,
-  }), [activeStudentProfileId, audioMuted, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
+  }), [activeStudentProfileId, audioMuted, autoMoveNext, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
 
   const buildBlankProfileAppState = useCallback((profile) => {
     const safeProfile = createStudentProfileDraft(profile);
@@ -13347,6 +13369,44 @@ function HomeschoolApp() {
       practiceAdvanceTimerRef.current = null;
     }, 500);
   }, [practiceDeck, practiceIdx, practiceTimedChoice, practiceTimerFinished, recordPracticeOutcome]);
+
+  useEffect(() => {
+    if (!autoMoveNext || !practiceMode || practiceDeck.length <= 1) return undefined;
+    const shouldAdvance = (
+      (practiceMode === "flashcards" && practiceReveal && Boolean(flashcardFeedbackState))
+      || (practiceMode === "typing" && Boolean(practiceTypingResult))
+      || (practiceMode === "dictation" && Boolean(practiceDictationResult))
+      || (practiceMode === "fillblanks" && Boolean(practiceBlankResult))
+      || (practiceMode === "sentencebuilder" && Boolean(practiceSentenceResult))
+    );
+    if (!shouldAdvance || practiceIdx >= practiceDeck.length - 1) return undefined;
+    if (practiceAdvanceTimerRef.current) {
+      clearTimeout(practiceAdvanceTimerRef.current);
+      practiceAdvanceTimerRef.current = null;
+    }
+    practiceAdvanceTimerRef.current = setTimeout(() => {
+      practiceAdvanceTimerRef.current = null;
+      handlePracticeNext();
+    }, practiceMode === "flashcards" ? 950 : 1300);
+    return () => {
+      if (practiceAdvanceTimerRef.current) {
+        clearTimeout(practiceAdvanceTimerRef.current);
+        practiceAdvanceTimerRef.current = null;
+      }
+    };
+  }, [
+    autoMoveNext,
+    practiceMode,
+    practiceDeck.length,
+    practiceIdx,
+    practiceReveal,
+    flashcardFeedbackState,
+    practiceTypingResult,
+    practiceDictationResult,
+    practiceBlankResult,
+    practiceSentenceResult,
+    handlePracticeNext,
+  ]);
 
   const handleMatchSelection = useCallback((type, item) => {
     if (!practiceMatchRound || practiceMatchRound.completed) return;
@@ -16685,6 +16745,9 @@ function HomeschoolApp() {
               <button className={`study-tool-btn compact${autoPlayNext ? " active" : ""}`} onClick={() => setAutoPlayNext((current) => !current)}>
                 {renderLocalizedTextNode(ui.autoPlayNext, language)}
               </button>
+              <button className={`study-tool-btn compact${autoMoveNext ? " active" : ""}`} onClick={() => setAutoMoveNext((current) => !current)}>
+                {renderLocalizedTextNode(ui.autoMoveNext, language)}
+              </button>
               <button className="study-tool-btn compact" onClick={() => window.HomeSchoolUtils?.speakText?.(practiceAudioPrompt, containsUrduText(practiceAudioPrompt) ? "ur" : (activePracticeCard?.practiceLang || "en"))} disabled={!practiceAudioPrompt || audioMuted}>
                 {renderLocalizedTextNode(joinLocalizedText("Hear Prompt", "اشارہ سنیں", language), language)}
               </button>
@@ -16703,7 +16766,7 @@ function HomeschoolApp() {
               <div className="flashcard-stage">
                 <button
                   type="button"
-                  className="flashcard-side-nav practice-focus-side-nav-prev"
+                  className="flashcard-side-nav flashcard-shell-nav-prev"
                   onClick={handlePracticePrevious}
                   disabled={practiceIdx <= 0}
                   aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
@@ -16775,7 +16838,7 @@ function HomeschoolApp() {
                 </div>
                 <button
                   type="button"
-                  className="flashcard-side-nav flashcard-side-nav-next"
+                  className="flashcard-side-nav flashcard-shell-nav-next"
                   onClick={handlePracticeNext}
                   disabled={practiceIdx >= practiceDeck.length - 1}
                   aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
@@ -16792,7 +16855,7 @@ function HomeschoolApp() {
               <div className="flashcard-stage">
                 <button
                   type="button"
-                  className="flashcard-side-nav flashcard-side-nav-prev"
+                  className="flashcard-side-nav practice-dictation-nav-prev"
                   onClick={handlePracticePrevious}
                   disabled={practiceIdx <= 0}
                   aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
@@ -16837,7 +16900,7 @@ function HomeschoolApp() {
                 </div>
                 <button
                   type="button"
-                  className="flashcard-side-nav practice-focus-side-nav-next"
+                  className="flashcard-side-nav practice-dictation-nav-next"
                   onClick={handlePracticeNext}
                   disabled={practiceIdx >= practiceDeck.length - 1}
                   aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
@@ -16854,7 +16917,7 @@ function HomeschoolApp() {
               <div className="flashcard-stage">
                 <button
                   type="button"
-                  className="flashcard-side-nav practice-focus-side-nav-prev"
+                  className="flashcard-side-nav practice-typing-nav-prev"
                   onClick={handlePracticePrevious}
                   disabled={practiceIdx <= 0}
                   aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
@@ -16888,7 +16951,7 @@ function HomeschoolApp() {
                 </div>
                 <button
                   type="button"
-                  className="flashcard-side-nav practice-focus-side-nav-next"
+                  className="flashcard-side-nav practice-typing-nav-next"
                   onClick={handlePracticeNext}
                   disabled={practiceIdx >= practiceDeck.length - 1}
                   aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
@@ -16905,7 +16968,7 @@ function HomeschoolApp() {
               <div className="flashcard-stage">
                 <button
                   type="button"
-                  className="flashcard-side-nav practice-focus-side-nav-prev"
+                  className="flashcard-side-nav practice-fillblanks-nav-prev"
                   onClick={handlePracticePrevious}
                   disabled={practiceIdx <= 0}
                   aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
@@ -16956,14 +17019,14 @@ function HomeschoolApp() {
                       ) : null}
                     </div>
                     <div className="practice-card-footer">
-                      <button className="retry-btn" onClick={() => window.HomeSchoolUtils.speakText(activePracticeCard.blankSentence.replace("_____", activePracticeCard.prompt), "en")}>{renderLocalizedTextNode(joinLocalizedText("Read Sentence", "جملہ سنیں", language), language)}</button>
+                      <button className="retry-btn" onClick={() => window.HomeSchoolUtils.speakText(getPracticeAudioPrompt(activePracticeCard, "fillblanks"), activePracticeCard.practiceLang || "en")}>{renderLocalizedTextNode(joinLocalizedText("Read Sentence", "جملہ سنیں", language), language)}</button>
                       <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next", "اگلا", language), language)}</button>
                     </div>
                   </div>
                 </div>
                 <button
                   type="button"
-                  className="flashcard-side-nav practice-focus-side-nav-next"
+                  className="flashcard-side-nav practice-fillblanks-nav-next"
                   onClick={handlePracticeNext}
                   disabled={practiceIdx >= practiceDeck.length - 1}
                   aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
@@ -16980,7 +17043,7 @@ function HomeschoolApp() {
               <div className="flashcard-stage">
                 <button
                   type="button"
-                  className="flashcard-side-nav practice-focus-side-nav-prev"
+                  className="flashcard-side-nav practice-sentencebuilder-nav-prev"
                   onClick={handlePracticePrevious}
                   disabled={practiceIdx <= 0}
                   aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
@@ -16999,7 +17062,7 @@ function HomeschoolApp() {
                       <div className={`sentence-builder-output${activePracticeCard.sentenceBuilderLang === "ur" ? " urdu" : ""}`}>
                         {practiceSentenceSelection.length
                           ? practiceSentenceSelection.map((entry, index) => (
-                            <button key={`${entry.index}_${index}`} className="sentence-builder-token selected" onClick={() => handleSentenceSelectionRemove(index)}>
+                            <button key={`${entry.index}_${index}`} className={`sentence-builder-token selected${activePracticeCard.sentenceBuilderLang === "ur" || containsUrduText(entry.text) ? " urdu" : ""}`} onClick={() => handleSentenceSelectionRemove(index)}>
                               {entry.text}
                             </button>
                           ))
@@ -17011,7 +17074,7 @@ function HomeschoolApp() {
                           return (
                             <button
                               key={token.id || `${token.text}_${index}`}
-                              className={`sentence-builder-token${selected ? " used" : ""}`}
+                              className={`sentence-builder-token${selected ? " used" : ""}${activePracticeCard.sentenceBuilderLang === "ur" || containsUrduText(token.text) ? " urdu" : ""}`}
                               disabled={selected || practiceReveal}
                               onClick={() => handleSentenceTokenToggle(token.text, index)}
                             >
@@ -17036,7 +17099,7 @@ function HomeschoolApp() {
                 </div>
                 <button
                   type="button"
-                  className="flashcard-side-nav practice-focus-side-nav-next"
+                  className="flashcard-side-nav practice-sentencebuilder-nav-next"
                   onClick={handlePracticeNext}
                   disabled={practiceIdx >= practiceDeck.length - 1}
                   aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
@@ -17708,6 +17771,8 @@ function HomeschoolApp() {
             onAudioMutedChange={setAudioMuted}
             autoPlayNext={autoPlayNext}
             onAutoPlayNextChange={setAutoPlayNext}
+            autoMoveNext={autoMoveNext}
+            onAutoMoveNextChange={setAutoMoveNext}
             wordMeaningPriority={wordMeaningPriority}
             onWordMeaningPriorityChange={setWordMeaningPriority}
             ttsRate={ttsRate}

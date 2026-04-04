@@ -115,6 +115,8 @@
       muteAudio: "Mute Audio",
       autoPlayNext: "Auto-Play Next",
       autoPlayNextHelp: "Automatically play the next prompt when a new practice card opens.",
+      autoMoveNext: "Auto-Move Next",
+      autoMoveNextHelp: "Automatically move to the next practice card after an answer is checked.",
       meaningLookupPriority: "Meaning Lookup Priority",
       meaningLookupPriorityHelp: "Choose whether word meanings should prefer local vocabulary first or try AI first when available.",
       meaningPriorityLocalFirst: "Local first",
@@ -381,6 +383,8 @@
       muteAudio: "\u0622\u0648\u0627\u0632 \u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA",
       autoPlayNext: "\u0627\u06AF\u0644\u0627 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0633\u0646\u0627\u0626\u06CC\u06BA",
       autoPlayNextHelp: "\u0646\u06CC\u0627 \u067E\u0631\u06CC\u06A9\u0679\u0633 \u06A9\u0627\u0631\u0688 \u06A9\u06BE\u0644\u062A\u06D2 \u06C1\u06CC \u0627\u06AF\u0644\u0627 \u067E\u0631\u0627\u0645\u067E\u0679 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0633\u0646\u0627\u0626\u06CC\u06BA\u06D4",
+      autoMoveNext: "\u0627\u06AF\u0644\u0627 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0628\u0691\u06BE\u0627\u0626\u06CC\u06BA",
+      autoMoveNextHelp: "\u062C\u0648\u0627\u0628 \u062C\u0627\u0646\u0686\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0627\u06AF\u0644\u06D2 \u067E\u0631\u06CC\u06A9\u0679\u0633 \u06A9\u0627\u0631\u0688 \u067E\u0631 \u062C\u0627\u0626\u06CC\u06BA\u06D4",
       meaningLookupPriority: "\u0645\u0639\u0646\u06CC \u062A\u0644\u0627\u0634 \u06A9\u06CC \u062A\u0631\u062C\u06CC\u062D",
       meaningLookupPriorityHelp: "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0644\u0641\u0638\u0648\u06BA \u06A9\u06D2 \u0645\u0639\u0646\u06CC \u067E\u06C1\u0644\u06D2 \u0645\u0642\u0627\u0645\u06CC \u0630\u062E\u06CC\u0631\u06C1 \u0627\u0644\u0641\u0627\u0638 \u0633\u06D2 \u0644\u06CC\u06D2 \u062C\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062F\u0633\u062A\u06CC\u0627\u0628 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u067E\u06C1\u0644\u06D2 \u0627\u06D2 \u0622\u0626\u06CC \u0633\u06D2 \u067E\u0648\u0686\u06BE\u0627 \u062C\u0627\u0626\u06D2\u06D4",
       meaningPriorityLocalFirst: "\u067E\u06C1\u0644\u06D2 \u0645\u0642\u0627\u0645\u06CC",
@@ -4638,10 +4642,16 @@ ${marker} `);
   function getPracticeAudioPrompt(card, mode) {
     if (!card) return "";
     if (mode === "dictation") return normalizeText(card == null ? void 0 : card.prompt);
-    if (mode === "fillblanks") return normalizeText((card == null ? void 0 : card.blankSentence) || "").replace("_____", normalizeText((card == null ? void 0 : card.prompt) || ""));
-    if (mode === "typing") return normalizeText((card == null ? void 0 : card.typingTarget) || (card == null ? void 0 : card.prompt) || "");
+    if (mode === "fillblanks") {
+      const blankLabel = (card == null ? void 0 : card.practiceLang) === "ur" ? "\u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1" : "blank";
+      return normalizeText((card == null ? void 0 : card.blankSentence) || "").replace("_____", blankLabel);
+    }
+    if (mode === "typing") return normalizeText(getPracticeTypingClue(card) || (card == null ? void 0 : card.prompt) || "");
     if (mode === "matching" || mode === "timedmatching") return normalizeText((card == null ? void 0 : card.matchPrompt) || (card == null ? void 0 : card.prompt) || "");
-    if (mode === "sentencebuilder") return normalizeText((card == null ? void 0 : card.sentenceBuilderSentence) || "");
+    if (mode === "sentencebuilder") {
+      const tokenPrompt = Array.isArray(card == null ? void 0 : card.sentenceBuilderOptions) ? card.sentenceBuilderOptions.map((token) => normalizeText((token == null ? void 0 : token.text) || "")).filter(Boolean).join(" ") : "";
+      return normalizeText(tokenPrompt || joinLocalizedText("Build the sentence from these words", "\u0627\u0646 \u0627\u0644\u0641\u0627\u0638 \u0633\u06D2 \u062C\u0645\u0644\u06C1 \u0628\u0646\u0627\u0626\u06CC\u06BA", (card == null ? void 0 : card.sentenceBuilderLang) === "ur" ? "ur" : "en"));
+    }
     if (mode === "timedchallenge") return normalizeText((card == null ? void 0 : card.prompt) || "");
     if (mode === "timedquiz") return normalizeText((card == null ? void 0 : card.quizQuestion) || "");
     if (mode === "timedtruefalse") return normalizeText((card == null ? void 0 : card.trueFalseStatement) || "");
@@ -5702,6 +5712,7 @@ ${marker} `);
     const [ttsEnabled, setTtsEnabled] = useState((_h = stored == null ? void 0 : stored.ttsEnabled) != null ? _h : true);
     const [audioMuted, setAudioMuted] = useState(Boolean(stored == null ? void 0 : stored.audioMuted));
     const [autoPlayNext, setAutoPlayNext] = useState(Boolean(stored == null ? void 0 : stored.autoPlayNext));
+    const [autoMoveNext, setAutoMoveNext] = useState(Boolean(stored == null ? void 0 : stored.autoMoveNext));
     const [wordMeaningPriority, setWordMeaningPriority] = useState(normalizeWordMeaningPriority(stored == null ? void 0 : stored.wordMeaningPriority));
     const [ttsRate, setTtsRate] = useState(Math.max(0.6, Math.min(1.3, Number(stored == null ? void 0 : stored.ttsRate) || 0.85)));
     const [availableVoices, setAvailableVoices] = useState([]);
@@ -6822,6 +6833,7 @@ ${marker} `);
         if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
         if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
         if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+        if (typeof storedPreferences.autoMoveNext !== "undefined") setAutoMoveNext(Boolean(storedPreferences.autoMoveNext));
         if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
         if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
         if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
@@ -8371,6 +8383,7 @@ ${marker} `);
               ttsEnabled: nextPayload.ttsEnabled,
               audioMuted: nextPayload.audioMuted,
               autoPlayNext: nextPayload.autoPlayNext,
+              autoMoveNext: nextPayload.autoMoveNext,
               wordMeaningPriority: nextPayload.wordMeaningPriority,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
@@ -8436,6 +8449,7 @@ ${marker} `);
                 ttsEnabled: nextPayload.ttsEnabled,
                 audioMuted: nextPayload.audioMuted,
                 autoPlayNext: nextPayload.autoPlayNext,
+                autoMoveNext: nextPayload.autoMoveNext,
                 wordMeaningPriority: nextPayload.wordMeaningPriority,
                 language: nextPayload.language,
                 themeMode: nextPayload.themeMode,
@@ -8504,6 +8518,7 @@ ${marker} `);
               ttsEnabled: nextPayload.ttsEnabled,
               audioMuted: nextPayload.audioMuted,
               autoPlayNext: nextPayload.autoPlayNext,
+              autoMoveNext: nextPayload.autoMoveNext,
               wordMeaningPriority: nextPayload.wordMeaningPriority,
               language: nextPayload.language,
               themeMode: nextPayload.themeMode,
@@ -8619,6 +8634,7 @@ ${marker} `);
             if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
             if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
             if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+            if (typeof storedPreferences.autoMoveNext !== "undefined") setAutoMoveNext(Boolean(storedPreferences.autoMoveNext));
             if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
             if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
             if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
@@ -9136,9 +9152,9 @@ ${marker} `);
       };
     }, [themeMode]);
     useEffect(() => {
-      window.HomeSchoolPrefs = { ttsEnabled, audioMuted, autoPlayNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled };
+      window.HomeSchoolPrefs = { ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled };
       if (!ttsEnabled || audioMuted) window.speechSynthesis.cancel();
-    }, [ttsEnabled, audioMuted, autoPlayNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled]);
+    }, [ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, language, themeMode, resolvedTheme, ttsRate, ttsVoiceSelections, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled]);
     useEffect(() => {
       const root = document.documentElement;
       if (!root) return;
@@ -9152,6 +9168,7 @@ ${marker} `);
         ttsEnabled,
         audioMuted,
         autoPlayNext,
+        autoMoveNext,
         ttsRate,
         ttsVoiceSelections,
         language,
@@ -9197,10 +9214,10 @@ ${marker} `);
         aiProviderConfigs,
         selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-    }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
+      if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+    }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, supabaseDictionarySync]);
     useEffect(() => {
       setNavHidden(Boolean(navAutoHide));
     }, [navPosition, navAutoHide]);
@@ -10127,6 +10144,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled(nextState.ttsEnabled);
         if (typeof nextState.audioMuted !== "undefined") setAudioMuted(Boolean(nextState.audioMuted));
         if (typeof nextState.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(nextState.autoPlayNext));
+        if (typeof nextState.autoMoveNext !== "undefined") setAutoMoveNext(Boolean(nextState.autoMoveNext));
         if (typeof nextState.ttsRate !== "undefined") setTtsRate(Math.max(0.6, Math.min(1.3, Number(nextState.ttsRate) || 0.85)));
         if (nextState.ttsVoiceSelections) setTtsVoiceSelections({ en: nextState.ttsVoiceSelections.en || "", ur: nextState.ttsVoiceSelections.ur || "" });
         if (typeof nextState.language !== "undefined") setLanguage(nextState.language);
@@ -10214,6 +10232,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
       if (typeof nextState.ttsEnabled !== "undefined") setTtsEnabled((current) => current && nextState.ttsEnabled);
       if (typeof nextState.audioMuted !== "undefined") setAudioMuted((current) => current || Boolean(nextState.audioMuted));
       if (typeof nextState.autoPlayNext !== "undefined") setAutoPlayNext((current) => current || Boolean(nextState.autoPlayNext));
+      if (typeof nextState.autoMoveNext !== "undefined") setAutoMoveNext((current) => current || Boolean(nextState.autoMoveNext));
       if (typeof nextState.ttsRate !== "undefined") setTtsRate((current) => Math.max(current, Math.min(1.3, Number(nextState.ttsRate) || current)));
       if (nextState.ttsVoiceSelections) setTtsVoiceSelections((current) => ({ ...current, ...nextState.ttsVoiceSelections }));
       if (typeof nextState.language !== "undefined") setLanguage((current) => current || nextState.language);
@@ -10319,6 +10338,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
       ttsEnabled,
       audioMuted,
       autoPlayNext,
+      autoMoveNext,
       wordMeaningPriority,
       ttsRate,
       ttsVoiceSelections,
@@ -10349,7 +10369,7 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
       timeTrackingData,
       notificationHistory,
       gamificationState
-    }), [activeStudentProfileId, audioMuted, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
+    }), [activeStudentProfileId, audioMuted, autoMoveNext, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
     const buildBlankProfileAppState = useCallback((profile) => {
       const safeProfile = createStudentProfileDraft(profile);
       return {
@@ -11239,6 +11259,37 @@ ${error.message || error}`);
         practiceAdvanceTimerRef.current = null;
       }, 500);
     }, [practiceDeck, practiceIdx, practiceTimedChoice, practiceTimerFinished, recordPracticeOutcome]);
+    useEffect(() => {
+      if (!autoMoveNext || !practiceMode || practiceDeck.length <= 1) return void 0;
+      const shouldAdvance = practiceMode === "flashcards" && practiceReveal && Boolean(flashcardFeedbackState) || practiceMode === "typing" && Boolean(practiceTypingResult) || practiceMode === "dictation" && Boolean(practiceDictationResult) || practiceMode === "fillblanks" && Boolean(practiceBlankResult) || practiceMode === "sentencebuilder" && Boolean(practiceSentenceResult);
+      if (!shouldAdvance || practiceIdx >= practiceDeck.length - 1) return void 0;
+      if (practiceAdvanceTimerRef.current) {
+        clearTimeout(practiceAdvanceTimerRef.current);
+        practiceAdvanceTimerRef.current = null;
+      }
+      practiceAdvanceTimerRef.current = setTimeout(() => {
+        practiceAdvanceTimerRef.current = null;
+        handlePracticeNext();
+      }, practiceMode === "flashcards" ? 950 : 1300);
+      return () => {
+        if (practiceAdvanceTimerRef.current) {
+          clearTimeout(practiceAdvanceTimerRef.current);
+          practiceAdvanceTimerRef.current = null;
+        }
+      };
+    }, [
+      autoMoveNext,
+      practiceMode,
+      practiceDeck.length,
+      practiceIdx,
+      practiceReveal,
+      flashcardFeedbackState,
+      practiceTypingResult,
+      practiceDictationResult,
+      practiceBlankResult,
+      practiceSentenceResult,
+      handlePracticeNext
+    ]);
     const handleMatchSelection = useCallback((type, item) => {
       if (!practiceMatchRound || practiceMatchRound.completed) return;
       if (type === "prompt") {
@@ -12990,14 +13041,14 @@ ${error.message || error}`);
         className: "review-list-input",
         style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : {}
       }
-    ), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: handleCreateCustomList, disabled: !customListDraft.trim() }, renderLocalizedTextNode(ui.createList, language))), reviewAnalytics.customLists.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "custom-list-grid" }, reviewAnalytics.customLists.map((list) => /* @__PURE__ */ React.createElement("div", { key: list.id, className: "custom-list-card" }, /* @__PURE__ */ React.createElement("div", { className: "custom-list-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", null, list.name), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${list.itemCount} items`, `${list.itemCount} \u0627\u0644\u0641\u0627\u0638`, language), language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => handleDeleteCustomList(list.id) }, renderLocalizedTextNode(ui.deleteList, language))), list.items.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "custom-list-items" }, list.items.slice(0, 6).map((item) => /* @__PURE__ */ React.createElement("span", { key: item.id, className: "custom-list-item-pill" }, item.prompt)), list.items.length > 6 ? /* @__PURE__ */ React.createElement("span", { className: "custom-list-item-pill muted" }, "+", list.items.length - 6) : null) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.noListItems, language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noCustomLists, language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notedWords, language)))), reviewAnalytics.notedWords.length > 0 ? reviewAnalytics.notedWords.slice(0, 6).map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotes, language))))), practiceMode && activePracticeCard && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(`${getPracticeModeMeta(practiceMode, language)} \u2022 ${getPracticeRoundNumber(["matching", "timedmatching"].includes(practiceMode) ? "matching" : practiceMode, practiceIdx)}`, language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activePracticeCard.sectionLabel)), /* @__PURE__ */ React.createElement("div", { className: "study-word-stats", style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.correct} correct`, `${practiceSessionStats.correct} \u062F\u0631\u0633\u062A`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.attempted} attempts`, `${practiceSessionStats.attempted} \u06A9\u0648\u0634\u0634\u06CC\u06BA`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.marksEarned || 0}/${practiceSessionStats.marksPossible || 0} marks`, `${practiceSessionStats.marksEarned || 0}/${practiceSessionStats.marksPossible || 0} \u0646\u0645\u0628\u0631`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceQuestionMarks} marks each`, `\u06C1\u0631 \u0633\u0648\u0627\u0644 ${practiceQuestionMarks} \u0646\u0645\u0628\u0631`, language), language)), /* @__PURE__ */ React.createElement("span", { className: `practice-mastery-chip ${activePracticeMastery.tone}` }, activePracticeMastery.label)), ["timedchallenge", "timedquiz", "timedtruefalse", "timedmatching"].includes(practiceMode) ? /* @__PURE__ */ React.createElement("div", { className: "practice-timer-control" }, /* @__PURE__ */ React.createElement("label", null, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Time per question / set", "\u0641\u06CC \u0633\u0648\u0627\u0644 / \u0633\u06CC\u0679 \u0648\u0642\u062A", language), language)), /* @__PURE__ */ React.createElement("select", { className: "review-list-input", value: activePracticeTimeLimit, onChange: (event) => handlePracticeTimedSettingChange(practiceMode, Number(event.target.value)) }, [15, 30, 45, 60, 90].map((seconds) => /* @__PURE__ */ React.createElement("option", { key: seconds, value: seconds }, seconds, "s"))))) : null, !["flashcards", "typing", "dictation", "fillblanks", "sentencebuilder"].includes(effectivePracticeMode) ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `practice-instruction${isUrduUi(language) ? " urdu" : ""}` }, renderLocalizedTextNode(getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-instruction urdu" }, getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, "ur"))) : null, practiceQuestionPrompt && !["flashcards", "typing", "dictation", "fillblanks", "sentencebuilder"].includes(effectivePracticeMode) ? /* @__PURE__ */ React.createElement("div", { className: "practice-question-stack" }, /* @__PURE__ */ React.createElement("div", { className: `practice-question-bar${isUrduUi(language) ? " urdu" : ""}` }, renderLocalizedTextNode(practiceQuestionPrompt, language)), practiceQuestionPromptUrdu && normalizeText(practiceQuestionPromptUrdu) !== normalizeText(practiceQuestionPrompt) ? /* @__PURE__ */ React.createElement("div", { className: "practice-question-bar urdu" }, practiceQuestionPromptUrdu) : null) : null, /* @__PURE__ */ React.createElement("div", { className: "practice-audio-toolbar" }, /* @__PURE__ */ React.createElement("button", { className: `study-tool-btn compact${audioMuted ? " active" : ""}`, onClick: () => setAudioMuted((current) => !current) }, renderLocalizedTextNode(audioMuted ? joinLocalizedText("Unmute", "\u0622\u0648\u0627\u0632 \u06A9\u06BE\u0648\u0644\u06CC\u06BA", language) : ui.muteAudio, language)), /* @__PURE__ */ React.createElement("button", { className: `study-tool-btn compact${autoPlayNext ? " active" : ""}`, onClick: () => setAutoPlayNext((current) => !current) }, renderLocalizedTextNode(ui.autoPlayNext, language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => {
+    ), /* @__PURE__ */ React.createElement("button", { className: "ghost-cta", onClick: handleCreateCustomList, disabled: !customListDraft.trim() }, renderLocalizedTextNode(ui.createList, language))), reviewAnalytics.customLists.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "custom-list-grid" }, reviewAnalytics.customLists.map((list) => /* @__PURE__ */ React.createElement("div", { key: list.id, className: "custom-list-card" }, /* @__PURE__ */ React.createElement("div", { className: "custom-list-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", null, list.name), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${list.itemCount} items`, `${list.itemCount} \u0627\u0644\u0641\u0627\u0638`, language), language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => handleDeleteCustomList(list.id) }, renderLocalizedTextNode(ui.deleteList, language))), list.items.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "custom-list-items" }, list.items.slice(0, 6).map((item) => /* @__PURE__ */ React.createElement("span", { key: item.id, className: "custom-list-item-pill" }, item.prompt)), list.items.length > 6 ? /* @__PURE__ */ React.createElement("span", { className: "custom-list-item-pill muted" }, "+", list.items.length - 6) : null) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.noListItems, language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noCustomLists, language))), /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notedWords, language)))), reviewAnalytics.notedWords.length > 0 ? reviewAnalytics.notedWords.slice(0, 6).map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotes, language))))), practiceMode && activePracticeCard && /* @__PURE__ */ React.createElement("div", { className: "lesson-detail", style: { direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { className: "lesson-num" }, renderLocalizedTextNode(`${getPracticeModeMeta(practiceMode, language)} \u2022 ${getPracticeRoundNumber(["matching", "timedmatching"].includes(practiceMode) ? "matching" : practiceMode, practiceIdx)}`, language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, activePracticeCard.sectionLabel)), /* @__PURE__ */ React.createElement("div", { className: "study-word-stats", style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.correct} correct`, `${practiceSessionStats.correct} \u062F\u0631\u0633\u062A`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.attempted} attempts`, `${practiceSessionStats.attempted} \u06A9\u0648\u0634\u0634\u06CC\u06BA`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceSessionStats.marksEarned || 0}/${practiceSessionStats.marksPossible || 0} marks`, `${practiceSessionStats.marksEarned || 0}/${practiceSessionStats.marksPossible || 0} \u0646\u0645\u0628\u0631`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${practiceQuestionMarks} marks each`, `\u06C1\u0631 \u0633\u0648\u0627\u0644 ${practiceQuestionMarks} \u0646\u0645\u0628\u0631`, language), language)), /* @__PURE__ */ React.createElement("span", { className: `practice-mastery-chip ${activePracticeMastery.tone}` }, activePracticeMastery.label)), ["timedchallenge", "timedquiz", "timedtruefalse", "timedmatching"].includes(practiceMode) ? /* @__PURE__ */ React.createElement("div", { className: "practice-timer-control" }, /* @__PURE__ */ React.createElement("label", null, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Time per question / set", "\u0641\u06CC \u0633\u0648\u0627\u0644 / \u0633\u06CC\u0679 \u0648\u0642\u062A", language), language)), /* @__PURE__ */ React.createElement("select", { className: "review-list-input", value: activePracticeTimeLimit, onChange: (event) => handlePracticeTimedSettingChange(practiceMode, Number(event.target.value)) }, [15, 30, 45, 60, 90].map((seconds) => /* @__PURE__ */ React.createElement("option", { key: seconds, value: seconds }, seconds, "s"))))) : null, !["flashcards", "typing", "dictation", "fillblanks", "sentencebuilder"].includes(effectivePracticeMode) ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: `practice-instruction${isUrduUi(language) ? " urdu" : ""}` }, renderLocalizedTextNode(getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-instruction urdu" }, getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, "ur"))) : null, practiceQuestionPrompt && !["flashcards", "typing", "dictation", "fillblanks", "sentencebuilder"].includes(effectivePracticeMode) ? /* @__PURE__ */ React.createElement("div", { className: "practice-question-stack" }, /* @__PURE__ */ React.createElement("div", { className: `practice-question-bar${isUrduUi(language) ? " urdu" : ""}` }, renderLocalizedTextNode(practiceQuestionPrompt, language)), practiceQuestionPromptUrdu && normalizeText(practiceQuestionPromptUrdu) !== normalizeText(practiceQuestionPrompt) ? /* @__PURE__ */ React.createElement("div", { className: "practice-question-bar urdu" }, practiceQuestionPromptUrdu) : null) : null, /* @__PURE__ */ React.createElement("div", { className: "practice-audio-toolbar" }, /* @__PURE__ */ React.createElement("button", { className: `study-tool-btn compact${audioMuted ? " active" : ""}`, onClick: () => setAudioMuted((current) => !current) }, renderLocalizedTextNode(audioMuted ? joinLocalizedText("Unmute", "\u0622\u0648\u0627\u0632 \u06A9\u06BE\u0648\u0644\u06CC\u06BA", language) : ui.muteAudio, language)), /* @__PURE__ */ React.createElement("button", { className: `study-tool-btn compact${autoPlayNext ? " active" : ""}`, onClick: () => setAutoPlayNext((current) => !current) }, renderLocalizedTextNode(ui.autoPlayNext, language)), /* @__PURE__ */ React.createElement("button", { className: `study-tool-btn compact${autoMoveNext ? " active" : ""}`, onClick: () => setAutoMoveNext((current) => !current) }, renderLocalizedTextNode(ui.autoMoveNext, language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => {
       var _a2, _b2;
       return (_b2 = (_a2 = window.HomeSchoolUtils) == null ? void 0 : _a2.speakText) == null ? void 0 : _b2.call(_a2, practiceAudioPrompt, containsUrduText(practiceAudioPrompt) ? "ur" : (activePracticeCard == null ? void 0 : activePracticeCard.practiceLang) || "en");
     }, disabled: !practiceAudioPrompt || audioMuted }, renderLocalizedTextNode(joinLocalizedText("Hear Prompt", "\u0627\u0634\u0627\u0631\u06C1 \u0633\u0646\u06CC\u06BA", language), language))), showPracticeBreakNudge ? /* @__PURE__ */ React.createElement("div", { className: "practice-break-nudge" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("You have worked hard. Take a short breath or sip of water, then continue.", "\u0622\u067E \u06A9\u0627\u0641\u06CC \u0645\u062D\u0646\u062A \u06A9\u0631 \u0686\u06A9\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0627\u06CC\u06A9 \u0686\u06BE\u0648\u0679\u0627 \u0633\u0627 \u0648\u0642\u0641\u06C1 \u0644\u06CC\u06BA \u06CC\u0627 \u067E\u0627\u0646\u06CC \u067E\u06CC \u0644\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setPracticeBreakDismissedAt(practiceSessionStats.attempted) }, renderLocalizedTextNode(joinLocalizedText("Keep Going", "\u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA", language), language))) : null, practiceFeedbackText ? /* @__PURE__ */ React.createElement("div", { className: `practice-feedback-panel${practiceFeedbackText && isUrduText(practiceFeedbackText) ? " urdu" : ""}` }, practiceFeedbackText) : null, practiceCelebrationSeed ? /* @__PURE__ */ React.createElement("div", { className: "practice-celebration", key: practiceCelebrationSeed, "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("span", null, "\u{1F338}"), /* @__PURE__ */ React.createElement("span", null, "\u2728"), /* @__PURE__ */ React.createElement("span", null, "\u{1F33C}"), /* @__PURE__ */ React.createElement("span", null, "\u2728"), /* @__PURE__ */ React.createElement("span", null, "\u{1F338}")) : null, effectivePracticeMode === "flashcards" && /* @__PURE__ */ React.createElement("div", { className: "flashcard-stage" }, /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav practice-focus-side-nav-prev",
+        className: "flashcard-side-nav flashcard-shell-nav-prev",
         onClick: handlePracticePrevious,
         disabled: practiceIdx <= 0,
         "aria-label": language === "ur" ? "\u067E\u0686\u06BE\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Previous card",
@@ -13032,7 +13083,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav flashcard-side-nav-next",
+        className: "flashcard-side-nav flashcard-shell-nav-next",
         onClick: handlePracticeNext,
         disabled: practiceIdx >= practiceDeck.length - 1,
         "aria-label": language === "ur" ? "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Next card",
@@ -13043,7 +13094,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav flashcard-side-nav-prev",
+        className: "flashcard-side-nav practice-dictation-nav-prev",
         onClick: handlePracticePrevious,
         disabled: practiceIdx <= 0,
         "aria-label": language === "ur" ? "\u067E\u0686\u06BE\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Previous card",
@@ -13063,7 +13114,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav practice-focus-side-nav-next",
+        className: "flashcard-side-nav practice-dictation-nav-next",
         onClick: handlePracticeNext,
         disabled: practiceIdx >= practiceDeck.length - 1,
         "aria-label": language === "ur" ? "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Next card",
@@ -13074,7 +13125,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav practice-focus-side-nav-prev",
+        className: "flashcard-side-nav practice-typing-nav-prev",
         onClick: handlePracticePrevious,
         disabled: practiceIdx <= 0,
         "aria-label": language === "ur" ? "\u067E\u0686\u06BE\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Previous card",
@@ -13094,7 +13145,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav practice-focus-side-nav-next",
+        className: "flashcard-side-nav practice-typing-nav-next",
         onClick: handlePracticeNext,
         disabled: practiceIdx >= practiceDeck.length - 1,
         "aria-label": language === "ur" ? "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Next card",
@@ -13105,7 +13156,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav practice-focus-side-nav-prev",
+        className: "flashcard-side-nav practice-fillblanks-nav-prev",
         onClick: handlePracticePrevious,
         disabled: practiceIdx <= 0,
         "aria-label": language === "ur" ? "\u067E\u0686\u06BE\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Previous card",
@@ -13134,11 +13185,11 @@ ${error.message || error}`);
         },
         option
       );
-    })), practiceBlankResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceBlankResult}`, style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceBlankResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("The missing word is", "\u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u06A9\u0627 \u0644\u0641\u0638 \u06C1\u06D2", language), language), ": ", activePracticeCard.prompt) : null, practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "practice-answer-clue" }, /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, activePracticeCard.prompt), activePracticeCard.answer ? /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur") }, activePracticeCard.answer) : null) : null), /* @__PURE__ */ React.createElement("div", { className: "practice-card-footer" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => window.HomeSchoolUtils.speakText(activePracticeCard.blankSentence.replace("_____", activePracticeCard.prompt), "en") }, renderLocalizedTextNode(joinLocalizedText("Read Sentence", "\u062C\u0645\u0644\u06C1 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next", "\u0627\u06AF\u0644\u0627", language), language))))), /* @__PURE__ */ React.createElement(
+    })), practiceBlankResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceBlankResult}`, style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceBlankResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("The missing word is", "\u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u06A9\u0627 \u0644\u0641\u0638 \u06C1\u06D2", language), language), ": ", activePracticeCard.prompt) : null, practiceReveal ? /* @__PURE__ */ React.createElement("div", { className: "practice-answer-clue" }, /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt", style: getPracticeTextStyle(activePracticeCard.prompt, {}, activePracticeCard.practiceLang) }, activePracticeCard.prompt), activePracticeCard.answer ? /* @__PURE__ */ React.createElement("div", { className: "study-word-answer", style: getPracticeTextStyle(activePracticeCard.answer, { fontSize: 15 }, activePracticeCard.practiceLang === "ur" ? "en" : "ur") }, activePracticeCard.answer) : null) : null), /* @__PURE__ */ React.createElement("div", { className: "practice-card-footer" }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => window.HomeSchoolUtils.speakText(getPracticeAudioPrompt(activePracticeCard, "fillblanks"), activePracticeCard.practiceLang || "en") }, renderLocalizedTextNode(joinLocalizedText("Read Sentence", "\u062C\u0645\u0644\u06C1 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next", "\u0627\u06AF\u0644\u0627", language), language))))), /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav practice-focus-side-nav-next",
+        className: "flashcard-side-nav practice-fillblanks-nav-next",
         onClick: handlePracticeNext,
         disabled: practiceIdx >= practiceDeck.length - 1,
         "aria-label": language === "ur" ? "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Next card",
@@ -13149,20 +13200,20 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav practice-focus-side-nav-prev",
+        className: "flashcard-side-nav practice-sentencebuilder-nav-prev",
         onClick: handlePracticePrevious,
         disabled: practiceIdx <= 0,
         "aria-label": language === "ur" ? "\u067E\u0686\u06BE\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Previous card",
         title: language === "ur" ? "\u067E\u0686\u06BE\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Previous card"
       },
       /* @__PURE__ */ React.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { d: "M12 18 6 12l6-6", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }), /* @__PURE__ */ React.createElement("path", { d: "M18 18 12 12l6-6", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }))
-    ), /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell practice-card-shell-focus" }, /* @__PURE__ */ React.createElement("div", { className: "flashcard-count-pill" }, practiceIdx + 1, " / ", practiceDeck.length), /* @__PURE__ */ React.createElement("div", { className: `practice-card-face practice-card-face-focus${practiceSentenceResult === "correct" ? " correct" : practiceSentenceResult === "wrong" ? " review" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: `flashcard-card-top${isUrduUi(language) ? " urdu" : ""}` }, renderLocalizedTextNode(joinLocalizedText("Build the sentence", "\u062C\u0645\u0644\u06C1 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-focus-body" }, /* @__PURE__ */ React.createElement("div", { className: `sentence-builder-output${activePracticeCard.sentenceBuilderLang === "ur" ? " urdu" : ""}` }, practiceSentenceSelection.length ? practiceSentenceSelection.map((entry, index) => /* @__PURE__ */ React.createElement("button", { key: `${entry.index}_${index}`, className: "sentence-builder-token selected", onClick: () => handleSentenceSelectionRemove(index) }, entry.text)) : /* @__PURE__ */ React.createElement("span", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Build your sentence here.", "\u0627\u067E\u0646\u0627 \u062C\u0645\u0644\u06C1 \u06CC\u06C1\u0627\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "sentence-builder-bank" }, (activePracticeCard.sentenceBuilderOptions || []).map((token, index) => {
+    ), /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell practice-card-shell-focus" }, /* @__PURE__ */ React.createElement("div", { className: "flashcard-count-pill" }, practiceIdx + 1, " / ", practiceDeck.length), /* @__PURE__ */ React.createElement("div", { className: `practice-card-face practice-card-face-focus${practiceSentenceResult === "correct" ? " correct" : practiceSentenceResult === "wrong" ? " review" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: `flashcard-card-top${isUrduUi(language) ? " urdu" : ""}` }, renderLocalizedTextNode(joinLocalizedText("Build the sentence", "\u062C\u0645\u0644\u06C1 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "practice-focus-body" }, /* @__PURE__ */ React.createElement("div", { className: `sentence-builder-output${activePracticeCard.sentenceBuilderLang === "ur" ? " urdu" : ""}` }, practiceSentenceSelection.length ? practiceSentenceSelection.map((entry, index) => /* @__PURE__ */ React.createElement("button", { key: `${entry.index}_${index}`, className: `sentence-builder-token selected${activePracticeCard.sentenceBuilderLang === "ur" || containsUrduText(entry.text) ? " urdu" : ""}`, onClick: () => handleSentenceSelectionRemove(index) }, entry.text)) : /* @__PURE__ */ React.createElement("span", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Build your sentence here.", "\u0627\u067E\u0646\u0627 \u062C\u0645\u0644\u06C1 \u06CC\u06C1\u0627\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "sentence-builder-bank" }, (activePracticeCard.sentenceBuilderOptions || []).map((token, index) => {
       const selected = practiceSentenceSelection.some((entry) => entry.index === index);
       return /* @__PURE__ */ React.createElement(
         "button",
         {
           key: token.id || `${token.text}_${index}`,
-          className: `sentence-builder-token${selected ? " used" : ""}`,
+          className: `sentence-builder-token${selected ? " used" : ""}${activePracticeCard.sentenceBuilderLang === "ur" || containsUrduText(token.text) ? " urdu" : ""}`,
           disabled: selected || practiceReveal,
           onClick: () => handleSentenceTokenToggle(token.text, index)
         },
@@ -13172,7 +13223,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "flashcard-side-nav practice-focus-side-nav-next",
+        className: "flashcard-side-nav practice-sentencebuilder-nav-next",
         onClick: handlePracticeNext,
         disabled: practiceIdx >= practiceDeck.length - 1,
         "aria-label": language === "ur" ? "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0631\u0688" : "Next card",
@@ -13481,6 +13532,8 @@ ${error.message || error}`);
         onAudioMutedChange: setAudioMuted,
         autoPlayNext,
         onAutoPlayNextChange: setAutoPlayNext,
+        autoMoveNext,
+        onAutoMoveNextChange: setAutoMoveNext,
         wordMeaningPriority,
         onWordMeaningPriorityChange: setWordMeaningPriority,
         ttsRate,
