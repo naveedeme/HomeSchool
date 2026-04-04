@@ -15713,7 +15713,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
   };
   const goBack = () => { window.speechSynthesis.cancel(); clearQuizAdvanceTimeout(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (tab === "review" && (activeReviewCard || reviewSessionDone)) { restoreReviewReturnSnapshot(); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizElapsedMs([]); setQuizIdx(0); setQuizTimerRemaining(activeSubjectQuizTimeLimit); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" || tab === "favorites" || tab === "badges" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "tutor" ? ui.tutor : ui.settings;
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" || tab === "favorites" || tab === "badges" ? ui.progress : tab === "review" ? ui.review : tab === "tutor" ? ui.tutor : ui.settings;
   const reviewReturnLabel = reviewReturnState?.tab === "review"
     ? ui.review
     : reviewReturnState?.tab === "profiles"
@@ -15723,7 +15723,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         : reviewReturnState?.tab === "progress"
           ? ui.progress
           : reviewReturnState?.tab === "favorites" || reviewReturnState?.tab === "badges"
-            ? joinLocalizedText("Profiles", "پروفائلز", language)
+            ? ui.progress
             : reviewReturnState?.tab === "tutor"
               ? ui.tutor
               : ui.home;
@@ -15794,15 +15794,15 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       return;
     }
     if (nextTab === "favorites") {
-      setProfilesSectionTab("favorites");
-      setTab("profiles");
+    setProgressSectionTab("favorites");
+    setTab("progress");
       setNavHidden(Boolean(navAutoHide));
       setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
       return;
     }
     if (nextTab === "badges") {
-      setProfilesSectionTab("badges");
-      setTab("profiles");
+    setProgressSectionTab("badges");
+    setTab("progress");
       setNavHidden(Boolean(navAutoHide));
       setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
       return;
@@ -16622,12 +16622,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <button type="button" className={`review-section-tab${profilesSectionTab === "library" ? " active" : ""}`} onClick={() => setProfilesSectionTab("library")}>
             {renderLocalizedTextNode(joinLocalizedText("Published", "شائع شدہ", language), language)}
           </button>
-          <button type="button" className={`review-section-tab${profilesSectionTab === "favorites" ? " active" : ""}`} onClick={() => setProfilesSectionTab("favorites")}>
-            {renderLocalizedTextNode(ui.favorites, language)}
-          </button>
-          <button type="button" className={`review-section-tab${profilesSectionTab === "badges" ? " active" : ""}`} onClick={() => setProfilesSectionTab("badges")}>
-            {renderLocalizedTextNode(ui.badges, language)}
-          </button>
           <button type="button" className={`review-section-tab${profilesSectionTab === "cloud" ? " active" : ""}`} onClick={() => setProfilesSectionTab("cloud")}>
             {renderLocalizedTextNode(joinLocalizedText("Cloud Sync", "کلاؤڈ سنک", language), language)}
           </button>
@@ -16879,71 +16873,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No published chapters match this filter yet.", "ابھی اس فلٹر کے مطابق کوئی شائع شدہ باب نہیں ملا۔", language), language)}</p>
             </div>
           )}
-        </>
-        ) : null}
-        {profilesSectionTab === "favorites" ? (
-        <>
-          <div className="review-panel" style={{ marginTop: 16, marginBottom: 18 }}>
-            <div className="review-panel-head">
-              <div>
-                <h3>{renderLocalizedTextNode(ui.favoriteWords, language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "آپ کے ستارہ لگائے گئے آئٹمز یہاں مضمون وار ترتیب سے رکھے گئے ہیں تاکہ آپ فوراً واپس جا سکیں۔", language), language)}</p>
-              </div>
-            </div>
-            <div className="stat-grid">
-              <div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.favoriteWords, language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">📘</div><div className="stat-value">{formatNumberLabel(favoriteSubjectGroups.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</div></div>
-            </div>
-          </div>
-          {favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => (
-            <div key={group.subjectId} className="review-panel" style={{ marginBottom: 18 }}>
-              <div className="review-panel-head">
-                <div>
-                  <h3>{renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "عمومی", language), language)}</h3>
-                  <p>{renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} محفوظ پسندیدہ آئٹمز`, language), language)}</p>
-                </div>
-              </div>
-              <div className="study-word-grid">
-                {group.cards.map((card) => <StudyWordCard key={card.id} card={card} showStats={false} allowView={true} />)}
-              </div>
-            </div>
-          )) : (
-            <div className="review-panel">
-              <p className="empty-state">{renderLocalizedTextNode(ui.noFavorites, language)}</p>
-            </div>
-          )}
-        </>
-        ) : null}
-        {profilesSectionTab === "badges" ? (
-        <>
-          <div className="review-panel" style={{ marginTop: 16, marginBottom: 18 }}>
-            <div className="review-panel-head">
-              <div>
-                <h3>{renderLocalizedTextNode(joinLocalizedText("Milestones & Momentum", "سنگِ میل اور رفتار", language), language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText("Track challenge wins, perfect days, and the next target worth chasing.", "اپنے روزانہ چیلنج، پرفیکٹ ڈیز، اور اگلے اہم ہدف کو یہاں دیکھیں۔", language), language)}</p>
-              </div>
-            </div>
-            <div className="stat-grid">
-              <div className="stat-card"><div className="stat-icon">🌟</div><div className="stat-value">{formatNumberLabel(perfectDayCount)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Perfect Days", "پرفیکٹ ڈیز", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">🎉</div><div className="stat-value">{formatNumberLabel((gamificationState.celebrationHistory || []).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Celebrations", "خوشیوں کے لمحات", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">✨</div><div className="stat-value">{nextXpMilestone ? formatNumberLabel(nextXpMilestone) : renderLocalizedTextNode(joinLocalizedText("Max", "مکمل", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Next XP Target", "اگلا ایکس پی ہدف", language), language)}</div></div>
-            </div>
-            {(gamificationState.celebrationHistory || []).length > 0 ? (
-              <div className="milestone-history-list">
-                {(gamificationState.celebrationHistory || []).slice(0, 4).map((entry) => (
-                  <div key={entry.key} className="milestone-history-item">
-                    <span className="milestone-history-icon" aria-hidden="true">{entry.icon}</span>
-                    <div>
-                      <strong>{renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)}</strong>
-                      <p>{renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div style={{ textAlign: "center", marginBottom: 20 }}><p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{earnedBadges.length} of {BADGES.length} badges earned</p></div>
-          <div className="badge-grid">{BADGES.map(b => <div key={b.id} className={"badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked")}><div className="badge-big-icon">{b.icon}</div><h4>{b.name}</h4><p>{b.desc}</p></div>)}</div>
         </>
         ) : null}
         {profilesSectionTab === "cloud" ? (
@@ -17911,6 +17840,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <button type="button" className={`review-section-tab${progressSectionTab === "subjects" ? " active" : ""}`} onClick={() => setProgressSectionTab("subjects")}>
             {renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}
           </button>
+          <button type="button" className={`review-section-tab${progressSectionTab === "favorites" ? " active" : ""}`} onClick={() => setProgressSectionTab("favorites")}>
+            {renderLocalizedTextNode(ui.favorites, language)}
+          </button>
+          <button type="button" className={`review-section-tab${progressSectionTab === "badges" ? " active" : ""}`} onClick={() => setProgressSectionTab("badges")}>
+            {renderLocalizedTextNode(ui.badges, language)}
+          </button>
           <button type="button" className={`review-section-tab${progressSectionTab === "timetracking" ? " active" : ""}`} onClick={() => setProgressSectionTab("timetracking")}>
             {renderLocalizedTextNode(joinLocalizedText("Time & Attendance", "وقت اور حاضری", language), language)}
           </button>
@@ -17934,6 +17869,69 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           {progressSectionTab === "subjects" && <>
             <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subject Progress", "مضامین کی پیش رفت", language), language)}</h3>
 {SUBJECTS.map(subj => { const ls = getMergedLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round((done / ls.length) * 100) : 0; return (<div key={subj.id} className="progress-bar-container"><div className="progress-bar-label"><span>{subj.icon} {subj.name}</span><span style={{ color: "var(--text-muted)" }}>{done}/{ls.length}</span></div><div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: pct + "%", background: subj.color }} /></div></div>); })}
+          </>}
+
+          {progressSectionTab === "favorites" && <>
+            <div className="review-panel" style={{ marginTop: 0, marginBottom: 18 }}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(ui.favoriteWords, language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "آپ کے ستارہ لگائے گئے آئٹمز یہاں مضمون وار ترتیب سے رکھے گئے ہیں تاکہ آپ فوراً واپس جا سکیں۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="stat-grid">
+                <div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.favoriteWords, language)}</div></div>
+                <div className="stat-card"><div className="stat-icon">📘</div><div className="stat-value">{formatNumberLabel(favoriteSubjectGroups.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</div></div>
+              </div>
+            </div>
+            {favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => (
+              <div key={group.subjectId} className="review-panel" style={{ marginBottom: 18 }}>
+                <div className="review-panel-head">
+                  <div>
+                    <h3>{renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "عمومی", language), language)}</h3>
+                    <p>{renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} محفوظ پسندیدہ آئٹمز`, language), language)}</p>
+                  </div>
+                </div>
+                <div className="study-word-grid">
+                  {group.cards.map((card) => <StudyWordCard key={card.id} card={card} showStats={false} allowView={true} />)}
+                </div>
+              </div>
+            )) : (
+              <div className="review-panel">
+                <p className="empty-state">{renderLocalizedTextNode(ui.noFavorites, language)}</p>
+              </div>
+            )}
+          </>}
+
+          {progressSectionTab === "badges" && <>
+            <div className="review-panel" style={{ marginTop: 0, marginBottom: 18 }}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Milestones & Momentum", "سنگِ میل اور رفتار", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Track challenge wins, perfect days, and the next target worth chasing.", "اپنے روزانہ چیلنج، پرفیکٹ ڈیز، اور اگلے اہم ہدف کو یہاں دیکھیں۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="stat-grid">
+                <div className="stat-card"><div className="stat-icon">🌟</div><div className="stat-value">{formatNumberLabel(perfectDayCount)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Perfect Days", "پرفیکٹ ڈیز", language), language)}</div></div>
+                <div className="stat-card"><div className="stat-icon">🎉</div><div className="stat-value">{formatNumberLabel((gamificationState.celebrationHistory || []).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Celebrations", "خوشیوں کے لمحات", language), language)}</div></div>
+                <div className="stat-card"><div className="stat-icon">✨</div><div className="stat-value">{nextXpMilestone ? formatNumberLabel(nextXpMilestone) : renderLocalizedTextNode(joinLocalizedText("Max", "مکمل", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Next XP Target", "اگلا ایکس پی ہدف", language), language)}</div></div>
+              </div>
+              {(gamificationState.celebrationHistory || []).length > 0 ? (
+                <div className="milestone-history-list">
+                  {(gamificationState.celebrationHistory || []).slice(0, 4).map((entry) => (
+                    <div key={entry.key} className="milestone-history-item">
+                      <span className="milestone-history-icon" aria-hidden="true">{entry.icon}</span>
+                      <div>
+                        <strong>{renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)}</strong>
+                        <p>{renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div style={{ textAlign: "center", marginBottom: 20 }}><p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{earnedBadges.length} of {BADGES.length} badges earned</p></div>
+            <div className="badge-grid">{BADGES.map(b => <div key={b.id} className={"badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked")}><div className="badge-big-icon">{b.icon}</div><h4>{b.name}</h4><p>{b.desc}</p></div>)}</div>
           </>}
 
           {progressSectionTab === "timetracking" && <div className="review-panel" style={{ marginTop: 0 }}>
@@ -19160,37 +19158,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">🧠</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => restoreReviewReturnSnapshot()}>{renderLocalizedTextNode(reviewReturnLabel, language)}</button><button className="next-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
       </>)}
 
-      {tab === "badges" && (<>
-        <div className="review-panel" style={{ marginBottom: 18 }}>
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(joinLocalizedText("Milestones & Momentum", "سنگِ میل اور رفتار", language), language)}</h3>
-              <p>{renderLocalizedTextNode(joinLocalizedText("Track challenge wins, perfect days, and the next target worth chasing.", "اپنے روزانہ چیلنج، پرفیکٹ ڈیز، اور اگلے اہم ہدف کو یہاں دیکھیں۔", language), language)}</p>
-            </div>
-          </div>
-          <div className="stat-grid">
-            <div className="stat-card"><div className="stat-icon">🌟</div><div className="stat-value">{formatNumberLabel(perfectDayCount)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Perfect Days", "پرفیکٹ ڈیز", language), language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">🎉</div><div className="stat-value">{formatNumberLabel((gamificationState.celebrationHistory || []).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Celebrations", "خوشیوں کے لمحات", language), language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">✨</div><div className="stat-value">{nextXpMilestone ? formatNumberLabel(nextXpMilestone) : renderLocalizedTextNode(joinLocalizedText("Max", "مکمل", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Next XP Target", "اگلا ایکس پی ہدف", language), language)}</div></div>
-          </div>
-          {(gamificationState.celebrationHistory || []).length > 0 ? (
-            <div className="milestone-history-list">
-              {(gamificationState.celebrationHistory || []).slice(0, 4).map((entry) => (
-                <div key={entry.key} className="milestone-history-item">
-                  <span className="milestone-history-icon" aria-hidden="true">{entry.icon}</span>
-                  <div>
-                    <strong>{renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)}</strong>
-                    <p>{renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <div style={{ textAlign: "center", marginBottom: 20 }}><p style={{ fontSize: 14, color: "var(--text-secondary)" }}>{earnedBadges.length} of {BADGES.length} badges earned</p></div>
-        <div className="badge-grid">{BADGES.map(b => <div key={b.id} className={"badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked")}><div className="badge-big-icon">{b.icon}</div><h4>{b.name}</h4><p>{b.desc}</p></div>)}</div>
-      </>)}
-
       {tab === "tutor" && (<>
         <div className="tutor-shell">
           <aside className="tutor-sidebar" data-ui-language={language}>
@@ -19323,37 +19290,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "favorites" && (<>
-        <div className="review-panel" style={{ marginBottom: 18 }}>
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(ui.favoriteWords, language)}</h3>
-              <p>{renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "آپ کے ستارہ لگائے گئے آئٹمز یہاں مضمون وار ترتیب سے رکھے گئے ہیں تاکہ آپ فوراً واپس جا سکیں۔", language), language)}</p>
-            </div>
-          </div>
-          <div className="stat-grid">
-            <div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.favoriteWords, language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">📘</div><div className="stat-value">{formatNumberLabel(favoriteSubjectGroups.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</div></div>
-          </div>
-        </div>
-        {favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => (
-          <div key={group.subjectId} className="review-panel" style={{ marginBottom: 18 }}>
-            <div className="review-panel-head">
-              <div>
-                <h3>{renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "عمومی", language), language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} محفوظ پسندیدہ آئٹمز`, language), language)}</p>
-              </div>
-            </div>
-            <div className="study-word-grid">
-              {group.cards.map((card) => <StudyWordCard key={card.id} card={card} showStats={false} allowView={true} />)}
-            </div>
-          </div>
-        )) : (
-          <div className="review-panel">
-            <p className="empty-state">{renderLocalizedTextNode(ui.noFavorites, language)}</p>
-          </div>
-        )}
-      </>)}
       {tab === "settings" && (<>
         <div className={`settings-disclosure${profileDisclosureOpen ? " open" : ""}`} data-transition-mode={transitionMode}>
           <button
