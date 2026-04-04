@@ -12190,29 +12190,36 @@ ${error.message || error}`);
     })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 12 } }, renderLocalizedTextNode(ui.noWordResults, language)))), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} \u062F\u0646 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644!`, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "\u0627\u0633\u06CC \u0637\u0631\u062D \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u0622\u067E \u0628\u06C1\u062A \u0627\u0686\u06BE\u0627 \u06A9\u0631 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA!", language), language))))), tab === "dictionary" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Local Dictionary", "\u0645\u0642\u0627\u0645\u06CC \u0644\u063A\u062A", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Browse, edit, trust, restore, and batch-build the bilingual dictionary that now grows with your study.", "\u0627\u0633 \u062F\u0648 \u0644\u0633\u0627\u0646\u06CC \u0644\u063A\u062A \u06A9\u0648 \u0628\u0631\u0627\u0624\u0632\u060C \u062A\u0631\u0645\u06CC\u0645\u060C \u0645\u0639\u062A\u0628\u0631\u060C \u0628\u062D\u0627\u0644\u060C \u0627\u0648\u0631 \u0628\u06CC\u0686 \u0645\u06CC\u06BA \u062A\u06CC\u0627\u0631 \u06A9\u0631\u06CC\u06BA \u062C\u0648 \u0627\u0628 \u0622\u067E \u06A9\u06CC \u067E\u0691\u06BE\u0627\u0626\u06CC \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0628\u0691\u06BE\u062A\u06CC \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "dictionary-stat-strip" }, /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.total} active`, `${dictionaryStats.total} \u0641\u0639\u0627\u0644`, language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, renderLocalizedTextNode(joinLocalizedText(`${dictionaryStats.deleted} deleted`, `${dictionaryStats.deleted} \u062D\u0630\u0641`, language), language)), /* @__PURE__ */ React.createElement("span", { className: "grade-tag", style: { marginTop: 0 } }, renderLocalizedTextNode(joinLocalizedText(`${supabaseSyncActivity.dictionaryPendingCount || 0} pending`, `${supabaseSyncActivity.dictionaryPendingCount || 0} \u0645\u0646\u062A\u0638\u0631`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "dictionary-browser-controls" }, /* @__PURE__ */ React.createElement(
       "input",
       {
-        className: "review-list-input",
+        className: `review-list-input dictionary-search-input${isUrduUi(language) || containsUrduText(dictionarySearch) ? " urdu" : ""}`,
         value: dictionarySearch,
         onChange: (event) => setDictionarySearch(event.target.value),
-        placeholder: renderLocalizedTextNode(joinLocalizedText("Search the dictionary", "\u0644\u063A\u062A \u0645\u06CC\u06BA \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA", language), language),
-        style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null
+        placeholder: renderLocalizedTextNode(joinLocalizedText("Search the dictionary", "\u0644\u063A\u062A \u0645\u06CC\u06BA \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA", language), language)
       }
-    ), normalizeText(dictionarySearch) ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-dropdown" }, dictionarySuggestionEntries.map((entry) => {
-      var _a2;
+    ), normalizeText(dictionarySearch) ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-dropdown", "data-ui-language": language }, dictionarySuggestionEntries.map((entry) => {
+      var _a2, _b2;
       const entryMeta = dictionaryMetaLookup[entry.normalizedWord] || {};
       const origins = new Set([...entry.origins || [], ...entry.sources || [], entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+      const suggestionHasUrdu = containsUrduText([
+        entry.word,
+        entry.meaningUr,
+        ...entry.meaningsUr || [],
+        entry.explanationUr
+      ].join(" "));
+      const suggestionWordIsUrdu = containsUrduText(entry.word || entry.normalizedWord || "");
+      const suggestionMetaIsUrdu = containsUrduText(((_a2 = entryMeta.lessonLabels) == null ? void 0 : _a2[0]) || "");
       const sourceLabel = entry.suggestionKind === "ai" ? joinLocalizedText("AI result", "AI \u0646\u062A\u06CC\u062C\u06C1", language) : origins.has("curriculum") ? joinLocalizedText("Curriculum", "\u06A9\u0631\u06CC\u06A9\u0648\u0644\u0645", language) : origins.has("imported") ? joinLocalizedText("Imported", "\u062F\u0631\u0622\u0645\u062F \u0634\u062F\u06C1", language) : origins.has("trusted") ? joinLocalizedText("Trusted", "\u0642\u0627\u0628\u0644\u0650 \u0627\u0639\u062A\u0645\u0627\u062F", language) : origins.has("weak") ? joinLocalizedText("Needs review", "\u062C\u0627\u0626\u0632\u06C1 \u062F\u0631\u06A9\u0627\u0631", language) : origins.has("ai") || origins.has("gemini") ? "AI" : joinLocalizedText("Dictionary", "\u0644\u063A\u062A", language);
       return /* @__PURE__ */ React.createElement(
         "button",
         {
           key: `dictionary_suggestion_${entry.normalizedWord}_${entry.suggestionKind || "local"}`,
           type: "button",
-          className: "dictionary-search-suggestion",
+          className: `dictionary-search-suggestion${isUrduUi(language) ? " ui-ur" : ""}${suggestionHasUrdu ? " has-urdu" : ""}${suggestionWordIsUrdu ? " word-ur" : ""}`,
           onClick: () => setDictionarySearch(entry.word || entry.normalizedWord || "")
         },
-        /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.word || entry.normalizedWord), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(sourceLabel, language))),
+        /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-head" }, /* @__PURE__ */ React.createElement("strong", { className: `dictionary-search-suggestion-word${suggestionWordIsUrdu ? " urdu-copy" : ""}` }, entry.word || entry.normalizedWord), /* @__PURE__ */ React.createElement("span", { className: `dictionary-search-suggestion-source${isUrduUi(language) ? " urdu-copy" : ""}` }, renderLocalizedTextNode(sourceLabel, language))),
         (entry.meaningsUr || []).length ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-meanings urdu-copy" }, (entry.meaningsUr || []).slice(0, 3).map((meaning, index) => /* @__PURE__ */ React.createElement("div", { key: `dictionary_suggestion_meaning_${entry.normalizedWord}_${index}` }, index + 1, ". ", meaning))) : entry.meaningUr ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-meanings urdu-copy" }, /* @__PURE__ */ React.createElement("div", null, entry.meaningUr)) : null,
         entry.explanationUr ? /* @__PURE__ */ React.createElement("p", { className: "dictionary-search-suggestion-explanation urdu-copy" }, entry.explanationUr) : null,
-        ((_a2 = entryMeta.lessonLabels) == null ? void 0 : _a2.length) ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-suggestion-meta" }, renderLocalizedTextNode(entryMeta.lessonLabels[0], language)) : null
+        ((_b2 = entryMeta.lessonLabels) == null ? void 0 : _b2.length) ? /* @__PURE__ */ React.createElement("div", { className: `dictionary-search-suggestion-meta${suggestionMetaIsUrdu ? " urdu-copy" : ""}` }, renderLocalizedTextNode(entryMeta.lessonLabels[0], language)) : null
       );
     }), !dictionarySuggestionEntries.length && dictionaryAiSearchState.loading ? /* @__PURE__ */ React.createElement("div", { className: "dictionary-search-feedback" }, renderLocalizedTextNode(
       joinLocalizedText(

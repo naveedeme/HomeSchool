@@ -539,17 +539,26 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .word-bank-shell{margin-top:16px;padding-top:4px}
 .dictionary-browser-shell{margin-top:18px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
 .dictionary-browser-controls{display:flex;flex-direction:column;gap:10px}
+.dictionary-search-input{font-family:var(--font);direction:ltr;text-align:left}
+.dictionary-search-input.urdu{font-family:var(--font-ur);direction:rtl;text-align:right;line-height:1.9}
 .dictionary-search-dropdown{display:flex;flex-direction:column;gap:8px;margin-top:-2px;padding:10px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent) 18%,var(--border));background:color-mix(in srgb,var(--bg-card) 94%,var(--bg-elevated));box-shadow:0 14px 28px color-mix(in srgb,var(--bg-primary) 12%,transparent)}
 .dictionary-search-suggestion{width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--border);background:color-mix(in srgb,var(--bg-card) 90%,var(--bg-elevated));color:var(--text-primary);text-align:left;cursor:pointer;transition:border-color .18s ease,transform .16s ease,background .18s ease}
 .dictionary-search-suggestion:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 28%,var(--border));background:color-mix(in srgb,var(--accent) 7%,var(--bg-card))}
 .dictionary-search-suggestion-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.dictionary-search-suggestion-head strong{font-size:14px;line-height:1.25}
-.dictionary-search-suggestion-head span{font-size:11px;font-weight:800;color:var(--accent);white-space:nowrap}
+.dictionary-search-suggestion-word{font-size:14px;line-height:1.25;font-family:var(--font)}
+.dictionary-search-suggestion-source{font-size:11px;font-weight:800;color:var(--accent);white-space:nowrap}
 .dictionary-search-suggestion-meanings{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:13px;line-height:1.8}
 .dictionary-search-suggestion-explanation{margin-top:8px;font-size:12px;line-height:1.8;color:var(--text-secondary)}
 .dictionary-search-suggestion-meta{margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5}
 .dictionary-search-feedback{padding:12px 14px;border-radius:14px;border:1px dashed color-mix(in srgb,var(--accent) 24%,var(--border));background:color-mix(in srgb,var(--accent) 6%,var(--bg-card));color:var(--text-secondary);font-size:12px;line-height:1.6}
 .dictionary-search-feedback.error{border-color:color-mix(in srgb,var(--danger) 28%,var(--border));background:color-mix(in srgb,var(--danger) 8%,var(--bg-card));color:var(--danger)}
+.dictionary-search-dropdown[data-ui-language="ur"] .dictionary-search-feedback{direction:rtl;text-align:right;font-family:var(--font-ur);line-height:1.9}
+.dictionary-search-suggestion.ui-ur{direction:rtl;text-align:right}
+.dictionary-search-suggestion.ui-ur .dictionary-search-suggestion-head{flex-direction:row-reverse}
+.dictionary-search-suggestion.ui-ur .dictionary-search-suggestion-source{white-space:normal;text-align:right}
+.dictionary-search-suggestion.word-ur .dictionary-search-suggestion-word{font-family:var(--font-ur);direction:rtl;text-align:right;line-height:1.7}
+.dictionary-search-suggestion.has-urdu .dictionary-search-suggestion-meanings,
+.dictionary-search-suggestion.has-urdu .dictionary-search-suggestion-explanation{font-family:var(--font-ur)}
 .dictionary-toolbar-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .dictionary-select{
 min-width:220px;

@@ -14603,17 +14603,24 @@ function HomeschoolApp() {
           </div>
           <div className="dictionary-browser-controls">
             <input
-              className="review-list-input"
+              className={`review-list-input dictionary-search-input${(isUrduUi(language) || containsUrduText(dictionarySearch)) ? " urdu" : ""}`}
               value={dictionarySearch}
               onChange={(event) => setDictionarySearch(event.target.value)}
               placeholder={renderLocalizedTextNode(joinLocalizedText("Search the dictionary", "لغت میں تلاش کریں", language), language)}
-              style={isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null}
             />
             {normalizeText(dictionarySearch) ? (
-              <div className="dictionary-search-dropdown">
+              <div className="dictionary-search-dropdown" data-ui-language={language}>
                 {dictionarySuggestionEntries.map((entry) => {
                   const entryMeta = dictionaryMetaLookup[entry.normalizedWord] || {};
                   const origins = new Set([...(entry.origins || []), ...(entry.sources || []), entry.source].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+                  const suggestionHasUrdu = containsUrduText([
+                    entry.word,
+                    entry.meaningUr,
+                    ...(entry.meaningsUr || []),
+                    entry.explanationUr,
+                  ].join(" "));
+                  const suggestionWordIsUrdu = containsUrduText(entry.word || entry.normalizedWord || "");
+                  const suggestionMetaIsUrdu = containsUrduText(entryMeta.lessonLabels?.[0] || "");
                   const sourceLabel = entry.suggestionKind === "ai"
                     ? joinLocalizedText("AI result", "AI نتیجہ", language)
                     : origins.has("curriculum")
@@ -14631,12 +14638,12 @@ function HomeschoolApp() {
                     <button
                       key={`dictionary_suggestion_${entry.normalizedWord}_${entry.suggestionKind || "local"}`}
                       type="button"
-                      className="dictionary-search-suggestion"
+                      className={`dictionary-search-suggestion${isUrduUi(language) ? " ui-ur" : ""}${suggestionHasUrdu ? " has-urdu" : ""}${suggestionWordIsUrdu ? " word-ur" : ""}`}
                       onClick={() => setDictionarySearch(entry.word || entry.normalizedWord || "")}
                     >
                       <div className="dictionary-search-suggestion-head">
-                        <strong>{entry.word || entry.normalizedWord}</strong>
-                        <span>{renderLocalizedTextNode(sourceLabel, language)}</span>
+                        <strong className={`dictionary-search-suggestion-word${suggestionWordIsUrdu ? " urdu-copy" : ""}`}>{entry.word || entry.normalizedWord}</strong>
+                        <span className={`dictionary-search-suggestion-source${isUrduUi(language) ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(sourceLabel, language)}</span>
                       </div>
                       {(entry.meaningsUr || []).length ? (
                         <div className="dictionary-search-suggestion-meanings urdu-copy">
@@ -14650,7 +14657,7 @@ function HomeschoolApp() {
                         </div>
                       ) : null}
                       {entry.explanationUr ? <p className="dictionary-search-suggestion-explanation urdu-copy">{entry.explanationUr}</p> : null}
-                      {entryMeta.lessonLabels?.length ? <div className="dictionary-search-suggestion-meta">{renderLocalizedTextNode(entryMeta.lessonLabels[0], language)}</div> : null}
+                      {entryMeta.lessonLabels?.length ? <div className={`dictionary-search-suggestion-meta${suggestionMetaIsUrdu ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(entryMeta.lessonLabels[0], language)}</div> : null}
                     </button>
                   );
                 })}
