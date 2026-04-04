@@ -6134,10 +6134,11 @@ function buildInterleavedDeck(library = [], limit = 12) {
 
 function getPracticeFeedbackText(card, mode, correct, language = "en") {
   if (!card) return "";
+  if (mode === "flashcards") return "";
   const answer = getPracticeFlashBack(card) || card?.prompt || "";
   const clue = card?.quizQuestion || card?.trueFalseStatement || getPracticeFlashFront(card);
   if (correct) {
-    return joinLocalizedText(`Nice work. ${answer}`, `بہت خوب۔ ${answer}`, language);
+    return "";
   }
   if (mode === "timedtruefalse") {
     const verdict = card?.trueFalseAnswer ? joinLocalizedText("True", "درست", language) : joinLocalizedText("False", "غلط", language);
@@ -6830,6 +6831,7 @@ function WordCollectionToolbar({ card, compact = false, allowView = false, iconO
   if (!card || !app?.onToggleFavorite) return null;
   const supportsLists = card.reviewBacked !== false;
   const canViewSource = allowView && Boolean(app?.onViewStudyItem);
+  const noteLooksUrdu = isUrduUi(language) || containsUrduText(draftNote || "");
 
   const buttonClass = `study-tool-btn${compact ? " compact" : ""}${card.favorite ? " active" : ""}${iconOnly ? " icon-only" : ""}`;
   const wrapperClass = `study-tools${compact ? " compact" : ""}${inline ? " inline" : ""}`;
@@ -6900,29 +6902,75 @@ function WordCollectionToolbar({ card, compact = false, allowView = false, iconO
       )}
 
       {showNoteEditor && (
-        <div className="study-note-editor">
-          <textarea
-            value={draftNote}
-            onChange={(event) => setDraftNote(event.target.value)}
-            placeholder={language === "ur" ? UI_TEXT.ur.notePlaceholder : UI_TEXT.en.notePlaceholder}
-            style={isUrduUi(language) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : {}}
-          />
-          <div className="study-note-actions">
-            <button
-              type="button"
-              className="study-tool-btn save"
-              onClick={async (event) => {
-                event.stopPropagation();
-                if (card.reviewBacked === false) {
-                  await app.onSaveStudyNote?.(card, draftNote);
-                } else {
-                  await app.onSaveWordNote?.(card.id, draftNote);
-                }
-                setShowNoteEditor(false);
-              }}
-            >
-              {renderLocalizedTextNode(joinLocalizedText(UI_TEXT.en.saveNote, UI_TEXT.ur.saveNote, language), language)}
-            </button>
+        <div
+          className="study-note-overlay"
+          onClick={(event) => {
+            event.stopPropagation();
+            setShowNoteEditor(false);
+          }}
+        >
+          <div
+            className="study-note-dialog"
+            onClick={(event) => event.stopPropagation()}
+            style={noteLooksUrdu ? { direction: "rtl", textAlign: "right" } : {}}
+          >
+            <div className="study-note-dialog-head">
+              <div>
+                <strong>{renderLocalizedTextNode(joinLocalizedText(UI_TEXT.en.addNote, UI_TEXT.ur.addNote, language), language)}</strong>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Keep a clear note for this word or sentence.", "اس لفظ یا جملے کے لیے ایک واضح نوٹ محفوظ کریں۔", language), language)}</p>
+              </div>
+              <button
+                type="button"
+                className="study-note-close"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShowNoteEditor(false);
+                }}
+                aria-label={language === "ur" ? "بند کریں" : "Close"}
+                title={language === "ur" ? "بند کریں" : "Close"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="study-note-editor">
+              <textarea
+                autoFocus
+                value={draftNote}
+                onChange={(event) => setDraftNote(event.target.value)}
+                placeholder={language === "ur" ? UI_TEXT.ur.notePlaceholder : UI_TEXT.en.notePlaceholder}
+                className={noteLooksUrdu ? "urdu" : ""}
+              />
+              <div className="study-note-actions">
+                <button
+                  type="button"
+                  className="study-tool-btn"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setDraftNote(card?.note || "");
+                    setShowNoteEditor(false);
+                  }}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Cancel", "منسوخ", language), language)}
+                </button>
+                <button
+                  type="button"
+                  className="study-tool-btn save"
+                  onClick={async (event) => {
+                    event.stopPropagation();
+                    if (card.reviewBacked === false) {
+                      await app.onSaveStudyNote?.(card, draftNote);
+                    } else {
+                      await app.onSaveWordNote?.(card.id, draftNote);
+                    }
+                    setShowNoteEditor(false);
+                  }}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText(UI_TEXT.en.saveNote, UI_TEXT.ur.saveNote, language), language)}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -7434,6 +7482,8 @@ function HomeschoolApp() {
   const [practiceReflectionLog, setPracticeReflectionLog] = useState([]);
   const [practiceBreakDismissedAt, setPracticeBreakDismissedAt] = useState(0);
   const [practiceCelebrationSeed, setPracticeCelebrationSeed] = useState(0);
+  const [flashcardFeedbackState, setFlashcardFeedbackState] = useState("");
+  const [flashcardTransitionMode, setFlashcardTransitionMode] = useState("forward");
   const [practiceLabReturnPending, setPracticeLabReturnPending] = useState(false);
   const [viewTargetId, setViewTargetId] = useState(null);
   const [pageFlashActive, setPageFlashActive] = useState(false);
@@ -8088,7 +8138,7 @@ function HomeschoolApp() {
   const practiceScopeLabel = activePracticeFilter.hasDayRange
     ? joinLocalizedText("lesson/day range and difficulty", "سبق/دن کی حد اور مشکل", language)
     : joinLocalizedText("lesson range and difficulty", "سبق کی حد اور مشکل", language);
-  const getPracticeModeMeta = useCallback((modeId, enabledTextEn, enabledTextUr, minimumRequired = 1) => {
+  const getPracticeAvailabilityMeta = useCallback((modeId, enabledTextEn, enabledTextUr, minimumRequired = 1) => {
     const readyCount = Number(practiceModeReadyCounts?.[modeId] || 0);
     if (readyCount >= minimumRequired) {
       return joinLocalizedText(
@@ -11647,6 +11697,12 @@ function HomeschoolApp() {
     }
     updatePracticeLessonProgress(card, correct, marksEarned, marksPossible);
     triggerPracticeFeedback(correct);
+    if (modeId === "flashcards") {
+      setFlashcardFeedbackState(correct ? "correct" : "review");
+      window.setTimeout(() => {
+        setFlashcardFeedbackState("");
+      }, 760);
+    }
   }, [language, practiceMode, practiceReveal, triggerPracticeFeedback, updateGamificationActivity, updatePracticeLessonProgress]);
 
   const handlePracticeTimerExpiry = useCallback(() => {
@@ -12944,6 +13000,8 @@ function HomeschoolApp() {
     setPracticeSessionStats({ attempted: 0, correct: 0, marksEarned: 0, marksPossible: 0, confidence: { low: 0, medium: 0, high: 0 } });
     setPracticeConfidenceChoice(null);
     setPracticeFeedbackText("");
+    setFlashcardFeedbackState("");
+    setFlashcardTransitionMode("forward");
     setPracticeReflectionDraft("");
     setPracticeReflectionLog([]);
     setPracticeBreakDismissedAt(0);
@@ -13003,6 +13061,8 @@ function HomeschoolApp() {
     setPracticeTimerFinished(false);
     setPracticeConfidenceChoice(null);
     setPracticeFeedbackText("");
+    setFlashcardFeedbackState("");
+    setFlashcardTransitionMode("forward");
     setPracticeReflectionDraft("");
     setTab("review");
   }, [activePracticeSubject?.name, activePracticeSubject?.nameUr, language, practiceCoreModePool, practiceSubjectSourcePool, practiceTimedSettings, resetReviewSession]);
@@ -13026,6 +13086,8 @@ function HomeschoolApp() {
         setPracticeTimerFinished(false);
       }
       setPracticeFeedbackText("");
+      setFlashcardFeedbackState("");
+      setFlashcardTransitionMode("forward");
       setPracticeConfidenceChoice(null);
       return;
     }
@@ -13038,6 +13100,7 @@ function HomeschoolApp() {
       resetPracticeSession();
       return;
     }
+    setFlashcardTransitionMode("forward");
     setPracticeIdx((current) => current + 1);
     setPracticeReveal(false);
     setPracticeTypingInput("");
@@ -13052,12 +13115,38 @@ function HomeschoolApp() {
     setPracticeTimedResult(null);
     setPracticeConfidenceChoice(null);
     setPracticeFeedbackText("");
+    setFlashcardFeedbackState("");
     setPracticeReflectionDraft("");
     if (["timedchallenge", "timedquiz", "timedtruefalse"].includes(practiceMode)) {
       setPracticeTimerRemaining(activePracticeTimeLimit);
       setPracticeTimerFinished(false);
     }
   }, [activePracticeTimeLimit, practiceMode, practiceIdx, practiceDeck, resetPracticeSession]);
+
+  const handlePracticePrevious = useCallback(() => {
+    if (practiceMode === "matching" || practiceMode === "timedmatching") return;
+    if (practiceIdx <= 0) return;
+    if (practiceAdvanceTimerRef.current) {
+      clearTimeout(practiceAdvanceTimerRef.current);
+      practiceAdvanceTimerRef.current = null;
+    }
+    setPracticeIdx((current) => Math.max(0, current - 1));
+    setPracticeReveal(false);
+    setPracticeTypingInput("");
+    setPracticeTypingResult(null);
+    setPracticeDictationInput("");
+    setPracticeDictationResult(null);
+    setPracticeBlankChoice(null);
+    setPracticeBlankResult(null);
+    setPracticeSentenceSelection([]);
+    setPracticeSentenceResult(null);
+    setPracticeTimedChoice(null);
+    setPracticeTimedResult(null);
+    setPracticeTimerFinished(false);
+    setPracticeFeedbackText("");
+    setFlashcardFeedbackState("");
+    setFlashcardTransitionMode("backward");
+  }, [practiceIdx, practiceMode]);
 
   const handleCheckTypedAnswer = useCallback(() => {
     const card = practiceDeck[practiceIdx];
@@ -16143,57 +16232,57 @@ function HomeschoolApp() {
               <button className={`practice-mode-card${practiceModeAvailability.flashcards ? "" : " disabled"}`} onClick={() => handleStartPractice("flashcards")} disabled={!practiceModeAvailability.flashcards}>
                 <span className="practice-mode-icon">🃏</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Flashcards", "فلیش کارڈز", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("flashcards", "Subject practice cards", "مضمون کی پریکٹس کارڈز"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("flashcards", "Subject practice cards", "مضمون کی پریکٹس کارڈز"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.typing ? "" : " disabled"}`} onClick={() => handleStartPractice("typing")} disabled={!practiceModeAvailability.typing}>
                 <span className="practice-mode-icon">⌨️</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Type the Answer", "جواب ٹائپ کریں", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("typing", "Subject practice cards", "مضمون کی پریکٹس کارڈز"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("typing", "Subject practice cards", "مضمون کی پریکٹس کارڈز"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.matching ? "" : " disabled"}`} onClick={() => handleStartPractice("matching")} disabled={!practiceModeAvailability.matching}>
                 <span className="practice-mode-icon">🧩</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Match Pairs", "جوڑیاں ملائیں", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("matching", "Needs 4+ subject cards", "کم از کم 4 مضمون کارڈز", 4), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("matching", "Needs 4+ subject cards", "کم از کم 4 مضمون کارڈز", 4), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.dictation ? "" : " disabled"}`} onClick={() => handleStartPractice("dictation")} disabled={!practiceModeAvailability.dictation}>
                 <span className="practice-mode-icon">🎧</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Dictation", "املا", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("dictation", "Review + lesson prompts", "ریویو + سبق پرامپٹس"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("dictation", "Review + lesson prompts", "ریویو + سبق پرامپٹس"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.fillblanks ? "" : " disabled"}`} onClick={() => handleStartPractice("fillblanks")} disabled={!practiceModeAvailability.fillblanks}>
                 <span className="practice-mode-icon">✍️</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Fill in Blanks", "خالی جگہ پُر کریں", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("fillblanks", "Sentence practice", "جملہ پریکٹس"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("fillblanks", "Sentence practice", "جملہ پریکٹس"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.sentencebuilder ? "" : " disabled"}`} onClick={() => handleStartPractice("sentencebuilder")} disabled={!practiceModeAvailability.sentencebuilder}>
                 <span className="practice-mode-icon">🧱</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Sentence Builder", "جملہ بنائیں", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("sentencebuilder", "Rebuild real sentences", "حقیقی جملے دوبارہ بنائیں"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("sentencebuilder", "Rebuild real sentences", "حقیقی جملے دوبارہ بنائیں"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.timedchallenge ? "" : " disabled"}`} onClick={() => handleStartPractice("timedchallenge")} disabled={!practiceModeAvailability.timedchallenge}>
                 <span className="practice-mode-icon">⏱️</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Timed Challenge", "وقت والی چیلنج", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("timedchallenge", "60-second speed round", "60 سیکنڈ کی تیز مشق"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("timedchallenge", "60-second speed round", "60 سیکنڈ کی تیز مشق"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.timedquiz ? "" : " disabled"}`} onClick={() => handleStartPractice("timedquiz")} disabled={!practiceModeAvailability.timedquiz}>
                 <span className="practice-mode-icon">📝</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Timed Quiz", "وقت والی کوئز", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("timedquiz", "Question timer inside", "سوال کا وقت اندر موجود"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("timedquiz", "Question timer inside", "سوال کا وقت اندر موجود"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.timedtruefalse ? "" : " disabled"}`} onClick={() => handleStartPractice("timedtruefalse")} disabled={!practiceModeAvailability.timedtruefalse}>
                 <span className="practice-mode-icon">⚖️</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Timed True / False", "وقت والی درست / غلط", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("timedtruefalse", "Quick judgement practice", "تیز فیصلہ والی مشق"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("timedtruefalse", "Quick judgement practice", "تیز فیصلہ والی مشق"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.timedmatching ? "" : " disabled"}`} onClick={() => handleStartPractice("timedmatching")} disabled={!practiceModeAvailability.timedmatching}>
                 <span className="practice-mode-icon">🧠</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Timed Match Pairs", "وقت والی جوڑیاں", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("timedmatching", "Timed sets", "وقت والے سیٹ", 4), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("timedmatching", "Timed sets", "وقت والے سیٹ", 4), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.interleaved ? "" : " disabled"}`} onClick={() => handleStartPractice("interleaved")} disabled={!practiceModeAvailability.interleaved}>
                 <span className="practice-mode-icon">🔀</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Interleaved Practice", "ملی جلی پریکٹس", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeModeMeta("interleaved", "Mixed healthy recall", "متوازن ملی جلی یادداشت"), language)}</span>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("interleaved", "Mixed healthy recall", "متوازن ملی جلی یادداشت"), language)}</span>
               </button>
             </div>
           </div>
@@ -16469,13 +16558,17 @@ function HomeschoolApp() {
                 </label>
               </div>
             ) : null}
-            <div className={`practice-instruction${isUrduUi(language) ? " urdu" : ""}`}>
-              {renderLocalizedTextNode(getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, language), language)}
-            </div>
-            <div className="practice-instruction urdu">
-              {getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, "ur")}
-            </div>
-            {practiceQuestionPrompt ? (
+            {effectivePracticeMode !== "flashcards" ? (
+              <>
+                <div className={`practice-instruction${isUrduUi(language) ? " urdu" : ""}`}>
+                  {renderLocalizedTextNode(getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, language), language)}
+                </div>
+                <div className="practice-instruction urdu">
+                  {getPracticeModeInstructions(effectivePracticeMode === "matching" ? practiceMode : effectivePracticeMode, "ur")}
+                </div>
+              </>
+            ) : null}
+            {practiceQuestionPrompt && effectivePracticeMode !== "flashcards" ? (
               <div className="practice-question-stack">
                 <div className={`practice-question-bar${isUrduUi(language) ? " urdu" : ""}`}>
                   {renderLocalizedTextNode(practiceQuestionPrompt, language)}
@@ -16509,17 +16602,92 @@ function HomeschoolApp() {
               <span>🌸</span><span>✨</span><span>🌼</span><span>✨</span><span>🌸</span>
             </div> : null}
             {effectivePracticeMode === "flashcards" && (
-              <div className="practice-card-shell">
-                <div className="practice-card-face">
-                  <div className="study-word-prompt" style={getPracticeTextStyle(getPracticeFlashFront(activePracticeCard))}>{getPracticeFlashFront(activePracticeCard)}</div>
-                  {practiceReveal ? <div className="study-word-answer" style={getPracticeTextStyle(getPracticeFlashBack(activePracticeCard), { marginTop: 14, fontSize: 18, fontWeight: 700 }, activePracticeCard.practiceLang)}>{getPracticeFlashBack(activePracticeCard)}</div> : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("Think first, then reveal the answer.", "پہلے خود سوچیں، پھر جواب دکھائیں۔", language), language)}</p>}
+              <div className="flashcard-stage">
+                <button
+                  type="button"
+                  className="flashcard-side-nav flashcard-side-nav-prev"
+                  onClick={handlePracticePrevious}
+                  disabled={practiceIdx <= 0}
+                  aria-label={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                  title={language === "ur" ? "پچھلا کارڈ" : "Previous card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 18 6 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M18 18 12 12l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div className="practice-card-shell practice-card-shell-flashcards">
+                  <div className="flashcard-count-pill">{practiceIdx + 1} / {practiceDeck.length}</div>
+                  <div className={`practice-card-face practice-card-face-flashcards${flashcardFeedbackState ? ` ${flashcardFeedbackState}` : ""}`}>
+                    <div key={`${practiceIdx}-${practiceReveal ? "back" : "front"}-${flashcardTransitionMode}`} className={`flashcard-live-layer ${practiceReveal ? "reveal" : flashcardTransitionMode}`}>
+                      <div className={`flashcard-flip-shell${practiceReveal ? " revealed" : ""}`}>
+                        <div className="flashcard-flip-inner">
+                          <div className="flashcard-side flashcard-side-front">
+                            <div className={`flashcard-card-top${isUrduUi(language) ? " urdu" : ""}`}>
+                              {renderLocalizedTextNode(joinLocalizedText("Translate this word into Urdu.", "اس لفظ کو اردو میں ترجمہ کریں۔", language), language)}
+                            </div>
+                            <div className="flashcard-card-body">
+                              <div className="study-word-prompt" style={getPracticeTextStyle(getPracticeFlashFront(activePracticeCard))}>{getPracticeFlashFront(activePracticeCard)}</div>
+                            </div>
+                            <button
+                              type="button"
+                              className="flashcard-flip-btn"
+                              onClick={() => {
+                                setFlashcardTransitionMode("reveal");
+                                setPracticeReveal(true);
+                              }}
+                            >
+                              {renderLocalizedTextNode(joinLocalizedText("Show Answer", "جواب دکھائیں", language), language)}
+                            </button>
+                          </div>
+                          <div className="flashcard-side flashcard-side-back">
+                            <button
+                              type="button"
+                              className="flashcard-back-btn"
+                              onClick={() => {
+                                setFlashcardTransitionMode("backward");
+                                setPracticeReveal(false);
+                              }}
+                              aria-label={language === "ur" ? "سوال پر واپس جائیں" : "Back to question"}
+                              title={language === "ur" ? "سوال پر واپس جائیں" : "Back to question"}
+                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M15 6 9 12l6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                            <div className={`flashcard-card-top${containsUrduText(getPracticeFlashBack(activePracticeCard)) || isUrduUi(language) ? " urdu" : ""}`}>
+                              {renderLocalizedTextNode(joinLocalizedText("Answer", "جواب", language), language)}
+                            </div>
+                            <div className="flashcard-card-body">
+                              <div className="study-word-answer" style={getPracticeTextStyle(getPracticeFlashBack(activePracticeCard), { fontSize: 18, fontWeight: 700 }, activePracticeCard.practiceLang)}>{getPracticeFlashBack(activePracticeCard)}</div>
+                            </div>
+                            <div className="flashcard-back-actions">
+                              <button type="button" className="flashcard-flip-btn" onClick={() => handleFlashcardSelfGrade(false)}>
+                                {renderLocalizedTextNode(joinLocalizedText("Need Review", "مزید مشق چاہیے", language), language)}
+                              </button>
+                              <button type="button" className="flashcard-flip-btn" onClick={() => handleFlashcardSelfGrade(true)}>
+                                {renderLocalizedTextNode(joinLocalizedText("I Got It", "میں نے درست کیا", language), language)}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="result-actions">
-                  <button className="retry-btn" onClick={() => setPracticeReveal((value) => !value)}>{renderLocalizedTextNode(practiceReveal ? joinLocalizedText("Hide Answer", "جواب چھپائیں", language) : ui.revealAnswer, language)}</button>
-                  {practiceReveal ? <button className="retry-btn" onClick={() => handleFlashcardSelfGrade(false)}>{renderLocalizedTextNode(joinLocalizedText("Need Review", "مزید مشق چاہیے", language), language)}</button> : null}
-                  {practiceReveal ? <button className="next-btn" onClick={() => handleFlashcardSelfGrade(true)}>{renderLocalizedTextNode(joinLocalizedText("I Got It", "میں نے درست کیا", language), language)}</button> : null}
-                  <button className="next-btn" onClick={handlePracticeNext}>{renderLocalizedTextNode(joinLocalizedText("Next Card", "اگلا کارڈ", language), language)}</button>
-                </div>
+                <button
+                  type="button"
+                  className="flashcard-side-nav flashcard-side-nav-next"
+                  onClick={handlePracticeNext}
+                  disabled={practiceIdx >= practiceDeck.length - 1}
+                  aria-label={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                  title={language === "ur" ? "اگلا کارڈ" : "Next card"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M6 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
             )}
             {effectivePracticeMode === "dictation" && (
