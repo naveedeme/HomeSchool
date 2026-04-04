@@ -207,9 +207,13 @@
       }, renderLocalizedText(labels.aiClearConnection || "Clear Connection", language))));
   }
 
-  function DisclosureSection({ title, language, children, transitionMode }) {
-    const [open, setOpen] = React.useState(false);
+  function DisclosureSection({ title, language, children, transitionMode, defaultOpen }) {
+    const [open, setOpen] = React.useState(Boolean(defaultOpen));
     const childList = React.Children.toArray(children);
+
+    React.useEffect(() => {
+      if (defaultOpen) setOpen(true);
+    }, [defaultOpen]);
 
     return React.createElement("div", {
       className: `settings-disclosure${open ? " open" : ""}`,
@@ -243,6 +247,24 @@
     },
       React.createElement("div", { className: "settings-group-title" }, renderLocalizedText(title, language)),
       React.createElement("div", { className: "settings-group-body" }, ...childList));
+  }
+
+  function normalizeSettingsSearchValue(value) {
+    return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  function matchesSettingsSearch(query, ...values) {
+    if (!query) return true;
+    const flattenedValues = values.reduce((all, value) => {
+      if (Array.isArray(value)) return all.concat(value);
+      all.push(value);
+      return all;
+    }, []);
+    const haystack = flattenedValues
+      .map((value) => normalizeSettingsSearchValue(value))
+      .filter(Boolean)
+      .join(" ");
+    return haystack.includes(query);
   }
 
   function renderDictionaryConflictCard(record, language, ui, onResolveDictionaryConflict) {
@@ -404,6 +426,10 @@
       onDailyReviewCapChange,
       reviewSrsSettings,
       onReviewSrsSettingChange,
+      practiceTimedSettings,
+      onPracticeTimedSettingChange,
+      quizTimingSettings,
+      onQuizTimingSettingChange,
       daySectionSettings,
       onDaySectionChange,
       studyGoals,
@@ -440,6 +466,8 @@
     const ui = labels || {};
     const versionHistory = Array.isArray(versionInfo?.history) ? versionInfo.history : [];
     const notificationItems = Array.isArray(notificationHistory) ? notificationHistory : [];
+    const [settingsSearch, setSettingsSearch] = React.useState("");
+    const normalizedSettingsSearch = normalizeSettingsSearchValue(settingsSearch);
     const selectStyle = {
       padding: "10px 12px",
       borderRadius: 10,
@@ -447,6 +475,12 @@
       background: "var(--bg-elevated)",
       color: "var(--text-primary)",
       fontFamily: language === "ur" || language === "bilingual" ? "var(--font-ur)" : "var(--font)",
+    };
+    const compactNumberInputStyle = {
+      ...selectStyle,
+      width: 96,
+      textAlign: "center",
+      fontWeight: 700,
     };
     const voiceFieldRowStyle = {
       display: "flex",
@@ -476,8 +510,6 @@
     const latestMinutesSpent = Math.round((latestTimeEntry?.msSpent || 0) / 60000);
     const syncSummary = supabaseSyncActivity && typeof supabaseSyncActivity === "object" ? supabaseSyncActivity : {};
     const pendingCloudDatasets = Object.entries(syncSummary.pendingCloudDatasets || {}).filter(([, count]) => Number(count) > 0);
-
-    const children = [];
 
     const dataChildren = [
       React.createElement("div", { key: "version", className: "settings-item" },
@@ -1283,6 +1315,80 @@
         React.createElement("input", { type: "range", min: 5, max: 180, step: 5, value: reviewSrsSettings?.againMinutes || 10, onChange: (event) => onReviewSrsSettingChange("againMinutes", event.target.value), style: { width: "100%" } })),
     ];
 
+    const timingChildren = [
+      React.createElement("div", {
+        key: "timing-help",
+        style: {
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border)",
+          marginBottom: 10,
+          color: "var(--text-secondary)",
+          fontSize: 12,
+          lineHeight: 1.5,
+        },
+      }, renderLocalizedText(
+        ui.practiceTimingHelp || (language === "ur"
+          ? "پریکٹس اور سبجیکٹ کوئز کے وقت یہاں سے سیٹ کریں۔ ہر موڈ اپنی الگ مدت استعمال کرے گا۔"
+          : "Set Practice Lab and subject-quiz timings here. Each mode uses its own saved timing."),
+        language,
+      )),
+      ...[
+        ["timedchallenge", joinLocalizedText("Timed Challenge", "وقت والی چیلنج", language), 60],
+        ["timedquiz", joinLocalizedText("Timed Quiz", "وقت والی کوئز", language), 30],
+        ["timedtruefalse", joinLocalizedText("Timed True / False", "وقت والی درست / غلط", language), 30],
+        ["timedmatching", joinLocalizedText("Timed Match Pairs", "وقت والی جوڑیاں", language), 30],
+      ].map(([modeId, label, fallback]) => React.createElement("div", {
+        key: `practice-timer-${modeId}`,
+        className: "settings-item",
+      },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(label, language)),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+          React.createElement("input", {
+            type: "number",
+            min: 10,
+            max: 180,
+            step: 5,
+            value: Number(practiceTimedSettings?.[modeId] || fallback),
+            onChange: (event) => onPracticeTimedSettingChange(modeId, event.target.value),
+            style: compactNumberInputStyle,
+          }),
+          React.createElement("span", { className: "si-value" }, renderLocalizedText(language === "ur" ? "سیکنڈ" : "sec", language))))),
+      React.createElement("div", {
+        key: "quiz-question-seconds",
+        className: "settings-item",
+      },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(joinLocalizedText("Subject quiz time per question", "سبجیکٹ کوئز میں فی سوال وقت", language), language)),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+          React.createElement("input", {
+            type: "number",
+            min: 5,
+            max: 90,
+            step: 1,
+            value: Number(quizTimingSettings?.questionSeconds || 15),
+            onChange: (event) => onQuizTimingSettingChange("questionSeconds", event.target.value),
+            style: compactNumberInputStyle,
+          }),
+          React.createElement("span", { className: "si-value" }, renderLocalizedText(language === "ur" ? "سیکنڈ" : "sec", language)))),
+      React.createElement("div", {
+        key: "quiz-reflection-seconds",
+        className: "settings-item",
+      },
+        React.createElement("span", { className: "si-label" }, renderLocalizedText(joinLocalizedText("Subject quiz reflection pause", "سبجیکٹ کوئز میں توقف", language), language)),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+          React.createElement("input", {
+            type: "number",
+            min: 1,
+            max: 10,
+            step: 1,
+            value: Number(quizTimingSettings?.reflectionSeconds || 2),
+            onChange: (event) => onQuizTimingSettingChange("reflectionSeconds", event.target.value),
+            style: compactNumberInputStyle,
+          }),
+          React.createElement("span", { className: "si-value" }, renderLocalizedText(language === "ur" ? "سیکنڈ" : "sec", language)))),
+    ];
+
     const planningChildren = [
       React.createElement("div", { key: "goal-daily", className: "settings-item", style: { display: "block" } },
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
@@ -1415,113 +1521,112 @@
     } else {
       notificationChildren.push(React.createElement("p", { key: "notice-empty", className: "empty-state" }, renderLocalizedText(ui.noNotificationsYet || "No notifications yet.", language)));
     }
-    children.push(React.createElement(DisclosureSection, {
-      key: "settings-app",
-      title: joinLocalizedText("App, Navigation & Accessibility", "ایپ، نیویگیشن اور رسائی", language),
-      language,
-      transitionMode,
-    },
-      React.createElement(SettingsGroup, {
-        key: "settings-group-experience",
-        title: joinLocalizedText("App Status & Navigation", "ایپ حالت اور نیویگیشن", language),
-        language,
-      }, ...experienceChildren),
-      React.createElement(SettingsGroup, {
-        key: "settings-group-preferences",
-        title: joinLocalizedText("Audio, Language & Display", "آڈیو، زبان اور دکھائی", language),
-        language,
-      }, ...preferencesChildren),
-      React.createElement(SettingsGroup, {
-        key: "settings-group-accessibility",
-        title: joinLocalizedText("Comfort & Accessibility", "آسانی اور رسائی", language),
-        language,
-      }, ...accessibilityChildren),
-    ));
-    children.push(React.createElement(DisclosureSection, {
-      key: "settings-account",
-      title: joinLocalizedText("Account & Cloud Sign-In", "اکاؤنٹ اور کلاؤڈ سائن اِن", language),
-      language,
-      transitionMode,
-    },
-      React.createElement(SettingsGroup, {
-        key: "settings-group-account",
-        title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language),
-        language,
-      }, ...accountChildren),
-    ));
-    children.push(React.createElement(DisclosureSection, {
-      key: "settings-ai",
-      title: joinLocalizedText("AI Tutor", "اے آئی استاد", language),
-      language,
-      transitionMode,
-    },
-      React.createElement(SettingsGroup, {
-        key: "settings-group-ai",
-        title: joinLocalizedText("Connections & Meaning Lookup", "کنکشن اور معنی تلاش", language),
-        language,
-      }, ...aiChildren),
-    ));
-    children.push(React.createElement(DisclosureSection, {
-      key: "settings-learning",
-      title: joinLocalizedText("Learning & Review", "سیکھنا اور ریویو", language),
-      language,
-      transitionMode,
-    },
-      React.createElement(SettingsGroup, {
-        key: "settings-group-pacing",
-        title: joinLocalizedText("Day-Based English Pacing", "دنوں پر مبنی انگریزی رفتار", language),
-        language,
-      }, ...pacingChildren),
-      React.createElement(SettingsGroup, {
-        key: "settings-group-srs",
-        title: joinLocalizedText("Review SRS Controls", "ریویو ایس آر ایس کنٹرول", language),
-        language,
-      }, ...srsChildren),
-    ));
-    children.push(React.createElement(DisclosureSection, {
-      key: "settings-planning-time",
-      title: joinLocalizedText("Planning, Time & Reminders", "منصوبہ بندی، وقت اور یاد دہانیاں", language),
-      language,
-      transitionMode,
-    },
-      React.createElement(SettingsGroup, {
-        key: "settings-group-planning",
-        title: joinLocalizedText("Goals & Study Planning", "اہداف اور مطالعہ منصوبہ بندی", language),
-        language,
-      }, ...planningChildren),
-      React.createElement(SettingsGroup, {
-        key: "settings-group-time",
-        title: joinLocalizedText("Class Time Tracking", "کلاس وقت کی نگرانی", language),
-        language,
-      }, ...timeChildren),
-      React.createElement(SettingsGroup, {
-        key: "settings-group-notifications",
-        title: joinLocalizedText("Notification History", "نوٹیفکیشن ہسٹری", language),
-        language,
-      }, ...notificationChildren),
-    ));
-    children.push(React.createElement(DisclosureSection, {
-      key: "settings-data-backup",
-      title: joinLocalizedText("Data, Backup & Reset", "ڈیٹا، بیک اپ اور ری سیٹ", language),
-      language,
-      transitionMode,
-    },
-      React.createElement(SettingsGroup, {
-        key: "settings-group-data",
-        title: joinLocalizedText("Updates & Progress Files", "اپ ڈیٹس اور پروگریس فائلیں", language),
-        language,
-      }, ...dataChildren),
-      React.createElement(SettingsGroup, {
-        key: "settings-group-user",
-        title: joinLocalizedText("Storage & Reset", "اسٹوریج اور ری سیٹ", language),
-        language,
-      }, ...userDataChildren),
-      React.createElement(SettingsGroup, {
-        key: "settings-group-admin",
-        title: joinLocalizedText("Backup & Admin Tools", "بیک اپ اور ایڈمن اوزار", language),
-        language,
-      }, ...adminChildren),
-    ));
+    const sectionEntries = [
+      {
+        key: "settings-app",
+        title: joinLocalizedText("App, Navigation & Accessibility", "ایپ، نیویگیشن اور رسائی", language),
+        tags: ["app", "navigation", "display", "theme", "font", "language", "audio", "tts", "voice", "contrast", "focus", "reading", "keyboard", "transition", "offline", "install"],
+        groups: [
+          { key: "settings-group-experience", title: joinLocalizedText("App Status & Navigation", "ایپ حالت اور نیویگیشن", language), tags: ["status", "navigation", "install", "offline", "network"], children: experienceChildren },
+          { key: "settings-group-preferences", title: joinLocalizedText("Audio, Language & Display", "آڈیو، زبان اور دکھائی", language), tags: ["audio", "language", "display", "voice", "tts", "theme", "font"], children: preferencesChildren },
+          { key: "settings-group-accessibility", title: joinLocalizedText("Comfort & Accessibility", "آسانی اور رسائی", language), tags: ["motion", "contrast", "focus", "reading", "keyboard"], children: accessibilityChildren },
+        ],
+      },
+      {
+        key: "settings-account",
+        title: joinLocalizedText("Account & Cloud Sign-In", "اکاؤنٹ اور کلاؤڈ سائن اِن", language),
+        tags: ["account", "supabase", "cloud", "sign in", "email", "password", "username", "sync"],
+        groups: [
+          { key: "settings-group-account", title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language), tags: ["login", "email", "password", "username", "role", "cloud"], children: accountChildren },
+        ],
+      },
+      {
+        key: "settings-ai",
+        title: joinLocalizedText("AI Tutor", "اے آئی استاد", language),
+        tags: ["ai", "provider", "api", "gemini", "openai", "meaning", "dictionary"],
+        groups: [
+          { key: "settings-group-ai", title: joinLocalizedText("Connections & Meaning Lookup", "کنکشن اور معنی تلاش", language), tags: ["ai", "provider", "meaning", "lookup", "dictionary"], children: aiChildren },
+        ],
+      },
+      {
+        key: "settings-learning",
+        title: joinLocalizedText("Learning & Review", "سیکھنا اور ریویو", language),
+        tags: ["review", "learning", "practice", "quiz", "timer", "timing", "srs", "daily cap"],
+        groups: [
+          { key: "settings-group-pacing", title: joinLocalizedText("Day-Based English Pacing", "دنوں پر مبنی انگریزی رفتار", language), tags: ["day", "english", "pacing", "lesson"], children: pacingChildren },
+          { key: "settings-group-srs", title: joinLocalizedText("Review SRS Controls", "ریویو ایس آر ایس کنٹرول", language), tags: ["srs", "review", "again", "mastery", "interval"], children: srsChildren },
+          { key: "settings-group-timers", title: joinLocalizedText("Practice & Quiz Timers", "پریکٹس اور کوئز ٹائمر", language), tags: ["practice", "quiz", "timer", "timed challenge", "timed quiz", "reflection"], children: timingChildren },
+        ],
+      },
+      {
+        key: "settings-planning-time",
+        title: joinLocalizedText("Planning, Time & Reminders", "منصوبہ بندی، وقت اور یاد دہانیاں", language),
+        tags: ["planning", "goal", "focus", "reminder", "class", "time", "notification"],
+        groups: [
+          { key: "settings-group-planning", title: joinLocalizedText("Goals & Study Planning", "اہداف اور مطالعہ منصوبہ بندی", language), tags: ["goal", "study", "focus"], children: planningChildren },
+          { key: "settings-group-time", title: joinLocalizedText("Class Time Tracking", "کلاس وقت کی نگرانی", language), tags: ["class", "time", "tracking", "attendance", "late"], children: timeChildren },
+          { key: "settings-group-notifications", title: joinLocalizedText("Notification History", "نوٹیفکیشن ہسٹری", language), tags: ["notification", "history", "reminder"], children: notificationChildren },
+        ],
+      },
+      {
+        key: "settings-data-backup",
+        title: joinLocalizedText("Data, Backup & Reset", "ڈیٹا، بیک اپ اور ری سیٹ", language),
+        tags: ["data", "backup", "export", "import", "reset", "storage", "refresh"],
+        groups: [
+          { key: "settings-group-data", title: joinLocalizedText("Updates & Progress Files", "اپ ڈیٹس اور پروگریس فائلیں", language), tags: ["update", "progress", "export", "import"], children: dataChildren },
+          { key: "settings-group-user", title: joinLocalizedText("Storage & Reset", "اسٹوریج اور ری سیٹ", language), tags: ["storage", "reset", "progress"], children: userDataChildren },
+          { key: "settings-group-admin", title: joinLocalizedText("Backup & Admin Tools", "بیک اپ اور ایڈمن اوزار", language), tags: ["backup", "admin", "review reset", "clear"], children: adminChildren },
+        ],
+      },
+    ];
+
+    const filteredSections = sectionEntries
+      .map((section) => {
+        const sectionMatches = matchesSettingsSearch(normalizedSettingsSearch, section.title, section.tags);
+        const groups = (section.groups || []).filter((group) => sectionMatches || matchesSettingsSearch(normalizedSettingsSearch, group.title, group.tags));
+        return { ...section, groups };
+      })
+      .filter((section) => section.groups.length > 0);
+
+    const children = [
+      React.createElement("div", { key: "settings-search-shell", className: "settings-search-shell" },
+        React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.settingsSearch || (language === "ur" ? "سیٹنگ تلاش کریں" : "Find a setting"), language)),
+        React.createElement("input", {
+          className: "settings-text-input",
+          type: "search",
+          value: settingsSearch,
+          placeholder: renderLocalizedText(ui.settingsSearchPlaceholder || (language === "ur" ? "مثلاً آواز، ٹائمر، تھیم، سنک" : "For example: voice, timer, theme, sync"), language),
+          onChange: (event) => setSettingsSearch(event.target.value),
+          style: language === "ur" ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null,
+        }),
+        React.createElement("div", { className: "settings-search-meta" },
+          normalizedSettingsSearch
+            ? renderLocalizedText(language === "ur" ? `${filteredSections.length} حصے ملے` : `${filteredSections.length} sections found`, language)
+            : renderLocalizedText(ui.settingsSearchHint || (language === "ur" ? "الفاظ لکھ کر متعلقہ سیٹنگز فلٹر کریں۔" : "Type keywords to filter the settings sections."), language))),
+      ...(filteredSections.length > 0
+        ? filteredSections.map((section) => React.createElement(DisclosureSection, {
+          key: section.key,
+          title: section.title,
+          language,
+          transitionMode,
+          defaultOpen: Boolean(normalizedSettingsSearch),
+        },
+        ...(section.groups || []).map((group) => React.createElement(SettingsGroup, {
+          key: group.key,
+          title: group.title,
+          language,
+        }, ...(group.children || [])))))
+        : [React.createElement("div", {
+          key: "settings-search-empty",
+          className: "empty-state",
+          style: {
+            padding: "18px 16px",
+            borderRadius: 14,
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+          },
+        }, renderLocalizedText(ui.settingsSearchEmpty || (language === "ur" ? "اس تلاش کے مطابق کوئی سیٹنگ نہیں ملی۔" : "No settings matched that search."), language))]),
+    ];
 
     return React.createElement("div", null, ...children);
   }

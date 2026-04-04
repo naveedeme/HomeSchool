@@ -4465,9 +4465,9 @@ function MathVisualDeck({ sub, lessonTitle }) {
 }
 
 // ─── Math Sub-Quiz Component (proper hooks) ───
-function MathSubQuiz({ questions, isUrdu }) {
-  const QUESTION_TIME_LIMIT_SECONDS = 15;
-  const REFLECTION_DELAY_MS = 2000;
+function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2000 }) {
+  const QUESTION_TIME_LIMIT_SECONDS = Math.max(5, Math.min(90, Number(questionTimeLimitSeconds) || 15));
+  const REFLECTION_DELAY_MS = Math.max(500, Math.min(10000, Number(reflectionDelayMs) || 2000));
   const [mqIdx, setMqIdx] = useState(0);
   const [mqAns, setMqAns] = useState([]);
   const [mqRev, setMqRev] = useState(false);
@@ -4504,7 +4504,7 @@ function MathSubQuiz({ questions, isUrdu }) {
     setMqDone(false);
     setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
     setMqElapsedMs([]);
-  }, [clearAdvanceTimeout]);
+  }, [QUESTION_TIME_LIMIT_SECONDS, clearAdvanceTimeout]);
   const speakText = useCallback((txt, e) => {
     if (e) e.stopPropagation();
     if (!isTtsEnabled()) return;
@@ -4529,7 +4529,7 @@ function MathSubQuiz({ questions, isUrdu }) {
       return next;
     });
     return elapsedMs;
-  }, [mqIdx]);
+  }, [QUESTION_TIME_LIMIT_SECONDS, mqIdx]);
   const moveToNextQuestion = useCallback(() => {
     clearAdvanceTimeout();
     if (mqIdx < mq.length - 1) {
@@ -4540,11 +4540,17 @@ function MathSubQuiz({ questions, isUrdu }) {
       return;
     }
     setMqDone(true);
-  }, [clearAdvanceTimeout, mqIdx, mq.length]);
+  }, [QUESTION_TIME_LIMIT_SECONDS, clearAdvanceTimeout, mqIdx, mq.length]);
 
   useEffect(() => {
     return () => clearAdvanceTimeout();
   }, [clearAdvanceTimeout]);
+
+  useEffect(() => {
+    if (mqDone || mqRev) return;
+    setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
+    questionStartedAtRef.current = Date.now();
+  }, [QUESTION_TIME_LIMIT_SECONDS, mqDone, mqRev, mqIdx]);
 
   useEffect(() => {
     if (mqDone || mqRev || !mq.length || mqTimerRemaining <= 0) return undefined;
@@ -4569,7 +4575,7 @@ function MathSubQuiz({ questions, isUrdu }) {
       moveToNextQuestion();
     }, REFLECTION_DELAY_MS);
     return () => clearAdvanceTimeout();
-  }, [clearAdvanceTimeout, moveToNextQuestion, mq.length, mqAns, mqDone, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
+  }, [QUESTION_TIME_LIMIT_SECONDS, REFLECTION_DELAY_MS, clearAdvanceTimeout, moveToNextQuestion, mq.length, mqAns, mqDone, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
 
   const handleOptionSelect = useCallback((optionIndex) => {
     if (mqRev || mqTimerRemaining <= 0) return;
@@ -4583,7 +4589,7 @@ function MathSubQuiz({ questions, isUrdu }) {
     advanceTimeoutRef.current = setTimeout(() => {
       moveToNextQuestion();
     }, REFLECTION_DELAY_MS);
-  }, [clearAdvanceTimeout, moveToNextQuestion, mq, mqAns, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
+  }, [REFLECTION_DELAY_MS, clearAdvanceTimeout, moveToNextQuestion, mq, mqAns, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
 
   if (mqDone) return (
     <div className="quiz-result">
@@ -6584,6 +6590,13 @@ function normalizeBackupReminderSettings(value = {}) {
   };
 }
 
+function normalizeQuizTimingSettings(value = {}) {
+  return {
+    questionSeconds: Math.max(5, Math.min(90, Number(value?.questionSeconds) || 15)),
+    reflectionSeconds: Math.max(1, Math.min(10, Number(value?.reflectionSeconds) || 2)),
+  };
+}
+
 function getBackupReminderSummary(settings = {}, hasProgress = false, language = "en", now = Date.now()) {
   const safe = normalizeBackupReminderSettings(settings);
   if (!safe.enabled) return { due: false, label: UI_TEXT[language === "ur" ? "ur" : "en"].backupReminderOff };
@@ -7574,6 +7587,7 @@ function HomeschoolApp() {
   const [tab, setTab] = useState("home");
   const [reviewSectionTab, setReviewSectionTab] = useState("queue");
   const [homeSectionTab, setHomeSectionTab] = useState("subjects");
+  const [progressSectionTab, setProgressSectionTab] = useState("overview");
   const [profilesSectionTab, setProfilesSectionTab] = useState("profiles");
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
@@ -7583,6 +7597,8 @@ function HomeschoolApp() {
   const [quizRevealed, setQuizRevealed] = useState(false);
   const [quizDone, setQuizDone] = useState(false);
   const [quizStartTime, setQuizStartTime] = useState(null);
+  const [quizTimerRemaining, setQuizTimerRemaining] = useState(Math.max(5, Math.min(90, Number(stored?.quizTimingSettings?.questionSeconds) || 15)));
+  const [quizElapsedMs, setQuizElapsedMs] = useState([]);
   const [selectedAdverbDay, setSelectedAdverbDay] = useState(null);
   const [selectedPrepDay, setSelectedPrepDay] = useState(null);
   const [selectedAdjDay, setSelectedAdjDay] = useState(null);
@@ -7645,6 +7661,7 @@ function HomeschoolApp() {
   const [practiceSubjectId, setPracticeSubjectId] = useState(stored?.practiceSubjectId || "english");
   const [practiceFiltersBySubject, setPracticeFiltersBySubject] = useState(stored?.practiceFiltersBySubject || {});
   const [practiceTimedSettings, setPracticeTimedSettings] = useState(stored?.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 });
+  const [quizTimingSettings, setQuizTimingSettings] = useState(normalizeQuizTimingSettings(stored?.quizTimingSettings || {}));
   const [practiceLessonProgress, setPracticeLessonProgress] = useState(stored?.practiceLessonProgress || {});
   const [practiceDeck, setPracticeDeck] = useState([]);
   const [practiceIdx, setPracticeIdx] = useState(0);
@@ -7766,6 +7783,8 @@ function HomeschoolApp() {
   const navBarHideTimerRef = useRef(null);
   const copyToastTimerRef = useRef(null);
   const practiceAdvanceTimerRef = useRef(null);
+  const quizQuestionStartedAtRef = useRef(Date.now());
+  const quizAdvanceTimeoutRef = useRef(null);
   const refreshReviewWorkspaceRef = useRef(null);
   const supabaseClientRef = useRef(null);
   const supabaseAuthSubscriptionRef = useRef(null);
@@ -8220,6 +8239,11 @@ function HomeschoolApp() {
   }, [activePracticeFilter.difficulty, activePracticeFilter.endDay, activePracticeFilter.endIndex, activePracticeFilter.hasDayRange, activePracticeFilter.startDay, activePracticeFilter.startIndex, activePracticeSubjectId, practiceSubjectLessonMap]);
   const practiceQuestionMarks = getPracticeDifficultyMarks(activePracticeFilter.difficulty);
   const activePracticeTimeLimit = Math.max(10, Math.min(180, Number(practiceTimedSettings?.[practiceMode] || (practiceMode === "timedchallenge" ? 60 : 30)) || (practiceMode === "timedchallenge" ? 60 : 30)));
+  const activeSubjectQuizTimeLimit = Math.max(5, Math.min(90, Number(quizTimingSettings?.questionSeconds) || 15));
+  const activeSubjectQuizReflectionDelayMs = Math.max(1000, Math.min(10000, (Number(quizTimingSettings?.reflectionSeconds) || 2) * 1000));
+  const activeLessonQuizQuestions = useMemo(() => (
+    selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : []
+  ), [grade, selectedLesson, selectedSubject?.id]);
   const activePracticeLessonKey = getPracticeItemLessonKey(activePracticeCard);
   const activePracticeLessonProgress = activePracticeLessonKey ? (practiceLessonProgress?.[`${activePracticeSubjectId}|${activePracticeLessonKey}`] || null) : null;
   const activePracticeMastery = getPracticeMasteryMeta(activePracticeCard, activePracticeLessonProgress, language);
@@ -8835,6 +8859,9 @@ function HomeschoolApp() {
       }
       if (storedReviewPreferences.practiceTimedSettings && typeof storedReviewPreferences.practiceTimedSettings === "object") {
         setPracticeTimedSettings((current) => ({ ...current, ...storedReviewPreferences.practiceTimedSettings }));
+      }
+      if (storedReviewPreferences.quizTimingSettings && typeof storedReviewPreferences.quizTimingSettings === "object") {
+        setQuizTimingSettings(normalizeQuizTimingSettings(storedReviewPreferences.quizTimingSettings));
       }
       if (storedReviewPreferences.reviewSrsSettings && typeof storedReviewPreferences.reviewSrsSettings === "object") {
         setReviewSrsSettings({
@@ -10506,6 +10533,7 @@ function HomeschoolApp() {
             practiceSubjectId: nextPayload.practiceSubjectId || "english",
             practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
             practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 },
+            quizTimingSettings: normalizeQuizTimingSettings(nextPayload.quizTimingSettings || {}),
           }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("practiceProgress", nextPayload.practiceLessonProgress || {}, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {}, saveCustomizationOptions);
@@ -10572,6 +10600,7 @@ function HomeschoolApp() {
               practiceSubjectId: nextPayload.practiceSubjectId || "english",
               practiceFiltersBySubject: nextPayload.practiceFiltersBySubject || {},
               practiceTimedSettings: nextPayload.practiceTimedSettings || { timedchallenge: 60, timedquiz: 30, timedtruefalse: 30, timedmatching: 30 },
+              quizTimingSettings: normalizeQuizTimingSettings(nextPayload.quizTimingSettings || {}),
             },
             practiceProgress: nextPayload.practiceLessonProgress || {},
             daySectionPacing: nextPayload.daySectionOverrides || {},
@@ -11814,6 +11843,105 @@ function HomeschoolApp() {
     }
   }, [practiceMode]);
 
+  const handleQuizTimingSettingChange = useCallback((field, value) => {
+    setQuizTimingSettings((current) => normalizeQuizTimingSettings({
+      ...(current || {}),
+      [field]: value,
+    }));
+  }, []);
+
+  const clearQuizAdvanceTimeout = useCallback(() => {
+    if (quizAdvanceTimeoutRef.current) {
+      clearTimeout(quizAdvanceTimeoutRef.current);
+      quizAdvanceTimeoutRef.current = null;
+    }
+  }, []);
+
+  const recordLessonQuizElapsedForCurrentQuestion = useCallback((forcedMs = null) => {
+    const elapsedMs = typeof forcedMs === "number"
+      ? forcedMs
+      : Math.min(activeSubjectQuizTimeLimit * 1000, Math.max(0, Date.now() - quizQuestionStartedAtRef.current));
+    setQuizElapsedMs((current) => {
+      if (typeof current[quizIdx] === "number") return current;
+      const next = [...current];
+      next[quizIdx] = elapsedMs;
+      return next;
+    });
+    return elapsedMs;
+  }, [activeSubjectQuizTimeLimit, quizIdx]);
+
+  const getLessonQuizTotalElapsedMs = useCallback((currentQuestionMs = null) => {
+    let totalMs = 0;
+    for (let index = 0; index < activeLessonQuizQuestions.length; index += 1) {
+      if (index === quizIdx && typeof currentQuestionMs === "number") {
+        totalMs += currentQuestionMs;
+      } else {
+        totalMs += Number(quizElapsedMs[index]) || 0;
+      }
+    }
+    return totalMs;
+  }, [activeLessonQuizQuestions.length, quizElapsedMs, quizIdx]);
+
+  const moveToNextLessonQuizQuestion = useCallback((nextAnswers = quizAnswers, currentQuestionMs = null) => {
+    clearQuizAdvanceTimeout();
+    if (quizIdx < activeLessonQuizQuestions.length - 1) {
+      setQuizIdx((current) => current + 1);
+      setQuizRevealed(false);
+      setQuizTimerRemaining(activeSubjectQuizTimeLimit);
+      quizQuestionStartedAtRef.current = Date.now();
+      return;
+    }
+    finishQuiz(nextAnswers, activeLessonQuizQuestions, getLessonQuizTotalElapsedMs(currentQuestionMs));
+    setQuizActive(false);
+  }, [activeLessonQuizQuestions, activeSubjectQuizTimeLimit, clearQuizAdvanceTimeout, getLessonQuizTotalElapsedMs, quizAnswers, quizIdx]);
+
+  const handleLessonQuizOptionSelect = useCallback((optionIndex) => {
+    if (quizRevealed || quizDone || !quizActive) return;
+    const nextAnswers = [...quizAnswers];
+    nextAnswers[quizIdx] = optionIndex;
+    setQuizAnswers(nextAnswers);
+    setQuizRevealed(true);
+    const elapsedMs = recordLessonQuizElapsedForCurrentQuestion();
+    clearQuizAdvanceTimeout();
+    quizAdvanceTimeoutRef.current = setTimeout(() => {
+      moveToNextLessonQuizQuestion(nextAnswers, elapsedMs);
+    }, activeSubjectQuizReflectionDelayMs);
+  }, [activeSubjectQuizReflectionDelayMs, clearQuizAdvanceTimeout, moveToNextLessonQuizQuestion, quizActive, quizAnswers, quizDone, quizIdx, quizRevealed, recordLessonQuizElapsedForCurrentQuestion]);
+
+  useEffect(() => {
+    return () => clearQuizAdvanceTimeout();
+  }, [clearQuizAdvanceTimeout]);
+
+  useEffect(() => {
+    if (!quizActive || quizDone || quizRevealed || !activeLessonQuizQuestions.length) return;
+    setQuizTimerRemaining(activeSubjectQuizTimeLimit);
+    quizQuestionStartedAtRef.current = Date.now();
+  }, [activeLessonQuizQuestions.length, activeSubjectQuizTimeLimit, quizActive, quizDone, quizIdx, quizRevealed]);
+
+  useEffect(() => {
+    if (!quizActive || quizDone || quizRevealed || !activeLessonQuizQuestions.length || quizTimerRemaining <= 0) return undefined;
+    const timerId = setTimeout(() => {
+      setQuizTimerRemaining((value) => Math.max(0, value - 1));
+    }, 1000);
+    return () => clearTimeout(timerId);
+  }, [activeLessonQuizQuestions.length, quizActive, quizDone, quizIdx, quizRevealed, quizTimerRemaining]);
+
+  useEffect(() => {
+    if (!quizActive || quizDone || quizRevealed || !activeLessonQuizQuestions.length || quizTimerRemaining > 0) return undefined;
+    const nextAnswers = [...quizAnswers];
+    if (typeof nextAnswers[quizIdx] !== "number") {
+      nextAnswers[quizIdx] = null;
+      setQuizAnswers(nextAnswers);
+    }
+    setQuizRevealed(true);
+    const elapsedMs = recordLessonQuizElapsedForCurrentQuestion(activeSubjectQuizTimeLimit * 1000);
+    clearQuizAdvanceTimeout();
+    quizAdvanceTimeoutRef.current = setTimeout(() => {
+      moveToNextLessonQuizQuestion(nextAnswers, elapsedMs);
+    }, activeSubjectQuizReflectionDelayMs);
+    return () => clearQuizAdvanceTimeout();
+  }, [activeLessonQuizQuestions.length, activeSubjectQuizReflectionDelayMs, activeSubjectQuizTimeLimit, clearQuizAdvanceTimeout, moveToNextLessonQuizQuestion, quizActive, quizAnswers, quizDone, quizIdx, quizRevealed, quizTimerRemaining, recordLessonQuizElapsedForCurrentQuestion]);
+
   const updatePracticeLessonProgress = useCallback((card, correct, marksEarned, marksPossible) => {
     const lessonKey = getPracticeItemLessonKey(card);
     const subjectId = card?.subject || activePracticeSubjectId;
@@ -12053,9 +12181,14 @@ function HomeschoolApp() {
     }));
   }, []);
 
-  const finishQuiz = async (ans, qs) => {
+  async function finishQuiz(ans, qs, totalElapsedMs = null) {
     const sc = ans.reduce((a, v, i) => a + (v === qs[i].c ? 1 : 0), 0);
-    const el = (Date.now() - quizStartTime) / 1000, today = new Date().toDateString();
+    const recordedElapsedMs = typeof totalElapsedMs === "number"
+      ? totalElapsedMs
+      : quizElapsedMs.reduce((sum, value) => sum + (Number(value) || 0), 0);
+    const fallbackElapsedSeconds = quizStartTime ? ((Date.now() - quizStartTime) / 1000) : 0;
+    const el = recordedElapsedMs > 0 ? (recordedElapsedMs / 1000) : fallbackElapsedSeconds;
+    const today = new Date().toDateString();
     const streakMode = calculateStreak(lastQuizDate, today);
     const ns = streakMode === "increment" ? streak + 1 : streakMode === null ? streak : 1;
     const earnedXp = calculateXP(sc, qs.length, el < 30);
@@ -12075,7 +12208,7 @@ function HomeschoolApp() {
       }
     }
     setQuizDone(true);
-  };
+  }
 
   const sendChat = async () => {
     if (!chatInput.trim()) return;
@@ -12384,6 +12517,7 @@ function HomeschoolApp() {
     if (typeof nextState.practiceSubjectId !== "undefined") setPracticeSubjectId((current) => current || nextState.practiceSubjectId || "english");
     if (nextState.practiceFiltersBySubject) setPracticeFiltersBySubject((current) => ({ ...(current || {}), ...nextState.practiceFiltersBySubject }));
     if (nextState.practiceTimedSettings) setPracticeTimedSettings((current) => ({ ...(current || {}), ...nextState.practiceTimedSettings }));
+    if (nextState.quizTimingSettings) setQuizTimingSettings((current) => normalizeQuizTimingSettings({ ...(current || {}), ...nextState.quizTimingSettings }));
     if (nextState.practiceLessonProgress) setPracticeLessonProgress((current) => ({ ...(current || {}), ...nextState.practiceLessonProgress }));
     if (nextState.daySectionOverrides) setDaySectionOverrides((current) => ({ ...current, ...nextState.daySectionOverrides }));
     if (nextState.studyGoals) setStudyGoals((current) => ({
@@ -12484,6 +12618,7 @@ function HomeschoolApp() {
     practiceSubjectId,
     practiceFiltersBySubject,
     practiceTimedSettings,
+    quizTimingSettings,
     practiceLessonProgress,
     daySectionOverrides,
     studyGoals,
@@ -12494,7 +12629,7 @@ function HomeschoolApp() {
     timeTrackingData,
     notificationHistory,
     gamificationState,
-  }), [activeStudentProfileId, audioMuted, autoMoveNext, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
+  }), [activeStudentProfileId, audioMuted, autoMoveNext, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, quizTimingSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
 
   const buildBlankProfileAppState = useCallback((profile) => {
     const safeProfile = createStudentProfileDraft(profile);
@@ -13742,6 +13877,7 @@ function HomeschoolApp() {
       if (!nextTab) return;
       event.preventDefault();
       window.speechSynthesis.cancel();
+      clearQuizAdvanceTimeout();
       setNavHidden(Boolean(navAutoHide));
       setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
       setSelectedSubject(null);
@@ -13749,7 +13885,9 @@ function HomeschoolApp() {
       setQuizActive(false);
       setQuizDone(false);
       setQuizAnswers([]);
+      setQuizElapsedMs([]);
       setQuizIdx(0);
+      setQuizTimerRemaining(activeSubjectQuizTimeLimit);
       setQuizRevealed(false);
       setSelectedAdverbDay(null);
       setSelectedPrepDay(null);
@@ -14399,6 +14537,7 @@ function HomeschoolApp() {
 
   const goHome = () => {
     window.speechSynthesis.cancel();
+    clearQuizAdvanceTimeout();
     setNavHidden(Boolean(navAutoHide));
     setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
     setTab("home");
@@ -14407,8 +14546,10 @@ function HomeschoolApp() {
     setQuizActive(false);
     setQuizDone(false);
     setQuizAnswers([]);
+    setQuizElapsedMs([]);
     setQuizIdx(0);
     setQuizRevealed(false);
+    setQuizTimerRemaining(activeSubjectQuizTimeLimit);
     setSelectedAdverbDay(null);
     setSelectedPrepDay(null);
     setSelectedAdjDay(null);
@@ -14430,7 +14571,7 @@ function HomeschoolApp() {
     resetReviewSession();
     resetPracticeSession();
   };
-  const goBack = () => { window.speechSynthesis.cancel(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (tab === "review" && (activeReviewCard || reviewSessionDone)) { restoreReviewReturnSnapshot(); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizIdx(0); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
+  const goBack = () => { window.speechSynthesis.cancel(); clearQuizAdvanceTimeout(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (tab === "review" && (activeReviewCard || reviewSessionDone)) { restoreReviewReturnSnapshot(); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizElapsedMs([]); setQuizIdx(0); setQuizTimerRemaining(activeSubjectQuizTimeLimit); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
   const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" || tab === "favorites" || tab === "badges" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" ? ui.progress : tab === "review" ? ui.review : tab === "tutor" ? ui.tutor : ui.settings;
   const reviewReturnLabel = reviewReturnState?.tab === "review"
@@ -14447,8 +14588,17 @@ function HomeschoolApp() {
               ? ui.tutor
               : ui.home;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
-  const currentQuiz = selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : [];
+  const currentQuiz = activeLessonQuizQuestions;
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
+  const quizRecordedTotalMs = quizElapsedMs.reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const quizTotalAllowedMs = currentQuiz.length * activeSubjectQuizTimeLimit * 1000;
+  const quizAverageQuestionMs = currentQuiz.length ? quizRecordedTotalMs / currentQuiz.length : 0;
+  const formatQuizDuration = (ms) => {
+    const totalSeconds = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  };
   const localizedNames = getLocalizedNamePair(studentName, studentNameUr);
   const reviewReadyNowCount = Math.min(Number(reviewStats.due || 0), Number(dailyReviewCap || 20));
   const canInstallApp = Boolean(installPromptEvent) && !isInstalled;
@@ -14518,6 +14668,7 @@ function HomeschoolApp() {
       return;
     }
     window.speechSynthesis.cancel();
+    clearQuizAdvanceTimeout();
     setNavHidden(Boolean(navAutoHide));
     setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
     setTab(nextTab);
@@ -14525,6 +14676,8 @@ function HomeschoolApp() {
     setSelectedLesson(null);
     setQuizActive(false);
     setQuizDone(false);
+    setQuizElapsedMs([]);
+    setQuizTimerRemaining(activeSubjectQuizTimeLimit);
     setSelectedAdverbDay(null);
     setSelectedPrepDay(null);
     setSelectedAdjDay(null);
@@ -15716,7 +15869,7 @@ function HomeschoolApp() {
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
         <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: selectedLesson.key || "english", sectionLabel: selectedLesson.title }} />
-          <button className="start-quiz-btn" onClick={() => { setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizRevealed(false); setQuizDone(false); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 {ui.startQuiz}</button>
+          <button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 {ui.startQuiz}</button>
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, marginBottom: 14 }}>
@@ -15807,7 +15960,7 @@ function HomeschoolApp() {
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && !selectedLesson.hasAdverbs && !selectedLesson.hasTenses && !selectedLesson.hasVocab && !selectedLesson.hasMathSub && (<div className="lesson-detail"><h2>{selectedLesson.title}</h2><p className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: selectedSubject?.id || "general", section: selectedLesson.key || selectedLesson.title, sectionLabel: selectedLesson.title }} /><button className="start-quiz-btn" onClick={() => { setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizRevealed(false); setQuizDone(false); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && !selectedLesson.hasAdverbs && !selectedLesson.hasTenses && !selectedLesson.hasVocab && !selectedLesson.hasMathSub && (<div className="lesson-detail"><h2>{selectedLesson.title}</h2><p className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: selectedSubject?.id || "general", section: selectedLesson.key || selectedLesson.title, sectionLabel: selectedLesson.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx === null && (<>
         {(() => { const isUr = selectedSubject?.id === "urdu"; return (<>
@@ -16292,11 +16445,11 @@ function HomeschoolApp() {
 <button className="play-all-btn" style={dayGroupBackButtonStyle} onClick={() => setSubQuizGroupIdx(null)}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
                   </div>
                 </div>}
-                {quizToRender && <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizGroupIdx} questions={quizToRender} isUrdu={selectedSubject?.id === "urdu"} />}
+                {quizToRender && <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizGroupIdx} questions={quizToRender} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} />}
               </div>
             )
           ) : (
-            <MathSubQuiz key={"mq_"+mathSubIdx} questions={sub.quiz} isUrdu={selectedSubject?.id === "urdu"} />
+            <MathSubQuiz key={"mq_"+mathSubIdx} questions={sub.quiz} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} />
           )
         )}
         </>);
@@ -16383,8 +16536,14 @@ function HomeschoolApp() {
 
       {tab === "home" && quizActive && !quizDone && currentQuiz.length > 0 && (<div className="quiz-container">
         <div className="quiz-progress">{currentQuiz.map((_, i) => <div key={i} className={"qp-dot" + (i < quizIdx ? " done" : i === quizIdx ? " current" : "")} />)}</div>
-        <div className="quiz-question"><div className="q-num">Question {quizIdx + 1} of {currentQuiz.length}</div><h3 className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{currentQuiz[quizIdx].q}</h3></div>
-        <div className="quiz-options">{currentQuiz[quizIdx].a.map((opt, oi) => { const sel = quizAnswers[quizIdx] === oi, cor = oi === currentQuiz[quizIdx].c; let cls = "quiz-option"; if (quizRevealed && cor) cls += " correct"; else if (quizRevealed && sel && !cor) cls += " wrong"; else if (sel) cls += " selected"; return (<button key={oi} className={cls} disabled={quizRevealed} onClick={() => { if (quizRevealed) return; const na = [...quizAnswers]; na[quizIdx] = oi; setQuizAnswers(na); setQuizRevealed(true); setTimeout(() => { if (quizIdx < currentQuiz.length - 1) { setQuizIdx(quizIdx + 1); setQuizRevealed(false); } else { finishQuiz(na, currentQuiz); setQuizActive(false); } }, 1200); }}><span className="opt-letter">{"ABCD"[oi]}</span><span className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{opt}</span></button>); })}</div>
+        <div className="quiz-question">
+          <div className="quiz-meta-row">
+            <div className="q-num">Question {quizIdx + 1} of {currentQuiz.length}</div>
+            <div className={`quiz-timer-pill${quizTimerRemaining <= 5 ? " danger" : ""}`}>{quizTimerRemaining}s</div>
+          </div>
+          <h3 className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{currentQuiz[quizIdx].q}</h3>
+        </div>
+        <div className="quiz-options">{currentQuiz[quizIdx].a.map((opt, oi) => { const sel = quizAnswers[quizIdx] === oi, cor = oi === currentQuiz[quizIdx].c; let cls = "quiz-option"; if (quizRevealed && cor) cls += " correct"; else if (quizRevealed && sel && !cor) cls += " wrong"; else if (sel) cls += " selected"; return (<button key={oi} className={cls} disabled={quizRevealed} onClick={() => handleLessonQuizOptionSelect(oi)}><span className="opt-letter">{"ABCD"[oi]}</span><span className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{opt}</span></button>); })}</div>
       </div>)}
 
       {tab === "home" && quizDone && (<div className="quiz-result">
@@ -16392,40 +16551,68 @@ function HomeschoolApp() {
         <h2>{quizScore === 4 ? "Perfect!" : quizScore >= 3 ? "Great Job!" : quizScore >= 2 ? "Good Try!" : "Keep Practicing!"}</h2>
         <p className="score-text">You scored</p><div className={"score-big " + (quizScore >= 3 ? "high" : quizScore >= 2 ? "mid" : "low")}>{quizScore}/{currentQuiz.length}</div>
         <p className="score-text">+{quizScore * 25 + (quizScore === 4 ? 50 : 0)} XP earned</p>
+        <div className="quiz-time-summary">
+          <div><strong>Time taken</strong> <span>{formatQuizDuration(quizRecordedTotalMs)} / {formatQuizDuration(quizTotalAllowedMs)}</span></div>
+          <div><strong>Average per question</strong> <span>{formatQuizDuration(quizAverageQuestionMs)}</span></div>
+        </div>
         {newBadges.map(bid => { const b = BADGES.find(x => x.id === bid); return b ? <div key={bid} className="badge-earned"><span className="badge-icon">{b.icon}</span><div className="badge-info"><h4>Badge Earned: {b.name}!</h4><p>{b.desc}</p></div></div> : null; })}
-        <div className="result-actions"><button className="retry-btn" onClick={() => { setQuizActive(true); setQuizDone(false); setQuizIdx(0); setQuizAnswers([]); setQuizRevealed(false); setQuizStartTime(Date.now()); setNewBadges([]); }}>🔄 Retry</button><button className="next-btn" onClick={() => { setQuizDone(false); setSelectedLesson(null); setNewBadges([]); }}>📚 More Lessons</button></div>
+        <div className="result-actions"><button className="retry-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizDone(false); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🔄 Retry</button><button className="next-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizDone(false); setSelectedLesson(null); setQuizElapsedMs([]); setQuizTimerRemaining(activeSubjectQuizTimeLimit); setNewBadges([]); }}>📚 More Lessons</button></div>
       </div>)}
 
       {tab === "progress" && (<>
-        <div className="stat-grid"><div className="stat-card"><div className="stat-icon">📝</div><div className="stat-value">{totalQuizzesDone}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Quizzes Done", "مکمل کوئز", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🎯</div><div className="stat-value">{totalQuizzesDone > 0 ? Math.round((totalScore / (totalQuizzesDone * 4)) * 100) : 0}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Avg Score", "اوسط اسکور", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{streak}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Day Streak", "دنوں کا تسلسل", language), language)}</div></div><div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{xp}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Total XP", "کل ایکس پی", language), language)}</div></div></div>
-        <div className="stat-grid">
-          <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(totalStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(ui.totalStudyTime, language)}</div></div>
-          <div className="stat-card"><div className="stat-icon">🕘</div><div className="stat-value">{formatNumberLabel(timeTrackingData.onTimeStarts || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("On-time starts", "وقت پر آغاز", language), language)}</div></div>
-          <div className="stat-card"><div className="stat-icon">🚶</div><div className="stat-value">{formatMinutesLabel(timeTrackingData.totalLateMinutes || 0, language)}</div><div className="stat-label">{renderLocalizedTextNode(ui.totalLateTime, language)}</div></div>
-          <div className="stat-card"><div className="stat-icon">🏁</div><div className="stat-value">{formatNumberLabel(timeTrackingData.classSessionsMet || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.classSessionsMet, language)}</div></div>
+        <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "پروگریس حصے" : "Progress sections"}>
+          <button type="button" className={`review-section-tab${progressSectionTab === "overview" ? " active" : ""}`} onClick={() => setProgressSectionTab("overview")}>
+            {renderLocalizedTextNode(joinLocalizedText("Overview", "جائزہ", language), language)}
+          </button>
+          <button type="button" className={`review-section-tab${progressSectionTab === "subjects" ? " active" : ""}`} onClick={() => setProgressSectionTab("subjects")}>
+            {renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}
+          </button>
+          <button type="button" className={`review-section-tab${progressSectionTab === "timetracking" ? " active" : ""}`} onClick={() => setProgressSectionTab("timetracking")}>
+            {renderLocalizedTextNode(joinLocalizedText("Time & Attendance", "وقت اور حاضری", language), language)}
+          </button>
         </div>
-        <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subject Progress", "مضامین کی پیش رفت", language), language)}</h3>
-        {SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round((done / ls.length) * 100) : 0; return (<div key={subj.id} className="progress-bar-container"><div className="progress-bar-label"><span>{subj.icon} {subj.name}</span><span style={{ color: "var(--text-muted)" }}>{done}/{ls.length}</span></div><div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: pct + "%", background: subj.color }} /></div></div>); })}
-        <div className="review-panel" style={{ marginTop: 18 }}>
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(ui.recentTimeHistory, language)}</h3>
-              <p>{renderLocalizedTextNode(joinLocalizedText("See your latest class-time records, usage, and lateness at a glance.", "اپنے حالیہ کلاس اوقات، مطالعہ وقت، اور تاخیر کو ایک نظر میں دیکھیں۔", language), language)}</p>
+
+        <div
+          key={`${transitionMode}:${progressSectionTab}`}
+          className={`review-section-transition${!reducedMotion && transitionMode !== "none" ? " transition-enabled" : ""}`}
+          data-transition-mode={transitionMode}
+        >
+          {progressSectionTab === "overview" && <>
+            <div className="stat-grid"><div className="stat-card"><div className="stat-icon">📝</div><div className="stat-value">{totalQuizzesDone}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Quizzes Done", "مکمل کوئز", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🎯</div><div className="stat-value">{totalQuizzesDone > 0 ? Math.round((totalScore / (totalQuizzesDone * 4)) * 100) : 0}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Avg Score", "اوسط اسکور", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{streak}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Day Streak", "دنوں کا تسلسل", language), language)}</div></div><div className="stat-card"><div className="stat-icon">⭐</div><div className="stat-value">{xp}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Total XP", "کل ایکس پی", language), language)}</div></div></div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(totalStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(ui.totalStudyTime, language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🕘</div><div className="stat-value">{formatNumberLabel(timeTrackingData.onTimeStarts || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("On-time starts", "وقت پر آغاز", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🚶</div><div className="stat-value">{formatMinutesLabel(timeTrackingData.totalLateMinutes || 0, language)}</div><div className="stat-label">{renderLocalizedTextNode(ui.totalLateTime, language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🏁</div><div className="stat-value">{formatNumberLabel(timeTrackingData.classSessionsMet || 0)}</div><div className="stat-label">{renderLocalizedTextNode(ui.classSessionsMet, language)}</div></div>
             </div>
-          </div>
-          {recentTimeHistory.length > 0 ? (
-            <div className="notification-history-list">
-              {recentTimeHistory.map((entry) => (
-                <div key={entry.dayKey} className="notification-history-item">
-                  <div className="notification-history-top">
-                    <strong>{renderLocalizedTextNode(entry.dayKey, language)}</strong>
-                    <span>{renderLocalizedTextNode(entry.status === "on-time" ? ui.classStatusOnTime : entry.status === "late" ? ui.classStatusLate : ui.classStatusNotStarted, language)}</span>
+          </>}
+
+          {progressSectionTab === "subjects" && <>
+            <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subject Progress", "مضامین کی پیش رفت", language), language)}</h3>
+            {SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round((done / ls.length) * 100) : 0; return (<div key={subj.id} className="progress-bar-container"><div className="progress-bar-label"><span>{subj.icon} {subj.name}</span><span style={{ color: "var(--text-muted)" }}>{done}/{ls.length}</span></div><div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: pct + "%", background: subj.color }} /></div></div>); })}
+          </>}
+
+          {progressSectionTab === "timetracking" && <div className="review-panel" style={{ marginTop: 0 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(ui.recentTimeHistory, language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("See your latest class-time records, usage, and lateness at a glance.", "اپنے حالیہ کلاس اوقات، مطالعہ وقت، اور تاخیر کو ایک نظر میں دیکھیں۔", language), language)}</p>
+              </div>
+            </div>
+            {recentTimeHistory.length > 0 ? (
+              <div className="notification-history-list">
+                {recentTimeHistory.map((entry) => (
+                  <div key={entry.dayKey} className="notification-history-item">
+                    <div className="notification-history-top">
+                      <strong>{renderLocalizedTextNode(entry.dayKey, language)}</strong>
+                      <span>{renderLocalizedTextNode(entry.status === "on-time" ? ui.classStatusOnTime : entry.status === "late" ? ui.classStatusLate : ui.classStatusNotStarted, language)}</span>
+                    </div>
+                    <p>{renderLocalizedTextNode(joinLocalizedText(`Spent ${formatMinutesLabel(Math.round((entry.msSpent || 0) / 60000), "en")} • Late by ${formatMinutesLabel(entry.latenessMinutes || 0, "en")}`, `${formatMinutesLabel(Math.round((entry.msSpent || 0) / 60000), "ur")} مطالعہ • ${formatMinutesLabel(entry.latenessMinutes || 0, "ur")} تاخیر`, language), language)}</p>
                   </div>
-                  <p>{renderLocalizedTextNode(joinLocalizedText(`Spent ${formatMinutesLabel(Math.round((entry.msSpent || 0) / 60000), "en")} • Late by ${formatMinutesLabel(entry.latenessMinutes || 0, "en")}`, `${formatMinutesLabel(Math.round((entry.msSpent || 0) / 60000), "ur")} مطالعہ • ${formatMinutesLabel(entry.latenessMinutes || 0, "ur")} تاخیر`, language), language)}</p>
-                </div>
-              ))}
-            </div>
-          ) : <p className="empty-state">{renderLocalizedTextNode(ui.classTrackingDisabled, language)}</p>}
+                ))}
+              </div>
+            ) : <p className="empty-state">{renderLocalizedTextNode(ui.classTrackingDisabled, language)}</p>}
+          </div>}
         </div>
       </>)}
 
@@ -18126,6 +18313,10 @@ function HomeschoolApp() {
             onDailyReviewCapChange={setDailyReviewCap}
             reviewSrsSettings={reviewSrsSettings}
             onReviewSrsSettingChange={handleReviewSrsSettingChange}
+            practiceTimedSettings={practiceTimedSettings}
+            onPracticeTimedSettingChange={handlePracticeTimedSettingChange}
+            quizTimingSettings={quizTimingSettings}
+            onQuizTimingSettingChange={handleQuizTimingSettingChange}
             daySectionSettings={daySectionSettings}
             onDaySectionChange={handleDaySectionChange}
             studyGoals={studyGoals}
