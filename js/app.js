@@ -6296,8 +6296,12 @@ function getPracticeAudioPrompt(card, mode) {
   if (!card) return "";
   if (mode === "dictation") return normalizeText(card?.prompt);
   if (mode === "fillblanks") {
-    const blankLabel = card?.practiceLang === "ur" ? "خالی جگہ" : "blank";
-    return normalizeText(card?.blankSentence || "").replace("_____", blankLabel);
+    return normalizeSentenceSpacing(
+      normalizeText(card?.blankSentence || "")
+        .replace(/_+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    );
   }
   if (mode === "typing") return normalizeText(getPracticeTypingClue(card) || card?.prompt || "");
   if (mode === "matching" || mode === "timedmatching") return normalizeText(card?.matchPrompt || card?.prompt || "");

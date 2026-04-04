@@ -4643,8 +4643,9 @@ ${marker} `);
     if (!card) return "";
     if (mode === "dictation") return normalizeText(card == null ? void 0 : card.prompt);
     if (mode === "fillblanks") {
-      const blankLabel = (card == null ? void 0 : card.practiceLang) === "ur" ? "\u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1" : "blank";
-      return normalizeText((card == null ? void 0 : card.blankSentence) || "").replace("_____", blankLabel);
+      return normalizeSentenceSpacing(
+        normalizeText((card == null ? void 0 : card.blankSentence) || "").replace(/_+/g, " ").replace(/\s+/g, " ").trim()
+      );
     }
     if (mode === "typing") return normalizeText(getPracticeTypingClue(card) || (card == null ? void 0 : card.prompt) || "");
     if (mode === "matching" || mode === "timedmatching") return normalizeText((card == null ? void 0 : card.matchPrompt) || (card == null ? void 0 : card.prompt) || "");

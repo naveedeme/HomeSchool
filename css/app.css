@@ -749,7 +749,11 @@ direction:ltr;
 .practice-card-input{margin-top:4px;border-radius:16px;background:color-mix(in srgb,var(--bg-elevated) 96%,white);min-height:52px}
 .practice-card-footer{display:flex;gap:12px;justify-content:center;margin-top:auto;padding-top:4px}
 .practice-card-footer .retry-btn,
-.practice-card-footer .next-btn{flex:1;min-height:48px;border-radius:16px}
+.practice-card-footer .next-btn{flex:1;min-height:48px;border-radius:16px;align-self:center;min-width:160px;padding:12px 18px;border:1px solid color-mix(in srgb,var(--accent) 22%,var(--border));background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--bg-card)),color-mix(in srgb,var(--accent) 7%,var(--bg-elevated)));color:var(--text-primary);font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;transition:transform .18s ease,border-color .18s ease,background .18s ease,opacity .18s ease}
+.practice-card-footer .retry-btn:hover,
+.practice-card-footer .next-btn:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 34%,var(--border))}
+.practice-card-footer .retry-btn:disabled,
+.practice-card-footer .next-btn:disabled{opacity:.56;cursor:not-allowed;transform:none}
 .flashcard-stage{position:relative;display:flex;justify-content:center;align-items:center;padding-inline:18px}
 .practice-card-face-flashcards{position:relative;z-index:1;min-height:280px;display:flex;flex-direction:column;justify-content:center;padding:28px 24px;border-radius:22px;border:1px solid color-mix(in srgb,var(--accent) 18%,var(--border));background:radial-gradient(circle at top right,color-mix(in srgb,var(--accent) 10%,transparent),transparent 34%),linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 94%,white),color-mix(in srgb,var(--bg-elevated) 96%,var(--bg-card)));box-shadow:inset 0 1px 0 rgba(255,255,255,.44),0 16px 32px rgba(15,23,42,.08)}
 .practice-card-shell-flashcards:hover .practice-card-face-flashcards{animation:flashcardHoverBeat .95s ease-in-out infinite}
@@ -893,7 +897,7 @@ direction:ltr;
 .timed-challenge-options{margin-top:16px}
 .timed-option{font-size:16px;font-weight:800}
 .blank-sentence{margin-top:14px;padding:16px 18px;border-radius:16px;border:1px dashed color-mix(in srgb,var(--accent) 32%,var(--border));background:color-mix(in srgb,var(--accent) 6%,var(--bg-card));font-size:18px;font-weight:700;line-height:1.7;color:var(--text-primary)}
-.blank-option-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
+.blank-option-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
 .blank-option{display:flex;align-items:center;justify-content:center;min-height:54px;padding:12px 14px;border-radius:14px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;transition:transform .16s ease,background-color .18s ease,border-color .18s ease,box-shadow .18s ease}
 .blank-option:hover{background:color-mix(in srgb,var(--accent) 6%,var(--bg-card));border-color:color-mix(in srgb,var(--accent) 28%,var(--border))}
 .blank-option:active{transform:scale(.985)}
