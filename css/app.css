@@ -255,23 +255,26 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-card[data-ui-language="ur"] .lesson-status{justify-content:flex-start}
 .lesson-detail{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px}
 .lesson-detail h2{font-size:20px;font-weight:800;margin-bottom:12px}.lesson-detail p{font-size:14px;color:var(--text-secondary);line-height:1.7}
+.subject-chapter-actions,.subject-chapter-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+.subject-chapter-actions-copy{font-size:12px;color:var(--text-secondary);line-height:1.5}
+.subject-chapter-toolbar .ghost-cta,.subject-chapter-actions .ghost-cta{display:inline-flex;align-items:center;justify-content:center;min-height:42px}
 .lesson-detail .start-quiz-btn{margin-top:20px;width:100%;padding:14px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--accent),#0EA5E9);color:#0F172A;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;transition:all .2s}
 .quiz-container{animation:fadeSlide .3s ease}@keyframes fadeSlide{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .quiz-progress{display:flex;gap:4px;margin-bottom:20px}.quiz-progress .qp-dot{flex:1;height:4px;background:var(--bg-elevated);border-radius:2px;transition:background .3s}.quiz-progress .qp-dot.done{background:var(--success)}.quiz-progress .qp-dot.current{background:var(--accent)}
 .quiz-question{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:16px}
-.exercise-bilingual-field{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:stretch;width:100%;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);overflow:hidden;box-shadow:0 10px 24px rgba(15,23,42,.05)}
-.exercise-bilingual-field-side{display:flex;flex-direction:column;gap:8px;padding:12px 16px;min-width:0;cursor:pointer;transition:background-color .2s ease,color .2s ease,box-shadow .2s ease}
+.exercise-bilingual-field{display:grid;grid-template-columns:50% 50%;align-items:stretch;width:100%;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);overflow:hidden;box-shadow:0 10px 24px rgba(15,23,42,.05)}
+.exercise-bilingual-field-side{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px 12px;min-width:0;width:100%;cursor:pointer;transition:background-color .2s ease,color .2s ease,box-shadow .2s ease;box-sizing:border-box}
 .exercise-bilingual-field-side:hover{background:color-mix(in srgb,var(--accent) 7%,var(--bg-card))}
 .exercise-bilingual-field-side.speaking{background:rgba(56,189,248,.12);color:#38BDF8;box-shadow:inset 0 0 0 1px rgba(56,189,248,.24)}
-.exercise-bilingual-field-divider{width:1px;align-self:stretch;background:color-mix(in srgb,var(--border) 88%,transparent)}
+.exercise-bilingual-field-divider{display:none}
 .exercise-bilingual-field-label{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)}
 .exercise-bilingual-field-text{font-size:18px;line-height:1.7;color:var(--text-primary)}
-.exercise-bilingual-field-side-en{text-align:left;direction:ltr}
-.exercise-bilingual-field-side-en .exercise-bilingual-field-label{font-family:var(--font)}
-.exercise-bilingual-field-text-en{font-family:var(--font)}
-.exercise-bilingual-field-side-ur{text-align:right;direction:rtl}
-.exercise-bilingual-field-side-ur .exercise-bilingual-field-label{font-family:var(--font-ur);line-height:1.8}
-.exercise-bilingual-field-text-ur{font-family:var(--font-ur);line-height:1.95}
+.exercise-bilingual-field-side-en{text-align:left;direction:ltr;align-items:stretch}
+.exercise-bilingual-field-side-en .exercise-bilingual-field-label{font-family:var(--font);width:100%;text-align:left}
+.exercise-bilingual-field-text-en{font-family:var(--font);width:100%;text-align:left;direction:ltr;unicode-bidi:isolate}
+.exercise-bilingual-field-side-ur{text-align:right;direction:rtl;unicode-bidi:isolate;align-items:stretch}
+.exercise-bilingual-field-side-ur .exercise-bilingual-field-label{font-family:var(--font-ur);line-height:1.8;width:100%;text-align:right;display:block;margin:0}
+.exercise-bilingual-field-text-ur{font-family:var(--font-ur);line-height:1.95;direction:rtl;text-align:right;unicode-bidi:isolate;width:100%;display:block;margin:0}
 .quiz-meta-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .quiz-timer-pill{display:inline-flex;align-items:center;justify-content:center;min-width:72px;padding:7px 12px;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent) 28%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--bg-card));font-size:12px;font-weight:900;line-height:1.2;color:var(--text-primary)}
 .quiz-timer-pill.danger{border-color:rgba(239,68,68,.34);background:rgba(239,68,68,.14);color:#dc2626}
@@ -853,6 +856,7 @@ direction:ltr;
 .practice-card-cue{display:inline-flex;align-items:center;max-width:100%;margin-bottom:12px;padding:7px 11px;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent) 22%,var(--border));background:color-mix(in srgb,var(--accent) 7%,var(--bg-card));color:var(--text-secondary);font-family:var(--font);font-size:12px;font-weight:800;line-height:1.5}
 .practice-card-cue.urdu{font-family:var(--font-ur);direction:rtl;text-align:right;line-height:1.85}
 .mixed-script-text{display:inline-block;max-width:100%;white-space:pre-wrap;word-break:break-word}
+.mixed-script-latin{font-family:var(--font);direction:ltr;unicode-bidi:isolate;text-align:left}
 .mixed-script-urdu{font-family:var(--font-ur);direction:rtl;unicode-bidi:isolate;text-align:right;line-height:1.9}
 .practice-instruction{margin-bottom:14px;padding:12px 14px;border-radius:14px;border:1px solid color-mix(in srgb,var(--accent) 22%,var(--border));background:color-mix(in srgb,var(--accent) 7%,var(--bg-card));color:var(--text-secondary);font-family:var(--font);font-size:14px;font-weight:700;line-height:1.65}
 .practice-instruction.urdu{font-family:var(--font-ur);direction:rtl;text-align:right;line-height:1.9}

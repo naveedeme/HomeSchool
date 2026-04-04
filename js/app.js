@@ -23,6 +23,174 @@ const {
 } = POS_DATA;
 const AppContext = React.createContext(null);
 
+function createEmptyCustomContentState() {
+  return {
+    lessonsBySubjectGrade: {},
+    quizzesByKey: {},
+    loaded: false,
+  };
+}
+
+function normalizeCustomContentSnapshot(snapshot = {}) {
+  const nextState = createEmptyCustomContentState();
+  const lessons = Array.isArray(snapshot?.lessons) ? snapshot.lessons : [];
+  const quizzes = Array.isArray(snapshot?.quizzes) ? snapshot.quizzes : [];
+  lessons.forEach((record) => {
+    const subject = String(record?.subject || "").trim();
+    const grade = Number(record?.grade);
+    const lessonKey = String(record?.lessonKey || record?.data?.key || record?.data?.id || "").trim();
+    if (!subject || !Number.isFinite(grade) || !lessonKey || !record?.data) return;
+    const bucketKey = `${subject}::${grade}`;
+    if (!nextState.lessonsBySubjectGrade[bucketKey]) nextState.lessonsBySubjectGrade[bucketKey] = [];
+    nextState.lessonsBySubjectGrade[bucketKey].push({
+      ...record.data,
+      key: record.data.key || lessonKey,
+      id: record.data.id || `${subject}_${grade}_${lessonKey}`,
+      __custom: true,
+    });
+  });
+  quizzes.forEach((record) => {
+    const subject = String(record?.subject || "").trim();
+    const grade = Number(record?.grade);
+    const lessonKey = String(record?.lessonKey || "").trim();
+    if (!subject || !Number.isFinite(grade) || !lessonKey) return;
+    nextState.quizzesByKey[`${subject}::${grade}::${lessonKey}`] = Array.isArray(record?.questions) ? record.questions : [];
+  });
+  nextState.loaded = true;
+  return nextState;
+}
+
+function mergeLessonCollections(baseLessons = [], customLessons = []) {
+  const merged = new Map();
+  (Array.isArray(baseLessons) ? baseLessons : []).forEach((lesson, index) => {
+    const lessonKey = String(lesson?.key || lesson?.id || `built_in_${index}`).trim();
+    if (!lessonKey) return;
+    merged.set(lessonKey, lesson);
+  });
+  (Array.isArray(customLessons) ? customLessons : []).forEach((lesson, index) => {
+    const lessonKey = String(lesson?.key || lesson?.id || `custom_${index}`).trim();
+    if (!lessonKey) return;
+    merged.set(lessonKey, lesson);
+  });
+  return Array.from(merged.values());
+}
+
+function slugifyCustomChapterKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/['"`’]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
+}
+
+function extractLessonOrdinal(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (!text) continue;
+    const explicitMatch = text.match(/\b(?:lesson|chapter|سبق)\s*[_\-\s]?\s*(\d+)\b/iu);
+    if (explicitMatch) {
+      const ordinal = Number(explicitMatch[1]);
+      if (Number.isFinite(ordinal) && ordinal > 0) return ordinal;
+    }
+    const plainMatch = text.match(/\b(\d+)\b/);
+    if (plainMatch) {
+      const ordinal = Number(plainMatch[1]);
+      if (Number.isFinite(ordinal) && ordinal > 0) return ordinal;
+    }
+  }
+  return null;
+}
+
+function resolveCustomChapterLessonKey({ lessonKey = "", title = "", fallbackNumber = null } = {}) {
+  const ordinal = extractLessonOrdinal(lessonKey, title, fallbackNumber);
+  if (Number.isFinite(ordinal) && ordinal > 0) return `lesson_${ordinal}`;
+  const normalizedSlug = slugifyCustomChapterKey(lessonKey || title);
+  return normalizedSlug || "lesson_1";
+}
+
+function cloneSerializableValue(value) {
+  return JSON.parse(JSON.stringify(value == null ? null : value));
+}
+
+function buildCustomChapterExportPayload({ subject, grade, lesson, questions, fallbackNumber = null }) {
+  const lessonData = cloneSerializableValue(lesson || {}) || {};
+  delete lessonData.__custom;
+  delete lessonData.id;
+  const lessonKey = resolveCustomChapterLessonKey({
+    lessonKey: lessonData.key || getLessonKeyValue(lesson),
+    title: lessonData.title || lesson?.title || "",
+    fallbackNumber,
+  });
+  lessonData.key = lessonKey;
+  return {
+    kind: "homeschool-chapter",
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    subject: String(subject || "").trim(),
+    grade: Number(grade),
+    lessonKey,
+    lesson: lessonData,
+    questions: Array.isArray(questions) ? cloneSerializableValue(questions) : [],
+  };
+}
+
+function normalizeCustomChapterImportPayload(payload = {}, context = {}) {
+  const safePayload = payload && typeof payload === "object" ? payload : {};
+  const chapterPayload = safePayload.chapter && typeof safePayload.chapter === "object" ? safePayload.chapter : null;
+  const lessonPayload = safePayload.lesson && typeof safePayload.lesson === "object"
+    ? safePayload.lesson
+    : safePayload.data && typeof safePayload.data === "object"
+      ? safePayload.data
+      : chapterPayload?.lesson && typeof chapterPayload.lesson === "object"
+        ? chapterPayload.lesson
+        : chapterPayload?.data && typeof chapterPayload.data === "object"
+          ? chapterPayload.data
+          : chapterPayload && typeof chapterPayload === "object"
+            ? chapterPayload
+            : {};
+  const subject = String(context.subject || safePayload.subject || safePayload.meta?.subject || "").trim();
+  const grade = Number(context.grade ?? safePayload.grade ?? safePayload.meta?.grade);
+  const title = String(lessonPayload.title || safePayload.title || "").trim();
+  const lessonKey = resolveCustomChapterLessonKey({
+    lessonKey: safePayload.lessonKey || lessonPayload.key || lessonPayload.id,
+    title,
+    fallbackNumber: context.nextLessonNumber,
+  });
+  if (!subject || !Number.isFinite(grade)) {
+    throw new Error("Chapter import needs a valid subject and grade.");
+  }
+  if (!lessonKey) {
+    throw new Error("Chapter import needs a lesson key or title.");
+  }
+  const lessonData = cloneSerializableValue(lessonPayload) || {};
+  delete lessonData.__custom;
+  lessonData.key = lessonKey;
+  lessonData.id = `${subject}_${grade}_${lessonKey}`;
+  if (!lessonData.title) lessonData.title = title || lessonKey.replace(/_/g, " ");
+  if (!lessonData.content && typeof safePayload.content === "string") lessonData.content = safePayload.content;
+  if (!lessonData.title) {
+    throw new Error("Chapter title is missing.");
+  }
+  const questions = Array.isArray(safePayload.questions)
+    ? safePayload.questions
+    : Array.isArray(safePayload.quiz)
+      ? safePayload.quiz
+      : Array.isArray(safePayload.quizQuestions)
+        ? safePayload.quizQuestions
+        : Array.isArray(chapterPayload?.questions)
+          ? chapterPayload.questions
+          : [];
+  return {
+    subject,
+    grade,
+    lessonKey,
+    data: lessonData,
+    questions: cloneSerializableValue(questions) || [],
+  };
+}
+
 const UI_TEXT = {
   en: {
     loadingHome: "Loading HomeSchool...",
@@ -5657,7 +5825,11 @@ function renderMixedScriptText(text, keyBase = "mixed-script") {
   let match;
   while ((match = regex.exec(source)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(<React.Fragment key={`${keyBase}-plain-${lastIndex}`}>{source.slice(lastIndex, match.index)}</React.Fragment>);
+      parts.push(
+        <span key={`${keyBase}-plain-${lastIndex}`} className="mixed-script-latin">
+          {source.slice(lastIndex, match.index)}
+        </span>,
+      );
     }
     parts.push(
       <span key={`${keyBase}-urdu-${match.index}`} className="mixed-script-urdu">
@@ -5667,7 +5839,11 @@ function renderMixedScriptText(text, keyBase = "mixed-script") {
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < source.length) {
-    parts.push(<React.Fragment key={`${keyBase}-tail-${lastIndex}`}>{source.slice(lastIndex)}</React.Fragment>);
+    parts.push(
+      <span key={`${keyBase}-tail-${lastIndex}`} className="mixed-script-latin">
+        {source.slice(lastIndex)}
+      </span>,
+    );
   }
   return parts.length ? parts : source;
 }
@@ -7726,6 +7902,8 @@ function HomeschoolApp() {
   const [aiProviderBusy, setAiProviderBusy] = useState({});
   const [selectedAiProvider, setSelectedAiProvider] = useState(storedAiTutorPreferences?.providerId || "openai");
   const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
+  const [customContentState, setCustomContentState] = useState(createEmptyCustomContentState());
+  const [chapterImportBusy, setChapterImportBusy] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [audioMuted, setAudioMuted] = useState(Boolean(stored?.audioMuted));
@@ -7862,6 +8040,7 @@ function HomeschoolApp() {
   const chatEndRef = useRef(null);
   const chatTextareaRef = useRef(null);
   const chatFileInputRef = useRef(null);
+  const chapterImportInputRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
@@ -8238,7 +8417,27 @@ function HomeschoolApp() {
     color: "var(--text-primary)",
     border: "1px solid var(--border)",
   };
-  const gradePracticeItems = useMemo(() => (grade ? buildGradePracticeItems(window.HomeSchoolData, grade) : []), [grade]);
+  const getMergedLessons = useCallback((subjectId, targetGrade) => {
+    const baseLessons = getLessons(subjectId, targetGrade) || [];
+    const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
+    return mergeLessonCollections(baseLessons, customLessons);
+  }, [customContentState.lessonsBySubjectGrade]);
+  const getMergedQuiz = useCallback((subjectId, targetGrade, lessonKey) => {
+    const normalizedLessonKey = String(lessonKey || "").trim();
+    const customQuiz = customContentState.quizzesByKey?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
+    if (Array.isArray(customQuiz) && customQuiz.length > 0) return customQuiz;
+    return getQuiz(subjectId, targetGrade, normalizedLessonKey) || [];
+  }, [customContentState.quizzesByKey]);
+  const contentDataLoader = useMemo(() => ({
+    ...window.HomeSchoolData,
+    getLessons: getMergedLessons,
+    getQuiz: getMergedQuiz,
+  }), [getMergedLessons, getMergedQuiz]);
+  const selectedSubjectLessons = useMemo(
+    () => (selectedSubject && grade ? getMergedLessons(selectedSubject.id, grade) : []),
+    [getMergedLessons, grade, selectedSubject],
+  );
+  const gradePracticeItems = useMemo(() => (grade ? buildGradePracticeItems(contentDataLoader, grade) : []), [contentDataLoader, grade]);
   const availablePracticeSubjects = useMemo(() => SUBJECTS.filter((subject) => {
     const hasReviewItems = reviewLibrary.some((card) => (card?.subject || "english") === subject.id && card?.prompt && (card?.answer || card?.meaning));
     const hasSupplementalItems = gradePracticeItems.some((item) => item?.subject === subject.id && item?.prompt && (item?.answer || item?.meaning));
@@ -8251,8 +8450,8 @@ function HomeschoolApp() {
     || null;
   const activePracticeSubjectId = activePracticeSubject?.id || "english";
   const practiceSubjectLessons = useMemo(
-    () => (grade && activePracticeSubjectId ? (window.HomeSchoolData?.getLessons?.(activePracticeSubjectId, grade) || []) : []),
-    [activePracticeSubjectId, grade],
+    () => (grade && activePracticeSubjectId ? getMergedLessons(activePracticeSubjectId, grade) : []),
+    [activePracticeSubjectId, getMergedLessons, grade],
   );
   const practiceSubjectLessonMap = useMemo(
     () => new Map(practiceSubjectLessons.map((lesson, index) => [getLessonKeyValue(lesson), index])),
@@ -8332,8 +8531,97 @@ function HomeschoolApp() {
   const activeSubjectQuizTimeLimit = Math.max(5, Math.min(90, Number(quizTimingSettings?.questionSeconds) || 15));
   const activeSubjectQuizReflectionDelayMs = Math.max(1000, Math.min(10000, (Number(quizTimingSettings?.reflectionSeconds) || 2) * 1000));
   const activeLessonQuizQuestions = useMemo(() => (
-    selectedLesson ? getQuiz(selectedSubject?.id, grade, selectedLesson.key) : []
-  ), [grade, selectedLesson, selectedSubject?.id]);
+    selectedLesson ? getMergedQuiz(selectedSubject?.id, grade, selectedLesson.key) : []
+  ), [getMergedQuiz, grade, selectedLesson, selectedSubject?.id]);
+  const refreshCustomContentState = useCallback(async () => {
+    if (!window.HomeSchoolDB?.getCustomContentSnapshot) {
+      setCustomContentState((current) => ({ ...current, loaded: true }));
+      return createEmptyCustomContentState();
+    }
+    const snapshot = await window.HomeSchoolDB.getCustomContentSnapshot();
+    const normalized = normalizeCustomContentSnapshot(snapshot);
+    setCustomContentState(normalized);
+    return normalized;
+  }, []);
+  const handleOpenChapterImport = useCallback(() => {
+    if (!selectedSubject) {
+      showAppToast(joinLocalizedText("Choose a subject first.", "پہلے ایک مضمون منتخب کریں۔", language), "alert");
+      return;
+    }
+    if (!grade) {
+      showAppToast(joinLocalizedText("Choose a grade first.", "پہلے ایک جماعت منتخب کریں۔", language), "alert");
+      return;
+    }
+    if (chapterImportInputRef.current) chapterImportInputRef.current.value = "";
+    chapterImportInputRef.current?.click?.();
+  }, [grade, language, selectedSubject, showAppToast]);
+  const handleImportCustomChapter = useCallback(async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    if (!selectedSubject || !grade) {
+      if (event?.target) event.target.value = "";
+      showAppToast(joinLocalizedText("Choose a subject first.", "پہلے ایک مضمون منتخب کریں۔", language), "alert");
+      return;
+    }
+    setChapterImportBusy(true);
+    try {
+      const rawText = await file.text();
+      const parsed = JSON.parse(rawText);
+      const payload = normalizeCustomChapterImportPayload(parsed, {
+        subject: selectedSubject.id,
+        grade,
+        nextLessonNumber: selectedSubjectLessons.length + 1,
+      });
+      const hadExistingLesson = selectedSubjectLessons.some((lesson) => {
+        const existingKey = String(getLessonKeyValue(lesson) || "").trim();
+        return existingKey === payload.lessonKey;
+      });
+      await window.HomeSchoolDB.saveCustomChapter(payload);
+      await refreshCustomContentState();
+      setSelectedLesson((current) => {
+        const currentKey = String(getLessonKeyValue(current) || "").trim();
+        return currentKey && currentKey === payload.lessonKey
+          ? { ...payload.data, __custom: true }
+          : current;
+      });
+      showAppToast(
+        hadExistingLesson
+          ? joinLocalizedText("Chapter updated", "سبق تازہ کر دیا گیا", language)
+          : joinLocalizedText("Chapter added", "سبق شامل کر دیا گیا", language),
+        "check",
+      );
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(
+          `Chapter import failed: ${error?.message || error}`,
+          `سبق درآمد ناکام ہوئی: ${error?.message || error}`,
+          language,
+        ),
+        "alert",
+      );
+    } finally {
+      setChapterImportBusy(false);
+      if (event?.target) event.target.value = "";
+    }
+  }, [grade, language, refreshCustomContentState, selectedSubject, selectedSubjectLessons, showAppToast]);
+  const handleExportSelectedChapter = useCallback(() => {
+    if (!selectedSubject || !selectedLesson || !grade) {
+      showAppToast(joinLocalizedText("Choose a lesson first.", "پہلے ایک سبق منتخب کریں۔", language), "alert");
+      return;
+    }
+    const payload = buildCustomChapterExportPayload({
+      subject: selectedSubject.id,
+      grade,
+      lesson: selectedLesson,
+      questions: activeLessonQuizQuestions,
+      fallbackNumber: Math.max(1, selectedSubjectLessons.findIndex((lesson) => String(getLessonKeyValue(lesson) || "").trim() === String(getLessonKeyValue(selectedLesson) || "").trim()) + 1),
+    });
+    downloadJson(
+      `chapter-${selectedSubject.id}-grade-${grade}-${payload.lessonKey || "lesson"}.json`,
+      payload,
+    );
+    showAppToast(joinLocalizedText("Chapter exported", "سبق برآمد کر دیا گیا", language), "copy");
+  }, [activeLessonQuizQuestions, grade, language, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast]);
   const activePracticeLessonKey = getPracticeItemLessonKey(activePracticeCard);
   const activePracticeLessonProgress = activePracticeLessonKey ? (practiceLessonProgress?.[`${activePracticeSubjectId}|${activePracticeLessonKey}`] || null) : null;
   const activePracticeMastery = getPracticeMasteryMeta(activePracticeCard, activePracticeLessonProgress, language);
@@ -8553,7 +8841,7 @@ function HomeschoolApp() {
   const discoveryLessonIndex = useMemo(() => {
     if (!grade) return [];
     return SUBJECTS.flatMap((subject) => {
-      const lessons = getLessons(subject.id, grade) || [];
+const lessons = getMergedLessons(subject.id, grade) || [];
       return lessons.map((lesson, lessonIndex) => ({
         id: `discover_${subject.id}_${lesson.key || lesson.id || lessonIndex}`,
         subjectId: subject.id,
@@ -8569,7 +8857,7 @@ function HomeschoolApp() {
         completed: Boolean(completedQuizzes[lesson.id]),
       }));
     });
-  }, [completedQuizzes, grade]);
+  }, [completedQuizzes, getMergedLessons, grade]);
   const filteredDiscoveryLessons = useMemo(() => {
     const searchNeedle = normalizeText(contentSearch).toLowerCase();
     return discoveryLessonIndex.filter((item) => {
@@ -8694,12 +8982,12 @@ function HomeschoolApp() {
     }, {});
   }, [language, wordBankIndex]);
   const dictionaryLessonOptions = useMemo(() => {
-    if (!dictionarySubjectFilter || dictionarySubjectFilter === "all" || !window.HomeSchoolData?.getLessons) return [];
-    return (window.HomeSchoolData.getLessons(dictionarySubjectFilter, grade) || []).map((lesson) => ({
+    if (!dictionarySubjectFilter || dictionarySubjectFilter === "all") return [];
+return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       key: lesson.key,
       label: lesson.title,
     }));
-  }, [dictionarySubjectFilter, grade]);
+  }, [dictionarySubjectFilter, getMergedLessons, grade]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDictionarySearchDebounced(dictionarySearch);
@@ -10811,6 +11099,7 @@ function HomeschoolApp() {
       setAiProviderDrafts(fallbackAiConfigs);
       if (fallbackAiTutorPreferences?.providerId) setSelectedAiProvider(fallbackAiTutorPreferences.providerId);
       setSupabaseDictionarySync(fallbackSupabaseSync);
+      setCustomContentState((current) => ({ ...current, loaded: true }));
       setDbLoaded(true);
       return;
     }
@@ -11004,6 +11293,12 @@ function HomeschoolApp() {
         setAiProviderConfigs(storedAiProviders);
         setAiProviderDrafts(storedAiProviders);
         if (storedAiTutor?.providerId) setSelectedAiProvider(storedAiTutor.providerId);
+        const customContentSnapshot = await window.HomeSchoolDB.getCustomContentSnapshot?.();
+        if (customContentSnapshot) {
+          setCustomContentState(normalizeCustomContentSnapshot(customContentSnapshot));
+        } else {
+          setCustomContentState((current) => ({ ...current, loaded: true }));
+        }
         const progressMap = await window.HomeSchoolDB.getProgressMap();
         if (Object.keys(progressMap).length > 0 && (!stored?.completedQuizzes || Object.keys(stored.completedQuizzes).length === 0)) {
           setCompletedQuizzes(progressMap);
@@ -11026,6 +11321,7 @@ function HomeschoolApp() {
         await refreshReviewWorkspace();
       } catch(e) {
         customizationDbEnabledRef.current = false;
+        setCustomContentState((current) => ({ ...current, loaded: true }));
         console.log("DB load fallback to inline:", e);
       }
       setDbLoaded(true);
@@ -12167,7 +12463,7 @@ function HomeschoolApp() {
     if (!item?.subjectId || !grade) return;
     const subject = SUBJECTS.find((entry) => entry.id === item.subjectId);
     if (!subject) return;
-    const lesson = (getLessons(subject.id, grade) || []).find((entry) => (entry.key || entry.id) === item.lessonKey);
+const lesson = (getMergedLessons(subject.id, grade) || []).find((entry) => (entry.key || entry.id) === item.lessonKey);
     if (!lesson) return;
     window.speechSynthesis.cancel();
     setTab("home");
@@ -13749,7 +14045,7 @@ function HomeschoolApp() {
     const source = inferViewSource(card);
     const subjectId = source?.subject || card?.subject || "english";
     const subject = (window.HomeSchoolData?.SUBJECTS || []).find((entry) => entry.id === subjectId) || null;
-    const lessons = window.HomeSchoolData?.getLessons ? window.HomeSchoolData.getLessons(subjectId, grade) : [];
+const lessons = getMergedLessons(subjectId, grade);
     let lesson = null;
 
     if (source?.lessonKey) {
@@ -13832,7 +14128,7 @@ function HomeschoolApp() {
     setViewTargetId(card?.id || null);
     setPageFlashActive(true);
     setTimeout(() => setPageFlashActive(false), 850);
-  }, [TENSES, clearLessonSelections, daySectionSettings, grade, inferViewSource, pacedPos, pacedVocab, resetReviewSession, tenseMain, tenseSub]);
+  }, [TENSES, clearLessonSelections, daySectionSettings, getMergedLessons, grade, inferViewSource, pacedPos, pacedVocab, resetReviewSession, tenseMain, tenseSub]);
 
   useEffect(() => {
     if (!viewTargetId) return undefined;
@@ -14168,7 +14464,7 @@ function HomeschoolApp() {
     ? formatDate(Math.max(Number(supabaseSyncActivity.lastCloudPullAt) || 0, Number(supabaseSyncActivity.lastDictionaryPullAt) || 0))
     : joinLocalizedText("Not pulled yet", "ابھی ڈاؤن لوڈ نہیں ہوا", language);
   const profileSubjectSummaries = useMemo(() => SUBJECTS.map((subject) => {
-    const lessons = grade ? (getLessons(subject.id, grade) || []) : [];
+const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     const completed = lessons.filter((lesson) => completedQuizzes?.[lesson.id]).length;
     const total = lessons.length;
     return {
@@ -14180,7 +14476,7 @@ function HomeschoolApp() {
       total,
       percent: total > 0 ? Math.round((completed / total) * 100) : 0,
     };
-  }), [completedQuizzes, getLessons, grade, language]);
+  }), [completedQuizzes, getMergedLessons, grade, language]);
   const profileLessonTotals = useMemo(() => profileSubjectSummaries.reduce((acc, entry) => ({
     completed: acc.completed + (entry.completed || 0),
     total: acc.total + (entry.total || 0),
@@ -15043,7 +15339,7 @@ function HomeschoolApp() {
             </div>
           </button>
           <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</h3>
-          <div className="subject-grid">{SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
+<div className="subject-grid">{SUBJECTS.map(subj => { const ls = getMergedLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? (done / ls.length) * 100 : 0, urduUi = language === "ur", primaryLabel = urduUi ? subj.nameUr : subj.name, secondaryLabel = urduUi ? subj.name : subj.nameUr; return (<button key={subj.id} className="subject-card" data-ui-language={language} dir={urduUi ? "rtl" : "ltr"} onClick={() => setSelectedSubject(subj)}><span className="subj-icon">{subj.icon}</span><span className={`subj-name${urduUi ? " subj-name-ur-primary" : ""}`}>{primaryLabel}</span><span className={`subj-name-secondary ${urduUi ? "subj-name-secondary-en" : "subj-name-secondary-ur"}`}>{secondaryLabel}</span><div className="subj-progress"><div className="subj-progress-fill" style={{ width: pct + "%", background: subj.color }} /></div></button>); })}</div>
         </>}
 
         {homeSectionTab === "goals" && <>
@@ -15953,9 +16249,26 @@ function HomeschoolApp() {
 
 
       {tab === "home" && selectedSubject && !selectedLesson && !quizActive && (<>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject?.id==="urdu" || isUrduUi(language))?"rtl":"ltr" }}><span style={{ fontSize: 36 }}>{selectedSubject.icon}</span><div><h2 style={{ fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject?.id==="urdu" || isUrduUi(language))?"var(--font-ur)":"inherit" }}>{renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)}</h2><p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject?.id==="urdu" || isUrduUi(language))?"var(--font-ur)":"inherit" }}>{renderLocalizedTextNode(`${ui.grade} ${grade} • ${getLessons(selectedSubject.id, grade).length} ${ui.lessons}`, language)}</p></div></div>
-        <div className="lesson-list" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{getLessons(selectedSubject.id, grade).map((l, i) => { const d = completedQuizzes[l.id], isUrduSubject = selectedSubject?.id==="urdu", rtlUi = isUrduSubject || isUrduUi(language), previewText = `${l.content.substring(0, 80)}${l.content.length > 80 ? "..." : ""}`, titleIsUrdu = isUrduSubject || containsUrduText(l.title), previewIsUrdu = isUrduSubject || containsUrduText(previewText), statusCopy = d ? joinLocalizedText(`Completed • ${d.score}/4`, `مکمل • ${d.score}/4`, language) : joinLocalizedText("Not started", "ابھی شروع نہیں ہوا", language); return (<button key={l.id} className="lesson-card" data-ui-language={language} onClick={() => setSelectedLesson(l)} style={rtlUi?{direction:"rtl",textAlign:"right"}:{}}><span className={`lesson-num${rtlUi ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(joinLocalizedText(`Lesson ${i+1}`, `سبق ${i+1}`, language), language)}</span><h3 className={titleIsUrdu ? "urdu-copy" : ""}>{l.title}</h3><p className={previewIsUrdu ? "urdu-copy" : ""}>{previewText}</p><div className="lesson-status" style={{ color: d ? "var(--success)" : "var(--text-muted)" }}><span aria-hidden="true">{d ? "✅" : "○"}</span><span className={`lesson-status-copy${rtlUi ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(statusCopy, language)}</span></div></button>); })}</div>
+<div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject?.id==="urdu" || isUrduUi(language))?"rtl":"ltr" }}><span style={{ fontSize: 36 }}>{selectedSubject.icon}</span><div><h2 style={{ fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject?.id==="urdu" || isUrduUi(language))?"var(--font-ur)":"inherit" }}>{renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)}</h2><p style={{ fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject?.id==="urdu" || isUrduUi(language))?"var(--font-ur)":"inherit" }}>{renderLocalizedTextNode(`${ui.grade} ${grade} • ${selectedSubjectLessons.length} ${ui.lessons}`, language)}</p></div></div>
+<div className="subject-chapter-actions" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
+  <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
+    {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Adding chapter...", "سبق شامل ہو رہا ہے...", language) : joinLocalizedText("Add Chapter", "سبق شامل کریں", language), language)}
+  </button>
+  <div className="subject-chapter-actions-copy">{renderLocalizedTextNode(joinLocalizedText("Import a chapter JSON into this subject.", "اس مضمون میں باب کا JSON درآمد کریں۔", language), language)}</div>
+</div>
+<div className="lesson-list" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>{selectedSubjectLessons.map((l, i) => { const d = completedQuizzes[l.id], isUrduSubject = selectedSubject?.id==="urdu", rtlUi = isUrduSubject || isUrduUi(language), safeContent = String(l.content || ""), previewText = `${safeContent.substring(0, 80)}${safeContent.length > 80 ? "..." : ""}`, titleIsUrdu = isUrduSubject || containsUrduText(l.title), previewIsUrdu = isUrduSubject || containsUrduText(previewText), statusCopy = d ? joinLocalizedText(`Completed • ${d.score}/4`, `مکمل • ${d.score}/4`, language) : joinLocalizedText("Not started", "ابھی شروع نہیں ہوا", language); return (<button key={l.id} className="lesson-card" data-ui-language={language} onClick={() => setSelectedLesson(l)} style={rtlUi?{direction:"rtl",textAlign:"right"}:{}}><span className={`lesson-num${rtlUi ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(joinLocalizedText(`Lesson ${i+1}`, `سبق ${i+1}`, language), language)}</span><h3 className={titleIsUrdu ? "urdu-copy" : ""}>{l.title}</h3><p className={previewIsUrdu ? "urdu-copy" : ""}>{previewText}</p><div className="lesson-status" style={{ color: d ? "var(--success)" : "var(--text-muted)" }}><span aria-hidden="true">{d ? "✅" : "○"}</span><span className={`lesson-status-copy${rtlUi ? " urdu-copy" : ""}`}>{renderLocalizedTextNode(statusCopy, language)}</span></div></button>); })}</div>
       </>)}
+
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && (
+        <div className="subject-chapter-toolbar" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
+          <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
+            {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Adding chapter...", "سبق شامل ہو رہا ہے...", language) : joinLocalizedText("Add Chapter", "سبق شامل کریں", language), language)}
+          </button>
+          <button type="button" className="ghost-cta" onClick={handleExportSelectedChapter}>
+            {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
+          </button>
+        </div>
+      )}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
         <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: selectedLesson.key || "english", sectionLabel: selectedLesson.title }} />
@@ -16677,7 +16990,7 @@ function HomeschoolApp() {
 
           {progressSectionTab === "subjects" && <>
             <h3 className="section-title">{renderLocalizedTextNode(joinLocalizedText("Subject Progress", "مضامین کی پیش رفت", language), language)}</h3>
-            {SUBJECTS.map(subj => { const ls = getLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round((done / ls.length) * 100) : 0; return (<div key={subj.id} className="progress-bar-container"><div className="progress-bar-label"><span>{subj.icon} {subj.name}</span><span style={{ color: "var(--text-muted)" }}>{done}/{ls.length}</span></div><div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: pct + "%", background: subj.color }} /></div></div>); })}
+{SUBJECTS.map(subj => { const ls = getMergedLessons(subj.id, grade), done = ls.filter(l => completedQuizzes[l.id]).length, pct = ls.length > 0 ? Math.round((done / ls.length) * 100) : 0; return (<div key={subj.id} className="progress-bar-container"><div className="progress-bar-label"><span>{subj.icon} {subj.name}</span><span style={{ color: "var(--text-muted)" }}>{done}/{ls.length}</span></div><div className="progress-bar-track"><div className="progress-bar-fill" style={{ width: pct + "%", background: subj.color }} /></div></div>); })}
           </>}
 
           {progressSectionTab === "timetracking" && <div className="review-panel" style={{ marginTop: 0 }}>
@@ -18489,6 +18802,13 @@ function HomeschoolApp() {
         {wordMeaningPopover.source ? <div className="word-meaning-popover-source">{wordMeaningPopover.source}</div> : null}
       </div>
     ) : null}
+    <input
+      ref={chapterImportInputRef}
+      type="file"
+      accept="application/json,.json"
+      style={{ display: "none" }}
+      onChange={handleImportCustomChapter}
+    />
     {copyToast ? (
       <div key={copyToast.id} className="copy-toast" role="status" aria-live="polite">
         {renderIconGlyph(copyToast.icon || "copy")}

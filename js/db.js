@@ -119,6 +119,31 @@
     profileSnapshots: "&id, updatedAt",
   });
 
+  db.version(11).stores({
+    coreData: "id, type, subject, grade, lessonKey",
+    posData: "id, type, day",
+    tensesData: "id, main, sub",
+    vocabData: "id, day",
+    mathChapters: "id, key, grade",
+    quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt, prompt",
+    reviewHistory: "id, cardId, dayKey, reviewedAt, subject, section, rating",
+    wordMeta: "id, subject, section, favorite, updatedAt",
+    customLists: "id, updatedAt, name",
+    customListItems: "id, listId, cardId, updatedAt",
+    progress: "id, subject, lessonId, grade, completed, timestamp",
+    userStats: "id",
+    dataVersion: "id, version, lastUpdated",
+    customizations: "++id, type, ts",
+    dictionaryEntries: "&normalized, updatedAt, deletedAt",
+    dictionaryOutbox: "&normalized, updatedAt",
+    dictionarySyncMeta: "&key, updatedAt",
+    cloudSyncOutbox: "&syncKey, dataset, updatedAt",
+    profileSnapshots: "&id, updatedAt",
+    customLessons: "&id, subject, grade, lessonKey, updatedAt",
+    customQuizData: "&id, subject, grade, lessonKey, updatedAt",
+  });
+
   const CLOUD_SYNC_SIGNAL_KEY = "hs_cloud_sync_signal";
   const GLOBAL_CLOUD_PROFILE_ID = "__global__";
   let activeCloudProfileId = "default";
@@ -268,6 +293,44 @@
       punctualityStreak: Math.max(0, Number(safe.punctualityStreak) || 0),
       bestPunctualityStreak: Math.max(0, Number(safe.bestPunctualityStreak) || 0),
       classSessionsMet: Math.max(0, Number(safe.classSessionsMet) || 0),
+    };
+  }
+
+  function normalizeCustomLessonRecord(entry = {}) {
+    const subject = String(entry.subject || "").trim();
+    const grade = Number(entry.grade);
+    const lessonKey = String(entry.lessonKey || entry.key || entry.data?.key || entry.data?.id || "").trim();
+    const recordId = `${subject}_${grade}_${lessonKey}`;
+    const data = entry.data && typeof entry.data === "object"
+      ? { ...entry.data }
+      : {};
+    if (!data.key && lessonKey) data.key = lessonKey;
+    if (!data.id && lessonKey) data.id = recordId;
+    return {
+      id: recordId,
+      subject,
+      grade,
+      lessonKey,
+      data,
+      source: String(entry.source || "custom").trim() || "custom",
+      updatedAt: Number(entry.updatedAt) || Date.now(),
+      createdAt: Number(entry.createdAt) || Date.now(),
+    };
+  }
+
+  function normalizeCustomQuizRecord(entry = {}) {
+    const subject = String(entry.subject || "").trim();
+    const grade = Number(entry.grade);
+    const lessonKey = String(entry.lessonKey || entry.key || "").trim();
+    const questions = Array.isArray(entry.questions) ? entry.questions : [];
+    return {
+      id: `${subject}_${grade}_${lessonKey}`,
+      subject,
+      grade,
+      lessonKey,
+      questions,
+      updatedAt: Number(entry.updatedAt) || Date.now(),
+      createdAt: Number(entry.createdAt) || Date.now(),
     };
   }
 
@@ -1575,6 +1638,80 @@ async function saveCustomization(type, data, options = {}) {
     return true;
   }
 
+  async function getCustomLessonRecords(subject = null, grade = null) {
+    if (!db.customLessons) return [];
+    const safeSubject = subject == null ? "" : String(subject).trim();
+    const safeGrade = grade == null ? null : Number(grade);
+    const rows = await db.customLessons.toArray();
+    return rows.filter((row) => {
+      if (safeSubject && row.subject !== safeSubject) return false;
+      if (safeGrade != null && row.grade !== safeGrade) return false;
+      return true;
+    });
+  }
+
+  async function getCustomQuizRecords(subject = null, grade = null) {
+    if (!db.customQuizData) return [];
+    const safeSubject = subject == null ? "" : String(subject).trim();
+    const safeGrade = grade == null ? null : Number(grade);
+    const rows = await db.customQuizData.toArray();
+    return rows.filter((row) => {
+      if (safeSubject && row.subject !== safeSubject) return false;
+      if (safeGrade != null && row.grade !== safeGrade) return false;
+      return true;
+    });
+  }
+
+  async function getCustomContentSnapshot() {
+    const [lessons, quizzes] = await Promise.all([
+      getCustomLessonRecords(),
+      getCustomQuizRecords(),
+    ]);
+    return { lessons, quizzes };
+  }
+
+  async function saveCustomChapter(payload = {}) {
+    if (!db.customLessons || !db.customQuizData) return null;
+    const lessonRecord = normalizeCustomLessonRecord(payload);
+    if (!lessonRecord.subject || !Number.isFinite(lessonRecord.grade) || !lessonRecord.lessonKey) {
+      throw new Error("Custom chapter requires subject, grade, and lessonKey.");
+    }
+    const quizRecord = normalizeCustomQuizRecord({
+      subject: lessonRecord.subject,
+      grade: lessonRecord.grade,
+      lessonKey: lessonRecord.lessonKey,
+      questions: payload.questions,
+      updatedAt: lessonRecord.updatedAt,
+      createdAt: lessonRecord.createdAt,
+    });
+    await db.transaction("rw", [db.customLessons, db.customQuizData], async () => {
+      await db.customLessons.put(lessonRecord);
+      if (Array.isArray(quizRecord.questions) && quizRecord.questions.length > 0) {
+        await db.customQuizData.put(quizRecord);
+      } else {
+        await db.customQuizData.delete(quizRecord.id);
+      }
+    });
+    return {
+      lesson: lessonRecord,
+      quiz: Array.isArray(quizRecord.questions) && quizRecord.questions.length > 0 ? quizRecord : null,
+    };
+  }
+
+  async function deleteCustomChapter(subject, grade, lessonKey) {
+    if (!db.customLessons || !db.customQuizData) return false;
+    const safeSubject = String(subject || "").trim();
+    const safeGrade = Number(grade);
+    const safeLessonKey = String(lessonKey || "").trim();
+    if (!safeSubject || !Number.isFinite(safeGrade) || !safeLessonKey) return false;
+    const id = `${safeSubject}_${safeGrade}_${safeLessonKey}`;
+    await db.transaction("rw", [db.customLessons, db.customQuizData], async () => {
+      await db.customLessons.delete(id);
+      await db.customQuizData.delete(id);
+    });
+    return true;
+  }
+
   window.HomeSchoolDB = {
     db,
 
@@ -1642,17 +1779,46 @@ async function saveCustomization(type, data, options = {}) {
     },
 
     async getLessons(subject, grade) {
-      const records = await db.coreData.filter((item) => item.subject === subject && item.grade === grade).toArray();
-      return records.map((record) => record.data);
+      const [records, customRecords] = await Promise.all([
+        db.coreData.filter((item) => item.subject === subject && item.grade === grade).toArray(),
+        getCustomLessonRecords(subject, grade),
+      ]);
+      const merged = new Map(records.map((record) => [record.lessonKey || record.data?.key || record.data?.id, record.data]));
+      customRecords.forEach((record) => {
+        merged.set(record.lessonKey, record.data);
+      });
+      return Array.from(merged.values());
     },
 
     async getQuiz(subject, key, grade = null) {
       if (grade !== null) {
+        const customRecord = db.customQuizData ? await db.customQuizData.get(`${subject}_${grade}_${key}`) : null;
+        if (customRecord?.questions?.length) return customRecord.questions;
         const record = await db.quizData.get(`${subject}_${grade}_${key}`);
         return record?.questions || [];
       }
       const records = await db.quizData.where("subject").equals(subject).filter((item) => item.lessonKey === key).toArray();
       return records[0]?.questions || [];
+    },
+
+    async getCustomLessonRecords(subject = null, grade = null) {
+      return getCustomLessonRecords(subject, grade);
+    },
+
+    async getCustomQuizRecords(subject = null, grade = null) {
+      return getCustomQuizRecords(subject, grade);
+    },
+
+    async getCustomContentSnapshot() {
+      return getCustomContentSnapshot();
+    },
+
+    async saveCustomChapter(payload = {}) {
+      return saveCustomChapter(payload);
+    },
+
+    async deleteCustomChapter(subject, grade, lessonKey) {
+      return deleteCustomChapter(subject, grade, lessonKey);
     },
 
     async getDueReviewCards(limit = 20, now = Date.now()) {
