@@ -4972,27 +4972,62 @@ function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
       />
     );
   }
+  const app = useContext(AppContext);
+  const studyCard = studyItem ? resolveStudyCard(app, {
+    prompt: text,
+    answer: studyItem.answer,
+    secondaryText: studyItem.secondaryText,
+    subject: studyItem.subject,
+    section: studyItem.section,
+    sectionLabel: studyItem.sectionLabel,
+  }) : null;
+  const focusProps = getStudyFocusProps(app, studyCard);
+  const [speakingSide, setSpeakingSide] = useState("");
+  const speakSide = (value, lang) => {
+    if (!isTtsEnabled()) return;
+    setSpeakingSide(lang);
+    const utterance = window.HomeSchoolUtils?.speakText?.(value, lang) || null;
+    if (utterance) {
+      utterance.onend = () => setSpeakingSide("");
+      utterance.onerror = () => setSpeakingSide("");
+      return;
+    }
+    setSpeakingSide("");
+  };
   return (
-    <div className="exercise-bilingual-prompt">
-      <div className="exercise-bilingual-prompt-side exercise-bilingual-prompt-side-en">
-        <div className="exercise-bilingual-prompt-label">English</div>
-        <SpeakableSentence
-          text={bilingualPair.english}
-          lang="en"
-          studyItem={{ ...(studyItem || {}), prompt: bilingualPair.english }}
-          showStudyToolbar={false}
-          buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
-        />
+    <div {...focusProps} className="exercise-bilingual-field" style={buttonStyle || undefined}>
+      <div
+        role="button"
+        tabIndex={0}
+        className={`exercise-bilingual-field-side exercise-bilingual-field-side-en${speakingSide === "en" ? " speaking" : ""}`}
+        onClick={() => speakSide(bilingualPair.english, "en")}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          speakSide(bilingualPair.english, "en");
+        }}
+      >
+        <div className="exercise-bilingual-field-label">English</div>
+        <div className="exercise-bilingual-field-text exercise-bilingual-field-text-en">
+          {renderMixedScriptText(bilingualPair.english)}
+        </div>
       </div>
-      <div className="exercise-bilingual-prompt-side exercise-bilingual-prompt-side-ur">
-        <div className="exercise-bilingual-prompt-label">اردو</div>
-        <SpeakableSentence
-          text={bilingualPair.urdu}
-          lang="ur"
-          studyItem={{ ...(studyItem || {}), prompt: bilingualPair.urdu }}
-          showStudyToolbar={false}
-          buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
-        />
+      <div className="exercise-bilingual-field-divider" aria-hidden="true" />
+      <div
+        role="button"
+        tabIndex={0}
+        className={`exercise-bilingual-field-side exercise-bilingual-field-side-ur${speakingSide === "ur" ? " speaking" : ""}`}
+        onClick={() => speakSide(bilingualPair.urdu, "ur")}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          speakSide(bilingualPair.urdu, "ur");
+        }}
+      >
+        <div className="exercise-bilingual-field-label">اردو</div>
+        <div className="exercise-bilingual-field-text exercise-bilingual-field-text-ur">
+          {renderMixedScriptText(bilingualPair.urdu)}
+        </div>
       </div>
     </div>
   );
@@ -16592,9 +16627,11 @@ function HomeschoolApp() {
             <div className="q-num">Question {quizIdx + 1} of {currentQuiz.length}</div>
             <div className={`quiz-timer-pill${quizTimerRemaining <= 5 ? " danger" : ""}`}>{quizTimerRemaining}s</div>
           </div>
-          <h3 className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{currentQuiz[quizIdx].q}</h3>
+          <h3 className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>
+            <PracticeMixedText text={currentQuiz[quizIdx].q} fallbackLang={selectedSubject?.id === "urdu" ? "ur" : "en"} />
+          </h3>
         </div>
-        <div className="quiz-options">{currentQuiz[quizIdx].a.map((opt, oi) => { const sel = quizAnswers[quizIdx] === oi, cor = oi === currentQuiz[quizIdx].c; let cls = "quiz-option"; if (quizRevealed && cor) cls += " correct"; else if (quizRevealed && sel && !cor) cls += " wrong"; else if (sel) cls += " selected"; return (<button key={oi} className={cls} disabled={quizRevealed} onClick={() => handleLessonQuizOptionSelect(oi)}><span className="opt-letter">{"ABCD"[oi]}</span><span className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{opt}</span></button>); })}</div>
+        <div className="quiz-options">{currentQuiz[quizIdx].a.map((opt, oi) => { const sel = quizAnswers[quizIdx] === oi, cor = oi === currentQuiz[quizIdx].c; let cls = "quiz-option"; if (quizRevealed && cor) cls += " correct"; else if (quizRevealed && sel && !cor) cls += " wrong"; else if (sel) cls += " selected"; return (<button key={oi} className={cls} disabled={quizRevealed} onClick={() => handleLessonQuizOptionSelect(oi)}><span className="opt-letter">{"ABCD"[oi]}</span><span className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}><PracticeMixedText text={opt} fallbackLang={selectedSubject?.id === "urdu" ? "ur" : "en"} /></span></button>); })}</div>
       </div>)}
 
       {tab === "home" && quizDone && (<div className="quiz-result">
