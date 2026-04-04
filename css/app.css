@@ -551,8 +551,8 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
   .practice-card-face-focus{min-height:240px;padding:22px 18px}
   .practice-card-footer{flex-direction:column}
   .practice-focus-body .practice-card-centered-copy{min-height:88px}
-  .practice-focus-side-nav-prev{left:max(0px,calc(50% - 476px / 2 + 14px))}
-  .practice-focus-side-nav-next{right:max(0px,calc(50% - 476px / 2 + 14px))}
+  .practice-focus-side-nav-prev{left:max(0px,calc(50% - 476px / 2 + 2px))}
+  .practice-focus-side-nav-next{right:max(0px,calc(50% - 476px / 2 + 2px))}
 }
 .review-list-creator{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .review-list-input{flex:1;min-width:220px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-family:var(--font);font-size:13px}
@@ -773,8 +773,8 @@ direction:ltr;
 .flashcard-side-nav{position:absolute;top:50%;z-index:4;width:46px;height:46px;border-radius:16px;border:1px solid var(--border);background:linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 96%,white),color-mix(in srgb,var(--bg-elevated) 92%,var(--bg-card)));color:var(--text-primary);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .18s ease,border-color .18s ease,background .18s ease,opacity .18s ease;box-shadow:0 10px 22px rgba(15,23,42,.08)}
 .flashcard-side-nav-prev{left:max(0px,calc(50% - 520px / 2 + 4px));transform:translateY(-50%)}
 .flashcard-side-nav-next{right:max(0px,calc(50% - 520px / 2 + 4px));transform:translateY(-50%)}
-.practice-focus-side-nav-prev{left:max(0px,calc(50% - 548px / 2 + 16px));transform:translateY(-50%)}
-.practice-focus-side-nav-next{right:max(0px,calc(50% - 548px / 2 + 16px));transform:translateY(-50%)}
+.practice-focus-side-nav-prev{left:max(0px,calc(50% - 548px / 2 + 4px));transform:translateY(-50%)}
+.practice-focus-side-nav-next{right:max(0px,calc(50% - 548px / 2 + 4px));transform:translateY(-50%)}
 .flashcard-side-nav:hover:not(:disabled){border-color:color-mix(in srgb,var(--accent) 30%,var(--border));background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 8%,var(--bg-card)),color-mix(in srgb,var(--bg-elevated) 94%,var(--bg-card)))}
 .flashcard-side-nav-prev:hover:not(:disabled){transform:translateY(calc(-50% - 1px))}
 .flashcard-side-nav-next:hover:not(:disabled){transform:translateY(calc(-50% - 1px))}
