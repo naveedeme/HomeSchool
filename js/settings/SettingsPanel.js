@@ -1250,7 +1250,7 @@
       }, renderLocalizedText(ui.dictionaryConflictsHelp || (language === "ur" ? "اگر ایک ہی لفظ کو دو مختلف ڈیوائسز پر مختلف انداز میں بہتر کیا گیا ہو تو یہاں فیصلہ کریں۔" : "Review rare cases where the same word was enriched differently on two devices."), language)),
       ...dictionarySyncConflicts.slice(0, 8).map((record) => renderDictionaryConflictCard(record, language, ui, onResolveDictionaryConflict)))]
       : [];
-    aiChildren.push(React.createElement("div", {
+    const accountSyncCard = React.createElement("div", {
       key: "dictionary-sync",
       style: {
         padding: "12px 14px",
@@ -1344,7 +1344,8 @@
       }, renderLocalizedText(ui.supabaseSyncHelp || (language === "ur"
         ? "یہ لغت، پسندیدہ/نوٹس/فہرستیں، ریویو پیش رفت، اور منتخب سیٹنگز کو sync کرتا ہے۔ اکاؤنٹ لاگ اِن اور بازیافت Account سیکشن میں سنبھالی جاتی ہے۔ Supabase میں dictionary_entries اور user_data_rows ٹیبل درکار ہوں گی۔"
         : "This syncs dictionary data, favorites/notes/lists, review progress, and selected preferences. Account sign-in and recovery live in the Account section. You will need both dictionary_entries and user_data_rows tables in Supabase."), language)),
-      ...dictionaryConflictChildren));
+      ...dictionaryConflictChildren);
+    accountChildren.push(accountSyncCard);
     (Array.isArray(aiProviders) ? aiProviders : []).forEach((provider) => {
       aiChildren.push(renderAiProviderCard(provider, ui, language, onAiProviderDraftChange, onSaveAiProvider, onClearAiProvider));
     });
