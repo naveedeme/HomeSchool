@@ -2274,94 +2274,16 @@ for select
 to anon, authenticated
 using (is_published = true and deleted_at is null);
 
-create policy "Users can insert own published chapters"
-on public.published_chapters
-for insert
-to authenticated
-with check ((select auth.uid()) = author_user_id);
-
-create policy "Users can update own published chapters"
-on public.published_chapters
-for update
-to authenticated
-using ((select auth.uid()) = author_user_id)
-with check ((select auth.uid()) = author_user_id);
-
-create policy "Users can delete own published chapters"
-on public.published_chapters
-for delete
-to authenticated
-using (
-  (select auth.uid()) = author_user_id
-  and exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role in ('editor', 'admin')
-  )
-);
-
-drop policy if exists "Users can insert own published chapters" on public.published_chapters;
-drop policy if exists "Users can update own published chapters" on public.published_chapters;
-drop policy if exists "Users can delete own published chapters" on public.published_chapters;
-
-create policy "Users can insert own published chapters"
-on public.published_chapters
-for insert
-to authenticated
-with check (
-  (select auth.uid()) = author_user_id
-  and exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role in ('editor', 'admin')
-  )
-);
-
-create policy "Users can update own published chapters"
-on public.published_chapters
-for update
-to authenticated
-using (
-  (select auth.uid()) = author_user_id
-  and exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role in ('editor', 'admin')
-  )
-)
-with check (
-  (select auth.uid()) = author_user_id
-  and exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role in ('editor', 'admin')
-  )
-);
-
-create policy "Users can delete own published chapters"
-on public.published_chapters
-for delete
-to authenticated
-using (
-  (select auth.uid()) = author_user_id
-  and exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role in ('editor', 'admin')
-  )
-);
-
 create table if not exists public.content_role_assignments (
   email text primary key,
   role text not null default 'student',
+  permissions_override jsonb null,
   updated_by uuid null,
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.content_role_assignments
+  add column if not exists permissions_override jsonb null;
 
 create index if not exists content_role_assignments_role_idx
   on public.content_role_assignments (role, updated_at desc);
@@ -2371,9 +2293,13 @@ alter table public.content_role_assignments enable row level security;
 create table if not exists public.content_access_settings (
   scope text primary key,
   default_role text not null default 'student',
+  role_permissions jsonb not null default '{}'::jsonb,
   updated_by uuid null,
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.content_access_settings
+  add column if not exists role_permissions jsonb not null default '{}'::jsonb;
 
 alter table public.content_access_settings enable row level security;
 
@@ -2411,6 +2337,129 @@ as $$
   )
 $$;
 
+create or replace function public.default_content_permission_matrix()
+returns jsonb
+language sql
+stable
+as $$
+  select jsonb_build_object(
+    'student', jsonb_build_object(
+      'importChapters', false,
+      'importSubjects', false,
+      'exportContent', false,
+      'savePublishedLocally', false,
+      'publishContent', false,
+      'unpublishContent', false,
+      'deleteLocalContent', false,
+      'manageContentAccess', false
+    ),
+    'parent', jsonb_build_object(
+      'importChapters', false,
+      'importSubjects', false,
+      'exportContent', false,
+      'savePublishedLocally', false,
+      'publishContent', false,
+      'unpublishContent', false,
+      'deleteLocalContent', false,
+      'manageContentAccess', false
+    ),
+    'teacher', jsonb_build_object(
+      'importChapters', true,
+      'importSubjects', false,
+      'exportContent', true,
+      'savePublishedLocally', true,
+      'publishContent', false,
+      'unpublishContent', false,
+      'deleteLocalContent', true,
+      'manageContentAccess', false
+    ),
+    'editor', jsonb_build_object(
+      'importChapters', true,
+      'importSubjects', true,
+      'exportContent', true,
+      'savePublishedLocally', true,
+      'publishContent', true,
+      'unpublishContent', true,
+      'deleteLocalContent', true,
+      'manageContentAccess', false
+    ),
+    'admin', jsonb_build_object(
+      'importChapters', true,
+      'importSubjects', true,
+      'exportContent', true,
+      'savePublishedLocally', true,
+      'publishContent', true,
+      'unpublishContent', true,
+      'deleteLocalContent', true,
+      'manageContentAccess', true
+    )
+  )
+$$;
+
+create or replace function public.user_content_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with settings as (
+    select coalesce(default_role, 'student') as default_role
+    from public.content_access_settings
+    where scope = 'global'
+    limit 1
+  ),
+  assignment as (
+    select role
+    from public.content_role_assignments
+    where lower(email) = public.current_auth_email()
+    limit 1
+  )
+  select lower(coalesce(
+    (select role from assignment),
+    (select default_role from settings),
+    'student'
+  ))
+$$;
+
+create or replace function public.user_content_permission(permission_key text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with settings as (
+    select
+      coalesce(role_permissions, public.default_content_permission_matrix()) as role_permissions,
+      coalesce(default_role, 'student') as default_role
+    from public.content_access_settings
+    where scope = 'global'
+    limit 1
+  ),
+  assignment as (
+    select
+      lower(role) as role,
+      permissions_override
+    from public.content_role_assignments
+    where lower(email) = public.current_auth_email()
+    limit 1
+  ),
+  resolved as (
+    select
+      lower(coalesce((select role from assignment), (select default_role from settings), 'student')) as role,
+      coalesce((select role_permissions from settings), public.default_content_permission_matrix()) as role_permissions,
+      coalesce((select permissions_override from assignment), '{}'::jsonb) as permissions_override
+  )
+  select
+    case
+      when (select role from resolved) = 'admin' and permission_key = 'manageContentAccess' then true
+      when ((select permissions_override from resolved) ? permission_key)
+        then coalesce(((select permissions_override from resolved) ->> permission_key)::boolean, false)
+      else coalesce((((select role_permissions from resolved) -> (select role from resolved) ->> permission_key)::boolean), false)
+    end
+$$;
+
 create or replace function public.can_publish_content()
 returns boolean
 language sql
@@ -2418,12 +2467,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select exists (
-    select 1
-    from public.content_role_assignments
-    where lower(email) = public.current_auth_email()
-      and role in ('editor', 'admin')
-  )
+  select public.user_content_permission('publishContent')
 $$;
 
 drop policy if exists "Users can read relevant content role assignments" on public.content_role_assignments;
@@ -2446,7 +2490,7 @@ for select
 to authenticated
 using (
   lower(email) = public.current_auth_email()
-  or public.is_content_admin()
+  or public.user_content_permission('manageContentAccess')
 );
 
 create policy "Bootstrap first content admin"
@@ -2463,20 +2507,20 @@ create policy "Admins can insert content role assignments"
 on public.content_role_assignments
 for insert
 to authenticated
-with check (public.is_content_admin());
+with check (public.user_content_permission('manageContentAccess'));
 
 create policy "Admins can update content role assignments"
 on public.content_role_assignments
 for update
 to authenticated
-using (public.is_content_admin())
-with check (public.is_content_admin());
+using (public.user_content_permission('manageContentAccess'))
+with check (public.user_content_permission('manageContentAccess'));
 
 create policy "Admins can delete content role assignments"
 on public.content_role_assignments
 for delete
 to authenticated
-using (public.is_content_admin());
+using (public.user_content_permission('manageContentAccess'));
 
 create policy "Authenticated users can read content access settings"
 on public.content_access_settings
@@ -2488,20 +2532,20 @@ create policy "Admins can insert content access settings"
 on public.content_access_settings
 for insert
 to authenticated
-with check (public.is_content_admin());
+with check (public.user_content_permission('manageContentAccess'));
 
 create policy "Admins can update content access settings"
 on public.content_access_settings
 for update
 to authenticated
-using (public.is_content_admin())
-with check (public.is_content_admin());
+using (public.user_content_permission('manageContentAccess'))
+with check (public.user_content_permission('manageContentAccess'));
 
 create policy "Admins can delete content access settings"
 on public.content_access_settings
 for delete
 to authenticated
-using (public.is_content_admin());
+using (public.user_content_permission('manageContentAccess'));
 
 create policy "Users can insert own published chapters"
 on public.published_chapters
@@ -2595,7 +2639,17 @@ using (
     const role = String(((_a = user == null ? void 0 : user.app_metadata) == null ? void 0 : _a.role) || ((_b = user == null ? void 0 : user.user_metadata) == null ? void 0 : _b.role) || "student").trim().toLowerCase();
     return role || "student";
   }
-  const CONTENT_MANAGER_ROLES = ["student", "teacher", "editor", "admin"];
+  const CONTENT_MANAGER_ROLES = ["student", "parent", "teacher", "editor", "admin"];
+  const CONTENT_PERMISSION_KEYS = [
+    "importChapters",
+    "importSubjects",
+    "exportContent",
+    "savePublishedLocally",
+    "publishContent",
+    "unpublishContent",
+    "deleteLocalContent",
+    "manageContentAccess"
+  ];
   function normalizeContentManagerRole(role) {
     const safeRole = String(role || "").trim().toLowerCase();
     return CONTENT_MANAGER_ROLES.includes(safeRole) ? safeRole : "student";
@@ -2603,6 +2657,16 @@ using (
   function createDefaultContentRoleCapabilities() {
     return {
       student: {
+        importChapters: false,
+        importSubjects: false,
+        exportContent: false,
+        savePublishedLocally: false,
+        publishContent: false,
+        unpublishContent: false,
+        deleteLocalContent: false,
+        manageContentAccess: false
+      },
+      parent: {
         importChapters: false,
         importSubjects: false,
         exportContent: false,
@@ -2644,19 +2708,68 @@ using (
       }
     };
   }
-  function getContentRoleCapabilities(role) {
+  function normalizeContentPermissionOverride(raw) {
+    const safe = {};
+    CONTENT_PERMISSION_KEYS.forEach((key) => {
+      if (raw && Object.prototype.hasOwnProperty.call(raw, key)) {
+        safe[key] = Boolean(raw[key]);
+      }
+    });
+    return safe;
+  }
+  function normalizeContentPermissionMatrix(raw) {
+    const defaults = createDefaultContentRoleCapabilities();
+    return CONTENT_MANAGER_ROLES.reduce((acc, role) => {
+      const merged = { ...defaults[role], ...normalizeContentPermissionOverride(raw == null ? void 0 : raw[role]) };
+      if (role === "admin") merged.manageContentAccess = true;
+      acc[role] = merged;
+      return acc;
+    }, {});
+  }
+  function normalizeContentRoleAssignmentRecord(raw) {
+    if (!raw || !raw.email) return null;
+    return {
+      email: String(raw.email || "").trim().toLowerCase(),
+      role: normalizeContentManagerRole(raw.role),
+      updated_at: raw.updated_at || "",
+      updated_by: raw.updated_by || "",
+      permissions_override: normalizeContentPermissionOverride(raw.permissions_override)
+    };
+  }
+  function getContentRoleCapabilities(role, matrix = null, override = null) {
     const safeRole = normalizeContentManagerRole(role);
-    const matrix = createDefaultContentRoleCapabilities();
-    return matrix[safeRole] || matrix.student;
+    const safeMatrix = normalizeContentPermissionMatrix(matrix || createDefaultContentRoleCapabilities());
+    const merged = {
+      ...safeMatrix[safeRole] || safeMatrix.student,
+      ...normalizeContentPermissionOverride(override)
+    };
+    if (safeRole === "admin") merged.manageContentAccess = true;
+    return merged;
+  }
+  function normalizeContentRoleTestMode(raw) {
+    return {
+      enabled: Boolean(raw == null ? void 0 : raw.enabled),
+      role: normalizeContentManagerRole((raw == null ? void 0 : raw.role) || "student")
+    };
   }
   function createDefaultContentAccessState() {
     return {
       loaded: false,
       defaultRole: "student",
       currentRole: "student",
+      currentPermissionsOverride: {},
+      rolePermissions: normalizeContentPermissionMatrix(),
       assignments: [],
       lastUpdatedAt: 0
     };
+  }
+  function countAssignedContentManagers(assignments, matrix) {
+    const safeAssignments = Array.isArray(assignments) ? assignments : [];
+    return safeAssignments.reduce((count, entry) => {
+      if (!(entry == null ? void 0 : entry.email)) return count;
+      const capabilities = getContentRoleCapabilities(entry.role, matrix, entry.permissions_override);
+      return capabilities.manageContentAccess ? count + 1 : count;
+    }, 0);
   }
   function createDictionaryRowsFromMap(rawCache, deviceId = "") {
     return Object.entries(normalizeWordMeaningCache(rawCache || {})).map(([normalizedWord, entry]) => ({
@@ -6816,10 +6929,18 @@ ${marker} `);
     const [syncPendingDetailsOpen, setSyncPendingDetailsOpen] = useState(false);
     const [contentAccessState, setContentAccessState] = useState(createDefaultContentAccessState());
     const [contentAccessBusy, setContentAccessBusy] = useState(false);
+    const [contentRoleTestMode, setContentRoleTestMode] = useState(normalizeContentRoleTestMode((stored == null ? void 0 : stored.contentRoleTestMode) || {}));
     const [contentRoleDraftEmail, setContentRoleDraftEmail] = useState("");
     const [contentRoleDraftRole, setContentRoleDraftRole] = useState("student");
-    const contentManagerRole = normalizeContentManagerRole(contentAccessState.currentRole || contentAccessState.defaultRole || "student");
-    const contentRoleCapabilities = getContentRoleCapabilities(contentManagerRole);
+    const liveContentRole = normalizeContentManagerRole(contentAccessState.currentRole || contentAccessState.defaultRole || "student");
+    const liveContentRoleCapabilities = getContentRoleCapabilities(
+      liveContentRole,
+      contentAccessState.rolePermissions,
+      contentAccessState.currentPermissionsOverride
+    );
+    const contentRoleTestActive = Boolean(contentRoleTestMode.enabled && liveContentRoleCapabilities.manageContentAccess);
+    const contentManagerRole = contentRoleTestActive ? normalizeContentManagerRole(contentRoleTestMode.role) : liveContentRole;
+    const contentRoleCapabilities = contentRoleTestActive ? getContentRoleCapabilities(contentManagerRole, contentAccessState.rolePermissions) : liveContentRoleCapabilities;
     const canImportChapters = Boolean(contentRoleCapabilities.importChapters);
     const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
     const canExportContent = Boolean(contentRoleCapabilities.exportContent);
@@ -8591,7 +8712,7 @@ ${marker} `);
       return client;
     }, [language, supabaseDictionarySync]);
     const refreshContentAccessState = useCallback(async (sessionOverride = null) => {
-      var _a2, _b2, _c2, _d2, _e2;
+      var _a2, _b2, _c2, _d2;
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
       if (!settings.url || !settings.anonKey) {
         const fallbackRole = "student";
@@ -8616,10 +8737,32 @@ ${marker} `);
           setContentAccessState(nextState2);
           return nextState2;
         }
+        const fetchRoleRows = async (emailFilter = null, options = {}) => {
+          const orderByUpdated = Boolean(options.orderByUpdated);
+          const limit = Number(options.limit || 0) || 0;
+          let result = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, permissions_override, updated_at, updated_by");
+          if (emailFilter) result = result.eq("email", emailFilter);
+          if (orderByUpdated) result = result.order("updated_at", { ascending: false });
+          if (limit > 0) result = result.limit(limit);
+          if (result.error && String(result.error.message || "").toLowerCase().includes("permissions_override")) {
+            result = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by");
+            if (emailFilter) result = result.eq("email", emailFilter);
+            if (orderByUpdated) result = result.order("updated_at", { ascending: false });
+            if (limit > 0) result = result.limit(limit);
+          }
+          if (result.error) throw result.error;
+          return Array.isArray(result.data) ? result.data.map((row) => normalizeContentRoleAssignmentRecord(row)).filter(Boolean) : [];
+        };
+        const fetchContentSettingsRow = async () => {
+          let result = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).select("scope, default_role, role_permissions, updated_at, updated_by").eq("scope", "global").limit(1);
+          if (result.error && String(result.error.message || "").toLowerCase().includes("role_permissions")) {
+            result = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).select("scope, default_role, updated_at, updated_by").eq("scope", "global").limit(1);
+          }
+          if (result.error) throw result.error;
+          return Array.isArray(result.data) ? result.data[0] || null : null;
+        };
         let roleRows = [];
-        const ownRoleResult = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by").eq("email", userEmail).limit(1);
-        if (ownRoleResult.error) throw ownRoleResult.error;
-        roleRows = Array.isArray(ownRoleResult.data) ? ownRoleResult.data : [];
+        roleRows = await fetchRoleRows(userEmail, { limit: 1 });
         if (!roleRows.length) {
           const countResult = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email", { head: true, count: "exact" });
           if (countResult.error) throw countResult.error;
@@ -8628,6 +8771,7 @@ ${marker} `);
             const bootstrapInsert = await client.from(SUPABASE_CONTENT_ROLE_TABLE).insert({
               email: userEmail,
               role: "admin",
+              permissions_override: null,
               updated_by: session.user.id,
               updated_at: nowIso
             });
@@ -8635,38 +8779,40 @@ ${marker} `);
             const defaultSettingsInsert = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).upsert({
               scope: "global",
               default_role: "student",
+              role_permissions: normalizeContentPermissionMatrix(),
               updated_by: session.user.id,
               updated_at: nowIso
             }, { onConflict: "scope" });
             if (defaultSettingsInsert.error) throw defaultSettingsInsert.error;
-            const refreshedRoleResult = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by").eq("email", userEmail).limit(1);
-            if (refreshedRoleResult.error) throw refreshedRoleResult.error;
-            roleRows = Array.isArray(refreshedRoleResult.data) ? refreshedRoleResult.data : [];
+            roleRows = await fetchRoleRows(userEmail, { limit: 1 });
             if (!roleRows.length) {
-              roleRows = [{
+              roleRows = [normalizeContentRoleAssignmentRecord({
                 email: userEmail,
                 role: "admin",
+                permissions_override: null,
                 updated_at: nowIso,
                 updated_by: session.user.id
-              }];
+              })];
             }
           }
         }
-        const settingsResult = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).select("scope, default_role, updated_at, updated_by").eq("scope", "global").limit(1);
-        if (settingsResult.error) throw settingsResult.error;
-        const settingsRow = Array.isArray(settingsResult.data) ? settingsResult.data[0] : null;
+        const settingsRow = await fetchContentSettingsRow();
         const defaultRole = normalizeContentManagerRole((settingsRow == null ? void 0 : settingsRow.default_role) || "student");
-        const currentRole = normalizeContentManagerRole(((_e2 = roleRows[0]) == null ? void 0 : _e2.role) || defaultRole);
+        const rolePermissions = normalizeContentPermissionMatrix((settingsRow == null ? void 0 : settingsRow.role_permissions) || {});
+        const ownAssignment = roleRows[0] || null;
+        const currentRole = normalizeContentManagerRole((ownAssignment == null ? void 0 : ownAssignment.role) || defaultRole);
+        const currentPermissionsOverride = normalizeContentPermissionOverride(ownAssignment == null ? void 0 : ownAssignment.permissions_override);
+        const currentRoleCapabilities = getContentRoleCapabilities(currentRole, rolePermissions, currentPermissionsOverride);
         let assignments = roleRows;
-        if (currentRole === "admin") {
-          const allAssignmentsResult = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by").order("updated_at", { ascending: false }).limit(200);
-          if (allAssignmentsResult.error) throw allAssignmentsResult.error;
-          assignments = Array.isArray(allAssignmentsResult.data) ? allAssignmentsResult.data : roleRows;
+        if (currentRoleCapabilities.manageContentAccess) {
+          assignments = await fetchRoleRows(null, { orderByUpdated: true, limit: 200 });
         }
         const nextState = {
           loaded: true,
           defaultRole,
           currentRole,
+          currentPermissionsOverride,
+          rolePermissions,
           assignments: Array.isArray(assignments) ? assignments : [],
           lastUpdatedAt: Date.now()
         };
@@ -9172,6 +9318,7 @@ ${marker} `);
         const { error } = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).upsert({
           scope: "global",
           default_role: safeRole,
+          role_permissions: normalizeContentPermissionMatrix(contentAccessState.rolePermissions),
           updated_by: supabaseAuthState.userId,
           updated_at: nowIso
         }, { onConflict: "scope" });
@@ -9183,8 +9330,8 @@ ${marker} `);
       } finally {
         setContentAccessBusy(false);
       }
-    }, [canManageContentAccess, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
-    const handleSaveContentRoleAssignment = useCallback(async (overrideEmail = null, overrideRole = null) => {
+    }, [canManageContentAccess, contentAccessState.rolePermissions, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
+    const handleSaveContentRoleAssignment = useCallback(async (overrideEmail = null, overrideRole = null, overridePermissions = null) => {
       if (!canManageContentAccess) {
         showAppToast(joinLocalizedText("Only admins can assign content roles.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0645\u0648\u0627\u062F \u06A9\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u0645\u0642\u0631\u0631 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -9201,9 +9348,13 @@ ${marker} `);
       }
       const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
       const currentEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === nextEmail) || null;
-      const adminCount = existingAssignments.filter((entry) => normalizeContentManagerRole(entry.role) === "admin").length;
-      if (currentEntry && normalizeContentManagerRole(currentEntry.role) === "admin" && nextRole !== "admin" && adminCount <= 1) {
-        showAppToast(joinLocalizedText("Keep at least one admin account.", "\u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0627\u06CC\u0688\u0645\u0646 \u0627\u06A9\u0627\u0624\u0646\u0679 \u0636\u0631\u0648\u0631 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), "alert");
+      const permissionsOverride = normalizeContentPermissionOverride(overridePermissions != null ? overridePermissions : currentEntry == null ? void 0 : currentEntry.permissions_override);
+      const currentMatrix = normalizeContentPermissionMatrix(contentAccessState.rolePermissions);
+      const currentManagerCount = countAssignedContentManagers(existingAssignments, currentMatrix);
+      const nextManagerCapabilities = getContentRoleCapabilities(nextRole, currentMatrix, permissionsOverride);
+      const currentManagerCapabilities = currentEntry ? getContentRoleCapabilities(currentEntry.role, currentMatrix, currentEntry.permissions_override) : null;
+      if (currentEntry && (currentManagerCapabilities == null ? void 0 : currentManagerCapabilities.manageContentAccess) && !nextManagerCapabilities.manageContentAccess && currentManagerCount <= 1) {
+        showAppToast(joinLocalizedText("Keep at least one account with content access control.", "\u0645\u0648\u0627\u062F \u06A9\u06CC \u0631\u0633\u0627\u0626\u06CC \u0633\u0646\u0628\u06BE\u0627\u0644\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0627\u06A9\u0627\u0624\u0646\u0679 \u0636\u0631\u0648\u0631 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
       setContentAccessBusy(true);
@@ -9213,6 +9364,7 @@ ${marker} `);
         const { error } = await client.from(SUPABASE_CONTENT_ROLE_TABLE).upsert({
           email: nextEmail,
           role: nextRole,
+          permissions_override: Object.keys(permissionsOverride).length ? permissionsOverride : null,
           updated_by: supabaseAuthState.userId,
           updated_at: nowIso
         }, { onConflict: "email" });
@@ -9228,7 +9380,7 @@ ${marker} `);
       } finally {
         setContentAccessBusy(false);
       }
-    }, [canManageContentAccess, contentAccessState.assignments, contentRoleDraftEmail, contentRoleDraftRole, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
+    }, [canManageContentAccess, contentAccessState.assignments, contentAccessState.rolePermissions, contentRoleDraftEmail, contentRoleDraftRole, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
     const handleDeleteContentRoleAssignment = useCallback(async (email) => {
       const safeEmail = String(email || "").trim().toLowerCase();
       if (!safeEmail) return;
@@ -9238,9 +9390,11 @@ ${marker} `);
       }
       const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
       const targetEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === safeEmail) || null;
-      const adminCount = existingAssignments.filter((entry) => normalizeContentManagerRole(entry.role) === "admin").length;
-      if (targetEntry && normalizeContentManagerRole(targetEntry.role) === "admin" && adminCount <= 1) {
-        showAppToast(joinLocalizedText("Keep at least one admin account.", "\u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0627\u06CC\u0688\u0645\u0646 \u0627\u06A9\u0627\u0624\u0646\u0679 \u0636\u0631\u0648\u0631 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), "alert");
+      const currentMatrix = normalizeContentPermissionMatrix(contentAccessState.rolePermissions);
+      const currentManagerCount = countAssignedContentManagers(existingAssignments, currentMatrix);
+      const targetCapabilities = targetEntry ? getContentRoleCapabilities(targetEntry.role, currentMatrix, targetEntry.permissions_override) : null;
+      if ((targetCapabilities == null ? void 0 : targetCapabilities.manageContentAccess) && currentManagerCount <= 1) {
+        showAppToast(joinLocalizedText("Keep at least one account with content access control.", "\u0645\u0648\u0627\u062F \u06A9\u06CC \u0631\u0633\u0627\u0626\u06CC \u0633\u0646\u0628\u06BE\u0627\u0644\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0627\u06A9\u0627\u0624\u0646\u0679 \u0636\u0631\u0648\u0631 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
       setContentAccessBusy(true);
@@ -9255,7 +9409,113 @@ ${marker} `);
       } finally {
         setContentAccessBusy(false);
       }
-    }, [canManageContentAccess, contentAccessState.assignments, ensureSupabaseClient, language, refreshContentAccessState, showAppToast]);
+    }, [canManageContentAccess, contentAccessState.assignments, contentAccessState.rolePermissions, ensureSupabaseClient, language, refreshContentAccessState, showAppToast]);
+    const handleSetContentRolePermission = useCallback(async (role, permissionKey, nextValue = null) => {
+      var _a2;
+      const safeRole = normalizeContentManagerRole(role);
+      const safePermission = String(permissionKey || "").trim();
+      if (!canManageContentAccess) {
+        showAppToast(joinLocalizedText("Only admins can edit content permissions.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0645\u0648\u0627\u062F \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A\u06CC\u06BA \u0628\u062F\u0644 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      if (!CONTENT_PERMISSION_KEYS.includes(safePermission)) return;
+      const currentMatrix = normalizeContentPermissionMatrix(contentAccessState.rolePermissions);
+      const currentValue = Boolean((_a2 = currentMatrix[safeRole]) == null ? void 0 : _a2[safePermission]);
+      const desiredValue = nextValue === null ? !currentValue : Boolean(nextValue);
+      if (safeRole === "admin" && safePermission === "manageContentAccess" && !desiredValue) {
+        showAppToast(joinLocalizedText("Admin access management must stay enabled.", "\u0627\u06CC\u0688\u0645\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0631\u0633\u0627\u0626\u06CC \u0633\u0646\u0628\u06BE\u0627\u0644\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0644\u0627\u0632\u0645\u0627\u064B \u0641\u0639\u0627\u0644 \u0631\u06C1\u06D2 \u06AF\u06CC\u06D4", language), "alert");
+        return;
+      }
+      const nextMatrix = normalizeContentPermissionMatrix({
+        ...currentMatrix,
+        [safeRole]: {
+          ...currentMatrix[safeRole],
+          [safePermission]: desiredValue
+        }
+      });
+      setContentAccessBusy(true);
+      try {
+        const client = ensureSupabaseClient();
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const { error } = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).upsert({
+          scope: "global",
+          default_role: normalizeContentManagerRole(contentAccessState.defaultRole),
+          role_permissions: nextMatrix,
+          updated_by: supabaseAuthState.userId,
+          updated_at: nowIso
+        }, { onConflict: "scope" });
+        if (error) throw error;
+        await refreshContentAccessState();
+        showAppToast(joinLocalizedText("Role permissions updated", "\u06A9\u0631\u062F\u0627\u0631 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A\u06CC\u06BA \u062A\u0627\u0632\u06C1 \u06C1\u0648 \u06AF\u0626\u06CC\u06BA", language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to update role permissions: ${(error == null ? void 0 : error.message) || error}`, `\u06A9\u0631\u062F\u0627\u0631 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A\u06CC\u06BA \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC\u06BA: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentAccessBusy(false);
+      }
+    }, [canManageContentAccess, contentAccessState.defaultRole, contentAccessState.rolePermissions, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
+    const handleSetContentRoleAssignmentPermission = useCallback(async (email, permissionKey, nextValue = null) => {
+      const safeEmail = String(email || "").trim().toLowerCase();
+      const safePermission = String(permissionKey || "").trim();
+      if (!safeEmail || !CONTENT_PERMISSION_KEYS.includes(safePermission)) return;
+      const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
+      const targetEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === safeEmail) || null;
+      if (!targetEntry) {
+        showAppToast(joinLocalizedText("Save a role for this email first.", "\u067E\u06C1\u0644\u06D2 \u0627\u0633 \u0627\u06CC \u0645\u06CC\u0644 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const currentOverride = normalizeContentPermissionOverride(targetEntry.permissions_override);
+      const basePermissions = getContentRoleCapabilities(targetEntry.role, contentAccessState.rolePermissions);
+      const currentValue = Object.prototype.hasOwnProperty.call(currentOverride, safePermission) ? Boolean(currentOverride[safePermission]) : Boolean(basePermissions[safePermission]);
+      const desiredValue = nextValue === null ? !currentValue : Boolean(nextValue);
+      const nextOverride = {
+        ...currentOverride,
+        [safePermission]: desiredValue
+      };
+      const currentManagerCount = countAssignedContentManagers(existingAssignments, contentAccessState.rolePermissions);
+      const nextCapabilities = getContentRoleCapabilities(targetEntry.role, contentAccessState.rolePermissions, nextOverride);
+      const currentCapabilities = getContentRoleCapabilities(targetEntry.role, contentAccessState.rolePermissions, targetEntry.permissions_override);
+      if (safePermission === "manageContentAccess" && currentCapabilities.manageContentAccess && !nextCapabilities.manageContentAccess && currentManagerCount <= 1) {
+        showAppToast(joinLocalizedText("The last content access manager must stay enabled.", "\u0622\u062E\u0631\u06CC \u0645\u0648\u0627\u062F \u0631\u0633\u0627\u0626\u06CC \u0645\u0646\u06CC\u062C\u0631 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0641\u0639\u0627\u0644 \u0631\u06C1\u0646\u0627 \u0636\u0631\u0648\u0631\u06CC \u06C1\u06D2\u06D4", language), "alert");
+        return;
+      }
+      await handleSaveContentRoleAssignment(safeEmail, targetEntry.role, nextOverride);
+    }, [contentAccessState.assignments, contentAccessState.rolePermissions, handleSaveContentRoleAssignment, language, showAppToast]);
+    const handleClearContentRoleAssignmentOverrides = useCallback(async (email) => {
+      const safeEmail = String(email || "").trim().toLowerCase();
+      if (!safeEmail) return;
+      const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
+      const targetEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === safeEmail) || null;
+      if (!targetEntry) return;
+      await handleSaveContentRoleAssignment(safeEmail, targetEntry.role, {});
+    }, [contentAccessState.assignments, handleSaveContentRoleAssignment]);
+    const handleSetContentRoleTestMode = useCallback((nextRole = null, enabled = null) => {
+      const role = normalizeContentManagerRole(nextRole || contentRoleTestMode.role || liveContentRole || "student");
+      const roleLabel = language === "ur" ? {
+        student: "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
+        parent: "\u0648\u0627\u0644\u062F\u06CC\u0646",
+        teacher: "\u0627\u0633\u062A\u0627\u062F",
+        editor: "\u0627\u06CC\u0688\u06CC\u0679\u0631",
+        admin: "\u0627\u06CC\u0688\u0645\u0646"
+      }[role] || "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645" : {
+        student: "Student",
+        parent: "Parent",
+        teacher: "Teacher",
+        editor: "Editor",
+        admin: "Admin"
+      }[role] || "Student";
+      setContentRoleTestMode((current) => {
+        const shouldEnable = enabled === null ? !current.enabled : Boolean(enabled);
+        return {
+          enabled: shouldEnable,
+          role
+        };
+      });
+      if (enabled === false) {
+        showAppToast(joinLocalizedText("Content role test mode stopped", "\u0645\u0648\u0627\u062F \u06A9\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0645\u0648\u0688 \u0628\u0646\u062F \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
+      } else if (enabled === true || enabled === null) {
+        showAppToast(joinLocalizedText(`Testing app as ${roleLabel}`, `\u0627\u06CC\u067E \u06A9\u0648 ${roleLabel} \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u062C\u0627\u0646\u0686\u0627 \u062C\u0627 \u0631\u06C1\u0627 \u06C1\u06D2`, language), "check");
+      }
+    }, [contentRoleTestMode.role, language, liveContentRole, showAppToast]);
     const handleResolveDictionaryConflict = useCallback(async (normalizedWord, mode = "merge") => {
       var _a2;
       const normalized = normalizeLookupWord(normalizedWord);
@@ -11138,6 +11398,7 @@ ${marker} `);
         dictionarySyncConflicts,
         dictionaryImportUrl,
         chapterSourcePreferences,
+        contentRoleTestMode,
         supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync),
         studentProfiles,
         deletedStudentProfileIds,
@@ -11151,10 +11412,10 @@ ${marker} `);
         aiProviderConfigs,
         selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-    }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, supabaseDictionarySync]);
+      if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+    }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, supabaseDictionarySync]);
     useEffect(() => {
       setNavHidden(Boolean(navAutoHide));
     }, [navPosition, navAutoHide]);
@@ -13691,8 +13952,8 @@ ${error.message || error}`);
       language
     );
     const contentManagerRoleLabel = joinLocalizedText(
-      contentManagerRole === "admin" ? "Admin" : contentManagerRole === "editor" ? "Editor" : contentManagerRole === "teacher" ? "Teacher" : "Student",
-      contentManagerRole === "admin" ? "\u0627\u06CC\u0688\u0645\u0646" : contentManagerRole === "editor" ? "\u0627\u06CC\u0688\u06CC\u0679\u0631" : contentManagerRole === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
+      contentManagerRole === "admin" ? "Admin" : contentManagerRole === "editor" ? "Editor" : contentManagerRole === "teacher" ? "Teacher" : contentManagerRole === "parent" ? "Parent" : "Student",
+      contentManagerRole === "admin" ? "\u0627\u06CC\u0688\u0645\u0646" : contentManagerRole === "editor" ? "\u0627\u06CC\u0688\u06CC\u0679\u0631" : contentManagerRole === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : contentManagerRole === "parent" ? "\u0648\u0627\u0644\u062F\u06CC\u0646" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
       language
     );
     const activeStudentProfileInitials = getStudentProfileInitials(activeStudentProfile);
@@ -15769,6 +16030,7 @@ ${error.message || error}`);
         contentManagerRoleLabel,
         contentAccessState,
         contentAccessBusy,
+        contentRoleTestMode,
         contentRoleDraftEmail,
         contentRoleDraftRole,
         onSupabaseDictionarySyncChange: updateSupabaseDictionarySyncField,
@@ -15790,6 +16052,10 @@ ${error.message || error}`);
         onContentRoleDraftEmailChange: setContentRoleDraftEmail,
         onContentRoleDraftRoleChange: setContentRoleDraftRole,
         onContentDefaultRoleChange: handleContentDefaultRoleChange,
+        onContentRolePermissionToggle: handleSetContentRolePermission,
+        onContentRoleAssignmentPermissionToggle: handleSetContentRoleAssignmentPermission,
+        onContentRoleAssignmentOverrideClear: handleClearContentRoleAssignmentOverrides,
+        onContentRoleTestModeChange: handleSetContentRoleTestMode,
         onSaveContentRoleAssignment: handleSaveContentRoleAssignment,
         onDeleteContentRoleAssignment: handleDeleteContentRoleAssignment,
         onResolveDictionaryConflict: handleResolveDictionaryConflict,

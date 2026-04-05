@@ -96,7 +96,17 @@
     return renderLocalizedText(storageLabel, language);
   }
 
-  const CONTENT_ROLE_PREVIEW_ORDER = ["student", "teacher", "editor", "admin"];
+  const CONTENT_ROLE_PREVIEW_ORDER = ["student", "parent", "teacher", "editor", "admin"];
+  const CONTENT_PERMISSION_KEYS = [
+    "importChapters",
+    "importSubjects",
+    "exportContent",
+    "savePublishedLocally",
+    "publishContent",
+    "unpublishContent",
+    "deleteLocalContent",
+    "manageContentAccess",
+  ];
 
   function normalizeContentPreviewRole(role) {
     const safeRole = String(role || "").trim().toLowerCase();
@@ -107,6 +117,16 @@
     const safeRole = normalizeContentPreviewRole(role);
     const matrix = {
       student: {
+        importChapters: false,
+        importSubjects: false,
+        exportContent: false,
+        savePublishedLocally: false,
+        publishContent: false,
+        unpublishContent: false,
+        deleteLocalContent: false,
+        manageContentAccess: false,
+      },
+      parent: {
         importChapters: false,
         importSubjects: false,
         exportContent: false,
@@ -148,6 +168,34 @@
       },
     };
     return matrix[safeRole] || matrix.student;
+  }
+
+  function normalizeContentPreviewOverride(raw) {
+    const safe = {};
+    CONTENT_PERMISSION_KEYS.forEach((key) => {
+      if (raw && Object.prototype.hasOwnProperty.call(raw, key)) safe[key] = Boolean(raw[key]);
+    });
+    return safe;
+  }
+
+  function normalizeContentPreviewMatrix(raw) {
+    return CONTENT_ROLE_PREVIEW_ORDER.reduce((acc, role) => {
+      const merged = { ...getContentPreviewCapabilities(role), ...normalizeContentPreviewOverride(raw?.[role]) };
+      if (role === "admin") merged.manageContentAccess = true;
+      acc[role] = merged;
+      return acc;
+    }, {});
+  }
+
+  function getEffectiveContentPreviewCapabilities(role, matrix, override) {
+    const safeRole = normalizeContentPreviewRole(role);
+    const safeMatrix = normalizeContentPreviewMatrix(matrix || {});
+    const merged = {
+      ...(safeMatrix[safeRole] || safeMatrix.student),
+      ...normalizeContentPreviewOverride(override),
+    };
+    if (safeRole === "admin") merged.manageContentAccess = true;
+    return merged;
   }
 
   function renderPacingControl(sectionKey, sectionConfig, labels, onDaySectionChange, language) {
@@ -405,6 +453,7 @@
       contentManagerRoleLabel,
       contentAccessState,
       contentAccessBusy,
+      contentRoleTestMode,
       contentRoleDraftEmail,
       contentRoleDraftRole,
       versionInfo,
@@ -434,6 +483,10 @@
       onContentRoleDraftEmailChange,
       onContentRoleDraftRoleChange,
       onContentDefaultRoleChange,
+      onContentRolePermissionToggle,
+      onContentRoleAssignmentPermissionToggle,
+      onContentRoleAssignmentOverrideClear,
+      onContentRoleTestModeChange,
       onSaveContentRoleAssignment,
       onDeleteContentRoleAssignment,
       onResolveDictionaryConflict,
@@ -582,31 +635,63 @@
     const contentAssignments = Array.isArray(contentAccessState?.assignments) ? contentAccessState.assignments : [];
     const contentDefaultRole = String(contentAccessState?.defaultRole || "student").trim().toLowerCase() || "student";
     const contentCurrentRole = String(contentAccessState?.currentRole || "student").trim().toLowerCase() || "student";
-    const canManageContentAccess = contentCurrentRole === "admin";
+    const contentRoleMatrix = normalizeContentPreviewMatrix(contentAccessState?.rolePermissions || {});
+    const contentCurrentCapabilities = getEffectiveContentPreviewCapabilities(
+      contentCurrentRole,
+      contentRoleMatrix,
+      contentAccessState?.currentPermissionsOverride || {},
+    );
+    const canManageContentAccess = Boolean(contentCurrentCapabilities.manageContentAccess);
     const previewRole = normalizeContentPreviewRole(contentRolePreview || contentCurrentRole || contentDefaultRole || "student");
-    const previewCapabilities = getContentPreviewCapabilities(previewRole);
+    const previewCapabilities = contentRoleMatrix[previewRole] || contentRoleMatrix.student;
     const contentRoleOptions = [
       {
         id: "student",
         label: joinLocalizedText("Student", "طالب علم", language),
-        capabilities: joinLocalizedText("Use built-in and published content.", "بلٹ اِن اور شائع شدہ مواد استعمال کر سکتا ہے۔", language),
+        capabilities: joinLocalizedText("View and use allowed content.", "اجازت یافتہ مواد دیکھ اور استعمال کر سکتا ہے۔", language),
+      },
+      {
+        id: "parent",
+        label: joinLocalizedText("Parent", "والدین", language),
+        capabilities: joinLocalizedText("Parent-facing access based on admin permissions.", "ایڈمن کی مقررہ اجازتوں کے مطابق والدین کی رسائی۔", language),
       },
       {
         id: "teacher",
         label: joinLocalizedText("Teacher", "استاد", language),
-        capabilities: joinLocalizedText("Import chapters, export, and save copies locally.", "ابواب درآمد، برآمد، اور کاپیاں مقامی طور پر محفوظ کر سکتا ہے۔", language),
+        capabilities: joinLocalizedText("Teacher tools can be enabled or restricted by admin.", "استاد کے اوزار ایڈمن کے مطابق فعال یا محدود کیے جا سکتے ہیں۔", language),
       },
       {
         id: "editor",
         label: joinLocalizedText("Editor", "ایڈیٹر", language),
-        capabilities: joinLocalizedText("Import subjects and publish or unpublish chapters.", "مضامین درآمد اور ابواب شائع یا غیر شائع کر سکتا ہے۔", language),
+        capabilities: joinLocalizedText("Publishing and import tools based on admin matrix.", "اشاعت اور درآمد کے اوزار ایڈمن کی میٹرکس کے مطابق۔", language),
       },
       {
         id: "admin",
         label: joinLocalizedText("Admin", "ایڈمن", language),
-        capabilities: joinLocalizedText("Full control over content and permissions.", "مواد اور اجازتوں پر مکمل اختیار رکھتا ہے۔", language),
+        capabilities: joinLocalizedText("Can always manage content access and permission rules.", "مواد کی رسائی اور اجازت کے قواعد ہمیشہ سنبھال سکتا ہے۔", language),
       },
     ];
+    const contentRolePreviewLabel = (contentRoleOptions.find((option) => option.id === normalizeContentPreviewRole(contentRoleTestMode?.role)) || contentRoleOptions[0]).label;
+    const contentPermissionItems = [
+      { key: "importChapters", label: joinLocalizedText("Import chapters", "ابواب درآمد", language) },
+      { key: "importSubjects", label: joinLocalizedText("Import whole subjects", "پورے مضامین درآمد", language) },
+      { key: "exportContent", label: joinLocalizedText("Export content", "مواد برآمد", language) },
+      { key: "savePublishedLocally", label: joinLocalizedText("Save published locally", "شائع شدہ مقامی محفوظ", language) },
+      { key: "publishContent", label: joinLocalizedText("Publish chapters", "ابواب شائع", language) },
+      { key: "unpublishContent", label: joinLocalizedText("Unpublish own chapters", "اپنے ابواب غیر شائع", language) },
+      { key: "deleteLocalContent", label: joinLocalizedText("Delete local drafts", "مقامی مسودے حذف", language) },
+      { key: "manageContentAccess", label: joinLocalizedText("Manage content access", "مواد کی رسائی سنبھالنا", language) },
+    ];
+    const summarizeContentCapabilities = (capabilities) => {
+      const enabledLabels = contentPermissionItems
+        .filter((item) => Boolean(capabilities?.[item.key]))
+        .slice(0, 3)
+        .map((item) => item.label);
+      if (!enabledLabels.length) {
+        return renderLocalizedText(joinLocalizedText("No elevated content actions enabled.", "کوئی اضافی مواد والے اختیار فعال نہیں۔", language), language);
+      }
+      return renderLocalizedText(enabledLabels.join(" • "), language);
+    };
     const contentAccessSummaryCard = React.createElement("div", {
       key: "content-access-summary",
       style: {
@@ -655,7 +740,9 @@
           direction: language === "ur" ? "rtl" : "ltr",
           textAlign: language === "ur" ? "right" : "left",
         },
-      }, renderLocalizedText(option.capabilities, language))))));
+      },
+      React.createElement("div", { style: { marginBottom: 4 } }, renderLocalizedText(option.capabilities, language)),
+      React.createElement("div", { style: { color: "var(--text-secondary)", fontSize: 11 } }, summarizeContentCapabilities(contentRoleMatrix[option.id])))))));
     const contentAccessPreviewItems = [
       { key: "importChapters", label: joinLocalizedText("Import chapters", "ابواب درآمد", language) },
       { key: "importSubjects", label: joinLocalizedText("Import whole subjects", "مکمل مضامین درآمد", language) },
@@ -676,7 +763,7 @@
         marginBottom: 10,
       },
     },
-    React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 10 } }, renderLocalizedText(language === "ur" ? "Role Access Preview" : "Role Access Preview", language)),
+    React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 10 } }, renderLocalizedText(language === "ur" ? "Admin Test Mode" : "Admin Test Mode", language)),
     React.createElement("div", {
       style: {
         color: "var(--text-muted)",
@@ -687,7 +774,10 @@
         direction: language === "ur" ? "rtl" : "ltr",
         textAlign: language === "ur" ? "right" : "left",
       },
-    }, renderLocalizedText(language === "ur" ? "ایک فرضی کردار منتخب کریں اور نیچے دیکھیں کہ اس کردار کو کون سے مواد والے اختیارات ملیں گے۔ یہ صرف پیش نظارہ ہے، اصل تفویض تبدیل نہیں ہوگی۔" : "Pick a mock role below to see exactly which content actions it would receive. This preview does not change real assignments.", language)),
+    }, renderLocalizedText(language === "ur" ? "نیچے کردار منتخب کریں اور Test Mode شروع کریں۔ اس کے بعد پورا ایپ اسی کردار کی طرح برتاؤ کرے گا، مگر اصل اکاؤنٹ کی تفویض تبدیل نہیں ہوگی۔" : "Pick a role below and start Test Mode. The whole app will behave like that role until you stop testing, without changing the real assignment.", language)),
+    React.createElement("div", { className: "settings-item" },
+      React.createElement("span", { className: "si-label" }, renderLocalizedText(language === "ur" ? "Current test state" : "Current test state", language)),
+      React.createElement("span", { className: "si-value" }, renderLocalizedText(contentRoleTestMode?.enabled ? joinLocalizedText(`Testing as ${contentRolePreviewLabel}`, `ٹیسٹ موڈ: ${contentRolePreviewLabel}`, language) : joinLocalizedText("Off", "بند", language), language))),
     React.createElement("div", {
       className: "settings-compact-grid",
       style: {
@@ -710,6 +800,17 @@
         },
       }, renderLocalizedText(option.label, language));
     })),
+    React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 } },
+      React.createElement("button", {
+        type: "button",
+        className: "study-tool-btn",
+        onClick: () => onContentRoleTestModeChange && onContentRoleTestModeChange(previewRole, true),
+      }, renderLocalizedText(language === "ur" ? "Test Mode شروع کریں" : "Start Test Mode", language)),
+      React.createElement("button", {
+        type: "button",
+        className: "ghost-cta",
+        onClick: () => onContentRoleTestModeChange && onContentRoleTestModeChange(previewRole, false),
+      }, renderLocalizedText(language === "ur" ? "Test Mode بند کریں" : "Stop Test Mode", language))),
     React.createElement("div", {
       className: "settings-compact-grid",
       style: {
@@ -824,6 +925,60 @@
         textAlign: language === "ur" ? "right" : "left",
       },
     }, renderLocalizedText(language === "ur" ? "یہ کنٹرول طے کرتے ہیں کہ کون باب درآمد، مضمون درآمد، شائع، غیر شائع، یا مقامی مسودے حذف کر سکتا ہے۔" : "These controls decide who can import chapters, import subjects, publish, unpublish, or delete local drafts.", language)),
+    React.createElement("div", {
+      style: {
+        color: "var(--text-primary)",
+        fontSize: 13,
+        fontWeight: 700,
+        marginBottom: 10,
+      },
+    }, renderLocalizedText(language === "ur" ? "Role Permission Matrix" : "Role Permission Matrix", language)),
+    React.createElement("div", {
+      className: "settings-compact-grid",
+      style: {
+        gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
+        gap: 10,
+        marginBottom: 10,
+      },
+    },
+    ...contentRoleOptions.map((option) => React.createElement("div", {
+      key: `content-role-matrix-${option.id}`,
+      className: "settings-compact-card",
+      style: {
+        minHeight: 220,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      },
+    },
+    React.createElement("strong", {
+      style: {
+        color: "var(--text-primary)",
+        fontSize: 13,
+        fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+      },
+    }, renderLocalizedText(option.label, language)),
+    React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 8,
+      },
+    },
+    ...contentPermissionItems.map((permission) => {
+      const allowed = Boolean(contentRoleMatrix[option.id]?.[permission.key]);
+      const locked = option.id === "admin" && permission.key === "manageContentAccess";
+      return React.createElement("button", {
+        key: `role-permission-${option.id}-${permission.key}`,
+        type: "button",
+        className: allowed ? "study-tool-btn" : "ghost-cta",
+        onClick: () => !locked && onContentRolePermissionToggle && onContentRolePermissionToggle(option.id, permission.key, !allowed),
+        disabled: contentAccessBusy || locked,
+        style: {
+          opacity: locked ? 0.72 : 1,
+        },
+      }, renderLocalizedText(permission.label, language));
+    }))))),
     ...(contentAssignments.length
       ? contentAssignments.map((assignment) => React.createElement("div", {
         key: `content-assignment-${assignment.email}`,
@@ -846,7 +1001,43 @@
             className: "ghost-cta",
             onClick: () => onDeleteContentRoleAssignment && onDeleteContentRoleAssignment(assignment.email),
             disabled: contentAccessBusy,
-          }, renderLocalizedText(language === "ur" ? "ہٹائیں" : "Remove", language)))))
+          }, renderLocalizedText(language === "ur" ? "ہٹائیں" : "Remove", language))),
+        React.createElement("div", {
+          style: {
+            color: "var(--text-secondary)",
+            fontSize: 12,
+            marginBottom: 8,
+            fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+            direction: language === "ur" ? "rtl" : "ltr",
+            textAlign: language === "ur" ? "right" : "left",
+          },
+        }, renderLocalizedText(language === "ur" ? "اس صارف کے لیے مخصوص اجازتیں" : "Per-user permission overrides", language)),
+        React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 } },
+          ...contentPermissionItems.map((permission) => {
+            const baseValue = Boolean(contentRoleMatrix[normalizeContentPreviewRole(assignment.role)]?.[permission.key]);
+            const overrideMap = normalizeContentPreviewOverride(assignment.permissions_override);
+            const hasOverride = Object.prototype.hasOwnProperty.call(overrideMap, permission.key);
+            const effectiveValue = hasOverride ? Boolean(overrideMap[permission.key]) : baseValue;
+            const locked = normalizeContentPreviewRole(assignment.role) === "admin" && permission.key === "manageContentAccess";
+            return React.createElement("button", {
+              key: `assignment-override-${assignment.email}-${permission.key}`,
+              type: "button",
+              className: effectiveValue ? "study-tool-btn" : "ghost-cta",
+              onClick: () => !locked && onContentRoleAssignmentPermissionToggle && onContentRoleAssignmentPermissionToggle(assignment.email, permission.key, !effectiveValue),
+              disabled: contentAccessBusy || locked,
+              style: {
+                opacity: locked ? 0.72 : 1,
+                boxShadow: hasOverride ? "0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)" : "none",
+              },
+            }, renderLocalizedText(permission.label, language));
+          })),
+        React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+          React.createElement("button", {
+            type: "button",
+            className: "ghost-cta",
+            onClick: () => onContentRoleAssignmentOverrideClear && onContentRoleAssignmentOverrideClear(assignment.email),
+            disabled: contentAccessBusy,
+          }, renderLocalizedText(language === "ur" ? "اووررائیڈ صاف کریں" : "Clear Overrides", language)))))
       : [React.createElement("div", {
         key: "content-assignment-empty",
         className: "empty-state",
@@ -1903,7 +2094,7 @@
         title: joinLocalizedText("Account & Cloud Sign-In", "اکاؤنٹ اور کلاؤڈ سائن اِن", language),
         tags: ["account", "supabase", "cloud", "sign in", "email", "password", "username", "sync", "sql", "setup sql", "copy sql", "test connection", "published chapter", "published chapters", "content", "publish", "permissions", "content role", "editor", "admin", "teacher", "student", "chapter access"],
         groups: [
-          { key: "settings-group-account", title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language), tags: ["login", "email", "password", "username", "role", "roles", "access preview", "mock role", "permissions", "cloud", "sql", "setup", "copy sql", "test connection", "sync now", "published chapter", "content"], children: accountChildren },
+          { key: "settings-group-account", title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language), tags: ["login", "email", "password", "username", "role", "roles", "parent", "editor", "teacher", "admin", "test mode", "permissions", "override", "access preview", "mock role", "cloud", "sql", "setup", "copy sql", "test connection", "sync now", "published chapter", "content"], children: accountChildren },
         ],
       },
       {
