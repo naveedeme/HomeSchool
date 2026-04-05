@@ -96,6 +96,60 @@
     return renderLocalizedText(storageLabel, language);
   }
 
+  const CONTENT_ROLE_PREVIEW_ORDER = ["student", "teacher", "editor", "admin"];
+
+  function normalizeContentPreviewRole(role) {
+    const safeRole = String(role || "").trim().toLowerCase();
+    return CONTENT_ROLE_PREVIEW_ORDER.includes(safeRole) ? safeRole : "student";
+  }
+
+  function getContentPreviewCapabilities(role) {
+    const safeRole = normalizeContentPreviewRole(role);
+    const matrix = {
+      student: {
+        importChapters: false,
+        importSubjects: false,
+        exportContent: false,
+        savePublishedLocally: false,
+        publishContent: false,
+        unpublishContent: false,
+        deleteLocalContent: false,
+        manageContentAccess: false,
+      },
+      teacher: {
+        importChapters: true,
+        importSubjects: false,
+        exportContent: true,
+        savePublishedLocally: true,
+        publishContent: false,
+        unpublishContent: false,
+        deleteLocalContent: true,
+        manageContentAccess: false,
+      },
+      editor: {
+        importChapters: true,
+        importSubjects: true,
+        exportContent: true,
+        savePublishedLocally: true,
+        publishContent: true,
+        unpublishContent: true,
+        deleteLocalContent: true,
+        manageContentAccess: false,
+      },
+      admin: {
+        importChapters: true,
+        importSubjects: true,
+        exportContent: true,
+        savePublishedLocally: true,
+        publishContent: true,
+        unpublishContent: true,
+        deleteLocalContent: true,
+        manageContentAccess: true,
+      },
+    };
+    return matrix[safeRole] || matrix.student;
+  }
+
   function renderPacingControl(sectionKey, sectionConfig, labels, onDaySectionChange, language) {
     return React.createElement("div", {
       key: sectionKey,
@@ -477,6 +531,7 @@
     const versionHistory = Array.isArray(versionInfo?.history) ? versionInfo.history : [];
     const notificationItems = Array.isArray(notificationHistory) ? notificationHistory : [];
     const [settingsSearch, setSettingsSearch] = React.useState("");
+    const [contentRolePreview, setContentRolePreview] = React.useState("student");
     const normalizedSettingsSearch = normalizeSettingsSearchValue(settingsSearch);
     const selectStyle = {
       padding: "10px 12px",
@@ -498,6 +553,10 @@
       gap: 10,
       flexWrap: "wrap",
     };
+    React.useEffect(() => {
+      const nextRole = normalizeContentPreviewRole(contentAccessState?.currentRole || contentAccessState?.defaultRole || "student");
+      setContentRolePreview(nextRole);
+    }, [contentAccessState?.currentRole, contentAccessState?.defaultRole]);
     const voicePreviewButtonStyle = {
       width: 42,
       height: 42,
@@ -524,6 +583,8 @@
     const contentDefaultRole = String(contentAccessState?.defaultRole || "student").trim().toLowerCase() || "student";
     const contentCurrentRole = String(contentAccessState?.currentRole || "student").trim().toLowerCase() || "student";
     const canManageContentAccess = contentCurrentRole === "admin";
+    const previewRole = normalizeContentPreviewRole(contentRolePreview || contentCurrentRole || contentDefaultRole || "student");
+    const previewCapabilities = getContentPreviewCapabilities(previewRole);
     const contentRoleOptions = [
       {
         id: "student",
@@ -595,6 +656,119 @@
           textAlign: language === "ur" ? "right" : "left",
         },
       }, renderLocalizedText(option.capabilities, language))))));
+    const contentAccessPreviewItems = [
+      { key: "importChapters", label: joinLocalizedText("Import chapters", "ابواب درآمد", language) },
+      { key: "importSubjects", label: joinLocalizedText("Import whole subjects", "مکمل مضامین درآمد", language) },
+      { key: "exportContent", label: joinLocalizedText("Export chapters and subjects", "ابواب اور مضامین برآمد", language) },
+      { key: "savePublishedLocally", label: joinLocalizedText("Save published copies locally", "شائع شدہ کاپیاں مقامی طور پر محفوظ", language) },
+      { key: "publishContent", label: joinLocalizedText("Publish chapters", "ابواب شائع", language) },
+      { key: "unpublishContent", label: joinLocalizedText("Unpublish own chapters", "اپنے ابواب غیر شائع", language) },
+      { key: "deleteLocalContent", label: joinLocalizedText("Delete local drafts", "مقامی مسودے حذف", language) },
+      { key: "manageContentAccess", label: joinLocalizedText("Manage content roles", "مواد کے کردار سنبھالنا", language) },
+    ];
+    const contentAccessPreviewCard = canManageContentAccess ? React.createElement("div", {
+      key: "content-access-preview",
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border)",
+        marginBottom: 10,
+      },
+    },
+    React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 10 } }, renderLocalizedText(language === "ur" ? "Role Access Preview" : "Role Access Preview", language)),
+    React.createElement("div", {
+      style: {
+        color: "var(--text-muted)",
+        fontSize: 12,
+        lineHeight: 1.6,
+        marginBottom: 10,
+        fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+        direction: language === "ur" ? "rtl" : "ltr",
+        textAlign: language === "ur" ? "right" : "left",
+      },
+    }, renderLocalizedText(language === "ur" ? "ایک فرضی کردار منتخب کریں اور نیچے دیکھیں کہ اس کردار کو کون سے مواد والے اختیارات ملیں گے۔ یہ صرف پیش نظارہ ہے، اصل تفویض تبدیل نہیں ہوگی۔" : "Pick a mock role below to see exactly which content actions it would receive. This preview does not change real assignments.", language)),
+    React.createElement("div", {
+      className: "settings-compact-grid",
+      style: {
+        gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))",
+        gap: 10,
+        marginBottom: 10,
+      },
+    },
+    ...contentRoleOptions.map((option) => {
+      const selected = option.id === previewRole;
+      return React.createElement("button", {
+        key: `content-preview-role-${option.id}`,
+        type: "button",
+        className: selected ? "study-tool-btn" : "ghost-cta",
+        onClick: () => setContentRolePreview(option.id),
+        style: {
+          width: "100%",
+          minHeight: 46,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+        },
+      }, renderLocalizedText(option.label, language));
+    })),
+    React.createElement("div", {
+      className: "settings-compact-grid",
+      style: {
+        gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+        gap: 10,
+      },
+    },
+    ...contentAccessPreviewItems.map((item) => {
+      const allowed = Boolean(previewCapabilities[item.key]);
+      return React.createElement("div", {
+        key: `content-preview-capability-${item.key}`,
+        className: "settings-compact-card",
+        style: {
+          minHeight: 72,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-start",
+          gap: 8,
+          borderColor: allowed ? "color-mix(in srgb, var(--success) 55%, var(--border))" : "color-mix(in srgb, var(--danger) 45%, var(--border))",
+          background: allowed
+            ? "color-mix(in srgb, var(--success) 12%, var(--bg-elevated))"
+            : "color-mix(in srgb, var(--danger) 10%, var(--bg-elevated))",
+        },
+      },
+      React.createElement("div", {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        },
+      },
+      React.createElement("strong", {
+        style: {
+          color: "var(--text-primary)",
+          fontSize: 13,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+        },
+      }, renderLocalizedText(item.label, language)),
+      React.createElement("span", {
+        className: "discovery-tag muted",
+        style: {
+          background: allowed ? "color-mix(in srgb, var(--success) 16%, transparent)" : "color-mix(in srgb, var(--danger) 16%, transparent)",
+          color: allowed ? "var(--success)" : "var(--danger)",
+          borderColor: allowed ? "color-mix(in srgb, var(--success) 35%, transparent)" : "color-mix(in srgb, var(--danger) 35%, transparent)",
+        },
+      }, renderLocalizedText(allowed ? (language === "ur" ? "اجازت" : "Allowed") : (language === "ur" ? "بلاک" : "Blocked"), language))),
+      React.createElement("div", {
+        style: {
+          color: "var(--text-muted)",
+          fontSize: 12,
+          lineHeight: 1.5,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+          direction: language === "ur" ? "rtl" : "ltr",
+          textAlign: language === "ur" ? "right" : "left",
+        },
+      }, renderLocalizedText(allowed ? (language === "ur" ? "یہ اختیار اس کردار کے لیے دستیاب ہوگا۔" : "This action would be available for the selected role.") : (language === "ur" ? "یہ اختیار اس کردار کے لیے دستیاب نہیں ہوگا۔" : "This action would stay unavailable for the selected role."), language)));
+    }))) : null;
     const contentAccessAdminCard = canManageContentAccess ? React.createElement("div", {
       key: "content-access-admin",
       style: {
@@ -876,6 +1050,7 @@
           React.createElement("span", { className: "si-value" }, renderLocalizedText(contentManagerRoleLabel || "Student", language)))),
       contentAccessSummaryCard,
       contentAccessAdminCard,
+      contentAccessPreviewCard,
       contentAccessNoteCard,
       React.createElement("div", { style: { marginBottom: 10 } },
         React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.supabaseUrl || (language === "ur" ? "Supabase URL" : "Supabase URL"), language)),
@@ -1728,7 +1903,7 @@
         title: joinLocalizedText("Account & Cloud Sign-In", "اکاؤنٹ اور کلاؤڈ سائن اِن", language),
         tags: ["account", "supabase", "cloud", "sign in", "email", "password", "username", "sync", "sql", "setup sql", "copy sql", "test connection", "published chapter", "published chapters", "content", "publish", "permissions", "content role", "editor", "admin", "teacher", "student", "chapter access"],
         groups: [
-          { key: "settings-group-account", title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language), tags: ["login", "email", "password", "username", "role", "cloud", "sql", "setup", "copy sql", "test connection", "sync now", "published chapter", "content"], children: accountChildren },
+          { key: "settings-group-account", title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language), tags: ["login", "email", "password", "username", "role", "roles", "access preview", "mock role", "permissions", "cloud", "sql", "setup", "copy sql", "test connection", "sync now", "published chapter", "content"], children: accountChildren },
         ],
       },
       {
