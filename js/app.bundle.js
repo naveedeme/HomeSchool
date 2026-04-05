@@ -6796,6 +6796,16 @@ ${marker} `);
     const [contentAccessBusy, setContentAccessBusy] = useState(false);
     const [contentRoleDraftEmail, setContentRoleDraftEmail] = useState("");
     const [contentRoleDraftRole, setContentRoleDraftRole] = useState("student");
+    const contentManagerRole = normalizeContentManagerRole(contentAccessState.currentRole || contentAccessState.defaultRole || "student");
+    const contentRoleCapabilities = getContentRoleCapabilities(contentManagerRole);
+    const canImportChapters = Boolean(contentRoleCapabilities.importChapters);
+    const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
+    const canExportContent = Boolean(contentRoleCapabilities.exportContent);
+    const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
+    const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
+    const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
+    const canDeleteLocalContent = Boolean(contentRoleCapabilities.deleteLocalContent);
+    const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
     const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
     const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored == null ? void 0 : stored.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
     const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored == null ? void 0 : stored.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -13653,21 +13663,11 @@ ${error.message || error}`);
       activeProfileRole === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : activeProfileRole === "parent" ? "\u0648\u0627\u0644\u062F\u06CC\u0646" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
       language
     );
-    const contentManagerRole = normalizeContentManagerRole(contentAccessState.currentRole || contentAccessState.defaultRole || "student");
     const contentManagerRoleLabel = joinLocalizedText(
       contentManagerRole === "admin" ? "Admin" : contentManagerRole === "editor" ? "Editor" : contentManagerRole === "teacher" ? "Teacher" : "Student",
       contentManagerRole === "admin" ? "\u0627\u06CC\u0688\u0645\u0646" : contentManagerRole === "editor" ? "\u0627\u06CC\u0688\u06CC\u0679\u0631" : contentManagerRole === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
       language
     );
-    const contentRoleCapabilities = getContentRoleCapabilities(contentManagerRole);
-    const canImportChapters = Boolean(contentRoleCapabilities.importChapters);
-    const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
-    const canExportContent = Boolean(contentRoleCapabilities.exportContent);
-    const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
-    const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
-    const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
-    const canDeleteLocalContent = Boolean(contentRoleCapabilities.deleteLocalContent);
-    const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
     const activeStudentProfileInitials = getStudentProfileInitials(activeStudentProfile);
     const dictionaryPendingSet = useMemo(
       () => new Set(Array.isArray(supabaseSyncActivity.pendingDictionaryKeys) ? supabaseSyncActivity.pendingDictionaryKeys : []),

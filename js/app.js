@@ -8740,6 +8740,16 @@ function HomeschoolApp() {
   const [contentAccessBusy, setContentAccessBusy] = useState(false);
   const [contentRoleDraftEmail, setContentRoleDraftEmail] = useState("");
   const [contentRoleDraftRole, setContentRoleDraftRole] = useState("student");
+  const contentManagerRole = normalizeContentManagerRole(contentAccessState.currentRole || contentAccessState.defaultRole || "student");
+  const contentRoleCapabilities = getContentRoleCapabilities(contentManagerRole);
+  const canImportChapters = Boolean(contentRoleCapabilities.importChapters);
+  const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
+  const canExportContent = Boolean(contentRoleCapabilities.exportContent);
+  const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
+  const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
+  const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
+  const canDeleteLocalContent = Boolean(contentRoleCapabilities.deleteLocalContent);
+  const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
   const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
   const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -15996,21 +16006,11 @@ const lessons = getMergedLessons(subjectId, grade);
     activeProfileRole === "teacher" ? "استاد" : activeProfileRole === "parent" ? "والدین" : "طالب علم",
     language,
   );
-  const contentManagerRole = normalizeContentManagerRole(contentAccessState.currentRole || contentAccessState.defaultRole || "student");
   const contentManagerRoleLabel = joinLocalizedText(
     contentManagerRole === "admin" ? "Admin" : contentManagerRole === "editor" ? "Editor" : contentManagerRole === "teacher" ? "Teacher" : "Student",
     contentManagerRole === "admin" ? "ایڈمن" : contentManagerRole === "editor" ? "ایڈیٹر" : contentManagerRole === "teacher" ? "استاد" : "طالب علم",
     language,
   );
-  const contentRoleCapabilities = getContentRoleCapabilities(contentManagerRole);
-  const canImportChapters = Boolean(contentRoleCapabilities.importChapters);
-  const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
-  const canExportContent = Boolean(contentRoleCapabilities.exportContent);
-  const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
-  const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
-  const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
-  const canDeleteLocalContent = Boolean(contentRoleCapabilities.deleteLocalContent);
-  const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
   const activeStudentProfileInitials = getStudentProfileInitials(activeStudentProfile);
   const dictionaryPendingSet = useMemo(
     () => new Set(Array.isArray(supabaseSyncActivity.pendingDictionaryKeys) ? supabaseSyncActivity.pendingDictionaryKeys : []),
