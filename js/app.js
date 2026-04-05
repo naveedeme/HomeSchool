@@ -317,6 +317,108 @@ function buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey) {
   return `${String(subject || "").trim()}::${Number(grade)}::${resolveCustomChapterLessonKey({ lessonKey: canonicalLessonKey })}`;
 }
 
+function buildChapterAssignmentSlotKey(subject, grade, canonicalLessonKey, targetType = "grade", targetStudentEmail = "") {
+  const safeTargetType = targetType === "student" ? "student" : "grade";
+  const safeStudentEmail = safeTargetType === "student" ? String(targetStudentEmail || "").trim().toLowerCase() : "";
+  return `${buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey)}::${safeTargetType}::${safeStudentEmail}`;
+}
+
+function createEmptyContentRelationshipState() {
+  return {
+    loaded: false,
+    links: [],
+    assignments: [],
+    lastUpdatedAt: 0,
+  };
+}
+
+function normalizeTeacherStudentLinkRecord(raw) {
+  const linkId = String(raw?.link_id || raw?.linkId || "").trim();
+  const teacherEmail = String(raw?.teacher_email || raw?.teacherEmail || "").trim().toLowerCase();
+  const studentEmail = String(raw?.student_email || raw?.studentEmail || "").trim().toLowerCase();
+  if (!linkId || !teacherEmail || !studentEmail) return null;
+  return {
+    linkId,
+    teacherUserId: String(raw?.teacher_user_id || raw?.teacherUserId || "").trim(),
+    teacherEmail,
+    studentEmail,
+    studentGrade: Number(raw?.student_grade) || null,
+    studentLabel: String(raw?.student_label || raw?.studentLabel || "").trim(),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    linkedByUserId: String(raw?.linked_by_user_id || raw?.linkedByUserId || "").trim(),
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeChapterAssignmentRecord(raw) {
+  const assignmentId = String(raw?.assignment_id || raw?.assignmentId || "").trim();
+  const targetType = String(raw?.target_type || raw?.targetType || "grade").trim().toLowerCase() === "student" ? "student" : "grade";
+  const targetGrade = Number(raw?.target_grade || raw?.targetGrade);
+  const subject = String(raw?.subject || "").trim();
+  const contentId = String(raw?.content_id || raw?.contentId || "").trim();
+  if (!assignmentId || !Number.isFinite(targetGrade) || !subject || !contentId) return null;
+  const lessonKey = resolveCustomChapterLessonKey({
+    lessonKey: raw?.lesson_key || raw?.lessonKey || "",
+  });
+  return {
+    assignmentId,
+    assignedByUserId: String(raw?.assigned_by_user_id || raw?.assignedByUserId || "").trim(),
+    assignedByEmail: String(raw?.assigned_by_email || raw?.assignedByEmail || "").trim().toLowerCase(),
+    targetType,
+    targetGrade,
+    targetStudentEmail: String(raw?.target_student_email || raw?.targetStudentEmail || "").trim().toLowerCase(),
+    subject,
+    lessonKey,
+    contentId,
+    note: String(raw?.note || "").trim(),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function buildEffectiveChapterAssignmentSelections(assignments = [], userEmail = "", targetGrade = null, canChooseContentSource = false) {
+  if (canChooseContentSource || !Number.isFinite(Number(targetGrade))) return {};
+  const safeUserEmail = String(userEmail || "").trim().toLowerCase();
+  const gradeSelections = new Map();
+  const studentSelections = new Map();
+  (Array.isArray(assignments) ? assignments : []).forEach((assignment) => {
+    const normalized = normalizeChapterAssignmentRecord(assignment);
+    if (!normalized || normalized.status !== "active") return;
+    if (Number(normalized.targetGrade) !== Number(targetGrade)) return;
+    const baseKey = buildChapterSourcePreferenceKey(normalized.subject, normalized.targetGrade, normalized.lessonKey);
+    if (normalized.targetType === "student") {
+      if (!safeUserEmail || normalized.targetStudentEmail !== safeUserEmail) return;
+      const previous = studentSelections.get(baseKey);
+      if (!previous || normalized.updatedAt >= previous.assignment.updatedAt) {
+        studentSelections.set(baseKey, {
+          mode: "published",
+          contentId: normalized.contentId,
+          assignment: normalized,
+        });
+      }
+      return;
+    }
+    const previous = gradeSelections.get(baseKey);
+    if (!previous || normalized.updatedAt >= previous.assignment.updatedAt) {
+      gradeSelections.set(baseKey, {
+        mode: "published",
+        contentId: normalized.contentId,
+        assignment: normalized,
+      });
+    }
+  });
+  const nextSelections = {};
+  gradeSelections.forEach((value, key) => {
+    nextSelections[key] = value;
+  });
+  studentSelections.forEach((value, key) => {
+    nextSelections[key] = value;
+  });
+  return nextSelections;
+}
+
 function getCanonicalLessonKeyForLesson(lesson) {
   if (!lesson || typeof lesson !== "object") return "";
   return resolveCustomChapterLessonKey({
@@ -346,6 +448,7 @@ function buildChapterVariantGroups({
   customLessons = [],
   publishedLessons = [],
   preferences = {},
+  assignmentSelections = {},
   currentUserId = "",
 }) {
   const groups = [];
@@ -393,6 +496,7 @@ function buildChapterVariantGroups({
     .map((group) => {
       const preferenceKey = buildChapterSourcePreferenceKey(group.subjectId, group.grade, group.canonicalLessonKey);
       const preference = preferences[preferenceKey] || { mode: "auto" };
+      const assignmentSelection = assignmentSelections[preferenceKey] || null;
       const builtinVariant = group.variants.find((variant) => variant.sourceType === "builtin") || null;
       const customVariant = group.variants.find((variant) => variant.sourceType === "custom") || null;
       const publishedVariants = group.variants
@@ -402,11 +506,15 @@ function buildChapterVariantGroups({
           return (right.updatedAt || 0) - (left.updatedAt || 0);
         });
       let activeVariant = null;
-      if (preference.mode === "builtin") {
+      if (assignmentSelection?.mode === "published") {
+        activeVariant = publishedVariants.find((variant) => variant.contentId === assignmentSelection.contentId)
+          || null;
+      }
+      if (!activeVariant && preference.mode === "builtin") {
         activeVariant = builtinVariant;
-      } else if (preference.mode === "custom") {
+      } else if (!activeVariant && preference.mode === "custom") {
         activeVariant = customVariant;
-      } else if (preference.mode === "published") {
+      } else if (!activeVariant && preference.mode === "published") {
         activeVariant = publishedVariants.find((variant) => variant.contentId === preference.contentId)
           || publishedVariants[0]
           || null;
@@ -423,6 +531,7 @@ function buildChapterVariantGroups({
         ...group,
         preferenceKey,
         preference,
+        assignmentSelection,
         activeVariant,
         activeLesson: activeVariant?.lesson || null,
       };
@@ -2298,6 +2407,8 @@ const SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
 const SUPABASE_PUBLISHED_CONTENT_TABLE = "published_chapters";
 const SUPABASE_CONTENT_ROLE_TABLE = "content_role_assignments";
 const SUPABASE_CONTENT_SETTINGS_TABLE = "content_access_settings";
+const SUPABASE_TEACHER_STUDENT_LINKS_TABLE = "teacher_student_links";
+const SUPABASE_CHAPTER_ASSIGNMENTS_TABLE = "chapter_assignments";
 const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
 const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -2459,6 +2570,54 @@ alter table if exists public.content_access_settings
 
 alter table public.content_access_settings enable row level security;
 
+create table if not exists public.teacher_student_links (
+  link_id text primary key,
+  teacher_user_id uuid null,
+  teacher_email text not null,
+  student_email text not null,
+  student_grade integer null,
+  student_label text null,
+  status text not null default 'active',
+  linked_by_user_id uuid null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists teacher_student_links_teacher_idx
+  on public.teacher_student_links (teacher_email, updated_at desc);
+
+create index if not exists teacher_student_links_student_idx
+  on public.teacher_student_links (student_email, updated_at desc);
+
+alter table public.teacher_student_links enable row level security;
+
+create table if not exists public.chapter_assignments (
+  assignment_id text primary key,
+  assigned_by_user_id uuid not null,
+  assigned_by_email text not null,
+  target_type text not null,
+  target_grade integer not null,
+  target_student_email text null,
+  subject text not null,
+  lesson_key text not null,
+  content_id text not null,
+  note text null,
+  status text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists chapter_assignments_subject_grade_idx
+  on public.chapter_assignments (subject, target_grade, lesson_key, updated_at desc);
+
+create index if not exists chapter_assignments_student_idx
+  on public.chapter_assignments (target_student_email, updated_at desc);
+
+create index if not exists chapter_assignments_assigned_by_idx
+  on public.chapter_assignments (assigned_by_email, updated_at desc);
+
+alter table public.chapter_assignments enable row level security;
+
 create or replace function public.current_auth_email()
 returns text
 language sql
@@ -2504,6 +2663,8 @@ as $$
       'importSubjects', false,
       'exportContent', false,
       'chooseContentSource', false,
+      'assignContent', false,
+      'manageStudentLinks', false,
       'savePublishedLocally', false,
       'publishContent', false,
       'unpublishContent', false,
@@ -2515,6 +2676,8 @@ as $$
       'importSubjects', false,
       'exportContent', false,
       'chooseContentSource', false,
+      'assignContent', false,
+      'manageStudentLinks', false,
       'savePublishedLocally', false,
       'publishContent', false,
       'unpublishContent', false,
@@ -2526,6 +2689,8 @@ as $$
       'importSubjects', false,
       'exportContent', true,
       'chooseContentSource', true,
+      'assignContent', true,
+      'manageStudentLinks', true,
       'savePublishedLocally', true,
       'publishContent', false,
       'unpublishContent', false,
@@ -2537,6 +2702,8 @@ as $$
       'importSubjects', true,
       'exportContent', true,
       'chooseContentSource', true,
+      'assignContent', true,
+      'manageStudentLinks', true,
       'savePublishedLocally', true,
       'publishContent', true,
       'unpublishContent', true,
@@ -2548,6 +2715,8 @@ as $$
       'importSubjects', true,
       'exportContent', true,
       'chooseContentSource', true,
+      'assignContent', true,
+      'manageStudentLinks', true,
       'savePublishedLocally', true,
       'publishContent', true,
       'unpublishContent', true,
@@ -2631,6 +2800,34 @@ as $$
   select public.user_content_permission('publishContent')
 $$;
 
+create or replace function public.can_manage_teacher_student_link(target_teacher_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.user_content_permission('manageStudentLinks')
+    and (
+      public.user_content_permission('manageContentAccess')
+      or lower(coalesce(target_teacher_email, '')) = public.current_auth_email()
+    )
+$$;
+
+create or replace function public.can_manage_chapter_assignment(target_assigned_by_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.user_content_permission('assignContent')
+    and (
+      public.user_content_permission('manageContentAccess')
+      or lower(coalesce(target_assigned_by_email, '')) = public.current_auth_email()
+    )
+$$;
+
 drop policy if exists "Users can read relevant content role assignments" on public.content_role_assignments;
 drop policy if exists "Admins can insert content role assignments" on public.content_role_assignments;
 drop policy if exists "Admins can update content role assignments" on public.content_role_assignments;
@@ -2640,6 +2837,14 @@ drop policy if exists "Authenticated users can read content access settings" on 
 drop policy if exists "Admins can insert content access settings" on public.content_access_settings;
 drop policy if exists "Admins can update content access settings" on public.content_access_settings;
 drop policy if exists "Admins can delete content access settings" on public.content_access_settings;
+drop policy if exists "Users can read teacher student links" on public.teacher_student_links;
+drop policy if exists "Users can insert teacher student links" on public.teacher_student_links;
+drop policy if exists "Users can update teacher student links" on public.teacher_student_links;
+drop policy if exists "Users can delete teacher student links" on public.teacher_student_links;
+drop policy if exists "Users can read chapter assignments" on public.chapter_assignments;
+drop policy if exists "Users can insert chapter assignments" on public.chapter_assignments;
+drop policy if exists "Users can update chapter assignments" on public.chapter_assignments;
+drop policy if exists "Users can delete chapter assignments" on public.chapter_assignments;
 
 drop policy if exists "Users can insert own published chapters" on public.published_chapters;
 drop policy if exists "Users can update own published chapters" on public.published_chapters;
@@ -2707,6 +2912,64 @@ on public.content_access_settings
 for delete
 to authenticated
 using (public.user_content_permission('manageContentAccess'));
+
+create policy "Users can read teacher student links"
+on public.teacher_student_links
+for select
+to authenticated
+using (
+  lower(teacher_email) = public.current_auth_email()
+  or lower(student_email) = public.current_auth_email()
+  or public.user_content_permission('manageContentAccess')
+);
+
+create policy "Users can insert teacher student links"
+on public.teacher_student_links
+for insert
+to authenticated
+with check (public.can_manage_teacher_student_link(teacher_email));
+
+create policy "Users can update teacher student links"
+on public.teacher_student_links
+for update
+to authenticated
+using (public.can_manage_teacher_student_link(teacher_email))
+with check (public.can_manage_teacher_student_link(teacher_email));
+
+create policy "Users can delete teacher student links"
+on public.teacher_student_links
+for delete
+to authenticated
+using (public.can_manage_teacher_student_link(teacher_email));
+
+create policy "Users can read chapter assignments"
+on public.chapter_assignments
+for select
+to authenticated
+using (
+  public.can_manage_chapter_assignment(assigned_by_email)
+  or lower(coalesce(target_student_email, '')) = public.current_auth_email()
+  or (target_type = 'grade' and status = 'active')
+);
+
+create policy "Users can insert chapter assignments"
+on public.chapter_assignments
+for insert
+to authenticated
+with check (public.can_manage_chapter_assignment(assigned_by_email));
+
+create policy "Users can update chapter assignments"
+on public.chapter_assignments
+for update
+to authenticated
+using (public.can_manage_chapter_assignment(assigned_by_email))
+with check (public.can_manage_chapter_assignment(assigned_by_email));
+
+create policy "Users can delete chapter assignments"
+on public.chapter_assignments
+for delete
+to authenticated
+using (public.can_manage_chapter_assignment(assigned_by_email));
 
 create policy "Users can insert own published chapters"
 on public.published_chapters
@@ -2812,6 +3075,8 @@ const CONTENT_PERMISSION_KEYS = [
   "importSubjects",
   "exportContent",
   "chooseContentSource",
+  "assignContent",
+  "manageStudentLinks",
   "savePublishedLocally",
   "publishContent",
   "unpublishContent",
@@ -2831,6 +3096,8 @@ function createDefaultContentRoleCapabilities() {
       importSubjects: false,
       exportContent: false,
       chooseContentSource: false,
+      assignContent: false,
+      manageStudentLinks: false,
       savePublishedLocally: false,
       publishContent: false,
       unpublishContent: false,
@@ -2842,6 +3109,8 @@ function createDefaultContentRoleCapabilities() {
       importSubjects: false,
       exportContent: false,
       chooseContentSource: false,
+      assignContent: false,
+      manageStudentLinks: false,
       savePublishedLocally: false,
       publishContent: false,
       unpublishContent: false,
@@ -2853,6 +3122,8 @@ function createDefaultContentRoleCapabilities() {
       importSubjects: false,
       exportContent: true,
       chooseContentSource: true,
+      assignContent: true,
+      manageStudentLinks: true,
       savePublishedLocally: true,
       publishContent: false,
       unpublishContent: false,
@@ -2864,6 +3135,8 @@ function createDefaultContentRoleCapabilities() {
       importSubjects: true,
       exportContent: true,
       chooseContentSource: true,
+      assignContent: true,
+      manageStudentLinks: true,
       savePublishedLocally: true,
       publishContent: true,
       unpublishContent: true,
@@ -2875,6 +3148,8 @@ function createDefaultContentRoleCapabilities() {
       importSubjects: true,
       exportContent: true,
       chooseContentSource: true,
+      assignContent: true,
+      manageStudentLinks: true,
       savePublishedLocally: true,
       publishContent: true,
       unpublishContent: true,
@@ -8768,11 +9043,20 @@ function HomeschoolApp() {
   const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
   const [customContentState, setCustomContentState] = useState(createEmptyCustomContentState());
   const [publishedContentState, setPublishedContentState] = useState(createEmptyPublishedContentState());
+  const [contentRelationshipState, setContentRelationshipState] = useState(createEmptyContentRelationshipState());
   const [chapterSourcePreferences, setChapterSourcePreferences] = useState(normalizeChapterSourcePreferences(stored?.chapterSourcePreferences || {}));
   const [chapterImportBusy, setChapterImportBusy] = useState(false);
   const [chapterPublishBusy, setChapterPublishBusy] = useState(false);
+  const [contentRelationshipBusy, setContentRelationshipBusy] = useState(false);
   const [chapterSelectionMode, setChapterSelectionMode] = useState(false);
   const [selectedChapterKeys, setSelectedChapterKeys] = useState([]);
+  const [teacherStudentDraftEmail, setTeacherStudentDraftEmail] = useState("");
+  const [teacherStudentDraftGrade, setTeacherStudentDraftGrade] = useState(initialActiveStudentProfile?.grade || stored?.grade || 5);
+  const [teacherStudentDraftTeacherEmail, setTeacherStudentDraftTeacherEmail] = useState("");
+  const [chapterAssignmentDraftScope, setChapterAssignmentDraftScope] = useState("grade");
+  const [chapterAssignmentDraftStudentEmail, setChapterAssignmentDraftStudentEmail] = useState("");
+  const [chapterAssignmentDraftContentId, setChapterAssignmentDraftContentId] = useState("");
+  const [chapterAssignmentDraftNote, setChapterAssignmentDraftNote] = useState("");
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [audioMuted, setAudioMuted] = useState(Boolean(stored?.audioMuted));
@@ -8914,11 +9198,15 @@ function HomeschoolApp() {
   const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
   const canExportContent = Boolean(contentRoleCapabilities.exportContent);
   const canChooseContentSource = Boolean(contentRoleCapabilities.chooseContentSource);
+  const canAssignContent = Boolean(contentRoleCapabilities.assignContent);
+  const canManageStudentLinks = Boolean(contentRoleCapabilities.manageStudentLinks);
   const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
   const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
   const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
   const canDeleteLocalContent = Boolean(contentRoleCapabilities.deleteLocalContent);
   const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
+  const canSeeLearnerManagement = canManageStudentLinks || canManageContentAccess;
+  const contentIdentityEmail = String(supabaseAuthState.email || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
   const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
   const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -8956,6 +9244,7 @@ function HomeschoolApp() {
   const supabaseRealtimeChannelRef = useRef(null);
   const supabaseCloudRealtimeChannelRef = useRef(null);
   const supabasePublishedContentRealtimeChannelRef = useRef(null);
+  const supabaseContentRelationshipRealtimeChannelRef = useRef(null);
   const dictionaryHydratedFromDbRef = useRef(false);
   const dictionaryPersistedSnapshotRef = useRef(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
   const skipNextDictionaryQueueRef = useRef(false);
@@ -9314,6 +9603,68 @@ function HomeschoolApp() {
     color: "var(--text-primary)",
     border: "1px solid var(--border)",
   };
+  const effectiveChapterAssignmentSelections = useMemo(() => buildEffectiveChapterAssignmentSelections(
+    contentRelationshipState.assignments,
+    contentIdentityEmail,
+    grade,
+    canChooseContentSource,
+  ), [canChooseContentSource, contentIdentityEmail, contentRelationshipState.assignments, grade]);
+  const linkedStudentOptions = useMemo(() => {
+    const safeLinks = Array.isArray(contentRelationshipState.links) ? contentRelationshipState.links : [];
+    const map = new Map();
+    safeLinks.forEach((link) => {
+      const normalized = normalizeTeacherStudentLinkRecord(link);
+      if (!normalized || normalized.status !== "active") return;
+      const matchesTeacher = canManageContentAccess || normalized.teacherEmail === contentIdentityEmail;
+      if (!matchesTeacher) return;
+      const key = normalized.studentEmail;
+      const current = map.get(key);
+      if (!current || normalized.updatedAt >= current.updatedAt) {
+        map.set(key, normalized);
+      }
+    });
+    return Array.from(map.values()).sort((left, right) => {
+      if (left.studentGrade !== right.studentGrade) return (left.studentGrade || 999) - (right.studentGrade || 999);
+      return String(left.studentEmail || "").localeCompare(String(right.studentEmail || ""));
+    });
+  }, [canManageContentAccess, contentIdentityEmail, contentRelationshipState.links]);
+  const managedTeacherStudentLinks = useMemo(() => {
+    const safeLinks = Array.isArray(contentRelationshipState.links) ? contentRelationshipState.links : [];
+    return safeLinks
+      .map((link) => normalizeTeacherStudentLinkRecord(link))
+      .filter(Boolean)
+      .filter((link) => link.status === "active")
+      .filter((link) => canManageContentAccess || link.teacherEmail === contentIdentityEmail)
+      .sort((left, right) => {
+        if ((left.studentGrade || 999) !== (right.studentGrade || 999)) {
+          return (left.studentGrade || 999) - (right.studentGrade || 999);
+        }
+        return String(left.studentEmail || "").localeCompare(String(right.studentEmail || ""));
+      });
+  }, [canManageContentAccess, contentIdentityEmail, contentRelationshipState.links]);
+  const managedChapterAssignments = useMemo(() => {
+    const safeAssignments = Array.isArray(contentRelationshipState.assignments) ? contentRelationshipState.assignments : [];
+    return safeAssignments
+      .map((assignment) => normalizeChapterAssignmentRecord(assignment))
+      .filter(Boolean)
+      .filter((assignment) => assignment.status === "active")
+      .filter((assignment) => canManageContentAccess || assignment.assignedByEmail === contentIdentityEmail)
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [canManageContentAccess, contentIdentityEmail, contentRelationshipState.assignments]);
+  const visibleChapterAssignments = useMemo(() => {
+    const safeAssignments = Array.isArray(contentRelationshipState.assignments) ? contentRelationshipState.assignments : [];
+    return safeAssignments
+      .map((assignment) => normalizeChapterAssignmentRecord(assignment))
+      .filter(Boolean)
+      .filter((assignment) => assignment.status === "active")
+      .filter((assignment) => {
+        if (canManageContentAccess) return true;
+        if (canAssignContent && assignment.assignedByEmail === contentIdentityEmail) return true;
+        if (assignment.targetStudentEmail && assignment.targetStudentEmail === contentIdentityEmail) return true;
+        return assignment.targetType === "grade" && Number(assignment.targetGrade) === Number(grade);
+      })
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [canAssignContent, canManageContentAccess, contentIdentityEmail, contentRelationshipState.assignments, grade]);
   const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
     const baseLessons = getLessons(subjectId, targetGrade) || [];
     const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
@@ -9325,9 +9676,10 @@ function HomeschoolApp() {
       customLessons,
       publishedLessons,
       preferences: chapterSourcePreferences,
+      assignmentSelections: effectiveChapterAssignmentSelections,
       currentUserId: supabaseAuthState.userId,
     });
-  }, [chapterSourcePreferences, customContentState.lessonsBySubjectGrade, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
+  }, [chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
   const getMergedLessons = useCallback((subjectId, targetGrade) => (
     getMergedLessonGroups(subjectId, targetGrade)
       .map((group) => group.activeLesson)
@@ -9371,6 +9723,10 @@ function HomeschoolApp() {
       })))
       : []
   ), [allSubjects, dbLoaded, getMergedLessonGroups, grade]);
+  const chapterGroupLookup = useMemo(() => allChapterGroups.reduce((acc, group) => {
+    acc[`${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}`] = group;
+    return acc;
+  }, {}), [allChapterGroups]);
   const selectedLessonCanonicalKey = useMemo(
     () => getCanonicalLessonKeyForLesson(selectedLesson),
     [selectedLesson],
@@ -9380,6 +9736,26 @@ function HomeschoolApp() {
       || null,
     [selectedLessonCanonicalKey, selectedSubjectChapterGroups],
   );
+  const selectedLessonPublishedVariants = useMemo(
+    () => (selectedLessonChapterGroup?.variants || []).filter((variant) => variant.sourceType === "published"),
+    [selectedLessonChapterGroup],
+  );
+  const selectedLessonManagedAssignments = useMemo(() => {
+    if (!selectedLessonChapterGroup) return [];
+    return managedChapterAssignments.filter((assignment) => (
+      assignment.subject === selectedLessonChapterGroup.subjectId
+      && assignment.lessonKey === selectedLessonChapterGroup.canonicalLessonKey
+      && Number(assignment.targetGrade) === Number(selectedLessonChapterGroup.grade)
+    ));
+  }, [managedChapterAssignments, selectedLessonChapterGroup]);
+  const selectedLessonVisibleAssignments = useMemo(() => {
+    if (!selectedLessonChapterGroup) return [];
+    return visibleChapterAssignments.filter((assignment) => (
+      assignment.subject === selectedLessonChapterGroup.subjectId
+      && assignment.lessonKey === selectedLessonChapterGroup.canonicalLessonKey
+      && Number(assignment.targetGrade) === Number(selectedLessonChapterGroup.grade)
+    ));
+  }, [selectedLessonChapterGroup, visibleChapterAssignments]);
   const myChapterGroups = useMemo(() => allChapterGroups.filter((group) => group.variants.some((variant) => (
     variant.sourceType === "custom" || (variant.sourceType === "published" && variant.ownedByCurrentUser)
   ))), [allChapterGroups]);
@@ -11879,6 +12255,264 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       return createEmptyPublishedContentState();
     }
   }, [ensureSupabaseClient, supabaseDictionarySync]);
+  const refreshContentRelationshipState = useCallback(async (sessionOverride = null) => {
+    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
+    if (!settings.url || !settings.anonKey) {
+      const nextState = { ...createEmptyContentRelationshipState(), loaded: true };
+      setContentRelationshipState(nextState);
+      return nextState;
+    }
+    try {
+      const client = ensureSupabaseClient();
+      const session = sessionOverride || (await client.auth.getSession())?.data?.session || null;
+      const userEmail = String(session?.user?.email || contentIdentityEmail || "").trim().toLowerCase();
+      if (!session?.user?.id || !userEmail) {
+        const nextState = { ...createEmptyContentRelationshipState(), loaded: true };
+        setContentRelationshipState(nextState);
+        return nextState;
+      }
+      const fetchTeacherStudentLinks = async (queryBuilder) => {
+        const { data, error } = await queryBuilder
+          .select("link_id, teacher_user_id, teacher_email, student_email, student_grade, student_label, status, linked_by_user_id, created_at, updated_at")
+          .order("updated_at", { ascending: false });
+        if (error) throw error;
+        return Array.isArray(data) ? data.map((row) => normalizeTeacherStudentLinkRecord(row)).filter(Boolean) : [];
+      };
+      const fetchChapterAssignments = async (queryBuilder) => {
+        const { data, error } = await queryBuilder
+          .select("assignment_id, assigned_by_user_id, assigned_by_email, target_type, target_grade, target_student_email, subject, lesson_key, content_id, note, status, created_at, updated_at")
+          .order("updated_at", { ascending: false });
+        if (error) throw error;
+        return Array.isArray(data) ? data.map((row) => normalizeChapterAssignmentRecord(row)).filter(Boolean) : [];
+      };
+      const linkMap = new Map();
+      const assignmentMap = new Map();
+      const collectLinks = (rows = []) => {
+        rows.forEach((row) => {
+          if (!row?.linkId) return;
+          const previous = linkMap.get(row.linkId);
+          if (!previous || row.updatedAt >= previous.updatedAt) linkMap.set(row.linkId, row);
+        });
+      };
+      const collectAssignments = (rows = []) => {
+        rows.forEach((row) => {
+          if (!row?.assignmentId) return;
+          const previous = assignmentMap.get(row.assignmentId);
+          if (!previous || row.updatedAt >= previous.updatedAt) assignmentMap.set(row.assignmentId, row);
+        });
+      };
+      if (canManageContentAccess) {
+        collectLinks(await fetchTeacherStudentLinks(client.from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE)));
+        collectAssignments(await fetchChapterAssignments(client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)));
+      } else {
+        if (canManageStudentLinks) {
+          collectLinks(await fetchTeacherStudentLinks(
+            client.from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE).eq("teacher_email", userEmail),
+          ));
+        }
+        collectLinks(await fetchTeacherStudentLinks(
+          client.from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE).eq("student_email", userEmail),
+        ));
+        if (canAssignContent) {
+          collectAssignments(await fetchChapterAssignments(
+            client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE).eq("assigned_by_email", userEmail),
+          ));
+        }
+        collectAssignments(await fetchChapterAssignments(
+          client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE).eq("target_student_email", userEmail).eq("status", "active"),
+        ));
+        if (Number.isFinite(Number(grade))) {
+          collectAssignments(await fetchChapterAssignments(
+            client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)
+              .eq("target_type", "grade")
+              .eq("target_grade", Number(grade))
+              .eq("status", "active"),
+          ));
+        }
+      }
+      const nextState = {
+        loaded: true,
+        links: Array.from(linkMap.values()),
+        assignments: Array.from(assignmentMap.values()),
+        lastUpdatedAt: Date.now(),
+      };
+      setContentRelationshipState(nextState);
+      return nextState;
+    } catch (error) {
+      console.log("Unable to refresh teacher-student relationships:", error);
+      const nextState = { ...createEmptyContentRelationshipState(), loaded: true };
+      setContentRelationshipState(nextState);
+      return nextState;
+    }
+  }, [canAssignContent, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, ensureSupabaseClient, grade, supabaseDictionarySync]);
+  const handleSaveTeacherStudentLink = useCallback(async () => {
+    if (!canManageStudentLinks) {
+      showAppToast(joinLocalizedText("Your content role cannot manage teacher-student links.", "آپ کے مواد والے کردار کو استاد اور طالب علم کے روابط سنبھالنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to manage teacher-student links.", "استاد اور طالب علم کے روابط سنبھالنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    const studentEmail = String(teacherStudentDraftEmail || "").trim().toLowerCase();
+    const teacherEmail = String((canManageContentAccess ? teacherStudentDraftTeacherEmail : contentIdentityEmail) || contentIdentityEmail).trim().toLowerCase();
+    const studentGrade = Math.max(1, Math.min(12, Number(teacherStudentDraftGrade) || Number(grade) || 1));
+    if (!teacherEmail || !teacherEmail.includes("@") || !studentEmail || !studentEmail.includes("@")) {
+      showAppToast(joinLocalizedText("Enter both teacher and student email addresses.", "استاد اور طالب علم دونوں کے ای میل پتے درج کریں۔", language), "alert");
+      return;
+    }
+    if (teacherEmail === studentEmail) {
+      showAppToast(joinLocalizedText("Teacher and student email should be different.", "استاد اور طالب علم کا ای میل مختلف ہونا چاہیے۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const nowIso = new Date().toISOString();
+      const linkId = `link_${simpleHash(`${teacherEmail}::${studentEmail}`)}`;
+      const { error } = await client
+        .from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE)
+        .upsert({
+          link_id: linkId,
+          teacher_user_id: canManageContentAccess ? null : supabaseAuthState.userId,
+          teacher_email: teacherEmail,
+          student_email: studentEmail,
+          student_grade: studentGrade,
+          student_label: "",
+          status: "active",
+          linked_by_user_id: supabaseAuthState.userId,
+          created_at: nowIso,
+          updated_at: nowIso,
+        }, { onConflict: "link_id" });
+      if (error) throw error;
+      setTeacherStudentDraftEmail("");
+      if (canManageContentAccess) setTeacherStudentDraftTeacherEmail("");
+      await refreshContentRelationshipState();
+      showAppToast(joinLocalizedText("Teacher-student link saved", "استاد اور طالب علم کا ربط محفوظ ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to save teacher-student link: ${error?.message || error}`, `استاد اور طالب علم کا ربط محفوظ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canManageContentAccess, canManageStudentLinks, contentIdentityEmail, ensureSupabaseClient, grade, language, refreshContentRelationshipState, showAppToast, supabaseAuthState.userId, teacherStudentDraftEmail, teacherStudentDraftGrade, teacherStudentDraftTeacherEmail]);
+
+  const handleDeleteTeacherStudentLink = useCallback(async (link) => {
+    const safeLink = normalizeTeacherStudentLinkRecord(link);
+    if (!safeLink?.linkId) return;
+    if (!canManageStudentLinks) {
+      showAppToast(joinLocalizedText("Your content role cannot remove teacher-student links.", "آپ کے مواد والے کردار کو استاد اور طالب علم کے روابط حذف کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client
+        .from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE)
+        .delete()
+        .eq("link_id", safeLink.linkId);
+      if (error) throw error;
+      await refreshContentRelationshipState();
+      showAppToast(joinLocalizedText("Teacher-student link removed", "استاد اور طالب علم کا ربط حذف کر دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to remove teacher-student link: ${error?.message || error}`, `استاد اور طالب علم کا ربط حذف نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canManageStudentLinks, ensureSupabaseClient, language, refreshContentRelationshipState, showAppToast]);
+
+  const handleSaveChapterAssignment = useCallback(async (options = {}) => {
+    if (!canAssignContent) {
+      showAppToast(joinLocalizedText("Your content role cannot assign chapters to students.", "آپ کے مواد والے کردار کو ابواب طلبہ کو تفویض کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to assign chapters.", "ابواب تفویض کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    const group = options.group || selectedLessonChapterGroup;
+    const scope = String(options.targetType || chapterAssignmentDraftScope || "grade").trim().toLowerCase() === "student" ? "student" : "grade";
+    const targetGrade = Math.max(1, Math.min(12, Number(options.targetGrade || grade) || 1));
+    const targetStudentEmail = String(options.targetStudentEmail || chapterAssignmentDraftStudentEmail || "").trim().toLowerCase();
+    const note = String(options.note || chapterAssignmentDraftNote || "").trim();
+    const contentId = String(options.contentId || chapterAssignmentDraftContentId || selectedLessonPublishedVariants[0]?.contentId || "").trim();
+    if (!group?.subjectId || !group?.canonicalLessonKey || !contentId) {
+      showAppToast(joinLocalizedText("Choose a published chapter copy first.", "پہلے شائع شدہ باب کی ایک کاپی منتخب کریں۔", language), "alert");
+      return;
+    }
+    if (scope === "student") {
+      if (!targetStudentEmail || !targetStudentEmail.includes("@")) {
+        showAppToast(joinLocalizedText("Choose a linked student first.", "پہلے ایک منسلک طالب علم منتخب کریں۔", language), "alert");
+        return;
+      }
+      if (!canManageContentAccess) {
+        const hasLink = linkedStudentOptions.some((entry) => entry.studentEmail === targetStudentEmail);
+        if (!hasLink) {
+          showAppToast(joinLocalizedText("Link this student to your teacher account first.", "پہلے اس طالب علم کو اپنے استاد اکاؤنٹ سے منسلک کریں۔", language), "alert");
+          return;
+        }
+      }
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const nowIso = new Date().toISOString();
+      const assignmentId = `assign_${simpleHash(`${scope}::${targetGrade}::${targetStudentEmail}::${group.subjectId}::${group.canonicalLessonKey}`)}`;
+      const { error } = await client
+        .from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)
+        .upsert({
+          assignment_id: assignmentId,
+          assigned_by_user_id: supabaseAuthState.userId,
+          assigned_by_email: contentIdentityEmail,
+          target_type: scope,
+          target_grade: targetGrade,
+          target_student_email: scope === "student" ? targetStudentEmail : null,
+          subject: group.subjectId,
+          lesson_key: group.canonicalLessonKey,
+          content_id: contentId,
+          note: note || null,
+          status: "active",
+          created_at: nowIso,
+          updated_at: nowIso,
+        }, { onConflict: "assignment_id" });
+      if (error) throw error;
+      await refreshContentRelationshipState();
+      showAppToast(
+        scope === "student"
+          ? joinLocalizedText("Chapter assigned to student", "باب طالب علم کو تفویض کر دیا گیا", language)
+          : joinLocalizedText("Grade chapter assignment saved", "جماعت کے لیے باب کی تفویض محفوظ ہو گئی", language),
+        "check",
+      );
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to save chapter assignment: ${error?.message || error}`, `باب کی تفویض محفوظ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canAssignContent, chapterAssignmentDraftContentId, chapterAssignmentDraftNote, chapterAssignmentDraftScope, chapterAssignmentDraftStudentEmail, contentIdentityEmail, ensureSupabaseClient, grade, language, linkedStudentOptions, refreshContentRelationshipState, selectedLessonChapterGroup, selectedLessonPublishedVariants, showAppToast, supabaseAuthState.userId]);
+
+  const handleDeleteChapterAssignment = useCallback(async (assignment) => {
+    const normalized = normalizeChapterAssignmentRecord(assignment);
+    if (!normalized?.assignmentId) return;
+    if (!canAssignContent) {
+      showAppToast(joinLocalizedText("Your content role cannot remove chapter assignments.", "آپ کے مواد والے کردار کو باب کی تفویض حذف کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client
+        .from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)
+        .delete()
+        .eq("assignment_id", normalized.assignmentId);
+      if (error) throw error;
+      await refreshContentRelationshipState();
+      showAppToast(joinLocalizedText("Chapter assignment removed", "باب کی تفویض حذف کر دی گئی", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to remove chapter assignment: ${error?.message || error}`, `باب کی تفویض حذف نہیں ہو سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canAssignContent, ensureSupabaseClient, language, refreshContentRelationshipState, showAppToast]);
+
   const handleUnpublishChapterVariant = useCallback(async (group, variant) => {
     if (!canUnpublishContent) {
       showAppToast(joinLocalizedText("Your content role does not allow unpublishing chapters.", "آپ کے مواد والے کردار کو ابواب غیر شائع کرنے کی اجازت نہیں۔", language), "alert");
@@ -12291,6 +12925,27 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   }, [dbLoaded, refreshPublishedContentState, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
 
   useEffect(() => {
+    if (!dbLoaded) return undefined;
+    if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
+      setContentRelationshipState((current) => ({ ...createEmptyContentRelationshipState(), loaded: true }));
+      return undefined;
+    }
+    let cancelled = false;
+    refreshContentRelationshipState().then((state) => {
+      if (cancelled) return;
+      if (!state?.loaded) {
+        setContentRelationshipState((current) => ({ ...current, loaded: true }));
+      }
+    }).catch((error) => {
+      console.log("Unable to load teacher-student relationships:", error);
+      if (!cancelled) setContentRelationshipState((current) => ({ ...current, loaded: true }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dbLoaded, grade, refreshContentRelationshipState, supabaseAuthState.email, supabaseAuthState.userId, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
+
+  useEffect(() => {
     const existingChannel = supabaseRealtimeChannelRef.current;
     if (existingChannel?.unsubscribe) {
       existingChannel.unsubscribe();
@@ -12375,6 +13030,53 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       supabasePublishedContentRealtimeChannelRef.current = null;
     };
   }, [ensureSupabaseClient, refreshPublishedContentState, supabaseDictionarySync.anonKey, supabaseDictionarySync.realtimeEnabled, supabaseDictionarySync.url]);
+
+  useEffect(() => {
+    const existingChannel = supabaseContentRelationshipRealtimeChannelRef.current;
+    if (existingChannel?.unsubscribe) {
+      existingChannel.unsubscribe();
+      supabaseContentRelationshipRealtimeChannelRef.current = null;
+    }
+    if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey || !supabaseDictionarySync.realtimeEnabled || !supabaseAuthState.userId) {
+      return undefined;
+    }
+    let active = true;
+    try {
+      const client = ensureSupabaseClient();
+      const channel = client
+        .channel(`content-relationships-${supabaseAuthState.userId}`)
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_TEACHER_STUDENT_LINKS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh teacher-student links from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CHAPTER_ASSIGNMENTS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh chapter assignments from realtime:", error);
+          });
+        })
+        .subscribe();
+      supabaseContentRelationshipRealtimeChannelRef.current = channel;
+    } catch (error) {
+      console.log("Unable to start content relationship realtime sync:", error);
+    }
+    return () => {
+      active = false;
+      const channel = supabaseContentRelationshipRealtimeChannelRef.current;
+      if (channel?.unsubscribe) channel.unsubscribe();
+      supabaseContentRelationshipRealtimeChannelRef.current = null;
+    };
+  }, [ensureSupabaseClient, refreshContentRelationshipState, supabaseAuthState.userId, supabaseDictionarySync.anonKey, supabaseDictionarySync.realtimeEnabled, supabaseDictionarySync.url]);
 
   useEffect(() => {
     const existingChannel = supabaseCloudRealtimeChannelRef.current;
@@ -12482,6 +13184,42 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       setPracticeSubjectId(availablePracticeSubjects[0].id);
     }
   }, [availablePracticeSubjects, practiceSubjectId]);
+
+  useEffect(() => {
+    if (!selectedLessonPublishedVariants.length) {
+      if (chapterAssignmentDraftContentId) setChapterAssignmentDraftContentId("");
+      return;
+    }
+    const selectedStillValid = selectedLessonPublishedVariants.some((variant) => String(variant.contentId || "").trim() === String(chapterAssignmentDraftContentId || "").trim());
+    if (!selectedStillValid) {
+      setChapterAssignmentDraftContentId(String(selectedLessonPublishedVariants[0]?.contentId || "").trim());
+    }
+  }, [chapterAssignmentDraftContentId, selectedLessonPublishedVariants]);
+
+  useEffect(() => {
+    if (chapterAssignmentDraftScope !== "student") return;
+    if (!linkedStudentOptions.length) {
+      if (chapterAssignmentDraftStudentEmail) setChapterAssignmentDraftStudentEmail("");
+      return;
+    }
+    const selectedStillValid = linkedStudentOptions.some((entry) => entry.studentEmail === chapterAssignmentDraftStudentEmail);
+    if (!selectedStillValid) {
+      setChapterAssignmentDraftStudentEmail(linkedStudentOptions[0].studentEmail);
+    }
+  }, [chapterAssignmentDraftScope, chapterAssignmentDraftStudentEmail, linkedStudentOptions]);
+
+  useEffect(() => {
+    const availableTabs = ["profiles", "reports", "chapters", "library", "cloud", "notifications"];
+    if (canSeeLearnerManagement) availableTabs.splice(2, 0, "learners");
+    if (canAssignContent || canManageContentAccess || visibleChapterAssignments.length > 0) {
+      const insertionIndex = canSeeLearnerManagement ? 3 : 2;
+      availableTabs.splice(insertionIndex, 0, "assignments");
+    }
+    if (!availableTabs.includes(profilesSectionTab)) {
+      setProfilesSectionTab(availableTabs[0]);
+    }
+  }, [canAssignContent, canManageContentAccess, canSeeLearnerManagement, profilesSectionTab, visibleChapterAssignments.length]);
+
   useEffect(() => {
     if (!activePracticeSubjectId || !practiceSubjectLessons.length) return;
     setPracticeFiltersBySubject((current) => {
@@ -17870,6 +18608,16 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <button type="button" className={`review-section-tab${profilesSectionTab === "reports" ? " active" : ""}`} onClick={() => setProfilesSectionTab("reports")}>
             {renderLocalizedTextNode(joinLocalizedText("Reports", "رپورٹس", language), language)}
           </button>
+          {canSeeLearnerManagement ? (
+            <button type="button" className={`review-section-tab${profilesSectionTab === "learners" ? " active" : ""}`} onClick={() => setProfilesSectionTab("learners")}>
+              {renderLocalizedTextNode(joinLocalizedText("Learners", "طلبہ", language), language)}
+            </button>
+          ) : null}
+          {(canAssignContent || canManageContentAccess || visibleChapterAssignments.length > 0) ? (
+            <button type="button" className={`review-section-tab${profilesSectionTab === "assignments" ? " active" : ""}`} onClick={() => setProfilesSectionTab("assignments")}>
+              {renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویض", language), language)}
+            </button>
+          ) : null}
           <button type="button" className={`review-section-tab${profilesSectionTab === "chapters" ? " active" : ""}`} onClick={() => setProfilesSectionTab("chapters")}>
             {renderLocalizedTextNode(joinLocalizedText("My Chapters", "میرے ابواب", language), language)}
           </button>
@@ -17993,6 +18741,175 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             ))}
           </div>
         </div>
+        ) : null}
+        {profilesSectionTab === "learners" ? (
+        <>
+          <div className="review-panel chapter-management-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Teacher-Student Links", "استاد اور طالب علم روابط", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Link learners to a teacher so grade-wide and student-wise chapter assignments stay structured instead of manual.", "طالب علموں کو استاد کے ساتھ منسلک کریں تاکہ جماعت وار اور طالب علم وار باب کی تفویض دستی اور بے ترتیب نہ رہے بلکہ منظم رہے۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{formatNumberLabel(managedTeacherStudentLinks.length)}</span>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-icon">👩‍🏫</div><div className="stat-value">{formatNumberLabel(new Set(managedTeacherStudentLinks.map((entry) => entry.teacherEmail).filter(Boolean)).size)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Teachers linked", "منسلک اساتذہ", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🧒</div><div className="stat-value">{formatNumberLabel(managedTeacherStudentLinks.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Learners linked", "منسلک طلبہ", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🎓</div><div className="stat-value">{formatNumberLabel(new Set(managedTeacherStudentLinks.map((entry) => Number(entry.studentGrade) || 0).filter(Boolean)).size)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Grades covered", "شامل جماعتیں", language), language)}</div></div>
+            </div>
+          </div>
+          {canSeeLearnerManagement ? (
+            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Link a Learner", "طالب علم منسلک کریں", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Use the student email they sign in with. Admin can also target a specific teacher account.", "اسی طالب علم کا ای میل استعمال کریں جس سے وہ سائن اِن کرتا ہے۔ ایڈمن کسی مخصوص استاد اکاؤنٹ کو بھی ہدف بنا سکتا ہے۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                {canManageContentAccess ? (
+                  <input
+                    className="settings-text-input"
+                    type="email"
+                    value={teacherStudentDraftTeacherEmail}
+                    onChange={(event) => setTeacherStudentDraftTeacherEmail(event.target.value)}
+                    placeholder={renderLocalizedTextNode(joinLocalizedText("Teacher email", "استاد کا ای میل", language), language)}
+                    dir="ltr"
+                    spellCheck={false}
+                  />
+                ) : null}
+                <input
+                  className="settings-text-input"
+                  type="email"
+                  value={teacherStudentDraftEmail}
+                  onChange={(event) => setTeacherStudentDraftEmail(event.target.value)}
+                  placeholder={renderLocalizedTextNode(joinLocalizedText("Student email", "طالب علم کا ای میل", language), language)}
+                  dir="ltr"
+                  spellCheck={false}
+                />
+                <input
+                  className="settings-text-input"
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={teacherStudentDraftGrade}
+                  onChange={(event) => setTeacherStudentDraftGrade(event.target.value)}
+                  placeholder={renderLocalizedTextNode(joinLocalizedText("Grade", "جماعت", language), language)}
+                  style={{ maxWidth: 120 }}
+                />
+                <button type="button" className="study-tool-btn" onClick={handleSaveTeacherStudentLink} disabled={contentRelationshipBusy}>
+                  {renderLocalizedTextNode(contentRelationshipBusy ? joinLocalizedText("Saving...", "محفوظ ہو رہا ہے...", language) : joinLocalizedText("Link Learner", "طالب علم منسلک کریں", language), language)}
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {managedTeacherStudentLinks.length ? managedTeacherStudentLinks.map((link) => (
+            <div key={`teacher_link_${link.linkId}`} className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(link.studentLabel || link.studentEmail, language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText(`Teacher ${link.teacherEmail} • Grade ${link.studentGrade || "—"}`, `استاد ${link.teacherEmail} • جماعت ${link.studentGrade || "—"}`, language), language)}</p>
+                </div>
+                <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText("Active link", "فعال ربط", language), language)}</span>
+              </div>
+              <div className="chapter-badge-row">
+                <span className="chapter-badge active">{renderLocalizedTextNode(joinLocalizedText(`Grade ${link.studentGrade || "—"}`, `جماعت ${link.studentGrade || "—"}`, language), language)}</span>
+                <span className="chapter-badge neutral">{renderLocalizedTextNode(link.studentEmail, language)}</span>
+              </div>
+              <div className="goal-progress-meta" style={{ marginBottom: 12 }}>
+                {renderLocalizedTextNode(joinLocalizedText(`Updated ${formatRelativeTimeLabel(link.updatedAt, language)}`, `${formatRelativeTimeLabel(link.updatedAt, language)} میں تازہ`, language), language)}
+              </div>
+              <div className="result-actions chapter-card-actions">
+                <button type="button" className="ghost-cta" onClick={() => {
+                  setChapterAssignmentDraftScope("student");
+                  setChapterAssignmentDraftStudentEmail(link.studentEmail);
+                  setProfilesSectionTab("assignments");
+                }}>
+                  {renderLocalizedTextNode(joinLocalizedText("Assign Chapters", "ابواب تفویض کریں", language), language)}
+                </button>
+                <button type="button" className="ghost-cta" onClick={() => handleDeleteTeacherStudentLink(link)} disabled={contentRelationshipBusy}>
+                  {renderLocalizedTextNode(joinLocalizedText("Remove Link", "ربط ہٹائیں", language), language)}
+                </button>
+              </div>
+            </div>
+          )) : (
+            <div className="review-panel">
+              <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No learner links yet. Link a learner first, then use chapter assignments.", "ابھی کوئی طالب علم ربط موجود نہیں۔ پہلے طالب علم منسلک کریں، پھر باب کی تفویض استعمال کریں۔", language), language)}</p>
+            </div>
+          )}
+        </>
+        ) : null}
+        {profilesSectionTab === "assignments" ? (
+        <>
+          <div className="review-panel chapter-management-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Chapter Assignments", "باب کی تفویض", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("These assignments make published chapter copies flow automatically to the right grade or linked learner, without asking students to configure anything manually.", "یہ تفویض شائع شدہ باب کی کاپیاں خودکار طور پر درست جماعت یا منسلک طالب علم تک پہنچاتی ہیں، تاکہ طلبہ کو کوئی دستی ترتیب نہ کرنی پڑے۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{formatNumberLabel(visibleChapterAssignments.length)}</span>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-icon">🏫</div><div className="stat-value">{formatNumberLabel(visibleChapterAssignments.filter((assignment) => assignment.targetType === "grade").length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Grade-wide", "جماعت وار", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🧑‍🎓</div><div className="stat-value">{formatNumberLabel(visibleChapterAssignments.filter((assignment) => assignment.targetType === "student").length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Student-specific", "طالب علم وار", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{formatNumberLabel(new Set(visibleChapterAssignments.map((assignment) => `${assignment.subject}::${assignment.lessonKey}`)).size)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Lesson slots", "سبق خانے", language), language)}</div></div>
+            </div>
+          </div>
+          {canAssignContent ? (
+            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+              <p className="goal-progress-meta" style={{ marginBottom: 0 }}>
+                {renderLocalizedTextNode(joinLocalizedText("Open any lesson and use the Assignment panel there to choose which published copy should go to a whole grade or to one linked learner.", "کسی بھی سبق کو کھولیں اور وہاں موجود Assignment پینل سے منتخب کریں کہ کون سی شائع شدہ کاپی پوری جماعت یا کسی ایک منسلک طالب علم کو دی جائے۔", language), language)}
+              </p>
+            </div>
+          ) : null}
+          {visibleChapterAssignments.length ? visibleChapterAssignments.map((assignment) => {
+            const assignmentGroup = chapterGroupLookup[`${assignment.subject}::${Number(assignment.targetGrade)}::${assignment.lessonKey}`] || null;
+            const assignmentSubject = subjectLookup[assignment.subject] || null;
+            const assignmentVariant = assignmentGroup?.variants?.find((variant) => String(variant.contentId || "").trim() === String(assignment.contentId || "").trim()) || null;
+            const targetLabel = assignment.targetType === "student"
+              ? joinLocalizedText(`Student • ${assignment.targetStudentEmail}`, `طالب علم • ${assignment.targetStudentEmail}`, language)
+              : joinLocalizedText(`Grade ${assignment.targetGrade}`, `جماعت ${assignment.targetGrade}`, language);
+            return (
+              <div key={`chapter_assignment_${assignment.assignmentId}`} className="review-panel chapter-card-panel" data-ui-language={language}>
+                <div className="review-panel-head">
+                  <div>
+                    <h3>{renderLocalizedTextNode(assignmentGroup?.activeLesson?.title || assignmentGroup?.title || assignment.lessonKey, language)}</h3>
+                    <p>{renderLocalizedTextNode(joinLocalizedText(`${assignmentSubject ? getSubjectDisplayName(assignmentSubject, "en") : assignment.subject} • ${targetLabel}`, `${assignmentSubject ? getSubjectDisplayName(assignmentSubject, "ur") : assignment.subject} • ${targetLabel}`, language), language)}</p>
+                  </div>
+                  <span className="goal-progress-badge">{renderLocalizedTextNode(assignmentVariant ? getChapterVariantDisplayLabel(assignmentVariant) : joinLocalizedText("Published copy", "شائع شدہ کاپی", language), language)}</span>
+                </div>
+                <div className="chapter-badge-row">
+                  <span className="chapter-badge active">{renderLocalizedTextNode(targetLabel, language)}</span>
+                  <span className="chapter-badge neutral">{renderLocalizedTextNode(joinLocalizedText(`Assigned by ${assignment.assignedByEmail}`, `${assignment.assignedByEmail} نے تفویض کیا`, language), language)}</span>
+                </div>
+                {assignment.note ? (
+                  <div className="goal-progress-meta" style={{ marginTop: 10, marginBottom: 12 }}>
+                    {renderLocalizedTextNode(joinLocalizedText(`Note: ${assignment.note}`, `نوٹ: ${assignment.note}`, language), language)}
+                  </div>
+                ) : null}
+                <div className="goal-progress-meta" style={{ marginBottom: 12 }}>
+                  {renderLocalizedTextNode(joinLocalizedText(`Updated ${formatRelativeTimeLabel(assignment.updatedAt, language)}`, `${formatRelativeTimeLabel(assignment.updatedAt, language)} میں تازہ`, language), language)}
+                </div>
+                <div className="result-actions chapter-card-actions">
+                  {assignmentGroup?.activeLesson ? (
+                    <button type="button" className="ghost-cta" onClick={() => handleOpenChapterVariant(assignment.subject, assignmentVariant?.lesson || assignmentGroup.activeLesson)}>
+                      {renderLocalizedTextNode(joinLocalizedText("Open lesson", "سبق کھولیں", language), language)}
+                    </button>
+                  ) : null}
+                  {(canManageContentAccess || assignment.assignedByEmail === contentIdentityEmail) ? (
+                    <button type="button" className="ghost-cta" onClick={() => handleDeleteChapterAssignment(assignment)} disabled={contentRelationshipBusy}>
+                      {renderLocalizedTextNode(joinLocalizedText("Remove assignment", "تفویض ہٹائیں", language), language)}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          }) : (
+            <div className="review-panel">
+              <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No chapter assignments yet.", "ابھی کوئی باب تفویض موجود نہیں۔", language), language)}</p>
+            </div>
+          )}
+        </>
         ) : null}
         {profilesSectionTab === "chapters" ? (
         <>
@@ -18532,6 +19449,127 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             {!canChooseContentSource ? (
               <div className="goal-progress-meta" style={{ marginTop: 10 }}>
                 {renderLocalizedTextNode(joinLocalizedText("This lesson is read-only for students. Teachers and above can choose the active chapter copy.", "یہ سبق طالب علم کے لیے صرف پڑھنے کے قابل ہے۔ فعال باب کی کاپی استاد اور اس سے اوپر والے منتخب کر سکتے ہیں۔", language), language)}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {(selectedLessonPublishedVariants.length > 0 || selectedLessonVisibleAssignments.length > 0) ? (
+          <div className="review-panel chapter-source-panel" data-ui-language={language}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویض", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Use published copies to set a grade-wide default or a student-specific assignment. Students then receive that chapter automatically without changing source settings themselves.", "شائع شدہ کاپیاں استعمال کر کے پوری جماعت کے لیے طے شدہ باب یا کسی ایک طالب علم کے لیے مخصوص تفویض مقرر کریں۔ پھر طلبہ خود ماخذ تبدیل کیے بغیر وہ باب خودکار طور پر پائیں گے۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{formatNumberLabel(selectedLessonVisibleAssignments.length)}</span>
+            </div>
+            {selectedLessonChapterGroup?.assignmentSelection?.assignment ? (
+              <div className="chapter-badge-row" style={{ marginBottom: 12 }}>
+                <span className="chapter-badge active">
+                  {renderLocalizedTextNode(
+                    selectedLessonChapterGroup.assignmentSelection.assignment.targetType === "student"
+                      ? joinLocalizedText("Student assignment active", "طالب علم تفویض فعال", language)
+                      : joinLocalizedText("Grade assignment active", "جماعت تفویض فعال", language),
+                    language,
+                  )}
+                </span>
+                <span className="chapter-badge neutral">
+                  {renderLocalizedTextNode(
+                    selectedLessonChapterGroup.assignmentSelection.assignment.targetType === "student"
+                      ? selectedLessonChapterGroup.assignmentSelection.assignment.targetStudentEmail
+                      : joinLocalizedText(`Grade ${selectedLessonChapterGroup.assignmentSelection.assignment.targetGrade}`, `جماعت ${selectedLessonChapterGroup.assignmentSelection.assignment.targetGrade}`, language),
+                    language,
+                  )}
+                </span>
+              </div>
+            ) : null}
+            {canAssignContent ? (
+              selectedLessonPublishedVariants.length ? (
+                <>
+                  <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                    <select className="dictionary-select" value={chapterAssignmentDraftContentId} onChange={(event) => setChapterAssignmentDraftContentId(event.target.value)}>
+                      {selectedLessonPublishedVariants.map((variant) => (
+                        <option key={`assign_variant_${variant.contentId}`} value={variant.contentId}>
+                          {getChapterVariantDisplayLabel(variant)}
+                        </option>
+                      ))}
+                    </select>
+                    <select className="dictionary-select" value={chapterAssignmentDraftScope} onChange={(event) => setChapterAssignmentDraftScope(event.target.value === "student" ? "student" : "grade")}>
+                      <option value="grade">{joinLocalizedText("Assign to grade", "جماعت کو تفویض", language)}</option>
+                      <option value="student">{joinLocalizedText("Assign to student", "طالب علم کو تفویض", language)}</option>
+                    </select>
+                    {chapterAssignmentDraftScope === "student" ? (
+                      <select className="dictionary-select" value={chapterAssignmentDraftStudentEmail} onChange={(event) => setChapterAssignmentDraftStudentEmail(event.target.value)} disabled={!linkedStudentOptions.length}>
+                        {linkedStudentOptions.length ? linkedStudentOptions.map((entry) => (
+                          <option key={`assignment_student_${entry.studentEmail}`} value={entry.studentEmail}>
+                            {`${entry.studentEmail} • ${joinLocalizedText(`Grade ${entry.studentGrade || grade}`, `جماعت ${entry.studentGrade || grade}`, language)}`}
+                          </option>
+                        )) : (
+                          <option value="">{joinLocalizedText("Link a learner first", "پہلے طالب علم منسلک کریں", language)}</option>
+                        )}
+                      </select>
+                    ) : null}
+                  </div>
+                  <textarea
+                    className={`chat-input${isUrduUi(language) ? " urdu" : ""}`}
+                    value={chapterAssignmentDraftNote}
+                    onChange={(event) => setChapterAssignmentDraftNote(event.target.value)}
+                    placeholder={renderLocalizedTextNode(joinLocalizedText("Optional note for this assignment", "اس تفویض کے لیے اختیاری نوٹ", language), language)}
+                    style={{ minHeight: 94, marginTop: 10 }}
+                  />
+                  <div className="result-actions chapter-card-actions">
+                    <button
+                      type="button"
+                      className="study-tool-btn"
+                      onClick={() => handleSaveChapterAssignment()}
+                      disabled={contentRelationshipBusy || (chapterAssignmentDraftScope === "student" && !linkedStudentOptions.length)}
+                    >
+                      {renderLocalizedTextNode(
+                        contentRelationshipBusy
+                          ? joinLocalizedText("Saving...", "محفوظ ہو رہا ہے...", language)
+                          : chapterAssignmentDraftScope === "student"
+                            ? joinLocalizedText("Assign to Student", "طالب علم کو تفویض کریں", language)
+                            : joinLocalizedText("Assign to Grade", "جماعت کو تفویض کریں", language),
+                        language,
+                      )}
+                    </button>
+                  </div>
+                  {chapterAssignmentDraftScope === "student" && !linkedStudentOptions.length ? (
+                    <div className="goal-progress-meta" style={{ marginTop: 8 }}>
+                      {renderLocalizedTextNode(joinLocalizedText("Link at least one learner first in Profiles -> Learners.", "پہلے Profiles -> Learners میں کم از کم ایک طالب علم منسلک کریں۔", language), language)}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="goal-progress-meta">
+                  {renderLocalizedTextNode(joinLocalizedText("Publish a chapter copy first, then assign it here.", "پہلے باب کی کوئی کاپی شائع کریں، پھر اسے یہاں تفویض کریں۔", language), language)}
+                </div>
+              )
+            ) : (
+              <div className="goal-progress-meta">
+                {renderLocalizedTextNode(joinLocalizedText("Students and parents can read assigned chapters, but only teachers and above can create or change assignments.", "طلبہ اور والدین تفویض شدہ ابواب پڑھ سکتے ہیں، مگر صرف استاد اور اس سے اوپر والے کردار نئی تفویض بنا یا بدل سکتے ہیں۔", language), language)}
+              </div>
+            )}
+            {selectedLessonVisibleAssignments.length ? (
+              <div className="profile-report-list" style={{ marginTop: 14 }}>
+                {selectedLessonVisibleAssignments.map((assignment) => {
+                  const assignmentVariant = selectedLessonChapterGroup?.variants?.find((variant) => String(variant.contentId || "").trim() === String(assignment.contentId || "").trim()) || null;
+                  return (
+                    <div key={`lesson_assignment_${assignment.assignmentId}`} className="profile-report-item">
+                      <div className="profile-report-item-head">
+                        <strong>{renderLocalizedTextNode(assignment.targetType === "student" ? joinLocalizedText(`Student • ${assignment.targetStudentEmail}`, `طالب علم • ${assignment.targetStudentEmail}`, language) : joinLocalizedText(`Grade ${assignment.targetGrade}`, `جماعت ${assignment.targetGrade}`, language), language)}</strong>
+                        <span>{renderLocalizedTextNode(assignmentVariant ? getChapterVariantDisplayLabel(assignmentVariant) : joinLocalizedText("Published copy", "شائع شدہ کاپی", language), language)}</span>
+                      </div>
+                      {assignment.note ? <div className="goal-progress-meta" style={{ marginBottom: 8 }}>{renderLocalizedTextNode(assignment.note, language)}</div> : null}
+                      <div className="result-actions chapter-card-actions" style={{ marginTop: 0 }}>
+                        {(canManageContentAccess || assignment.assignedByEmail === contentIdentityEmail) ? (
+                          <button type="button" className="ghost-cta" onClick={() => handleDeleteChapterAssignment(assignment)} disabled={contentRelationshipBusy}>
+                            {renderLocalizedTextNode(joinLocalizedText("Remove", "ہٹائیں", language), language)}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>
