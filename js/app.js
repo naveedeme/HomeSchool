@@ -906,50 +906,56 @@ function buildAutoDiaryWeekPlan({
   }
   const academicWeekNumber = getAcademicWeekNumber(weekDates[0] || Date.now(), yearStartDate);
   return (Array.isArray(subjects) ? subjects : []).flatMap((subject, subjectIndex) => {
-    const lessonGroups = (getLessonGroups(subject.id, grade) || []).filter((group) => group?.activeLesson);
-    if (!lessonGroups.length) return [];
-    const unfinishedIndex = lessonGroups.findIndex((group) => !isLessonProgressComplete(group.activeLesson, completedQuizzes, practiceLessonProgress));
-    const selectedGroupIndex = unfinishedIndex >= 0 ? unfinishedIndex : Math.min(lessonGroups.length - 1, Math.max(0, academicWeekNumber - 1));
-    const selectedGroup = lessonGroups[selectedGroupIndex] || lessonGroups[0];
-    const lesson = selectedGroup?.activeLesson;
-    if (!lesson) return [];
-    const units = extractLessonWorkUnits(lesson, getQuiz(subject.id, grade, lesson.key) || []);
-    const buckets = distributeWorkUnitsAcrossStudyDays(units, 5);
-    return weekDates.slice(0, 5).map((targetDate, dayIndex) => {
-      const bucketUnits = Array.isArray(buckets[dayIndex]) ? buckets[dayIndex] : [];
-      const fallbackUnit = {
-        key: `${subject.id}_${selectedGroup.canonicalLessonKey}_overview_${dayIndex + 1}`,
-        title: lesson.title || `${subject.name || subject.id} lesson`,
-        detail: joinLocalizedText("Study the lesson and complete its practice.", "سبق پڑھیں اور اس کی مشق مکمل کریں۔", "en"),
-        kind: "overview",
-      };
-      return {
-        taskKind: "auto",
-        taskKey: buildDiaryTaskKey("auto", {
-          subject: subject.id,
-          lessonKey: selectedGroup.canonicalLessonKey,
+    try {
+      const lessonGroups = (getLessonGroups(subject.id, grade) || []).filter((group) => group?.activeLesson);
+      if (!lessonGroups.length) return [];
+      const unfinishedIndex = lessonGroups.findIndex((group) => !isLessonProgressComplete(group.activeLesson, completedQuizzes, practiceLessonProgress));
+      const selectedGroupIndex = unfinishedIndex >= 0 ? unfinishedIndex : Math.min(lessonGroups.length - 1, Math.max(0, academicWeekNumber - 1));
+      const selectedGroup = lessonGroups[selectedGroupIndex] || lessonGroups[0];
+      const lesson = selectedGroup?.activeLesson;
+      if (!lesson) return [];
+      const quizRows = getQuiz(subject.id, grade, lesson.key);
+      const units = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
+      const buckets = distributeWorkUnitsAcrossStudyDays(units, 5);
+      return weekDates.slice(0, 5).map((targetDate, dayIndex) => {
+        const bucketUnits = Array.isArray(buckets[dayIndex]) ? buckets[dayIndex] : [];
+        const fallbackUnit = {
+          key: `${subject.id}_${selectedGroup.canonicalLessonKey}_overview_${dayIndex + 1}`,
+          title: lesson.title || `${subject.name || subject.id} lesson`,
+          detail: joinLocalizedText("Study the lesson and complete its practice.", "سبق پڑھیں اور اس کی مشق مکمل کریں۔", "en"),
+          kind: "overview",
+        };
+        return {
+          taskKind: "auto",
+          taskKey: buildDiaryTaskKey("auto", {
+            subject: subject.id,
+            lessonKey: selectedGroup.canonicalLessonKey,
+            dayIndex: dayIndex + 1,
+            unitKey: bucketUnits[0]?.key || fallbackUnit.key,
+          }),
+          schoolId: "",
+          targetDate,
+          weekStartDate: weekDates[0],
           dayIndex: dayIndex + 1,
-          unitKey: bucketUnits[0]?.key || fallbackUnit.key,
-        }),
-        schoolId: "",
-        targetDate,
-        weekStartDate: weekDates[0],
-        dayIndex: dayIndex + 1,
-        academicWeekNumber,
-        subject: subject.id,
-        subjectLabel: subject.name || subject.id,
-        subjectLabelUr: subject.nameUr || subject.name || subject.id,
-        lessonKey: selectedGroup.canonicalLessonKey,
-        contentId: String(selectedGroup.activeVariant?.contentId || "").trim(),
-        title: lesson.title || `${subject.name || subject.id} lesson`,
-        note: "",
-        source: "auto",
-        taskUnits: bucketUnits.length ? bucketUnits : [fallbackUnit],
-        chapterGroup: selectedGroup,
-        lesson,
-        subjectIndex,
-      };
-    });
+          academicWeekNumber,
+          subject: subject.id,
+          subjectLabel: subject.name || subject.id,
+          subjectLabelUr: subject.nameUr || subject.name || subject.id,
+          lessonKey: selectedGroup.canonicalLessonKey,
+          contentId: String(selectedGroup.activeVariant?.contentId || "").trim(),
+          title: lesson.title || `${subject.name || subject.id} lesson`,
+          note: "",
+          source: "auto",
+          taskUnits: bucketUnits.length ? bucketUnits : [fallbackUnit],
+          chapterGroup: selectedGroup,
+          lesson,
+          subjectIndex,
+        };
+      });
+    } catch (error) {
+      console.log("Unable to build auto diary task for subject:", subject?.id, error);
+      return [];
+    }
   });
 }
 
@@ -1019,8 +1025,9 @@ function buildGeneratedWeeklyTestTemplate({
   const fillQuestions = [];
   const matchingPairs = [];
   lessonList.forEach((task, lessonIndex) => {
-    const quizRows = getQuiz(task.subject, grade, task.lessonKey) || [];
-    quizRows.slice(0, 3).forEach((row, rowIndex) => {
+    const quizRows = getQuiz(task.subject, grade, task.lessonKey);
+    const safeQuizRows = Array.isArray(quizRows) ? quizRows : [];
+    safeQuizRows.slice(0, 3).forEach((row, rowIndex) => {
       const prompt = String(row?.q || "").trim();
       const options = Array.isArray(row?.a) ? row.a.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
       const correctIndex = Number(row?.c);
@@ -11505,10 +11512,20 @@ function HomeschoolApp() {
     visibleParentStudentLinks
       .filter((entry) => entry.parentEmail === contentIdentityEmail)
       .forEach((entry) => {
-        const current = map.get(entry.studentEmail);
-        if (!current || entry.updatedAt >= current.updatedAt) map.set(entry.studentEmail, entry);
+        const normalizedEmail = String(entry.studentEmail || "").trim().toLowerCase();
+        if (!normalizedEmail) return;
+        const nextEntry = {
+          email: normalizedEmail,
+          studentEmail: normalizedEmail,
+          label: String(entry.studentEmail || "").trim(),
+          schoolId: String(entry.schoolId || "").trim(),
+          relationshipLabel: entry.relationshipLabel || "",
+          updatedAt: Number(entry.updatedAt || 0) || 0,
+        };
+        const current = map.get(normalizedEmail);
+        if (!current || nextEntry.updatedAt >= current.updatedAt) map.set(normalizedEmail, nextEntry);
       });
-    return Array.from(map.values()).sort((left, right) => String(left.studentEmail || "").localeCompare(String(right.studentEmail || "")));
+    return Array.from(map.values()).sort((left, right) => String(left.studentEmail || left.email || "").localeCompare(String(right.studentEmail || right.email || "")));
   }, [contentIdentityEmail, visibleParentStudentLinks]);
   const accessibleStudentOptions = useMemo(() => {
     const map = new Map();
