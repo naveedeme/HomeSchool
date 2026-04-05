@@ -8631,7 +8631,7 @@ ${marker} `);
               updated_by: session.user.id,
               updated_at: nowIso
             });
-            if (bootstrapInsert.error) throw bootstrapInsert.error;
+            if (bootstrapInsert.error && bootstrapInsert.error.code !== "23505") throw bootstrapInsert.error;
             const defaultSettingsInsert = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).upsert({
               scope: "global",
               default_role: "student",
@@ -8639,12 +8639,17 @@ ${marker} `);
               updated_at: nowIso
             }, { onConflict: "scope" });
             if (defaultSettingsInsert.error) throw defaultSettingsInsert.error;
-            roleRows = [{
-              email: userEmail,
-              role: "admin",
-              updated_at: nowIso,
-              updated_by: session.user.id
-            }];
+            const refreshedRoleResult = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by").eq("email", userEmail).limit(1);
+            if (refreshedRoleResult.error) throw refreshedRoleResult.error;
+            roleRows = Array.isArray(refreshedRoleResult.data) ? refreshedRoleResult.data : [];
+            if (!roleRows.length) {
+              roleRows = [{
+                email: userEmail,
+                role: "admin",
+                updated_at: nowIso,
+                updated_by: session.user.id
+              }];
+            }
           }
         }
         const settingsResult = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).select("scope, default_role, updated_at, updated_by").eq("scope", "global").limit(1);
