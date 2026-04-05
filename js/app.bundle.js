@@ -9626,6 +9626,9 @@ ${marker} `);
       return visibleChapterAssignments.filter((assignment) => assignment.subject === selectedLessonChapterGroup.subjectId && assignment.lessonKey === selectedLessonChapterGroup.canonicalLessonKey && Number(assignment.targetGrade) === Number(selectedLessonChapterGroup.grade));
     }, [selectedLessonChapterGroup, visibleChapterAssignments]);
     const refreshContentRelationshipStateRef = useRef(async () => createEmptyContentRelationshipState());
+    const ensureSupabaseClientRef = useRef(() => {
+      throw new Error("Supabase client not ready");
+    });
     const handleSaveSchool = useCallback(async () => {
       if (!canManageInstitution) {
         showAppToast(joinLocalizedText("Your content role cannot manage schools.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -9645,7 +9648,7 @@ ${marker} `);
         const schoolId = `school_${simpleHash(schoolName.toLowerCase())}`;
         const ownerEmail = String(schoolDraftOwnerEmail || contentIdentityEmail).trim().toLowerCase();
         const principalEmail = String(schoolDraftPrincipalEmail || ownerEmail).trim().toLowerCase();
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
         const baseRow = {
           school_id: schoolId,
@@ -9690,7 +9693,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [canManageInstitution, contentIdentityEmail, ensureSupabaseClient, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
+    }, [canManageInstitution, contentIdentityEmail, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
     const handleSaveSchoolMembership = useCallback(async () => {
       if (!canManageInstitution) {
         showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -9710,7 +9713,7 @@ ${marker} `);
         const role = normalizeContentManagerRole(schoolMemberDraftRole || "teacher");
         const gradeScope = normalizeGradeScopeArray(schoolMemberDraftGradeScope);
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).upsert({
           membership_id: `membership_${simpleHash(`${activeInstitutionSchoolIdResolved}_${memberEmail}_${role}`)}`,
           school_id: activeInstitutionSchoolIdResolved,
@@ -9732,7 +9735,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeInstitutionSchoolIdResolved, canManageInstitution, contentIdentityEmail, ensureSupabaseClient, language, schoolMemberDraftEmail, schoolMemberDraftGradeScope, schoolMemberDraftRole, showAppToast]);
+    }, [activeInstitutionSchoolIdResolved, canManageInstitution, contentIdentityEmail, language, schoolMemberDraftEmail, schoolMemberDraftGradeScope, schoolMemberDraftRole, showAppToast]);
     const handleDeleteSchoolMembership = useCallback(async (membership) => {
       const normalized = normalizeSchoolMembershipRecord(membership);
       if (!(normalized == null ? void 0 : normalized.membershipId)) return;
@@ -9742,7 +9745,7 @@ ${marker} `);
       }
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).delete().eq("membership_id", normalized.membershipId);
         if (error) throw error;
         await refreshContentRelationshipStateRef.current();
@@ -9752,7 +9755,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [canManageInstitution, ensureSupabaseClient, language, showAppToast]);
+    }, [canManageInstitution, language, showAppToast]);
     const handleSaveParentStudentLink = useCallback(async () => {
       if (!canManageParentLinks && !canManageInstitution && !canManageContentAccess) {
         showAppToast(joinLocalizedText("Your content role cannot manage parent-child links.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0627\u0648\u0631 \u0628\u0686\u0648\u06BA \u06A9\u06D2 \u0631\u0648\u0627\u0628\u0637 \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -9766,7 +9769,7 @@ ${marker} `);
       }
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_PARENT_STUDENT_LINKS_TABLE).upsert({
           link_id: `parent_link_${simpleHash(`${activeInstitutionSchoolIdResolved}_${parentEmail}_${studentEmail}`)}`,
           school_id: activeInstitutionSchoolIdResolved || null,
@@ -9790,13 +9793,13 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageParentLinks, contentIdentityEmail, ensureSupabaseClient, language, parentLinkDraftFamilyIdentifier, parentLinkDraftParentEmail, parentLinkDraftRelationshipLabel, parentLinkDraftStudentEmail, showAppToast]);
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageParentLinks, contentIdentityEmail, language, parentLinkDraftFamilyIdentifier, parentLinkDraftParentEmail, parentLinkDraftRelationshipLabel, parentLinkDraftStudentEmail, showAppToast]);
     const handleDeleteParentStudentLink = useCallback(async (link) => {
       const normalized = normalizeParentStudentLinkRecord(link);
       if (!(normalized == null ? void 0 : normalized.linkId)) return;
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_PARENT_STUDENT_LINKS_TABLE).delete().eq("link_id", normalized.linkId);
         if (error) throw error;
         await refreshContentRelationshipStateRef.current();
@@ -9806,7 +9809,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [ensureSupabaseClient, language, showAppToast]);
+    }, [language, showAppToast]);
     const handleSaveDiaryEntry = useCallback(async () => {
       var _a2;
       if (!canManageDiary) {
@@ -9821,7 +9824,7 @@ ${marker} `);
       }
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
         const targetType = diaryDraftScope === "student" ? "student" : "grade";
         const lessonGroup = chapterGroupLookup[`${subjectId}::${Number(grade)}::${String(diaryDraftContentId || "").trim()}`] || null;
@@ -9851,13 +9854,13 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeInstitutionSchoolIdResolved, canManageDiary, chapterGroupLookup, contentIdentityEmail, currentDiaryWeekDates, diaryDraftContentId, diaryDraftEndDate, diaryDraftNote, diaryDraftRangeMode, diaryDraftScope, diaryDraftStartDate, diaryDraftStudentEmail, diaryDraftSubjectId, diaryWeekAnchorDate, ensureSupabaseClient, grade, language, selectedSubject == null ? void 0 : selectedSubject.id, showAppToast]);
+    }, [activeInstitutionSchoolIdResolved, canManageDiary, chapterGroupLookup, contentIdentityEmail, currentDiaryWeekDates, diaryDraftContentId, diaryDraftEndDate, diaryDraftNote, diaryDraftRangeMode, diaryDraftScope, diaryDraftStartDate, diaryDraftStudentEmail, diaryDraftSubjectId, diaryWeekAnchorDate, grade, language, selectedSubject == null ? void 0 : selectedSubject.id, showAppToast]);
     const handleDeleteDiaryEntry = useCallback(async (entry) => {
       const normalized = normalizeDiaryEntryRecord(entry);
       if (!(normalized == null ? void 0 : normalized.diaryId)) return;
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_DIARY_ENTRIES_TABLE).delete().eq("diary_id", normalized.diaryId);
         if (error) throw error;
         await refreshContentRelationshipStateRef.current();
@@ -9867,14 +9870,14 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [ensureSupabaseClient, language, showAppToast]);
+    }, [language, showAppToast]);
     const handleToggleDiaryCompletion = useCallback(async (task, explicitDone = null) => {
       if (!task || !activeDiaryViewerStudentEmail) return;
       const current = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
       const shouldComplete = explicitDone === null ? !current : Boolean(explicitDone);
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         if (!shouldComplete && (current == null ? void 0 : current.completionId)) {
           const { error } = await client.from(SUPABASE_DIARY_COMPLETIONS_TABLE).delete().eq("completion_id", current.completionId);
           if (error) throw error;
@@ -9911,7 +9914,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, diaryCompletionLookup, ensureSupabaseClient, language, showAppToast]);
+    }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, diaryCompletionLookup, language, showAppToast]);
     const handleOpenTestTemplateImport = useCallback(() => {
       var _a2, _b2;
       if (!canManageTests) {
@@ -9966,7 +9969,7 @@ ${marker} `);
       }
       setTestTemplatePublishBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const row = {
           template_id: normalized.templateId,
           school_id: activeInstitutionSchoolIdResolved || null,
@@ -9990,13 +9993,13 @@ ${marker} `);
       } finally {
         setTestTemplatePublishBusy(false);
       }
-    }, [activeInstitutionSchoolIdResolved, canManageTests, contentIdentityEmail, ensureSupabaseClient, grade, language, showAppToast, supabaseAuthState.userId]);
+    }, [activeInstitutionSchoolIdResolved, canManageTests, contentIdentityEmail, grade, language, showAppToast, supabaseAuthState.userId]);
     const handleUnpublishTestTemplate = useCallback(async (template) => {
       const normalized = normalizeTestTemplateRecord(template);
       if (!(normalized == null ? void 0 : normalized.templateId)) return;
       setTestTemplatePublishBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_TEST_TEMPLATES_TABLE).upsert({
           template_id: normalized.templateId,
           school_id: normalized.schoolId || activeInstitutionSchoolIdResolved || null,
@@ -10018,7 +10021,7 @@ ${marker} `);
       } finally {
         setTestTemplatePublishBusy(false);
       }
-    }, [activeInstitutionSchoolIdResolved, contentIdentityEmail, ensureSupabaseClient, language, showAppToast, supabaseAuthState.userId]);
+    }, [activeInstitutionSchoolIdResolved, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
     const handleAssignWeeklyTestTemplate = useCallback(async () => {
       if (!canManageTests) {
         showAppToast(joinLocalizedText("Your content role cannot assign weekly tests.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -10032,7 +10035,7 @@ ${marker} `);
       }
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const row = {
           assignment_id: `weekly_test_${simpleHash(`${activeInstitutionSchoolIdResolved}_${targetType}_${testAssignmentDraftStudentEmail}_${templateId}_${currentDiaryWeekStartDate}`)}`,
           school_id: activeInstitutionSchoolIdResolved || null,
@@ -10055,13 +10058,13 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeInstitutionSchoolIdResolved, canManageTests, contentIdentityEmail, currentDiaryWeekStartDate, currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.templateId, ensureSupabaseClient, grade, language, showAppToast, testAssignmentDraftNote, testAssignmentDraftScope, testAssignmentDraftStudentEmail, testAssignmentDraftTemplateId]);
+    }, [activeInstitutionSchoolIdResolved, canManageTests, contentIdentityEmail, currentDiaryWeekStartDate, currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.templateId, grade, language, showAppToast, testAssignmentDraftNote, testAssignmentDraftScope, testAssignmentDraftStudentEmail, testAssignmentDraftTemplateId]);
     const handleDeleteWeeklyTestAssignment = useCallback(async (assignment) => {
       const normalized = normalizeWeeklyTestAssignmentRecord(assignment);
       if (!(normalized == null ? void 0 : normalized.assignmentId)) return;
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE).delete().eq("assignment_id", normalized.assignmentId);
         if (error) throw error;
         await refreshContentRelationshipStateRef.current();
@@ -10071,7 +10074,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [ensureSupabaseClient, language, showAppToast]);
+    }, [language, showAppToast]);
     const handleStartWeeklyTestSession = useCallback((template = null) => {
       var _a2;
       const normalized = normalizeLocalTestTemplateRecord(template || currentWeeklyTestTemplate);
@@ -10132,7 +10135,7 @@ ${marker} `);
       });
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_WEEKLY_TEST_RESULTS_TABLE).upsert({
           result_id: `test_result_${simpleHash(`${activeInstitutionSchoolIdResolved}_${activeDiaryViewerStudentEmail}_${activeWeeklyTestSession.weekStartDate}_${activeWeeklyTestSession.templateId}`)}`,
           school_id: activeInstitutionSchoolIdResolved || null,
@@ -10161,7 +10164,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, activeWeeklyTestSession, ensureSupabaseClient, language, showAppToast]);
+    }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, activeWeeklyTestSession, language, showAppToast]);
     const myChapterGroups = useMemo(() => allChapterGroups.filter((group) => group.variants.some((variant) => variant.sourceType === "custom" || variant.sourceType === "published" && variant.ownedByCurrentUser)), [allChapterGroups]);
     const publishedChapterBrowserItems = useMemo(() => {
       const normalizedAuthorFilter = String(chapterBrowserAuthorFilter || "").trim().toLowerCase();
@@ -11496,6 +11499,7 @@ ${marker} `);
       supabaseClientRef.current = { key: cacheKey, client };
       return client;
     }, [language, supabaseDictionarySync]);
+    ensureSupabaseClientRef.current = ensureSupabaseClient;
     const refreshContentAccessState = useCallback(async (sessionOverride = null) => {
       var _a2, _b2, _c2, _d2;
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
