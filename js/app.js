@@ -12271,17 +12271,19 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         setContentRelationshipState(nextState);
         return nextState;
       }
-      const fetchTeacherStudentLinks = async (queryBuilder) => {
-        const { data, error } = await queryBuilder
-          .select("link_id, teacher_user_id, teacher_email, student_email, student_grade, student_label, status, linked_by_user_id, created_at, updated_at")
-          .order("updated_at", { ascending: false });
+      const fetchTeacherStudentLinks = async (applyFilters) => {
+        let query = client.from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE)
+          .select("link_id, teacher_user_id, teacher_email, student_email, student_grade, student_label, status, linked_by_user_id, created_at, updated_at");
+        if (applyFilters) query = applyFilters(query);
+        const { data, error } = await query.order("updated_at", { ascending: false });
         if (error) throw error;
         return Array.isArray(data) ? data.map((row) => normalizeTeacherStudentLinkRecord(row)).filter(Boolean) : [];
       };
-      const fetchChapterAssignments = async (queryBuilder) => {
-        const { data, error } = await queryBuilder
-          .select("assignment_id, assigned_by_user_id, assigned_by_email, target_type, target_grade, target_student_email, subject, lesson_key, content_id, note, status, created_at, updated_at")
-          .order("updated_at", { ascending: false });
+      const fetchChapterAssignments = async (applyFilters) => {
+        let query = client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)
+          .select("assignment_id, assigned_by_user_id, assigned_by_email, target_type, target_grade, target_student_email, subject, lesson_key, content_id, note, status, created_at, updated_at");
+        if (applyFilters) query = applyFilters(query);
+        const { data, error } = await query.order("updated_at", { ascending: false });
         if (error) throw error;
         return Array.isArray(data) ? data.map((row) => normalizeChapterAssignmentRecord(row)).filter(Boolean) : [];
       };
@@ -12302,28 +12304,28 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         });
       };
       if (canManageContentAccess) {
-        collectLinks(await fetchTeacherStudentLinks(client.from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE)));
-        collectAssignments(await fetchChapterAssignments(client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)));
+        collectLinks(await fetchTeacherStudentLinks());
+        collectAssignments(await fetchChapterAssignments());
       } else {
         if (canManageStudentLinks) {
           collectLinks(await fetchTeacherStudentLinks(
-            client.from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE).eq("teacher_email", userEmail),
+            (q) => q.eq("teacher_email", userEmail),
           ));
         }
         collectLinks(await fetchTeacherStudentLinks(
-          client.from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE).eq("student_email", userEmail),
+          (q) => q.eq("student_email", userEmail),
         ));
         if (canAssignContent) {
           collectAssignments(await fetchChapterAssignments(
-            client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE).eq("assigned_by_email", userEmail),
+            (q) => q.eq("assigned_by_email", userEmail),
           ));
         }
         collectAssignments(await fetchChapterAssignments(
-          client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE).eq("target_student_email", userEmail).eq("status", "active"),
+          (q) => q.eq("target_student_email", userEmail).eq("status", "active"),
         ));
         if (Number.isFinite(Number(grade))) {
           collectAssignments(await fetchChapterAssignments(
-            client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)
+            (q) => q
               .eq("target_type", "grade")
               .eq("target_grade", Number(grade))
               .eq("status", "active"),
