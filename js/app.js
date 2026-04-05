@@ -2296,6 +2296,8 @@ function normalizeDictionaryImportPayload(rawPayload, options = {}) {
 const SUPABASE_DICTIONARY_TABLE = "dictionary_entries";
 const SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
 const SUPABASE_PUBLISHED_CONTENT_TABLE = "published_chapters";
+const SUPABASE_CONTENT_ROLE_TABLE = "content_role_assignments";
+const SUPABASE_CONTENT_SETTINGS_TABLE = "content_access_settings";
 const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
 const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -2445,7 +2447,226 @@ create policy "Users can delete own published chapters"
 on public.published_chapters
 for delete
 to authenticated
-using ((select auth.uid()) = author_user_id);`;
+using (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+);
+
+drop policy if exists "Users can insert own published chapters" on public.published_chapters;
+drop policy if exists "Users can update own published chapters" on public.published_chapters;
+drop policy if exists "Users can delete own published chapters" on public.published_chapters;
+
+create policy "Users can insert own published chapters"
+on public.published_chapters
+for insert
+to authenticated
+with check (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+);
+
+create policy "Users can update own published chapters"
+on public.published_chapters
+for update
+to authenticated
+using (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+)
+with check (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+);
+
+create policy "Users can delete own published chapters"
+on public.published_chapters
+for delete
+to authenticated
+using (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+);
+
+create table if not exists public.content_role_assignments (
+  email text primary key,
+  role text not null default 'student',
+  updated_by uuid null,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists content_role_assignments_role_idx
+  on public.content_role_assignments (role, updated_at desc);
+
+alter table public.content_role_assignments enable row level security;
+
+drop policy if exists "Users can read relevant content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can insert content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can update content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can delete content role assignments" on public.content_role_assignments;
+drop policy if exists "Bootstrap first content admin" on public.content_role_assignments;
+
+create policy "Users can read relevant content role assignments"
+on public.content_role_assignments
+for select
+to authenticated
+using (
+  lower(email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  or exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Bootstrap first content admin"
+on public.content_role_assignments
+for insert
+to authenticated
+with check (
+  role = 'admin'
+  and lower(email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  and not exists (select 1 from public.content_role_assignments)
+);
+
+create policy "Admins can insert content role assignments"
+on public.content_role_assignments
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Admins can update content role assignments"
+on public.content_role_assignments
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Admins can delete content role assignments"
+on public.content_role_assignments
+for delete
+to authenticated
+using (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create table if not exists public.content_access_settings (
+  scope text primary key,
+  default_role text not null default 'student',
+  updated_by uuid null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.content_access_settings enable row level security;
+
+drop policy if exists "Authenticated users can read content access settings" on public.content_access_settings;
+drop policy if exists "Admins can insert content access settings" on public.content_access_settings;
+drop policy if exists "Admins can update content access settings" on public.content_access_settings;
+drop policy if exists "Admins can delete content access settings" on public.content_access_settings;
+
+create policy "Authenticated users can read content access settings"
+on public.content_access_settings
+for select
+to authenticated
+using (true);
+
+create policy "Admins can insert content access settings"
+on public.content_access_settings
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Admins can update content access settings"
+on public.content_access_settings
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Admins can delete content access settings"
+on public.content_access_settings
+for delete
+to authenticated
+using (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);`;
 
 function createDefaultSupabaseDictionarySyncSettings() {
   return {
@@ -2512,6 +2733,74 @@ function getSupabaseAuthRedirectUrl() {
 function getSupabaseUserRole(user) {
   const role = String(user?.app_metadata?.role || user?.user_metadata?.role || "student").trim().toLowerCase();
   return role || "student";
+}
+
+const CONTENT_MANAGER_ROLES = ["student", "teacher", "editor", "admin"];
+
+function normalizeContentManagerRole(role) {
+  const safeRole = String(role || "").trim().toLowerCase();
+  return CONTENT_MANAGER_ROLES.includes(safeRole) ? safeRole : "student";
+}
+
+function createDefaultContentRoleCapabilities() {
+  return {
+    student: {
+      importChapters: false,
+      importSubjects: false,
+      exportContent: false,
+      savePublishedLocally: false,
+      publishContent: false,
+      unpublishContent: false,
+      deleteLocalContent: false,
+      manageContentAccess: false,
+    },
+    teacher: {
+      importChapters: true,
+      importSubjects: false,
+      exportContent: true,
+      savePublishedLocally: true,
+      publishContent: false,
+      unpublishContent: false,
+      deleteLocalContent: true,
+      manageContentAccess: false,
+    },
+    editor: {
+      importChapters: true,
+      importSubjects: true,
+      exportContent: true,
+      savePublishedLocally: true,
+      publishContent: true,
+      unpublishContent: true,
+      deleteLocalContent: true,
+      manageContentAccess: false,
+    },
+    admin: {
+      importChapters: true,
+      importSubjects: true,
+      exportContent: true,
+      savePublishedLocally: true,
+      publishContent: true,
+      unpublishContent: true,
+      deleteLocalContent: true,
+      manageContentAccess: true,
+    },
+  };
+}
+
+function getContentRoleCapabilities(role) {
+  const safeRole = normalizeContentManagerRole(role);
+  const matrix = createDefaultContentRoleCapabilities();
+  return matrix[safeRole] || matrix.student;
+}
+
+function createDefaultContentAccessState() {
+  return {
+    loaded: false,
+    defaultRole: "student",
+    currentRole: "student",
+    assignments: [],
+    lastUpdatedAt: 0,
+  };
 }
 
 function createDictionaryRowsFromMap(rawCache, deviceId = "") {
@@ -8447,6 +8736,10 @@ function HomeschoolApp() {
   const [supabaseSyncActivity, setSupabaseSyncActivity] = useState(createDefaultSupabaseSyncActivitySummary());
   const [supabaseSyncPendingRows, setSupabaseSyncPendingRows] = useState({ dictionary: [], cloud: [] });
   const [syncPendingDetailsOpen, setSyncPendingDetailsOpen] = useState(false);
+  const [contentAccessState, setContentAccessState] = useState(createDefaultContentAccessState());
+  const [contentAccessBusy, setContentAccessBusy] = useState(false);
+  const [contentRoleDraftEmail, setContentRoleDraftEmail] = useState("");
+  const [contentRoleDraftRole, setContentRoleDraftRole] = useState("student");
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
   const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
   const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -9064,13 +9357,17 @@ function HomeschoolApp() {
     return normalized;
   }, []);
   const handleOpenChapterImport = useCallback(() => {
+    if (!canImportChapters && !canImportSubjects) {
+      showAppToast(joinLocalizedText("Your content role does not allow importing lessons or subjects.", "آپ کے مواد والے کردار کو اسباق یا مضامین درآمد کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     if (!grade) {
       showAppToast(joinLocalizedText("Choose a grade first.", "پہلے ایک جماعت منتخب کریں۔", language), "alert");
       return;
     }
     if (chapterImportInputRef.current) chapterImportInputRef.current.value = "";
     chapterImportInputRef.current?.click?.();
-  }, [grade, language, showAppToast]);
+  }, [canImportChapters, canImportSubjects, grade, language, showAppToast]);
   const handleImportCustomChapter = useCallback(async (event) => {
     const files = Array.from(event?.target?.files || []);
     if (!files.length) return;
@@ -9098,6 +9395,17 @@ function HomeschoolApp() {
             grade,
             nextLessonNumber: selectedSubjectLessons.length + importedChapters.size + 1,
           });
+          const includesSubjectImport = (normalized.subjects || []).some((subject) => {
+            const normalizedSubject = normalizeSubjectDefinition(subject);
+            return normalizedSubject.id && !builtinSubjectIds.has(normalizedSubject.id) && !existingSubjectIds.has(normalizedSubject.id);
+          });
+          const includesChapterImport = (normalized.chapters || []).length > 0;
+          if (includesSubjectImport && !canImportSubjects) {
+            throw new Error(language === "ur" ? "اس اکاؤنٹ کو نئے مضامین درآمد کرنے کی اجازت نہیں۔" : "This account is not allowed to import new subjects.");
+          }
+          if (includesChapterImport && !canImportChapters) {
+            throw new Error(language === "ur" ? "اس اکاؤنٹ کو اسباق درآمد کرنے کی اجازت نہیں۔" : "This account is not allowed to import lessons.");
+          }
           (normalized.subjects || []).forEach((subject) => {
             const normalizedSubject = normalizeSubjectDefinition(subject);
             if (!normalizedSubject.id || builtinSubjectIds.has(normalizedSubject.id)) return;
@@ -9194,8 +9502,12 @@ function HomeschoolApp() {
       setChapterImportBusy(false);
       if (event?.target) event.target.value = "";
     }
-  }, [allChapterGroups, allSubjects, grade, language, refreshCustomContentState, selectedLesson, selectedSubject, selectedSubjectLessons.length, showAppToast]);
+  }, [allChapterGroups, allSubjects, canImportChapters, canImportSubjects, grade, language, refreshCustomContentState, selectedLesson, selectedSubject, selectedSubjectLessons.length, showAppToast]);
   const handleExportSelectedChapter = useCallback(() => {
+    if (!canExportContent) {
+      showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "آپ کے مواد والے کردار کو ابواب برآمد کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     if (!selectedSubject || !selectedLesson || !grade) {
       showAppToast(joinLocalizedText("Choose a lesson first.", "پہلے ایک سبق منتخب کریں۔", language), "alert");
       return;
@@ -9212,7 +9524,7 @@ function HomeschoolApp() {
       payload,
     );
     showAppToast(joinLocalizedText("Chapter exported", "سبق برآمد کر دیا گیا", language), "copy");
-  }, [activeLessonQuizQuestions, grade, language, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast]);
+  }, [activeLessonQuizQuestions, canExportContent, grade, language, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast]);
   const selectedSubjectExportEntries = useMemo(() => selectedSubjectChapterGroups
     .map((group, index) => group?.activeLesson ? {
       lesson: group.activeLesson,
@@ -9250,6 +9562,10 @@ function HomeschoolApp() {
     setSelectedChapterKeys([]);
   }, []);
   const handleExportSelectedChapters = useCallback(() => {
+    if (!canExportContent) {
+      showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "آپ کے مواد والے کردار کو ابواب برآمد کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     if (!selectedSubject || !grade || selectedSubjectSelectedEntries.length === 0) {
       showAppToast(joinLocalizedText("Choose one or more lessons first.", "پہلے ایک یا زیادہ اسباق منتخب کریں۔", language), "alert");
       return;
@@ -9267,8 +9583,12 @@ function HomeschoolApp() {
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);
     showAppToast(joinLocalizedText("Selected chapters exported", "منتخب اسباق برآمد ہو گئے", language), "copy");
-  }, [grade, language, selectedSubject, selectedSubjectSelectedEntries, showAppToast]);
+  }, [canExportContent, grade, language, selectedSubject, selectedSubjectSelectedEntries, showAppToast]);
   const handleExportAllSubjectLessons = useCallback(() => {
+    if (!canExportContent) {
+      showAppToast(joinLocalizedText("Your content role does not allow exporting lessons.", "آپ کے مواد والے کردار کو اسباق برآمد کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     if (!selectedSubject || !grade || selectedSubjectExportEntries.length === 0) {
       showAppToast(joinLocalizedText("No lessons available to export.", "برآمد کرنے کے لیے کوئی سبق موجود نہیں۔", language), "alert");
       return;
@@ -9284,8 +9604,12 @@ function HomeschoolApp() {
       payload,
     );
     showAppToast(joinLocalizedText("All lessons exported", "تمام اسباق برآمد ہو گئے", language), "copy");
-  }, [grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
+  }, [canExportContent, grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
   const handleExportWholeSubject = useCallback(() => {
+    if (!canExportContent) {
+      showAppToast(joinLocalizedText("Your content role does not allow exporting subjects.", "آپ کے مواد والے کردار کو مضامین برآمد کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     if (!selectedSubject || !grade || selectedSubjectExportEntries.length === 0) {
       showAppToast(joinLocalizedText("No subject lessons available to export.", "برآمد کرنے کے لیے مضمون کے اسباق موجود نہیں۔", language), "alert");
       return;
@@ -9302,7 +9626,7 @@ function HomeschoolApp() {
       payload,
     );
     showAppToast(joinLocalizedText("Subject exported", "مضمون برآمد ہو گیا", language), "copy");
-  }, [grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
+  }, [canExportContent, grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
   const updateChapterSourceSelection = useCallback((subjectId, targetGrade, canonicalLessonKey, nextSelection = null, options = {}) => {
     const preferenceKey = buildChapterSourcePreferenceKey(subjectId, targetGrade, canonicalLessonKey);
     const normalizedSelection = nextSelection && typeof nextSelection === "object"
@@ -9338,6 +9662,10 @@ function HomeschoolApp() {
     setSelectedLesson(lesson);
   }, [subjectLookup]);
   const handleExportChapterVariant = useCallback((subjectId, targetGrade, lesson) => {
+    if (!canExportContent) {
+      showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "آپ کے مواد والے کردار کو ابواب برآمد کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     if (!lesson || !subjectId || !targetGrade) return;
     const payload = buildCustomChapterExportPayload({
       subject: subjectId,
@@ -9350,8 +9678,12 @@ function HomeschoolApp() {
       payload,
     );
     showAppToast(joinLocalizedText("Chapter exported", "سبق برآمد کر دیا گیا", language), "copy");
-  }, [getMergedQuiz, language, showAppToast]);
+  }, [canExportContent, getMergedQuiz, language, showAppToast]);
   const handleSavePublishedChapterLocally = useCallback(async (subjectId, targetGrade, lesson) => {
+    if (!canSavePublishedLocally) {
+      showAppToast(joinLocalizedText("Your content role does not allow saving published chapters locally.", "آپ کے مواد والے کردار کو شائع شدہ ابواب مقامی طور پر محفوظ کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     if (!window.HomeSchoolDB?.saveCustomChapter || !lesson) return;
     try {
       const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
@@ -9376,8 +9708,12 @@ function HomeschoolApp() {
         "alert",
       );
     }
-  }, [getMergedQuiz, language, refreshCustomContentState, showAppToast]);
+  }, [canSavePublishedLocally, getMergedQuiz, language, refreshCustomContentState, showAppToast]);
   const handleDeleteLocalChapter = useCallback(async (group) => {
+    if (!canDeleteLocalContent) {
+      showAppToast(joinLocalizedText("Your content role does not allow deleting local chapters.", "آپ کے مواد والے کردار کو مقامی ابواب حذف کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     const localVariant = group?.variants?.find((variant) => variant.sourceType === "custom");
     if (!localVariant || !window.HomeSchoolDB?.deleteCustomChapter) {
       showAppToast(joinLocalizedText("No local chapter copy to remove.", "ہٹانے کے لیے کوئی مقامی باب موجود نہیں۔", language), "alert");
@@ -9394,7 +9730,7 @@ function HomeschoolApp() {
         "alert",
       );
     }
-  }, [language, refreshCustomContentState, showAppToast, updateChapterSourceSelection]);
+  }, [canDeleteLocalContent, language, refreshCustomContentState, showAppToast, updateChapterSourceSelection]);
   useEffect(() => {
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);
@@ -10262,6 +10598,111 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     return client;
   }, [language, supabaseDictionarySync]);
 
+  const refreshContentAccessState = useCallback(async (sessionOverride = null) => {
+    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
+    if (!settings.url || !settings.anonKey) {
+      const fallbackRole = "student";
+      const nextState = {
+        ...createDefaultContentAccessState(),
+        loaded: true,
+        defaultRole: fallbackRole,
+        currentRole: fallbackRole,
+      };
+      setContentAccessState(nextState);
+      return nextState;
+    }
+    try {
+      const client = ensureSupabaseClient();
+      const session = sessionOverride || (await client.auth.getSession())?.data?.session || null;
+      const userEmail = String(session?.user?.email || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
+      if (!session?.user?.id || !userEmail) {
+        const nextState = {
+          ...createDefaultContentAccessState(),
+          loaded: true,
+        };
+        setContentAccessState(nextState);
+        return nextState;
+      }
+      let roleRows = [];
+      const ownRoleResult = await client
+        .from(SUPABASE_CONTENT_ROLE_TABLE)
+        .select("email, role, updated_at, updated_by")
+        .eq("email", userEmail)
+        .limit(1);
+      if (ownRoleResult.error) throw ownRoleResult.error;
+      roleRows = Array.isArray(ownRoleResult.data) ? ownRoleResult.data : [];
+      if (!roleRows.length) {
+        const countResult = await client
+          .from(SUPABASE_CONTENT_ROLE_TABLE)
+          .select("email", { head: true, count: "exact" });
+        if (countResult.error) throw countResult.error;
+        if (Number(countResult.count || 0) === 0) {
+          const nowIso = new Date().toISOString();
+          const bootstrapInsert = await client
+            .from(SUPABASE_CONTENT_ROLE_TABLE)
+            .insert({
+              email: userEmail,
+              role: "admin",
+              updated_by: session.user.id,
+              updated_at: nowIso,
+            });
+          if (bootstrapInsert.error) throw bootstrapInsert.error;
+          const defaultSettingsInsert = await client
+            .from(SUPABASE_CONTENT_SETTINGS_TABLE)
+            .upsert({
+              scope: "global",
+              default_role: "student",
+              updated_by: session.user.id,
+              updated_at: nowIso,
+            }, { onConflict: "scope" });
+          if (defaultSettingsInsert.error) throw defaultSettingsInsert.error;
+          roleRows = [{
+            email: userEmail,
+            role: "admin",
+            updated_at: nowIso,
+            updated_by: session.user.id,
+          }];
+        }
+      }
+      const settingsResult = await client
+        .from(SUPABASE_CONTENT_SETTINGS_TABLE)
+        .select("scope, default_role, updated_at, updated_by")
+        .eq("scope", "global")
+        .limit(1);
+      if (settingsResult.error) throw settingsResult.error;
+      const settingsRow = Array.isArray(settingsResult.data) ? settingsResult.data[0] : null;
+      const defaultRole = normalizeContentManagerRole(settingsRow?.default_role || "student");
+      const currentRole = normalizeContentManagerRole(roleRows[0]?.role || defaultRole);
+      let assignments = roleRows;
+      if (currentRole === "admin") {
+        const allAssignmentsResult = await client
+          .from(SUPABASE_CONTENT_ROLE_TABLE)
+          .select("email, role, updated_at, updated_by")
+          .order("updated_at", { ascending: false })
+          .limit(200);
+        if (allAssignmentsResult.error) throw allAssignmentsResult.error;
+        assignments = Array.isArray(allAssignmentsResult.data) ? allAssignmentsResult.data : roleRows;
+      }
+      const nextState = {
+        loaded: true,
+        defaultRole,
+        currentRole,
+        assignments: Array.isArray(assignments) ? assignments : [],
+        lastUpdatedAt: Date.now(),
+      };
+      setContentAccessState(nextState);
+      return nextState;
+    } catch (error) {
+      console.log("Unable to refresh content access state:", error);
+      const nextState = {
+        ...createDefaultContentAccessState(),
+        loaded: true,
+      };
+      setContentAccessState(nextState);
+      return nextState;
+    }
+  }, [ensureSupabaseClient, supabaseDictionarySync, supabasePendingEmail]);
+
   const applySupabaseSessionState = useCallback((session, options = {}) => {
     const user = session?.user || null;
     const signedIn = Boolean(user?.id);
@@ -10286,6 +10727,19 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       lastSyncedAt: options.lastSyncedAt || current.lastSyncedAt || 0,
     }));
   }, [language, supabaseDictionarySync.authEmail]);
+
+  useEffect(() => {
+    if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
+      setContentAccessState((current) => ({
+        ...createDefaultContentAccessState(),
+        loaded: true,
+        defaultRole: current.defaultRole || "student",
+        currentRole: "student",
+      }));
+      return;
+    }
+    refreshContentAccessState().catch(() => null);
+  }, [refreshContentAccessState, supabaseAuthState.email, supabaseAuthState.userId, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
 
   const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
     if (!window.HomeSchoolDB) {
@@ -10775,6 +11229,117 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     }
   }, [copyTextToClipboard, language]);
 
+  const handleContentDefaultRoleChange = useCallback(async (nextRole) => {
+    const safeRole = normalizeContentManagerRole(nextRole);
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only admins can change content access defaults.", "صرف ایڈمن مواد کی رسائی کی ترتیبات بدل سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId) {
+      showAppToast(joinLocalizedText("Sign in first to manage content access.", "مواد کی رسائی سنبھالنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    setContentAccessBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const nowIso = new Date().toISOString();
+      const { error } = await client
+        .from(SUPABASE_CONTENT_SETTINGS_TABLE)
+        .upsert({
+          scope: "global",
+          default_role: safeRole,
+          updated_by: supabaseAuthState.userId,
+          updated_at: nowIso,
+        }, { onConflict: "scope" });
+      if (error) throw error;
+      await refreshContentAccessState();
+      showAppToast(joinLocalizedText("Default content role updated", "مواد کا طے شدہ کردار تازہ ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to update content access default: ${error?.message || error}`, `مواد کی طے شدہ رسائی تازہ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentAccessBusy(false);
+    }
+  }, [canManageContentAccess, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
+
+  const handleSaveContentRoleAssignment = useCallback(async (overrideEmail = null, overrideRole = null) => {
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only admins can assign content roles.", "صرف ایڈمن مواد کے کردار مقرر کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId) {
+      showAppToast(joinLocalizedText("Sign in first to manage content roles.", "مواد کے کردار سنبھالنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    const nextEmail = String((overrideEmail ?? contentRoleDraftEmail) || "").trim().toLowerCase();
+    const nextRole = normalizeContentManagerRole(overrideRole ?? contentRoleDraftRole);
+    if (!nextEmail || !nextEmail.includes("@")) {
+      showAppToast(joinLocalizedText("Enter a valid account email first.", "پہلے درست اکاؤنٹ ای میل درج کریں۔", language), "alert");
+      return;
+    }
+    const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
+    const currentEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === nextEmail) || null;
+    const adminCount = existingAssignments.filter((entry) => normalizeContentManagerRole(entry.role) === "admin").length;
+    if (currentEntry && normalizeContentManagerRole(currentEntry.role) === "admin" && nextRole !== "admin" && adminCount <= 1) {
+      showAppToast(joinLocalizedText("Keep at least one admin account.", "کم از کم ایک ایڈمن اکاؤنٹ ضرور رکھیں۔", language), "alert");
+      return;
+    }
+    setContentAccessBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const nowIso = new Date().toISOString();
+      const { error } = await client
+        .from(SUPABASE_CONTENT_ROLE_TABLE)
+        .upsert({
+          email: nextEmail,
+          role: nextRole,
+          updated_by: supabaseAuthState.userId,
+          updated_at: nowIso,
+        }, { onConflict: "email" });
+      if (error) throw error;
+      if (!overrideEmail) {
+        setContentRoleDraftEmail("");
+        setContentRoleDraftRole("student");
+      }
+      await refreshContentAccessState();
+      showAppToast(joinLocalizedText("Content role saved", "مواد کا کردار محفوظ ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to save content role: ${error?.message || error}`, `مواد کا کردار محفوظ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentAccessBusy(false);
+    }
+  }, [canManageContentAccess, contentAccessState.assignments, contentRoleDraftEmail, contentRoleDraftRole, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
+
+  const handleDeleteContentRoleAssignment = useCallback(async (email) => {
+    const safeEmail = String(email || "").trim().toLowerCase();
+    if (!safeEmail) return;
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only admins can remove content roles.", "صرف ایڈمن مواد کے کردار ہٹا سکتے ہیں۔", language), "alert");
+      return;
+    }
+    const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
+    const targetEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === safeEmail) || null;
+    const adminCount = existingAssignments.filter((entry) => normalizeContentManagerRole(entry.role) === "admin").length;
+    if (targetEntry && normalizeContentManagerRole(targetEntry.role) === "admin" && adminCount <= 1) {
+      showAppToast(joinLocalizedText("Keep at least one admin account.", "کم از کم ایک ایڈمن اکاؤنٹ ضرور رکھیں۔", language), "alert");
+      return;
+    }
+    setContentAccessBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client
+        .from(SUPABASE_CONTENT_ROLE_TABLE)
+        .delete()
+        .eq("email", safeEmail);
+      if (error) throw error;
+      await refreshContentAccessState();
+      showAppToast(joinLocalizedText("Content role removed", "مواد کا کردار ہٹا دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to remove content role: ${error?.message || error}`, `مواد کا کردار ہٹایا نہیں جا سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentAccessBusy(false);
+    }
+  }, [canManageContentAccess, contentAccessState.assignments, ensureSupabaseClient, language, refreshContentAccessState, showAppToast]);
+
   const handleResolveDictionaryConflict = useCallback(async (normalizedWord, mode = "merge") => {
     const normalized = normalizeLookupWord(normalizedWord);
     if (!normalized) return;
@@ -10968,6 +11533,10 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     }
   }, [ensureSupabaseClient, supabaseDictionarySync]);
   const handleUnpublishChapterVariant = useCallback(async (group, variant) => {
+    if (!canUnpublishContent) {
+      showAppToast(joinLocalizedText("Your content role does not allow unpublishing chapters.", "آپ کے مواد والے کردار کو ابواب غیر شائع کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
     if (!variant?.contentId) {
       showAppToast(joinLocalizedText("This chapter is not published yet.", "یہ سبق ابھی شائع نہیں ہوا۔", language), "alert");
       return;
@@ -11001,9 +11570,13 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         "alert",
       );
     }
-  }, [chapterSourcePreferences, ensureSupabaseClient, language, refreshPublishedContentState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  }, [canUnpublishContent, chapterSourcePreferences, ensureSupabaseClient, language, refreshPublishedContentState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
 
   const handlePublishSelectedChapter = useCallback(async () => {
+    if (!canPublishContent) {
+      showAppToast(joinLocalizedText("Only editors or admins can publish chapters.", "صرف ایڈیٹر یا ایڈمن ابواب شائع کر سکتے ہیں۔", language), "alert");
+      return;
+    }
     if (!selectedSubject || !selectedLesson || !grade) {
       showAppToast(joinLocalizedText("Choose a lesson first.", "پہلے ایک سبق منتخب کریں۔", language), "alert");
       return;
@@ -11096,7 +11669,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     } finally {
       setChapterPublishBusy(false);
     }
-  }, [activeLessonQuizQuestions, ensureSupabaseClient, grade, language, refreshCustomContentState, refreshPublishedContentState, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
+  }, [activeLessonQuizQuestions, canPublishContent, ensureSupabaseClient, grade, language, refreshCustomContentState, refreshPublishedContentState, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
 
   useEffect(() => {
     localStorageFallback("hs_dictionary_device_id", dictionaryDeviceIdRef.current);
@@ -15423,6 +15996,21 @@ const lessons = getMergedLessons(subjectId, grade);
     activeProfileRole === "teacher" ? "استاد" : activeProfileRole === "parent" ? "والدین" : "طالب علم",
     language,
   );
+  const contentManagerRole = normalizeContentManagerRole(contentAccessState.currentRole || contentAccessState.defaultRole || "student");
+  const contentManagerRoleLabel = joinLocalizedText(
+    contentManagerRole === "admin" ? "Admin" : contentManagerRole === "editor" ? "Editor" : contentManagerRole === "teacher" ? "Teacher" : "Student",
+    contentManagerRole === "admin" ? "ایڈمن" : contentManagerRole === "editor" ? "ایڈیٹر" : contentManagerRole === "teacher" ? "استاد" : "طالب علم",
+    language,
+  );
+  const contentRoleCapabilities = getContentRoleCapabilities(contentManagerRole);
+  const canImportChapters = Boolean(contentRoleCapabilities.importChapters);
+  const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
+  const canExportContent = Boolean(contentRoleCapabilities.exportContent);
+  const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
+  const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
+  const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
+  const canDeleteLocalContent = Boolean(contentRoleCapabilities.deleteLocalContent);
+  const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
   const activeStudentProfileInitials = getStudentProfileInitials(activeStudentProfile);
   const dictionaryPendingSet = useMemo(
     () => new Set(Array.isArray(supabaseSyncActivity.pendingDictionaryKeys) ? supabaseSyncActivity.pendingDictionaryKeys : []),
@@ -16368,21 +16956,29 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </div>
           </button>
           <div className="subject-chapter-actions" style={{ marginTop: 16 }}>
-            <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
-              {renderLocalizedTextNode(
-                chapterImportBusy
-                  ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language)
-                  : joinLocalizedText("Import Subject or Lessons", "مضمون یا اسباق درآمد کریں", language),
-                language,
-              )}
-            </button>
+            {canImportChapters || canImportSubjects ? (
+              <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
+                {renderLocalizedTextNode(
+                  chapterImportBusy
+                    ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language)
+                    : joinLocalizedText("Import Subject or Lessons", "مضمون یا اسباق درآمد کریں", language),
+                  language,
+                )}
+              </button>
+            ) : null}
             <div className="subject-chapter-actions-copy">
               {renderLocalizedTextNode(
-                joinLocalizedText(
-                  "Add one or many chapter JSON files, a chapter pack, or a whole subject pack.",
-                  "ایک یا کئی باب JSON فائلیں، باب پیک، یا پورا مضمون پیک شامل کریں۔",
-                  language,
-                ),
+                (canImportChapters || canImportSubjects)
+                  ? joinLocalizedText(
+                    "Add one or many chapter JSON files, a chapter pack, or a whole subject pack.",
+                    "ایک یا کئی باب JSON فائلیں، باب پیک، یا پورا مضمون پیک شامل کریں۔",
+                    language,
+                  )
+                  : joinLocalizedText(
+                    "Chapter and subject import tools are restricted by your content role.",
+                    "باب اور مضمون درآمد کے اوزار آپ کے مواد والے کردار کے مطابق محدود ہیں۔",
+                    language,
+                  ),
                 language,
               )}
             </div>
@@ -17121,9 +17717,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </div>
                 <div className="result-actions chapter-card-actions">
                   <button type="button" className="ghost-cta" onClick={() => handleOpenChapterVariant(group.subjectId, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Open", "کھولیں", language), language)}</button>
-                  <button type="button" className="ghost-cta" onClick={() => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Export", "برآمد کریں", language), language)}</button>
-                  {localVariant ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(group)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}</button> : null}
-                  {ownedPublishedVariant ? <button type="button" className="ghost-cta" onClick={() => handleUnpublishChapterVariant(group, ownedPublishedVariant)}>{renderLocalizedTextNode(joinLocalizedText("Unpublish", "غیر شائع کریں", language), language)}</button> : null}
+                  {canExportContent ? <button type="button" className="ghost-cta" onClick={() => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Export", "برآمد کریں", language), language)}</button> : null}
+                  {localVariant && canDeleteLocalContent ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(group)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}</button> : null}
+                  {ownedPublishedVariant && canUnpublishContent ? <button type="button" className="ghost-cta" onClick={() => handleUnpublishChapterVariant(group, ownedPublishedVariant)}>{renderLocalizedTextNode(joinLocalizedText("Unpublish", "غیر شائع کریں", language), language)}</button> : null}
                 </div>
               </div>
             );
@@ -17183,7 +17779,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     updateChapterSourceSelection(item.group.subjectId, item.group.grade, item.group.canonicalLessonKey, { mode: "published", contentId: item.contentId });
                     handleOpenChapterVariant(item.group.subjectId, item.lesson);
                   }}>{renderLocalizedTextNode(joinLocalizedText("Use this copy", "یہ کاپی استعمال کریں", language), language)}</button>
-                  <button type="button" className="ghost-cta" onClick={() => handleSavePublishedChapterLocally(item.group.subjectId, item.group.grade, item.lesson)}>{renderLocalizedTextNode(joinLocalizedText("Save locally", "مقامی محفوظ کریں", language), language)}</button>
+                  {canSavePublishedLocally ? <button type="button" className="ghost-cta" onClick={() => handleSavePublishedChapterLocally(item.group.subjectId, item.group.grade, item.lesson)}>{renderLocalizedTextNode(joinLocalizedText("Save locally", "مقامی محفوظ کریں", language), language)}</button> : null}
                   <button type="button" className="ghost-cta" onClick={() => handleOpenChapterVariant(item.group.subjectId, item.lesson)}>{renderLocalizedTextNode(joinLocalizedText("Preview", "جائزہ", language), language)}</button>
                 </div>
               </div>
@@ -17405,23 +18001,27 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </div>
         </div>
         <div className="subject-chapter-actions" style={(selectedSubject?.id === "urdu" || isUrduUi(language)) ? { direction: "rtl" } : {}}>
-          <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
-            {renderLocalizedTextNode(
-              chapterImportBusy
-                ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language)
-                : joinLocalizedText("Import Lessons", "اسباق درآمد کریں", language),
-              language,
-            )}
-          </button>
-          <button type="button" className={`ghost-cta${chapterSelectionMode ? " active" : ""}`} onClick={handleToggleChapterSelectionMode}>
-            {renderLocalizedTextNode(
-              chapterSelectionMode
-                ? joinLocalizedText("Done Selecting", "انتخاب مکمل", language)
-                : joinLocalizedText("Select Lessons", "اسباق منتخب کریں", language),
-              language,
-            )}
-          </button>
-          {chapterSelectionMode ? (
+          {canImportChapters || canImportSubjects ? (
+            <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
+              {renderLocalizedTextNode(
+                chapterImportBusy
+                  ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language)
+                  : joinLocalizedText("Import Lessons", "اسباق درآمد کریں", language),
+                language,
+              )}
+            </button>
+          ) : null}
+          {canExportContent ? (
+            <button type="button" className={`ghost-cta${chapterSelectionMode ? " active" : ""}`} onClick={handleToggleChapterSelectionMode}>
+              {renderLocalizedTextNode(
+                chapterSelectionMode
+                  ? joinLocalizedText("Done Selecting", "انتخاب مکمل", language)
+                  : joinLocalizedText("Select Lessons", "اسباق منتخب کریں", language),
+                language,
+              )}
+            </button>
+          ) : null}
+          {chapterSelectionMode && canExportContent ? (
             <>
               <button type="button" className="ghost-cta" onClick={handleSelectAllSubjectChapters} disabled={!selectedSubjectChapterGroups.length}>
                 {renderLocalizedTextNode(joinLocalizedText("Select All", "سب منتخب کریں", language), language)}
@@ -17434,17 +18034,23 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </button>
             </>
           ) : null}
-          <button type="button" className="ghost-cta" onClick={handleExportAllSubjectLessons} disabled={!selectedSubjectLessons.length}>
-            {renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "تمام اسباق برآمد کریں", language), language)}
-          </button>
-          <button type="button" className="ghost-cta" onClick={handleExportWholeSubject} disabled={!selectedSubjectLessons.length}>
-            {renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "پورا مضمون برآمد کریں", language), language)}
-          </button>
+          {canExportContent ? (
+            <button type="button" className="ghost-cta" onClick={handleExportAllSubjectLessons} disabled={!selectedSubjectLessons.length}>
+              {renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "تمام اسباق برآمد کریں", language), language)}
+            </button>
+          ) : null}
+          {canExportContent ? (
+            <button type="button" className="ghost-cta" onClick={handleExportWholeSubject} disabled={!selectedSubjectLessons.length}>
+              {renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "پورا مضمون برآمد کریں", language), language)}
+            </button>
+          ) : null}
           <div className="subject-chapter-actions-copy">
             {renderLocalizedTextNode(
-              chapterSelectionMode
+              canImportChapters || canImportSubjects || canExportContent
+                ? (chapterSelectionMode && canExportContent
                 ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} اسباق برآمد کے لیے منتخب ہیں۔`, language)
-                : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، باب پیک درآمد کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language),
+                : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، باب پیک درآمد کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language))
+                : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "مواد درآمد اور اشاعت کے اوزار ایڈمن سنبھالتے ہیں۔ آپ کے موجودہ کردار کے لیے یہ مضمون صرف دیکھنے کے قابل ہے۔", language),
               language,
             )}
           </div>
@@ -17514,24 +18120,30 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       {tab === "home" && selectedLesson && !quizActive && !quizDone && (
         <>
           <div className="subject-chapter-toolbar" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
-            <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
-              {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language) : joinLocalizedText("Import Content", "مواد درآمد کریں", language), language)}
-            </button>
-            <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
-              {renderLocalizedTextNode(
-                chapterPublishBusy
-                  ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language)
-                  : String(selectedLesson?.publication?.authorUserId || "").trim() === String(supabaseAuthState.userId || "").trim()
-                    ? joinLocalizedText("Update Published Chapter", "شائع شدہ سبق تازہ کریں", language)
-                    : selectedLesson?.publication?.contentId
-                      ? joinLocalizedText("Publish Copy", "نقل شائع کریں", language)
-                      : joinLocalizedText("Publish Chapter", "سبق شائع کریں", language),
-                language,
-              )}
-            </button>
-            <button type="button" className="ghost-cta" onClick={handleExportSelectedChapter}>
-              {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
-            </button>
+            {canImportChapters || canImportSubjects ? (
+              <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
+                {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language) : joinLocalizedText("Import Content", "مواد درآمد کریں", language), language)}
+              </button>
+            ) : null}
+            {canPublishContent ? (
+              <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
+                {renderLocalizedTextNode(
+                  chapterPublishBusy
+                    ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language)
+                    : String(selectedLesson?.publication?.authorUserId || "").trim() === String(supabaseAuthState.userId || "").trim()
+                      ? joinLocalizedText("Update Published Chapter", "شائع شدہ سبق تازہ کریں", language)
+                      : selectedLesson?.publication?.contentId
+                        ? joinLocalizedText("Publish Copy", "نقل شائع کریں", language)
+                        : joinLocalizedText("Publish Chapter", "سبق شائع کریں", language),
+                  language,
+                )}
+              </button>
+            ) : null}
+            {canExportContent ? (
+              <button type="button" className="ghost-cta" onClick={handleExportSelectedChapter}>
+                {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
+              </button>
+            ) : null}
           </div>
           {selectedLessonChapterGroup?.variants?.length > 1 ? (
             <div className="review-panel chapter-source-panel" data-ui-language={language}>
@@ -19943,6 +20555,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             supabasePendingEmail={supabasePendingEmail}
             supabasePasswordVisible={supabaseAccountPasswordVisible}
             activeStudentProfileLabel={activeStudentProfileLabel}
+            contentManagerRoleLabel={contentManagerRoleLabel}
+            contentAccessState={contentAccessState}
+            contentAccessBusy={contentAccessBusy}
+            contentRoleDraftEmail={contentRoleDraftEmail}
+            contentRoleDraftRole={contentRoleDraftRole}
             onSupabaseDictionarySyncChange={updateSupabaseDictionarySyncField}
             onSupabaseAccountPasswordChange={setSupabaseAccountPassword}
             onSupabaseAccountUsernameChange={(value) => setSupabaseAccountUsername(sanitizeAccountUsername(value))}
@@ -19959,6 +20576,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             onSupabaseSyncNow={handleSupabaseSyncNow}
             onSupabaseCopySql={handleCopySupabaseSqlHelper}
             onSupabaseSignOut={handleSupabaseSignOut}
+            onContentRoleDraftEmailChange={setContentRoleDraftEmail}
+            onContentRoleDraftRoleChange={setContentRoleDraftRole}
+            onContentDefaultRoleChange={handleContentDefaultRoleChange}
+            onSaveContentRoleAssignment={handleSaveContentRoleAssignment}
+            onDeleteContentRoleAssignment={handleDeleteContentRoleAssignment}
             onResolveDictionaryConflict={handleResolveDictionaryConflict}
             onResolveCloudSyncConflict={handleResolveCloudSyncConflict}
             versionInfo={versionManagerRef.current?.getVersionInfo?.()}

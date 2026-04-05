@@ -348,6 +348,11 @@
       supabasePendingEmail,
       supabasePasswordVisible,
       activeStudentProfileLabel,
+      contentManagerRoleLabel,
+      contentAccessState,
+      contentAccessBusy,
+      contentRoleDraftEmail,
+      contentRoleDraftRole,
       versionInfo,
       onCheckUpdates,
       onRefreshData,
@@ -372,6 +377,11 @@
       onSupabaseSyncNow,
       onSupabaseCopySql,
       onSupabaseSignOut,
+      onContentRoleDraftEmailChange,
+      onContentRoleDraftRoleChange,
+      onContentDefaultRoleChange,
+      onSaveContentRoleAssignment,
+      onDeleteContentRoleAssignment,
       onResolveDictionaryConflict,
       onResolveCloudSyncConflict,
       onResetProgress,
@@ -510,6 +520,176 @@
     const latestMinutesSpent = Math.round((latestTimeEntry?.msSpent || 0) / 60000);
     const syncSummary = supabaseSyncActivity && typeof supabaseSyncActivity === "object" ? supabaseSyncActivity : {};
     const pendingCloudDatasets = Object.entries(syncSummary.pendingCloudDatasets || {}).filter(([, count]) => Number(count) > 0);
+    const contentAssignments = Array.isArray(contentAccessState?.assignments) ? contentAccessState.assignments : [];
+    const contentDefaultRole = String(contentAccessState?.defaultRole || "student").trim().toLowerCase() || "student";
+    const contentCurrentRole = String(contentAccessState?.currentRole || "student").trim().toLowerCase() || "student";
+    const canManageContentAccess = contentCurrentRole === "admin";
+    const contentRoleOptions = [
+      {
+        id: "student",
+        label: joinLocalizedText("Student", "طالب علم", language),
+        capabilities: joinLocalizedText("View and use built-in or published content only.", "صرف بلٹ اِن یا شائع شدہ مواد دیکھ اور استعمال کر سکتا ہے۔", language),
+      },
+      {
+        id: "teacher",
+        label: joinLocalizedText("Teacher", "استاد", language),
+        capabilities: joinLocalizedText("Can import chapter files, export copies, and save published copies locally.", "باب فائلیں درآمد، کاپیاں برآمد، اور شائع شدہ کاپیاں مقامی طور پر محفوظ کر سکتا ہے۔", language),
+      },
+      {
+        id: "editor",
+        label: joinLocalizedText("Editor", "ایڈیٹر", language),
+        capabilities: joinLocalizedText("Can import subjects, publish chapters, unpublish own work, and manage richer content flows.", "مضامین درآمد، ابواب شائع، اپنی شائع شدہ کاپی ہٹانے، اور وسیع مواد کے بہاؤ سنبھال سکتا ہے۔", language),
+      },
+      {
+        id: "admin",
+        label: joinLocalizedText("Admin", "ایڈمن", language),
+        capabilities: joinLocalizedText("Full content control, including who can import or publish.", "مکمل موادی اختیار، بشمول یہ کہ کون درآمد یا شائع کر سکتا ہے۔", language),
+      },
+    ];
+    const contentAccessSummaryCard = React.createElement("div", {
+      key: "content-access-summary",
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border)",
+        marginBottom: 10,
+      },
+    },
+    React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 10 } }, renderLocalizedText(language === "ur" ? "Content Access & Publishing" : "Content Access & Publishing", language)),
+    React.createElement("div", { className: "settings-item" },
+      React.createElement("span", { className: "si-label" }, renderLocalizedText(language === "ur" ? "Your content role" : "Your content role", language)),
+      React.createElement("span", { className: "si-value" }, renderLocalizedText(contentManagerRoleLabel || "Student", language))),
+    React.createElement("div", { className: "settings-item" },
+      React.createElement("span", { className: "si-label" }, renderLocalizedText(language === "ur" ? "Default new-user role" : "Default new-user role", language)),
+      React.createElement("span", { className: "si-value" }, renderLocalizedText((contentRoleOptions.find((option) => option.id === contentDefaultRole) || contentRoleOptions[0]).label, language))),
+    React.createElement("div", {
+      style: {
+        marginTop: 10,
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+        gap: 10,
+      },
+    },
+    ...contentRoleOptions.map((option) => React.createElement("div", {
+      key: `content-role-card-${option.id}`,
+      className: "settings-group-card",
+      style: {
+        marginBottom: 0,
+        borderColor: option.id === contentCurrentRole ? "var(--accent)" : "var(--border)",
+        boxShadow: option.id === contentCurrentRole ? "0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent)" : "none",
+      },
+    },
+      React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 6 } }, renderLocalizedText(option.label, language)),
+      React.createElement("div", {
+        style: {
+          color: "var(--text-muted)",
+          fontSize: 12,
+          lineHeight: 1.6,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+          direction: language === "ur" ? "rtl" : "ltr",
+          textAlign: language === "ur" ? "right" : "left",
+        },
+      }, renderLocalizedText(option.capabilities, language))))));
+    const contentAccessAdminCard = canManageContentAccess ? React.createElement("div", {
+      key: "content-access-admin",
+      style: {
+        padding: "12px 14px",
+        borderRadius: 12,
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border)",
+        marginBottom: 10,
+      },
+    },
+    React.createElement("div", { style: { color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 10 } }, renderLocalizedText(language === "ur" ? "Admin Content Controls" : "Admin Content Controls", language)),
+    React.createElement("div", { style: { marginBottom: 10 } },
+      React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(language === "ur" ? "Default role for new accounts" : "Default role for new accounts", language)),
+      React.createElement("select", {
+        value: contentDefaultRole,
+        onChange: (event) => onContentDefaultRoleChange && onContentDefaultRoleChange(event.target.value),
+        style: selectStyle,
+        disabled: contentAccessBusy,
+      }, ...contentRoleOptions.map((option) => React.createElement("option", { key: `default-content-role-${option.id}`, value: option.id }, renderLocalizedText(option.label, language))))),
+    React.createElement("div", { style: { marginBottom: 10 } },
+      React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(language === "ur" ? "Assign a role by email" : "Assign a role by email", language)),
+      React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" } },
+        React.createElement("input", {
+          className: "settings-text-input",
+          type: "email",
+          value: contentRoleDraftEmail || "",
+          onChange: (event) => onContentRoleDraftEmailChange && onContentRoleDraftEmailChange(event.target.value),
+          placeholder: language === "ur" ? "مثلاً editor@example.com" : "For example: editor@example.com",
+          dir: "ltr",
+          spellCheck: false,
+          style: { flex: "1 1 240px", marginBottom: 0 },
+        }),
+        React.createElement("select", {
+          value: contentRoleDraftRole || "student",
+          onChange: (event) => onContentRoleDraftRoleChange && onContentRoleDraftRoleChange(event.target.value),
+          style: { ...selectStyle, flex: "0 0 150px" },
+          disabled: contentAccessBusy,
+        }, ...contentRoleOptions.map((option) => React.createElement("option", { key: `draft-content-role-${option.id}`, value: option.id }, renderLocalizedText(option.label, language)))),
+        React.createElement("button", {
+          type: "button",
+          className: "study-tool-btn",
+          onClick: () => onSaveContentRoleAssignment && onSaveContentRoleAssignment(),
+          disabled: contentAccessBusy,
+        }, renderLocalizedText(contentAccessBusy ? (language === "ur" ? "محفوظ ہو رہا ہے..." : "Saving...") : (language === "ur" ? "کردار محفوظ کریں" : "Save Role"), language)))),
+    React.createElement("div", {
+      style: {
+        color: "var(--text-muted)",
+        fontSize: 12,
+        lineHeight: 1.6,
+        marginBottom: 10,
+        fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+        direction: language === "ur" ? "rtl" : "ltr",
+        textAlign: language === "ur" ? "right" : "left",
+      },
+    }, renderLocalizedText(language === "ur" ? "یہ کنٹرول طے کرتے ہیں کہ کون باب درآمد، مضمون درآمد، شائع، غیر شائع، یا مقامی مسودے حذف کر سکتا ہے۔" : "These controls decide who can import chapters, import subjects, publish, unpublish, or delete local drafts.", language)),
+    ...(contentAssignments.length
+      ? contentAssignments.map((assignment) => React.createElement("div", {
+        key: `content-assignment-${assignment.email}`,
+        className: "settings-group-card",
+        style: { marginBottom: 10 },
+      },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 8 } },
+          React.createElement("strong", { style: { color: "var(--text-primary)", direction: "ltr" } }, String(assignment.email || "")),
+          React.createElement("span", { className: "discovery-tag muted" }, renderLocalizedText((contentRoleOptions.find((option) => option.id === String(assignment.role || "").trim().toLowerCase()) || contentRoleOptions[0]).label, language))),
+        React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+          ...contentRoleOptions.map((option) => React.createElement("button", {
+            key: `assignment-${assignment.email}-${option.id}`,
+            type: "button",
+            className: option.id === String(assignment.role || "").trim().toLowerCase() ? "study-tool-btn" : "ghost-cta",
+            onClick: () => onSaveContentRoleAssignment && onSaveContentRoleAssignment(assignment.email, option.id),
+            disabled: contentAccessBusy,
+          }, renderLocalizedText(option.label, language))),
+          React.createElement("button", {
+            type: "button",
+            className: "ghost-cta",
+            onClick: () => onDeleteContentRoleAssignment && onDeleteContentRoleAssignment(assignment.email),
+            disabled: contentAccessBusy,
+          }, renderLocalizedText(language === "ur" ? "ہٹائیں" : "Remove", language)))))
+      : [React.createElement("div", {
+        key: "content-assignment-empty",
+        className: "empty-state",
+        style: { marginTop: 8 },
+      }, renderLocalizedText(language === "ur" ? "ابھی کوئی مخصوص موادی کردار تفویض نہیں کیا گیا۔" : "No explicit content role assignments yet.", language))])) : null;
+    const contentAccessNoteCard = canManageContentAccess ? null : React.createElement("div", {
+      key: "content-access-note",
+      style: {
+        marginBottom: 10,
+        padding: "10px 12px",
+        borderRadius: 10,
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border)",
+        color: "var(--text-muted)",
+        fontSize: 12,
+        lineHeight: 1.6,
+        fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+        direction: language === "ur" ? "rtl" : "ltr",
+        textAlign: language === "ur" ? "right" : "left",
+      },
+    }, renderLocalizedText(language === "ur" ? "مواد درآمد اور اشاعت کے اختیارات صرف ایڈمن تبدیل کر سکتے ہیں۔ اگر آپ کو یہ اختیارات چاہییں تو ایڈمن سے Editor یا Admin رسائی مانگیں۔" : "Only admins can change content import and publishing rights. If you need these tools, ask an admin for Editor or Admin access.", language));
 
     const dataChildren = [
       React.createElement("div", { key: "version", className: "settings-item" },
@@ -686,7 +866,13 @@
           React.createElement("span", { className: "si-value" }, renderLocalizedText(activeStudentProfileLabel || "—", language))),
         React.createElement("div", { className: "settings-item" },
           React.createElement("span", { className: "si-label" }, renderLocalizedText(language === "ur" ? "Cloud Role" : "Cloud Role", language)),
-          React.createElement("span", { className: "si-value" }, renderLocalizedText(supabaseAccountRoleLabel || "Student", language)))),
+          React.createElement("span", { className: "si-value" }, renderLocalizedText(supabaseAccountRoleLabel || "Student", language))),
+        React.createElement("div", { className: "settings-item" },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(language === "ur" ? "Content Access Role" : "Content Access Role", language)),
+          React.createElement("span", { className: "si-value" }, renderLocalizedText(contentManagerRoleLabel || "Student", language)))),
+      contentAccessSummaryCard,
+      contentAccessAdminCard,
+      contentAccessNoteCard,
       React.createElement("div", { style: { marginBottom: 10 } },
         React.createElement("label", { className: "settings-input-label" }, renderLocalizedText(ui.supabaseUrl || (language === "ur" ? "Supabase URL" : "Supabase URL"), language)),
         React.createElement("input", {
@@ -1535,7 +1721,7 @@
       {
         key: "settings-account",
         title: joinLocalizedText("Account & Cloud Sign-In", "اکاؤنٹ اور کلاؤڈ سائن اِن", language),
-        tags: ["account", "supabase", "cloud", "sign in", "email", "password", "username", "sync", "sql", "setup sql", "copy sql", "test connection", "published chapter", "published chapters", "content", "publish"],
+        tags: ["account", "supabase", "cloud", "sign in", "email", "password", "username", "sync", "sql", "setup sql", "copy sql", "test connection", "published chapter", "published chapters", "content", "publish", "permissions", "content role", "editor", "admin", "teacher", "student", "chapter access"],
         groups: [
           { key: "settings-group-account", title: joinLocalizedText("Supabase Account Identity", "Supabase اکاؤنٹ شناخت", language), tags: ["login", "email", "password", "username", "role", "cloud", "sql", "setup", "copy sql", "test connection", "sync now", "published chapter", "content"], children: accountChildren },
         ],

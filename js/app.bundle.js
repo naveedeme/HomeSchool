@@ -2140,6 +2140,8 @@
   const SUPABASE_DICTIONARY_TABLE = "dictionary_entries";
   const SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
   const SUPABASE_PUBLISHED_CONTENT_TABLE = "published_chapters";
+  const SUPABASE_CONTENT_ROLE_TABLE = "content_role_assignments";
+  const SUPABASE_CONTENT_SETTINGS_TABLE = "content_access_settings";
   const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
   const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -2289,7 +2291,226 @@ create policy "Users can delete own published chapters"
 on public.published_chapters
 for delete
 to authenticated
-using ((select auth.uid()) = author_user_id);`;
+using (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+);
+
+drop policy if exists "Users can insert own published chapters" on public.published_chapters;
+drop policy if exists "Users can update own published chapters" on public.published_chapters;
+drop policy if exists "Users can delete own published chapters" on public.published_chapters;
+
+create policy "Users can insert own published chapters"
+on public.published_chapters
+for insert
+to authenticated
+with check (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+);
+
+create policy "Users can update own published chapters"
+on public.published_chapters
+for update
+to authenticated
+using (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+)
+with check (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+);
+
+create policy "Users can delete own published chapters"
+on public.published_chapters
+for delete
+to authenticated
+using (
+  (select auth.uid()) = author_user_id
+  and exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role in ('editor', 'admin')
+  )
+);
+
+create table if not exists public.content_role_assignments (
+  email text primary key,
+  role text not null default 'student',
+  updated_by uuid null,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists content_role_assignments_role_idx
+  on public.content_role_assignments (role, updated_at desc);
+
+alter table public.content_role_assignments enable row level security;
+
+drop policy if exists "Users can read relevant content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can insert content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can update content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can delete content role assignments" on public.content_role_assignments;
+drop policy if exists "Bootstrap first content admin" on public.content_role_assignments;
+
+create policy "Users can read relevant content role assignments"
+on public.content_role_assignments
+for select
+to authenticated
+using (
+  lower(email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  or exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Bootstrap first content admin"
+on public.content_role_assignments
+for insert
+to authenticated
+with check (
+  role = 'admin'
+  and lower(email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+  and not exists (select 1 from public.content_role_assignments)
+);
+
+create policy "Admins can insert content role assignments"
+on public.content_role_assignments
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Admins can update content role assignments"
+on public.content_role_assignments
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Admins can delete content role assignments"
+on public.content_role_assignments
+for delete
+to authenticated
+using (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create table if not exists public.content_access_settings (
+  scope text primary key,
+  default_role text not null default 'student',
+  updated_by uuid null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.content_access_settings enable row level security;
+
+drop policy if exists "Authenticated users can read content access settings" on public.content_access_settings;
+drop policy if exists "Admins can insert content access settings" on public.content_access_settings;
+drop policy if exists "Admins can update content access settings" on public.content_access_settings;
+drop policy if exists "Admins can delete content access settings" on public.content_access_settings;
+
+create policy "Authenticated users can read content access settings"
+on public.content_access_settings
+for select
+to authenticated
+using (true);
+
+create policy "Admins can insert content access settings"
+on public.content_access_settings
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Admins can update content access settings"
+on public.content_access_settings
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);
+
+create policy "Admins can delete content access settings"
+on public.content_access_settings
+for delete
+to authenticated
+using (
+  exists (
+    select 1
+    from public.content_role_assignments cra
+    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
+      and cra.role = 'admin'
+  )
+);`;
   function createDefaultSupabaseDictionarySyncSettings() {
     return {
       enabled: false,
@@ -2351,6 +2572,69 @@ using ((select auth.uid()) = author_user_id);`;
     var _a, _b;
     const role = String(((_a = user == null ? void 0 : user.app_metadata) == null ? void 0 : _a.role) || ((_b = user == null ? void 0 : user.user_metadata) == null ? void 0 : _b.role) || "student").trim().toLowerCase();
     return role || "student";
+  }
+  const CONTENT_MANAGER_ROLES = ["student", "teacher", "editor", "admin"];
+  function normalizeContentManagerRole(role) {
+    const safeRole = String(role || "").trim().toLowerCase();
+    return CONTENT_MANAGER_ROLES.includes(safeRole) ? safeRole : "student";
+  }
+  function createDefaultContentRoleCapabilities() {
+    return {
+      student: {
+        importChapters: false,
+        importSubjects: false,
+        exportContent: false,
+        savePublishedLocally: false,
+        publishContent: false,
+        unpublishContent: false,
+        deleteLocalContent: false,
+        manageContentAccess: false
+      },
+      teacher: {
+        importChapters: true,
+        importSubjects: false,
+        exportContent: true,
+        savePublishedLocally: true,
+        publishContent: false,
+        unpublishContent: false,
+        deleteLocalContent: true,
+        manageContentAccess: false
+      },
+      editor: {
+        importChapters: true,
+        importSubjects: true,
+        exportContent: true,
+        savePublishedLocally: true,
+        publishContent: true,
+        unpublishContent: true,
+        deleteLocalContent: true,
+        manageContentAccess: false
+      },
+      admin: {
+        importChapters: true,
+        importSubjects: true,
+        exportContent: true,
+        savePublishedLocally: true,
+        publishContent: true,
+        unpublishContent: true,
+        deleteLocalContent: true,
+        manageContentAccess: true
+      }
+    };
+  }
+  function getContentRoleCapabilities(role) {
+    const safeRole = normalizeContentManagerRole(role);
+    const matrix = createDefaultContentRoleCapabilities();
+    return matrix[safeRole] || matrix.student;
+  }
+  function createDefaultContentAccessState() {
+    return {
+      loaded: false,
+      defaultRole: "student",
+      currentRole: "student",
+      assignments: [],
+      lastUpdatedAt: 0
+    };
   }
   function createDictionaryRowsFromMap(rawCache, deviceId = "") {
     return Object.entries(normalizeWordMeaningCache(rawCache || {})).map(([normalizedWord, entry]) => ({
@@ -6508,6 +6792,10 @@ ${marker} `);
     const [supabaseSyncActivity, setSupabaseSyncActivity] = useState(createDefaultSupabaseSyncActivitySummary());
     const [supabaseSyncPendingRows, setSupabaseSyncPendingRows] = useState({ dictionary: [], cloud: [] });
     const [syncPendingDetailsOpen, setSyncPendingDetailsOpen] = useState(false);
+    const [contentAccessState, setContentAccessState] = useState(createDefaultContentAccessState());
+    const [contentAccessBusy, setContentAccessBusy] = useState(false);
+    const [contentRoleDraftEmail, setContentRoleDraftEmail] = useState("");
+    const [contentRoleDraftRole, setContentRoleDraftRole] = useState("student");
     const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
     const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored == null ? void 0 : stored.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
     const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored == null ? void 0 : stored.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -7093,13 +7381,17 @@ ${marker} `);
     }, []);
     const handleOpenChapterImport = useCallback(() => {
       var _a2, _b2;
+      if (!canImportChapters && !canImportSubjects) {
+        showAppToast(joinLocalizedText("Your content role does not allow importing lessons or subjects.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0633\u0628\u0627\u0642 \u06CC\u0627 \u0645\u0636\u0627\u0645\u06CC\u0646 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!grade) {
         showAppToast(joinLocalizedText("Choose a grade first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u062C\u0645\u0627\u0639\u062A \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
       if (chapterImportInputRef.current) chapterImportInputRef.current.value = "";
       (_b2 = (_a2 = chapterImportInputRef.current) == null ? void 0 : _a2.click) == null ? void 0 : _b2.call(_a2);
-    }, [grade, language, showAppToast]);
+    }, [canImportChapters, canImportSubjects, grade, language, showAppToast]);
     const handleImportCustomChapter = useCallback(async (event) => {
       var _a2;
       const files = Array.from(((_a2 = event == null ? void 0 : event.target) == null ? void 0 : _a2.files) || []);
@@ -7128,6 +7420,17 @@ ${marker} `);
               grade,
               nextLessonNumber: selectedSubjectLessons.length + importedChapters.size + 1
             });
+            const includesSubjectImport = (normalized.subjects || []).some((subject) => {
+              const normalizedSubject = normalizeSubjectDefinition(subject);
+              return normalizedSubject.id && !builtinSubjectIds.has(normalizedSubject.id) && !existingSubjectIds.has(normalizedSubject.id);
+            });
+            const includesChapterImport = (normalized.chapters || []).length > 0;
+            if (includesSubjectImport && !canImportSubjects) {
+              throw new Error(language === "ur" ? "\u0627\u0633 \u0627\u06A9\u0627\u0624\u0646\u0679 \u06A9\u0648 \u0646\u0626\u06D2 \u0645\u0636\u0627\u0645\u06CC\u0646 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4" : "This account is not allowed to import new subjects.");
+            }
+            if (includesChapterImport && !canImportChapters) {
+              throw new Error(language === "ur" ? "\u0627\u0633 \u0627\u06A9\u0627\u0624\u0646\u0679 \u06A9\u0648 \u0627\u0633\u0628\u0627\u0642 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4" : "This account is not allowed to import lessons.");
+            }
             (normalized.subjects || []).forEach((subject) => {
               const normalizedSubject = normalizeSubjectDefinition(subject);
               if (!normalizedSubject.id || builtinSubjectIds.has(normalizedSubject.id)) return;
@@ -7220,8 +7523,12 @@ ${marker} `);
         setChapterImportBusy(false);
         if (event == null ? void 0 : event.target) event.target.value = "";
       }
-    }, [allChapterGroups, allSubjects, grade, language, refreshCustomContentState, selectedLesson, selectedSubject, selectedSubjectLessons.length, showAppToast]);
+    }, [allChapterGroups, allSubjects, canImportChapters, canImportSubjects, grade, language, refreshCustomContentState, selectedLesson, selectedSubject, selectedSubjectLessons.length, showAppToast]);
     const handleExportSelectedChapter = useCallback(() => {
+      if (!canExportContent) {
+        showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0628\u0648\u0627\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!selectedSubject || !selectedLesson || !grade) {
         showAppToast(joinLocalizedText("Choose a lesson first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u0633\u0628\u0642 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -7238,7 +7545,7 @@ ${marker} `);
         payload
       );
       showAppToast(joinLocalizedText("Chapter exported", "\u0633\u0628\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "copy");
-    }, [activeLessonQuizQuestions, grade, language, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast]);
+    }, [activeLessonQuizQuestions, canExportContent, grade, language, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast]);
     const selectedSubjectExportEntries = useMemo(() => selectedSubjectChapterGroups.map((group, index) => (group == null ? void 0 : group.activeLesson) ? {
       lesson: group.activeLesson,
       questions: getMergedQuiz(group.subjectId, group.grade, group.activeLesson.key),
@@ -7267,6 +7574,10 @@ ${marker} `);
       setSelectedChapterKeys([]);
     }, []);
     const handleExportSelectedChapters = useCallback(() => {
+      if (!canExportContent) {
+        showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0628\u0648\u0627\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!selectedSubject || !grade || selectedSubjectSelectedEntries.length === 0) {
         showAppToast(joinLocalizedText("Choose one or more lessons first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u06CC\u0627 \u0632\u06CC\u0627\u062F\u06C1 \u0627\u0633\u0628\u0627\u0642 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -7284,8 +7595,12 @@ ${marker} `);
       setChapterSelectionMode(false);
       setSelectedChapterKeys([]);
       showAppToast(joinLocalizedText("Selected chapters exported", "\u0645\u0646\u062A\u062E\u0628 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06C1\u0648 \u06AF\u0626\u06D2", language), "copy");
-    }, [grade, language, selectedSubject, selectedSubjectSelectedEntries, showAppToast]);
+    }, [canExportContent, grade, language, selectedSubject, selectedSubjectSelectedEntries, showAppToast]);
     const handleExportAllSubjectLessons = useCallback(() => {
+      if (!canExportContent) {
+        showAppToast(joinLocalizedText("Your content role does not allow exporting lessons.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!selectedSubject || !grade || selectedSubjectExportEntries.length === 0) {
         showAppToast(joinLocalizedText("No lessons available to export.", "\u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u0633\u0628\u0642 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -7301,8 +7616,12 @@ ${marker} `);
         payload
       );
       showAppToast(joinLocalizedText("All lessons exported", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06C1\u0648 \u06AF\u0626\u06D2", language), "copy");
-    }, [grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
+    }, [canExportContent, grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
     const handleExportWholeSubject = useCallback(() => {
+      if (!canExportContent) {
+        showAppToast(joinLocalizedText("Your content role does not allow exporting subjects.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!selectedSubject || !grade || selectedSubjectExportEntries.length === 0) {
         showAppToast(joinLocalizedText("No subject lessons available to export.", "\u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u0627\u0633\u0628\u0627\u0642 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -7319,7 +7638,7 @@ ${marker} `);
         payload
       );
       showAppToast(joinLocalizedText("Subject exported", "\u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06C1\u0648 \u06AF\u06CC\u0627", language), "copy");
-    }, [grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
+    }, [canExportContent, grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
     const updateChapterSourceSelection = useCallback((subjectId, targetGrade, canonicalLessonKey, nextSelection = null, options = {}) => {
       const preferenceKey = buildChapterSourcePreferenceKey(subjectId, targetGrade, canonicalLessonKey);
       const normalizedSelection = nextSelection && typeof nextSelection === "object" ? {
@@ -7351,6 +7670,10 @@ ${marker} `);
       setSelectedLesson(lesson);
     }, [subjectLookup]);
     const handleExportChapterVariant = useCallback((subjectId, targetGrade, lesson) => {
+      if (!canExportContent) {
+        showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0628\u0648\u0627\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!lesson || !subjectId || !targetGrade) return;
       const payload = buildCustomChapterExportPayload({
         subject: subjectId,
@@ -7363,9 +7686,13 @@ ${marker} `);
         payload
       );
       showAppToast(joinLocalizedText("Chapter exported", "\u0633\u0628\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "copy");
-    }, [getMergedQuiz, language, showAppToast]);
+    }, [canExportContent, getMergedQuiz, language, showAppToast]);
     const handleSavePublishedChapterLocally = useCallback(async (subjectId, targetGrade, lesson) => {
       var _a2;
+      if (!canSavePublishedLocally) {
+        showAppToast(joinLocalizedText("Your content role does not allow saving published chapters locally.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0627\u0628\u0648\u0627\u0628 \u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.saveCustomChapter) || !lesson) return;
       try {
         const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
@@ -7390,9 +7717,13 @@ ${marker} `);
           "alert"
         );
       }
-    }, [getMergedQuiz, language, refreshCustomContentState, showAppToast]);
+    }, [canSavePublishedLocally, getMergedQuiz, language, refreshCustomContentState, showAppToast]);
     const handleDeleteLocalChapter = useCallback(async (group) => {
       var _a2, _b2;
+      if (!canDeleteLocalContent) {
+        showAppToast(joinLocalizedText("Your content role does not allow deleting local chapters.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0645\u0642\u0627\u0645\u06CC \u0627\u0628\u0648\u0627\u0628 \u062D\u0630\u0641 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       const localVariant = (_a2 = group == null ? void 0 : group.variants) == null ? void 0 : _a2.find((variant) => variant.sourceType === "custom");
       if (!localVariant || !((_b2 = window.HomeSchoolDB) == null ? void 0 : _b2.deleteCustomChapter)) {
         showAppToast(joinLocalizedText("No local chapter copy to remove.", "\u06C1\u0679\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u0645\u0642\u0627\u0645\u06CC \u0628\u0627\u0628 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -7409,7 +7740,7 @@ ${marker} `);
           "alert"
         );
       }
-    }, [language, refreshCustomContentState, showAppToast, updateChapterSourceSelection]);
+    }, [canDeleteLocalContent, language, refreshCustomContentState, showAppToast, updateChapterSourceSelection]);
     useEffect(() => {
       setChapterSelectionMode(false);
       setSelectedChapterKeys([]);
@@ -8227,6 +8558,93 @@ ${marker} `);
       supabaseClientRef.current = { key: cacheKey, client };
       return client;
     }, [language, supabaseDictionarySync]);
+    const refreshContentAccessState = useCallback(async (sessionOverride = null) => {
+      var _a2, _b2, _c2, _d2, _e2;
+      const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
+      if (!settings.url || !settings.anonKey) {
+        const fallbackRole = "student";
+        const nextState = {
+          ...createDefaultContentAccessState(),
+          loaded: true,
+          defaultRole: fallbackRole,
+          currentRole: fallbackRole
+        };
+        setContentAccessState(nextState);
+        return nextState;
+      }
+      try {
+        const client = ensureSupabaseClient();
+        const session = sessionOverride || ((_b2 = (_a2 = await client.auth.getSession()) == null ? void 0 : _a2.data) == null ? void 0 : _b2.session) || null;
+        const userEmail = String(((_c2 = session == null ? void 0 : session.user) == null ? void 0 : _c2.email) || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
+        if (!((_d2 = session == null ? void 0 : session.user) == null ? void 0 : _d2.id) || !userEmail) {
+          const nextState2 = {
+            ...createDefaultContentAccessState(),
+            loaded: true
+          };
+          setContentAccessState(nextState2);
+          return nextState2;
+        }
+        let roleRows = [];
+        const ownRoleResult = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by").eq("email", userEmail).limit(1);
+        if (ownRoleResult.error) throw ownRoleResult.error;
+        roleRows = Array.isArray(ownRoleResult.data) ? ownRoleResult.data : [];
+        if (!roleRows.length) {
+          const countResult = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email", { head: true, count: "exact" });
+          if (countResult.error) throw countResult.error;
+          if (Number(countResult.count || 0) === 0) {
+            const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+            const bootstrapInsert = await client.from(SUPABASE_CONTENT_ROLE_TABLE).insert({
+              email: userEmail,
+              role: "admin",
+              updated_by: session.user.id,
+              updated_at: nowIso
+            });
+            if (bootstrapInsert.error) throw bootstrapInsert.error;
+            const defaultSettingsInsert = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).upsert({
+              scope: "global",
+              default_role: "student",
+              updated_by: session.user.id,
+              updated_at: nowIso
+            }, { onConflict: "scope" });
+            if (defaultSettingsInsert.error) throw defaultSettingsInsert.error;
+            roleRows = [{
+              email: userEmail,
+              role: "admin",
+              updated_at: nowIso,
+              updated_by: session.user.id
+            }];
+          }
+        }
+        const settingsResult = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).select("scope, default_role, updated_at, updated_by").eq("scope", "global").limit(1);
+        if (settingsResult.error) throw settingsResult.error;
+        const settingsRow = Array.isArray(settingsResult.data) ? settingsResult.data[0] : null;
+        const defaultRole = normalizeContentManagerRole((settingsRow == null ? void 0 : settingsRow.default_role) || "student");
+        const currentRole = normalizeContentManagerRole(((_e2 = roleRows[0]) == null ? void 0 : _e2.role) || defaultRole);
+        let assignments = roleRows;
+        if (currentRole === "admin") {
+          const allAssignmentsResult = await client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by").order("updated_at", { ascending: false }).limit(200);
+          if (allAssignmentsResult.error) throw allAssignmentsResult.error;
+          assignments = Array.isArray(allAssignmentsResult.data) ? allAssignmentsResult.data : roleRows;
+        }
+        const nextState = {
+          loaded: true,
+          defaultRole,
+          currentRole,
+          assignments: Array.isArray(assignments) ? assignments : [],
+          lastUpdatedAt: Date.now()
+        };
+        setContentAccessState(nextState);
+        return nextState;
+      } catch (error) {
+        console.log("Unable to refresh content access state:", error);
+        const nextState = {
+          ...createDefaultContentAccessState(),
+          loaded: true
+        };
+        setContentAccessState(nextState);
+        return nextState;
+      }
+    }, [ensureSupabaseClient, supabaseDictionarySync, supabasePendingEmail]);
     const applySupabaseSessionState = useCallback((session, options = {}) => {
       var _a2, _b2;
       const user = (session == null ? void 0 : session.user) || null;
@@ -8248,6 +8666,18 @@ ${marker} `);
         lastSyncedAt: options.lastSyncedAt || current.lastSyncedAt || 0
       }));
     }, [language, supabaseDictionarySync.authEmail]);
+    useEffect(() => {
+      if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
+        setContentAccessState((current) => ({
+          ...createDefaultContentAccessState(),
+          loaded: true,
+          defaultRole: current.defaultRole || "student",
+          currentRole: "student"
+        }));
+        return;
+      }
+      refreshContentAccessState().catch(() => null);
+    }, [refreshContentAccessState, supabaseAuthState.email, supabaseAuthState.userId, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
     const performSupabaseDictionarySync = useCallback(async (reason = "manual") => {
       var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2;
       if (!window.HomeSchoolDB) {
@@ -8688,6 +9118,107 @@ ${marker} `);
         alert(joinLocalizedText("Unable to copy the setup SQL on this device right now.", "\u0627\u0633 \u0688\u06CC\u0648\u0627\u0626\u0633 \u067E\u0631 \u0627\u0633 \u0648\u0642\u062A setup SQL \u06A9\u0627\u067E\u06CC \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC\u06D4", language));
       }
     }, [copyTextToClipboard, language]);
+    const handleContentDefaultRoleChange = useCallback(async (nextRole) => {
+      const safeRole = normalizeContentManagerRole(nextRole);
+      if (!canManageContentAccess) {
+        showAppToast(joinLocalizedText("Only admins can change content access defaults.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0645\u0648\u0627\u062F \u06A9\u06CC \u0631\u0633\u0627\u0626\u06CC \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628\u0627\u062A \u0628\u062F\u0644 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      if (!supabaseAuthState.userId) {
+        showAppToast(joinLocalizedText("Sign in first to manage content access.", "\u0645\u0648\u0627\u062F \u06A9\u06CC \u0631\u0633\u0627\u0626\u06CC \u0633\u0646\u0628\u06BE\u0627\u0644\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      setContentAccessBusy(true);
+      try {
+        const client = ensureSupabaseClient();
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const { error } = await client.from(SUPABASE_CONTENT_SETTINGS_TABLE).upsert({
+          scope: "global",
+          default_role: safeRole,
+          updated_by: supabaseAuthState.userId,
+          updated_at: nowIso
+        }, { onConflict: "scope" });
+        if (error) throw error;
+        await refreshContentAccessState();
+        showAppToast(joinLocalizedText("Default content role updated", "\u0645\u0648\u0627\u062F \u06A9\u0627 \u0637\u06D2 \u0634\u062F\u06C1 \u06A9\u0631\u062F\u0627\u0631 \u062A\u0627\u0632\u06C1 \u06C1\u0648 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to update content access default: ${(error == null ? void 0 : error.message) || error}`, `\u0645\u0648\u0627\u062F \u06A9\u06CC \u0637\u06D2 \u0634\u062F\u06C1 \u0631\u0633\u0627\u0626\u06CC \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentAccessBusy(false);
+      }
+    }, [canManageContentAccess, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
+    const handleSaveContentRoleAssignment = useCallback(async (overrideEmail = null, overrideRole = null) => {
+      if (!canManageContentAccess) {
+        showAppToast(joinLocalizedText("Only admins can assign content roles.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0645\u0648\u0627\u062F \u06A9\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u0645\u0642\u0631\u0631 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      if (!supabaseAuthState.userId) {
+        showAppToast(joinLocalizedText("Sign in first to manage content roles.", "\u0645\u0648\u0627\u062F \u06A9\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u0633\u0646\u0628\u06BE\u0627\u0644\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const nextEmail = String((overrideEmail != null ? overrideEmail : contentRoleDraftEmail) || "").trim().toLowerCase();
+      const nextRole = normalizeContentManagerRole(overrideRole != null ? overrideRole : contentRoleDraftRole);
+      if (!nextEmail || !nextEmail.includes("@")) {
+        showAppToast(joinLocalizedText("Enter a valid account email first.", "\u067E\u06C1\u0644\u06D2 \u062F\u0631\u0633\u062A \u0627\u06A9\u0627\u0624\u0646\u0679 \u0627\u06CC \u0645\u06CC\u0644 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
+      const currentEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === nextEmail) || null;
+      const adminCount = existingAssignments.filter((entry) => normalizeContentManagerRole(entry.role) === "admin").length;
+      if (currentEntry && normalizeContentManagerRole(currentEntry.role) === "admin" && nextRole !== "admin" && adminCount <= 1) {
+        showAppToast(joinLocalizedText("Keep at least one admin account.", "\u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0627\u06CC\u0688\u0645\u0646 \u0627\u06A9\u0627\u0624\u0646\u0679 \u0636\u0631\u0648\u0631 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      setContentAccessBusy(true);
+      try {
+        const client = ensureSupabaseClient();
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const { error } = await client.from(SUPABASE_CONTENT_ROLE_TABLE).upsert({
+          email: nextEmail,
+          role: nextRole,
+          updated_by: supabaseAuthState.userId,
+          updated_at: nowIso
+        }, { onConflict: "email" });
+        if (error) throw error;
+        if (!overrideEmail) {
+          setContentRoleDraftEmail("");
+          setContentRoleDraftRole("student");
+        }
+        await refreshContentAccessState();
+        showAppToast(joinLocalizedText("Content role saved", "\u0645\u0648\u0627\u062F \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to save content role: ${(error == null ? void 0 : error.message) || error}`, `\u0645\u0648\u0627\u062F \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u0645\u062D\u0641\u0648\u0638 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentAccessBusy(false);
+      }
+    }, [canManageContentAccess, contentAccessState.assignments, contentRoleDraftEmail, contentRoleDraftRole, ensureSupabaseClient, language, refreshContentAccessState, showAppToast, supabaseAuthState.userId]);
+    const handleDeleteContentRoleAssignment = useCallback(async (email) => {
+      const safeEmail = String(email || "").trim().toLowerCase();
+      if (!safeEmail) return;
+      if (!canManageContentAccess) {
+        showAppToast(joinLocalizedText("Only admins can remove content roles.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0645\u0648\u0627\u062F \u06A9\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06C1\u0679\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
+      const targetEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === safeEmail) || null;
+      const adminCount = existingAssignments.filter((entry) => normalizeContentManagerRole(entry.role) === "admin").length;
+      if (targetEntry && normalizeContentManagerRole(targetEntry.role) === "admin" && adminCount <= 1) {
+        showAppToast(joinLocalizedText("Keep at least one admin account.", "\u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0627\u06CC\u0688\u0645\u0646 \u0627\u06A9\u0627\u0624\u0646\u0679 \u0636\u0631\u0648\u0631 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      setContentAccessBusy(true);
+      try {
+        const client = ensureSupabaseClient();
+        const { error } = await client.from(SUPABASE_CONTENT_ROLE_TABLE).delete().eq("email", safeEmail);
+        if (error) throw error;
+        await refreshContentAccessState();
+        showAppToast(joinLocalizedText("Content role removed", "\u0645\u0648\u0627\u062F \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u06C1\u0679\u0627 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to remove content role: ${(error == null ? void 0 : error.message) || error}`, `\u0645\u0648\u0627\u062F \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u06C1\u0679\u0627\u06CC\u0627 \u0646\u06C1\u06CC\u06BA \u062C\u0627 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentAccessBusy(false);
+      }
+    }, [canManageContentAccess, contentAccessState.assignments, ensureSupabaseClient, language, refreshContentAccessState, showAppToast]);
     const handleResolveDictionaryConflict = useCallback(async (normalizedWord, mode = "merge") => {
       var _a2;
       const normalized = normalizeLookupWord(normalizedWord);
@@ -8858,6 +9389,10 @@ ${marker} `);
     }, [ensureSupabaseClient, supabaseDictionarySync]);
     const handleUnpublishChapterVariant = useCallback(async (group, variant) => {
       var _a2, _b2;
+      if (!canUnpublishContent) {
+        showAppToast(joinLocalizedText("Your content role does not allow unpublishing chapters.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0628\u0648\u0627\u0628 \u063A\u06CC\u0631 \u0634\u0627\u0626\u0639 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!(variant == null ? void 0 : variant.contentId)) {
         showAppToast(joinLocalizedText("This chapter is not published yet.", "\u06CC\u06C1 \u0633\u0628\u0642 \u0627\u0628\u06BE\u06CC \u0634\u0627\u0626\u0639 \u0646\u06C1\u06CC\u06BA \u06C1\u0648\u0627\u06D4", language), "alert");
         return;
@@ -8886,8 +9421,12 @@ ${marker} `);
           "alert"
         );
       }
-    }, [chapterSourcePreferences, ensureSupabaseClient, language, refreshPublishedContentState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+    }, [canUnpublishContent, chapterSourcePreferences, ensureSupabaseClient, language, refreshPublishedContentState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
     const handlePublishSelectedChapter = useCallback(async () => {
+      if (!canPublishContent) {
+        showAppToast(joinLocalizedText("Only editors or admins can publish chapters.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u06CC\u0679\u0631 \u06CC\u0627 \u0627\u06CC\u0688\u0645\u0646 \u0627\u0628\u0648\u0627\u0628 \u0634\u0627\u0626\u0639 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       if (!selectedSubject || !selectedLesson || !grade) {
         showAppToast(joinLocalizedText("Choose a lesson first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u0633\u0628\u0642 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -8972,7 +9511,7 @@ ${marker} `);
       } finally {
         setChapterPublishBusy(false);
       }
-    }, [activeLessonQuizQuestions, ensureSupabaseClient, grade, language, refreshCustomContentState, refreshPublishedContentState, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
+    }, [activeLessonQuizQuestions, canPublishContent, ensureSupabaseClient, grade, language, refreshCustomContentState, refreshPublishedContentState, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
     useEffect(() => {
       localStorageFallback("hs_dictionary_device_id", dictionaryDeviceIdRef.current);
     }, []);
@@ -13114,6 +13653,21 @@ ${error.message || error}`);
       activeProfileRole === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : activeProfileRole === "parent" ? "\u0648\u0627\u0644\u062F\u06CC\u0646" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
       language
     );
+    const contentManagerRole = normalizeContentManagerRole(contentAccessState.currentRole || contentAccessState.defaultRole || "student");
+    const contentManagerRoleLabel = joinLocalizedText(
+      contentManagerRole === "admin" ? "Admin" : contentManagerRole === "editor" ? "Editor" : contentManagerRole === "teacher" ? "Teacher" : "Student",
+      contentManagerRole === "admin" ? "\u0627\u06CC\u0688\u0645\u0646" : contentManagerRole === "editor" ? "\u0627\u06CC\u0688\u06CC\u0679\u0631" : contentManagerRole === "teacher" ? "\u0627\u0633\u062A\u0627\u062F" : "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645",
+      language
+    );
+    const contentRoleCapabilities = getContentRoleCapabilities(contentManagerRole);
+    const canImportChapters = Boolean(contentRoleCapabilities.importChapters);
+    const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
+    const canExportContent = Boolean(contentRoleCapabilities.exportContent);
+    const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
+    const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
+    const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
+    const canDeleteLocalContent = Boolean(contentRoleCapabilities.deleteLocalContent);
+    const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
     const activeStudentProfileInitials = getStudentProfileInitials(activeStudentProfile);
     const dictionaryPendingSet = useMemo(
       () => new Set(Array.isArray(supabaseSyncActivity.pendingDictionaryKeys) ? supabaseSyncActivity.pendingDictionaryKeys : []),
@@ -13973,13 +14527,17 @@ ${error.message || error}`);
       homeSectionTab === "subjects" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { className: "adverb-home-banner", style: { width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }, onClick: handleStartReview }, /* @__PURE__ */ React.createElement("div", { className: "banner-icon" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("div", { className: "banner-text" }, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewReady, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(
         reviewStats.due > 0 ? language === "ur" ? `${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : language === "bilingual" ? `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due / ${formatNumberLabel(reviewReadyNowCount)} \u0627\u0628\u06BE\u06CC \u062A\u06CC\u0627\u0631 \u2022 ${formatNumberLabel(reviewStats.due || 0)} \u06A9\u0644 \u0628\u0627\u0642\u06CC` : `${formatNumberLabel(reviewReadyNowCount)} ready now \u2022 ${formatNumberLabel(reviewStats.due || 0)} total due` : language === "ur" ? `${formatNumberLabel(reviewStats.reviewedToday || 0)} \u0622\u062C \u062F\u06C1\u0631\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u2022 ${formatNumberLabel(reviewStats.learning || 0)} \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0645\u06CC\u06BA` : language === "bilingual" ? `${formatNumberLabel(reviewStats.reviewedToday || 0)} reviewed today \u2022 ${formatNumberLabel(reviewStats.learning || 0)} learning / ${formatNumberLabel(reviewStats.reviewedToday || 0)} \u0622\u062C \u062F\u06C1\u0631\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u2022 ${formatNumberLabel(reviewStats.learning || 0)} \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0645\u06CC\u06BA` : `${formatNumberLabel(reviewStats.reviewedToday || 0)} reviewed today \u2022 ${formatNumberLabel(reviewStats.learning || 0)} learning`,
         language
-      )))), /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenChapterImport, disabled: chapterImportBusy }, renderLocalizedTextNode(
+      )))), /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions", style: { marginTop: 16 } }, canImportChapters || canImportSubjects ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenChapterImport, disabled: chapterImportBusy }, renderLocalizedTextNode(
         chapterImportBusy ? joinLocalizedText("Importing content...", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import Subject or Lessons", "\u0645\u0636\u0645\u0648\u0646 \u06CC\u0627 \u0627\u0633\u0628\u0627\u0642 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language),
         language
-      )), /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
-        joinLocalizedText(
+      )) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
+        canImportChapters || canImportSubjects ? joinLocalizedText(
           "Add one or many chapter JSON files, a chapter pack, or a whole subject pack.",
           "\u0627\u06CC\u06A9 \u06CC\u0627 \u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA\u060C \u0628\u0627\u0628 \u067E\u06CC\u06A9\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u067E\u06CC\u06A9 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4",
+          language
+        ) : joinLocalizedText(
+          "Chapter and subject import tools are restricted by your content role.",
+          "\u0628\u0627\u0628 \u0627\u0648\u0631 \u0645\u0636\u0645\u0648\u0646 \u062F\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0627\u0648\u0632\u0627\u0631 \u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u0645\u062D\u062F\u0648\u062F \u06C1\u06CC\u06BA\u06D4",
           language
         ),
         language
@@ -14168,7 +14726,7 @@ ${error.message || error}`);
             },
             renderLocalizedTextNode(getChapterVariantDisplayLabel(variant), language)
           );
-        })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenChapterVariant(group.subjectId, group.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Open", "\u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Export", "\u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)), localVariant ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteLocalChapter(group) }, renderLocalizedTextNode(joinLocalizedText("Delete local", "\u0645\u0642\u0627\u0645\u06CC \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, ownedPublishedVariant ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleUnpublishChapterVariant(group, ownedPublishedVariant) }, renderLocalizedTextNode(joinLocalizedText("Unpublish", "\u063A\u06CC\u0631 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language), language)) : null));
+        })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenChapterVariant(group.subjectId, group.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Open", "\u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)), canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Export", "\u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, localVariant && canDeleteLocalContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteLocalChapter(group) }, renderLocalizedTextNode(joinLocalizedText("Delete local", "\u0645\u0642\u0627\u0645\u06CC \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, ownedPublishedVariant && canUnpublishContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleUnpublishChapterVariant(group, ownedPublishedVariant) }, renderLocalizedTextNode(joinLocalizedText("Unpublish", "\u063A\u06CC\u0631 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language), language)) : null));
       }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No local or owned published chapters yet. Import one from a subject first.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0645\u0642\u0627\u0645\u06CC \u06CC\u0627 \u0622\u067E \u06A9\u06CC \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0628\u0627\u0628 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4 \u067E\u06C1\u0644\u06D2 \u06A9\u0633\u06CC \u0645\u0636\u0645\u0648\u0646 \u0633\u06D2 \u0627\u06CC\u06A9 \u0628\u0627\u0628 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))) : null,
       profilesSectionTab === "library" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Published Chapter Browser", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0627\u0628\u0648\u0627\u0628 \u0628\u0631\u0627\u0624\u0632\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Browse published chapters by subject and author, then activate a copy or save it locally.", "\u0645\u0636\u0645\u0648\u0646 \u0627\u0648\u0631 \u0645\u0635\u0646\u0641 \u06A9\u06D2 \u0644\u062D\u0627\u0638 \u0633\u06D2 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0627\u0628\u0648\u0627\u0628 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u06A9\u0633\u06CC \u06A9\u0627\u067E\u06CC \u06A9\u0648 \u0641\u0639\u0627\u0644 \u06A9\u0631\u06CC\u06BA \u06CC\u0627 \u0627\u0633\u06D2 \u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(publishedChapterBrowserItems.length))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row" }, /* @__PURE__ */ React.createElement("select", { className: "dictionary-select", value: chapterBrowserSubjectFilter, onChange: (event) => setChapterBrowserSubjectFilter(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("All subjects", "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("option", { key: `chapter_browser_subject_${subject.id}`, value: subject.id }, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))), /* @__PURE__ */ React.createElement(
         "input",
@@ -14184,7 +14742,7 @@ ${error.message || error}`);
         return /* @__PURE__ */ React.createElement("div", { key: `published_library_${item.contentId}`, className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, ((_a2 = item.subject) == null ? void 0 : _a2.icon) || "\u{1F4D8}", " ", renderLocalizedTextNode(((_b2 = item.lesson) == null ? void 0 : _b2.title) || item.group.title || item.group.canonicalLessonKey, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${item.subject ? getSubjectDisplayName(item.subject, "en") : item.group.subjectId} \u2022 ${item.authorUsername || "Community"}`, `${item.subject ? getSubjectDisplayName(item.subject, "ur") : item.group.subjectId} \u2022 ${item.authorUsername || "\u06A9\u0645\u06CC\u0648\u0646\u0679\u06CC"}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(item), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row" }, getChapterVariantBadges(item.lesson, supabaseAuthState.userId, language).map((badge) => /* @__PURE__ */ React.createElement("span", { key: `${item.contentId}_${badge.tone}_${badge.label}`, className: `chapter-badge ${badge.tone}` }, renderLocalizedTextNode(badge.label, language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText(`Canonical key: ${item.group.canonicalLessonKey}`, `\u0627\u0635\u0644 \u06A9\u0644\u06CC\u062F: ${item.group.canonicalLessonKey}`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => {
           updateChapterSourceSelection(item.group.subjectId, item.group.grade, item.group.canonicalLessonKey, { mode: "published", contentId: item.contentId });
           handleOpenChapterVariant(item.group.subjectId, item.lesson);
-        } }, renderLocalizedTextNode(joinLocalizedText("Use this copy", "\u06CC\u06C1 \u06A9\u0627\u067E\u06CC \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleSavePublishedChapterLocally(item.group.subjectId, item.group.grade, item.lesson) }, renderLocalizedTextNode(joinLocalizedText("Save locally", "\u0645\u0642\u0627\u0645\u06CC \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenChapterVariant(item.group.subjectId, item.lesson) }, renderLocalizedTextNode(joinLocalizedText("Preview", "\u062C\u0627\u0626\u0632\u06C1", language), language))));
+        } }, renderLocalizedTextNode(joinLocalizedText("Use this copy", "\u06CC\u06C1 \u06A9\u0627\u067E\u06CC \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canSavePublishedLocally ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleSavePublishedChapterLocally(item.group.subjectId, item.group.grade, item.lesson) }, renderLocalizedTextNode(joinLocalizedText("Save locally", "\u0645\u0642\u0627\u0645\u06CC \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)) : null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenChapterVariant(item.group.subjectId, item.lesson) }, renderLocalizedTextNode(joinLocalizedText("Preview", "\u062C\u0627\u0626\u0632\u06C1", language), language))));
       }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No published chapters match this filter yet.", "\u0627\u0628\u06BE\u06CC \u0627\u0633 \u0641\u0644\u0679\u0631 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u06A9\u0648\u0626\u06CC \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0628\u0627\u0628 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4", language), language)))) : null,
       profilesSectionTab === "cloud" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel sync-activity-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Cloud Sync Activity", "\u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9 \u0633\u0631\u06AF\u0631\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Local study still saves instantly. This panel shows what is already pushed, what is still waiting, and whether realtime cloud sync is helping this profile stay current.", "\u0645\u0642\u0627\u0645\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u0641\u0648\u0631\u0627\u064B \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648\u062A\u0627 \u0631\u06C1\u062A\u0627 \u06C1\u06D2\u06D4 \u06CC\u06C1 \u067E\u06CC\u0646\u0644 \u062F\u06A9\u06BE\u0627\u062A\u0627 \u06C1\u06D2 \u06A9\u06C1 \u06A9\u06CC\u0627 \u0686\u06CC\u0632 \u0627\u067E \u0644\u0648\u0688 \u06C1\u0648 \u0686\u06A9\u06CC \u06C1\u06D2\u060C \u06A9\u06CC\u0627 \u0627\u0628\u06BE\u06CC \u0628\u0627\u0642\u06CC \u06C1\u06D2\u060C \u0627\u0648\u0631 \u0622\u06CC\u0627 \u0631\u06CC\u0626\u0644 \u0679\u0627\u0626\u0645 \u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9 \u0627\u0633 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u06A9\u0648 \u062A\u0627\u0632\u06C1 \u0631\u06A9\u06BE\u0646\u06D2 \u0645\u06CC\u06BA \u0645\u062F\u062F \u062F\u06D2 \u0631\u06C1\u06CC \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 0 } }, /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(supabaseDictionarySync.realtimeEnabled ? joinLocalizedText("Realtime on", "\u0631\u06CC\u0626\u0644 \u0679\u0627\u0626\u0645 \u0622\u0646", language) : joinLocalizedText("Realtime off", "\u0631\u06CC\u0626\u0644 \u0679\u0627\u0626\u0645 \u0628\u0646\u062F", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSupabaseSyncNow, disabled: supabaseSyncBusy }, renderLocalizedTextNode(supabaseSyncBusy ? joinLocalizedText("Syncing...", "\u0633\u0646\u06A9 \u06C1\u0648 \u0631\u06C1\u06CC \u06C1\u06D2...", language) : joinLocalizedText("Sync now", "\u0627\u0628\u06BE\u06CC \u0633\u0646\u06A9 \u06A9\u0631\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement(
         "div",
@@ -14215,14 +14773,14 @@ ${error.message || error}`);
       profilesSectionTab === "notifications" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notificationHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.notificationHistoryHint, language)))), recentNotificationHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentNotificationHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotificationsYet, language))) : null,
       profilesSectionTab === "reports" && activeProfileRole === "parent" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel role-overview-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Parent View", "\u0648\u0627\u0644\u062F\u06CC\u0646 \u0645\u0646\u0638\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("A calm, read-only summary of this learner's current progress so you can guide without disturbing their study setup.", "\u0627\u0633 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u0645\u0648\u062C\u0648\u062F\u06C1 \u067E\u06CC\u0634 \u0631\u0641\u062A \u06A9\u0627 \u067E\u064F\u0631\u0633\u06A9\u0648\u0646\u060C \u0635\u0631\u0641 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0648\u0627\u0644\u0627 \u062E\u0644\u0627\u0635\u06C1 \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0645\u062F\u062F \u06A9\u0631 \u0633\u06A9\u06CC\u06BA \u0645\u06AF\u0631 \u0627\u0646 \u06A9\u06CC \u0633\u06CC\u0679\u0646\u06AF \u0646\u06C1 \u0628\u06AF\u0691\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText("Read only", "\u0635\u0631\u0641 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(activeStudentProfileLabel, language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`Best next support: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "Keep reviewing"}`, `\u0627\u06AF\u0644\u06CC \u0628\u06C1\u062A\u0631\u06CC\u0646 \u0645\u062F\u062F: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "\u0631\u06CC\u0648\u06CC\u0648 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA"}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`${completedDailyChallenges}/${dailyChallenges.length} daily goals`, `${completedDailyChallenges}/${dailyChallenges.length} \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06C1\u062F\u0627\u0641`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(weeklyStudyMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Weekly study", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9E0}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.due || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Review due", "\u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u0642\u06CC", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, profileLessonCompletion, "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Lesson completion", "\u0633\u0628\u0642 \u062A\u06A9\u0645\u06CC\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(streak || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Current streak", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u062A\u0633\u0644\u0633\u0644", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Strongest subject", "\u0633\u0628 \u0633\u06D2 \u0645\u0636\u0628\u0648\u0637 \u0645\u0636\u0645\u0648\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((profileStrongestSubject == null ? void 0 : profileStrongestSubject.label) || joinLocalizedText("Still emerging", "\u0627\u0628\u06BE\u06CC \u0633\u0627\u0645\u0646\u06D2 \u0622 \u0631\u06C1\u0627 \u06C1\u06D2", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Support next", "\u0627\u06AF\u0644\u06CC \u0645\u062F\u062F", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((profileSupportSubject == null ? void 0 : profileSupportSubject.label) || joinLocalizedText("Keep reviewing", "\u0631\u06CC\u0648\u06CC\u0648 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA", language), language))))) : null,
       profilesSectionTab === "reports" && activeProfileRole === "teacher" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel role-overview-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Teacher Ready", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This learner already has profile-scoped cloud data, progress, and dictionary growth ready for future classroom dashboards.", "\u0627\u0633 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u0631\u0648\u0641\u0627\u0626\u0644-\u0627\u0633\u06A9\u0648\u067E\u0688 \u06A9\u0644\u0627\u0624\u0688 \u0688\u06CC\u0679\u0627\u060C \u067E\u06CC\u0634 \u0631\u0641\u062A\u060C \u0627\u0648\u0631 \u0644\u063A\u062A \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC \u0622\u0626\u0646\u062F\u06C1 \u06A9\u0644\u0627\u0633 \u0631\u0648\u0645 \u0688\u06CC\u0634 \u0628\u0648\u0631\u0688\u0632 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u062A\u06CC\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText("Groundwork ready", "\u0628\u0646\u06CC\u0627\u062F \u062A\u06CC\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(studentProfiles.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Profiles on device", "\u0688\u06CC\u0648\u0627\u0626\u0633 \u067E\u0631 \u067E\u0631\u0648\u0641\u0627\u0626\u0644\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2601\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(supabaseDictionarySync.enabled ? joinLocalizedText("On", "\u0622\u0646", language) : joinLocalizedText("Off", "\u0628\u0646\u062F", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Cloud sync", "\u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9FE}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(cloudSyncConflicts.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Pending sync reviews", "\u0632\u06CC\u0631\u0650 \u062C\u0627\u0626\u0632\u06C1 \u0633\u0646\u06A9", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_n = reviewAnalytics.customLists) == null ? void 0 : _n.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Custom lists", "\u0627\u067E\u0646\u06CC \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Current learner focus", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u062A\u0648\u062C\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("No active profile", "\u06A9\u0648\u0626\u06CC \u0641\u0639\u0627\u0644 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0646\u06C1\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`Support subject: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "Keep reviewing"}`, `\u0645\u062F\u062F \u0648\u0627\u0644\u0627 \u0645\u0636\u0645\u0648\u0646: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "\u0631\u06CC\u0648\u06CC\u0648 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA"}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Cloud readiness", "\u06A9\u0644\u0627\u0624\u0688 \u062A\u06CC\u0627\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(syncPendingTotal ? joinLocalizedText("Needs push", "\u0627\u067E \u0644\u0648\u0688 \u062F\u0631\u06A9\u0627\u0631", language) : joinLocalizedText("Current", "\u062A\u0627\u0632\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${syncPendingTotal} pending changes \u2022 ${supabaseSyncActivity.dictionaryEntries || 0} dictionary rows`, `${syncPendingTotal} \u0645\u0646\u062A\u0638\u0631 \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u2022 ${supabaseSyncActivity.dictionaryEntries || 0} \u0644\u063A\u062A \u0642\u0637\u0627\u0631`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Classroom-ready summary", "\u06A9\u0644\u0627\u0633 \u0631\u0648\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062E\u0644\u0627\u0635\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Groundwork", "\u0628\u0646\u06CC\u0627\u062F", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText("Profiles, review, dictionary, and cloud merge rules are now prepared for future class and assignment views.", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644\u0632\u060C \u0631\u06CC\u0648\u06CC\u0648\u060C \u0644\u063A\u062A\u060C \u0627\u0648\u0631 \u06A9\u0644\u0627\u0624\u0688 \u0636\u0645 \u0642\u0648\u0627\u0646\u06CC\u0646 \u0627\u0628 \u0622\u0626\u0646\u062F\u06C1 \u06A9\u0644\u0627\u0633 \u0627\u0648\u0631 \u0627\u0633\u0627\u0626\u0646\u0645\u0646\u0679 \u0645\u0646\u0627\u0638\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u06D4", language), language))))) : null
-    )), tab === "home" && selectedSubject && !selectedLesson && !quizActive && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 36 } }, selectedSubject.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "var(--font-ur)" : "inherit" } }, renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "var(--font-ur)" : "inherit" } }, renderLocalizedTextNode(`${ui.grade} ${grade} \u2022 ${selectedSubjectLessons.length} ${ui.lessons}`, language)))), /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenChapterImport, disabled: chapterImportBusy }, renderLocalizedTextNode(
+    )), tab === "home" && selectedSubject && !selectedLesson && !quizActive && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 36 } }, selectedSubject.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "var(--font-ur)" : "inherit" } }, renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "var(--font-ur)" : "inherit" } }, renderLocalizedTextNode(`${ui.grade} ${grade} \u2022 ${selectedSubjectLessons.length} ${ui.lessons}`, language)))), /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, canImportChapters || canImportSubjects ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenChapterImport, disabled: chapterImportBusy }, renderLocalizedTextNode(
       chapterImportBusy ? joinLocalizedText("Importing content...", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import Lessons", "\u0627\u0633\u0628\u0627\u0642 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language),
       language
-    )), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${chapterSelectionMode ? " active" : ""}`, onClick: handleToggleChapterSelectionMode }, renderLocalizedTextNode(
+    )) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${chapterSelectionMode ? " active" : ""}`, onClick: handleToggleChapterSelectionMode }, renderLocalizedTextNode(
       chapterSelectionMode ? joinLocalizedText("Done Selecting", "\u0627\u0646\u062A\u062E\u0627\u0628 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Select Lessons", "\u0627\u0633\u0628\u0627\u0642 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language),
       language
-    )), chapterSelectionMode ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSelectAllSubjectChapters, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Select All", "\u0633\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClearSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Export Selected", "\u0645\u0646\u062A\u062E\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))) : null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportAllSubjectLessons, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportWholeSubject, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "\u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
-      chapterSelectionMode ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06C1\u06CC\u06BA\u06D4`, language) : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "\u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u0628\u0627\u0628 \u067E\u06CC\u06A9 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0627\u06CC\u06A9 \u067E\u06CC\u06A9 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language),
+    )) : null, chapterSelectionMode && canExportContent ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSelectAllSubjectChapters, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Select All", "\u0633\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClearSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Export Selected", "\u0645\u0646\u062A\u062E\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportAllSubjectLessons, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportWholeSubject, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "\u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
+      canImportChapters || canImportSubjects || canExportContent ? chapterSelectionMode && canExportContent ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06C1\u06CC\u06BA\u06D4`, language) : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "\u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u0628\u0627\u0628 \u067E\u06CC\u06A9 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0627\u06CC\u06A9 \u067E\u06CC\u06A9 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language) : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u0627\u0648\u0631 \u0627\u0634\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0648\u0632\u0627\u0631 \u0627\u06CC\u0688\u0645\u0646 \u0633\u0646\u0628\u06BE\u0627\u0644\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0622\u067E \u06A9\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06CC\u06C1 \u0645\u0636\u0645\u0648\u0646 \u0635\u0631\u0641 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0642\u0627\u0628\u0644 \u06C1\u06D2\u06D4", language),
       language
     ))), /* @__PURE__ */ React.createElement("div", { className: "lesson-list", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, selectedSubjectChapterGroups.map((group, index) => {
       const lesson = group.activeLesson;
@@ -14264,10 +14822,10 @@ ${error.message || error}`);
           language
         )))
       );
-    }))), tab === "home" && selectedLesson && !quizActive && !quizDone && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-toolbar", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenChapterImport, disabled: chapterImportBusy }, renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import Content", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handlePublishSelectedChapter, disabled: chapterPublishBusy }, renderLocalizedTextNode(
+    }))), tab === "home" && selectedLesson && !quizActive && !quizDone && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-toolbar", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, canImportChapters || canImportSubjects ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenChapterImport, disabled: chapterImportBusy }, renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import Content", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canPublishContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handlePublishSelectedChapter, disabled: chapterPublishBusy }, renderLocalizedTextNode(
       chapterPublishBusy ? joinLocalizedText("Publishing...", "\u0634\u0627\u0626\u0639 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : String(((_o = selectedLesson == null ? void 0 : selectedLesson.publication) == null ? void 0 : _o.authorUserId) || "").trim() === String(supabaseAuthState.userId || "").trim() ? joinLocalizedText("Update Published Chapter", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0633\u0628\u0642 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language) : ((_p = selectedLesson == null ? void 0 : selectedLesson.publication) == null ? void 0 : _p.contentId) ? joinLocalizedText("Publish Copy", "\u0646\u0642\u0644 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Publish Chapter", "\u0633\u0628\u0642 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language),
       language
-    )), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapter }, renderLocalizedTextNode(joinLocalizedText("Export Chapter", "\u0633\u0628\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))), ((_q = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _q.length) > 1 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-source-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Chapter Source", "\u0633\u0628\u0642 \u0645\u0627\u062E\u0630", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose which copy of this chapter should appear in your subject list and open by default.", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0627\u0633 \u0633\u0628\u0642 \u06A9\u06CC \u06A9\u0648\u0646 \u0633\u06CC \u06A9\u0627\u067E\u06CC \u0622\u067E \u06A9\u06CC \u0645\u0636\u0645\u0648\u0646 \u0641\u06C1\u0631\u0633\u062A \u0645\u06CC\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u0627\u0648\u0631 \u0628\u0637\u0648\u0631\u0650 \u0637\u06D2 \u0634\u062F\u06C1 \u06A9\u06BE\u0644\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-choice-row" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`, onClick: () => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null) }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), selectedLessonChapterGroup.variants.map((variant) => {
+    )) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapter }, renderLocalizedTextNode(joinLocalizedText("Export Chapter", "\u0633\u0628\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null), ((_q = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _q.length) > 1 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-source-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Chapter Source", "\u0633\u0628\u0642 \u0645\u0627\u062E\u0630", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose which copy of this chapter should appear in your subject list and open by default.", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0627\u0633 \u0633\u0628\u0642 \u06A9\u06CC \u06A9\u0648\u0646 \u0633\u06CC \u06A9\u0627\u067E\u06CC \u0622\u067E \u06A9\u06CC \u0645\u0636\u0645\u0648\u0646 \u0641\u06C1\u0631\u0633\u062A \u0645\u06CC\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u0627\u0648\u0631 \u0628\u0637\u0648\u0631\u0650 \u0637\u06D2 \u0634\u062F\u06C1 \u06A9\u06BE\u0644\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-choice-row" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`, onClick: () => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null) }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), selectedLessonChapterGroup.variants.map((variant) => {
       var _a2, _b2, _c2;
       const selectionValue = variant.sourceType === "published" ? { mode: "published", contentId: variant.contentId } : { mode: variant.sourceType };
       const isActiveSelection = variant.sourceType === "published" ? ((_a2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _a2.mode) === "published" && String(((_b2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _b2.contentId) || "").trim() === String(variant.contentId || "").trim() : ((_c2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _c2.mode) === variant.sourceType;
@@ -15181,6 +15739,11 @@ ${error.message || error}`);
         supabasePendingEmail,
         supabasePasswordVisible: supabaseAccountPasswordVisible,
         activeStudentProfileLabel,
+        contentManagerRoleLabel,
+        contentAccessState,
+        contentAccessBusy,
+        contentRoleDraftEmail,
+        contentRoleDraftRole,
         onSupabaseDictionarySyncChange: updateSupabaseDictionarySyncField,
         onSupabaseAccountPasswordChange: setSupabaseAccountPassword,
         onSupabaseAccountUsernameChange: (value) => setSupabaseAccountUsername(sanitizeAccountUsername(value)),
@@ -15197,6 +15760,11 @@ ${error.message || error}`);
         onSupabaseSyncNow: handleSupabaseSyncNow,
         onSupabaseCopySql: handleCopySupabaseSqlHelper,
         onSupabaseSignOut: handleSupabaseSignOut,
+        onContentRoleDraftEmailChange: setContentRoleDraftEmail,
+        onContentRoleDraftRoleChange: setContentRoleDraftRole,
+        onContentDefaultRoleChange: handleContentDefaultRoleChange,
+        onSaveContentRoleAssignment: handleSaveContentRoleAssignment,
+        onDeleteContentRoleAssignment: handleDeleteContentRoleAssignment,
         onResolveDictionaryConflict: handleResolveDictionaryConflict,
         onResolveCloudSyncConflict: handleResolveCloudSyncConflict,
         versionInfo: (_B = (_A = versionManagerRef.current) == null ? void 0 : _A.getVersionInfo) == null ? void 0 : _B.call(_A),
