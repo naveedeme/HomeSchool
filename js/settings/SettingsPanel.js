@@ -576,6 +576,10 @@
       className: "settings-group-card",
       style: {
         marginBottom: 0,
+        minHeight: 132,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
         borderColor: option.id === contentCurrentRole ? "var(--accent)" : "var(--border)",
         boxShadow: option.id === contentCurrentRole ? "0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent)" : "none",
       },
