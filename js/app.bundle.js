@@ -2368,83 +2368,6 @@ create index if not exists content_role_assignments_role_idx
 
 alter table public.content_role_assignments enable row level security;
 
-drop policy if exists "Users can read relevant content role assignments" on public.content_role_assignments;
-drop policy if exists "Admins can insert content role assignments" on public.content_role_assignments;
-drop policy if exists "Admins can update content role assignments" on public.content_role_assignments;
-drop policy if exists "Admins can delete content role assignments" on public.content_role_assignments;
-drop policy if exists "Bootstrap first content admin" on public.content_role_assignments;
-
-create policy "Users can read relevant content role assignments"
-on public.content_role_assignments
-for select
-to authenticated
-using (
-  lower(email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-  or exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
-);
-
-create policy "Bootstrap first content admin"
-on public.content_role_assignments
-for insert
-to authenticated
-with check (
-  role = 'admin'
-  and lower(email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-  and not exists (select 1 from public.content_role_assignments)
-);
-
-create policy "Admins can insert content role assignments"
-on public.content_role_assignments
-for insert
-to authenticated
-with check (
-  exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
-);
-
-create policy "Admins can update content role assignments"
-on public.content_role_assignments
-for update
-to authenticated
-using (
-  exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
-);
-
-create policy "Admins can delete content role assignments"
-on public.content_role_assignments
-for delete
-to authenticated
-using (
-  exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
-);
-
 create table if not exists public.content_access_settings (
   scope text primary key,
   default_role text not null default 'student',
@@ -2454,10 +2377,106 @@ create table if not exists public.content_access_settings (
 
 alter table public.content_access_settings enable row level security;
 
+create or replace function public.current_auth_email()
+returns text
+language sql
+stable
+as $$
+  select lower(coalesce((auth.jwt() ->> 'email'), ''))
+$$;
+
+create or replace function public.content_role_assignment_total()
+returns bigint
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::bigint
+  from public.content_role_assignments
+$$;
+
+create or replace function public.is_content_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.content_role_assignments
+    where lower(email) = public.current_auth_email()
+      and role = 'admin'
+  )
+$$;
+
+create or replace function public.can_publish_content()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.content_role_assignments
+    where lower(email) = public.current_auth_email()
+      and role in ('editor', 'admin')
+  )
+$$;
+
+drop policy if exists "Users can read relevant content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can insert content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can update content role assignments" on public.content_role_assignments;
+drop policy if exists "Admins can delete content role assignments" on public.content_role_assignments;
+drop policy if exists "Bootstrap first content admin" on public.content_role_assignments;
 drop policy if exists "Authenticated users can read content access settings" on public.content_access_settings;
 drop policy if exists "Admins can insert content access settings" on public.content_access_settings;
 drop policy if exists "Admins can update content access settings" on public.content_access_settings;
 drop policy if exists "Admins can delete content access settings" on public.content_access_settings;
+
+drop policy if exists "Users can insert own published chapters" on public.published_chapters;
+drop policy if exists "Users can update own published chapters" on public.published_chapters;
+drop policy if exists "Users can delete own published chapters" on public.published_chapters;
+
+create policy "Users can read relevant content role assignments"
+on public.content_role_assignments
+for select
+to authenticated
+using (
+  lower(email) = public.current_auth_email()
+  or public.is_content_admin()
+);
+
+create policy "Bootstrap first content admin"
+on public.content_role_assignments
+for insert
+to authenticated
+with check (
+  role = 'admin'
+  and lower(email) = public.current_auth_email()
+  and public.content_role_assignment_total() = 0
+);
+
+create policy "Admins can insert content role assignments"
+on public.content_role_assignments
+for insert
+to authenticated
+with check (public.is_content_admin());
+
+create policy "Admins can update content role assignments"
+on public.content_role_assignments
+for update
+to authenticated
+using (public.is_content_admin())
+with check (public.is_content_admin());
+
+create policy "Admins can delete content role assignments"
+on public.content_role_assignments
+for delete
+to authenticated
+using (public.is_content_admin());
 
 create policy "Authenticated users can read content access settings"
 on public.content_access_settings
@@ -2469,47 +2488,50 @@ create policy "Admins can insert content access settings"
 on public.content_access_settings
 for insert
 to authenticated
-with check (
-  exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
-);
+with check (public.is_content_admin());
 
 create policy "Admins can update content access settings"
 on public.content_access_settings
 for update
 to authenticated
-using (
-  exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
-);
+using (public.is_content_admin())
+with check (public.is_content_admin());
 
 create policy "Admins can delete content access settings"
 on public.content_access_settings
 for delete
 to authenticated
+using (public.is_content_admin());
+
+create policy "Users can insert own published chapters"
+on public.published_chapters
+for insert
+to authenticated
+with check (
+  (select auth.uid()) = author_user_id
+  and public.can_publish_content()
+);
+
+create policy "Users can update own published chapters"
+on public.published_chapters
+for update
+to authenticated
 using (
-  exists (
-    select 1
-    from public.content_role_assignments cra
-    where lower(cra.email) = lower(coalesce((auth.jwt() ->> 'email'), ''))
-      and cra.role = 'admin'
-  )
+  (select auth.uid()) = author_user_id
+  and public.can_publish_content()
+)
+with check (
+  (select auth.uid()) = author_user_id
+  and public.can_publish_content()
+);
+
+create policy "Users can delete own published chapters"
+on public.published_chapters
+for delete
+to authenticated
+using (
+  (select auth.uid()) = author_user_id
+  and public.can_publish_content()
 );`;
   function createDefaultSupabaseDictionarySyncSettings() {
     return {
