@@ -2503,6 +2503,7 @@ as $$
       'importChapters', false,
       'importSubjects', false,
       'exportContent', false,
+      'chooseContentSource', false,
       'savePublishedLocally', false,
       'publishContent', false,
       'unpublishContent', false,
@@ -2513,6 +2514,7 @@ as $$
       'importChapters', false,
       'importSubjects', false,
       'exportContent', false,
+      'chooseContentSource', false,
       'savePublishedLocally', false,
       'publishContent', false,
       'unpublishContent', false,
@@ -2523,6 +2525,7 @@ as $$
       'importChapters', true,
       'importSubjects', false,
       'exportContent', true,
+      'chooseContentSource', true,
       'savePublishedLocally', true,
       'publishContent', false,
       'unpublishContent', false,
@@ -2533,6 +2536,7 @@ as $$
       'importChapters', true,
       'importSubjects', true,
       'exportContent', true,
+      'chooseContentSource', true,
       'savePublishedLocally', true,
       'publishContent', true,
       'unpublishContent', true,
@@ -2543,6 +2547,7 @@ as $$
       'importChapters', true,
       'importSubjects', true,
       'exportContent', true,
+      'chooseContentSource', true,
       'savePublishedLocally', true,
       'publishContent', true,
       'unpublishContent', true,
@@ -2806,6 +2811,7 @@ const CONTENT_PERMISSION_KEYS = [
   "importChapters",
   "importSubjects",
   "exportContent",
+  "chooseContentSource",
   "savePublishedLocally",
   "publishContent",
   "unpublishContent",
@@ -2824,6 +2830,7 @@ function createDefaultContentRoleCapabilities() {
       importChapters: false,
       importSubjects: false,
       exportContent: false,
+      chooseContentSource: false,
       savePublishedLocally: false,
       publishContent: false,
       unpublishContent: false,
@@ -2834,6 +2841,7 @@ function createDefaultContentRoleCapabilities() {
       importChapters: false,
       importSubjects: false,
       exportContent: false,
+      chooseContentSource: false,
       savePublishedLocally: false,
       publishContent: false,
       unpublishContent: false,
@@ -2844,6 +2852,7 @@ function createDefaultContentRoleCapabilities() {
       importChapters: true,
       importSubjects: false,
       exportContent: true,
+      chooseContentSource: true,
       savePublishedLocally: true,
       publishContent: false,
       unpublishContent: false,
@@ -2854,6 +2863,7 @@ function createDefaultContentRoleCapabilities() {
       importChapters: true,
       importSubjects: true,
       exportContent: true,
+      chooseContentSource: true,
       savePublishedLocally: true,
       publishContent: true,
       unpublishContent: true,
@@ -2864,6 +2874,7 @@ function createDefaultContentRoleCapabilities() {
       importChapters: true,
       importSubjects: true,
       exportContent: true,
+      chooseContentSource: true,
       savePublishedLocally: true,
       publishContent: true,
       unpublishContent: true,
@@ -8902,6 +8913,7 @@ function HomeschoolApp() {
   const canImportChapters = Boolean(contentRoleCapabilities.importChapters);
   const canImportSubjects = Boolean(contentRoleCapabilities.importSubjects);
   const canExportContent = Boolean(contentRoleCapabilities.exportContent);
+  const canChooseContentSource = Boolean(contentRoleCapabilities.chooseContentSource);
   const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
   const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
   const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
@@ -9795,6 +9807,15 @@ function HomeschoolApp() {
     showAppToast(joinLocalizedText("Subject exported", "مضمون برآمد ہو گیا", language), "copy");
   }, [canExportContent, grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
   const updateChapterSourceSelection = useCallback((subjectId, targetGrade, canonicalLessonKey, nextSelection = null, options = {}) => {
+    if (!canChooseContentSource && !options.force) {
+      if (!options.silent) {
+        showAppToast(
+          joinLocalizedText("Only teachers and above can change chapter source selection.", "صرف استاد اور اس سے اوپر والے کردار سبق کا ماخذ تبدیل کر سکتے ہیں۔", language),
+          "alert",
+        );
+      }
+      return;
+    }
     const preferenceKey = buildChapterSourcePreferenceKey(subjectId, targetGrade, canonicalLessonKey);
     const normalizedSelection = nextSelection && typeof nextSelection === "object"
       ? {
@@ -9820,7 +9841,7 @@ function HomeschoolApp() {
         "check",
       );
     }
-  }, [language, showAppToast]);
+  }, [canChooseContentSource, language, showAppToast]);
   const handleOpenChapterVariant = useCallback((subjectId, lesson) => {
     const subject = subjectLookup[subjectId] || null;
     if (!subject || !lesson) return;
@@ -9888,7 +9909,7 @@ function HomeschoolApp() {
     }
     try {
       await window.HomeSchoolDB.deleteCustomChapter(group.subjectId, group.grade, group.canonicalLessonKey);
-      updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true });
+    updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
       await refreshCustomContentState();
       showAppToast(joinLocalizedText("Local chapter removed", "مقامی سبق ہٹا دیا گیا", language), "check");
     } catch (error) {
@@ -11886,7 +11907,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       if (error) throw error;
       if ((chapterSourcePreferences[group.preferenceKey]?.mode || "auto") === "published"
         && String(chapterSourcePreferences[group.preferenceKey]?.contentId || "").trim() === String(variant.contentId || "").trim()) {
-        updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true });
+        updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
       }
       await refreshPublishedContentState();
       showAppToast(joinLocalizedText("Published chapter removed", "شائع شدہ سبق ہٹا دیا گیا", language), "check");
@@ -18010,7 +18031,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <span className="chapter-badge active">{renderLocalizedTextNode(joinLocalizedText("Active", "فعال", language), language)}</span>
                 </div>
                 <div className="chapter-choice-row">
-                  <button type="button" className={`chapter-source-choice${!chapterSourcePreferences[group.preferenceKey] ? " active" : ""}`} onClick={() => updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null)}>
+                  <button type="button" className={`chapter-source-choice${!chapterSourcePreferences[group.preferenceKey] ? " active" : ""}`} onClick={() => updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null)} disabled={!canChooseContentSource}>
                     {renderLocalizedTextNode(joinLocalizedText("Auto", "خودکار", language), language)}
                   </button>
                   {group.variants.map((variant) => {
@@ -18025,6 +18046,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                         key={`${group.preferenceKey}_${variant.sourceKey}`}
                         type="button"
                         className={`chapter-source-choice${isActiveSelection ? " active" : ""}`}
+                        disabled={!canChooseContentSource}
                         onClick={() => updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, selectionValue)}
                       >
                         {renderLocalizedTextNode(getChapterVariantDisplayLabel(variant), language)}
@@ -18032,6 +18054,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     );
                   })}
                 </div>
+                {!canChooseContentSource ? (
+                  <div className="goal-progress-meta" style={{ marginBottom: 12 }}>
+                    {renderLocalizedTextNode(joinLocalizedText("Teachers and above can choose which chapter copy stays active.", "کون سی باب کی کاپی فعال رہے گی، یہ استاد اور اس سے اوپر والے کردار منتخب کر سکتے ہیں۔", language), language)}
+                  </div>
+                ) : null}
                 <div className="result-actions chapter-card-actions">
                   <button type="button" className="ghost-cta" onClick={() => handleOpenChapterVariant(group.subjectId, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Open", "کھولیں", language), language)}</button>
                   {canExportContent ? <button type="button" className="ghost-cta" onClick={() => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Export", "برآمد کریں", language), language)}</button> : null}
@@ -18092,13 +18119,20 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   {renderLocalizedTextNode(joinLocalizedText(`Canonical key: ${item.group.canonicalLessonKey}`, `اصل کلید: ${item.group.canonicalLessonKey}`, language), language)}
                 </div>
                 <div className="result-actions chapter-card-actions">
-                  <button type="button" className="ghost-cta" onClick={() => {
-                    updateChapterSourceSelection(item.group.subjectId, item.group.grade, item.group.canonicalLessonKey, { mode: "published", contentId: item.contentId });
-                    handleOpenChapterVariant(item.group.subjectId, item.lesson);
-                  }}>{renderLocalizedTextNode(joinLocalizedText("Use this copy", "یہ کاپی استعمال کریں", language), language)}</button>
+                  {canChooseContentSource ? (
+                    <button type="button" className="ghost-cta" onClick={() => {
+                      updateChapterSourceSelection(item.group.subjectId, item.group.grade, item.group.canonicalLessonKey, { mode: "published", contentId: item.contentId });
+                      handleOpenChapterVariant(item.group.subjectId, item.lesson);
+                    }}>{renderLocalizedTextNode(joinLocalizedText("Use this copy", "یہ کاپی استعمال کریں", language), language)}</button>
+                  ) : null}
                   {canSavePublishedLocally ? <button type="button" className="ghost-cta" onClick={() => handleSavePublishedChapterLocally(item.group.subjectId, item.group.grade, item.lesson)}>{renderLocalizedTextNode(joinLocalizedText("Save locally", "مقامی محفوظ کریں", language), language)}</button> : null}
                   <button type="button" className="ghost-cta" onClick={() => handleOpenChapterVariant(item.group.subjectId, item.lesson)}>{renderLocalizedTextNode(joinLocalizedText("Preview", "جائزہ", language), language)}</button>
                 </div>
+                {!canChooseContentSource ? (
+                  <div className="goal-progress-meta" style={{ marginTop: 10 }}>
+                    {renderLocalizedTextNode(joinLocalizedText("Students can preview published copies, but switching the active copy is reserved for teachers and above.", "طالب علم شائع شدہ کاپیاں دیکھ سکتے ہیں، مگر فعال کاپی بدلنا صرف استاد اور اس سے اوپر والوں کے لیے ہے۔", language), language)}
+                  </div>
+                ) : null}
               </div>
             ))
           ) : (
@@ -18471,11 +18505,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </div>
                 <span className="goal-progress-badge">{renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language)}</span>
               </div>
-              <div className="chapter-choice-row">
-                <button type="button" className={`chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`} onClick={() => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null)}>
-                  {renderLocalizedTextNode(joinLocalizedText("Auto", "خودکار", language), language)}
-                </button>
-                {selectedLessonChapterGroup.variants.map((variant) => {
+            <div className="chapter-choice-row">
+              <button type="button" className={`chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`} onClick={() => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null)} disabled={!canChooseContentSource}>
+                {renderLocalizedTextNode(joinLocalizedText("Auto", "خودکار", language), language)}
+              </button>
+              {selectedLessonChapterGroup.variants.map((variant) => {
                   const selectionValue = variant.sourceType === "published"
                     ? { mode: "published", contentId: variant.contentId }
                     : { mode: variant.sourceType };
@@ -18484,18 +18518,24 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     : chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]?.mode === variant.sourceType;
                   return (
                     <button
-                      key={`${selectedLessonChapterGroup.preferenceKey}_${variant.sourceKey}`}
-                      type="button"
-                      className={`chapter-source-choice${isActiveSelection ? " active" : ""}`}
-                      onClick={() => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, selectionValue)}
-                    >
-                      {renderLocalizedTextNode(getChapterVariantDisplayLabel(variant), language)}
-                    </button>
-                  );
-                })}
-              </div>
+                    key={`${selectedLessonChapterGroup.preferenceKey}_${variant.sourceKey}`}
+                    type="button"
+                    className={`chapter-source-choice${isActiveSelection ? " active" : ""}`}
+                    disabled={!canChooseContentSource}
+                    onClick={() => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, selectionValue)}
+                  >
+                    {renderLocalizedTextNode(getChapterVariantDisplayLabel(variant), language)}
+                  </button>
+                );
+              })}
             </div>
-          ) : null}
+            {!canChooseContentSource ? (
+              <div className="goal-progress-meta" style={{ marginTop: 10 }}>
+                {renderLocalizedTextNode(joinLocalizedText("This lesson is read-only for students. Teachers and above can choose the active chapter copy.", "یہ سبق طالب علم کے لیے صرف پڑھنے کے قابل ہے۔ فعال باب کی کاپی استاد اور اس سے اوپر والے منتخب کر سکتے ہیں۔", language), language)}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         </>
       )}
 
