@@ -10793,35 +10793,39 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       const fetchRoleRows = async (emailFilter = null, options = {}) => {
         const orderByUpdated = Boolean(options.orderByUpdated);
         const limit = Number(options.limit || 0) || 0;
-        let result = await client
+        let query = client
           .from(SUPABASE_CONTENT_ROLE_TABLE)
           .select("email, role, permissions_override, updated_at, updated_by");
-        if (emailFilter) result = result.eq("email", emailFilter);
-        if (orderByUpdated) result = result.order("updated_at", { ascending: false });
-        if (limit > 0) result = result.limit(limit);
+        if (emailFilter) query = query.eq("email", emailFilter);
+        if (orderByUpdated) query = query.order("updated_at", { ascending: false });
+        if (limit > 0) query = query.limit(limit);
+        let result = await query;
         if (result.error && String(result.error.message || "").toLowerCase().includes("permissions_override")) {
-          result = await client
+          query = client
             .from(SUPABASE_CONTENT_ROLE_TABLE)
             .select("email, role, updated_at, updated_by");
-          if (emailFilter) result = result.eq("email", emailFilter);
-          if (orderByUpdated) result = result.order("updated_at", { ascending: false });
-          if (limit > 0) result = result.limit(limit);
+          if (emailFilter) query = query.eq("email", emailFilter);
+          if (orderByUpdated) query = query.order("updated_at", { ascending: false });
+          if (limit > 0) query = query.limit(limit);
+          result = await query;
         }
         if (result.error) throw result.error;
         return Array.isArray(result.data) ? result.data.map((row) => normalizeContentRoleAssignmentRecord(row)).filter(Boolean) : [];
       };
       const fetchContentSettingsRow = async () => {
-        let result = await client
+        let query = client
           .from(SUPABASE_CONTENT_SETTINGS_TABLE)
           .select("scope, default_role, role_permissions, updated_at, updated_by")
           .eq("scope", "global")
           .limit(1);
+        let result = await query;
         if (result.error && String(result.error.message || "").toLowerCase().includes("role_permissions")) {
-          result = await client
+          query = client
             .from(SUPABASE_CONTENT_SETTINGS_TABLE)
             .select("scope, default_role, updated_at, updated_by")
             .eq("scope", "global")
             .limit(1);
+          result = await query;
         }
         if (result.error) throw result.error;
         return Array.isArray(result.data) ? result.data[0] || null : null;
