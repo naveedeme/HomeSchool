@@ -3302,6 +3302,28 @@ as $$
   select lower(coalesce((auth.jwt() ->> 'email'), ''))
 $$;
 
+create or replace function public.jwt_content_role()
+returns text
+language sql
+stable
+as $$
+  with raw_role as (
+    select lower(coalesce(
+      nullif(auth.jwt() -> 'app_metadata' ->> 'homeschoolRole', ''),
+      nullif(auth.jwt() -> 'app_metadata' ->> 'contentRole', ''),
+      nullif(auth.jwt() -> 'user_metadata' ->> 'homeschoolRole', ''),
+      nullif(auth.jwt() -> 'user_metadata' ->> 'contentRole', ''),
+      nullif(auth.jwt() -> 'user_metadata' ->> 'role', ''),
+      ''
+    )) as role
+  )
+  select case
+    when role in ('student', 'parent', 'teacher', 'principal', 'school_owner', 'editor', 'admin') then role
+    else null
+  end
+  from raw_role
+$$;
+
 create or replace function public.content_role_assignment_total()
 returns bigint
 language sql
@@ -3477,6 +3499,7 @@ as $$
   )
   select lower(coalesce(
     (select role from assignment),
+    (select public.jwt_content_role()),
     (select default_role from settings),
     'student'
   ))
@@ -3507,7 +3530,7 @@ as $$
   ),
   resolved as (
     select
-      lower(coalesce((select role from assignment), (select default_role from settings), 'student')) as role,
+      lower(coalesce((select role from assignment), public.jwt_content_role(), (select default_role from settings), 'student')) as role,
       coalesce((select role_permissions from settings), public.default_content_permission_matrix()) as role_permissions,
       coalesce((select permissions_override from assignment), '{}'::jsonb) as permissions_override
   )
@@ -4414,8 +4437,10 @@ using (
     return `${location.origin}${location.pathname}${location.search}`;
   }
   function getSupabaseUserRole(user) {
-    var _a, _b;
-    const role = String(((_a = user == null ? void 0 : user.app_metadata) == null ? void 0 : _a.role) || ((_b = user == null ? void 0 : user.user_metadata) == null ? void 0 : _b.role) || "student").trim().toLowerCase();
+    var _a, _b, _c, _d, _e, _f;
+    const role = String(
+      ((_a = user == null ? void 0 : user.app_metadata) == null ? void 0 : _a.homeschoolRole) || ((_b = user == null ? void 0 : user.app_metadata) == null ? void 0 : _b.contentRole) || ((_c = user == null ? void 0 : user.app_metadata) == null ? void 0 : _c.role) || ((_d = user == null ? void 0 : user.user_metadata) == null ? void 0 : _d.homeschoolRole) || ((_e = user == null ? void 0 : user.user_metadata) == null ? void 0 : _e.contentRole) || ((_f = user == null ? void 0 : user.user_metadata) == null ? void 0 : _f.role) || "student"
+    ).trim().toLowerCase();
     return role || "student";
   }
   const CONTENT_MANAGER_ROLES = ["student", "parent", "teacher", "principal", "school_owner", "editor", "admin"];
@@ -4584,12 +4609,18 @@ using (
   function normalizeContentRoleAssignmentRecord(raw) {
     if (!raw || !raw.email) return null;
     return {
+      emailKey: String(raw.email || "").trim(),
       email: String(raw.email || "").trim().toLowerCase(),
       role: normalizeContentManagerRole(raw.role),
       updated_at: raw.updated_at || "",
       updated_by: raw.updated_by || "",
       permissions_override: normalizeContentPermissionOverride(raw.permissions_override)
     };
+  }
+  function findContentRoleAssignment(assignments, email) {
+    const safeEmail = String(email || "").trim().toLowerCase();
+    if (!safeEmail) return null;
+    return (Array.isArray(assignments) ? assignments : []).find((entry) => String((entry == null ? void 0 : entry.email) || "").trim().toLowerCase() === safeEmail) || null;
   }
   function getContentManagerRoleLabel(role, language = "en") {
     const safeRole = normalizeContentManagerRole(role);
@@ -11527,16 +11558,16 @@ ${marker} `);
           return nextState2;
         }
         const fetchRoleRows = async (emailFilter = null, options = {}) => {
-          const orderByUpdated = Boolean(options.orderByUpdated);
+          const orderByUpdated = Boolean(options.orderByUpdated || emailFilter);
           const limit = Number(options.limit || 0) || 0;
           let query = client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, permissions_override, updated_at, updated_by");
-          if (emailFilter) query = query.eq("email", emailFilter);
+          if (emailFilter) query = query.ilike("email", emailFilter);
           if (orderByUpdated) query = query.order("updated_at", { ascending: false });
           if (limit > 0) query = query.limit(limit);
           let result = await query;
           if (result.error && String(result.error.message || "").toLowerCase().includes("permissions_override")) {
             query = client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by");
-            if (emailFilter) query = query.eq("email", emailFilter);
+            if (emailFilter) query = query.ilike("email", emailFilter);
             if (orderByUpdated) query = query.order("updated_at", { ascending: false });
             if (limit > 0) query = query.limit(limit);
             result = await query;
@@ -11554,6 +11585,7 @@ ${marker} `);
           if (result.error) throw result.error;
           return Array.isArray(result.data) ? result.data[0] || null : null;
         };
+        const authRole = normalizeContentManagerRole(getSupabaseUserRole(session.user));
         let roleRows = [];
         roleRows = await fetchRoleRows(userEmail, { limit: 1 });
         if (!roleRows.length) {
@@ -11587,13 +11619,29 @@ ${marker} `);
                 updated_by: session.user.id
               })];
             }
+          } else if (authRole !== "student") {
+            const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+            try {
+              const selfUpsert = await client.from(SUPABASE_CONTENT_ROLE_TABLE).upsert({
+                email: userEmail,
+                role: authRole,
+                permissions_override: null,
+                updated_by: session.user.id,
+                updated_at: nowIso
+              }, { onConflict: "email" });
+              if (!selfUpsert.error) {
+                roleRows = await fetchRoleRows(userEmail, { limit: 1 });
+              }
+            } catch (error) {
+              console.log("Unable to self-heal content role assignment:", error);
+            }
           }
         }
         const settingsRow = await fetchContentSettingsRow();
         const defaultRole = normalizeContentManagerRole((settingsRow == null ? void 0 : settingsRow.default_role) || "student");
         const rolePermissions = normalizeContentPermissionMatrix((settingsRow == null ? void 0 : settingsRow.role_permissions) || {});
         const ownAssignment = roleRows[0] || null;
-        const currentRole = normalizeContentManagerRole((ownAssignment == null ? void 0 : ownAssignment.role) || defaultRole);
+        const currentRole = normalizeContentManagerRole((ownAssignment == null ? void 0 : ownAssignment.role) || (authRole !== "student" ? authRole : defaultRole));
         const currentPermissionsOverride = normalizeContentPermissionOverride(ownAssignment == null ? void 0 : ownAssignment.permissions_override);
         const currentRoleCapabilities = getContentRoleCapabilities(currentRole, rolePermissions, currentPermissionsOverride);
         let assignments = roleRows;
@@ -12140,7 +12188,7 @@ ${marker} `);
         return;
       }
       const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
-      const currentEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === nextEmail) || null;
+      const currentEntry = findContentRoleAssignment(existingAssignments, nextEmail);
       const permissionsOverride = normalizeContentPermissionOverride(overridePermissions != null ? overridePermissions : currentEntry == null ? void 0 : currentEntry.permissions_override);
       const currentMatrix = normalizeContentPermissionMatrix(contentAccessState.rolePermissions);
       const currentManagerCount = countAssignedContentManagers(existingAssignments, currentMatrix);
@@ -12155,7 +12203,7 @@ ${marker} `);
         const client = ensureSupabaseClient();
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
         const { error } = await client.from(SUPABASE_CONTENT_ROLE_TABLE).upsert({
-          email: nextEmail,
+          email: (currentEntry == null ? void 0 : currentEntry.emailKey) || nextEmail,
           role: nextRole,
           permissions_override: Object.keys(permissionsOverride).length ? permissionsOverride : null,
           updated_by: supabaseAuthState.userId,
@@ -12182,7 +12230,7 @@ ${marker} `);
         return;
       }
       const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
-      const targetEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === safeEmail) || null;
+      const targetEntry = findContentRoleAssignment(existingAssignments, safeEmail);
       const currentMatrix = normalizeContentPermissionMatrix(contentAccessState.rolePermissions);
       const currentManagerCount = countAssignedContentManagers(existingAssignments, currentMatrix);
       const targetCapabilities = targetEntry ? getContentRoleCapabilities(targetEntry.role, currentMatrix, targetEntry.permissions_override) : null;
@@ -12193,7 +12241,7 @@ ${marker} `);
       setContentAccessBusy(true);
       try {
         const client = ensureSupabaseClient();
-        const { error } = await client.from(SUPABASE_CONTENT_ROLE_TABLE).delete().eq("email", safeEmail);
+        const { error } = await client.from(SUPABASE_CONTENT_ROLE_TABLE).delete().ilike("email", (targetEntry == null ? void 0 : targetEntry.emailKey) || safeEmail);
         if (error) throw error;
         await refreshContentAccessState();
         showAppToast(joinLocalizedText("Content role removed", "\u0645\u0648\u0627\u062F \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u06C1\u0679\u0627 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
@@ -12251,7 +12299,7 @@ ${marker} `);
       const safePermission = String(permissionKey || "").trim();
       if (!safeEmail || !CONTENT_PERMISSION_KEYS.includes(safePermission)) return;
       const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
-      const targetEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === safeEmail) || null;
+      const targetEntry = findContentRoleAssignment(existingAssignments, safeEmail);
       if (!targetEntry) {
         showAppToast(joinLocalizedText("Save a role for this email first.", "\u067E\u06C1\u0644\u06D2 \u0627\u0633 \u0627\u06CC \u0645\u06CC\u0644 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -12277,7 +12325,7 @@ ${marker} `);
       const safeEmail = String(email || "").trim().toLowerCase();
       if (!safeEmail) return;
       const existingAssignments = Array.isArray(contentAccessState.assignments) ? contentAccessState.assignments : [];
-      const targetEntry = existingAssignments.find((entry) => String(entry.email || "").trim().toLowerCase() === safeEmail) || null;
+      const targetEntry = findContentRoleAssignment(existingAssignments, safeEmail);
       if (!targetEntry) return;
       await handleSaveContentRoleAssignment(safeEmail, targetEntry.role, {});
     }, [contentAccessState.assignments, handleSaveContentRoleAssignment]);
