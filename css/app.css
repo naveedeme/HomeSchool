@@ -427,6 +427,8 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .settings-disclosure.open[data-transition-mode="zoom"] .settings-disclosure-body{transform:scale(1)}
 .settings-group-card{padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,var(--border) 92%,transparent);background:color-mix(in srgb,var(--bg-elevated) 70%,transparent);margin-top:12px}
 .settings-group-card:first-child{margin-top:0}
+.settings-compact-grid{display:grid;align-items:stretch}
+.settings-compact-card{padding:14px;border-radius:14px;border:1px solid color-mix(in srgb,var(--border) 92%,transparent);background:color-mix(in srgb,var(--bg-elevated) 70%,transparent);margin:0;align-self:stretch;box-sizing:border-box}
 .settings-group-title{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.02em;margin-bottom:10px}
 .settings-group-body{display:block}
 .settings-group-body > *:last-child{margin-bottom:0!important}
