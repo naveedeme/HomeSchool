@@ -323,12 +323,249 @@ function buildChapterAssignmentSlotKey(subject, grade, canonicalLessonKey, targe
   return `${buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey)}::${safeTargetType}::${safeStudentEmail}`;
 }
 
+function toIsoDateString(value = Date.now()) {
+  const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setHours(0, 0, 0, 0);
+  return date.toISOString().slice(0, 10);
+}
+
+function parseIsoDateValue(value) {
+  const safe = String(value || "").trim();
+  if (!safe) return null;
+  const date = new Date(`${safe}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getWeekStartDate(value = Date.now()) {
+  const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + offset);
+  return date;
+}
+
+function getWeekDates(value = Date.now()) {
+  const weekStart = getWeekStartDate(value);
+  if (!weekStart) return [];
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(weekStart.getTime());
+    date.setDate(weekStart.getDate() + index);
+    return date;
+  });
+}
+
+function getSaturdayDate(value = Date.now()) {
+  const weekDates = getWeekDates(value);
+  return weekDates[5] || null;
+}
+
+function getAcademicWeekNumber(value = Date.now(), yearStartDate = null) {
+  const currentWeekStart = getWeekStartDate(value);
+  const academicStart = getWeekStartDate(yearStartDate || new Date(new Date(value).getFullYear(), 0, 1));
+  if (!currentWeekStart || !academicStart) return 1;
+  const diffMs = currentWeekStart.getTime() - academicStart.getTime();
+  return Math.max(1, Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1);
+}
+
+function splitBalanced(items = [], groups = 1) {
+  const safeItems = Array.isArray(items) ? items.slice() : [];
+  const safeGroups = Math.max(1, Number(groups) || 1);
+  if (!safeItems.length) return Array.from({ length: safeGroups }, () => []);
+  const buckets = Array.from({ length: safeGroups }, () => []);
+  let cursor = 0;
+  safeItems.forEach((item) => {
+    buckets[cursor].push(item);
+    cursor = (cursor + 1) % safeGroups;
+  });
+  return buckets;
+}
+
+function normalizeLessonWorkUnit(raw, lesson = {}, index = 0) {
+  if (raw == null) return null;
+  if (typeof raw === "string") {
+    const text = raw.trim();
+    if (!text) return null;
+    return {
+      key: `${getLessonKeyValue(lesson) || lesson.id || "lesson"}_unit_${index}`,
+      title: text.length > 80 ? `${text.slice(0, 77)}...` : text,
+      detail: text,
+      kind: "study",
+    };
+  }
+  if (typeof raw !== "object") return null;
+  const title = String(raw.title || raw.heading || raw.name || raw.label || raw.question || raw.prompt || raw.en || raw.ur || raw.text || "").trim();
+  const detail = String(raw.content || raw.text || raw.paragraph || raw.explanation || raw.question || raw.prompt || raw.ur || raw.en || title).trim();
+  if (!title && !detail) return null;
+  return {
+    key: String(raw.key || raw.id || `${getLessonKeyValue(lesson) || lesson.id || "lesson"}_unit_${index}`).trim(),
+    title: title || detail,
+    detail: detail || title,
+    kind: Array.isArray(raw.words) || Array.isArray(raw.examples) ? "practice" : "study",
+  };
+}
+
+function extractLessonWorkUnits(lesson = {}, quizQuestions = []) {
+  const units = [];
+  const pushCollection = (collection) => {
+    if (!Array.isArray(collection)) return;
+    collection.forEach((entry, index) => {
+      const normalized = normalizeLessonWorkUnit(entry, lesson, units.length + index);
+      if (normalized) units.push(normalized);
+    });
+  };
+  [
+    lesson.sections,
+    lesson.subsections,
+    lesson.subLessons,
+    lesson.days,
+    lesson.mathSubs,
+    lesson.examples,
+    lesson.practiceItems,
+    lesson.items,
+    lesson.topics,
+    lesson.paragraphs,
+    lesson.words,
+  ].forEach(pushCollection);
+  if (!units.length && typeof lesson.content === "string" && lesson.content.trim()) {
+    const paragraphs = lesson.content.split(/\n+/).map((entry) => entry.trim()).filter(Boolean);
+    (paragraphs.length ? paragraphs : [lesson.content]).forEach((entry, index) => {
+      const normalized = normalizeLessonWorkUnit(entry, lesson, index);
+      if (normalized) units.push(normalized);
+    });
+  }
+  if (!units.length && Array.isArray(quizQuestions) && quizQuestions.length) {
+    quizQuestions.slice(0, 5).forEach((question, index) => {
+      const normalized = normalizeLessonWorkUnit({
+        title: question?.q || question?.prompt || question?.question || "",
+        text: question?.q || question?.prompt || question?.question || "",
+      }, lesson, index);
+      if (normalized) units.push(normalized);
+    });
+  }
+  if (!units.length) {
+    units.push({
+      key: `${getLessonKeyValue(lesson) || lesson.id || "lesson"}_overview`,
+      title: String(lesson.title || lesson.key || "Lesson Overview").trim(),
+      detail: String(lesson.content || lesson.title || "").trim(),
+      kind: "study",
+    });
+  }
+  const seen = new Set();
+  return units.filter((unit) => {
+    const key = String(unit.key || unit.title || "").trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5) {
+  const safeStudyDays = Math.max(1, Number(studyDays) || 5);
+  const safeUnits = Array.isArray(units) ? units.filter(Boolean) : [];
+  if (!safeUnits.length) return Array.from({ length: safeStudyDays }, () => []);
+  if (safeUnits.length >= safeStudyDays) {
+    const buckets = Array.from({ length: safeStudyDays }, () => []);
+    let startIndex = 0;
+    for (let index = 0; index < safeStudyDays; index += 1) {
+      const remainingItems = safeUnits.length - startIndex;
+      const remainingBuckets = safeStudyDays - index;
+      const sliceSize = Math.max(1, Math.ceil(remainingItems / remainingBuckets));
+      buckets[index] = safeUnits.slice(startIndex, startIndex + sliceSize);
+      startIndex += sliceSize;
+    }
+    return buckets;
+  }
+  const buckets = Array.from({ length: safeStudyDays }, () => []);
+  safeUnits.forEach((unit, index) => {
+    buckets[index].push(unit);
+  });
+  const remainingDayCount = safeStudyDays - safeUnits.length;
+  if (remainingDayCount > 0) {
+    const reviewChunks = splitBalanced(safeUnits, remainingDayCount);
+    reviewChunks.forEach((chunk, index) => {
+      buckets[safeUnits.length + index] = chunk.map((unit) => ({
+        ...unit,
+        key: `${unit.key}_review_${index}`,
+        kind: "review",
+      }));
+    });
+  }
+  return buckets;
+}
+
 function createEmptyContentRelationshipState() {
   return {
     loaded: false,
+    schools: [],
+    memberships: [],
+    parentLinks: [],
     links: [],
     assignments: [],
+    diaryEntries: [],
+    diaryCompletions: [],
+    testTemplates: [],
+    weeklyTestAssignments: [],
+    weeklyTestResults: [],
     lastUpdatedAt: 0,
+  };
+}
+
+function normalizeSchoolRecord(raw) {
+  const schoolId = String(raw?.school_id || raw?.schoolId || "").trim();
+  if (!schoolId) return null;
+  return {
+    schoolId,
+    schoolName: String(raw?.school_name || raw?.schoolName || "").trim() || schoolId,
+    ownerEmail: String(raw?.owner_email || raw?.ownerEmail || "").trim().toLowerCase(),
+    principalEmail: String(raw?.principal_email || raw?.principalEmail || "").trim().toLowerCase(),
+    yearStartDate: String(raw?.year_start_date || raw?.yearStartDate || "").trim(),
+    weekAccumulationMode: String(raw?.week_accumulation_mode || raw?.weekAccumulationMode || "rolling").trim().toLowerCase() || "rolling",
+    weekAccumulationValue: Math.max(1, Number(raw?.week_accumulation_value || raw?.weekAccumulationValue) || 8),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeSchoolMembershipRecord(raw) {
+  const membershipId = String(raw?.membership_id || raw?.membershipId || "").trim();
+  const schoolId = String(raw?.school_id || raw?.schoolId || "").trim();
+  const userEmail = String(raw?.user_email || raw?.userEmail || "").trim().toLowerCase();
+  if (!membershipId || !schoolId || !userEmail) return null;
+  return {
+    membershipId,
+    schoolId,
+    userEmail,
+    role: normalizeContentManagerRole(raw?.role || "student"),
+    gradeScope: Array.isArray(raw?.grade_scope || raw?.gradeScope)
+      ? (raw.grade_scope || raw.gradeScope).map((value) => Number(value)).filter((value) => Number.isFinite(value))
+      : [],
+    linkedByEmail: String(raw?.linked_by_email || raw?.linkedByEmail || "").trim().toLowerCase(),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeParentStudentLinkRecord(raw) {
+  const linkId = String(raw?.link_id || raw?.linkId || "").trim();
+  const parentEmail = String(raw?.parent_email || raw?.parentEmail || "").trim().toLowerCase();
+  const studentEmail = String(raw?.student_email || raw?.studentEmail || "").trim().toLowerCase();
+  if (!linkId || !parentEmail || !studentEmail) return null;
+  return {
+    linkId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    parentEmail,
+    studentEmail,
+    relationshipLabel: String(raw?.relationship_label || raw?.relationshipLabel || "").trim(),
+    familyIdentifier: String(raw?.family_identifier || raw?.familyIdentifier || "").trim(),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    linkedByEmail: String(raw?.linked_by_email || raw?.linkedByEmail || "").trim().toLowerCase(),
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
   };
 }
 
@@ -339,6 +576,7 @@ function normalizeTeacherStudentLinkRecord(raw) {
   if (!linkId || !teacherEmail || !studentEmail) return null;
   return {
     linkId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
     teacherUserId: String(raw?.teacher_user_id || raw?.teacherUserId || "").trim(),
     teacherEmail,
     studentEmail,
@@ -363,6 +601,7 @@ function normalizeChapterAssignmentRecord(raw) {
   });
   return {
     assignmentId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
     assignedByUserId: String(raw?.assigned_by_user_id || raw?.assignedByUserId || "").trim(),
     assignedByEmail: String(raw?.assigned_by_email || raw?.assignedByEmail || "").trim().toLowerCase(),
     targetType,
@@ -376,6 +615,531 @@ function normalizeChapterAssignmentRecord(raw) {
     createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
     updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
   };
+}
+
+function normalizeDiaryEntryRecord(raw) {
+  const diaryId = String(raw?.diary_id || raw?.diaryId || "").trim();
+  const subject = String(raw?.subject || "").trim();
+  const targetDate = String(raw?.target_date || raw?.targetDate || "").trim();
+  if (!diaryId || !subject || !targetDate) return null;
+  return {
+    diaryId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    teacherEmail: String(raw?.teacher_email || raw?.teacherEmail || "").trim().toLowerCase(),
+    targetType: String(raw?.target_type || raw?.targetType || "grade").trim().toLowerCase() === "student" ? "student" : "grade",
+    targetGrade: Number(raw?.target_grade || raw?.targetGrade) || null,
+    targetStudentEmail: String(raw?.target_student_email || raw?.targetStudentEmail || "").trim().toLowerCase(),
+    targetDate,
+    subject,
+    lessonKey: resolveCustomChapterLessonKey({ lessonKey: raw?.lesson_key || raw?.lessonKey || "" }),
+    contentId: String(raw?.content_id || raw?.contentId || "").trim(),
+    note: String(raw?.note || "").trim(),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeDiaryCompletionRecord(raw) {
+  const completionId = String(raw?.completion_id || raw?.completionId || "").trim();
+  const studentEmail = String(raw?.student_email || raw?.studentEmail || "").trim().toLowerCase();
+  const targetDate = String(raw?.target_date || raw?.targetDate || "").trim();
+  const taskKind = String(raw?.task_kind || raw?.taskKind || "").trim().toLowerCase();
+  const taskKey = String(raw?.task_key || raw?.taskKey || "").trim();
+  if (!completionId || !studentEmail || !targetDate || !taskKind || !taskKey) return null;
+  return {
+    completionId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    studentEmail,
+    taskKind,
+    taskKey,
+    targetDate,
+    subject: String(raw?.subject || "").trim(),
+    lessonKey: resolveCustomChapterLessonKey({ lessonKey: raw?.lesson_key || raw?.lessonKey || "" }),
+    contentId: String(raw?.content_id || raw?.contentId || "").trim(),
+    status: String(raw?.status || "completed").trim().toLowerCase() || "completed",
+    completionPayload: cloneSerializableValue(raw?.completion_payload || raw?.completionPayload || {}) || {},
+    completedAt: Number(new Date(raw?.completed_at || raw?.completedAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.completed_at || raw?.completedAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeTestTemplateRecord(raw) {
+  const templateId = String(raw?.template_id || raw?.templateId || "").trim();
+  if (!templateId) return null;
+  return {
+    templateId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    authorUserId: String(raw?.author_user_id || raw?.authorUserId || "").trim(),
+    authorEmail: String(raw?.author_email || raw?.authorEmail || "").trim().toLowerCase(),
+    title: String(raw?.title || "").trim() || "Saturday Test",
+    grade: Number(raw?.grade) || null,
+    subjectScope: Array.isArray(raw?.subject_scope || raw?.subjectScope)
+      ? (raw.subject_scope || raw.subjectScope).map((value) => String(value || "").trim()).filter(Boolean)
+      : [],
+    payload: cloneSerializableValue(raw?.payload || {}) || {},
+    isPublished: Boolean(raw?.is_published ?? raw?.isPublished),
+    publishedAt: Number(new Date(raw?.published_at || raw?.publishedAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+    deletedAt: raw?.deleted_at || raw?.deletedAt ? (Number(new Date(raw.deleted_at || raw.deletedAt).getTime()) || Date.now()) : null,
+  };
+}
+
+function normalizeWeeklyTestAssignmentRecord(raw) {
+  const assignmentId = String(raw?.assignment_id || raw?.assignmentId || "").trim();
+  const templateId = String(raw?.template_id || raw?.templateId || "").trim();
+  const weekStartDate = String(raw?.week_start_date || raw?.weekStartDate || "").trim();
+  if (!assignmentId || !templateId || !weekStartDate) return null;
+  return {
+    assignmentId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    assignedByEmail: String(raw?.assigned_by_email || raw?.assignedByEmail || "").trim().toLowerCase(),
+    targetType: String(raw?.target_type || raw?.targetType || "grade").trim().toLowerCase() === "student" ? "student" : "grade",
+    targetGrade: Number(raw?.target_grade || raw?.targetGrade) || null,
+    targetStudentEmail: String(raw?.target_student_email || raw?.targetStudentEmail || "").trim().toLowerCase(),
+    weekStartDate,
+    templateId,
+    note: String(raw?.note || "").trim(),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeWeeklyTestResultRecord(raw) {
+  const resultId = String(raw?.result_id || raw?.resultId || "").trim();
+  const studentEmail = String(raw?.student_email || raw?.studentEmail || "").trim().toLowerCase();
+  const weekStartDate = String(raw?.week_start_date || raw?.weekStartDate || "").trim();
+  if (!resultId || !studentEmail || !weekStartDate) return null;
+  return {
+    resultId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    studentEmail,
+    weekStartDate,
+    templateId: String(raw?.template_id || raw?.templateId || "").trim(),
+    score: Number(raw?.score) || 0,
+    total: Number(raw?.total) || 0,
+    summaryPayload: cloneSerializableValue(raw?.summary_payload || raw?.summaryPayload || {}) || {},
+    subjectBreakdown: cloneSerializableValue(raw?.subject_breakdown || raw?.subjectBreakdown || {}) || {},
+    weakTopics: Array.isArray(raw?.weak_topics || raw?.weakTopics) ? cloneSerializableValue(raw.weak_topics || raw.weakTopics) : [],
+    completedAt: Number(new Date(raw?.completed_at || raw?.completedAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.completed_at || raw?.completedAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeTestQuestionRecord(raw, index = 0) {
+  if (!raw || typeof raw !== "object") return null;
+  const type = ["mcq", "truefalse", "fillblank", "matching"].includes(String(raw.type || "").trim().toLowerCase())
+    ? String(raw.type || "").trim().toLowerCase()
+    : "mcq";
+  const prompt = String(raw.prompt || raw.q || raw.question || "").trim();
+  if (!prompt && type !== "matching") return null;
+  if (type === "mcq") {
+    const options = Array.isArray(raw.options || raw.a) ? (raw.options || raw.a).map((option) => String(option || "").trim()).filter(Boolean) : [];
+    const correctIndex = Math.max(0, Math.min(options.length - 1, Number(raw.correctIndex ?? raw.c) || 0));
+    if (!options.length) return null;
+    return {
+      id: String(raw.id || `question_${index}`).trim(),
+      type,
+      prompt,
+      options,
+      correctIndex,
+      subject: String(raw.subject || "").trim(),
+      lessonKey: resolveCustomChapterLessonKey({ lessonKey: raw.lessonKey || raw.lesson_key || "" }),
+      explanation: String(raw.explanation || "").trim(),
+    };
+  }
+  if (type === "truefalse") {
+    return {
+      id: String(raw.id || `question_${index}`).trim(),
+      type,
+      prompt,
+      correct: Boolean(raw.correct),
+      subject: String(raw.subject || "").trim(),
+      lessonKey: resolveCustomChapterLessonKey({ lessonKey: raw.lessonKey || raw.lesson_key || "" }),
+      explanation: String(raw.explanation || "").trim(),
+    };
+  }
+  if (type === "fillblank") {
+    const answer = String(raw.answer || raw.correctAnswer || "").trim();
+    if (!answer) return null;
+    return {
+      id: String(raw.id || `question_${index}`).trim(),
+      type,
+      prompt,
+      answer,
+      subject: String(raw.subject || "").trim(),
+      lessonKey: resolveCustomChapterLessonKey({ lessonKey: raw.lessonKey || raw.lesson_key || "" }),
+      explanation: String(raw.explanation || "").trim(),
+    };
+  }
+  const pairs = Array.isArray(raw.pairs)
+    ? raw.pairs.map((pair, pairIndex) => ({
+      left: String(pair?.left || pair?.prompt || "").trim(),
+      right: String(pair?.right || pair?.answer || "").trim(),
+      id: String(pair?.id || `pair_${pairIndex}`).trim(),
+    })).filter((pair) => pair.left && pair.right)
+    : [];
+  if (!pairs.length) return null;
+  return {
+    id: String(raw.id || `question_${index}`).trim(),
+    type,
+    prompt: prompt || "Match the pairs",
+    pairs,
+    subject: String(raw.subject || "").trim(),
+    lessonKey: resolveCustomChapterLessonKey({ lessonKey: raw.lessonKey || raw.lesson_key || "" }),
+    explanation: String(raw.explanation || "").trim(),
+  };
+}
+
+function normalizeLocalTestTemplateRecord(raw, index = 0) {
+  if (!raw || typeof raw !== "object") return null;
+  const templateId = String(raw.templateId || raw.template_id || raw.id || `local_test_${index}`).trim();
+  if (!templateId) return null;
+  const payload = raw.payload && typeof raw.payload === "object" ? raw.payload : raw;
+  const questions = Array.isArray(payload.questions)
+    ? payload.questions.map((question, questionIndex) => normalizeTestQuestionRecord(question, questionIndex)).filter(Boolean)
+    : [];
+  return {
+    templateId,
+    schoolId: String(raw.schoolId || raw.school_id || "").trim(),
+    authorEmail: String(raw.authorEmail || raw.author_email || "").trim().toLowerCase(),
+    title: String(payload.title || raw.title || "Saturday Test").trim(),
+    grade: Number(payload.grade ?? raw.grade) || null,
+    subjectScope: Array.isArray(payload.subjectScope || payload.subject_scope || raw.subjectScope || raw.subject_scope)
+      ? (payload.subjectScope || payload.subject_scope || raw.subjectScope || raw.subject_scope).map((value) => String(value || "").trim()).filter(Boolean)
+      : [],
+    payload: {
+      title: String(payload.title || raw.title || "Saturday Test").trim(),
+      instructions: String(payload.instructions || raw.instructions || "").trim(),
+      questions,
+    },
+    isPublished: Boolean(raw.isPublished || raw.is_published),
+    publishedAt: Number(raw.publishedAt || raw.published_at || raw.updatedAt || raw.updated_at || Date.now()) || Date.now(),
+    updatedAt: Number(raw.updatedAt || raw.updated_at || raw.createdAt || raw.created_at || Date.now()) || Date.now(),
+    deletedAt: null,
+    source: String(raw.source || "local").trim().toLowerCase() || "local",
+  };
+}
+
+function normalizeLocalTestTemplateLibrary(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .map((entry, index) => normalizeLocalTestTemplateRecord(entry, index))
+    .filter(Boolean)
+    .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+}
+
+function getInstitutionRoleRank(role) {
+  const safeRole = String(role || "").trim().toLowerCase();
+  if (safeRole === "admin") return 700;
+  if (safeRole === "editor") return 650;
+  if (safeRole === "school_owner") return 600;
+  if (safeRole === "principal") return 500;
+  if (safeRole === "teacher") return 400;
+  if (safeRole === "parent") return 300;
+  if (safeRole === "student") return 200;
+  return 0;
+}
+
+function getHighestInstitutionRole(roles = []) {
+  return (Array.isArray(roles) ? roles : [])
+    .map((role) => String(role || "").trim().toLowerCase())
+    .sort((left, right) => getInstitutionRoleRank(right) - getInstitutionRoleRank(left))[0] || "";
+}
+
+function normalizeGradeScopeArray(raw) {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value >= 1 && value <= 12)
+      .filter((value, index, list) => list.indexOf(value) === index)
+      .sort((left, right) => left - right);
+  }
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  return text
+    .split(/[,\s]+/)
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 12)
+    .filter((value, index, list) => list.indexOf(value) === index)
+    .sort((left, right) => left - right);
+}
+
+function buildDiaryTaskKey(kind, payload = {}) {
+  const safeKind = String(kind || "auto").trim().toLowerCase();
+  if (safeKind === "assigned") return `assigned::${String(payload.diaryId || payload.diary_id || "").trim()}`;
+  if (safeKind === "test") return `test::${String(payload.templateId || payload.template_id || "").trim()}::${String(payload.weekStartDate || payload.week_start_date || "").trim()}`;
+  return [
+    "auto",
+    String(payload.subject || "").trim(),
+    resolveCustomChapterLessonKey({ lessonKey: payload.lessonKey || payload.lesson_key || "" }),
+    String(payload.dayIndex ?? payload.day_index ?? ""),
+    String(payload.unitKey || payload.unit_key || "").trim(),
+  ].join("::");
+}
+
+function isLessonProgressComplete(lesson, completedQuizzes = {}, practiceLessonProgress = {}) {
+  if (!lesson) return false;
+  const lessonId = String(lesson.id || "").trim();
+  const lessonKey = String(getLessonKeyValue(lesson) || lesson.key || "").trim();
+  if (lessonId && completedQuizzes?.[lessonId]) return true;
+  if (lessonKey) {
+    const progress = practiceLessonProgress?.[lessonKey];
+    if (progress?.completed) return true;
+    if (Number(progress?.percentComplete) >= 100) return true;
+  }
+  return false;
+}
+
+function buildAutoDiaryWeekPlan({
+  subjects = [],
+  grade = null,
+  weekDates = [],
+  yearStartDate = "",
+  getLessonGroups,
+  getQuiz,
+  completedQuizzes = {},
+  practiceLessonProgress = {},
+}) {
+  if (!Number.isFinite(Number(grade)) || !Array.isArray(weekDates) || weekDates.length < 5 || typeof getLessonGroups !== "function" || typeof getQuiz !== "function") {
+    return [];
+  }
+  const academicWeekNumber = getAcademicWeekNumber(weekDates[0] || Date.now(), yearStartDate);
+  return (Array.isArray(subjects) ? subjects : []).flatMap((subject, subjectIndex) => {
+    const lessonGroups = (getLessonGroups(subject.id, grade) || []).filter((group) => group?.activeLesson);
+    if (!lessonGroups.length) return [];
+    const unfinishedIndex = lessonGroups.findIndex((group) => !isLessonProgressComplete(group.activeLesson, completedQuizzes, practiceLessonProgress));
+    const selectedGroupIndex = unfinishedIndex >= 0 ? unfinishedIndex : Math.min(lessonGroups.length - 1, Math.max(0, academicWeekNumber - 1));
+    const selectedGroup = lessonGroups[selectedGroupIndex] || lessonGroups[0];
+    const lesson = selectedGroup?.activeLesson;
+    if (!lesson) return [];
+    const units = extractLessonWorkUnits(lesson, getQuiz(subject.id, grade, lesson.key) || []);
+    const buckets = distributeWorkUnitsAcrossStudyDays(units, 5);
+    return weekDates.slice(0, 5).map((targetDate, dayIndex) => {
+      const bucketUnits = Array.isArray(buckets[dayIndex]) ? buckets[dayIndex] : [];
+      const fallbackUnit = {
+        key: `${subject.id}_${selectedGroup.canonicalLessonKey}_overview_${dayIndex + 1}`,
+        title: lesson.title || `${subject.name || subject.id} lesson`,
+        detail: joinLocalizedText("Study the lesson and complete its practice.", "سبق پڑھیں اور اس کی مشق مکمل کریں۔", "en"),
+        kind: "overview",
+      };
+      return {
+        taskKind: "auto",
+        taskKey: buildDiaryTaskKey("auto", {
+          subject: subject.id,
+          lessonKey: selectedGroup.canonicalLessonKey,
+          dayIndex: dayIndex + 1,
+          unitKey: bucketUnits[0]?.key || fallbackUnit.key,
+        }),
+        schoolId: "",
+        targetDate,
+        weekStartDate: weekDates[0],
+        dayIndex: dayIndex + 1,
+        academicWeekNumber,
+        subject: subject.id,
+        subjectLabel: subject.name || subject.id,
+        subjectLabelUr: subject.nameUr || subject.name || subject.id,
+        lessonKey: selectedGroup.canonicalLessonKey,
+        contentId: String(selectedGroup.activeVariant?.contentId || "").trim(),
+        title: lesson.title || `${subject.name || subject.id} lesson`,
+        note: "",
+        source: "auto",
+        taskUnits: bucketUnits.length ? bucketUnits : [fallbackUnit],
+        chapterGroup: selectedGroup,
+        lesson,
+        subjectIndex,
+      };
+    });
+  });
+}
+
+function buildDiaryTasksForWeek({
+  autoTasks = [],
+  diaryEntries = [],
+  subjectsById = {},
+  chapterGroupLookup = {},
+}) {
+  const assignedTasks = (Array.isArray(diaryEntries) ? diaryEntries : []).map((entry) => {
+    const subject = subjectsById?.[entry.subject] || null;
+    const chapterGroup = chapterGroupLookup?.[`${entry.subject}::${Number(entry.targetGrade || 0)}::${entry.lessonKey}`] || null;
+    const lesson = chapterGroup?.activeLesson || null;
+    return {
+      taskKind: "assigned",
+      taskKey: buildDiaryTaskKey("assigned", entry),
+      diaryId: entry.diaryId,
+      schoolId: entry.schoolId,
+      targetDate: entry.targetDate,
+      weekStartDate: getWeekStartDate(entry.targetDate),
+      dayIndex: Math.max(1, Math.min(6, Math.round((parseIsoDateValue(entry.targetDate).getDay() + 6) % 7) + 1)),
+      academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
+      subject: entry.subject,
+      subjectLabel: subject?.name || entry.subject,
+      subjectLabelUr: subject?.nameUr || subject?.name || entry.subject,
+      lessonKey: entry.lessonKey,
+      contentId: entry.contentId,
+      title: lesson?.title || joinLocalizedText("Assigned work", "تفویض شدہ کام", "en"),
+      note: entry.note || "",
+      source: "assigned",
+      taskUnits: [],
+      chapterGroup,
+      lesson,
+      rawEntry: entry,
+    };
+  });
+  return [...(Array.isArray(autoTasks) ? autoTasks : []), ...assignedTasks]
+    .sort((left, right) => {
+      if (String(left.targetDate || "").localeCompare(String(right.targetDate || "")) !== 0) {
+        return String(left.targetDate || "").localeCompare(String(right.targetDate || ""));
+      }
+      if ((left.subjectIndex || 0) !== (right.subjectIndex || 0)) return (left.subjectIndex || 0) - (right.subjectIndex || 0);
+      if (left.source !== right.source) return left.source === "auto" ? -1 : 1;
+      return String(left.subject || "").localeCompare(String(right.subject || ""));
+    });
+}
+
+function buildGeneratedWeeklyTestTemplate({
+  weekStartDate = "",
+  grade = null,
+  coveredTasks = [],
+  getQuiz,
+  subjectsById = {},
+  accumulationMode = "rolling",
+  accumulationValue = 8,
+}) {
+  if (!weekStartDate || !Number.isFinite(Number(grade)) || typeof getQuiz !== "function") return null;
+  const uniqueLessons = new Map();
+  (Array.isArray(coveredTasks) ? coveredTasks : []).forEach((task) => {
+    const key = `${task.subject}::${task.lessonKey}`;
+    if (!task.subject || !task.lessonKey || uniqueLessons.has(key)) return;
+    uniqueLessons.set(key, task);
+  });
+  const lessonList = Array.from(uniqueLessons.values());
+  const mcqQuestions = [];
+  const tfQuestions = [];
+  const fillQuestions = [];
+  const matchingPairs = [];
+  lessonList.forEach((task, lessonIndex) => {
+    const quizRows = getQuiz(task.subject, grade, task.lessonKey) || [];
+    quizRows.slice(0, 3).forEach((row, rowIndex) => {
+      const prompt = String(row?.q || "").trim();
+      const options = Array.isArray(row?.a) ? row.a.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
+      const correctIndex = Number(row?.c);
+      if (prompt && options.length >= 2 && Number.isFinite(correctIndex) && correctIndex >= 0 && correctIndex < options.length && mcqQuestions.length < 8) {
+        mcqQuestions.push({
+          id: `${task.subject}_${task.lessonKey}_mcq_${lessonIndex}_${rowIndex}`,
+          type: "mcq",
+          prompt,
+          options,
+          correctIndex,
+          subject: task.subject,
+          lessonKey: task.lessonKey,
+        });
+        const correctAnswer = options[correctIndex];
+        const wrongOption = options.find((entry, optionIndex) => optionIndex !== correctIndex && entry !== correctAnswer) || correctAnswer;
+        if (tfQuestions.length < 4) {
+          const useTrue = (lessonIndex + rowIndex) % 2 === 0;
+          tfQuestions.push({
+            id: `${task.subject}_${task.lessonKey}_tf_${lessonIndex}_${rowIndex}`,
+            type: "truefalse",
+            prompt: `${prompt} -> ${useTrue ? correctAnswer : wrongOption}`,
+            correct: useTrue,
+            subject: task.subject,
+            lessonKey: task.lessonKey,
+          });
+        }
+      }
+    });
+    const firstUnit = Array.isArray(task.taskUnits) && task.taskUnits.length ? task.taskUnits[0] : null;
+    if (firstUnit?.title && firstUnit?.detail && fillQuestions.length < 4) {
+      fillQuestions.push({
+        id: `${task.subject}_${task.lessonKey}_fill_${lessonIndex}`,
+        type: "fillblank",
+        prompt: `${firstUnit.title}: _____`,
+        answer: String(firstUnit.detail || "").trim().split(/[.!?]/)[0] || firstUnit.detail,
+        subject: task.subject,
+        lessonKey: task.lessonKey,
+      });
+    }
+    const subject = subjectsById?.[task.subject] || null;
+    matchingPairs.push({
+      left: subject?.name || task.subject,
+      right: task.title,
+      id: `${task.subject}_${task.lessonKey}_pair_${lessonIndex}`,
+    });
+  });
+  const questions = [
+    ...mcqQuestions.slice(0, 6),
+    ...tfQuestions.slice(0, 3),
+    ...fillQuestions.slice(0, 3),
+  ];
+  if (matchingPairs.length >= 3) {
+    questions.push({
+      id: `matching_${weekStartDate}`,
+      type: "matching",
+      prompt: "Match each subject with its weekly chapter",
+      pairs: matchingPairs.slice(0, 5),
+      subject: "mixed",
+      lessonKey: weekStartDate,
+    });
+  }
+  if (!questions.length) return null;
+  return normalizeLocalTestTemplateRecord({
+    templateId: `generated_${weekStartDate}_${grade}`,
+    title: `Saturday Test - Grade ${grade}`,
+    grade,
+    subjectScope: lessonList.map((task) => task.subject).filter((value, index, list) => value && list.indexOf(value) === index),
+    payload: {
+      title: `Saturday Test - Grade ${grade}`,
+      instructions: accumulationMode === "academic_year"
+        ? `Generated from this week's lessons with year accumulation enabled.`
+        : `Generated from this week's lessons with a rolling ${Math.max(1, Number(accumulationValue) || 8)}-week memory window.`,
+      questions,
+    },
+    source: "generated",
+  });
+}
+
+function buildTestTemplateExportPayload(template) {
+  const normalized = normalizeLocalTestTemplateRecord(template);
+  if (!normalized) return null;
+  return {
+    kind: "homeschool-test-template",
+    templateId: normalized.templateId,
+    schoolId: normalized.schoolId,
+    authorEmail: normalized.authorEmail,
+    title: normalized.title,
+    grade: normalized.grade,
+    subjectScope: normalized.subjectScope,
+    payload: normalized.payload,
+  };
+}
+
+function buildTestTemplatePackExportPayload(templates = [], label = "Test Templates") {
+  const normalizedTemplates = (Array.isArray(templates) ? templates : [])
+    .map((template) => buildTestTemplateExportPayload(template))
+    .filter(Boolean);
+  return {
+    kind: "homeschool-test-template-pack",
+    label,
+    templates: normalizedTemplates,
+  };
+}
+
+function normalizeTestTemplateImportPayload(raw, context = {}) {
+  const safe = raw && typeof raw === "object" ? raw : {};
+  if (safe.kind === "homeschool-test-template-pack" || Array.isArray(safe.templates)) {
+    return (Array.isArray(safe.templates) ? safe.templates : [])
+      .map((entry, index) => normalizeLocalTestTemplateRecord({
+        ...entry,
+        grade: entry.grade || context.grade,
+      }, index))
+      .filter(Boolean);
+  }
+  const single = normalizeLocalTestTemplateRecord({
+    ...safe,
+    grade: safe.grade || context.grade,
+  }, 0);
+  return single ? [single] : [];
 }
 
 function buildEffectiveChapterAssignmentSelections(assignments = [], userEmail = "", targetGrade = null, canChooseContentSource = false) {
@@ -2409,6 +3173,14 @@ const SUPABASE_CONTENT_ROLE_TABLE = "content_role_assignments";
 const SUPABASE_CONTENT_SETTINGS_TABLE = "content_access_settings";
 const SUPABASE_TEACHER_STUDENT_LINKS_TABLE = "teacher_student_links";
 const SUPABASE_CHAPTER_ASSIGNMENTS_TABLE = "chapter_assignments";
+const SUPABASE_SCHOOLS_TABLE = "schools";
+const SUPABASE_SCHOOL_MEMBERSHIPS_TABLE = "school_memberships";
+const SUPABASE_PARENT_STUDENT_LINKS_TABLE = "parent_student_links";
+const SUPABASE_DIARY_ENTRIES_TABLE = "diary_entries";
+const SUPABASE_DIARY_COMPLETIONS_TABLE = "diary_task_completions";
+const SUPABASE_TEST_TEMPLATES_TABLE = "test_templates";
+const SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE = "weekly_test_assignments";
+const SUPABASE_WEEKLY_TEST_RESULTS_TABLE = "weekly_test_results";
 const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
 const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -2618,6 +3390,137 @@ create index if not exists chapter_assignments_assigned_by_idx
 
 alter table public.chapter_assignments enable row level security;
 
+alter table if exists public.teacher_student_links
+  add column if not exists school_id text null;
+
+alter table if exists public.chapter_assignments
+  add column if not exists school_id text null;
+
+create table if not exists public.schools (
+  school_id text primary key,
+  school_name text not null,
+  owner_email text not null,
+  principal_email text null,
+  year_start_date date null,
+  week_accumulation_mode text not null default 'rolling',
+  week_accumulation_value integer not null default 8,
+  status text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.school_memberships (
+  membership_id text primary key,
+  school_id text not null,
+  member_email text not null,
+  role text not null,
+  grade_scope jsonb not null default '[]'::jsonb,
+  status text not null default 'active',
+  linked_by_email text null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.parent_student_links (
+  link_id text primary key,
+  school_id text null,
+  parent_email text not null,
+  student_email text not null,
+  relationship_label text null,
+  family_identifier text null,
+  status text not null default 'active',
+  linked_by_email text null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.diary_entries (
+  diary_id text primary key,
+  school_id text null,
+  teacher_email text not null,
+  target_type text not null,
+  target_grade integer null,
+  target_student_email text null,
+  target_date date not null,
+  subject text not null,
+  lesson_key text not null,
+  content_id text null,
+  note text null,
+  status text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.diary_task_completions (
+  completion_id text primary key,
+  school_id text null,
+  student_email text not null,
+  task_kind text not null,
+  task_key text not null,
+  target_date date not null,
+  subject text null,
+  lesson_key text null,
+  content_id text null,
+  status text not null default 'completed',
+  completion_payload jsonb not null default '{}'::jsonb,
+  completed_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.test_templates (
+  template_id text primary key,
+  school_id text null,
+  author_user_id uuid null,
+  author_email text not null,
+  title text not null,
+  grade integer null,
+  subject_scope jsonb not null default '[]'::jsonb,
+  payload jsonb not null default '{}'::jsonb,
+  is_published boolean not null default false,
+  published_at timestamptz null,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz null
+);
+
+create table if not exists public.weekly_test_assignments (
+  assignment_id text primary key,
+  school_id text null,
+  assigned_by_email text not null,
+  target_type text not null,
+  target_grade integer null,
+  target_student_email text null,
+  week_start_date date not null,
+  template_id text not null,
+  note text null,
+  status text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.weekly_test_results (
+  result_id text primary key,
+  school_id text null,
+  student_email text not null,
+  week_start_date date not null,
+  template_id text not null,
+  score integer not null default 0,
+  total integer not null default 0,
+  summary_payload jsonb not null default '{}'::jsonb,
+  subject_breakdown jsonb not null default '{}'::jsonb,
+  weak_topics jsonb not null default '[]'::jsonb,
+  completed_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.schools enable row level security;
+alter table public.school_memberships enable row level security;
+alter table public.parent_student_links enable row level security;
+alter table public.diary_entries enable row level security;
+alter table public.diary_task_completions enable row level security;
+alter table public.test_templates enable row level security;
+alter table public.weekly_test_assignments enable row level security;
+alter table public.weekly_test_results enable row level security;
+
 create or replace function public.current_auth_email()
 returns text
 language sql
@@ -2665,6 +3568,10 @@ as $$
       'chooseContentSource', false,
       'assignContent', false,
       'manageStudentLinks', false,
+      'manageParentLinks', false,
+      'manageInstitution', false,
+      'manageDiary', false,
+      'manageTests', false,
       'savePublishedLocally', false,
       'publishContent', false,
       'unpublishContent', false,
@@ -2678,6 +3585,10 @@ as $$
       'chooseContentSource', false,
       'assignContent', false,
       'manageStudentLinks', false,
+      'manageParentLinks', false,
+      'manageInstitution', false,
+      'manageDiary', false,
+      'manageTests', false,
       'savePublishedLocally', false,
       'publishContent', false,
       'unpublishContent', false,
@@ -2691,9 +3602,47 @@ as $$
       'chooseContentSource', true,
       'assignContent', true,
       'manageStudentLinks', true,
+      'manageParentLinks', false,
+      'manageInstitution', false,
+      'manageDiary', true,
+      'manageTests', true,
       'savePublishedLocally', true,
       'publishContent', false,
       'unpublishContent', false,
+      'deleteLocalContent', true,
+      'manageContentAccess', false
+    ),
+    'principal', jsonb_build_object(
+      'importChapters', true,
+      'importSubjects', true,
+      'exportContent', true,
+      'chooseContentSource', true,
+      'assignContent', true,
+      'manageStudentLinks', true,
+      'manageParentLinks', true,
+      'manageInstitution', true,
+      'manageDiary', true,
+      'manageTests', true,
+      'savePublishedLocally', true,
+      'publishContent', true,
+      'unpublishContent', true,
+      'deleteLocalContent', true,
+      'manageContentAccess', false
+    ),
+    'school_owner', jsonb_build_object(
+      'importChapters', true,
+      'importSubjects', true,
+      'exportContent', true,
+      'chooseContentSource', true,
+      'assignContent', true,
+      'manageStudentLinks', true,
+      'manageParentLinks', true,
+      'manageInstitution', true,
+      'manageDiary', true,
+      'manageTests', true,
+      'savePublishedLocally', true,
+      'publishContent', true,
+      'unpublishContent', true,
       'deleteLocalContent', true,
       'manageContentAccess', false
     ),
@@ -2704,6 +3653,10 @@ as $$
       'chooseContentSource', true,
       'assignContent', true,
       'manageStudentLinks', true,
+      'manageParentLinks', true,
+      'manageInstitution', true,
+      'manageDiary', true,
+      'manageTests', true,
       'savePublishedLocally', true,
       'publishContent', true,
       'unpublishContent', true,
@@ -2717,6 +3670,10 @@ as $$
       'chooseContentSource', true,
       'assignContent', true,
       'manageStudentLinks', true,
+      'manageParentLinks', true,
+      'manageInstitution', true,
+      'manageDiary', true,
+      'manageTests', true,
       'savePublishedLocally', true,
       'publishContent', true,
       'unpublishContent', true,
@@ -2828,6 +3785,389 @@ as $$
     )
 $$;
 
+create or replace function public.can_access_school(target_school_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    target_school_id is null
+    or target_school_id = ''
+    or public.user_content_permission('manageContentAccess')
+    or exists (
+      select 1
+      from public.school_memberships
+      where school_id = target_school_id
+        and lower(member_email) = public.current_auth_email()
+        and status = 'active'
+    )
+$$;
+
+create or replace function public.can_manage_school(target_school_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.user_content_permission('manageContentAccess')
+    or (
+      public.user_content_permission('manageInstitution')
+      and exists (
+        select 1
+        from public.school_memberships
+        where school_id = target_school_id
+          and lower(member_email) = public.current_auth_email()
+          and status = 'active'
+          and lower(role) in ('school_owner', 'principal', 'editor', 'admin')
+      )
+    )
+$$;
+
+create or replace function public.school_membership_allows_grade(target_school_id text, target_email text, target_grade integer)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    exists (
+      select 1
+      from public.schools
+      where school_id = target_school_id
+        and (
+          lower(owner_email) = lower(coalesce(target_email, ''))
+          or lower(coalesce(principal_email, '')) = lower(coalesce(target_email, ''))
+        )
+    )
+    or exists (
+      select 1
+      from public.school_memberships
+      where school_id = target_school_id
+        and lower(member_email) = lower(coalesce(target_email, ''))
+        and status = 'active'
+        and (
+          target_grade is null
+          or coalesce(jsonb_array_length(grade_scope), 0) = 0
+          or exists (
+            select 1
+            from jsonb_array_elements_text(coalesce(grade_scope, '[]'::jsonb)) as grade_value(value)
+            where nullif(trim(grade_value.value), '') is not null
+              and grade_value.value::integer = target_grade
+          )
+        )
+    )
+$$;
+
+create or replace function public.current_user_is_linked_teacher(target_school_id text, target_student_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.teacher_student_links
+    where lower(teacher_email) = public.current_auth_email()
+      and lower(student_email) = lower(coalesce(target_student_email, ''))
+      and status = 'active'
+      and (
+        coalesce(target_school_id, '') = ''
+        or coalesce(school_id, '') = ''
+        or school_id = target_school_id
+      )
+  )
+$$;
+
+create or replace function public.current_user_is_linked_parent(target_school_id text, target_student_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.parent_student_links
+    where lower(parent_email) = public.current_auth_email()
+      and lower(student_email) = lower(coalesce(target_student_email, ''))
+      and status = 'active'
+      and (
+        coalesce(target_school_id, '') = ''
+        or coalesce(school_id, '') = ''
+        or school_id = target_school_id
+      )
+  )
+$$;
+
+create or replace function public.current_user_can_access_student(target_school_id text, target_student_email text, target_grade integer)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    lower(coalesce(target_student_email, '')) = public.current_auth_email()
+    or public.user_content_permission('manageContentAccess')
+    or public.can_manage_school(target_school_id)
+    or public.current_user_is_linked_teacher(target_school_id, target_student_email)
+    or public.current_user_is_linked_parent(target_school_id, target_student_email)
+$$;
+
+create or replace function public.current_user_can_access_grade(target_school_id text, target_grade integer)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.user_content_permission('manageContentAccess')
+    or public.can_manage_school(target_school_id)
+    or public.school_membership_allows_grade(target_school_id, public.current_auth_email(), target_grade)
+    or exists (
+      select 1
+      from public.parent_student_links
+      where lower(parent_email) = public.current_auth_email()
+        and status = 'active'
+        and (
+          coalesce(target_school_id, '') = ''
+          or coalesce(school_id, '') = ''
+          or school_id = target_school_id
+        )
+        and public.school_membership_allows_grade(target_school_id, student_email, target_grade)
+    )
+$$;
+
+create or replace function public.can_manage_parent_student_link(target_school_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.user_content_permission('manageParentLinks')
+    and (
+      public.user_content_permission('manageContentAccess')
+      or public.can_manage_school(target_school_id)
+    )
+$$;
+
+create or replace function public.can_read_parent_student_link(target_school_id text, target_parent_email text, target_student_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    lower(coalesce(target_parent_email, '')) = public.current_auth_email()
+    or lower(coalesce(target_student_email, '')) = public.current_auth_email()
+    or public.can_manage_parent_student_link(target_school_id)
+    or public.current_user_is_linked_teacher(target_school_id, target_student_email)
+$$;
+
+create or replace function public.can_read_teacher_student_link(target_school_id text, target_teacher_email text, target_student_email text, target_grade integer)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    lower(coalesce(target_teacher_email, '')) = public.current_auth_email()
+    or lower(coalesce(target_student_email, '')) = public.current_auth_email()
+    or public.current_user_is_linked_parent(target_school_id, target_student_email)
+    or public.current_user_can_access_student(target_school_id, target_student_email, target_grade)
+$$;
+
+create or replace function public.can_read_chapter_assignment(
+  target_school_id text,
+  target_assigned_by_email text,
+  target_type text,
+  target_grade integer,
+  target_student_email text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.can_manage_chapter_assignment(target_assigned_by_email)
+    or (
+      lower(coalesce(target_type, '')) = 'student'
+      and public.current_user_can_access_student(target_school_id, target_student_email, target_grade)
+    )
+    or (
+      lower(coalesce(target_type, '')) = 'grade'
+      and public.current_user_can_access_grade(target_school_id, target_grade)
+    )
+$$;
+
+create or replace function public.can_manage_diary_entry(target_school_id text, target_teacher_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.user_content_permission('manageDiary')
+    and (
+      public.user_content_permission('manageContentAccess')
+      or public.can_manage_school(target_school_id)
+      or lower(coalesce(target_teacher_email, '')) = public.current_auth_email()
+    )
+$$;
+
+create or replace function public.can_read_diary_entry(
+  target_school_id text,
+  target_teacher_email text,
+  target_type text,
+  target_grade integer,
+  target_student_email text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.can_manage_diary_entry(target_school_id, target_teacher_email)
+    or (
+      lower(coalesce(target_type, '')) = 'student'
+      and public.current_user_can_access_student(target_school_id, target_student_email, target_grade)
+    )
+    or (
+      lower(coalesce(target_type, '')) = 'grade'
+      and public.current_user_can_access_grade(target_school_id, target_grade)
+    )
+$$;
+
+create or replace function public.can_read_diary_completion(target_school_id text, target_student_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_user_can_access_student(target_school_id, target_student_email, null)
+$$;
+
+create or replace function public.can_manage_diary_completion(target_school_id text, target_student_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    lower(coalesce(target_student_email, '')) = public.current_auth_email()
+    or public.can_manage_diary_entry(target_school_id, null)
+$$;
+
+create or replace function public.can_manage_test_template(target_school_id text, target_author_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.user_content_permission('manageTests')
+    and (
+      public.user_content_permission('manageContentAccess')
+      or public.can_manage_school(target_school_id)
+      or lower(coalesce(target_author_email, '')) = public.current_auth_email()
+    )
+$$;
+
+create or replace function public.can_read_test_template(target_school_id text, target_author_email text, template_published boolean)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    coalesce(template_published, false)
+    or public.can_manage_test_template(target_school_id, target_author_email)
+    or public.can_access_school(target_school_id)
+$$;
+
+create or replace function public.can_manage_weekly_test_assignment(target_school_id text, target_assigned_by_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.user_content_permission('manageTests')
+    and (
+      public.user_content_permission('manageContentAccess')
+      or public.can_manage_school(target_school_id)
+      or lower(coalesce(target_assigned_by_email, '')) = public.current_auth_email()
+    )
+$$;
+
+create or replace function public.can_read_weekly_test_assignment(
+  target_school_id text,
+  target_assigned_by_email text,
+  target_type text,
+  target_grade integer,
+  target_student_email text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.can_manage_weekly_test_assignment(target_school_id, target_assigned_by_email)
+    or (
+      lower(coalesce(target_type, '')) = 'student'
+      and public.current_user_can_access_student(target_school_id, target_student_email, target_grade)
+    )
+    or (
+      lower(coalesce(target_type, '')) = 'grade'
+      and public.current_user_can_access_grade(target_school_id, target_grade)
+    )
+$$;
+
+create or replace function public.can_read_weekly_test_result(target_school_id text, target_student_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_user_can_access_student(target_school_id, target_student_email, null)
+$$;
+
+create or replace function public.can_manage_weekly_test_result(target_school_id text, target_student_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    lower(coalesce(target_student_email, '')) = public.current_auth_email()
+    or public.can_manage_weekly_test_assignment(target_school_id, null)
+$$;
+
 drop policy if exists "Users can read relevant content role assignments" on public.content_role_assignments;
 drop policy if exists "Admins can insert content role assignments" on public.content_role_assignments;
 drop policy if exists "Admins can update content role assignments" on public.content_role_assignments;
@@ -2845,6 +4185,38 @@ drop policy if exists "Users can read chapter assignments" on public.chapter_ass
 drop policy if exists "Users can insert chapter assignments" on public.chapter_assignments;
 drop policy if exists "Users can update chapter assignments" on public.chapter_assignments;
 drop policy if exists "Users can delete chapter assignments" on public.chapter_assignments;
+drop policy if exists "Users can read schools" on public.schools;
+drop policy if exists "Users can insert schools" on public.schools;
+drop policy if exists "Users can update schools" on public.schools;
+drop policy if exists "Users can delete schools" on public.schools;
+drop policy if exists "Users can read school memberships" on public.school_memberships;
+drop policy if exists "Users can insert school memberships" on public.school_memberships;
+drop policy if exists "Users can update school memberships" on public.school_memberships;
+drop policy if exists "Users can delete school memberships" on public.school_memberships;
+drop policy if exists "Users can read parent student links" on public.parent_student_links;
+drop policy if exists "Users can insert parent student links" on public.parent_student_links;
+drop policy if exists "Users can update parent student links" on public.parent_student_links;
+drop policy if exists "Users can delete parent student links" on public.parent_student_links;
+drop policy if exists "Users can read diary entries" on public.diary_entries;
+drop policy if exists "Users can insert diary entries" on public.diary_entries;
+drop policy if exists "Users can update diary entries" on public.diary_entries;
+drop policy if exists "Users can delete diary entries" on public.diary_entries;
+drop policy if exists "Users can read diary completions" on public.diary_task_completions;
+drop policy if exists "Users can insert diary completions" on public.diary_task_completions;
+drop policy if exists "Users can update diary completions" on public.diary_task_completions;
+drop policy if exists "Users can delete diary completions" on public.diary_task_completions;
+drop policy if exists "Users can read test templates" on public.test_templates;
+drop policy if exists "Users can insert test templates" on public.test_templates;
+drop policy if exists "Users can update test templates" on public.test_templates;
+drop policy if exists "Users can delete test templates" on public.test_templates;
+drop policy if exists "Users can read weekly test assignments" on public.weekly_test_assignments;
+drop policy if exists "Users can insert weekly test assignments" on public.weekly_test_assignments;
+drop policy if exists "Users can update weekly test assignments" on public.weekly_test_assignments;
+drop policy if exists "Users can delete weekly test assignments" on public.weekly_test_assignments;
+drop policy if exists "Users can read weekly test results" on public.weekly_test_results;
+drop policy if exists "Users can insert weekly test results" on public.weekly_test_results;
+drop policy if exists "Users can update weekly test results" on public.weekly_test_results;
+drop policy if exists "Users can delete weekly test results" on public.weekly_test_results;
 
 drop policy if exists "Users can insert own published chapters" on public.published_chapters;
 drop policy if exists "Users can update own published chapters" on public.published_chapters;
@@ -2971,6 +4343,216 @@ for delete
 to authenticated
 using (public.can_manage_chapter_assignment(assigned_by_email));
 
+create policy "Users can read schools"
+on public.schools
+for select
+to authenticated
+using (
+  public.can_access_school(school_id)
+  or lower(owner_email) = public.current_auth_email()
+  or lower(coalesce(principal_email, '')) = public.current_auth_email()
+);
+
+create policy "Users can insert schools"
+on public.schools
+for insert
+to authenticated
+with check (
+  public.user_content_permission('manageInstitution')
+  or public.user_content_permission('manageContentAccess')
+);
+
+create policy "Users can update schools"
+on public.schools
+for update
+to authenticated
+using (public.can_manage_school(school_id))
+with check (public.can_manage_school(school_id));
+
+create policy "Users can delete schools"
+on public.schools
+for delete
+to authenticated
+using (public.can_manage_school(school_id));
+
+create policy "Users can read school memberships"
+on public.school_memberships
+for select
+to authenticated
+using (
+  lower(member_email) = public.current_auth_email()
+  or public.can_manage_school(school_id)
+);
+
+create policy "Users can insert school memberships"
+on public.school_memberships
+for insert
+to authenticated
+with check (public.can_manage_school(school_id));
+
+create policy "Users can update school memberships"
+on public.school_memberships
+for update
+to authenticated
+using (public.can_manage_school(school_id))
+with check (public.can_manage_school(school_id));
+
+create policy "Users can delete school memberships"
+on public.school_memberships
+for delete
+to authenticated
+using (public.can_manage_school(school_id));
+
+create policy "Users can read parent student links"
+on public.parent_student_links
+for select
+to authenticated
+using (public.can_read_parent_student_link(school_id, parent_email, student_email));
+
+create policy "Users can insert parent student links"
+on public.parent_student_links
+for insert
+to authenticated
+with check (public.can_manage_parent_student_link(school_id));
+
+create policy "Users can update parent student links"
+on public.parent_student_links
+for update
+to authenticated
+using (public.can_manage_parent_student_link(school_id))
+with check (public.can_manage_parent_student_link(school_id));
+
+create policy "Users can delete parent student links"
+on public.parent_student_links
+for delete
+to authenticated
+using (public.can_manage_parent_student_link(school_id));
+
+create policy "Users can read diary entries"
+on public.diary_entries
+for select
+to authenticated
+using (public.can_read_diary_entry(school_id, teacher_email, target_type, target_grade, target_student_email));
+
+create policy "Users can insert diary entries"
+on public.diary_entries
+for insert
+to authenticated
+with check (public.can_manage_diary_entry(school_id, teacher_email));
+
+create policy "Users can update diary entries"
+on public.diary_entries
+for update
+to authenticated
+using (public.can_manage_diary_entry(school_id, teacher_email))
+with check (public.can_manage_diary_entry(school_id, teacher_email));
+
+create policy "Users can delete diary entries"
+on public.diary_entries
+for delete
+to authenticated
+using (public.can_manage_diary_entry(school_id, teacher_email));
+
+create policy "Users can read diary completions"
+on public.diary_task_completions
+for select
+to authenticated
+using (public.can_read_diary_completion(school_id, student_email));
+
+create policy "Users can insert diary completions"
+on public.diary_task_completions
+for insert
+to authenticated
+with check (public.can_manage_diary_completion(school_id, student_email));
+
+create policy "Users can update diary completions"
+on public.diary_task_completions
+for update
+to authenticated
+using (public.can_manage_diary_completion(school_id, student_email))
+with check (public.can_manage_diary_completion(school_id, student_email));
+
+create policy "Users can delete diary completions"
+on public.diary_task_completions
+for delete
+to authenticated
+using (public.can_manage_diary_completion(school_id, student_email));
+
+create policy "Users can read test templates"
+on public.test_templates
+for select
+to authenticated
+using (public.can_read_test_template(school_id, author_email, is_published) and deleted_at is null);
+
+create policy "Users can insert test templates"
+on public.test_templates
+for insert
+to authenticated
+with check (public.can_manage_test_template(school_id, author_email));
+
+create policy "Users can update test templates"
+on public.test_templates
+for update
+to authenticated
+using (public.can_manage_test_template(school_id, author_email))
+with check (public.can_manage_test_template(school_id, author_email));
+
+create policy "Users can delete test templates"
+on public.test_templates
+for delete
+to authenticated
+using (public.can_manage_test_template(school_id, author_email));
+
+create policy "Users can read weekly test assignments"
+on public.weekly_test_assignments
+for select
+to authenticated
+using (public.can_read_weekly_test_assignment(school_id, assigned_by_email, target_type, target_grade, target_student_email));
+
+create policy "Users can insert weekly test assignments"
+on public.weekly_test_assignments
+for insert
+to authenticated
+with check (public.can_manage_weekly_test_assignment(school_id, assigned_by_email));
+
+create policy "Users can update weekly test assignments"
+on public.weekly_test_assignments
+for update
+to authenticated
+using (public.can_manage_weekly_test_assignment(school_id, assigned_by_email))
+with check (public.can_manage_weekly_test_assignment(school_id, assigned_by_email));
+
+create policy "Users can delete weekly test assignments"
+on public.weekly_test_assignments
+for delete
+to authenticated
+using (public.can_manage_weekly_test_assignment(school_id, assigned_by_email));
+
+create policy "Users can read weekly test results"
+on public.weekly_test_results
+for select
+to authenticated
+using (public.can_read_weekly_test_result(school_id, student_email));
+
+create policy "Users can insert weekly test results"
+on public.weekly_test_results
+for insert
+to authenticated
+with check (public.can_manage_weekly_test_result(school_id, student_email));
+
+create policy "Users can update weekly test results"
+on public.weekly_test_results
+for update
+to authenticated
+using (public.can_manage_weekly_test_result(school_id, student_email))
+with check (public.can_manage_weekly_test_result(school_id, student_email));
+
+create policy "Users can delete weekly test results"
+on public.weekly_test_results
+for delete
+to authenticated
+using (public.can_manage_weekly_test_result(school_id, student_email));
+
 create policy "Users can insert own published chapters"
 on public.published_chapters
 for insert
@@ -3069,7 +4651,7 @@ function getSupabaseUserRole(user) {
   return role || "student";
 }
 
-const CONTENT_MANAGER_ROLES = ["student", "parent", "teacher", "editor", "admin"];
+const CONTENT_MANAGER_ROLES = ["student", "parent", "teacher", "principal", "school_owner", "editor", "admin"];
 const CONTENT_PERMISSION_KEYS = [
   "importChapters",
   "importSubjects",
@@ -3077,6 +4659,10 @@ const CONTENT_PERMISSION_KEYS = [
   "chooseContentSource",
   "assignContent",
   "manageStudentLinks",
+  "manageParentLinks",
+  "manageInstitution",
+  "manageDiary",
+  "manageTests",
   "savePublishedLocally",
   "publishContent",
   "unpublishContent",
@@ -3098,6 +4684,10 @@ function createDefaultContentRoleCapabilities() {
       chooseContentSource: false,
       assignContent: false,
       manageStudentLinks: false,
+      manageParentLinks: false,
+      manageInstitution: false,
+      manageDiary: false,
+      manageTests: false,
       savePublishedLocally: false,
       publishContent: false,
       unpublishContent: false,
@@ -3111,6 +4701,10 @@ function createDefaultContentRoleCapabilities() {
       chooseContentSource: false,
       assignContent: false,
       manageStudentLinks: false,
+      manageParentLinks: false,
+      manageInstitution: false,
+      manageDiary: false,
+      manageTests: false,
       savePublishedLocally: false,
       publishContent: false,
       unpublishContent: false,
@@ -3124,9 +4718,47 @@ function createDefaultContentRoleCapabilities() {
       chooseContentSource: true,
       assignContent: true,
       manageStudentLinks: true,
+      manageParentLinks: false,
+      manageInstitution: false,
+      manageDiary: true,
+      manageTests: true,
       savePublishedLocally: true,
       publishContent: false,
       unpublishContent: false,
+      deleteLocalContent: true,
+      manageContentAccess: false,
+    },
+    principal: {
+      importChapters: true,
+      importSubjects: true,
+      exportContent: true,
+      chooseContentSource: true,
+      assignContent: true,
+      manageStudentLinks: true,
+      manageParentLinks: true,
+      manageInstitution: true,
+      manageDiary: true,
+      manageTests: true,
+      savePublishedLocally: true,
+      publishContent: true,
+      unpublishContent: true,
+      deleteLocalContent: true,
+      manageContentAccess: false,
+    },
+    school_owner: {
+      importChapters: true,
+      importSubjects: true,
+      exportContent: true,
+      chooseContentSource: true,
+      assignContent: true,
+      manageStudentLinks: true,
+      manageParentLinks: true,
+      manageInstitution: true,
+      manageDiary: true,
+      manageTests: true,
+      savePublishedLocally: true,
+      publishContent: true,
+      unpublishContent: true,
       deleteLocalContent: true,
       manageContentAccess: false,
     },
@@ -3137,6 +4769,10 @@ function createDefaultContentRoleCapabilities() {
       chooseContentSource: true,
       assignContent: true,
       manageStudentLinks: true,
+      manageParentLinks: true,
+      manageInstitution: true,
+      manageDiary: true,
+      manageTests: true,
       savePublishedLocally: true,
       publishContent: true,
       unpublishContent: true,
@@ -3150,6 +4786,10 @@ function createDefaultContentRoleCapabilities() {
       chooseContentSource: true,
       assignContent: true,
       manageStudentLinks: true,
+      manageParentLinks: true,
+      manageInstitution: true,
+      manageDiary: true,
+      manageTests: true,
       savePublishedLocally: true,
       publishContent: true,
       unpublishContent: true,
@@ -3188,6 +4828,20 @@ function normalizeContentRoleAssignmentRecord(raw) {
     updated_by: raw.updated_by || "",
     permissions_override: normalizeContentPermissionOverride(raw.permissions_override),
   };
+}
+
+function getContentManagerRoleLabel(role, language = "en") {
+  const safeRole = normalizeContentManagerRole(role);
+  const labels = {
+    student: joinLocalizedText("Student", "طالب علم", language),
+    parent: joinLocalizedText("Parent", "والدین", language),
+    teacher: joinLocalizedText("Teacher", "استاد", language),
+    principal: joinLocalizedText("Principal", "پرنسپل", language),
+    school_owner: joinLocalizedText("School Owner", "اسکول مالک", language),
+    editor: joinLocalizedText("Editor", "ایڈیٹر", language),
+    admin: joinLocalizedText("Admin", "ایڈمن", language),
+  };
+  return labels[safeRole] || labels.student;
 }
 
 function getContentRoleCapabilities(role, matrix = null, override = null) {
@@ -8994,6 +10648,7 @@ function HomeschoolApp() {
   const [homeSectionTab, setHomeSectionTab] = useState("subjects");
   const [progressSectionTab, setProgressSectionTab] = useState("overview");
   const [profilesSectionTab, setProfilesSectionTab] = useState("profiles");
+  const [diarySectionTab, setDiarySectionTab] = useState("week");
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [quizActive, setQuizActive] = useState(false);
@@ -9044,6 +10699,7 @@ function HomeschoolApp() {
   const [customContentState, setCustomContentState] = useState(createEmptyCustomContentState());
   const [publishedContentState, setPublishedContentState] = useState(createEmptyPublishedContentState());
   const [contentRelationshipState, setContentRelationshipState] = useState(createEmptyContentRelationshipState());
+  const [activeInstitutionSchoolId, setActiveInstitutionSchoolId] = useState(String(stored?.activeInstitutionSchoolId || "").trim());
   const [chapterSourcePreferences, setChapterSourcePreferences] = useState(normalizeChapterSourcePreferences(stored?.chapterSourcePreferences || {}));
   const [chapterImportBusy, setChapterImportBusy] = useState(false);
   const [chapterPublishBusy, setChapterPublishBusy] = useState(false);
@@ -9057,6 +10713,39 @@ function HomeschoolApp() {
   const [chapterAssignmentDraftStudentEmail, setChapterAssignmentDraftStudentEmail] = useState("");
   const [chapterAssignmentDraftContentId, setChapterAssignmentDraftContentId] = useState("");
   const [chapterAssignmentDraftNote, setChapterAssignmentDraftNote] = useState("");
+  const [schoolDraftName, setSchoolDraftName] = useState("");
+  const [schoolDraftOwnerEmail, setSchoolDraftOwnerEmail] = useState("");
+  const [schoolDraftPrincipalEmail, setSchoolDraftPrincipalEmail] = useState("");
+  const [schoolDraftYearStartDate, setSchoolDraftYearStartDate] = useState(toIsoDateString(new Date(new Date().getFullYear(), 0, 1)));
+  const [schoolDraftAccumulationMode, setSchoolDraftAccumulationMode] = useState("rolling");
+  const [schoolDraftAccumulationValue, setSchoolDraftAccumulationValue] = useState(8);
+  const [schoolMemberDraftEmail, setSchoolMemberDraftEmail] = useState("");
+  const [schoolMemberDraftRole, setSchoolMemberDraftRole] = useState("student");
+  const [schoolMemberDraftGradeScope, setSchoolMemberDraftGradeScope] = useState("");
+  const [parentLinkDraftParentEmail, setParentLinkDraftParentEmail] = useState("");
+  const [parentLinkDraftStudentEmail, setParentLinkDraftStudentEmail] = useState("");
+  const [parentLinkDraftRelationshipLabel, setParentLinkDraftRelationshipLabel] = useState("");
+  const [parentLinkDraftFamilyIdentifier, setParentLinkDraftFamilyIdentifier] = useState("");
+  const [diaryWeekAnchorDate, setDiaryWeekAnchorDate] = useState(toIsoDateString(Date.now()));
+  const [diaryDraftScope, setDiaryDraftScope] = useState("grade");
+  const [diaryDraftStudentEmail, setDiaryDraftStudentEmail] = useState("");
+  const [diaryDraftRangeMode, setDiaryDraftRangeMode] = useState("single");
+  const [diaryDraftStartDate, setDiaryDraftStartDate] = useState(toIsoDateString(Date.now()));
+  const [diaryDraftEndDate, setDiaryDraftEndDate] = useState(toIsoDateString(Date.now()));
+  const [diaryDraftSubjectId, setDiaryDraftSubjectId] = useState("");
+  const [diaryDraftContentId, setDiaryDraftContentId] = useState("");
+  const [diaryDraftNote, setDiaryDraftNote] = useState("");
+  const [localTestTemplateLibrary, setLocalTestTemplateLibrary] = useState(normalizeLocalTestTemplateLibrary(stored?.localTestTemplateLibrary || []));
+  const [testTemplateImportBusy, setTestTemplateImportBusy] = useState(false);
+  const [testTemplatePublishBusy, setTestTemplatePublishBusy] = useState(false);
+  const [testTemplateDraftSubjectFilter, setTestTemplateDraftSubjectFilter] = useState("all");
+  const [testTemplateDraftAuthorFilter, setTestTemplateDraftAuthorFilter] = useState("");
+  const [testAssignmentDraftScope, setTestAssignmentDraftScope] = useState("grade");
+  const [testAssignmentDraftStudentEmail, setTestAssignmentDraftStudentEmail] = useState("");
+  const [testAssignmentDraftTemplateId, setTestAssignmentDraftTemplateId] = useState("");
+  const [testAssignmentDraftNote, setTestAssignmentDraftNote] = useState("");
+  const [performanceStudentEmail, setPerformanceStudentEmail] = useState("");
+  const [activeWeeklyTestSession, setActiveWeeklyTestSession] = useState(null);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(stored?.ttsEnabled ?? true);
   const [audioMuted, setAudioMuted] = useState(Boolean(stored?.audioMuted));
@@ -9200,6 +10889,10 @@ function HomeschoolApp() {
   const canChooseContentSource = Boolean(contentRoleCapabilities.chooseContentSource);
   const canAssignContent = Boolean(contentRoleCapabilities.assignContent);
   const canManageStudentLinks = Boolean(contentRoleCapabilities.manageStudentLinks);
+  const canManageParentLinks = Boolean(contentRoleCapabilities.manageParentLinks);
+  const canManageInstitution = Boolean(contentRoleCapabilities.manageInstitution);
+  const canManageDiary = Boolean(contentRoleCapabilities.manageDiary);
+  const canManageTests = Boolean(contentRoleCapabilities.manageTests);
   const canSavePublishedLocally = Boolean(contentRoleCapabilities.savePublishedLocally);
   const canPublishContent = Boolean(contentRoleCapabilities.publishContent);
   const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
@@ -9225,6 +10918,7 @@ function HomeschoolApp() {
   const chatTextareaRef = useRef(null);
   const chatFileInputRef = useRef(null);
   const chapterImportInputRef = useRef(null);
+  const testTemplateImportInputRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
@@ -9727,6 +11421,287 @@ function HomeschoolApp() {
     acc[`${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}`] = group;
     return acc;
   }, {}), [allChapterGroups]);
+  const safeSchools = useMemo(
+    () => (Array.isArray(contentRelationshipState.schools) ? contentRelationshipState.schools.map((entry) => normalizeSchoolRecord(entry)).filter(Boolean) : []),
+    [contentRelationshipState.schools],
+  );
+  const safeSchoolMemberships = useMemo(
+    () => (Array.isArray(contentRelationshipState.memberships) ? contentRelationshipState.memberships.map((entry) => normalizeSchoolMembershipRecord(entry)).filter(Boolean) : []),
+    [contentRelationshipState.memberships],
+  );
+  const safeParentStudentLinks = useMemo(
+    () => (Array.isArray(contentRelationshipState.parentLinks) ? contentRelationshipState.parentLinks.map((entry) => normalizeParentStudentLinkRecord(entry)).filter(Boolean) : []),
+    [contentRelationshipState.parentLinks],
+  );
+  const currentUserSchoolMemberships = useMemo(
+    () => safeSchoolMemberships.filter((entry) => entry.status === "active" && entry.memberEmail === contentIdentityEmail),
+    [contentIdentityEmail, safeSchoolMemberships],
+  );
+  const accessibleSchools = useMemo(() => {
+    if (canManageContentAccess) return safeSchools;
+    const membershipIds = new Set(currentUserSchoolMemberships.map((entry) => entry.schoolId).filter(Boolean));
+    return safeSchools.filter((entry) => membershipIds.has(entry.schoolId));
+  }, [canManageContentAccess, currentUserSchoolMemberships, safeSchools]);
+  const activeInstitutionSchool = useMemo(() => {
+    if (!accessibleSchools.length) return null;
+    return accessibleSchools.find((entry) => entry.schoolId === activeInstitutionSchoolId) || accessibleSchools[0];
+  }, [accessibleSchools, activeInstitutionSchoolId]);
+  const activeInstitutionSchoolIdResolved = String(activeInstitutionSchool?.schoolId || "").trim();
+  const currentUserInstitutionRole = useMemo(() => {
+    if (!currentUserSchoolMemberships.length) return "";
+    return getHighestInstitutionRole(currentUserSchoolMemberships.map((entry) => entry.role));
+  }, [currentUserSchoolMemberships]);
+  const visibleTeacherStudentLinks = useMemo(() => {
+    const filtered = managedTeacherStudentLinks.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
+    if (filtered.length) return filtered;
+    return managedTeacherStudentLinks;
+  }, [activeInstitutionSchoolIdResolved, managedTeacherStudentLinks]);
+  const visibleParentStudentLinks = useMemo(() => {
+    const safeLinks = safeParentStudentLinks.filter((entry) => entry.status === "active");
+    const filtered = activeInstitutionSchoolIdResolved ? safeLinks.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeLinks;
+    if (canManageContentAccess || canManageParentLinks || canManageInstitution) return filtered;
+    return filtered.filter((entry) => entry.parentEmail === contentIdentityEmail || entry.studentEmail === contentIdentityEmail);
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageParentLinks, contentIdentityEmail, safeParentStudentLinks]);
+  const linkedChildOptions = useMemo(() => {
+    const map = new Map();
+    visibleParentStudentLinks
+      .filter((entry) => entry.parentEmail === contentIdentityEmail)
+      .forEach((entry) => {
+        const current = map.get(entry.studentEmail);
+        if (!current || entry.updatedAt >= current.updatedAt) map.set(entry.studentEmail, entry);
+      });
+    return Array.from(map.values()).sort((left, right) => String(left.studentEmail || "").localeCompare(String(right.studentEmail || "")));
+  }, [contentIdentityEmail, visibleParentStudentLinks]);
+  const accessibleStudentOptions = useMemo(() => {
+    const map = new Map();
+    const pushEntry = (email, payload = {}) => {
+      const normalizedEmail = String(email || "").trim().toLowerCase();
+      if (!normalizedEmail) return;
+      const current = map.get(normalizedEmail);
+      const nextEntry = {
+        email: normalizedEmail,
+        label: String(payload.label || payload.studentLabel || normalizedEmail).trim(),
+        grade: Number(payload.grade || payload.studentGrade) || null,
+        schoolId: String(payload.schoolId || "").trim(),
+        relationship: String(payload.relationship || "").trim(),
+        updatedAt: Number(payload.updatedAt || 0) || 0,
+      };
+      if (!current || nextEntry.updatedAt >= current.updatedAt) map.set(normalizedEmail, nextEntry);
+    };
+    visibleTeacherStudentLinks.forEach((entry) => pushEntry(entry.studentEmail, {
+      label: entry.studentLabel || entry.studentEmail,
+      grade: entry.studentGrade,
+      schoolId: entry.schoolId,
+      updatedAt: entry.updatedAt,
+      relationship: "teacher",
+    }));
+    visibleParentStudentLinks.forEach((entry) => pushEntry(entry.studentEmail, {
+      label: entry.studentEmail,
+      schoolId: entry.schoolId,
+      updatedAt: entry.updatedAt,
+      relationship: entry.relationshipLabel || "parent",
+    }));
+    if (!map.size && contentIdentityEmail && ["student"].includes(contentManagerRole)) {
+      pushEntry(contentIdentityEmail, { label: contentIdentityEmail, grade, updatedAt: Date.now(), relationship: "self" });
+    }
+    return Array.from(map.values()).sort((left, right) => {
+      if ((left.grade || 999) !== (right.grade || 999)) return (left.grade || 999) - (right.grade || 999);
+      return String(left.email || "").localeCompare(String(right.email || ""));
+    });
+  }, [contentIdentityEmail, contentManagerRole, grade, visibleParentStudentLinks, visibleTeacherStudentLinks]);
+  const currentDiaryWeekDates = useMemo(() => getWeekDates(diaryWeekAnchorDate), [diaryWeekAnchorDate]);
+  const currentDiaryWeekStartDate = currentDiaryWeekDates[0] || getWeekStartDate(Date.now());
+  const activeSchoolYearStartDate = String(activeInstitutionSchool?.yearStartDate || "").trim();
+  const autoDiaryTasks = useMemo(() => buildAutoDiaryWeekPlan({
+    subjects: allSubjects,
+    grade,
+    weekDates: currentDiaryWeekDates.slice(0, 5),
+    yearStartDate: activeSchoolYearStartDate,
+    getLessonGroups: getMergedLessonGroups,
+    getQuiz: getMergedQuiz,
+    completedQuizzes,
+    practiceLessonProgress,
+  }), [activeSchoolYearStartDate, allSubjects, completedQuizzes, currentDiaryWeekDates, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+  const visibleDiaryEntries = useMemo(() => {
+    const safeEntries = (Array.isArray(contentRelationshipState.diaryEntries) ? contentRelationshipState.diaryEntries : [])
+      .map((entry) => normalizeDiaryEntryRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.status === "active");
+    const filteredBySchool = activeInstitutionSchoolIdResolved
+      ? safeEntries.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
+      : safeEntries;
+    return filteredBySchool.filter((entry) => {
+      if (canManageContentAccess || canManageDiary || canManageInstitution) return true;
+      if (entry.teacherEmail && entry.teacherEmail === contentIdentityEmail) return true;
+      if (entry.targetType === "student" && entry.targetStudentEmail === contentIdentityEmail) return true;
+      if (entry.targetType === "student" && linkedChildOptions.some((child) => child.email === entry.targetStudentEmail)) return true;
+      return entry.targetType === "grade" && Number(entry.targetGrade) === Number(grade);
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageDiary, canManageInstitution, contentIdentityEmail, contentRelationshipState.diaryEntries, grade, linkedChildOptions]);
+  const currentWeekAssignedDiaryEntries = useMemo(
+    () => visibleDiaryEntries.filter((entry) => entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[4]),
+    [currentDiaryWeekDates, visibleDiaryEntries],
+  );
+  const weeklyDiaryTasks = useMemo(() => buildDiaryTasksForWeek({
+    autoTasks: autoDiaryTasks,
+    diaryEntries: currentWeekAssignedDiaryEntries,
+    subjectsById: subjectLookup,
+    chapterGroupLookup,
+  }), [autoDiaryTasks, chapterGroupLookup, currentWeekAssignedDiaryEntries, subjectLookup]);
+  const visibleDiaryCompletions = useMemo(() => {
+    const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : [])
+      .map((entry) => normalizeDiaryCompletionRecord(entry))
+      .filter(Boolean);
+    const filteredBySchool = activeInstitutionSchoolIdResolved
+      ? safeRows.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
+      : safeRows;
+    const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
+    return filteredBySchool.filter((entry) => {
+      if (canManageContentAccess || canManageDiary || canManageInstitution) return true;
+      if (entry.studentEmail === contentIdentityEmail) return true;
+      if (childEmails.has(entry.studentEmail)) return true;
+      return visibleTeacherStudentLinks.some((link) => link.studentEmail === entry.studentEmail && link.teacherEmail === contentIdentityEmail);
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageDiary, canManageInstitution, contentIdentityEmail, contentRelationshipState.diaryCompletions, linkedChildOptions, visibleTeacherStudentLinks]);
+  const diaryCompletionLookup = useMemo(() => visibleDiaryCompletions.reduce((acc, entry) => {
+    acc[`${entry.taskKind}::${entry.taskKey}`] = entry;
+    return acc;
+  }, {}), [visibleDiaryCompletions]);
+  const weeklyDiaryTaskGroups = useMemo(() => currentDiaryWeekDates.slice(0, 5).map((targetDate, index) => ({
+    targetDate,
+    dayIndex: index + 1,
+    tasks: weeklyDiaryTasks.filter((task) => task.targetDate === targetDate),
+  })), [currentDiaryWeekDates, weeklyDiaryTasks]);
+  const visibleTestTemplates = useMemo(() => {
+    const safeTemplates = (Array.isArray(contentRelationshipState.testTemplates) ? contentRelationshipState.testTemplates : [])
+      .map((entry) => normalizeTestTemplateRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => !entry.deletedAt);
+    const filteredBySchool = activeInstitutionSchoolIdResolved
+      ? safeTemplates.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
+      : safeTemplates;
+    return filteredBySchool.filter((entry) => {
+      if (canManageContentAccess || canManageTests || canManageInstitution) return true;
+      if (entry.authorEmail && entry.authorEmail === contentIdentityEmail) return true;
+      if (!entry.grade || Number(entry.grade) === Number(grade)) return true;
+      return false;
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageTests, contentIdentityEmail, contentRelationshipState.testTemplates, grade]);
+  const availableTestTemplates = useMemo(() => {
+    const map = new Map();
+    normalizeLocalTestTemplateLibrary(localTestTemplateLibrary).forEach((entry) => {
+      map.set(entry.templateId, { ...entry, source: entry.source || "local" });
+    });
+    visibleTestTemplates.forEach((entry) => {
+      const current = map.get(entry.templateId);
+      if (!current || (entry.updatedAt || 0) >= (current.updatedAt || 0)) {
+        map.set(entry.templateId, { ...entry, source: entry.isPublished ? "published" : "cloud" });
+      }
+    });
+    return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [localTestTemplateLibrary, visibleTestTemplates]);
+  const generatedWeeklyTestTemplate = useMemo(() => buildGeneratedWeeklyTestTemplate({
+    weekStartDate: currentDiaryWeekStartDate,
+    grade,
+    coveredTasks: weeklyDiaryTasks,
+    getQuiz: getMergedQuiz,
+    subjectsById: subjectLookup,
+    accumulationMode: activeInstitutionSchool?.weekAccumulationMode || "rolling",
+    accumulationValue: activeInstitutionSchool?.weekAccumulationValue || 8,
+  }), [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, subjectLookup, weeklyDiaryTasks]);
+  const visibleWeeklyTestAssignments = useMemo(() => {
+    const safeAssignments = (Array.isArray(contentRelationshipState.weeklyTestAssignments) ? contentRelationshipState.weeklyTestAssignments : [])
+      .map((entry) => normalizeWeeklyTestAssignmentRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.status === "active")
+      .filter((entry) => entry.weekStartDate === currentDiaryWeekStartDate);
+    const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
+    const filteredBySchool = activeInstitutionSchoolIdResolved
+      ? safeAssignments.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
+      : safeAssignments;
+    return filteredBySchool.filter((entry) => {
+      if (canManageContentAccess || canManageTests || canManageInstitution) return true;
+      if (entry.assignedByEmail === contentIdentityEmail) return true;
+      if (entry.targetType === "student" && (entry.targetStudentEmail === contentIdentityEmail || childEmails.has(entry.targetStudentEmail))) return true;
+      return entry.targetType === "grade" && Number(entry.targetGrade) === Number(grade);
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageTests, contentIdentityEmail, contentRelationshipState.weeklyTestAssignments, currentDiaryWeekStartDate, grade, linkedChildOptions]);
+  const currentWeeklyAssignedTemplate = useMemo(() => {
+    const latestAssignment = [...visibleWeeklyTestAssignments].sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0] || null;
+    if (!latestAssignment) return null;
+    return visibleTestTemplates.find((entry) => entry.templateId === latestAssignment.templateId) || null;
+  }, [visibleTestTemplates, visibleWeeklyTestAssignments]);
+  const currentWeeklyTestTemplate = currentWeeklyAssignedTemplate || generatedWeeklyTestTemplate;
+  const visibleWeeklyTestResults = useMemo(() => {
+    const safeResults = (Array.isArray(contentRelationshipState.weeklyTestResults) ? contentRelationshipState.weeklyTestResults : [])
+      .map((entry) => normalizeWeeklyTestResultRecord(entry))
+      .filter(Boolean);
+    const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
+    const filteredBySchool = activeInstitutionSchoolIdResolved
+      ? safeResults.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
+      : safeResults;
+    return filteredBySchool.filter((entry) => {
+      if (canManageContentAccess || canManageTests || canManageInstitution) return true;
+      if (entry.studentEmail === contentIdentityEmail) return true;
+      if (childEmails.has(entry.studentEmail)) return true;
+      return visibleTeacherStudentLinks.some((link) => link.studentEmail === entry.studentEmail && link.teacherEmail === contentIdentityEmail);
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageTests, contentIdentityEmail, contentRelationshipState.weeklyTestResults, linkedChildOptions, visibleTeacherStudentLinks]);
+  const diaryViewerStudentOptions = useMemo(() => {
+    if (accessibleStudentOptions.length) return accessibleStudentOptions;
+    if (contentIdentityEmail) {
+      return [{
+        email: contentIdentityEmail,
+        label: contentIdentityEmail,
+        grade: Number(grade) || null,
+        schoolId: activeInstitutionSchoolIdResolved,
+        relationship: "self",
+        updatedAt: Date.now(),
+      }];
+    }
+    return [];
+  }, [accessibleStudentOptions, activeInstitutionSchoolIdResolved, contentIdentityEmail, grade]);
+  const activeDiaryViewerStudentEmail = useMemo(() => {
+    if (performanceStudentEmail && diaryViewerStudentOptions.some((entry) => entry.email === performanceStudentEmail)) return performanceStudentEmail;
+    if (contentManagerRole === "student" && contentIdentityEmail) return contentIdentityEmail;
+    if (contentManagerRole === "parent" && linkedChildOptions[0]?.email) return linkedChildOptions[0].email;
+    return diaryViewerStudentOptions[0]?.email || "";
+  }, [contentIdentityEmail, contentManagerRole, diaryViewerStudentOptions, linkedChildOptions, performanceStudentEmail]);
+  const currentWeeklyStudentTestResult = useMemo(
+    () => visibleWeeklyTestResults
+      .filter((entry) => entry.studentEmail === activeDiaryViewerStudentEmail && entry.weekStartDate === currentDiaryWeekStartDate)
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0] || null,
+    [activeDiaryViewerStudentEmail, currentDiaryWeekStartDate, visibleWeeklyTestResults],
+  );
+  const performanceSummaryByStudent = useMemo(() => {
+    const diaryTasksByStudent = {};
+    diaryViewerStudentOptions.forEach((entry) => {
+      const email = entry.email;
+      const relevantCompletions = visibleDiaryCompletions.filter((row) => row.studentEmail === email);
+      const weeklyCompletions = relevantCompletions.filter((row) => row.targetDate >= currentDiaryWeekDates[0] && row.targetDate <= currentDiaryWeekDates[4]);
+      const weeklyResults = visibleWeeklyTestResults.filter((row) => row.studentEmail === email);
+      diaryTasksByStudent[email] = {
+        weeklyCompleted: weeklyCompletions.length,
+        weeklyAssigned: weeklyDiaryTasks.length,
+        recentTestAverage: weeklyResults.length
+          ? Math.round(weeklyResults.reduce((sum, row) => sum + ((row.total ? (row.score / row.total) : 0) * 100), 0) / weeklyResults.length)
+          : 0,
+        latestTest: weeklyResults.sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0] || null,
+        weakTopics: weeklyResults.flatMap((row) => Array.isArray(row.weakTopics) ? row.weakTopics : []).slice(0, 6),
+      };
+    });
+    return diaryTasksByStudent;
+  }, [currentDiaryWeekDates, diaryViewerStudentOptions, visibleDiaryCompletions, visibleWeeklyTestResults, weeklyDiaryTasks.length]);
+  useEffect(() => {
+    if (!accessibleSchools.length) return;
+    if (activeInstitutionSchoolIdResolved) return;
+    setActiveInstitutionSchoolId(accessibleSchools[0].schoolId);
+  }, [accessibleSchools, activeInstitutionSchoolIdResolved]);
+  useEffect(() => {
+    if (!diaryViewerStudentOptions.length) return;
+    if (activeDiaryViewerStudentEmail && diaryViewerStudentOptions.some((entry) => entry.email === activeDiaryViewerStudentEmail)) return;
+    setPerformanceStudentEmail(diaryViewerStudentOptions[0].email);
+  }, [activeDiaryViewerStudentEmail, diaryViewerStudentOptions]);
   const selectedLessonCanonicalKey = useMemo(
     () => getCanonicalLessonKeyForLesson(selectedLesson),
     [selectedLesson],
@@ -9756,6 +11731,544 @@ function HomeschoolApp() {
       && Number(assignment.targetGrade) === Number(selectedLessonChapterGroup.grade)
     ));
   }, [selectedLessonChapterGroup, visibleChapterAssignments]);
+  const refreshContentRelationshipStateRef = useRef(async () => createEmptyContentRelationshipState());
+  const handleSaveSchool = useCallback(async () => {
+    if (!canManageInstitution) {
+      showAppToast(joinLocalizedText("Your content role cannot manage schools.", "آپ کے مواد والے کردار کو اسکول منظم کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to manage schools.", "اسکول منظم کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    const schoolName = String(schoolDraftName || "").trim();
+    if (!schoolName) {
+      showAppToast(joinLocalizedText("Enter a school name first.", "پہلے اسکول کا نام درج کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const schoolId = `school_${simpleHash(schoolName.toLowerCase())}`;
+      const ownerEmail = String(schoolDraftOwnerEmail || contentIdentityEmail).trim().toLowerCase();
+      const principalEmail = String(schoolDraftPrincipalEmail || ownerEmail).trim().toLowerCase();
+      const client = ensureSupabaseClient();
+      const nowIso = new Date().toISOString();
+      const baseRow = {
+        school_id: schoolId,
+        school_name: schoolName,
+        owner_email: ownerEmail,
+        principal_email: principalEmail,
+        year_start_date: String(schoolDraftYearStartDate || getWeekStartDate(Date.now())).trim(),
+        week_accumulation_mode: String(schoolDraftAccumulationMode || "rolling").trim().toLowerCase(),
+        week_accumulation_value: Math.max(1, Number(schoolDraftAccumulationValue) || 8),
+        status: "active",
+        updated_at: nowIso,
+      };
+      const { error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(baseRow, { onConflict: "school_id" });
+      if (error) throw error;
+      await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).upsert([
+        {
+          membership_id: `membership_${simpleHash(`${schoolId}_${ownerEmail}_school_owner`)}`,
+          school_id: schoolId,
+          member_email: ownerEmail,
+          role: "school_owner",
+          grade_scope: [],
+          status: "active",
+          linked_by_email: contentIdentityEmail,
+          updated_at: nowIso,
+        },
+        {
+          membership_id: `membership_${simpleHash(`${schoolId}_${principalEmail}_principal`)}`,
+          school_id: schoolId,
+          member_email: principalEmail,
+          role: "principal",
+          grade_scope: [],
+          status: "active",
+          linked_by_email: contentIdentityEmail,
+          updated_at: nowIso,
+        },
+      ], { onConflict: "membership_id" });
+      setActiveInstitutionSchoolId(schoolId);
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("School saved", "اسکول محفوظ ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to save school: ${error?.message || error}`, `اسکول محفوظ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canManageInstitution, contentIdentityEmail, ensureSupabaseClient, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
+  const handleSaveSchoolMembership = useCallback(async () => {
+    if (!canManageInstitution) {
+      showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    if (!activeInstitutionSchoolIdResolved) {
+      showAppToast(joinLocalizedText("Select a school first.", "پہلے ایک اسکول منتخب کریں۔", language), "alert");
+      return;
+    }
+    const memberEmail = String(schoolMemberDraftEmail || "").trim().toLowerCase();
+    if (!memberEmail || !memberEmail.includes("@")) {
+      showAppToast(joinLocalizedText("Enter a valid member email first.", "پہلے درست ممبر ای میل درج کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const role = normalizeContentManagerRole(schoolMemberDraftRole || "teacher");
+      const gradeScope = normalizeGradeScopeArray(schoolMemberDraftGradeScope);
+      const nowIso = new Date().toISOString();
+      const client = ensureSupabaseClient();
+      const { error } = await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).upsert({
+        membership_id: `membership_${simpleHash(`${activeInstitutionSchoolIdResolved}_${memberEmail}_${role}`)}`,
+        school_id: activeInstitutionSchoolIdResolved,
+        member_email: memberEmail,
+        role,
+        grade_scope: gradeScope,
+        status: "active",
+        linked_by_email: contentIdentityEmail,
+        updated_at: nowIso,
+      }, { onConflict: "membership_id" });
+      if (error) throw error;
+      setSchoolMemberDraftEmail("");
+      setSchoolMemberDraftRole("teacher");
+      setSchoolMemberDraftGradeScope("");
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("School membership saved", "اسکول ممبرشپ محفوظ ہو گئی", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to save membership: ${error?.message || error}`, `ممبرشپ محفوظ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [activeInstitutionSchoolIdResolved, canManageInstitution, contentIdentityEmail, ensureSupabaseClient, language, schoolMemberDraftEmail, schoolMemberDraftGradeScope, schoolMemberDraftRole, showAppToast]);
+  const handleDeleteSchoolMembership = useCallback(async (membership) => {
+    const normalized = normalizeSchoolMembershipRecord(membership);
+    if (!normalized?.membershipId) return;
+    if (!canManageInstitution) {
+      showAppToast(joinLocalizedText("Your content role cannot remove school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ ہٹانے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).delete().eq("membership_id", normalized.membershipId);
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("School membership removed", "اسکول ممبرشپ ہٹا دی گئی", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to remove membership: ${error?.message || error}`, `ممبرشپ ہٹائی نہیں جا سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canManageInstitution, ensureSupabaseClient, language, showAppToast]);
+  const handleSaveParentStudentLink = useCallback(async () => {
+    if (!canManageParentLinks && !canManageInstitution && !canManageContentAccess) {
+      showAppToast(joinLocalizedText("Your content role cannot manage parent-child links.", "آپ کے مواد والے کردار کو والدین اور بچوں کے روابط منظم کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    const parentEmail = String(parentLinkDraftParentEmail || "").trim().toLowerCase();
+    const studentEmail = String(parentLinkDraftStudentEmail || "").trim().toLowerCase();
+    if (!parentEmail || !studentEmail || !parentEmail.includes("@") || !studentEmail.includes("@")) {
+      showAppToast(joinLocalizedText("Enter both parent and student emails.", "والدین اور طالب علم دونوں کے ای میل درج کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.from(SUPABASE_PARENT_STUDENT_LINKS_TABLE).upsert({
+        link_id: `parent_link_${simpleHash(`${activeInstitutionSchoolIdResolved}_${parentEmail}_${studentEmail}`)}`,
+        school_id: activeInstitutionSchoolIdResolved || null,
+        parent_email: parentEmail,
+        student_email: studentEmail,
+        relationship_label: String(parentLinkDraftRelationshipLabel || "Parent").trim(),
+        family_identifier: String(parentLinkDraftFamilyIdentifier || "").trim(),
+        status: "active",
+        linked_by_email: contentIdentityEmail,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "link_id" });
+      if (error) throw error;
+      setParentLinkDraftParentEmail("");
+      setParentLinkDraftStudentEmail("");
+      setParentLinkDraftRelationshipLabel("");
+      setParentLinkDraftFamilyIdentifier("");
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Parent-child link saved", "والدین اور بچے کا ربط محفوظ ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to save parent link: ${error?.message || error}`, `والدین کا ربط محفوظ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageParentLinks, contentIdentityEmail, ensureSupabaseClient, language, parentLinkDraftFamilyIdentifier, parentLinkDraftParentEmail, parentLinkDraftRelationshipLabel, parentLinkDraftStudentEmail, showAppToast]);
+  const handleDeleteParentStudentLink = useCallback(async (link) => {
+    const normalized = normalizeParentStudentLinkRecord(link);
+    if (!normalized?.linkId) return;
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.from(SUPABASE_PARENT_STUDENT_LINKS_TABLE).delete().eq("link_id", normalized.linkId);
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Parent-child link removed", "والدین اور بچے کا ربط ہٹا دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to remove parent link: ${error?.message || error}`, `والدین کا ربط ہٹایا نہیں جا سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [ensureSupabaseClient, language, showAppToast]);
+  const handleSaveDiaryEntry = useCallback(async () => {
+    if (!canManageDiary) {
+      showAppToast(joinLocalizedText("Your content role cannot assign diary work.", "آپ کے مواد والے کردار کو ڈائری کام تفویض کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    const subjectId = String(diaryDraftSubjectId || selectedSubject?.id || "").trim();
+    const targetDates = diaryDraftRangeMode === "week"
+      ? currentDiaryWeekDates.slice(0, 5)
+      : getWeekDates(diaryDraftStartDate || diaryWeekAnchorDate)
+        .slice(0, 5)
+        .filter((date) => date >= String(diaryDraftStartDate || "").trim() && date <= String(diaryDraftEndDate || diaryDraftStartDate || "").trim());
+    if (!subjectId || !diaryDraftContentId || !targetDates.length) {
+      showAppToast(joinLocalizedText("Choose the diary dates, subject, and chapter first.", "پہلے ڈائری کی تاریخیں، مضمون، اور باب منتخب کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const nowIso = new Date().toISOString();
+      const targetType = diaryDraftScope === "student" ? "student" : "grade";
+      const lessonGroup = chapterGroupLookup[`${subjectId}::${Number(grade)}::${String(diaryDraftContentId || "").trim()}`] || null;
+      const contentId = String(lessonGroup?.activeVariant?.contentId || "").trim();
+      const rows = targetDates.map((targetDate) => ({
+        diary_id: `diary_${simpleHash(`${activeInstitutionSchoolIdResolved}_${targetType}_${diaryDraftStudentEmail}_${subjectId}_${diaryDraftContentId}_${targetDate}`)}`,
+        school_id: activeInstitutionSchoolIdResolved || null,
+        teacher_email: contentIdentityEmail,
+        target_type: targetType,
+        target_grade: Number(grade) || null,
+        target_student_email: targetType === "student" ? String(diaryDraftStudentEmail || "").trim().toLowerCase() : null,
+        target_date: targetDate,
+        subject: subjectId,
+        lesson_key: String(diaryDraftContentId || "").trim(),
+        content_id: contentId || null,
+        note: String(diaryDraftNote || "").trim(),
+        status: "active",
+        updated_at: nowIso,
+      }));
+      const { error } = await client.from(SUPABASE_DIARY_ENTRIES_TABLE).upsert(rows, { onConflict: "diary_id" });
+      if (error) throw error;
+      setDiaryDraftNote("");
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Diary work assigned", "ڈائری کام تفویض ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to save diary entry: ${error?.message || error}`, `ڈائری اندراج محفوظ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [activeInstitutionSchoolIdResolved, canManageDiary, chapterGroupLookup, contentIdentityEmail, currentDiaryWeekDates, diaryDraftContentId, diaryDraftEndDate, diaryDraftNote, diaryDraftRangeMode, diaryDraftScope, diaryDraftStartDate, diaryDraftStudentEmail, diaryDraftSubjectId, diaryWeekAnchorDate, ensureSupabaseClient, grade, language, selectedSubject?.id, showAppToast]);
+  const handleDeleteDiaryEntry = useCallback(async (entry) => {
+    const normalized = normalizeDiaryEntryRecord(entry);
+    if (!normalized?.diaryId) return;
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.from(SUPABASE_DIARY_ENTRIES_TABLE).delete().eq("diary_id", normalized.diaryId);
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Diary entry removed", "ڈائری اندراج ہٹا دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to remove diary entry: ${error?.message || error}`, `ڈائری اندراج ہٹایا نہیں جا سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [ensureSupabaseClient, language, showAppToast]);
+  const handleToggleDiaryCompletion = useCallback(async (task, explicitDone = null) => {
+    if (!task || !activeDiaryViewerStudentEmail) return;
+    const current = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
+    const shouldComplete = explicitDone === null ? !current : Boolean(explicitDone);
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      if (!shouldComplete && current?.completionId) {
+        const { error } = await client.from(SUPABASE_DIARY_COMPLETIONS_TABLE).delete().eq("completion_id", current.completionId);
+        if (error) throw error;
+      } else if (shouldComplete) {
+        const row = {
+          completion_id: current?.completionId || `completion_${simpleHash(`${activeInstitutionSchoolIdResolved}_${activeDiaryViewerStudentEmail}_${task.taskKind}_${task.taskKey}`)}`,
+          school_id: activeInstitutionSchoolIdResolved || null,
+          student_email: activeDiaryViewerStudentEmail,
+          task_kind: task.taskKind,
+          task_key: task.taskKey,
+          target_date: task.targetDate,
+          subject: task.subject,
+          lesson_key: task.lessonKey || null,
+          content_id: task.contentId || null,
+          status: "completed",
+          completion_payload: {
+            title: task.title,
+            note: task.note || "",
+            source: task.source,
+          },
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        const { error } = await client.from(SUPABASE_DIARY_COMPLETIONS_TABLE).upsert(row, { onConflict: "completion_id" });
+        if (error) throw error;
+      }
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(
+        shouldComplete
+          ? joinLocalizedText("Diary task completed", "ڈائری کام مکمل ہو گیا", language)
+          : joinLocalizedText("Diary task reopened", "ڈائری کام دوبارہ کھول دیا گیا", language),
+        "check",
+      );
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to update diary completion: ${error?.message || error}`, `ڈائری تکمیل تازہ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, diaryCompletionLookup, ensureSupabaseClient, language, showAppToast]);
+  const handleOpenTestTemplateImport = useCallback(() => {
+    if (!canManageTests) {
+      showAppToast(joinLocalizedText("Your content role cannot import Saturday tests.", "آپ کے مواد والے کردار کو ہفتہ وار ٹیسٹ درآمد کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    if (testTemplateImportInputRef.current) testTemplateImportInputRef.current.value = "";
+    testTemplateImportInputRef.current?.click?.();
+  }, [canManageTests, language, showAppToast]);
+  const handleImportTestTemplates = useCallback(async (event) => {
+    const files = Array.from(event?.target?.files || []);
+    if (!files.length) return;
+    setTestTemplateImportBusy(true);
+    try {
+      const imported = [];
+      for (const file of files) {
+        const raw = JSON.parse(await file.text());
+        imported.push(...normalizeTestTemplateImportPayload(raw, { grade }));
+      }
+      if (!imported.length) throw new Error("No test templates found.");
+      setLocalTestTemplateLibrary((current) => normalizeLocalTestTemplateLibrary([...(Array.isArray(current) ? current : []), ...imported]));
+      showAppToast(joinLocalizedText(`${imported.length} test template(s) imported`, `${imported.length} ٹیسٹ ٹیمپلیٹس درآمد ہو گئے`, language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to import test templates: ${error?.message || error}`, `ٹیسٹ ٹیمپلیٹس درآمد نہیں ہو سکے: ${error?.message || error}`, language), "alert");
+    } finally {
+      setTestTemplateImportBusy(false);
+      if (event?.target) event.target.value = "";
+    }
+  }, [grade, language, showAppToast]);
+  const handleExportTestTemplate = useCallback((template) => {
+    const payload = buildTestTemplateExportPayload(template);
+    if (!payload) return;
+    downloadJson(`test-template-${payload.templateId}.json`, payload);
+    showAppToast(joinLocalizedText("Test template exported", "ٹیسٹ ٹیمپلیٹ برآمد ہو گیا", language), "copy");
+  }, [language, showAppToast]);
+  const handleDeleteLocalTestTemplate = useCallback((templateId) => {
+    const safeId = String(templateId || "").trim();
+    if (!safeId) return;
+    setLocalTestTemplateLibrary((current) => normalizeLocalTestTemplateLibrary((Array.isArray(current) ? current : []).filter((entry) => String(entry.templateId || "").trim() !== safeId)));
+    showAppToast(joinLocalizedText("Local test template removed", "مقامی ٹیسٹ ٹیمپلیٹ ہٹا دیا گیا", language), "check");
+  }, [language, showAppToast]);
+  const handlePublishTestTemplate = useCallback(async (template) => {
+    if (!canManageTests) {
+      showAppToast(joinLocalizedText("Your content role cannot publish Saturday tests.", "آپ کے مواد والے کردار کو ہفتہ وار ٹیسٹ شائع کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    const normalized = normalizeLocalTestTemplateRecord(template);
+    if (!normalized || !supabaseAuthState.userId) {
+      showAppToast(joinLocalizedText("Sign in first to publish tests.", "ٹیسٹ شائع کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    setTestTemplatePublishBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const row = {
+        template_id: normalized.templateId,
+        school_id: activeInstitutionSchoolIdResolved || null,
+        author_user_id: supabaseAuthState.userId,
+        author_email: contentIdentityEmail,
+        title: normalized.title,
+        grade: normalized.grade || Number(grade) || null,
+        subject_scope: normalized.subjectScope,
+        payload: normalized.payload,
+        is_published: true,
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        deleted_at: null,
+      };
+      const { error } = await client.from(SUPABASE_TEST_TEMPLATES_TABLE).upsert(row, { onConflict: "template_id" });
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Test template published", "ٹیسٹ ٹیمپلیٹ شائع ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to publish test template: ${error?.message || error}`, `ٹیسٹ ٹیمپلیٹ شائع نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setTestTemplatePublishBusy(false);
+    }
+  }, [activeInstitutionSchoolIdResolved, canManageTests, contentIdentityEmail, ensureSupabaseClient, grade, language, showAppToast, supabaseAuthState.userId]);
+  const handleUnpublishTestTemplate = useCallback(async (template) => {
+    const normalized = normalizeTestTemplateRecord(template);
+    if (!normalized?.templateId) return;
+    setTestTemplatePublishBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.from(SUPABASE_TEST_TEMPLATES_TABLE).upsert({
+        template_id: normalized.templateId,
+        school_id: normalized.schoolId || activeInstitutionSchoolIdResolved || null,
+        author_user_id: normalized.authorUserId || supabaseAuthState.userId,
+        author_email: normalized.authorEmail || contentIdentityEmail,
+        title: normalized.title,
+        grade: normalized.grade,
+        subject_scope: normalized.subjectScope,
+        payload: normalized.payload,
+        is_published: false,
+        updated_at: new Date().toISOString(),
+        deleted_at: new Date().toISOString(),
+      }, { onConflict: "template_id" });
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Test template unpublished", "ٹیسٹ ٹیمپلیٹ غیر شائع کر دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to unpublish test template: ${error?.message || error}`, `ٹیسٹ ٹیمپلیٹ غیر شائع نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setTestTemplatePublishBusy(false);
+    }
+  }, [activeInstitutionSchoolIdResolved, contentIdentityEmail, ensureSupabaseClient, language, showAppToast, supabaseAuthState.userId]);
+  const handleAssignWeeklyTestTemplate = useCallback(async () => {
+    if (!canManageTests) {
+      showAppToast(joinLocalizedText("Your content role cannot assign weekly tests.", "آپ کے مواد والے کردار کو ہفتہ وار ٹیسٹ تفویض کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    const targetType = testAssignmentDraftScope === "student" ? "student" : "grade";
+    const templateId = String(testAssignmentDraftTemplateId || currentWeeklyTestTemplate?.templateId || "").trim();
+    if (!templateId) {
+      showAppToast(joinLocalizedText("Choose a test template first.", "پہلے ایک ٹیسٹ ٹیمپلیٹ منتخب کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const row = {
+        assignment_id: `weekly_test_${simpleHash(`${activeInstitutionSchoolIdResolved}_${targetType}_${testAssignmentDraftStudentEmail}_${templateId}_${currentDiaryWeekStartDate}`)}`,
+        school_id: activeInstitutionSchoolIdResolved || null,
+        assigned_by_email: contentIdentityEmail,
+        target_type: targetType,
+        target_grade: Number(grade) || null,
+        target_student_email: targetType === "student" ? String(testAssignmentDraftStudentEmail || "").trim().toLowerCase() : null,
+        week_start_date: currentDiaryWeekStartDate,
+        template_id: templateId,
+        note: String(testAssignmentDraftNote || "").trim(),
+        status: "active",
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await client.from(SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE).upsert(row, { onConflict: "assignment_id" });
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Weekly test assigned", "ہفتہ وار ٹیسٹ تفویض ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to assign weekly test: ${error?.message || error}`, `ہفتہ وار ٹیسٹ تفویض نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [activeInstitutionSchoolIdResolved, canManageTests, contentIdentityEmail, currentDiaryWeekStartDate, currentWeeklyTestTemplate?.templateId, ensureSupabaseClient, grade, language, showAppToast, testAssignmentDraftNote, testAssignmentDraftScope, testAssignmentDraftStudentEmail, testAssignmentDraftTemplateId]);
+  const handleDeleteWeeklyTestAssignment = useCallback(async (assignment) => {
+    const normalized = normalizeWeeklyTestAssignmentRecord(assignment);
+    if (!normalized?.assignmentId) return;
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.from(SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE).delete().eq("assignment_id", normalized.assignmentId);
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Weekly test assignment removed", "ہفتہ وار ٹیسٹ تفویض ہٹا دی گئی", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to remove weekly test assignment: ${error?.message || error}`, `ہفتہ وار ٹیسٹ تفویض ہٹائی نہیں جا سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [ensureSupabaseClient, language, showAppToast]);
+  const handleStartWeeklyTestSession = useCallback((template = null) => {
+    const normalized = normalizeLocalTestTemplateRecord(template || currentWeeklyTestTemplate);
+    if (!normalized) {
+      showAppToast(joinLocalizedText("No weekly test is ready yet.", "ابھی کوئی ہفتہ وار ٹیسٹ تیار نہیں۔", language), "alert");
+      return;
+    }
+    setActiveWeeklyTestSession({
+      templateId: normalized.templateId,
+      weekStartDate: currentDiaryWeekStartDate,
+      title: normalized.title,
+      questions: normalized.payload?.questions || [],
+      answers: {},
+      startedAt: Date.now(),
+    });
+  }, [currentDiaryWeekStartDate, currentWeeklyTestTemplate, language, showAppToast]);
+  const handleWeeklyTestAnswerChange = useCallback((questionId, value, pairId = null) => {
+    setActiveWeeklyTestSession((current) => {
+      if (!current) return current;
+      const nextAnswers = { ...(current.answers || {}) };
+      if (pairId) {
+        nextAnswers[questionId] = { ...(nextAnswers[questionId] || {}), [pairId]: value };
+      } else {
+        nextAnswers[questionId] = value;
+      }
+      return { ...current, answers: nextAnswers };
+    });
+  }, []);
+  const handleSubmitWeeklyTest = useCallback(async () => {
+    if (!activeWeeklyTestSession || !activeDiaryViewerStudentEmail) return;
+    const questions = Array.isArray(activeWeeklyTestSession.questions) ? activeWeeklyTestSession.questions : [];
+    let score = 0;
+    const subjectBreakdown = {};
+    const weakTopics = [];
+    questions.forEach((question) => {
+      const answer = activeWeeklyTestSession.answers?.[question.id];
+      let correct = false;
+      if (question.type === "mcq") correct = Number(answer) === Number(question.correctIndex);
+      else if (question.type === "truefalse") correct = String(answer) === String(Boolean(question.correct));
+      else if (question.type === "fillblank") correct = normalizeText(answer) === normalizeText(question.answer);
+      else if (question.type === "matching") {
+        const selected = answer && typeof answer === "object" ? answer : {};
+        correct = (question.pairs || []).every((pair) => String(selected[pair.id] || "") === String(pair.right || ""));
+      }
+      if (correct) score += 1;
+      const subjectId = String(question.subject || "mixed").trim();
+      if (!subjectBreakdown[subjectId]) subjectBreakdown[subjectId] = { total: 0, correct: 0 };
+      subjectBreakdown[subjectId].total += 1;
+      if (correct) subjectBreakdown[subjectId].correct += 1;
+      if (!correct) {
+        weakTopics.push({
+          subject: subjectId,
+          prompt: question.prompt,
+          lessonKey: question.lessonKey || "",
+        });
+      }
+    });
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const { error } = await client.from(SUPABASE_WEEKLY_TEST_RESULTS_TABLE).upsert({
+        result_id: `test_result_${simpleHash(`${activeInstitutionSchoolIdResolved}_${activeDiaryViewerStudentEmail}_${activeWeeklyTestSession.weekStartDate}_${activeWeeklyTestSession.templateId}`)}`,
+        school_id: activeInstitutionSchoolIdResolved || null,
+        student_email: activeDiaryViewerStudentEmail,
+        week_start_date: activeWeeklyTestSession.weekStartDate,
+        template_id: activeWeeklyTestSession.templateId,
+        score,
+        total: questions.length,
+        summary_payload: {
+          title: activeWeeklyTestSession.title,
+          startedAt: activeWeeklyTestSession.startedAt,
+          submittedAt: Date.now(),
+          durationMs: Math.max(0, Date.now() - Number(activeWeeklyTestSession.startedAt || Date.now())),
+        },
+        subject_breakdown: subjectBreakdown,
+        weak_topics: weakTopics,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "result_id" });
+      if (error) throw error;
+      setActiveWeeklyTestSession(null);
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Weekly test submitted", "ہفتہ وار ٹیسٹ جمع ہو گیا", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to submit weekly test: ${error?.message || error}`, `ہفتہ وار ٹیسٹ جمع نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, activeWeeklyTestSession, ensureSupabaseClient, language, showAppToast]);
   const myChapterGroups = useMemo(() => allChapterGroups.filter((group) => group.variants.some((variant) => (
     variant.sourceType === "custom" || (variant.sourceType === "published" && variant.ownedByCurrentUser)
   ))), [allChapterGroups]);
@@ -12034,21 +14547,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
 
   const handleSetContentRoleTestMode = useCallback((nextRole = null, enabled = null) => {
     const role = normalizeContentManagerRole(nextRole || contentRoleTestMode.role || liveContentRole || "student");
-    const roleLabel = language === "ur"
-      ? ({
-        student: "طالب علم",
-        parent: "والدین",
-        teacher: "استاد",
-        editor: "ایڈیٹر",
-        admin: "ایڈمن",
-      }[role] || "طالب علم")
-      : ({
-        student: "Student",
-        parent: "Parent",
-        teacher: "Teacher",
-        editor: "Editor",
-        admin: "Admin",
-      }[role] || "Student");
+    const roleLabel = getContentManagerRoleLabel(role, language);
     setContentRoleTestMode((current) => {
       const shouldEnable = enabled === null ? !current.enabled : Boolean(enabled);
       return {
@@ -12271,82 +14770,184 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         setContentRelationshipState(nextState);
         return nextState;
       }
-      const fetchTeacherStudentLinks = async (applyFilters) => {
-        let query = client.from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE)
-          .select("link_id, teacher_user_id, teacher_email, student_email, student_grade, student_label, status, linked_by_user_id, created_at, updated_at");
+      const fetchNormalizedRows = async (table, selectClause, normalizeFn, applyFilters = null, orderBy = "updated_at") => {
+        let query = client.from(table).select(selectClause);
         if (applyFilters) query = applyFilters(query);
-        const { data, error } = await query.order("updated_at", { ascending: false });
+        if (orderBy) query = query.order(orderBy, { ascending: false });
+        const { data, error } = await query;
         if (error) throw error;
-        return Array.isArray(data) ? data.map((row) => normalizeTeacherStudentLinkRecord(row)).filter(Boolean) : [];
+        return Array.isArray(data) ? data.map((row) => normalizeFn(row)).filter(Boolean) : [];
       };
-      const fetchChapterAssignments = async (applyFilters) => {
-        let query = client.from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)
-          .select("assignment_id, assigned_by_user_id, assigned_by_email, target_type, target_grade, target_student_email, subject, lesson_key, content_id, note, status, created_at, updated_at");
-        if (applyFilters) query = applyFilters(query);
-        const { data, error } = await query.order("updated_at", { ascending: false });
-        if (error) throw error;
-        return Array.isArray(data) ? data.map((row) => normalizeChapterAssignmentRecord(row)).filter(Boolean) : [];
+      const rowMaps = {
+        schools: new Map(),
+        memberships: new Map(),
+        parentLinks: new Map(),
+        links: new Map(),
+        assignments: new Map(),
+        diaryEntries: new Map(),
+        diaryCompletions: new Map(),
+        testTemplates: new Map(),
+        weeklyTestAssignments: new Map(),
+        weeklyTestResults: new Map(),
       };
-      const linkMap = new Map();
-      const assignmentMap = new Map();
-      const collectLinks = (rows = []) => {
+      const collectRows = (kind, rows = [], idKey) => {
         rows.forEach((row) => {
-          if (!row?.linkId) return;
-          const previous = linkMap.get(row.linkId);
-          if (!previous || row.updatedAt >= previous.updatedAt) linkMap.set(row.linkId, row);
+          const rowId = String(row?.[idKey] || "").trim();
+          if (!rowId) return;
+          const previous = rowMaps[kind].get(rowId);
+          const nextUpdatedAt = Number(row?.updatedAt || row?.createdAt || row?.publishedAt || row?.completedAt || 0);
+          const previousUpdatedAt = Number(previous?.updatedAt || previous?.createdAt || previous?.publishedAt || previous?.completedAt || 0);
+          if (!previous || nextUpdatedAt >= previousUpdatedAt) rowMaps[kind].set(rowId, row);
         });
       };
-      const collectAssignments = (rows = []) => {
-        rows.forEach((row) => {
-          if (!row?.assignmentId) return;
-          const previous = assignmentMap.get(row.assignmentId);
-          if (!previous || row.updatedAt >= previous.updatedAt) assignmentMap.set(row.assignmentId, row);
-        });
+
+      const selfMemberships = canManageContentAccess
+        ? []
+        : await fetchNormalizedRows(
+          SUPABASE_SCHOOL_MEMBERSHIPS_TABLE,
+          "membership_id, school_id, member_email, role, grade_scope, status, linked_by_email, created_at, updated_at",
+          normalizeSchoolMembershipRecord,
+          (q) => q.eq("member_email", userEmail),
+        );
+      const selfParentLinks = canManageContentAccess
+        ? []
+        : await fetchNormalizedRows(
+          SUPABASE_PARENT_STUDENT_LINKS_TABLE,
+          "link_id, school_id, parent_email, student_email, relationship_label, family_identifier, status, linked_by_email, created_at, updated_at",
+          normalizeParentStudentLinkRecord,
+          (q) => q.or(`parent_email.eq.${userEmail},student_email.eq.${userEmail}`),
+        );
+      const selfTeacherLinks = canManageContentAccess
+        ? []
+        : await fetchNormalizedRows(
+          SUPABASE_TEACHER_STUDENT_LINKS_TABLE,
+          "link_id, school_id, teacher_user_id, teacher_email, student_email, student_grade, student_label, status, linked_by_user_id, created_at, updated_at",
+          normalizeTeacherStudentLinkRecord,
+          (q) => q.or(`teacher_email.eq.${userEmail},student_email.eq.${userEmail}`),
+        );
+      collectRows("memberships", selfMemberships, "membershipId");
+      collectRows("parentLinks", selfParentLinks, "linkId");
+      collectRows("links", selfTeacherLinks, "linkId");
+      const accessibleSchoolIds = new Set([
+        ...selfMemberships.map((row) => row.schoolId),
+        ...selfParentLinks.map((row) => row.schoolId),
+        ...selfTeacherLinks.map((row) => row.schoolId),
+      ].filter(Boolean));
+
+      const collectSchoolScoped = async (table, selectClause, normalizeFn, kind, idKey) => {
+        if (canManageContentAccess) {
+          collectRows(kind, await fetchNormalizedRows(table, selectClause, normalizeFn), idKey);
+          return;
+        }
+        await Promise.all(Array.from(accessibleSchoolIds).map(async (schoolId) => {
+          collectRows(kind, await fetchNormalizedRows(table, selectClause, normalizeFn, (q) => q.eq("school_id", schoolId)), idKey);
+        }));
       };
-      if (canManageContentAccess) {
-        collectLinks(await fetchTeacherStudentLinks());
-        collectAssignments(await fetchChapterAssignments());
-      } else {
-        if (canManageStudentLinks) {
-          collectLinks(await fetchTeacherStudentLinks(
-            (q) => q.eq("teacher_email", userEmail),
-          ));
-        }
-        collectLinks(await fetchTeacherStudentLinks(
-          (q) => q.eq("student_email", userEmail),
-        ));
-        if (canAssignContent) {
-          collectAssignments(await fetchChapterAssignments(
-            (q) => q.eq("assigned_by_email", userEmail),
-          ));
-        }
-        collectAssignments(await fetchChapterAssignments(
-          (q) => q.eq("target_student_email", userEmail).eq("status", "active"),
-        ));
-        if (Number.isFinite(Number(grade))) {
-          collectAssignments(await fetchChapterAssignments(
-            (q) => q
-              .eq("target_type", "grade")
-              .eq("target_grade", Number(grade))
-              .eq("status", "active"),
-          ));
-        }
+
+      await collectSchoolScoped(
+        SUPABASE_SCHOOLS_TABLE,
+        "school_id, school_name, owner_email, principal_email, year_start_date, week_accumulation_mode, week_accumulation_value, status, created_at, updated_at",
+        normalizeSchoolRecord,
+        "schools",
+        "schoolId",
+      );
+      await collectSchoolScoped(
+        SUPABASE_SCHOOL_MEMBERSHIPS_TABLE,
+        "membership_id, school_id, member_email, role, grade_scope, status, linked_by_email, created_at, updated_at",
+        normalizeSchoolMembershipRecord,
+        "memberships",
+        "membershipId",
+      );
+      await collectSchoolScoped(
+        SUPABASE_PARENT_STUDENT_LINKS_TABLE,
+        "link_id, school_id, parent_email, student_email, relationship_label, family_identifier, status, linked_by_email, created_at, updated_at",
+        normalizeParentStudentLinkRecord,
+        "parentLinks",
+        "linkId",
+      );
+      await collectSchoolScoped(
+        SUPABASE_TEACHER_STUDENT_LINKS_TABLE,
+        "link_id, school_id, teacher_user_id, teacher_email, student_email, student_grade, student_label, status, linked_by_user_id, created_at, updated_at",
+        normalizeTeacherStudentLinkRecord,
+        "links",
+        "linkId",
+      );
+      await collectSchoolScoped(
+        SUPABASE_CHAPTER_ASSIGNMENTS_TABLE,
+        "assignment_id, school_id, assigned_by_user_id, assigned_by_email, target_type, target_grade, target_student_email, subject, lesson_key, content_id, note, status, created_at, updated_at",
+        normalizeChapterAssignmentRecord,
+        "assignments",
+        "assignmentId",
+      );
+      await collectSchoolScoped(
+        SUPABASE_DIARY_ENTRIES_TABLE,
+        "diary_id, school_id, teacher_email, target_type, target_grade, target_student_email, target_date, subject, lesson_key, content_id, note, status, created_at, updated_at",
+        normalizeDiaryEntryRecord,
+        "diaryEntries",
+        "diaryId",
+      );
+      await collectSchoolScoped(
+        SUPABASE_DIARY_COMPLETIONS_TABLE,
+        "completion_id, school_id, student_email, task_kind, task_key, target_date, subject, lesson_key, content_id, status, completion_payload, completed_at, updated_at",
+        normalizeDiaryCompletionRecord,
+        "diaryCompletions",
+        "completionId",
+      );
+      await collectSchoolScoped(
+        SUPABASE_TEST_TEMPLATES_TABLE,
+        "template_id, school_id, author_user_id, author_email, title, grade, subject_scope, payload, is_published, published_at, updated_at, deleted_at",
+        normalizeTestTemplateRecord,
+        "testTemplates",
+        "templateId",
+      );
+      if (!canManageContentAccess) {
+        collectRows("testTemplates", await fetchNormalizedRows(
+          SUPABASE_TEST_TEMPLATES_TABLE,
+          "template_id, school_id, author_user_id, author_email, title, grade, subject_scope, payload, is_published, published_at, updated_at, deleted_at",
+          normalizeTestTemplateRecord,
+          (q) => q.is("school_id", null).eq("is_published", true),
+        ), "templateId");
       }
+      await collectSchoolScoped(
+        SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE,
+        "assignment_id, school_id, assigned_by_email, target_type, target_grade, target_student_email, week_start_date, template_id, note, status, created_at, updated_at",
+        normalizeWeeklyTestAssignmentRecord,
+        "weeklyTestAssignments",
+        "assignmentId",
+      );
+      await collectSchoolScoped(
+        SUPABASE_WEEKLY_TEST_RESULTS_TABLE,
+        "result_id, school_id, student_email, week_start_date, template_id, score, total, summary_payload, subject_breakdown, weak_topics, completed_at, updated_at",
+        normalizeWeeklyTestResultRecord,
+        "weeklyTestResults",
+        "resultId",
+      );
+
       const nextState = {
+        ...createEmptyContentRelationshipState(),
         loaded: true,
-        links: Array.from(linkMap.values()),
-        assignments: Array.from(assignmentMap.values()),
+        schools: Array.from(rowMaps.schools.values()),
+        memberships: Array.from(rowMaps.memberships.values()),
+        parentLinks: Array.from(rowMaps.parentLinks.values()),
+        links: Array.from(rowMaps.links.values()),
+        assignments: Array.from(rowMaps.assignments.values()),
+        diaryEntries: Array.from(rowMaps.diaryEntries.values()),
+        diaryCompletions: Array.from(rowMaps.diaryCompletions.values()),
+        testTemplates: Array.from(rowMaps.testTemplates.values()).filter((entry) => !entry.deletedAt),
+        weeklyTestAssignments: Array.from(rowMaps.weeklyTestAssignments.values()),
+        weeklyTestResults: Array.from(rowMaps.weeklyTestResults.values()),
         lastUpdatedAt: Date.now(),
       };
       setContentRelationshipState(nextState);
       return nextState;
     } catch (error) {
-      console.log("Unable to refresh teacher-student relationships:", error);
+      console.log("Unable to refresh institutional relationships:", error);
       const nextState = { ...createEmptyContentRelationshipState(), loaded: true };
       setContentRelationshipState(nextState);
       return nextState;
     }
   }, [canAssignContent, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, ensureSupabaseClient, grade, supabaseDictionarySync]);
+  refreshContentRelationshipStateRef.current = refreshContentRelationshipState;
   const handleSaveTeacherStudentLink = useCallback(async () => {
     if (!canManageStudentLinks) {
       showAppToast(joinLocalizedText("Your content role cannot manage teacher-student links.", "آپ کے مواد والے کردار کو استاد اور طالب علم کے روابط سنبھالنے کی اجازت نہیں۔", language), "alert");
@@ -12371,11 +14972,12 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     try {
       const client = ensureSupabaseClient();
       const nowIso = new Date().toISOString();
-      const linkId = `link_${simpleHash(`${teacherEmail}::${studentEmail}`)}`;
+      const linkId = `link_${simpleHash(`${activeInstitutionSchoolIdResolved || "global"}::${teacherEmail}::${studentEmail}`)}`;
       const { error } = await client
         .from(SUPABASE_TEACHER_STUDENT_LINKS_TABLE)
         .upsert({
           link_id: linkId,
+          school_id: activeInstitutionSchoolIdResolved || null,
           teacher_user_id: canManageContentAccess ? null : supabaseAuthState.userId,
           teacher_email: teacherEmail,
           student_email: studentEmail,
@@ -12396,7 +14998,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [canManageContentAccess, canManageStudentLinks, contentIdentityEmail, ensureSupabaseClient, grade, language, refreshContentRelationshipState, showAppToast, supabaseAuthState.userId, teacherStudentDraftEmail, teacherStudentDraftGrade, teacherStudentDraftTeacherEmail]);
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, ensureSupabaseClient, grade, language, refreshContentRelationshipState, showAppToast, supabaseAuthState.userId, teacherStudentDraftEmail, teacherStudentDraftGrade, teacherStudentDraftTeacherEmail]);
 
   const handleDeleteTeacherStudentLink = useCallback(async (link) => {
     const safeLink = normalizeTeacherStudentLinkRecord(link);
@@ -12458,11 +15060,12 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     try {
       const client = ensureSupabaseClient();
       const nowIso = new Date().toISOString();
-      const assignmentId = `assign_${simpleHash(`${scope}::${targetGrade}::${targetStudentEmail}::${group.subjectId}::${group.canonicalLessonKey}`)}`;
+      const assignmentId = `assign_${simpleHash(`${activeInstitutionSchoolIdResolved || "global"}::${scope}::${targetGrade}::${targetStudentEmail}::${group.subjectId}::${group.canonicalLessonKey}`)}`;
       const { error } = await client
         .from(SUPABASE_CHAPTER_ASSIGNMENTS_TABLE)
         .upsert({
           assignment_id: assignmentId,
+          school_id: activeInstitutionSchoolIdResolved || null,
           assigned_by_user_id: supabaseAuthState.userId,
           assigned_by_email: contentIdentityEmail,
           target_type: scope,
@@ -12489,7 +15092,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [canAssignContent, chapterAssignmentDraftContentId, chapterAssignmentDraftNote, chapterAssignmentDraftScope, chapterAssignmentDraftStudentEmail, contentIdentityEmail, ensureSupabaseClient, grade, language, linkedStudentOptions, refreshContentRelationshipState, selectedLessonChapterGroup, selectedLessonPublishedVariants, showAppToast, supabaseAuthState.userId]);
+  }, [activeInstitutionSchoolIdResolved, canAssignContent, chapterAssignmentDraftContentId, chapterAssignmentDraftNote, chapterAssignmentDraftScope, chapterAssignmentDraftStudentEmail, contentIdentityEmail, ensureSupabaseClient, grade, language, linkedStudentOptions, refreshContentRelationshipState, selectedLessonChapterGroup, selectedLessonPublishedVariants, showAppToast, supabaseAuthState.userId]);
 
   const handleDeleteChapterAssignment = useCallback(async (assignment) => {
     const normalized = normalizeChapterAssignmentRecord(assignment);
@@ -13065,6 +15668,86 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
           if (!active) return;
           refreshContentRelationshipState().catch((error) => {
             console.log("Unable to refresh chapter assignments from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_SCHOOLS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh schools from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_SCHOOL_MEMBERSHIPS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh school memberships from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_PARENT_STUDENT_LINKS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh parent-student links from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_DIARY_ENTRIES_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh diary entries from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_DIARY_COMPLETIONS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh diary completions from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_TEST_TEMPLATES_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh test templates from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh weekly test assignments from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_WEEKLY_TEST_RESULTS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh weekly test results from realtime:", error);
           });
         })
         .subscribe();
@@ -14440,8 +17123,8 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     });
 }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, supabaseDictionarySync]);
+  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -17085,8 +19768,8 @@ const lessons = getMergedLessons(subjectId, grade);
     language,
   );
   const contentManagerRoleLabel = joinLocalizedText(
-    contentManagerRole === "admin" ? "Admin" : contentManagerRole === "editor" ? "Editor" : contentManagerRole === "teacher" ? "Teacher" : contentManagerRole === "parent" ? "Parent" : "Student",
-    contentManagerRole === "admin" ? "ایڈمن" : contentManagerRole === "editor" ? "ایڈیٹر" : contentManagerRole === "teacher" ? "استاد" : contentManagerRole === "parent" ? "والدین" : "طالب علم",
+    getContentManagerRoleLabel(contentManagerRole, "en"),
+    getContentManagerRoleLabel(contentManagerRole, "ur"),
     language,
   );
   const activeStudentProfileInitials = getStudentProfileInitials(activeStudentProfile);
@@ -17652,9 +20335,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     resetReviewSession();
     resetPracticeSession();
   };
-  const goBack = () => { window.speechSynthesis.cancel(); clearQuizAdvanceTimeout(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (tab === "review" && (activeReviewCard || reviewSessionDone)) { restoreReviewReturnSnapshot(); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizElapsedMs([]); setQuizIdx(0); setQuizTimerRemaining(activeSubjectQuizTimeLimit); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
+  const goBack = () => { window.speechSynthesis.cancel(); clearQuizAdvanceTimeout(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (tab === "review" && (activeReviewCard || reviewSessionDone)) { restoreReviewReturnSnapshot(); } else if (tab === "diary" && activeWeeklyTestSession) { setActiveWeeklyTestSession(null); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizElapsedMs([]); setQuizIdx(0); setQuizTimerRemaining(activeSubjectQuizTimeLimit); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review" || tab === "diary") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
   const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" || tab === "favorites" || tab === "badges" ? ui.progress : tab === "review" ? ui.review : tab === "tutor" ? ui.tutor : ui.settings;
+  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" || tab === "favorites" || tab === "badges" ? ui.progress : tab === "review" ? ui.review : tab === "diary" ? joinLocalizedText("Diary", "ڈائری", language) : tab === "tutor" ? ui.tutor : ui.settings;
   const reviewReturnLabel = reviewReturnState?.tab === "review"
     ? ui.review
     : reviewReturnState?.tab === "profiles"
@@ -17724,6 +20407,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     { id: "home", icon: "🏠", label: ui.home },
     { id: "review", icon: "🧠", label: ui.review },
     { id: "progress", icon: "📊", label: ui.progress },
+    { id: "diary", icon: "🗓️", label: joinLocalizedText("Diary", "ڈائری", language) },
     ...(readyAiProviderIds.length > 0 ? [{ id: "tutor", icon: "🤖", label: ui.tutor }] : []),
     { id: "dictionary", icon: "📚", label: joinLocalizedText("Dictionary", "لغت", language) },
     { id: "profiles", icon: "👤", label: joinLocalizedText("Profiles", "پروفائلز", language) },
@@ -17779,6 +20463,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     if (nextTab !== "review") {
       resetReviewSession();
       resetPracticeSession();
+    }
+    if (nextTab !== "diary") {
+      setActiveWeeklyTestSession(null);
     }
   };
   const renderNavBar = (position, inline = false) => (
@@ -18615,6 +21302,16 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               {renderLocalizedTextNode(joinLocalizedText("Learners", "طلبہ", language), language)}
             </button>
           ) : null}
+          {(canManageInstitution || accessibleSchools.length > 0) ? (
+            <button type="button" className={`review-section-tab${profilesSectionTab === "institution" ? " active" : ""}`} onClick={() => setProfilesSectionTab("institution")}>
+              {renderLocalizedTextNode(joinLocalizedText("Institution", "ادارہ", language), language)}
+            </button>
+          ) : null}
+          {(canManageParentLinks || linkedChildOptions.length > 0 || visibleParentStudentLinks.length > 0) ? (
+            <button type="button" className={`review-section-tab${profilesSectionTab === "family" ? " active" : ""}`} onClick={() => setProfilesSectionTab("family")}>
+              {renderLocalizedTextNode(joinLocalizedText("Family", "خاندان", language), language)}
+            </button>
+          ) : null}
           {(canAssignContent || canManageContentAccess || visibleChapterAssignments.length > 0) ? (
             <button type="button" className={`review-section-tab${profilesSectionTab === "assignments" ? " active" : ""}`} onClick={() => setProfilesSectionTab("assignments")}>
               {renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویض", language), language)}
@@ -18837,6 +21534,149 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           )) : (
             <div className="review-panel">
               <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No learner links yet. Link a learner first, then use chapter assignments.", "ابھی کوئی طالب علم ربط موجود نہیں۔ پہلے طالب علم منسلک کریں، پھر باب کی تفویض استعمال کریں۔", language), language)}</p>
+            </div>
+          )}
+        </>
+        ) : null}
+        {profilesSectionTab === "institution" ? (
+        <>
+          <div className="review-panel chapter-management-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "اسکول درجہ بندی", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "ادارتی ڈھانچہ ایک بار بنائیں تاکہ پرنسپل اساتذہ کی نگرانی کریں، اساتذہ منسلک طلبہ کے ساتھ کام کریں، اور والدین صرف اپنے بچوں تک محدود رہیں۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{formatNumberLabel(accessibleSchools.length)}</span>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-icon">🏫</div><div className="stat-value">{formatNumberLabel(accessibleSchools.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Schools", "اسکول", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">👔</div><div className="stat-value">{renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Your institution role", "آپ کا ادارتی کردار", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">👥</div><div className="stat-value">{formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Members in scope", "دائرہ کے ممبرز", language), language)}</div></div>
+            </div>
+            {accessibleSchools.length ? (
+              <div className="profile-switcher-chip-row" style={{ marginTop: 14 }}>
+                {accessibleSchools.map((school) => (
+                  <button key={school.schoolId} type="button" className={`profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`} onClick={() => setActiveInstitutionSchoolId(school.schoolId)}>
+                    <span className="profile-switcher-chip-avatar" aria-hidden="true">🏫</span>
+                    <span className="profile-switcher-chip-copy">
+                      <strong>{renderLocalizedTextNode(school.schoolName, language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "—"}`, `پرنسپل ${school.principalEmail || "—"}`, language), language)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "ابھی کوئی اسکول منسلک نہیں۔", language), language)}</p>}
+          </div>
+          {canManageInstitution ? (
+            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Create or Update School", "اسکول بنائیں یا تازہ کریں", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Use one school record per institution, then link principals, teachers, students, and parents beneath it.", "ہر ادارے کے لیے ایک اسکول ریکارڈ رکھیں، پھر اس کے نیچے پرنسپل، اساتذہ، طلبہ، اور والدین منسلک کریں۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                <input className="settings-text-input" value={schoolDraftName} onChange={(event) => setSchoolDraftName(event.target.value)} placeholder={language === "ur" ? "اسکول کا نام" : "School name"} />
+                <input className="settings-text-input" type="email" dir="ltr" value={schoolDraftOwnerEmail} onChange={(event) => setSchoolDraftOwnerEmail(event.target.value)} placeholder={language === "ur" ? "اسکول مالک ای میل" : "School owner email"} />
+                <input className="settings-text-input" type="email" dir="ltr" value={schoolDraftPrincipalEmail} onChange={(event) => setSchoolDraftPrincipalEmail(event.target.value)} placeholder={language === "ur" ? "پرنسپل ای میل" : "Principal email"} />
+                <input className="settings-text-input" type="date" value={schoolDraftYearStartDate} onChange={(event) => setSchoolDraftYearStartDate(event.target.value)} />
+              </div>
+              <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
+                <select className="settings-select" value={schoolDraftAccumulationMode} onChange={(event) => setSchoolDraftAccumulationMode(event.target.value)}>
+                  <option value="rolling">{renderLocalizedTextNode(joinLocalizedText("Rolling last N weeks", "پچھلے N ہفتے", language), language)}</option>
+                  <option value="academic_year">{renderLocalizedTextNode(joinLocalizedText("Current academic year", "موجودہ تعلیمی سال", language), language)}</option>
+                  <option value="since_start">{renderLocalizedTextNode(joinLocalizedText("Since app start", "ایپ کے آغاز سے", language), language)}</option>
+                </select>
+                <input className="settings-text-input" type="number" min="1" max="52" value={schoolDraftAccumulationValue} onChange={(event) => setSchoolDraftAccumulationValue(event.target.value)} placeholder={language === "ur" ? "ہفتے" : "Weeks"} style={{ maxWidth: 140 }} />
+                <button type="button" className="study-tool-btn" onClick={handleSaveSchool} disabled={contentRelationshipBusy}>
+                  {renderLocalizedTextNode(contentRelationshipBusy ? joinLocalizedText("Saving...", "محفوظ ہو رہا ہے...", language) : joinLocalizedText("Save School", "اسکول محفوظ کریں", language), language)}
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {activeInstitutionSchool ? (
+            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("School Memberships", "اسکول ممبرشپس", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Membership decides who belongs to this school. Teacher-student links and family links then make the relationship graph precise.", "ممبرشپ طے کرتی ہے کہ کون اس اسکول سے تعلق رکھتا ہے۔ اس کے بعد استاد-طالب علم اور خاندانی روابط رشتوں کو درست بناتے ہیں۔", language), language)}</p>
+                </div>
+              </div>
+              {canManageInstitution ? (
+                <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                  <input className="settings-text-input" type="email" dir="ltr" value={schoolMemberDraftEmail} onChange={(event) => setSchoolMemberDraftEmail(event.target.value)} placeholder={language === "ur" ? "ممبر ای میل" : "Member email"} />
+                  <select className="settings-select" value={schoolMemberDraftRole} onChange={(event) => setSchoolMemberDraftRole(event.target.value)}>
+                    {CONTENT_MANAGER_ROLES.map((role) => <option key={`membership_role_${role}`} value={role}>{renderLocalizedTextNode(getContentManagerRoleLabel(role, language), language)}</option>)}
+                  </select>
+                  <input className="settings-text-input" value={schoolMemberDraftGradeScope} onChange={(event) => setSchoolMemberDraftGradeScope(event.target.value)} placeholder={language === "ur" ? "جماعتیں، مثلاً 5,6" : "Grades, e.g. 5,6"} />
+                  <button type="button" className="study-tool-btn" onClick={handleSaveSchoolMembership} disabled={contentRelationshipBusy}>
+                    {renderLocalizedTextNode(joinLocalizedText("Save Member", "ممبر محفوظ کریں", language), language)}
+                  </button>
+                </div>
+              ) : null}
+              <div className="profile-report-list" style={{ marginTop: 14 }}>
+                {safeSchoolMemberships.filter((entry) => entry.status === "active" && entry.schoolId === activeInstitutionSchool.schoolId).map((entry) => (
+                  <div key={`school_membership_${entry.membershipId}`} className="profile-report-item">
+                    <div className="profile-report-item-head">
+                      <strong>{renderLocalizedTextNode(entry.memberEmail, language)}</strong>
+                      <span>{renderLocalizedTextNode(getContentManagerRoleLabel(entry.role, language), language)}</span>
+                    </div>
+                    <div className="goal-progress-meta">{renderLocalizedTextNode(entry.gradeScope.length ? joinLocalizedText(`Grades ${entry.gradeScope.join(", ")}`, `جماعتیں ${entry.gradeScope.join("، ")}`, language) : joinLocalizedText("All grades in school scope", "اسکول کے تمام درجے", language), language)}</div>
+                    {canManageInstitution ? <div className="result-actions chapter-card-actions"><button type="button" className="ghost-cta" onClick={() => handleDeleteSchoolMembership(entry)} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Remove", "ہٹائیں", language), language)}</button></div> : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+        ) : null}
+        {profilesSectionTab === "family" ? (
+        <>
+          <div className="review-panel chapter-management-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Parent & Children", "والدین اور بچے", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Parent access is now relationship-based. A parent only sees their linked children, while teachers stay limited to their learners.", "والدین کی رسائی اب رشتوں کی بنیاد پر ہے۔ والدین صرف اپنے منسلک بچوں کو دیکھتے ہیں، جبکہ اساتذہ صرف اپنے طلبہ تک محدود رہتے ہیں۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">{formatNumberLabel(visibleParentStudentLinks.length)}</span>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-icon">👨‍👩‍👧</div><div className="stat-value">{formatNumberLabel(new Set(visibleParentStudentLinks.map((entry) => entry.parentEmail).filter(Boolean)).size)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Parents linked", "منسلک والدین", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🧒</div><div className="stat-value">{formatNumberLabel(new Set(visibleParentStudentLinks.map((entry) => entry.studentEmail).filter(Boolean)).size)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Children linked", "منسلک بچے", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">🪪</div><div className="stat-value">{formatNumberLabel(new Set(visibleParentStudentLinks.map((entry) => entry.familyIdentifier).filter(Boolean)).size)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Families", "خاندان", language), language)}</div></div>
+            </div>
+          </div>
+          {(canManageParentLinks || canManageInstitution || canManageContentAccess) ? (
+            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Link Parent to Child", "والدین کو بچے سے منسلک کریں", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Use the real sign-in emails or identifiers the family already uses. This powers the parent dashboard automatically.", "وہی حقیقی سائن اِن ای میل یا شناخت استعمال کریں جو خاندان پہلے سے استعمال کرتا ہے۔ اسی سے والدین کا ڈیش بورڈ خودکار طور پر چلتا ہے۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                <input className="settings-text-input" type="email" dir="ltr" value={parentLinkDraftParentEmail} onChange={(event) => setParentLinkDraftParentEmail(event.target.value)} placeholder={language === "ur" ? "والدین ای میل" : "Parent email"} />
+                <input className="settings-text-input" type="email" dir="ltr" value={parentLinkDraftStudentEmail} onChange={(event) => setParentLinkDraftStudentEmail(event.target.value)} placeholder={language === "ur" ? "طالب علم ای میل" : "Student email"} />
+                <input className="settings-text-input" value={parentLinkDraftRelationshipLabel} onChange={(event) => setParentLinkDraftRelationshipLabel(event.target.value)} placeholder={language === "ur" ? "مثلاً والدہ" : "Relationship label"} />
+                <input className="settings-text-input" value={parentLinkDraftFamilyIdentifier} onChange={(event) => setParentLinkDraftFamilyIdentifier(event.target.value)} placeholder={language === "ur" ? "فیملی آئی ڈی / CNIC" : "Family ID / CNIC"} />
+                <button type="button" className="study-tool-btn" onClick={handleSaveParentStudentLink} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Save Link", "ربط محفوظ کریں", language), language)}</button>
+              </div>
+            </div>
+          ) : null}
+          {visibleParentStudentLinks.length ? visibleParentStudentLinks.map((entry) => (
+            <div key={`parent_child_${entry.linkId}`} className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(entry.parentEmail, language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText(`${entry.studentEmail} • ${entry.relationshipLabel || "Parent"}`, `${entry.studentEmail} • ${entry.relationshipLabel || "والدین"}`, language), language)}</p>
+                </div>
+                <span className="goal-progress-badge">{renderLocalizedTextNode(entry.familyIdentifier || joinLocalizedText("Family link", "خاندانی ربط", language), language)}</span>
+              </div>
+              {(canManageParentLinks || canManageInstitution || canManageContentAccess) ? <div className="result-actions chapter-card-actions"><button type="button" className="ghost-cta" onClick={() => handleDeleteParentStudentLink(entry)} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Remove", "ہٹائیں", language), language)}</button></div> : null}
+            </div>
+          )) : (
+            <div className="review-panel">
+              <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No parent-child links yet.", "ابھی کوئی والدین-بچہ روابط موجود نہیں۔", language), language)}</p>
             </div>
           )}
         </>
@@ -20392,6 +23232,150 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
             ) : <p className="empty-state">{renderLocalizedTextNode(ui.classTrackingDisabled, language)}</p>}
           </div>}
+        </div>
+      </>)}
+
+      {tab === "diary" && (<>
+        <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "ڈائری حصے" : "Diary sections"}>
+          <button type="button" className={`review-section-tab${diarySectionTab === "week" ? " active" : ""}`} onClick={() => setDiarySectionTab("week")}>{renderLocalizedTextNode(joinLocalizedText("This Week", "یہ ہفتہ", language), language)}</button>
+          <button type="button" className={`review-section-tab${diarySectionTab === "saturday" ? " active" : ""}`} onClick={() => setDiarySectionTab("saturday")}>{renderLocalizedTextNode(joinLocalizedText("Saturday Test", "ہفتہ ٹیسٹ", language), language)}</button>
+          {(canManageDiary || canManageInstitution || canManageContentAccess) ? <button type="button" className={`review-section-tab${diarySectionTab === "manage" ? " active" : ""}`} onClick={() => setDiarySectionTab("manage")}>{renderLocalizedTextNode(joinLocalizedText("Manage Diary", "ڈائری منظم کریں", language), language)}</button> : null}
+          {(canManageTests || availableTestTemplates.length > 0) ? <button type="button" className={`review-section-tab${diarySectionTab === "templates" ? " active" : ""}`} onClick={() => setDiarySectionTab("templates")}>{renderLocalizedTextNode(joinLocalizedText("Test Templates", "ٹیسٹ ٹیمپلیٹس", language), language)}</button> : null}
+          {(canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess) ? <button type="button" className={`review-section-tab${diarySectionTab === "dashboard" ? " active" : ""}`} onClick={() => setDiarySectionTab("dashboard")}>{renderLocalizedTextNode(joinLocalizedText("Performance", "کارکردگی", language), language)}</button> : null}
+        </div>
+        <div key={`${transitionMode}:diary:${diarySectionTab}`} className={`review-section-transition${!reducedMotion && transitionMode !== "none" ? " transition-enabled" : ""}`} data-transition-mode={transitionMode}>
+          {diarySectionTab === "week" ? (
+            <>
+              <div className="review-panel chapter-management-panel" data-ui-language={language}>
+                <div className="review-panel-head">
+                  <div>
+                    <h3>{renderLocalizedTextNode(joinLocalizedText("Weekly Diary", "ہفتہ وار ڈائری", language), language)}</h3>
+                    <p>{renderLocalizedTextNode(joinLocalizedText("Auto diary and assigned diary merge here for the current learner and week.", "خودکار اور تفویض شدہ ڈائری یہاں موجودہ سیکھنے والے اور ہفتے کے لیے اکٹھی دکھائی جاتی ہے۔", language), language)}</p>
+                  </div>
+                  <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `ہفتہ ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language)}</span>
+                </div>
+                <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                  <input className="settings-text-input" type="date" value={diaryWeekAnchorDate} onChange={(event) => setDiaryWeekAnchorDate(event.target.value)} />
+                  {diaryViewerStudentOptions.length > 1 ? <select className="settings-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
+                  <span className="goal-progress-badge">{renderLocalizedTextNode(activeInstitutionSchool?.schoolName || joinLocalizedText("Independent", "آزاد", language), language)}</span>
+                </div>
+                <div className="stat-grid" style={{ marginTop: 14 }}>
+                  <div className="stat-card"><div className="stat-icon">🗓️</div><div className="stat-value">{formatNumberLabel(weeklyDiaryTasks.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Tasks", "کام", language), language)}</div></div>
+                  <div className="stat-card"><div className="stat-icon">✅</div><div className="stat-value">{formatNumberLabel(visibleDiaryCompletions.filter((entry) => entry.studentEmail === activeDiaryViewerStudentEmail && entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[4]).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Completed", "مکمل", language), language)}</div></div>
+                  <div className="stat-card"><div className="stat-icon">🧑‍🏫</div><div className="stat-value">{formatNumberLabel(currentWeekAssignedDiaryEntries.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Assigned", "تفویض شدہ", language), language)}</div></div>
+                  <div className="stat-card"><div className="stat-icon">🤖</div><div className="stat-value">{formatNumberLabel(autoDiaryTasks.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Auto", "خودکار", language), language)}</div></div>
+                </div>
+              </div>
+              {weeklyDiaryTaskGroups.map((group) => (
+                <div key={`diary_group_${group.targetDate}`} className="review-panel" style={{ marginTop: 16 }}>
+                  <div className="review-panel-head">
+                    <div>
+                      <h3>{renderLocalizedTextNode(joinLocalizedText(`Day ${group.dayIndex}`, `دن ${group.dayIndex}`, language), language)} • {renderLocalizedTextNode(group.targetDate, language)}</h3>
+                      <p>{renderLocalizedTextNode(joinLocalizedText(`${group.tasks.length} tasks`, `${group.tasks.length} کام`, language), language)}</p>
+                    </div>
+                  </div>
+                  {group.tasks.length ? <div className="profile-report-list">
+                    {group.tasks.map((task) => {
+                      const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
+                      return (
+                        <div key={`diary_task_${task.taskKey}`} className="profile-report-item">
+                          <div className="profile-report-item-head">
+                            <strong>{renderLocalizedTextNode(subjectLookup?.[task.subject] ? getSubjectDisplayName(subjectLookup[task.subject], language) : task.subjectLabel, language)}</strong>
+                            <span>{renderLocalizedTextNode(task.source === "assigned" ? joinLocalizedText("Assigned", "تفویض شدہ", language) : joinLocalizedText("Auto", "خودکار", language), language)}</span>
+                          </div>
+                          <div className="goal-progress-meta">{renderLocalizedTextNode(task.title, language)}</div>
+                          {task.note ? <div className="goal-progress-meta" style={{ marginTop: 6 }}>{renderLocalizedTextNode(task.note, language)}</div> : null}
+                          {task.taskUnits?.length ? <div className="chapter-badge-row" style={{ marginTop: 8 }}>{task.taskUnits.slice(0, 5).map((unit) => <span key={`task_unit_${task.taskKey}_${unit.key}`} className="chapter-badge neutral">{renderLocalizedTextNode(unit.title, language)}</span>)}</div> : null}
+                          <div className="result-actions chapter-card-actions"><button type="button" className={`ghost-cta${completion ? " active" : ""}`} onClick={() => handleToggleDiaryCompletion(task)} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(completion ? joinLocalizedText("Marked done", "مکمل", language) : joinLocalizedText("Mark done", "مکمل کریں", language), language)}</button></div>
+                        </div>
+                      );
+                    })}
+                  </div> : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No diary tasks for this day yet.", "ابھی اس دن کے لیے کوئی ڈائری کام نہیں۔", language), language)}</p>}
+                </div>
+              ))}
+            </>
+          ) : null}
+          {diarySectionTab === "saturday" ? (
+            <>
+              <div className="review-panel chapter-management-panel" data-ui-language={language}>
+                <div className="review-panel-head">
+                  <div>
+                    <h3>{renderLocalizedTextNode(joinLocalizedText("Saturday Test Day", "ہفتہ ٹیسٹ ڈے", language), language)}</h3>
+                    <p>{renderLocalizedTextNode(joinLocalizedText("Teachers can assign a Saturday test; otherwise the app generates one from the week.", "اساتذہ ہفتہ ٹیسٹ تفویض کر سکتے ہیں، ورنہ ایپ ہفتے کے مواد سے ایک ٹیسٹ بناتی ہے۔", language), language)}</p>
+                  </div>
+                  <span className="goal-progress-badge">{renderLocalizedTextNode(getSaturdayDate(diaryWeekAnchorDate), language)}</span>
+                </div>
+                <div className="stat-grid">
+                  <div className="stat-card"><div className="stat-icon">🧪</div><div className="stat-value">{formatNumberLabel(currentWeeklyTestTemplate?.payload?.questions?.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Questions", "سوالات", language), language)}</div></div>
+                  <div className="stat-card"><div className="stat-icon">🗂️</div><div className="stat-value">{renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("Assigned", "تفویض شدہ", language) : joinLocalizedText("Generated", "خودکار", language), language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Source", "ماخذ", language), language)}</div></div>
+                  <div className="stat-card"><div className="stat-icon">📈</div><div className="stat-value">{currentWeeklyStudentTestResult ? `${Math.round(((currentWeeklyStudentTestResult.score || 0) / Math.max(1, currentWeeklyStudentTestResult.total || 1)) * 100)}%` : "—"}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Latest", "تازہ", language), language)}</div></div>
+                </div>
+              </div>
+              {(canManageTests || canManageInstitution || canManageContentAccess) ? (
+                <div className="review-panel chapter-card-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+                  <div className="review-panel-head">
+                    <div>
+                      <h3>{renderLocalizedTextNode(joinLocalizedText("Assign Weekly Test", "ہفتہ وار ٹیسٹ تفویض کریں", language), language)}</h3>
+                      <p>{renderLocalizedTextNode(joinLocalizedText("Choose a template for the full grade or one linked learner.", "پوری جماعت یا کسی ایک منسلک طالب علم کے لیے ایک ٹیمپلیٹ منتخب کریں۔", language), language)}</p>
+                    </div>
+                  </div>
+                  <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                    <select className="settings-select" value={testAssignmentDraftScope} onChange={(event) => setTestAssignmentDraftScope(event.target.value)}>
+                      <option value="grade">{renderLocalizedTextNode(joinLocalizedText("Grade-wide", "جماعت وار", language), language)}</option>
+                      <option value="student">{renderLocalizedTextNode(joinLocalizedText("Student-specific", "طالب علم وار", language), language)}</option>
+                    </select>
+                    {testAssignmentDraftScope === "student" ? <select className="settings-select" value={testAssignmentDraftStudentEmail} onChange={(event) => setTestAssignmentDraftStudentEmail(event.target.value)}><option value="">{renderLocalizedTextNode(joinLocalizedText("Choose learner", "طالب علم چنیں", language), language)}</option>{visibleTeacherStudentLinks.map((entry) => <option key={`weekly_test_student_${entry.linkId}`} value={entry.studentEmail}>{entry.studentLabel || entry.studentEmail}</option>)}</select> : null}
+                    <select className="settings-select" value={testAssignmentDraftTemplateId} onChange={(event) => setTestAssignmentDraftTemplateId(event.target.value)}>
+                      <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose template", "ٹیمپلیٹ چنیں", language), language)}</option>
+                      {availableTestTemplates.map((template) => <option key={`available_template_${template.templateId}`} value={template.templateId}>{template.title}</option>)}
+                    </select>
+                    <button type="button" className="study-tool-btn" onClick={handleAssignWeeklyTestTemplate} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Assign Test", "ٹیسٹ تفویض کریں", language), language)}</button>
+                  </div>
+                </div>
+              ) : null}
+              {activeWeeklyTestSession ? (
+                <div className="review-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+                  <div className="review-panel-head">
+                    <div>
+                      <h3>{renderLocalizedTextNode(activeWeeklyTestSession.title, language)}</h3>
+                      <p>{renderLocalizedTextNode(joinLocalizedText("Complete all question types, then submit once at the end.", "تمام سوالی اقسام مکمل کریں، پھر آخر میں ایک بار جمع کریں۔", language), language)}</p>
+                    </div>
+                  </div>
+                  <div className="profile-report-list">
+                    {(activeWeeklyTestSession.questions || []).map((question, index) => (
+                      <div key={`weekly_test_q_${question.id}`} className="profile-report-item">
+                        <div className="profile-report-item-head">
+                          <strong>{renderLocalizedTextNode(joinLocalizedText(`Q${index + 1}. ${question.prompt}`, `س${index + 1}. ${question.prompt}`, language), language)}</strong>
+                          <span>{renderLocalizedTextNode(question.type, language)}</span>
+                        </div>
+                        {question.type === "mcq" ? <div className="quiz-options">{(question.options || []).map((option, optionIndex) => <button key={`weekly_test_option_${question.id}_${optionIndex}`} type="button" className={`quiz-option${Number(activeWeeklyTestSession.answers?.[question.id]) === optionIndex ? " selected" : ""}`} onClick={() => handleWeeklyTestAnswerChange(question.id, optionIndex)}><span className="opt-letter">{String.fromCharCode(65 + optionIndex)}</span><span><PracticeMixedText text={option} fallbackLang={containsUrduText(option) ? "ur" : "en"} /></span></button>)}</div> : null}
+                        {question.type === "truefalse" ? <div className="result-actions chapter-card-actions">{[true, false].map((value) => <button key={`weekly_tf_${question.id}_${String(value)}`} type="button" className={`ghost-cta${String(activeWeeklyTestSession.answers?.[question.id]) === String(value) ? " active" : ""}`} onClick={() => handleWeeklyTestAnswerChange(question.id, value)}>{renderLocalizedTextNode(value ? joinLocalizedText("True", "درست", language) : joinLocalizedText("False", "غلط", language), language)}</button>)}</div> : null}
+                        {question.type === "fillblank" ? <input className="settings-text-input" value={activeWeeklyTestSession.answers?.[question.id] || ""} onChange={(event) => handleWeeklyTestAnswerChange(question.id, event.target.value)} placeholder={language === "ur" ? "جواب لکھیں" : "Type your answer"} /> : null}
+                        {question.type === "matching" ? <div className="profile-report-list">{(question.pairs || []).map((pair) => <div key={`match_pair_${question.id}_${pair.id}`} className="profile-report-item" style={{ marginTop: 8 }}><div className="profile-report-item-head"><strong>{renderLocalizedTextNode(pair.left, language)}</strong></div><select className="settings-select" value={activeWeeklyTestSession.answers?.[question.id]?.[pair.id] || ""} onChange={(event) => handleWeeklyTestAnswerChange(question.id, event.target.value, pair.id)}><option value="">{renderLocalizedTextNode(joinLocalizedText("Choose match", "مماثل چنیں", language), language)}</option>{(question.pairs || []).map((option) => <option key={`match_option_${question.id}_${option.id}`} value={option.right}>{option.right}</option>)}</select></div>)}</div> : null}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="result-actions chapter-card-actions" style={{ marginTop: 16 }}>
+                    <button type="button" className="ghost-cta" onClick={() => setActiveWeeklyTestSession(null)}>{renderLocalizedTextNode(joinLocalizedText("Cancel", "منسوخ", language), language)}</button>
+                    <button type="button" className="study-tool-btn" onClick={handleSubmitWeeklyTest} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Submit Test", "ٹیسٹ جمع کریں", language), language)}</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="review-panel" style={{ marginTop: 16 }}>
+                  <div className="review-panel-head">
+                    <div>
+                      <h3>{renderLocalizedTextNode(currentWeeklyTestTemplate?.title || joinLocalizedText("No Saturday test yet", "ابھی کوئی ہفتہ ٹیسٹ نہیں", language), language)}</h3>
+                      <p>{renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("This week's test came from an assigned template.", "اس ہفتے کا ٹیسٹ ایک تفویض شدہ ٹیمپلیٹ سے آیا ہے۔", language) : joinLocalizedText("This week's test is being generated from the covered lessons.", "اس ہفتے کا ٹیسٹ زیرِ مطالعہ اسباق سے تیار ہو رہا ہے۔", language), language)}</p>
+                    </div>
+                  </div>
+                  {currentWeeklyTestTemplate ? <div className="result-actions chapter-card-actions"><button type="button" className="study-tool-btn" onClick={() => handleStartWeeklyTestSession(currentWeeklyTestTemplate)}>{renderLocalizedTextNode(joinLocalizedText("Start Test", "ٹیسٹ شروع کریں", language), language)}</button>{currentWeeklyStudentTestResult ? <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} latest`, `${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} تازہ`, language), language)}</span> : null}</div> : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No Saturday test is ready yet.", "ابھی کوئی ہفتہ ٹیسٹ تیار نہیں۔", language), language)}</p>}
+                </div>
+              )}
+            </>
+          ) : null}
+          {diarySectionTab === "manage" ? <div className="review-panel chapter-card-panel" data-ui-language={language}><div className="review-panel-head"><div><h3>{renderLocalizedTextNode(joinLocalizedText("Assign Diary Work", "ڈائری کام تفویض کریں", language), language)}</h3><p>{renderLocalizedTextNode(joinLocalizedText("Assigned diary stays separate from the auto diary so teachers can add precise homework or reinforcement.", "تفویض شدہ ڈائری خودکار ڈائری سے الگ رہتی ہے تاکہ استاد درست ہوم ورک یا دہرائی دے سکیں۔", language), language)}</p></div></div><div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}><select className="settings-select" value={diaryDraftScope} onChange={(event) => setDiaryDraftScope(event.target.value)}><option value="grade">{renderLocalizedTextNode(joinLocalizedText("Grade-wide", "جماعت وار", language), language)}</option><option value="student">{renderLocalizedTextNode(joinLocalizedText("Student-specific", "طالب علم وار", language), language)}</option></select>{diaryDraftScope === "student" ? <select className="settings-select" value={diaryDraftStudentEmail} onChange={(event) => setDiaryDraftStudentEmail(event.target.value)}><option value="">{renderLocalizedTextNode(joinLocalizedText("Choose learner", "طالب علم چنیں", language), language)}</option>{visibleTeacherStudentLinks.map((entry) => <option key={`diary_target_${entry.linkId}`} value={entry.studentEmail}>{entry.studentLabel || entry.studentEmail}</option>)}</select> : null}<select className="settings-select" value={diaryDraftRangeMode} onChange={(event) => setDiaryDraftRangeMode(event.target.value)}><option value="single">{renderLocalizedTextNode(joinLocalizedText("Single date", "ایک تاریخ", language), language)}</option><option value="week">{renderLocalizedTextNode(joinLocalizedText("Date range", "تاریخی دائرہ", language), language)}</option></select><input className="settings-text-input" type="date" value={diaryDraftStartDate} onChange={(event) => setDiaryDraftStartDate(event.target.value)} />{diaryDraftRangeMode === "week" ? <input className="settings-text-input" type="date" value={diaryDraftEndDate} onChange={(event) => setDiaryDraftEndDate(event.target.value)} /> : null}</div><div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}><select className="settings-select" value={diaryDraftSubjectId} onChange={(event) => setDiaryDraftSubjectId(event.target.value)}><option value="">{renderLocalizedTextNode(joinLocalizedText("Choose subject", "مضمون چنیں", language), language)}</option>{allSubjects.map((subject) => <option key={`diary_subject_${subject.id}`} value={subject.id}>{subject.name}</option>)}</select><select className="settings-select" value={diaryDraftContentId} onChange={(event) => setDiaryDraftContentId(event.target.value)}><option value="">{renderLocalizedTextNode(joinLocalizedText("Choose chapter", "باب چنیں", language), language)}</option>{(diaryDraftSubjectId ? getMergedLessonGroups(diaryDraftSubjectId, grade) : []).map((group) => <option key={`diary_chapter_${group.preferenceKey}`} value={group.canonicalLessonKey}>{group.activeLesson?.title || group.canonicalLessonKey}</option>)}</select><input className="settings-text-input" value={diaryDraftNote} onChange={(event) => setDiaryDraftNote(event.target.value)} placeholder={language === "ur" ? "ہدایات / نوٹ" : "Instruction / note"} /><button type="button" className="study-tool-btn" onClick={handleSaveDiaryEntry} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Assign Diary", "ڈائری تفویض کریں", language), language)}</button></div>{currentWeekAssignedDiaryEntries.length ? <div className="profile-report-list" style={{ marginTop: 14 }}>{currentWeekAssignedDiaryEntries.map((entry) => <div key={`assigned_diary_${entry.diaryId}`} className="profile-report-item"><div className="profile-report-item-head"><strong>{renderLocalizedTextNode(entry.targetDate, language)}</strong><span>{renderLocalizedTextNode(entry.targetType === "student" ? entry.targetStudentEmail : joinLocalizedText(`Grade ${entry.targetGrade}`, `جماعت ${entry.targetGrade}`, language), language)}</span></div><div className="goal-progress-meta">{renderLocalizedTextNode(entry.note || entry.lessonKey, language)}</div><div className="result-actions chapter-card-actions"><button type="button" className="ghost-cta" onClick={() => handleDeleteDiaryEntry(entry)} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Remove", "ہٹائیں", language), language)}</button></div></div>)}</div> : null}</div> : null}
+          {diarySectionTab === "templates" ? <div className="review-panel chapter-card-panel" data-ui-language={language}><div className="review-panel-head"><div><h3>{renderLocalizedTextNode(joinLocalizedText("Test Template Library", "ٹیسٹ ٹیمپلیٹ لائبریری", language), language)}</h3><p>{renderLocalizedTextNode(joinLocalizedText("Import, export, publish, and reuse Saturday test templates.", "ہفتہ وار ٹیسٹ ٹیمپلیٹس درآمد، برآمد، شائع، اور دوبارہ استعمال کریں۔", language), language)}</p></div><div className="result-actions" style={{ marginTop: 0 }}>{canManageTests ? <button type="button" className="ghost-cta" onClick={handleOpenTestTemplateImport} disabled={testTemplateImportBusy}>{renderLocalizedTextNode(testTemplateImportBusy ? joinLocalizedText("Importing...", "درآمد ہو رہا ہے...", language) : joinLocalizedText("Import JSON", "JSON درآمد کریں", language), language)}</button> : null}{availableTestTemplates.length ? <button type="button" className="ghost-cta" onClick={() => downloadJson(`test-template-pack-grade-${grade}.json`, buildTestTemplatePackExportPayload(availableTestTemplates, `Grade ${grade} templates`))}>{renderLocalizedTextNode(joinLocalizedText("Export All", "سب برآمد کریں", language), language)}</button> : null}</div></div><div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}><select className="settings-select" value={testTemplateDraftSubjectFilter} onChange={(event) => setTestTemplateDraftSubjectFilter(event.target.value)}><option value="all">{renderLocalizedTextNode(joinLocalizedText("All subjects", "تمام مضامین", language), language)}</option>{allSubjects.map((subject) => <option key={`template_subject_${subject.id}`} value={subject.id}>{subject.name}</option>)}</select><input className="settings-text-input" value={testTemplateDraftAuthorFilter} onChange={(event) => setTestTemplateDraftAuthorFilter(event.target.value)} placeholder={language === "ur" ? "عنوان یا مصنف فلٹر" : "Filter by title or author"} /></div><div className="profile-report-list" style={{ marginTop: 14 }}>{availableTestTemplates.filter((template) => { if (testTemplateDraftSubjectFilter !== "all" && !(template.subjectScope || []).includes(testTemplateDraftSubjectFilter)) return false; const filterText = String(testTemplateDraftAuthorFilter || "").trim().toLowerCase(); return !filterText || `${template.title} ${template.authorEmail || ""}`.toLowerCase().includes(filterText); }).map((template) => <div key={`template_${template.templateId}`} className="profile-report-item"><div className="profile-report-item-head"><strong>{renderLocalizedTextNode(template.title, language)}</strong><span>{renderLocalizedTextNode(template.source === "published" ? joinLocalizedText("Published", "شائع شدہ", language) : template.source === "generated" ? joinLocalizedText("Generated", "خودکار", language) : joinLocalizedText("Local", "مقامی", language), language)}</span></div><div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText(`${template.payload?.questions?.length || 0} questions`, `${template.payload?.questions?.length || 0} سوالات`, language), language)}</div><div className="result-actions chapter-card-actions"><button type="button" className="ghost-cta" onClick={() => handleExportTestTemplate(template)}>{renderLocalizedTextNode(joinLocalizedText("Export", "برآمد", language), language)}</button>{canManageTests ? <button type="button" className="ghost-cta" onClick={() => handlePublishTestTemplate(template)} disabled={testTemplatePublishBusy}>{renderLocalizedTextNode(joinLocalizedText("Publish", "شائع کریں", language), language)}</button> : null}{template.source === "published" && (canManageTests || canManageInstitution || canManageContentAccess) ? <button type="button" className="ghost-cta" onClick={() => handleUnpublishTestTemplate(template)} disabled={testTemplatePublishBusy}>{renderLocalizedTextNode(joinLocalizedText("Unpublish", "غیر شائع", language), language)}</button> : null}{template.source !== "published" ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalTestTemplate(template.templateId)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف", language), language)}</button> : null}</div></div>)}</div></div> : null}
+          {diarySectionTab === "dashboard" ? <div className="review-panel chapter-card-panel" data-ui-language={language}><div className="review-panel-head"><div><h3>{renderLocalizedTextNode(joinLocalizedText("Performance Dashboard", "کارکردگی ڈیش بورڈ", language), language)}</h3><p>{renderLocalizedTextNode(joinLocalizedText("See diary completion, Saturday scores, and weak topics for the selected learner.", "منتخب سیکھنے والے کے لیے ڈائری تکمیل، ہفتہ ٹیسٹ کے نتائج، اور کمزور موضوعات دیکھیں۔", language), language)}</p></div></div>{diaryViewerStudentOptions.length > 1 ? <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}><select className="settings-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`perf_student_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select></div> : null}<div className="stat-grid" style={{ marginTop: 14 }}><div className="stat-card"><div className="stat-icon">✅</div><div className="stat-value">{formatNumberLabel(performanceSummaryByStudent[activeDiaryViewerStudentEmail]?.weeklyCompleted || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Weekly diary done", "ہفتہ وار ڈائری مکمل", language), language)}</div></div><div className="stat-card"><div className="stat-icon">🧪</div><div className="stat-value">{formatNumberLabel(performanceSummaryByStudent[activeDiaryViewerStudentEmail]?.latestTest?.score || 0)}/{formatNumberLabel(performanceSummaryByStudent[activeDiaryViewerStudentEmail]?.latestTest?.total || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Latest Saturday test", "تازہ ہفتہ ٹیسٹ", language), language)}</div></div><div className="stat-card"><div className="stat-icon">📈</div><div className="stat-value">{formatNumberLabel(performanceSummaryByStudent[activeDiaryViewerStudentEmail]?.recentTestAverage || 0)}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Trend average", "اوسط رجحان", language), language)}</div></div><div className="stat-card"><div className="stat-icon">⚠️</div><div className="stat-value">{formatNumberLabel((performanceSummaryByStudent[activeDiaryViewerStudentEmail]?.weakTopics || []).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Weak topics", "کمزور موضوعات", language), language)}</div></div></div>{(performanceSummaryByStudent[activeDiaryViewerStudentEmail]?.weakTopics || []).length ? <div className="profile-report-list" style={{ marginTop: 14 }}>{(performanceSummaryByStudent[activeDiaryViewerStudentEmail]?.weakTopics || []).map((topic, index) => <div key={`weak_topic_${index}`} className="profile-report-item"><div className="profile-report-item-head"><strong>{renderLocalizedTextNode(subjectLookup?.[topic.subject] ? getSubjectDisplayName(subjectLookup[topic.subject], language) : topic.subject, language)}</strong><span>{renderLocalizedTextNode(topic.lessonKey || "", language)}</span></div><div className="goal-progress-meta">{renderLocalizedTextNode(topic.prompt || joinLocalizedText("Repeatedly incorrect", "بار بار غلط", language), language)}</div></div>)}</div> : <p className="empty-state" style={{ marginTop: 14 }}>{renderLocalizedTextNode(joinLocalizedText("No weak topics recorded yet.", "ابھی کوئی کمزور موضوع ریکارڈ نہیں ہوا۔", language), language)}</p>}</div> : null}
         </div>
       </>)}
 
@@ -22141,6 +25125,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       style={{ display: "none" }}
       onChange={handleImportCustomChapter}
     />
+    <input
+      ref={testTemplateImportInputRef}
+      type="file"
+      accept="application/json,.json"
+      multiple
+      style={{ display: "none" }}
+      onChange={handleImportTestTemplates}
+    />
     {copyToast ? (
       <div key={copyToast.id} className="copy-toast" role="status" aria-live="polite">
         {renderIconGlyph(copyToast.icon || "copy")}
@@ -22212,4 +25204,3 @@ if (!window.__HOME_SCHOOL_BOOTSTRAPPED__ && document.getElementById('root')) {
   root.render(<HomeschoolApp />);
   window.__HOME_SCHOOL_BOOTSTRAPPED__ = true;
 }
-
