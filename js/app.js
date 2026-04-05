@@ -353,7 +353,7 @@ function getWeekDates(value = Date.now()) {
   return Array.from({ length: 6 }, (_, index) => {
     const date = new Date(weekStart.getTime());
     date.setDate(weekStart.getDate() + index);
-    return date;
+    return toIsoDateString(date);
   });
 }
 
@@ -975,7 +975,7 @@ function buildDiaryTasksForWeek({
       diaryId: entry.diaryId,
       schoolId: entry.schoolId,
       targetDate: entry.targetDate,
-      weekStartDate: getWeekStartDate(entry.targetDate),
+      weekStartDate: toIsoDateString(getWeekStartDate(entry.targetDate)),
       dayIndex: Math.max(1, Math.min(6, Math.round((parseIsoDateValue(entry.targetDate).getDay() + 6) % 7) + 1)),
       academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
       subject: entry.subject,
@@ -11565,7 +11565,7 @@ function HomeschoolApp() {
     });
   }, [contentIdentityEmail, contentManagerRole, grade, visibleParentStudentLinks, visibleTeacherStudentLinks]);
   const currentDiaryWeekDates = useMemo(() => getWeekDates(diaryWeekAnchorDate), [diaryWeekAnchorDate]);
-  const currentDiaryWeekStartDate = currentDiaryWeekDates[0] || getWeekStartDate(Date.now());
+  const currentDiaryWeekStartDate = currentDiaryWeekDates[0] || toIsoDateString(getWeekStartDate(Date.now()));
   const activeSchoolYearStartDate = String(activeInstitutionSchool?.yearStartDate || "").trim();
   const autoDiaryTasks = useMemo(() => buildAutoDiaryWeekPlan({
     subjects: allSubjects,
@@ -11816,7 +11816,7 @@ function HomeschoolApp() {
         school_name: schoolName,
         owner_email: ownerEmail,
         principal_email: principalEmail,
-        year_start_date: String(schoolDraftYearStartDate || getWeekStartDate(Date.now())).trim(),
+        year_start_date: String(schoolDraftYearStartDate || toIsoDateString(getWeekStartDate(Date.now()))).trim(),
         week_accumulation_mode: String(schoolDraftAccumulationMode || "rolling").trim().toLowerCase(),
         week_accumulation_value: Math.max(1, Number(schoolDraftAccumulationValue) || 8),
         status: "active",
