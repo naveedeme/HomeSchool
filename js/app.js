@@ -20896,7 +20896,7 @@ const lessons = getMergedLessons(subjectId, grade);
         const target = document.querySelector(`[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]`);
         if (!target) return;
         target.classList.add("study-focus-active-manual");
-        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
         setTimeout(() => target.classList.remove("study-focus-active-manual"), 1600);
       }, 220);
     }
@@ -20992,6 +20992,13 @@ const lessons = getMergedLessons(subjectId, grade);
               ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises`
               : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
           }
+        }
+        if ((explicitSubTab === "exercises" || explicitExerciseKind) && !Array.isArray(derivedSubs[matchedSubIndex]?.exerciseGroups)) {
+          nextViewTargetId = explicitExerciseKind
+            ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercise_${explicitExerciseKind}`
+            : explicitTargetScope === "tab"
+              ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises`
+              : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
         }
         if (explicitSubTab === "quiz" && Array.isArray(derivedSubs[matchedSubIndex]?.quizGroups)) {
           const preferredQuizGroupLabel = explicitGroupLabel || (
@@ -24995,7 +25002,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const taskOutline = buildDiaryTaskOutline(task);
                               const taskOutlineChildren = taskOutline[0]?.children || [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
-                              const subsectionTitle = String(task?.title || "").trim();
+                              const subsectionTitle = String(taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               return (
                                 <div key={`today_t_${task.taskKey}`} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
@@ -25050,7 +25057,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const taskOutline = buildDiaryTaskOutline(task);
                               const taskOutlineChildren = taskOutline[0]?.children || [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
-                              const subsectionTitle = String(task?.title || "").trim();
+                              const subsectionTitle = String(taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               return (
                                 <div key={`daily_t_${task.taskKey}`} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
