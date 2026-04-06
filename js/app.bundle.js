@@ -8061,6 +8061,175 @@ ${marker} `);
   function buildPracticeDeck(library = [], limit = 12, mode = "flashcards") {
     return shuffleArray((library || []).filter((card) => isUsefulPracticePair(card, mode))).slice(0, Math.max(4, Number(limit) || 12));
   }
+  function getPronunciationTargetText(card) {
+    return normalizeText(
+      (card == null ? void 0 : card.pronunciationTarget) || (card == null ? void 0 : card.prompt) || (card == null ? void 0 : card.practiceFront) || (card == null ? void 0 : card.typingTarget) || (card == null ? void 0 : card.matchPrompt) || ""
+    );
+  }
+  function getPronunciationLanguage(text, fallbackLang = "en") {
+    const content = normalizeText(text);
+    if (!content) return fallbackLang === "ur" ? "ur" : "en";
+    const urduChars = (content.match(/[\u0600-\u06FF]/gu) || []).length;
+    const latinChars = (content.match(/[A-Za-z]/g) || []).length;
+    if (urduChars && !latinChars) return "ur";
+    if (latinChars && !urduChars) return "en";
+    if (urduChars > latinChars) return "ur";
+    if (latinChars > urduChars) return "en";
+    return fallbackLang === "ur" ? "ur" : "en";
+  }
+  function normalizePronunciationComparison(value, lang = "en") {
+    const normalized = String(value || "").normalize("NFKC").replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/gu, "").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+    if (!normalized) return "";
+    return lang === "ur" ? normalized : normalized.toLowerCase();
+  }
+  function countMatchingPronunciationTokens(targetTokens = [], heardTokens = []) {
+    if (!targetTokens.length || !heardTokens.length) return 0;
+    const heardMap = /* @__PURE__ */ new Map();
+    heardTokens.forEach((token) => {
+      if (!token) return;
+      heardMap.set(token, (heardMap.get(token) || 0) + 1);
+    });
+    let matched = 0;
+    targetTokens.forEach((token) => {
+      const current = heardMap.get(token) || 0;
+      if (current <= 0) return;
+      matched += 1;
+      heardMap.set(token, current - 1);
+    });
+    return matched;
+  }
+  function computeLevenshteinDistance(left = "", right = "") {
+    const a = String(left || "");
+    const b = String(right || "");
+    if (!a) return b.length;
+    if (!b) return a.length;
+    const rows = Array.from({ length: a.length + 1 }, (_, index) => index);
+    for (let column = 1; column <= b.length; column += 1) {
+      let previous = rows[0];
+      rows[0] = column;
+      for (let row = 1; row <= a.length; row += 1) {
+        const current = rows[row];
+        const substitution = previous + (a[row - 1] === b[column - 1] ? 0 : 1);
+        const insertion = rows[row] + 1;
+        const deletion = rows[row - 1] + 1;
+        rows[row] = Math.min(substitution, insertion, deletion);
+        previous = current;
+      }
+    }
+    return rows[a.length];
+  }
+  function assessPronunciationAttempt(targetText, heardText, lang = "en") {
+    const targetNormalized = normalizePronunciationComparison(targetText, lang);
+    const heardNormalized = normalizePronunciationComparison(heardText, lang);
+    if (!targetNormalized) {
+      return {
+        status: "idle",
+        score: 0,
+        targetNormalized,
+        heardNormalized,
+        tokenScore: 0,
+        charScore: 0
+      };
+    }
+    if (!heardNormalized) {
+      return {
+        status: "missing",
+        score: 0,
+        targetNormalized,
+        heardNormalized,
+        tokenScore: 0,
+        charScore: 0
+      };
+    }
+    if (targetNormalized === heardNormalized) {
+      return {
+        status: "exact",
+        score: 100,
+        targetNormalized,
+        heardNormalized,
+        tokenScore: 1,
+        charScore: 1
+      };
+    }
+    const targetTokens = targetNormalized.split(/\s+/).filter(Boolean);
+    const heardTokens = heardNormalized.split(/\s+/).filter(Boolean);
+    const tokenScore = targetTokens.length ? countMatchingPronunciationTokens(targetTokens, heardTokens) / targetTokens.length : 0;
+    const maxLength = Math.max(targetNormalized.length, heardNormalized.length, 1);
+    const charScore = Math.max(0, 1 - computeLevenshteinDistance(targetNormalized, heardNormalized) / maxLength);
+    const score = Math.round((tokenScore * 0.65 + charScore * 0.35) * 100);
+    const status = score >= 82 ? "strong" : score >= 60 ? "close" : "retry";
+    return {
+      status,
+      score,
+      targetNormalized,
+      heardNormalized,
+      tokenScore,
+      charScore
+    };
+  }
+  function buildPronunciationFeedback(status, language = "en") {
+    if (status === "exact") {
+      return joinLocalizedText(
+        "Excellent. That matched the target very clearly.",
+        "\u0628\u06C1\u062A \u062E\u0648\u0628\u06D4 \u0622\u067E \u06A9\u06CC \u0627\u062F\u0627\u0626\u06CC\u06AF\u06CC \u06C1\u062F\u0641 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0628\u06C1\u062A \u0648\u0627\u0636\u062D \u0637\u0648\u0631 \u067E\u0631 \u0645\u0644\u06CC\u06D4",
+        language
+      );
+    }
+    if (status === "strong") {
+      return joinLocalizedText(
+        "Very good. You were very close. Try once more to make it even cleaner.",
+        "\u0628\u06C1\u062A \u0627\u0686\u06BE\u0627\u06D4 \u0622\u067E \u06A9\u0627\u0641\u06CC \u0642\u0631\u06CC\u0628 \u062A\u06BE\u06D2\u06D4 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0627\u0648\u0631 \u06A9\u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0627\u0648\u0631 \u0628\u06BE\u06CC \u0635\u0627\u0641 \u06C1\u0648 \u062C\u0627\u0626\u06D2\u06D4",
+        language
+      );
+    }
+    if (status === "close") {
+      return joinLocalizedText(
+        "Good attempt. Listen again and match the wording a little more closely.",
+        "\u0627\u0686\u06BE\u06CC \u06A9\u0648\u0634\u0634\u06D4 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0633\u0646\u06CC\u06BA \u0627\u0648\u0631 \u0627\u0644\u0641\u0627\u0638 \u06A9\u0648 \u062A\u06BE\u0648\u0691\u0627 \u0632\u06CC\u0627\u062F\u06C1 \u0642\u0631\u06CC\u0628 \u0633\u06D2 \u0645\u0644\u0627\u0646\u06D2 \u06A9\u06CC \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4",
+        language
+      );
+    }
+    if (status === "missing") {
+      return joinLocalizedText(
+        "We could not hear a clear attempt yet. Try speaking a bit louder and closer to the microphone.",
+        "\u0627\u0628\u06BE\u06CC \u0648\u0627\u0636\u062D \u0622\u0648\u0627\u0632 \u0646\u06C1\u06CC\u06BA \u0645\u0644 \u0633\u06A9\u06CC\u06D4 \u0630\u0631\u0627 \u0627\u0648\u0646\u0686\u0627 \u0628\u0648\u0644\u06CC\u06BA \u0627\u0648\u0631 \u0645\u0627\u0626\u06CC\u06A9 \u06A9\u06D2 \u0642\u0631\u06CC\u0628 \u06C1\u0648 \u06A9\u0631 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4",
+        language
+      );
+    }
+    return joinLocalizedText(
+      "Try again. Hear the model once more and speak the phrase more clearly.",
+      "\u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4 \u0646\u0645\u0648\u0646\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0627\u0648\u0631 \u0633\u0646\u06CC\u06BA \u0627\u0648\u0631 \u062C\u0645\u0644\u06C1 \u0632\u06CC\u0627\u062F\u06C1 \u0635\u0627\u0641 \u0627\u0646\u062F\u0627\u0632 \u0645\u06CC\u06BA \u06A9\u06C1\u06CC\u06BA\u06D4",
+      language
+    );
+  }
+  function buildPronunciationDeck(library = [], limit = 12) {
+    const safeLimit = Math.max(4, Number(limit) || 12);
+    const seen = /* @__PURE__ */ new Set();
+    const deck = [];
+    shuffleArray(Array.isArray(library) ? library : []).forEach((card) => {
+      var _a, _b;
+      if (deck.length >= safeLimit) return;
+      if (!card || (card == null ? void 0 : card.supplementalType) === "quiz") return;
+      const target = getPronunciationTargetText(card);
+      if (!target) return;
+      const words = target.split(/\s+/).filter(Boolean);
+      if (!words.length || words.length > 16) return;
+      const normalizedTarget = normalizeAnswerText(target);
+      if (!normalizedTarget || seen.has(normalizedTarget)) return;
+      const lang = getPronunciationLanguage(target, (card == null ? void 0 : card.practiceLang) || "en");
+      const supportText = normalizeText((card == null ? void 0 : card.answer) || (card == null ? void 0 : card.meaning) || "");
+      deck.push({
+        ...card,
+        pronunciationTarget: target,
+        pronunciationLang: lang,
+        pronunciationSupport: supportText && normalizeAnswerText(supportText) !== normalizedTarget ? supportText : "",
+        pronunciationSectionTitle: normalizeText(((_a = card == null ? void 0 : card.source) == null ? void 0 : _a.subTitle) || ""),
+        pronunciationLessonTitle: normalizeText(((_b = card == null ? void 0 : card.source) == null ? void 0 : _b.lessonTitle) || (card == null ? void 0 : card.sectionLabel) || "")
+      });
+      seen.add(normalizedTarget);
+    });
+    return deck;
+  }
   function escapeRegExp(value) {
     return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
@@ -9589,7 +9758,7 @@ ${marker} `);
     return /* @__PURE__ */ React.createElement("div", { ...focusProps, style: { cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } }, /* @__PURE__ */ React.createElement("span", { onClick: speakEn, style: { cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 } }, en, " \u2192 ", v2, " \u2192 ", v3, " ", sEn ? "\u{1F50A}" : "\u{1F508}"), /* @__PURE__ */ React.createElement("span", { onClick: speakUr, style: { cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 } }, sUr ? "\u{1F50A}" : "\u{1F508}", " ", ur), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" } })));
   }
   function HomeschoolApp() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P;
     const stored = loadState();
     const storedAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
     const storedSupabaseSyncSettings = sanitizeSupabaseDictionarySyncSettings(
@@ -9820,6 +9989,12 @@ ${marker} `);
     const [flashcardTransitionMode, setFlashcardTransitionMode] = useState("forward");
     const [practiceLabReturnPending, setPracticeLabReturnPending] = useState(false);
     const [typingTutorOpen, setTypingTutorOpen] = useState(false);
+    const [pronunciationLabOpen, setPronunciationLabOpen] = useState(false);
+    const [pronunciationLabIdx, setPronunciationLabIdx] = useState(0);
+    const [pronunciationLabTranscript, setPronunciationLabTranscript] = useState("");
+    const [pronunciationLabResult, setPronunciationLabResult] = useState(null);
+    const [pronunciationLabListening, setPronunciationLabListening] = useState(false);
+    const [pronunciationLabHistory, setPronunciationLabHistory] = useState({});
     const [viewTargetId, setViewTargetId] = useState(null);
     const [pageFlashActive, setPageFlashActive] = useState(false);
     const [heatmapExpanded, setHeatmapExpanded] = useState(false);
@@ -9936,6 +10111,7 @@ ${marker} `);
     const chapterImportInputRef = useRef(null);
     const testTemplateImportInputRef = useRef(null);
     const speechRecognitionRef = useRef(null);
+    const pronunciationRecognitionRef = useRef(null);
     const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
     const studentProfilesRef = useRef(initialStudentProfiles);
     const profileSwitcherButtonRef = useRef(null);
@@ -10224,6 +10400,140 @@ ${marker} `);
       setChatListening(true);
       recognition.start();
     }, [chatListening, language]);
+    const stopPronunciationListening = useCallback(() => {
+      var _a2, _b2;
+      try {
+        (_b2 = (_a2 = pronunciationRecognitionRef.current) == null ? void 0 : _a2.stop) == null ? void 0 : _b2.call(_a2);
+      } catch (error) {
+      }
+    }, []);
+    const handleOpenPronunciationLab = useCallback(() => {
+      if (!pronunciationLabDeck.length) {
+        alert(
+          joinLocalizedText(
+            `${(activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "This subject"} does not have enough speaking prompts for Pronunciation Lab yet.`,
+            `${(activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr) || "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646"} \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u0644\u0641\u0638 \u0644\u06CC\u0628 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0627\u0641\u06CC \u0628\u0648\u0644\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0627\u0628\u06BE\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA \u06C1\u06CC\u06BA\u06D4`,
+            language
+          )
+        );
+        return;
+      }
+      setPronunciationLabIdx(0);
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+      setPronunciationLabHistory({});
+      setPronunciationLabOpen(true);
+    }, [activePracticeSubject == null ? void 0 : activePracticeSubject.name, activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr, language, pronunciationLabDeck.length]);
+    const handleClosePronunciationLab = useCallback(() => {
+      stopPronunciationListening();
+      setPronunciationLabListening(false);
+      setPronunciationLabOpen(false);
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+      window.speechSynthesis.cancel();
+    }, [stopPronunciationListening]);
+    const handlePlayPronunciationModel = useCallback(() => {
+      var _a2, _b2;
+      if (!activePronunciationCard || audioMuted) return;
+      (_b2 = (_a2 = window.HomeSchoolUtils) == null ? void 0 : _a2.speakText) == null ? void 0 : _b2.call(
+        _a2,
+        activePronunciationCard.pronunciationTarget,
+        activePronunciationCard.pronunciationLang || "en"
+      );
+    }, [activePronunciationCard, audioMuted]);
+    const handlePronunciationPrev = useCallback(() => {
+      if (pronunciationLabIdx <= 0) return;
+      stopPronunciationListening();
+      setPronunciationLabListening(false);
+      setPronunciationLabIdx((current) => Math.max(0, current - 1));
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+    }, [pronunciationLabIdx, stopPronunciationListening]);
+    const handlePronunciationNext = useCallback(() => {
+      if (pronunciationLabIdx >= pronunciationLabDeck.length - 1) return;
+      stopPronunciationListening();
+      setPronunciationLabListening(false);
+      setPronunciationLabIdx((current) => Math.min(pronunciationLabDeck.length - 1, current + 1));
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+    }, [pronunciationLabDeck.length, pronunciationLabIdx, stopPronunciationListening]);
+    const handlePronunciationRetry = useCallback(() => {
+      stopPronunciationListening();
+      setPronunciationLabListening(false);
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+    }, [stopPronunciationListening]);
+    const handlePronunciationListen = useCallback(() => {
+      var _a2, _b2;
+      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!activePronunciationCard || !SpeechRecognitionClass) return;
+      if (pronunciationLabListening) {
+        stopPronunciationListening();
+        return;
+      }
+      try {
+        (_b2 = (_a2 = speechRecognitionRef.current) == null ? void 0 : _a2.stop) == null ? void 0 : _b2.call(_a2);
+      } catch (error) {
+      }
+      const recognition = new SpeechRecognitionClass();
+      recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        var _a3, _b3;
+        const transcript = Array.from(event.results || []).map((result) => {
+          var _a4;
+          return ((_a4 = result == null ? void 0 : result[0]) == null ? void 0 : _a4.transcript) || "";
+        }).join(" ").trim();
+        const assessment = assessPronunciationAttempt(
+          activePronunciationCard.pronunciationTarget,
+          transcript,
+          activePronunciationCard.pronunciationLang || "en"
+        );
+        const resultPayload = {
+          ...assessment,
+          transcript,
+          feedback: buildPronunciationFeedback(assessment.status, language)
+        };
+        setPronunciationLabTranscript(transcript);
+        setPronunciationLabResult(resultPayload);
+        setPronunciationLabHistory((current) => {
+          const key = String(activePronunciationCard.id || activePronunciationCard.pronunciationTarget || pronunciationLabIdx);
+          const existing = (current == null ? void 0 : current[key]) || { attempts: 0, bestScore: 0 };
+          return {
+            ...current || {},
+            [key]: {
+              attempts: existing.attempts + 1,
+              bestScore: Math.max(existing.bestScore || 0, assessment.score || 0),
+              status: assessment.status
+            }
+          };
+        });
+        (_b3 = (_a3 = window.HomeSchoolUtils) == null ? void 0 : _a3.playFeedbackSound) == null ? void 0 : _b3.call(
+          _a3,
+          assessment.status === "exact" || assessment.status === "strong" ? "correct" : "wrong"
+        );
+      };
+      recognition.onerror = () => {
+        setPronunciationLabResult({
+          status: "missing",
+          score: 0,
+          transcript: "",
+          feedback: buildPronunciationFeedback("missing", language)
+        });
+        setPronunciationLabListening(false);
+      };
+      recognition.onend = () => {
+        setPronunciationLabListening(false);
+        pronunciationRecognitionRef.current = null;
+      };
+      pronunciationRecognitionRef.current = recognition;
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+      setPronunciationLabListening(true);
+      recognition.start();
+    }, [activePronunciationCard, language, pronunciationLabIdx, pronunciationLabListening, stopPronunciationListening]);
     const handleCopyWordMeaning = useCallback(() => {
       if (!wordMeaningPopover) return;
       copyTextToClipboard(buildWordMeaningCopyText(wordMeaningPopover));
@@ -12212,6 +12522,19 @@ ${marker} `);
       () => [...practiceSubjectReviewLibrary, ...practiceSubjectSupplementalItems],
       [practiceSubjectReviewLibrary, practiceSubjectSupplementalItems]
     );
+    const pronunciationLabDeck = useMemo(
+      () => buildPronunciationDeck(practiceSubjectSourcePool, 12),
+      [practiceSubjectSourcePool]
+    );
+    const activePronunciationCard = pronunciationLabDeck[pronunciationLabIdx] || null;
+    const pronunciationLabAttempts = useMemo(
+      () => Object.values(pronunciationLabHistory || {}).reduce((sum, entry) => sum + (Number(entry == null ? void 0 : entry.attempts) || 0), 0),
+      [pronunciationLabHistory]
+    );
+    const pronunciationLabStrongMatches = useMemo(
+      () => Object.values(pronunciationLabHistory || {}).filter((entry) => Number(entry == null ? void 0 : entry.bestScore) >= 82).length,
+      [pronunciationLabHistory]
+    );
     const practiceCoreModePool = useMemo(() => {
       const hasReviewPairs = practiceSubjectReviewLibrary.some((card) => isUsefulPracticePair(card, "flashcards"));
       return hasReviewPairs ? practiceSubjectReviewLibrary : practiceSubjectSourcePool;
@@ -12240,6 +12563,7 @@ ${marker} `);
       () => buildSentenceBuilderDeck(practiceSubjectSourcePool, 4).length,
       [practiceSubjectSourcePool]
     );
+    const pronunciationLabReadyCount = pronunciationLabDeck.length;
     const practiceTimedChallengeReadyCount = useMemo(
       () => buildTimedChallengeDeck(practiceSubjectSourcePool, 6, 4).length,
       [practiceSubjectSourcePool]
@@ -12282,6 +12606,16 @@ ${marker} `);
       timedmatching: practiceMatchingReadyCount,
       interleaved: practiceInterleavedReadyCount
     };
+    useEffect(() => {
+      if (!pronunciationLabOpen) return;
+      if (!pronunciationLabDeck.length) {
+        handleClosePronunciationLab();
+        return;
+      }
+      if (pronunciationLabIdx > pronunciationLabDeck.length - 1) {
+        setPronunciationLabIdx(0);
+      }
+    }, [handleClosePronunciationLab, pronunciationLabDeck.length, pronunciationLabIdx, pronunciationLabOpen]);
     const practiceScopeLabel = activePracticeFilter.hasDayRange ? joinLocalizedText("lesson/day range and difficulty", "\u0633\u0628\u0642/\u062F\u0646 \u06A9\u06CC \u062D\u062F \u0627\u0648\u0631 \u0645\u0634\u06A9\u0644", language) : joinLocalizedText("lesson range and difficulty", "\u0633\u0628\u0642 \u06A9\u06CC \u062D\u062F \u0627\u0648\u0631 \u0645\u0634\u06A9\u0644", language);
     const getPracticeAvailabilityMeta = useCallback((modeId, enabledTextEn, enabledTextUr, minimumRequired = 1) => {
       const readyCount = Number((practiceModeReadyCounts == null ? void 0 : practiceModeReadyCounts[modeId]) || 0);
@@ -15101,13 +15435,18 @@ ${marker} `);
       return () => window.clearTimeout(timer);
     }, [practiceLabReturnPending, practiceMode, reducedMotion, tab]);
     useEffect(() => {
-      if (!typingTutorOpen) return void 0;
+      if (!typingTutorOpen && !pronunciationLabOpen) return void 0;
       const handleEscape = (event) => {
-        if (event.key === "Escape") setTypingTutorOpen(false);
+        if (event.key !== "Escape") return;
+        if (pronunciationLabOpen) {
+          handleClosePronunciationLab();
+          return;
+        }
+        if (typingTutorOpen) setTypingTutorOpen(false);
       };
       document.addEventListener("keydown", handleEscape);
       return () => document.removeEventListener("keydown", handleEscape);
-    }, [typingTutorOpen]);
+    }, [handleClosePronunciationLab, pronunciationLabOpen, typingTutorOpen]);
     const refreshStorageLabel = useCallback(async () => {
       if (!window.HomeSchoolDB) {
         setStorageLabel(await getStorageEstimateLabel("localStorage"));
@@ -16362,9 +16701,13 @@ ${marker} `);
       textarea.style.height = `${Math.min(220, Math.max(62, textarea.scrollHeight))}px`;
     }, [chatInput, tab]);
     useEffect(() => () => {
-      var _a2, _b2;
+      var _a2, _b2, _c2, _d2;
       try {
         (_b2 = (_a2 = speechRecognitionRef.current) == null ? void 0 : _a2.stop) == null ? void 0 : _b2.call(_a2);
+      } catch (error) {
+      }
+      try {
+        (_d2 = (_c2 = pronunciationRecognitionRef.current) == null ? void 0 : _c2.stop) == null ? void 0 : _d2.call(_c2);
       } catch (error) {
       }
     }, []);
@@ -20936,6 +21279,17 @@ ${error.message || error}`);
         "button",
         {
           type: "button",
+          className: `practice-mode-card practice-tool-card${pronunciationLabReadyCount ? "" : " disabled"}`,
+          onClick: handleOpenPronunciationLab,
+          disabled: !pronunciationLabReadyCount
+        },
+        /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F399}\uFE0F"),
+        /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Pronunciation Lab", "\u062A\u0644\u0641\u0638 \u0644\u06CC\u0628", language), language)),
+        /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(joinLocalizedText(`Listen, speak, and compare with ${pronunciationLabReadyCount} ready prompts from this practice range.`, `\u0627\u0633 \u067E\u0631\u06CC\u06A9\u0679\u0633 \u0631\u06CC\u0646\u062C \u06A9\u06D2 ${pronunciationLabReadyCount} \u062A\u06CC\u0627\u0631 \u0627\u0634\u0627\u0631\u0648\u06BA \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0633\u0646\u06CC\u06BA\u060C \u0628\u0648\u0644\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0645\u0648\u0627\u0632\u0646\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4`, language), language))
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
           className: "practice-mode-card practice-tool-card",
           onClick: () => setTypingTutorOpen(true)
         },
@@ -21578,7 +21932,7 @@ ${error.message || error}`);
         aiBrowserBlocked: !aiBrowserCapability.ok,
         labels: ui
       }
-    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, typingTutorOpen ? /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-overlay", onClick: () => setTypingTutorOpen(false) }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Typing Tutor", "\u0679\u0627\u0626\u067E\u0646\u06AF \u0679\u06CC\u0648\u0679\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This opens your standalone Typing Tutor build unchanged inside a popup.", "\u06CC\u06C1 \u0622\u067E \u06A9\u06D2 \u0639\u0644\u06CC\u062D\u062F\u06C1 \u0679\u0627\u0626\u067E\u0646\u06AF \u0679\u06CC\u0648\u0679\u0631 \u0628\u0644\u0688 \u06A9\u0648 \u0628\u063A\u06CC\u0631 \u062A\u0628\u062F\u06CC\u0644\u06CC \u06A9\u06D2 \u0627\u06CC\u06A9 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-actions" }, /* @__PURE__ */ React.createElement(
+    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, pronunciationLabOpen ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-overlay", onClick: handleClosePronunciationLab }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Pronunciation Lab", "\u062A\u0644\u0641\u0638 \u0644\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Practice speaking the current subject prompts from your selected lesson range and compare what the browser hears.", "\u0627\u067E\u0646\u06D2 \u0645\u0646\u062A\u062E\u0628 \u0633\u0628\u0642 \u0631\u06CC\u0646\u062C \u0633\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0628\u0648\u0644 \u06A9\u0631 \u0645\u0634\u0642 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u06C1 \u0628\u0631\u0627\u0624\u0632\u0631 \u06A9\u06CC\u0627 \u0633\u0646\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClosePronunciationLab }, renderLocalizedTextNode(joinLocalizedText("Close", "\u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stats" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Ready", "\u062A\u06CC\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabDeck.length)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Attempts", "\u06A9\u0648\u0634\u0634\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabAttempts)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Strong Matches", "\u0628\u06C1\u062A\u0631\u06CC\u0646 \u0645\u0637\u0627\u0628\u0642\u062A", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabStrongMatches))), !speechRecognitionSupported ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-alert" }, renderLocalizedTextNode(joinLocalizedText("This browser can play the model voice, but it does not support microphone speech recognition here.", "\u06CC\u06C1 \u0628\u0631\u0627\u0624\u0632\u0631 \u0646\u0645\u0648\u0646\u06C1 \u0622\u0648\u0627\u0632 \u062A\u0648 \u0686\u0644\u0627 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u060C \u0644\u06CC\u06A9\u0646 \u06CC\u06C1\u0627\u06BA \u0645\u0627\u0626\u06CC\u06A9\u0631\u0648\u0641\u0648\u0646 \u06A9\u06CC \u0622\u0648\u0627\u0632 \u067E\u06C1\u0686\u0627\u0646\u0646\u06D2 \u06A9\u06CC \u0633\u06C1\u0648\u0644\u062A \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)) : null, activePronunciationCard ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-body" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-nav" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-side-nav practice-typing-nav-prev", onClick: handlePronunciationPrev, disabled: pronunciationLabIdx <= 0 }, "\xAB")), /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell practice-card-shell-focus pronunciation-lab-shell" }, /* @__PURE__ */ React.createElement("div", { className: "flashcard-count-pill" }, pronunciationLabIdx + 1, " / ", pronunciationLabDeck.length), /* @__PURE__ */ React.createElement("div", { className: `practice-card-face practice-card-face-focus pronunciation-lab-face${(pronunciationLabResult == null ? void 0 : pronunciationLabResult.status) ? ` ${pronunciationLabResult.status === "exact" || pronunciationLabResult.status === "strong" ? "correct" : "review"}` : ""}` }, /* @__PURE__ */ React.createElement("div", { className: `flashcard-card-top${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, renderLocalizedTextNode(joinLocalizedText("Listen and Say", "\u0633\u0646\u06CC\u06BA \u0627\u0648\u0631 \u0628\u0648\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-card-head" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-lesson" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Chapter", "\u0628\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationLessonTitle || (activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "", fallbackLang: activePronunciationCard.pronunciationLang })), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-section" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Subsection", "\u0630\u06CC\u0644\u06CC \u062D\u0635\u06C1", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationSectionTitle || activePronunciationCard.sectionLabel || "", fallbackLang: activePronunciationCard.pronunciationLang }))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-target" }, /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationTarget, fallbackLang: activePronunciationCard.pronunciationLang })), activePronunciationCard.pronunciationSupport ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-support" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Support", "\u0645\u062F\u062F", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationSupport, fallbackLang: getPronunciationLanguage(activePronunciationCard.pronunciationSupport, language === "ur" ? "ur" : "en") })) : null, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-toolbar" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-flip-btn", onClick: handlePlayPronunciationModel, disabled: audioMuted }, renderLocalizedTextNode(joinLocalizedText("Hear Model", "\u0646\u0645\u0648\u0646\u06C1 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `flashcard-flip-btn${pronunciationLabListening ? " active" : ""}`, onClick: handlePronunciationListen, disabled: !speechRecognitionSupported }, renderLocalizedTextNode(pronunciationLabListening ? joinLocalizedText("Stop Listening", "\u0633\u0646\u0646\u0627 \u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Start Speaking", "\u0628\u0648\u0644\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-flip-btn", onClick: handlePronunciationRetry }, renderLocalizedTextNode(joinLocalizedText("Try Again", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634", language), language))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-result-card" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-result-head" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("What we heard", "\u06C1\u0645 \u0646\u06D2 \u06A9\u06CC\u0627 \u0633\u0646\u0627", language), language)), /* @__PURE__ */ React.createElement("strong", null, (_P = pronunciationLabResult == null ? void 0 : pronunciationLabResult.score) != null ? _P : 0, "%")), /* @__PURE__ */ React.createElement("div", { className: `pronunciation-lab-transcript${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, pronunciationLabTranscript ? /* @__PURE__ */ React.createElement(PracticeMixedText, { text: pronunciationLabTranscript, fallbackLang: activePronunciationCard.pronunciationLang }) : renderLocalizedTextNode(joinLocalizedText("Your spoken transcript will appear here.", "\u0622\u067E \u06A9\u06CC \u0628\u0648\u0644\u06CC \u06AF\u0626\u06CC \u0639\u0628\u0627\u0631\u062A \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `pronunciation-lab-feedback${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, renderLocalizedTextNode((pronunciationLabResult == null ? void 0 : pronunciationLabResult.feedback) || joinLocalizedText("Press Hear Model, then Start Speaking to compare your pronunciation.", "\u067E\u06C1\u0644\u06D2 \u0646\u0645\u0648\u0646\u06C1 \u0633\u0646\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0628\u0648\u0644\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u06A9\u06D2 \u062A\u0644\u0641\u0638 \u06A9\u0627 \u0645\u0648\u0627\u0632\u0646\u06C1 \u06C1\u0648 \u0633\u06A9\u06D2\u06D4", language), language))))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-nav" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-side-nav practice-typing-nav-next", onClick: handlePronunciationNext, disabled: pronunciationLabIdx >= pronunciationLabDeck.length - 1 }, "\xBB"))) : null)) : null, typingTutorOpen ? /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-overlay", onClick: () => setTypingTutorOpen(false) }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Typing Tutor", "\u0679\u0627\u0626\u067E\u0646\u06AF \u0679\u06CC\u0648\u0679\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This opens your standalone Typing Tutor build unchanged inside a popup.", "\u06CC\u06C1 \u0622\u067E \u06A9\u06D2 \u0639\u0644\u06CC\u062D\u062F\u06C1 \u0679\u0627\u0626\u067E\u0646\u06AF \u0679\u06CC\u0648\u0679\u0631 \u0628\u0644\u0688 \u06A9\u0648 \u0628\u063A\u06CC\u0631 \u062A\u0628\u062F\u06CC\u0644\u06CC \u06A9\u06D2 \u0627\u06CC\u06A9 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-actions" }, /* @__PURE__ */ React.createElement(
       "a",
       {
         className: "ghost-cta",

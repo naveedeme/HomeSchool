@@ -9949,6 +9949,194 @@ function buildPracticeDeck(library = [], limit = 12, mode = "flashcards") {
   return shuffleArray((library || []).filter((card) => isUsefulPracticePair(card, mode))).slice(0, Math.max(4, Number(limit) || 12));
 }
 
+function getPronunciationTargetText(card) {
+  return normalizeText(
+    card?.pronunciationTarget
+    || card?.prompt
+    || card?.practiceFront
+    || card?.typingTarget
+    || card?.matchPrompt
+    || "",
+  );
+}
+
+function getPronunciationLanguage(text, fallbackLang = "en") {
+  const content = normalizeText(text);
+  if (!content) return fallbackLang === "ur" ? "ur" : "en";
+  const urduChars = (content.match(/[\u0600-\u06FF]/gu) || []).length;
+  const latinChars = (content.match(/[A-Za-z]/g) || []).length;
+  if (urduChars && !latinChars) return "ur";
+  if (latinChars && !urduChars) return "en";
+  if (urduChars > latinChars) return "ur";
+  if (latinChars > urduChars) return "en";
+  return fallbackLang === "ur" ? "ur" : "en";
+}
+
+function normalizePronunciationComparison(value, lang = "en") {
+  const normalized = String(value || "")
+    .normalize("NFKC")
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/gu, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return "";
+  return lang === "ur" ? normalized : normalized.toLowerCase();
+}
+
+function countMatchingPronunciationTokens(targetTokens = [], heardTokens = []) {
+  if (!targetTokens.length || !heardTokens.length) return 0;
+  const heardMap = new Map();
+  heardTokens.forEach((token) => {
+    if (!token) return;
+    heardMap.set(token, (heardMap.get(token) || 0) + 1);
+  });
+  let matched = 0;
+  targetTokens.forEach((token) => {
+    const current = heardMap.get(token) || 0;
+    if (current <= 0) return;
+    matched += 1;
+    heardMap.set(token, current - 1);
+  });
+  return matched;
+}
+
+function computeLevenshteinDistance(left = "", right = "") {
+  const a = String(left || "");
+  const b = String(right || "");
+  if (!a) return b.length;
+  if (!b) return a.length;
+  const rows = Array.from({ length: a.length + 1 }, (_, index) => index);
+  for (let column = 1; column <= b.length; column += 1) {
+    let previous = rows[0];
+    rows[0] = column;
+    for (let row = 1; row <= a.length; row += 1) {
+      const current = rows[row];
+      const substitution = previous + (a[row - 1] === b[column - 1] ? 0 : 1);
+      const insertion = rows[row] + 1;
+      const deletion = rows[row - 1] + 1;
+      rows[row] = Math.min(substitution, insertion, deletion);
+      previous = current;
+    }
+  }
+  return rows[a.length];
+}
+
+function assessPronunciationAttempt(targetText, heardText, lang = "en") {
+  const targetNormalized = normalizePronunciationComparison(targetText, lang);
+  const heardNormalized = normalizePronunciationComparison(heardText, lang);
+  if (!targetNormalized) {
+    return {
+      status: "idle",
+      score: 0,
+      targetNormalized,
+      heardNormalized,
+      tokenScore: 0,
+      charScore: 0,
+    };
+  }
+  if (!heardNormalized) {
+    return {
+      status: "missing",
+      score: 0,
+      targetNormalized,
+      heardNormalized,
+      tokenScore: 0,
+      charScore: 0,
+    };
+  }
+  if (targetNormalized === heardNormalized) {
+    return {
+      status: "exact",
+      score: 100,
+      targetNormalized,
+      heardNormalized,
+      tokenScore: 1,
+      charScore: 1,
+    };
+  }
+  const targetTokens = targetNormalized.split(/\s+/).filter(Boolean);
+  const heardTokens = heardNormalized.split(/\s+/).filter(Boolean);
+  const tokenScore = targetTokens.length
+    ? countMatchingPronunciationTokens(targetTokens, heardTokens) / targetTokens.length
+    : 0;
+  const maxLength = Math.max(targetNormalized.length, heardNormalized.length, 1);
+  const charScore = Math.max(0, 1 - (computeLevenshteinDistance(targetNormalized, heardNormalized) / maxLength));
+  const score = Math.round(((tokenScore * 0.65) + (charScore * 0.35)) * 100);
+  const status = score >= 82 ? "strong" : score >= 60 ? "close" : "retry";
+  return {
+    status,
+    score,
+    targetNormalized,
+    heardNormalized,
+    tokenScore,
+    charScore,
+  };
+}
+
+function buildPronunciationFeedback(status, language = "en") {
+  if (status === "exact") {
+    return joinLocalizedText(
+      "Excellent. That matched the target very clearly.",
+      "بہت خوب۔ آپ کی ادائیگی ہدف کے ساتھ بہت واضح طور پر ملی۔",
+      language,
+    );
+  }
+  if (status === "strong") {
+    return joinLocalizedText(
+      "Very good. You were very close. Try once more to make it even cleaner.",
+      "بہت اچھا۔ آپ کافی قریب تھے۔ ایک بار اور کہیں تاکہ اور بھی صاف ہو جائے۔",
+      language,
+    );
+  }
+  if (status === "close") {
+    return joinLocalizedText(
+      "Good attempt. Listen again and match the wording a little more closely.",
+      "اچھی کوشش۔ دوبارہ سنیں اور الفاظ کو تھوڑا زیادہ قریب سے ملانے کی کوشش کریں۔",
+      language,
+    );
+  }
+  if (status === "missing") {
+    return joinLocalizedText(
+      "We could not hear a clear attempt yet. Try speaking a bit louder and closer to the microphone.",
+      "ابھی واضح آواز نہیں مل سکی۔ ذرا اونچا بولیں اور مائیک کے قریب ہو کر کوشش کریں۔",
+      language,
+    );
+  }
+  return joinLocalizedText(
+    "Try again. Hear the model once more and speak the phrase more clearly.",
+    "دوبارہ کوشش کریں۔ نمونہ ایک بار اور سنیں اور جملہ زیادہ صاف انداز میں کہیں۔",
+    language,
+  );
+}
+
+function buildPronunciationDeck(library = [], limit = 12) {
+  const safeLimit = Math.max(4, Number(limit) || 12);
+  const seen = new Set();
+  const deck = [];
+  shuffleArray(Array.isArray(library) ? library : []).forEach((card) => {
+    if (deck.length >= safeLimit) return;
+    if (!card || card?.supplementalType === "quiz") return;
+    const target = getPronunciationTargetText(card);
+    if (!target) return;
+    const words = target.split(/\s+/).filter(Boolean);
+    if (!words.length || words.length > 16) return;
+    const normalizedTarget = normalizeAnswerText(target);
+    if (!normalizedTarget || seen.has(normalizedTarget)) return;
+    const lang = getPronunciationLanguage(target, card?.practiceLang || "en");
+    const supportText = normalizeText(card?.answer || card?.meaning || "");
+    deck.push({
+      ...card,
+      pronunciationTarget: target,
+      pronunciationLang: lang,
+      pronunciationSupport: supportText && normalizeAnswerText(supportText) !== normalizedTarget ? supportText : "",
+      pronunciationSectionTitle: normalizeText(card?.source?.subTitle || ""),
+      pronunciationLessonTitle: normalizeText(card?.source?.lessonTitle || card?.sectionLabel || ""),
+    });
+    seen.add(normalizedTarget);
+  });
+  return deck;
+}
+
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -11961,6 +12149,12 @@ function HomeschoolApp() {
   const [flashcardTransitionMode, setFlashcardTransitionMode] = useState("forward");
   const [practiceLabReturnPending, setPracticeLabReturnPending] = useState(false);
   const [typingTutorOpen, setTypingTutorOpen] = useState(false);
+  const [pronunciationLabOpen, setPronunciationLabOpen] = useState(false);
+  const [pronunciationLabIdx, setPronunciationLabIdx] = useState(0);
+  const [pronunciationLabTranscript, setPronunciationLabTranscript] = useState("");
+  const [pronunciationLabResult, setPronunciationLabResult] = useState(null);
+  const [pronunciationLabListening, setPronunciationLabListening] = useState(false);
+  const [pronunciationLabHistory, setPronunciationLabHistory] = useState({});
   const [viewTargetId, setViewTargetId] = useState(null);
   const [pageFlashActive, setPageFlashActive] = useState(false);
   const [heatmapExpanded, setHeatmapExpanded] = useState(false);
@@ -12079,6 +12273,7 @@ function HomeschoolApp() {
   const chapterImportInputRef = useRef(null);
   const testTemplateImportInputRef = useRef(null);
   const speechRecognitionRef = useRef(null);
+  const pronunciationRecognitionRef = useRef(null);
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
   const profileSwitcherButtonRef = useRef(null);
@@ -12380,6 +12575,144 @@ const headerHideTimerRef = useRef(null);
     setChatListening(true);
     recognition.start();
   }, [chatListening, language]);
+
+  const stopPronunciationListening = useCallback(() => {
+    try {
+      pronunciationRecognitionRef.current?.stop?.();
+    } catch (error) {
+      // Ignore speech recognition shutdown errors.
+    }
+  }, []);
+
+  const handleOpenPronunciationLab = useCallback(() => {
+    if (!pronunciationLabDeck.length) {
+      alert(
+        joinLocalizedText(
+          `${activePracticeSubject?.name || "This subject"} does not have enough speaking prompts for Pronunciation Lab yet.`,
+          `${activePracticeSubject?.nameUr || "اس مضمون"} کے لیے تلفظ لیب کے لیے کافی بولنے والے اشارے ابھی موجود نہیں ہیں۔`,
+          language,
+        ),
+      );
+      return;
+    }
+    setPronunciationLabIdx(0);
+    setPronunciationLabTranscript("");
+    setPronunciationLabResult(null);
+    setPronunciationLabHistory({});
+    setPronunciationLabOpen(true);
+  }, [activePracticeSubject?.name, activePracticeSubject?.nameUr, language, pronunciationLabDeck.length]);
+
+  const handleClosePronunciationLab = useCallback(() => {
+    stopPronunciationListening();
+    setPronunciationLabListening(false);
+    setPronunciationLabOpen(false);
+    setPronunciationLabTranscript("");
+    setPronunciationLabResult(null);
+    window.speechSynthesis.cancel();
+  }, [stopPronunciationListening]);
+
+  const handlePlayPronunciationModel = useCallback(() => {
+    if (!activePronunciationCard || audioMuted) return;
+    window.HomeSchoolUtils?.speakText?.(
+      activePronunciationCard.pronunciationTarget,
+      activePronunciationCard.pronunciationLang || "en",
+    );
+  }, [activePronunciationCard, audioMuted]);
+
+  const handlePronunciationPrev = useCallback(() => {
+    if (pronunciationLabIdx <= 0) return;
+    stopPronunciationListening();
+    setPronunciationLabListening(false);
+    setPronunciationLabIdx((current) => Math.max(0, current - 1));
+    setPronunciationLabTranscript("");
+    setPronunciationLabResult(null);
+  }, [pronunciationLabIdx, stopPronunciationListening]);
+
+  const handlePronunciationNext = useCallback(() => {
+    if (pronunciationLabIdx >= pronunciationLabDeck.length - 1) return;
+    stopPronunciationListening();
+    setPronunciationLabListening(false);
+    setPronunciationLabIdx((current) => Math.min(pronunciationLabDeck.length - 1, current + 1));
+    setPronunciationLabTranscript("");
+    setPronunciationLabResult(null);
+  }, [pronunciationLabDeck.length, pronunciationLabIdx, stopPronunciationListening]);
+
+  const handlePronunciationRetry = useCallback(() => {
+    stopPronunciationListening();
+    setPronunciationLabListening(false);
+    setPronunciationLabTranscript("");
+    setPronunciationLabResult(null);
+  }, [stopPronunciationListening]);
+
+  const handlePronunciationListen = useCallback(() => {
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!activePronunciationCard || !SpeechRecognitionClass) return;
+    if (pronunciationLabListening) {
+      stopPronunciationListening();
+      return;
+    }
+    try {
+      speechRecognitionRef.current?.stop?.();
+    } catch (error) {
+      // Ignore shutdown errors from chat recognition.
+    }
+    const recognition = new SpeechRecognitionClass();
+    recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results || [])
+        .map((result) => result?.[0]?.transcript || "")
+        .join(" ")
+        .trim();
+      const assessment = assessPronunciationAttempt(
+        activePronunciationCard.pronunciationTarget,
+        transcript,
+        activePronunciationCard.pronunciationLang || "en",
+      );
+      const resultPayload = {
+        ...assessment,
+        transcript,
+        feedback: buildPronunciationFeedback(assessment.status, language),
+      };
+      setPronunciationLabTranscript(transcript);
+      setPronunciationLabResult(resultPayload);
+      setPronunciationLabHistory((current) => {
+        const key = String(activePronunciationCard.id || activePronunciationCard.pronunciationTarget || pronunciationLabIdx);
+        const existing = current?.[key] || { attempts: 0, bestScore: 0 };
+        return {
+          ...(current || {}),
+          [key]: {
+            attempts: existing.attempts + 1,
+            bestScore: Math.max(existing.bestScore || 0, assessment.score || 0),
+            status: assessment.status,
+          },
+        };
+      });
+      window.HomeSchoolUtils?.playFeedbackSound?.(
+        assessment.status === "exact" || assessment.status === "strong" ? "correct" : "wrong",
+      );
+    };
+    recognition.onerror = () => {
+      setPronunciationLabResult({
+        status: "missing",
+        score: 0,
+        transcript: "",
+        feedback: buildPronunciationFeedback("missing", language),
+      });
+      setPronunciationLabListening(false);
+    };
+    recognition.onend = () => {
+      setPronunciationLabListening(false);
+      pronunciationRecognitionRef.current = null;
+    };
+    pronunciationRecognitionRef.current = recognition;
+    setPronunciationLabTranscript("");
+    setPronunciationLabResult(null);
+    setPronunciationLabListening(true);
+    recognition.start();
+  }, [activePronunciationCard, language, pronunciationLabIdx, pronunciationLabListening, stopPronunciationListening]);
 
   const handleCopyWordMeaning = useCallback(() => {
     if (!wordMeaningPopover) return;
@@ -14497,6 +14830,19 @@ const headerHideTimerRef = useRef(null);
     () => [...practiceSubjectReviewLibrary, ...practiceSubjectSupplementalItems],
     [practiceSubjectReviewLibrary, practiceSubjectSupplementalItems],
   );
+  const pronunciationLabDeck = useMemo(
+    () => buildPronunciationDeck(practiceSubjectSourcePool, 12),
+    [practiceSubjectSourcePool],
+  );
+  const activePronunciationCard = pronunciationLabDeck[pronunciationLabIdx] || null;
+  const pronunciationLabAttempts = useMemo(
+    () => Object.values(pronunciationLabHistory || {}).reduce((sum, entry) => sum + (Number(entry?.attempts) || 0), 0),
+    [pronunciationLabHistory],
+  );
+  const pronunciationLabStrongMatches = useMemo(
+    () => Object.values(pronunciationLabHistory || {}).filter((entry) => Number(entry?.bestScore) >= 82).length,
+    [pronunciationLabHistory],
+  );
   const practiceCoreModePool = useMemo(() => {
     const hasReviewPairs = practiceSubjectReviewLibrary.some((card) => isUsefulPracticePair(card, "flashcards"));
     return hasReviewPairs ? practiceSubjectReviewLibrary : practiceSubjectSourcePool;
@@ -14525,6 +14871,7 @@ const headerHideTimerRef = useRef(null);
     () => buildSentenceBuilderDeck(practiceSubjectSourcePool, 4).length,
     [practiceSubjectSourcePool],
   );
+  const pronunciationLabReadyCount = pronunciationLabDeck.length;
   const practiceTimedChallengeReadyCount = useMemo(
     () => buildTimedChallengeDeck(practiceSubjectSourcePool, 6, 4).length,
     [practiceSubjectSourcePool],
@@ -14567,6 +14914,16 @@ const headerHideTimerRef = useRef(null);
     timedmatching: practiceMatchingReadyCount,
     interleaved: practiceInterleavedReadyCount,
   };
+  useEffect(() => {
+    if (!pronunciationLabOpen) return;
+    if (!pronunciationLabDeck.length) {
+      handleClosePronunciationLab();
+      return;
+    }
+    if (pronunciationLabIdx > pronunciationLabDeck.length - 1) {
+      setPronunciationLabIdx(0);
+    }
+  }, [handleClosePronunciationLab, pronunciationLabDeck.length, pronunciationLabIdx, pronunciationLabOpen]);
   const practiceScopeLabel = activePracticeFilter.hasDayRange
     ? joinLocalizedText("lesson/day range and difficulty", "سبق/دن کی حد اور مشکل", language)
     : joinLocalizedText("lesson range and difficulty", "سبق کی حد اور مشکل", language);
@@ -17659,13 +18016,18 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   }, [practiceLabReturnPending, practiceMode, reducedMotion, tab]);
 
   useEffect(() => {
-    if (!typingTutorOpen) return undefined;
+    if (!typingTutorOpen && !pronunciationLabOpen) return undefined;
     const handleEscape = (event) => {
-      if (event.key === "Escape") setTypingTutorOpen(false);
+      if (event.key !== "Escape") return;
+      if (pronunciationLabOpen) {
+        handleClosePronunciationLab();
+        return;
+      }
+      if (typingTutorOpen) setTypingTutorOpen(false);
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [typingTutorOpen]);
+  }, [handleClosePronunciationLab, pronunciationLabOpen, typingTutorOpen]);
 
   const refreshStorageLabel = useCallback(async () => {
     if (!window.HomeSchoolDB) {
@@ -18952,6 +19314,11 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   useEffect(() => () => {
     try {
       speechRecognitionRef.current?.stop?.();
+    } catch (error) {
+      // Ignore speech recognition shutdown errors.
+    }
+    try {
+      pronunciationRecognitionRef.current?.stop?.();
     } catch (error) {
       // Ignore speech recognition shutdown errors.
     }
@@ -26078,6 +26445,16 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             <div className="practice-tool-row">
               <button
                 type="button"
+                className={`practice-mode-card practice-tool-card${pronunciationLabReadyCount ? "" : " disabled"}`}
+                onClick={handleOpenPronunciationLab}
+                disabled={!pronunciationLabReadyCount}
+              >
+                <span className="practice-mode-icon">🎙️</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Pronunciation Lab", "تلفظ لیب", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText(`Listen, speak, and compare with ${pronunciationLabReadyCount} ready prompts from this practice range.`, `اس پریکٹس رینج کے ${pronunciationLabReadyCount} تیار اشاروں کے ساتھ سنیں، بولیں، اور موازنہ کریں۔`, language), language)}</span>
+              </button>
+              <button
+                type="button"
                 className="practice-mode-card practice-tool-card"
                 onClick={() => setTypingTutorOpen(true)}
               >
@@ -27597,6 +27974,108 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     </div>
     {navBarAutoHide && navPosition === "bottom" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-bottom" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
     {navPosition === "bottom" ? renderNavBar("bottom") : null}
+    {pronunciationLabOpen ? (
+      <div className="pronunciation-lab-overlay" onClick={handleClosePronunciationLab}>
+        <div className="pronunciation-lab-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="pronunciation-lab-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Pronunciation Lab", "تلفظ لیب", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("Practice speaking the current subject prompts from your selected lesson range and compare what the browser hears.", "اپنے منتخب سبق رینج سے موجودہ مضمون کے اشارے بول کر مشق کریں اور دیکھیں کہ براؤزر کیا سنتا ہے۔", language), language)}</p>
+            </div>
+            <div className="pronunciation-lab-actions">
+              <button type="button" className="ghost-cta" onClick={handleClosePronunciationLab}>
+                {renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          <div className="pronunciation-lab-stats">
+            <div className="pronunciation-lab-stat">
+              <span>{renderLocalizedTextNode(joinLocalizedText("Ready", "تیار", language), language)}</span>
+              <strong>{pronunciationLabDeck.length}</strong>
+            </div>
+            <div className="pronunciation-lab-stat">
+              <span>{renderLocalizedTextNode(joinLocalizedText("Attempts", "کوششیں", language), language)}</span>
+              <strong>{pronunciationLabAttempts}</strong>
+            </div>
+            <div className="pronunciation-lab-stat">
+              <span>{renderLocalizedTextNode(joinLocalizedText("Strong Matches", "بہترین مطابقت", language), language)}</span>
+              <strong>{pronunciationLabStrongMatches}</strong>
+            </div>
+          </div>
+          {!speechRecognitionSupported ? (
+            <div className="pronunciation-lab-alert">
+              {renderLocalizedTextNode(joinLocalizedText("This browser can play the model voice, but it does not support microphone speech recognition here.", "یہ براؤزر نمونہ آواز تو چلا سکتا ہے، لیکن یہاں مائیکروفون کی آواز پہچاننے کی سہولت دستیاب نہیں۔", language), language)}
+            </div>
+          ) : null}
+          {activePronunciationCard ? (
+            <div className="pronunciation-lab-body">
+              <div className="pronunciation-lab-nav">
+                <button type="button" className="flashcard-side-nav practice-typing-nav-prev" onClick={handlePronunciationPrev} disabled={pronunciationLabIdx <= 0}>
+                  «
+                </button>
+              </div>
+              <div className="practice-card-shell practice-card-shell-focus pronunciation-lab-shell">
+                <div className="flashcard-count-pill">{pronunciationLabIdx + 1} / {pronunciationLabDeck.length}</div>
+                <div className={`practice-card-face practice-card-face-focus pronunciation-lab-face${pronunciationLabResult?.status ? ` ${pronunciationLabResult.status === "exact" || pronunciationLabResult.status === "strong" ? "correct" : "review"}` : ""}`}>
+                  <div className={`flashcard-card-top${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}`}>
+                    {renderLocalizedTextNode(joinLocalizedText("Listen and Say", "سنیں اور بولیں", language), language)}
+                  </div>
+                  <div className="pronunciation-lab-card-head">
+                    <div className="pronunciation-lab-lesson">
+                      <span className="pronunciation-lab-label">{renderLocalizedTextNode(joinLocalizedText("Chapter", "باب", language), language)}</span>
+                      <PracticeMixedText text={activePronunciationCard.pronunciationLessonTitle || activePracticeSubject?.name || ""} fallbackLang={activePronunciationCard.pronunciationLang} />
+                    </div>
+                    <div className="pronunciation-lab-section">
+                      <span className="pronunciation-lab-label">{renderLocalizedTextNode(joinLocalizedText("Subsection", "ذیلی حصہ", language), language)}</span>
+                      <PracticeMixedText text={activePronunciationCard.pronunciationSectionTitle || activePronunciationCard.sectionLabel || ""} fallbackLang={activePronunciationCard.pronunciationLang} />
+                    </div>
+                  </div>
+                  <div className="pronunciation-lab-target">
+                    <PracticeMixedText text={activePronunciationCard.pronunciationTarget} fallbackLang={activePronunciationCard.pronunciationLang} />
+                  </div>
+                  {activePronunciationCard.pronunciationSupport ? (
+                    <div className="pronunciation-lab-support">
+                      <span className="pronunciation-lab-label">{renderLocalizedTextNode(joinLocalizedText("Support", "مدد", language), language)}</span>
+                      <PracticeMixedText text={activePronunciationCard.pronunciationSupport} fallbackLang={getPronunciationLanguage(activePronunciationCard.pronunciationSupport, language === "ur" ? "ur" : "en")} />
+                    </div>
+                  ) : null}
+                  <div className="pronunciation-lab-toolbar">
+                    <button type="button" className="flashcard-flip-btn" onClick={handlePlayPronunciationModel} disabled={audioMuted}>
+                      {renderLocalizedTextNode(joinLocalizedText("Hear Model", "نمونہ سنیں", language), language)}
+                    </button>
+                    <button type="button" className={`flashcard-flip-btn${pronunciationLabListening ? " active" : ""}`} onClick={handlePronunciationListen} disabled={!speechRecognitionSupported}>
+                      {renderLocalizedTextNode(pronunciationLabListening ? joinLocalizedText("Stop Listening", "سننا بند کریں", language) : joinLocalizedText("Start Speaking", "بولنا شروع کریں", language), language)}
+                    </button>
+                    <button type="button" className="flashcard-flip-btn" onClick={handlePronunciationRetry}>
+                      {renderLocalizedTextNode(joinLocalizedText("Try Again", "دوبارہ کوشش", language), language)}
+                    </button>
+                  </div>
+                  <div className="pronunciation-lab-result-card">
+                    <div className="pronunciation-lab-result-head">
+                      <span>{renderLocalizedTextNode(joinLocalizedText("What we heard", "ہم نے کیا سنا", language), language)}</span>
+                      <strong>{pronunciationLabResult?.score ?? 0}%</strong>
+                    </div>
+                    <div className={`pronunciation-lab-transcript${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}`}>
+                      {pronunciationLabTranscript
+                        ? <PracticeMixedText text={pronunciationLabTranscript} fallbackLang={activePronunciationCard.pronunciationLang} />
+                        : renderLocalizedTextNode(joinLocalizedText("Your spoken transcript will appear here.", "آپ کی بولی گئی عبارت یہاں نظر آئے گی۔", language), language)}
+                    </div>
+                    <div className={`pronunciation-lab-feedback${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}`}>
+                      {renderLocalizedTextNode(pronunciationLabResult?.feedback || joinLocalizedText("Press Hear Model, then Start Speaking to compare your pronunciation.", "پہلے نمونہ سنیں، پھر بولنا شروع کریں تاکہ آپ کے تلفظ کا موازنہ ہو سکے۔", language), language)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="pronunciation-lab-nav">
+                <button type="button" className="flashcard-side-nav practice-typing-nav-next" onClick={handlePronunciationNext} disabled={pronunciationLabIdx >= pronunciationLabDeck.length - 1}>
+                  »
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    ) : null}
     {typingTutorOpen ? (
       <div className="typing-tutor-overlay" onClick={() => setTypingTutorOpen(false)}>
         <div className="typing-tutor-modal" onClick={(event) => event.stopPropagation()}>
