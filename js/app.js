@@ -22,6 +22,7 @@ const {
   verbs: VERBS_DATA,
 } = POS_DATA;
 const AppContext = React.createContext(null);
+const TYPING_TUTOR_EMBED_PATH = "./typing-tutor/index.html";
 
 function createEmptyCustomContentState() {
   return {
@@ -11959,6 +11960,7 @@ function HomeschoolApp() {
   const [flashcardFeedbackState, setFlashcardFeedbackState] = useState("");
   const [flashcardTransitionMode, setFlashcardTransitionMode] = useState("forward");
   const [practiceLabReturnPending, setPracticeLabReturnPending] = useState(false);
+  const [typingTutorOpen, setTypingTutorOpen] = useState(false);
   const [viewTargetId, setViewTargetId] = useState(null);
   const [pageFlashActive, setPageFlashActive] = useState(false);
   const [heatmapExpanded, setHeatmapExpanded] = useState(false);
@@ -17655,6 +17657,15 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     }, 40);
     return () => window.clearTimeout(timer);
   }, [practiceLabReturnPending, practiceMode, reducedMotion, tab]);
+
+  useEffect(() => {
+    if (!typingTutorOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setTypingTutorOpen(false);
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [typingTutorOpen]);
 
   const refreshStorageLabel = useCallback(async () => {
     if (!window.HomeSchoolDB) {
@@ -26064,6 +26075,17 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </div>
               </div>
             ) : null}
+            <div className="practice-tool-row">
+              <button
+                type="button"
+                className="practice-mode-card practice-tool-card"
+                onClick={() => setTypingTutorOpen(true)}
+              >
+                <span className="practice-mode-icon">⌨️</span>
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Typing Tutor", "ٹائپنگ ٹیوٹر", language), language)}</strong>
+                <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the standalone typing project in a separate popup without changing its behavior.", "الگ ٹائپنگ پروجیکٹ کو علیحدہ پاپ اپ میں کھولیں، بغیر اس کی فعالیت بدلے۔", language), language)}</span>
+              </button>
+            </div>
             <div className="practice-mode-grid">
               <button className={`practice-mode-card${practiceModeAvailability.flashcards ? "" : " disabled"}`} onClick={() => handleStartPractice("flashcards")} disabled={!practiceModeAvailability.flashcards}>
                 <span className="practice-mode-icon">🃏</span>
@@ -27575,6 +27597,38 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     </div>
     {navBarAutoHide && navPosition === "bottom" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-bottom" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
     {navPosition === "bottom" ? renderNavBar("bottom") : null}
+    {typingTutorOpen ? (
+      <div className="typing-tutor-overlay" onClick={() => setTypingTutorOpen(false)}>
+        <div className="typing-tutor-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="typing-tutor-modal-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Typing Tutor", "ٹائپنگ ٹیوٹر", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("This opens your standalone Typing Tutor build unchanged inside a popup.", "یہ آپ کے علیحدہ ٹائپنگ ٹیوٹر بلڈ کو بغیر تبدیلی کے ایک پاپ اپ میں کھولتا ہے۔", language), language)}</p>
+            </div>
+            <div className="typing-tutor-modal-actions">
+              <a
+                className="ghost-cta"
+                href={TYPING_TUTOR_EMBED_PATH}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Open in new tab", "نئے ٹیب میں کھولیں", language), language)}
+              </a>
+              <button type="button" className="ghost-cta" onClick={() => setTypingTutorOpen(false)}>
+                {renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          <div className="typing-tutor-frame-shell">
+            <iframe
+              className="typing-tutor-frame"
+              src={TYPING_TUTOR_EMBED_PATH}
+              title="Typing Tutor"
+            />
+          </div>
+        </div>
+      </div>
+    ) : null}
     {wordMeaningPopover ? (
       <div
         className={`word-meaning-popover word-meaning-popover-${wordMeaningPopover.placement || "above"}`}
