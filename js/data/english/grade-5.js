@@ -17220,10 +17220,17 @@
   },
   {
     "title": "Vocabulary",
-    "content": "Build vocabulary through three leveled tracks — beginner, intermediate, and advance — with day-wise practice, review days, and Urdu support.",
+    "content": "Build vocabulary through the original word-meanings track plus beginner, intermediate, and advance leveled practice with day-wise review and Urdu support.",
     "key": "vocabulary",
     "hasMathSub": true,
     "subs": [
+      {
+        "t": "Words Meanings",
+        "c": "Continue the original Grade 5 vocabulary track with textbook-style day blocks, Urdu meanings, and reading support.",
+        "lessonLabel": "📅 Days",
+        "showWordSentences": true,
+        "dayLessons": window.HomeSchoolEnglishModules.VOCABULARY_DATA || []
+      },
       {
         "t": "Beginner Vocabulary",
         "c": "Start with core everyday words, Urdu meanings, and review checkpoints to build a strong base.",
