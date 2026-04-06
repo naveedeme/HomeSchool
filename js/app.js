@@ -12317,6 +12317,8 @@ function HomeschoolApp() {
   const testTemplateImportInputRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const pronunciationRecognitionRef = useRef(null);
+  const pronunciationListeningActiveRef = useRef(false);
+  const pronunciationListeningRestartCountRef = useRef(0);
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
   const profileSwitcherButtonRef = useRef(null);
@@ -12620,6 +12622,8 @@ const headerHideTimerRef = useRef(null);
   }, [chatListening, language]);
 
   const stopPronunciationListening = useCallback(() => {
+    pronunciationListeningActiveRef.current = false;
+    pronunciationListeningRestartCountRef.current = 0;
     try {
       pronunciationRecognitionRef.current?.stop?.();
     } catch (error) {
@@ -14863,48 +14867,36 @@ const headerHideTimerRef = useRef(null);
       });
       return;
     }
-    if (navigator.mediaDevices?.getUserMedia) {
-      try {
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        micStream.getTracks().forEach((track) => track.stop());
-      } catch (error) {
-        const errorName = String(error?.name || error?.code || "permission-denied");
-        setPronunciationLabListening(false);
-        setPronunciationLabResult({
-          status: "missing",
-          score: 0,
-          transcript: "",
-          feedback: buildPronunciationListeningFeedback(errorName, language),
-        });
-        return;
-      }
-    }
     try {
       speechRecognitionRef.current?.stop?.();
     } catch (error) {
       // Ignore shutdown errors from chat recognition.
     }
+    try {
+      pronunciationRecognitionRef.current?.stop?.();
+    } catch (error) {
+      // Ignore prior pronunciation recognition shutdown errors.
+    }
     const recognition = new SpeechRecognitionClass();
     recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.continuous = true;
     recognition.maxAlternatives = 1;
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results || [])
-        .map((result) => result?.[0]?.transcript || "")
-        .join(" ")
-        .trim();
+    let finalTranscript = "";
+    let finalized = false;
+    const finalizeAttempt = (transcript) => {
+      const normalizedTranscript = String(transcript || "").trim();
       const assessment = assessPronunciationAttempt(
         activePronunciationCard.pronunciationTarget,
-        transcript,
+        normalizedTranscript,
         activePronunciationCard.pronunciationLang || "en",
       );
       const resultPayload = {
         ...assessment,
-        transcript,
+        transcript: normalizedTranscript,
         feedback: buildPronunciationFeedback(assessment.status, language),
       };
-      setPronunciationLabTranscript(transcript);
+      setPronunciationLabTranscript(normalizedTranscript);
       setPronunciationLabResult(resultPayload);
       setPronunciationLabHistory((current) => {
         const key = String(activePronunciationCard.id || activePronunciationCard.pronunciationTarget || pronunciationLabIdx);
@@ -14922,7 +14914,37 @@ const headerHideTimerRef = useRef(null);
         assessment.status === "exact" || assessment.status === "strong" ? "correct" : "wrong",
       );
     };
+    recognition.onstart = () => {
+      pronunciationListeningActiveRef.current = true;
+      pronunciationListeningRestartCountRef.current = 0;
+      setPronunciationLabListening(true);
+    };
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+      Array.from(event.results || []).forEach((result) => {
+        const text = String(result?.[0]?.transcript || "").trim();
+        if (!text) return;
+        if (result.isFinal) {
+          finalTranscript = [finalTranscript, text].filter(Boolean).join(" ").trim();
+        } else {
+          interimTranscript = [interimTranscript, text].filter(Boolean).join(" ").trim();
+        }
+      });
+      const displayTranscript = [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
+      if (displayTranscript) {
+        setPronunciationLabTranscript(displayTranscript);
+      }
+      if (finalTranscript && !finalized) {
+        finalized = true;
+        pronunciationListeningActiveRef.current = false;
+        pronunciationListeningRestartCountRef.current = 0;
+        finalizeAttempt(finalTranscript);
+        recognition.stop();
+      }
+    };
     recognition.onerror = (event) => {
+      pronunciationListeningActiveRef.current = false;
+      pronunciationListeningRestartCountRef.current = 0;
       setPronunciationLabResult({
         status: "missing",
         score: 0,
@@ -14932,6 +14954,21 @@ const headerHideTimerRef = useRef(null);
       setPronunciationLabListening(false);
     };
     recognition.onend = () => {
+      if (
+        pronunciationListeningActiveRef.current
+        && !finalized
+        && pronunciationListeningRestartCountRef.current < 1
+      ) {
+        pronunciationListeningRestartCountRef.current += 1;
+        try {
+          recognition.start();
+          return;
+        } catch (error) {
+          // Fall through to final stop state below.
+        }
+      }
+      pronunciationListeningActiveRef.current = false;
+      pronunciationListeningRestartCountRef.current = 0;
       setPronunciationLabListening(false);
       pronunciationRecognitionRef.current = null;
     };
@@ -14949,6 +14986,7 @@ const headerHideTimerRef = useRef(null);
         transcript: "",
         feedback: buildPronunciationListeningFeedback(error?.name || error?.message, language),
       });
+      pronunciationRecognitionRef.current = null;
     }
   }, [activePronunciationCard, language, pronunciationLabIdx, pronunciationLabListening, stopPronunciationListening]);
   const practiceTimedChallengeReadyCount = useMemo(
