@@ -628,7 +628,9 @@ function normalizeChapterAssignmentRecord(raw) {
 
 function normalizeDiaryEntryRecord(raw) {
   const diaryId = String(raw?.diary_id || raw?.diaryId || "").trim();
-  const targetDate = String(raw?.target_date || raw?.targetDate || "").trim();
+  const targetDateRaw = String(raw?.target_date || raw?.targetDate || "").trim();
+  const parsedTargetDate = parseIsoDateValue(targetDateRaw);
+  const targetDate = parsedTargetDate ? toIsoDateString(parsedTargetDate) : "";
   if (!diaryId || !targetDate) return null;
   const entryType = String(raw?.entry_type || raw?.entryType || "diary").trim().toLowerCase();
   const subject = String(raw?.subject || "").trim();
@@ -656,7 +658,9 @@ function normalizeDiaryEntryRecord(raw) {
 function normalizeDiaryCompletionRecord(raw) {
   const completionId = String(raw?.completion_id || raw?.completionId || "").trim();
   const studentEmail = String(raw?.student_email || raw?.studentEmail || "").trim().toLowerCase();
-  const targetDate = String(raw?.target_date || raw?.targetDate || "").trim();
+  const targetDateRaw = String(raw?.target_date || raw?.targetDate || "").trim();
+  const parsedTargetDate = parseIsoDateValue(targetDateRaw);
+  const targetDate = parsedTargetDate ? toIsoDateString(parsedTargetDate) : "";
   const taskKind = String(raw?.task_kind || raw?.taskKind || "").trim().toLowerCase();
   const taskKey = String(raw?.task_key || raw?.taskKey || "").trim();
   if (!completionId || !studentEmail || !targetDate || !taskKind || !taskKey) return null;
@@ -1077,47 +1081,52 @@ function buildHydratedHistoricalDiaryTask({
   getQuiz,
   yearStartDate = "",
 }) {
-  if (!historyRecord || typeof getLessonGroups !== "function" || typeof getQuiz !== "function") return null;
-  const safeSubject = String(historyRecord.subject || "").trim();
-  const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey: historyRecord.lessonKey || "" });
-  if (!safeSubject || !safeLessonKey || !Number.isFinite(Number(grade))) return null;
-  const lessonGroups = (getLessonGroups(safeSubject, grade) || []).filter((group) => group?.activeLesson);
-  const chapterGroup = lessonGroups.find((group) => group?.canonicalLessonKey === safeLessonKey) || null;
-  if (!chapterGroup) return null;
-  const desiredContentId = String(historyRecord.contentId || "").trim();
-  const matchedVariant = desiredContentId
-    ? (chapterGroup.variants || []).find((variant) => String(variant?.contentId || "").trim() === desiredContentId)
-    : null;
-  const lesson = matchedVariant?.lesson || chapterGroup.activeLesson || null;
-  if (!lesson) return null;
-  const quizRows = getQuiz(safeSubject, grade, safeLessonKey);
-  const taskUnits = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
-  const subjectIndex = Math.max(0, (Array.isArray(subjects) ? subjects : []).findIndex((subject) => subject?.id === safeSubject));
-  const subjectEntry = (Array.isArray(subjects) ? subjects : []).find((subject) => subject?.id === safeSubject) || null;
-  const coveredAtDate = parseIsoDateValue(historyRecord.targetDate || "") || new Date(historyRecord.coveredAt || Date.now());
-  return {
-    taskKind: "auto",
-    taskKey: `history::${safeSubject}::${safeLessonKey}::${String(historyRecord.contentId || "builtin").trim() || "builtin"}::${toIsoDateString(coveredAtDate)}`,
-    schoolId: String(historyRecord.schoolId || "").trim(),
-    targetDate: toIsoDateString(coveredAtDate),
-    weekStartDate: toIsoDateString(getWeekStartDate(coveredAtDate)),
-    dayIndex: Math.max(1, Math.min(5, Number(historyRecord.dayIndex) || 1)),
-    academicWeekNumber: getAcademicWeekNumber(coveredAtDate, yearStartDate),
-    subject: safeSubject,
-    subjectLabel: subjectEntry?.name || safeSubject,
-    subjectLabelUr: subjectEntry?.nameUr || subjectEntry?.name || safeSubject,
-    lessonKey: safeLessonKey,
-    contentId: desiredContentId || String(chapterGroup.activeVariant?.contentId || "").trim(),
-    title: lesson.title || chapterGroup.activeLesson?.title || `${subjectEntry?.name || safeSubject} lesson`,
-    note: String(historyRecord.note || "").trim(),
-    source: historyRecord.source || "history",
-    taskUnits,
-    chapterGroup,
-    lesson,
-    subjectIndex,
-    coveredAt: Number(coveredAtDate.getTime()) || Date.now(),
-    coverageEvidence: String(historyRecord.coverageEvidence || "").trim() || "history",
-  };
+  try {
+    if (!historyRecord || typeof getLessonGroups !== "function" || typeof getQuiz !== "function") return null;
+    const safeSubject = String(historyRecord.subject || "").trim();
+    const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey: historyRecord.lessonKey || "" });
+    if (!safeSubject || !safeLessonKey || !Number.isFinite(Number(grade))) return null;
+    const lessonGroups = (getLessonGroups(safeSubject, grade) || []).filter((group) => group?.activeLesson);
+    const chapterGroup = lessonGroups.find((group) => group?.canonicalLessonKey === safeLessonKey) || null;
+    if (!chapterGroup) return null;
+    const desiredContentId = String(historyRecord.contentId || "").trim();
+    const matchedVariant = desiredContentId
+      ? (chapterGroup.variants || []).find((variant) => String(variant?.contentId || "").trim() === desiredContentId)
+      : null;
+    const lesson = matchedVariant?.lesson || chapterGroup.activeLesson || null;
+    if (!lesson) return null;
+    const quizRows = getQuiz(safeSubject, grade, safeLessonKey);
+    const taskUnits = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
+    const subjectIndex = Math.max(0, (Array.isArray(subjects) ? subjects : []).findIndex((subject) => subject?.id === safeSubject));
+    const subjectEntry = (Array.isArray(subjects) ? subjects : []).find((subject) => subject?.id === safeSubject) || null;
+    const coveredAtDate = parseIsoDateValue(historyRecord.targetDate || "") || new Date(historyRecord.coveredAt || Date.now());
+    return {
+      taskKind: "auto",
+      taskKey: `history::${safeSubject}::${safeLessonKey}::${String(historyRecord.contentId || "builtin").trim() || "builtin"}::${toIsoDateString(coveredAtDate)}`,
+      schoolId: String(historyRecord.schoolId || "").trim(),
+      targetDate: toIsoDateString(coveredAtDate),
+      weekStartDate: toIsoDateString(getWeekStartDate(coveredAtDate)),
+      dayIndex: Math.max(1, Math.min(5, Number(historyRecord.dayIndex) || 1)),
+      academicWeekNumber: getAcademicWeekNumber(coveredAtDate, yearStartDate),
+      subject: safeSubject,
+      subjectLabel: subjectEntry?.name || safeSubject,
+      subjectLabelUr: subjectEntry?.nameUr || subjectEntry?.name || safeSubject,
+      lessonKey: safeLessonKey,
+      contentId: desiredContentId || String(chapterGroup.activeVariant?.contentId || "").trim(),
+      title: lesson.title || chapterGroup.activeLesson?.title || `${subjectEntry?.name || safeSubject} lesson`,
+      note: String(historyRecord.note || "").trim(),
+      source: historyRecord.source || "history",
+      taskUnits,
+      chapterGroup,
+      lesson,
+      subjectIndex,
+      coveredAt: Number(coveredAtDate.getTime()) || Date.now(),
+      coverageEvidence: String(historyRecord.coverageEvidence || "").trim() || "history",
+    };
+  } catch (error) {
+    console.log("Unable to hydrate historical diary task:", historyRecord?.subject, historyRecord?.lessonKey, error);
+    return null;
+  }
 }
 
 function buildPriorWeeksCoveredTasks({
@@ -1134,80 +1143,84 @@ function buildPriorWeeksCoveredTasks({
   diaryCompletions = [],
   studentEmail = "",
 }) {
-  const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
-  const safeCurrentKeys = currentWeekLessonKeys instanceof Set ? currentWeekLessonKeys : new Set();
-  const normalizedCompletions = (Array.isArray(diaryCompletions) ? diaryCompletions : [])
-    .map((entry) => normalizeDiaryCompletionRecord(entry))
-    .filter(Boolean)
-    .filter((entry) => entry.studentEmail === safeStudentEmail && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate);
-  const normalizedEntries = (Array.isArray(diaryEntries) ? diaryEntries : [])
-    .map((entry) => normalizeDiaryEntryRecord(entry))
-    .filter(Boolean)
-    .filter((entry) => entry.entryType !== "assignment" && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate)
-    .filter((entry) => {
-      if (entry.targetType === "student") return entry.targetStudentEmail === safeStudentEmail;
-      return Number(entry.targetGrade) === Number(grade);
-    });
-  const historyRows = [
-    ...normalizedCompletions.map((entry) => ({
-      schoolId: entry.schoolId,
-      subject: entry.subject,
-      lessonKey: entry.lessonKey,
-      contentId: entry.contentId,
-      note: entry.completionPayload?.note || "",
-      targetDate: entry.targetDate,
-      coveredAt: Number(entry.completedAt || entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
-      coverageEvidence: "completion",
-      source: entry.completionPayload?.source || "history_completed",
-    })),
-    ...normalizedEntries.map((entry) => ({
-      schoolId: entry.schoolId,
-      subject: entry.subject,
-      lessonKey: entry.lessonKey,
-      contentId: entry.contentId,
-      note: entry.note,
-      targetDate: entry.targetDate,
-      coveredAt: Number(entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
-      coverageEvidence: "assigned",
-      source: "history_assigned",
-    })),
-  ];
-  const rangeStartDate = resolveDiaryCoverageRangeStartDate({
-    currentWeekStartDate,
-    accumulationMode,
-    accumulationValue,
-    yearStartDate,
-    historyRows,
-  });
-  const filteredHistoryRows = historyRows.filter((entry) => entry.targetDate >= rangeStartDate && entry.targetDate < currentWeekStartDate);
-  const historyByLesson = new Map();
-  filteredHistoryRows.forEach((entry) => {
-    const key = [
-      String(entry.subject || "").trim(),
-      resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
-      String(entry.contentId || "").trim() || "__default__",
-    ].join("::");
-    const currentLessonKey = `${String(entry.subject || "").trim()}::${resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" })}`;
-    if (!key || safeCurrentKeys.has(currentLessonKey)) return;
-    const existing = historyByLesson.get(key);
-    const existingRank = existing?.coverageEvidence === "completion" ? 2 : existing?.coverageEvidence === "assigned" ? 1 : 0;
-    const nextRank = entry.coverageEvidence === "completion" ? 2 : entry.coverageEvidence === "assigned" ? 1 : 0;
-    if (!existing || nextRank > existingRank || (nextRank === existingRank && Number(entry.coveredAt || 0) > Number(existing.coveredAt || 0))) {
-      historyByLesson.set(key, entry);
-    }
-  });
-  const hydratedHistory = Array.from(historyByLesson.values())
-    .sort((left, right) => Number(right.coveredAt || 0) - Number(left.coveredAt || 0))
-    .map((entry) => buildHydratedHistoricalDiaryTask({
-      historyRecord: entry,
-      subjects,
-      grade,
-      getLessonGroups,
-      getQuiz,
+  try {
+    const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
+    const safeCurrentKeys = currentWeekLessonKeys instanceof Set ? currentWeekLessonKeys : new Set();
+    const normalizedCompletions = (Array.isArray(diaryCompletions) ? diaryCompletions : [])
+      .map((entry) => normalizeDiaryCompletionRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.studentEmail === safeStudentEmail && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate);
+    const normalizedEntries = (Array.isArray(diaryEntries) ? diaryEntries : [])
+      .map((entry) => normalizeDiaryEntryRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.entryType !== "assignment" && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate)
+      .filter((entry) => {
+        if (entry.targetType === "student") return entry.targetStudentEmail === safeStudentEmail;
+        return Number(entry.targetGrade) === Number(grade);
+      });
+    const historyRows = [
+      ...normalizedCompletions.map((entry) => ({
+        schoolId: entry.schoolId,
+        subject: entry.subject,
+        lessonKey: entry.lessonKey,
+        contentId: entry.contentId,
+        note: entry.completionPayload?.note || "",
+        targetDate: entry.targetDate,
+        coveredAt: Number(entry.completedAt || entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
+        coverageEvidence: "completion",
+        source: entry.completionPayload?.source || "history_completed",
+      })),
+      ...normalizedEntries.map((entry) => ({
+        schoolId: entry.schoolId,
+        subject: entry.subject,
+        lessonKey: entry.lessonKey,
+        contentId: entry.contentId,
+        note: entry.note,
+        targetDate: entry.targetDate,
+        coveredAt: Number(entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
+        coverageEvidence: "assigned",
+        source: "history_assigned",
+      })),
+    ];
+    const rangeStartDate = resolveDiaryCoverageRangeStartDate({
+      currentWeekStartDate,
+      accumulationMode,
+      accumulationValue,
       yearStartDate,
-    }))
-    .filter(Boolean);
-  if (hydratedHistory.length) return hydratedHistory;
+      historyRows,
+    });
+    const filteredHistoryRows = historyRows.filter((entry) => entry.targetDate >= rangeStartDate && entry.targetDate < currentWeekStartDate);
+    const historyByLesson = new Map();
+    filteredHistoryRows.forEach((entry) => {
+      const key = [
+        String(entry.subject || "").trim(),
+        resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
+        String(entry.contentId || "").trim() || "__default__",
+      ].join("::");
+      const currentLessonKey = `${String(entry.subject || "").trim()}::${resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" })}`;
+      if (!key || safeCurrentKeys.has(currentLessonKey)) return;
+      const existing = historyByLesson.get(key);
+      const existingRank = existing?.coverageEvidence === "completion" ? 2 : existing?.coverageEvidence === "assigned" ? 1 : 0;
+      const nextRank = entry.coverageEvidence === "completion" ? 2 : entry.coverageEvidence === "assigned" ? 1 : 0;
+      if (!existing || nextRank > existingRank || (nextRank === existingRank && Number(entry.coveredAt || 0) > Number(existing.coveredAt || 0))) {
+        historyByLesson.set(key, entry);
+      }
+    });
+    const hydratedHistory = Array.from(historyByLesson.values())
+      .sort((left, right) => Number(right.coveredAt || 0) - Number(left.coveredAt || 0))
+      .map((entry) => buildHydratedHistoricalDiaryTask({
+        historyRecord: entry,
+        subjects,
+        grade,
+        getLessonGroups,
+        getQuiz,
+        yearStartDate,
+      }))
+      .filter(Boolean);
+    if (hydratedHistory.length) return hydratedHistory;
+  } catch (error) {
+    console.log("Unable to build prior-week covered tasks:", error);
+  }
   return buildLegacyPriorWeeksCoveredTasks({
     currentWeekStartDate,
     accumulationMode,
@@ -1230,6 +1243,8 @@ function buildDiaryTasksForWeek({
   const assignedTasks = normalizedEntries
     .filter((entry) => String(entry?.entryType || "").trim().toLowerCase() !== "assignment")
     .map((entry) => {
+    const parsedTargetDate = parseIsoDateValue(entry.targetDate || "");
+    if (!parsedTargetDate) return null;
     const subject = subjectsById?.[entry.subject] || null;
     const chapterGroup = chapterGroupLookup?.[`${entry.subject}::${Number(entry.targetGrade || 0)}::${entry.lessonKey}`] || null;
     const lesson = chapterGroup?.activeLesson || null;
@@ -1239,8 +1254,8 @@ function buildDiaryTasksForWeek({
       diaryId: entry.diaryId,
       schoolId: entry.schoolId,
       targetDate: entry.targetDate,
-      weekStartDate: toIsoDateString(getWeekStartDate(entry.targetDate)),
-      dayIndex: Math.max(1, Math.min(6, Math.round((parseIsoDateValue(entry.targetDate).getDay() + 6) % 7) + 1)),
+      weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
+      dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
       academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
       subject: entry.subject,
       subjectLabel: subject?.name || entry.subject,
@@ -1255,10 +1270,13 @@ function buildDiaryTasksForWeek({
       lesson,
       rawEntry: entry,
     };
-  });
+  })
+    .filter(Boolean);
   const assignmentTasks = normalizedEntries
     .filter((entry) => String(entry?.entryType || "").trim().toLowerCase() === "assignment")
     .map((entry) => {
+      const parsedTargetDate = parseIsoDateValue(entry.targetDate || "");
+      if (!parsedTargetDate) return null;
       const linkedSubjectId = String(entry.subject || "").trim();
       const hasLinkedLesson = linkedSubjectId && linkedSubjectId !== "__assignment__" && String(entry.lessonKey || "").trim();
       const subject = hasLinkedLesson ? (subjectsById?.[linkedSubjectId] || null) : null;
@@ -1273,8 +1291,8 @@ function buildDiaryTasksForWeek({
         diaryId: entry.diaryId,
         schoolId: entry.schoolId,
         targetDate: entry.targetDate,
-        weekStartDate: toIsoDateString(getWeekStartDate(entry.targetDate)),
-        dayIndex: Math.max(1, Math.min(6, Math.round((parseIsoDateValue(entry.targetDate).getDay() + 6) % 7) + 1)),
+        weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
+        dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
         academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
         subject: hasLinkedLesson ? linkedSubjectId : "__assignment__",
         subjectLabel: hasLinkedLesson ? (subject?.name || linkedSubjectId) : joinLocalizedText("Assignments & Projects", "تفویضات اور پروجیکٹس", "en"),
@@ -1297,7 +1315,8 @@ function buildDiaryTasksForWeek({
         lesson,
         rawEntry: entry,
       };
-    });
+    })
+    .filter(Boolean);
   const sourceOrder = {
     auto: 0,
     assigned: 1,
@@ -5759,7 +5778,32 @@ function formatNumberLabel(value) {
 }
 
 function renderLocalizedTextNode(text, language, urStyle = {}) {
-  if (typeof text !== "string") return text;
+  if (React.isValidElement(text)) return text;
+  let safeText = text;
+  if (safeText instanceof Date) {
+    safeText = toIsoDateString(safeText);
+  } else if (Array.isArray(safeText)) {
+    safeText = safeText
+      .map((entry) => {
+        if (entry == null) return "";
+        if (entry instanceof Date) return toIsoDateString(entry);
+        if (typeof entry === "string") return entry;
+        if (typeof entry === "number" || typeof entry === "boolean") return String(entry);
+        if (typeof entry === "object") {
+          const localizedValue = entry?.[language] ?? entry?.en ?? entry?.ur ?? entry?.text ?? entry?.title ?? entry?.name ?? entry?.label;
+          return localizedValue == null ? "" : String(localizedValue);
+        }
+        return String(entry);
+      })
+      .filter(Boolean)
+      .join(" ");
+  } else if (safeText != null && typeof safeText === "object") {
+    const localizedValue = safeText?.[language] ?? safeText?.en ?? safeText?.ur ?? safeText?.text ?? safeText?.title ?? safeText?.name ?? safeText?.label;
+    safeText = localizedValue == null ? "" : String(localizedValue);
+  } else if (typeof safeText !== "string") {
+    safeText = safeText == null ? "" : String(safeText);
+  }
+  if (typeof safeText !== "string") return safeText;
   if (language === "ur") {
     return React.createElement("span", {
       style: {
@@ -5768,10 +5812,10 @@ function renderLocalizedTextNode(text, language, urStyle = {}) {
         unicodeBidi: "isolate",
         ...urStyle,
       },
-    }, text);
+    }, safeText);
   }
-  if (language !== "bilingual" || !text.includes(" / ")) return text;
-  const [enText, ...rest] = text.split(" / ");
+  if (language !== "bilingual" || !safeText.includes(" / ")) return safeText;
+  const [enText, ...rest] = safeText.split(" / ");
   const urText = rest.join(" / ");
   return React.createElement(React.Fragment, null,
     React.createElement("span", {
@@ -5804,6 +5848,8 @@ function renderSeparatedLocalizedTextNode(enText, urText, language, options = {}
     enStyle = {},
     urStyle = {},
   } = options;
+  const safeEnText = enText instanceof Date ? toIsoDateString(enText) : (enText == null ? "" : String(enText));
+  const safeUrText = urText instanceof Date ? toIsoDateString(urText) : (urText == null ? "" : String(urText));
   if (language === "ur") {
     return React.createElement(asBlock ? "div" : "span", {
       style: {
@@ -5814,7 +5860,7 @@ function renderSeparatedLocalizedTextNode(enText, urText, language, options = {}
         textAlign: "right",
         ...urStyle,
       },
-    }, urText);
+    }, safeUrText);
   }
   if (language !== "bilingual") {
     return React.createElement(asBlock ? "div" : "span", {
@@ -5825,7 +5871,7 @@ function renderSeparatedLocalizedTextNode(enText, urText, language, options = {}
         textAlign: "left",
         ...enStyle,
       },
-    }, enText);
+    }, safeEnText);
   }
   return React.createElement(asBlock ? "div" : "span", {
     style: {
@@ -5842,7 +5888,7 @@ function renderSeparatedLocalizedTextNode(enText, urText, language, options = {}
       textAlign: "left",
       ...enStyle,
     },
-  }, enText),
+    }, safeEnText),
   React.createElement("span", {
     style: {
       fontFamily: "var(--font-ur)",
@@ -5851,7 +5897,7 @@ function renderSeparatedLocalizedTextNode(enText, urText, language, options = {}
       textAlign: "right",
       ...urStyle,
     },
-  }, urText));
+    }, safeUrText));
 }
 
 function renderDirectionalName(name, fallbackDirection = "ltr", extraStyle = {}) {
@@ -12210,12 +12256,19 @@ function HomeschoolApp() {
     () => visibleDiaryEntries.filter((entry) => entry.entryType === "assignment").sort((a, b) => String(b.targetDate || "").localeCompare(String(a.targetDate || ""))),
     [visibleDiaryEntries],
   );
-  const weeklyDiaryTasks = useMemo(() => buildDiaryTasksForWeek({
-    autoTasks: autoDiaryTasks,
-    diaryEntries: currentWeekDiaryEntries,
-    subjectsById: subjectLookup,
-    chapterGroupLookup,
-  }), [autoDiaryTasks, chapterGroupLookup, currentWeekDiaryEntries, subjectLookup]);
+  const weeklyDiaryTasks = useMemo(() => {
+    try {
+      return buildDiaryTasksForWeek({
+        autoTasks: autoDiaryTasks,
+        diaryEntries: currentWeekDiaryEntries,
+        subjectsById: subjectLookup,
+        chapterGroupLookup,
+      });
+    } catch (error) {
+      console.log("Unable to build weekly diary tasks:", error);
+      return [];
+    }
+  }, [autoDiaryTasks, chapterGroupLookup, currentWeekDiaryEntries, subjectLookup]);
   const visibleDiaryCompletions = useMemo(() => {
     const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : [])
       .map((entry) => normalizeDiaryCompletionRecord(entry))
@@ -12359,34 +12412,46 @@ function HomeschoolApp() {
     return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
   }, [localTestTemplateLibrary, visibleTestTemplates]);
   const priorWeekAccumulatedTasks = useMemo(() => {
-    const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : [])
-      .filter((task) => task?.subject && task?.lessonKey)
-      .map((task) => `${task.subject}::${task.lessonKey}`));
-    return buildPriorWeeksCoveredTasks({
-      currentWeekStartDate: currentDiaryWeekStartDate,
-      accumulationMode: activeInstitutionSchool?.weekAccumulationMode || "rolling",
-      accumulationValue: activeInstitutionSchool?.weekAccumulationValue || 8,
-      yearStartDate: activeSchoolYearStartDate,
-      subjects: allSubjects,
-      grade,
-      getLessonGroups: getMergedLessonGroups,
-      getQuiz: getMergedQuiz,
-      currentWeekLessonKeys: currentKeys,
-      diaryEntries: visibleDiaryEntries,
-      diaryCompletions: visibleDiaryCompletions,
-      studentEmail: activeDiaryViewerStudentEmail,
-    });
+    try {
+      const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : [])
+        .filter((task) => task?.subject && task?.lessonKey)
+        .map((task) => `${task.subject}::${task.lessonKey}`));
+      return buildPriorWeeksCoveredTasks({
+        currentWeekStartDate: currentDiaryWeekStartDate,
+        accumulationMode: activeInstitutionSchool?.weekAccumulationMode || "rolling",
+        accumulationValue: activeInstitutionSchool?.weekAccumulationValue || 8,
+        yearStartDate: activeSchoolYearStartDate,
+        subjects: allSubjects,
+        grade,
+        getLessonGroups: getMergedLessonGroups,
+        getQuiz: getMergedQuiz,
+        currentWeekLessonKeys: currentKeys,
+        diaryEntries: visibleDiaryEntries,
+        diaryCompletions: visibleDiaryCompletions,
+        studentEmail: activeDiaryViewerStudentEmail,
+      });
+    } catch (error) {
+      console.log("Unable to calculate prior-week accumulated diary tasks:", error);
+      return [];
+    }
   }, [activeDiaryViewerStudentEmail, activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
-  const generatedWeeklyTestTemplate = useMemo(() => buildGeneratedWeeklyTestTemplate({
-    weekStartDate: currentDiaryWeekStartDate,
-    grade,
-    coveredTasks: weeklyDiaryTasks,
-    priorWeekTasks: priorWeekAccumulatedTasks,
-    getQuiz: getMergedQuiz,
-    subjectsById: subjectLookup,
-    accumulationMode: activeInstitutionSchool?.weekAccumulationMode || "rolling",
-    accumulationValue: activeInstitutionSchool?.weekAccumulationValue || 8,
-  }), [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
+  const generatedWeeklyTestTemplate = useMemo(() => {
+    try {
+      return buildGeneratedWeeklyTestTemplate({
+        weekStartDate: currentDiaryWeekStartDate,
+        grade,
+        coveredTasks: weeklyDiaryTasks,
+        priorWeekTasks: priorWeekAccumulatedTasks,
+        getQuiz: getMergedQuiz,
+        subjectsById: subjectLookup,
+        accumulationMode: activeInstitutionSchool?.weekAccumulationMode || "rolling",
+        accumulationValue: activeInstitutionSchool?.weekAccumulationValue || 8,
+      });
+    } catch (error) {
+      console.log("Unable to build generated weekly test template:", error);
+      return null;
+    }
+  }, [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
   const visibleWeeklyTestAssignments = useMemo(() => {
     const safeAssignments = (Array.isArray(contentRelationshipState.weeklyTestAssignments) ? contentRelationshipState.weeklyTestAssignments : [])
       .map((entry) => normalizeWeeklyTestAssignmentRecord(entry))
@@ -24549,7 +24614,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     </select>
                     <select className="settings-select" value={diaryDraftContentId} onChange={(event) => { setDiaryDraftContentId(event.target.value); setDiaryDraftLessonSection(""); }}>
                       <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose chapter", "باب چنیں", language), language)}</option>
-                      {(diaryDraftSubjectId ? getMergedLessonGroups(diaryDraftSubjectId, grade) : []).map((group) => <option key={`tdiary_ch_${group.canonicalLessonKey}`} value={group.canonicalLessonKey}>{group.activeLesson?.title || group.canonicalLessonKey}</option>)}
+                      {(diaryDraftSubjectId ? getMergedLessonGroups(diaryDraftSubjectId, grade) : []).map((group) => <option key={`tdiary_ch_${group.canonicalLessonKey}`} value={group.canonicalLessonKey}>{String(group.activeLesson?.title || group.canonicalLessonKey || "").trim()}</option>)}
                     </select>
                     {diaryDraftContentId ? (() => {
                       const lessonGroup = chapterGroupLookup[`${diaryDraftSubjectId}::${Number(grade)}::${diaryDraftContentId}`];
@@ -24757,7 +24822,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     {testAssignmentDraftScope === "student" ? <select className="settings-select" value={testAssignmentDraftStudentEmail} onChange={(event) => setTestAssignmentDraftStudentEmail(event.target.value)}><option value="">{renderLocalizedTextNode(joinLocalizedText("Choose learner", "طالب علم چنیں", language), language)}</option>{visibleTeacherStudentLinks.map((entry) => <option key={`weekly_test_student_${entry.linkId}`} value={entry.studentEmail}>{entry.studentLabel || entry.studentEmail}</option>)}</select> : null}
                     <select className="settings-select" value={testAssignmentDraftTemplateId} onChange={(event) => setTestAssignmentDraftTemplateId(event.target.value)}>
                       <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose template", "ٹیمپلیٹ چنیں", language), language)}</option>
-                      {availableTestTemplates.map((template) => <option key={`available_template_${template.templateId}`} value={template.templateId}>{template.title}</option>)}
+                      {availableTestTemplates.map((template) => <option key={`available_template_${template.templateId}`} value={template.templateId}>{String(template.title || template.templateId || "").trim()}</option>)}
                     </select>
                     <button type="button" className="study-tool-btn" onClick={handleAssignWeeklyTestTemplate} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Assign Test", "ٹیسٹ تفویض کریں", language), language)}</button>
                   </div>

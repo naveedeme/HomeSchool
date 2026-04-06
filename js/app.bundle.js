@@ -564,7 +564,9 @@
   }
   function normalizeDiaryEntryRecord(raw) {
     const diaryId = String((raw == null ? void 0 : raw.diary_id) || (raw == null ? void 0 : raw.diaryId) || "").trim();
-    const targetDate = String((raw == null ? void 0 : raw.target_date) || (raw == null ? void 0 : raw.targetDate) || "").trim();
+    const targetDateRaw = String((raw == null ? void 0 : raw.target_date) || (raw == null ? void 0 : raw.targetDate) || "").trim();
+    const parsedTargetDate = parseIsoDateValue(targetDateRaw);
+    const targetDate = parsedTargetDate ? toIsoDateString(parsedTargetDate) : "";
     if (!diaryId || !targetDate) return null;
     const entryType = String((raw == null ? void 0 : raw.entry_type) || (raw == null ? void 0 : raw.entryType) || "diary").trim().toLowerCase();
     const subject = String((raw == null ? void 0 : raw.subject) || "").trim();
@@ -591,7 +593,9 @@
   function normalizeDiaryCompletionRecord(raw) {
     const completionId = String((raw == null ? void 0 : raw.completion_id) || (raw == null ? void 0 : raw.completionId) || "").trim();
     const studentEmail = String((raw == null ? void 0 : raw.student_email) || (raw == null ? void 0 : raw.studentEmail) || "").trim().toLowerCase();
-    const targetDate = String((raw == null ? void 0 : raw.target_date) || (raw == null ? void 0 : raw.targetDate) || "").trim();
+    const targetDateRaw = String((raw == null ? void 0 : raw.target_date) || (raw == null ? void 0 : raw.targetDate) || "").trim();
+    const parsedTargetDate = parseIsoDateValue(targetDateRaw);
+    const targetDate = parsedTargetDate ? toIsoDateString(parsedTargetDate) : "";
     const taskKind = String((raw == null ? void 0 : raw.task_kind) || (raw == null ? void 0 : raw.taskKind) || "").trim().toLowerCase();
     const taskKey = String((raw == null ? void 0 : raw.task_key) || (raw == null ? void 0 : raw.taskKey) || "").trim();
     if (!completionId || !studentEmail || !targetDate || !taskKind || !taskKey) return null;
@@ -974,45 +978,50 @@
     yearStartDate = ""
   }) {
     var _a, _b;
-    if (!historyRecord || typeof getLessonGroups !== "function" || typeof getQuiz2 !== "function") return null;
-    const safeSubject = String(historyRecord.subject || "").trim();
-    const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey: historyRecord.lessonKey || "" });
-    if (!safeSubject || !safeLessonKey || !Number.isFinite(Number(grade))) return null;
-    const lessonGroups = (getLessonGroups(safeSubject, grade) || []).filter((group) => group == null ? void 0 : group.activeLesson);
-    const chapterGroup = lessonGroups.find((group) => (group == null ? void 0 : group.canonicalLessonKey) === safeLessonKey) || null;
-    if (!chapterGroup) return null;
-    const desiredContentId = String(historyRecord.contentId || "").trim();
-    const matchedVariant = desiredContentId ? (chapterGroup.variants || []).find((variant) => String((variant == null ? void 0 : variant.contentId) || "").trim() === desiredContentId) : null;
-    const lesson = (matchedVariant == null ? void 0 : matchedVariant.lesson) || chapterGroup.activeLesson || null;
-    if (!lesson) return null;
-    const quizRows = getQuiz2(safeSubject, grade, safeLessonKey);
-    const taskUnits = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
-    const subjectIndex = Math.max(0, (Array.isArray(subjects) ? subjects : []).findIndex((subject) => (subject == null ? void 0 : subject.id) === safeSubject));
-    const subjectEntry = (Array.isArray(subjects) ? subjects : []).find((subject) => (subject == null ? void 0 : subject.id) === safeSubject) || null;
-    const coveredAtDate = parseIsoDateValue(historyRecord.targetDate || "") || new Date(historyRecord.coveredAt || Date.now());
-    return {
-      taskKind: "auto",
-      taskKey: `history::${safeSubject}::${safeLessonKey}::${String(historyRecord.contentId || "builtin").trim() || "builtin"}::${toIsoDateString(coveredAtDate)}`,
-      schoolId: String(historyRecord.schoolId || "").trim(),
-      targetDate: toIsoDateString(coveredAtDate),
-      weekStartDate: toIsoDateString(getWeekStartDate(coveredAtDate)),
-      dayIndex: Math.max(1, Math.min(5, Number(historyRecord.dayIndex) || 1)),
-      academicWeekNumber: getAcademicWeekNumber(coveredAtDate, yearStartDate),
-      subject: safeSubject,
-      subjectLabel: (subjectEntry == null ? void 0 : subjectEntry.name) || safeSubject,
-      subjectLabelUr: (subjectEntry == null ? void 0 : subjectEntry.nameUr) || (subjectEntry == null ? void 0 : subjectEntry.name) || safeSubject,
-      lessonKey: safeLessonKey,
-      contentId: desiredContentId || String(((_a = chapterGroup.activeVariant) == null ? void 0 : _a.contentId) || "").trim(),
-      title: lesson.title || ((_b = chapterGroup.activeLesson) == null ? void 0 : _b.title) || `${(subjectEntry == null ? void 0 : subjectEntry.name) || safeSubject} lesson`,
-      note: String(historyRecord.note || "").trim(),
-      source: historyRecord.source || "history",
-      taskUnits,
-      chapterGroup,
-      lesson,
-      subjectIndex,
-      coveredAt: Number(coveredAtDate.getTime()) || Date.now(),
-      coverageEvidence: String(historyRecord.coverageEvidence || "").trim() || "history"
-    };
+    try {
+      if (!historyRecord || typeof getLessonGroups !== "function" || typeof getQuiz2 !== "function") return null;
+      const safeSubject = String(historyRecord.subject || "").trim();
+      const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey: historyRecord.lessonKey || "" });
+      if (!safeSubject || !safeLessonKey || !Number.isFinite(Number(grade))) return null;
+      const lessonGroups = (getLessonGroups(safeSubject, grade) || []).filter((group) => group == null ? void 0 : group.activeLesson);
+      const chapterGroup = lessonGroups.find((group) => (group == null ? void 0 : group.canonicalLessonKey) === safeLessonKey) || null;
+      if (!chapterGroup) return null;
+      const desiredContentId = String(historyRecord.contentId || "").trim();
+      const matchedVariant = desiredContentId ? (chapterGroup.variants || []).find((variant) => String((variant == null ? void 0 : variant.contentId) || "").trim() === desiredContentId) : null;
+      const lesson = (matchedVariant == null ? void 0 : matchedVariant.lesson) || chapterGroup.activeLesson || null;
+      if (!lesson) return null;
+      const quizRows = getQuiz2(safeSubject, grade, safeLessonKey);
+      const taskUnits = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
+      const subjectIndex = Math.max(0, (Array.isArray(subjects) ? subjects : []).findIndex((subject) => (subject == null ? void 0 : subject.id) === safeSubject));
+      const subjectEntry = (Array.isArray(subjects) ? subjects : []).find((subject) => (subject == null ? void 0 : subject.id) === safeSubject) || null;
+      const coveredAtDate = parseIsoDateValue(historyRecord.targetDate || "") || new Date(historyRecord.coveredAt || Date.now());
+      return {
+        taskKind: "auto",
+        taskKey: `history::${safeSubject}::${safeLessonKey}::${String(historyRecord.contentId || "builtin").trim() || "builtin"}::${toIsoDateString(coveredAtDate)}`,
+        schoolId: String(historyRecord.schoolId || "").trim(),
+        targetDate: toIsoDateString(coveredAtDate),
+        weekStartDate: toIsoDateString(getWeekStartDate(coveredAtDate)),
+        dayIndex: Math.max(1, Math.min(5, Number(historyRecord.dayIndex) || 1)),
+        academicWeekNumber: getAcademicWeekNumber(coveredAtDate, yearStartDate),
+        subject: safeSubject,
+        subjectLabel: (subjectEntry == null ? void 0 : subjectEntry.name) || safeSubject,
+        subjectLabelUr: (subjectEntry == null ? void 0 : subjectEntry.nameUr) || (subjectEntry == null ? void 0 : subjectEntry.name) || safeSubject,
+        lessonKey: safeLessonKey,
+        contentId: desiredContentId || String(((_a = chapterGroup.activeVariant) == null ? void 0 : _a.contentId) || "").trim(),
+        title: lesson.title || ((_b = chapterGroup.activeLesson) == null ? void 0 : _b.title) || `${(subjectEntry == null ? void 0 : subjectEntry.name) || safeSubject} lesson`,
+        note: String(historyRecord.note || "").trim(),
+        source: historyRecord.source || "history",
+        taskUnits,
+        chapterGroup,
+        lesson,
+        subjectIndex,
+        coveredAt: Number(coveredAtDate.getTime()) || Date.now(),
+        coverageEvidence: String(historyRecord.coverageEvidence || "").trim() || "history"
+      };
+    } catch (error) {
+      console.log("Unable to hydrate historical diary task:", historyRecord == null ? void 0 : historyRecord.subject, historyRecord == null ? void 0 : historyRecord.lessonKey, error);
+      return null;
+    }
   }
   function buildPriorWeeksCoveredTasks({
     currentWeekStartDate = "",
@@ -1028,73 +1037,77 @@
     diaryCompletions = [],
     studentEmail = ""
   }) {
-    const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
-    const safeCurrentKeys = currentWeekLessonKeys instanceof Set ? currentWeekLessonKeys : /* @__PURE__ */ new Set();
-    const normalizedCompletions = (Array.isArray(diaryCompletions) ? diaryCompletions : []).map((entry) => normalizeDiaryCompletionRecord(entry)).filter(Boolean).filter((entry) => entry.studentEmail === safeStudentEmail && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate);
-    const normalizedEntries = (Array.isArray(diaryEntries) ? diaryEntries : []).map((entry) => normalizeDiaryEntryRecord(entry)).filter(Boolean).filter((entry) => entry.entryType !== "assignment" && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate).filter((entry) => {
-      if (entry.targetType === "student") return entry.targetStudentEmail === safeStudentEmail;
-      return Number(entry.targetGrade) === Number(grade);
-    });
-    const historyRows = [
-      ...normalizedCompletions.map((entry) => {
-        var _a, _b;
-        return {
+    try {
+      const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
+      const safeCurrentKeys = currentWeekLessonKeys instanceof Set ? currentWeekLessonKeys : /* @__PURE__ */ new Set();
+      const normalizedCompletions = (Array.isArray(diaryCompletions) ? diaryCompletions : []).map((entry) => normalizeDiaryCompletionRecord(entry)).filter(Boolean).filter((entry) => entry.studentEmail === safeStudentEmail && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate);
+      const normalizedEntries = (Array.isArray(diaryEntries) ? diaryEntries : []).map((entry) => normalizeDiaryEntryRecord(entry)).filter(Boolean).filter((entry) => entry.entryType !== "assignment" && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate).filter((entry) => {
+        if (entry.targetType === "student") return entry.targetStudentEmail === safeStudentEmail;
+        return Number(entry.targetGrade) === Number(grade);
+      });
+      const historyRows = [
+        ...normalizedCompletions.map((entry) => {
+          var _a, _b;
+          return {
+            schoolId: entry.schoolId,
+            subject: entry.subject,
+            lessonKey: entry.lessonKey,
+            contentId: entry.contentId,
+            note: ((_a = entry.completionPayload) == null ? void 0 : _a.note) || "",
+            targetDate: entry.targetDate,
+            coveredAt: Number(entry.completedAt || entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
+            coverageEvidence: "completion",
+            source: ((_b = entry.completionPayload) == null ? void 0 : _b.source) || "history_completed"
+          };
+        }),
+        ...normalizedEntries.map((entry) => ({
           schoolId: entry.schoolId,
           subject: entry.subject,
           lessonKey: entry.lessonKey,
           contentId: entry.contentId,
-          note: ((_a = entry.completionPayload) == null ? void 0 : _a.note) || "",
+          note: entry.note,
           targetDate: entry.targetDate,
-          coveredAt: Number(entry.completedAt || entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
-          coverageEvidence: "completion",
-          source: ((_b = entry.completionPayload) == null ? void 0 : _b.source) || "history_completed"
-        };
-      }),
-      ...normalizedEntries.map((entry) => ({
-        schoolId: entry.schoolId,
-        subject: entry.subject,
-        lessonKey: entry.lessonKey,
-        contentId: entry.contentId,
-        note: entry.note,
-        targetDate: entry.targetDate,
-        coveredAt: Number(entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
-        coverageEvidence: "assigned",
-        source: "history_assigned"
-      }))
-    ];
-    const rangeStartDate = resolveDiaryCoverageRangeStartDate({
-      currentWeekStartDate,
-      accumulationMode,
-      accumulationValue,
-      yearStartDate,
-      historyRows
-    });
-    const filteredHistoryRows = historyRows.filter((entry) => entry.targetDate >= rangeStartDate && entry.targetDate < currentWeekStartDate);
-    const historyByLesson = /* @__PURE__ */ new Map();
-    filteredHistoryRows.forEach((entry) => {
-      const key = [
-        String(entry.subject || "").trim(),
-        resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
-        String(entry.contentId || "").trim() || "__default__"
-      ].join("::");
-      const currentLessonKey = `${String(entry.subject || "").trim()}::${resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" })}`;
-      if (!key || safeCurrentKeys.has(currentLessonKey)) return;
-      const existing = historyByLesson.get(key);
-      const existingRank = (existing == null ? void 0 : existing.coverageEvidence) === "completion" ? 2 : (existing == null ? void 0 : existing.coverageEvidence) === "assigned" ? 1 : 0;
-      const nextRank = entry.coverageEvidence === "completion" ? 2 : entry.coverageEvidence === "assigned" ? 1 : 0;
-      if (!existing || nextRank > existingRank || nextRank === existingRank && Number(entry.coveredAt || 0) > Number(existing.coveredAt || 0)) {
-        historyByLesson.set(key, entry);
-      }
-    });
-    const hydratedHistory = Array.from(historyByLesson.values()).sort((left, right) => Number(right.coveredAt || 0) - Number(left.coveredAt || 0)).map((entry) => buildHydratedHistoricalDiaryTask({
-      historyRecord: entry,
-      subjects,
-      grade,
-      getLessonGroups,
-      getQuiz: getQuiz2,
-      yearStartDate
-    })).filter(Boolean);
-    if (hydratedHistory.length) return hydratedHistory;
+          coveredAt: Number(entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
+          coverageEvidence: "assigned",
+          source: "history_assigned"
+        }))
+      ];
+      const rangeStartDate = resolveDiaryCoverageRangeStartDate({
+        currentWeekStartDate,
+        accumulationMode,
+        accumulationValue,
+        yearStartDate,
+        historyRows
+      });
+      const filteredHistoryRows = historyRows.filter((entry) => entry.targetDate >= rangeStartDate && entry.targetDate < currentWeekStartDate);
+      const historyByLesson = /* @__PURE__ */ new Map();
+      filteredHistoryRows.forEach((entry) => {
+        const key = [
+          String(entry.subject || "").trim(),
+          resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
+          String(entry.contentId || "").trim() || "__default__"
+        ].join("::");
+        const currentLessonKey = `${String(entry.subject || "").trim()}::${resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" })}`;
+        if (!key || safeCurrentKeys.has(currentLessonKey)) return;
+        const existing = historyByLesson.get(key);
+        const existingRank = (existing == null ? void 0 : existing.coverageEvidence) === "completion" ? 2 : (existing == null ? void 0 : existing.coverageEvidence) === "assigned" ? 1 : 0;
+        const nextRank = entry.coverageEvidence === "completion" ? 2 : entry.coverageEvidence === "assigned" ? 1 : 0;
+        if (!existing || nextRank > existingRank || nextRank === existingRank && Number(entry.coveredAt || 0) > Number(existing.coveredAt || 0)) {
+          historyByLesson.set(key, entry);
+        }
+      });
+      const hydratedHistory = Array.from(historyByLesson.values()).sort((left, right) => Number(right.coveredAt || 0) - Number(left.coveredAt || 0)).map((entry) => buildHydratedHistoricalDiaryTask({
+        historyRecord: entry,
+        subjects,
+        grade,
+        getLessonGroups,
+        getQuiz: getQuiz2,
+        yearStartDate
+      })).filter(Boolean);
+      if (hydratedHistory.length) return hydratedHistory;
+    } catch (error) {
+      console.log("Unable to build prior-week covered tasks:", error);
+    }
     return buildLegacyPriorWeeksCoveredTasks({
       currentWeekStartDate,
       accumulationMode,
@@ -1114,6 +1127,8 @@
   }) {
     const normalizedEntries = Array.isArray(diaryEntries) ? diaryEntries : [];
     const assignedTasks = normalizedEntries.filter((entry) => String((entry == null ? void 0 : entry.entryType) || "").trim().toLowerCase() !== "assignment").map((entry) => {
+      const parsedTargetDate = parseIsoDateValue(entry.targetDate || "");
+      if (!parsedTargetDate) return null;
       const subject = (subjectsById == null ? void 0 : subjectsById[entry.subject]) || null;
       const chapterGroup = (chapterGroupLookup == null ? void 0 : chapterGroupLookup[`${entry.subject}::${Number(entry.targetGrade || 0)}::${entry.lessonKey}`]) || null;
       const lesson = (chapterGroup == null ? void 0 : chapterGroup.activeLesson) || null;
@@ -1123,8 +1138,8 @@
         diaryId: entry.diaryId,
         schoolId: entry.schoolId,
         targetDate: entry.targetDate,
-        weekStartDate: toIsoDateString(getWeekStartDate(entry.targetDate)),
-        dayIndex: Math.max(1, Math.min(6, Math.round((parseIsoDateValue(entry.targetDate).getDay() + 6) % 7) + 1)),
+        weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
+        dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
         academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
         subject: entry.subject,
         subjectLabel: (subject == null ? void 0 : subject.name) || entry.subject,
@@ -1139,8 +1154,10 @@
         lesson,
         rawEntry: entry
       };
-    });
+    }).filter(Boolean);
     const assignmentTasks = normalizedEntries.filter((entry) => String((entry == null ? void 0 : entry.entryType) || "").trim().toLowerCase() === "assignment").map((entry) => {
+      const parsedTargetDate = parseIsoDateValue(entry.targetDate || "");
+      if (!parsedTargetDate) return null;
       const linkedSubjectId = String(entry.subject || "").trim();
       const hasLinkedLesson = linkedSubjectId && linkedSubjectId !== "__assignment__" && String(entry.lessonKey || "").trim();
       const subject = hasLinkedLesson ? (subjectsById == null ? void 0 : subjectsById[linkedSubjectId]) || null : null;
@@ -1153,8 +1170,8 @@
         diaryId: entry.diaryId,
         schoolId: entry.schoolId,
         targetDate: entry.targetDate,
-        weekStartDate: toIsoDateString(getWeekStartDate(entry.targetDate)),
-        dayIndex: Math.max(1, Math.min(6, Math.round((parseIsoDateValue(entry.targetDate).getDay() + 6) % 7) + 1)),
+        weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
+        dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
         academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
         subject: hasLinkedLesson ? linkedSubjectId : "__assignment__",
         subjectLabel: hasLinkedLesson ? (subject == null ? void 0 : subject.name) || linkedSubjectId : joinLocalizedText("Assignments & Projects", "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0627\u0648\u0631 \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679\u0633", "en"),
@@ -1175,7 +1192,7 @@
         lesson,
         rawEntry: entry
       };
-    });
+    }).filter(Boolean);
     const sourceOrder = {
       auto: 0,
       assigned: 1,
@@ -5404,7 +5421,31 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
     return Number(value || 0).toLocaleString();
   }
   function renderLocalizedTextNode(text, language, urStyle = {}) {
-    if (typeof text !== "string") return text;
+    var _a, _b, _c, _d, _e, _f;
+    if (React.isValidElement(text)) return text;
+    let safeText = text;
+    if (safeText instanceof Date) {
+      safeText = toIsoDateString(safeText);
+    } else if (Array.isArray(safeText)) {
+      safeText = safeText.map((entry) => {
+        var _a2, _b2, _c2, _d2, _e2, _f2;
+        if (entry == null) return "";
+        if (entry instanceof Date) return toIsoDateString(entry);
+        if (typeof entry === "string") return entry;
+        if (typeof entry === "number" || typeof entry === "boolean") return String(entry);
+        if (typeof entry === "object") {
+          const localizedValue = (_f2 = (_e2 = (_d2 = (_c2 = (_b2 = (_a2 = entry == null ? void 0 : entry[language]) != null ? _a2 : entry == null ? void 0 : entry.en) != null ? _b2 : entry == null ? void 0 : entry.ur) != null ? _c2 : entry == null ? void 0 : entry.text) != null ? _d2 : entry == null ? void 0 : entry.title) != null ? _e2 : entry == null ? void 0 : entry.name) != null ? _f2 : entry == null ? void 0 : entry.label;
+          return localizedValue == null ? "" : String(localizedValue);
+        }
+        return String(entry);
+      }).filter(Boolean).join(" ");
+    } else if (safeText != null && typeof safeText === "object") {
+      const localizedValue = (_f = (_e = (_d = (_c = (_b = (_a = safeText == null ? void 0 : safeText[language]) != null ? _a : safeText == null ? void 0 : safeText.en) != null ? _b : safeText == null ? void 0 : safeText.ur) != null ? _c : safeText == null ? void 0 : safeText.text) != null ? _d : safeText == null ? void 0 : safeText.title) != null ? _e : safeText == null ? void 0 : safeText.name) != null ? _f : safeText == null ? void 0 : safeText.label;
+      safeText = localizedValue == null ? "" : String(localizedValue);
+    } else if (typeof safeText !== "string") {
+      safeText = safeText == null ? "" : String(safeText);
+    }
+    if (typeof safeText !== "string") return safeText;
     if (language === "ur") {
       return React.createElement("span", {
         style: {
@@ -5413,10 +5454,10 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
           unicodeBidi: "isolate",
           ...urStyle
         }
-      }, text);
+      }, safeText);
     }
-    if (language !== "bilingual" || !text.includes(" / ")) return text;
-    const [enText, ...rest] = text.split(" / ");
+    if (language !== "bilingual" || !safeText.includes(" / ")) return safeText;
+    const [enText, ...rest] = safeText.split(" / ");
     const urText = rest.join(" / ");
     return React.createElement(
       React.Fragment,
@@ -5451,6 +5492,8 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
       enStyle = {},
       urStyle = {}
     } = options;
+    const safeEnText = enText instanceof Date ? toIsoDateString(enText) : enText == null ? "" : String(enText);
+    const safeUrText = urText instanceof Date ? toIsoDateString(urText) : urText == null ? "" : String(urText);
     if (language === "ur") {
       return React.createElement(asBlock ? "div" : "span", {
         style: {
@@ -5461,7 +5504,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
           textAlign: "right",
           ...urStyle
         }
-      }, urText);
+      }, safeUrText);
     }
     if (language !== "bilingual") {
       return React.createElement(asBlock ? "div" : "span", {
@@ -5472,7 +5515,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
           textAlign: "left",
           ...enStyle
         }
-      }, enText);
+      }, safeEnText);
     }
     return React.createElement(
       asBlock ? "div" : "span",
@@ -5491,7 +5534,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
           textAlign: "left",
           ...enStyle
         }
-      }, enText),
+      }, safeEnText),
       React.createElement("span", {
         style: {
           fontFamily: "var(--font-ur)",
@@ -5500,7 +5543,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
           textAlign: "right",
           ...urStyle
         }
-      }, urText)
+      }, safeUrText)
     );
   }
   function renderDirectionalName(name, fallbackDirection = "ltr", extraStyle = {}) {
@@ -10078,12 +10121,19 @@ ${marker} `);
       () => visibleDiaryEntries.filter((entry) => entry.entryType === "assignment").sort((a, b) => String(b.targetDate || "").localeCompare(String(a.targetDate || ""))),
       [visibleDiaryEntries]
     );
-    const weeklyDiaryTasks = useMemo(() => buildDiaryTasksForWeek({
-      autoTasks: autoDiaryTasks,
-      diaryEntries: currentWeekDiaryEntries,
-      subjectsById: subjectLookup,
-      chapterGroupLookup
-    }), [autoDiaryTasks, chapterGroupLookup, currentWeekDiaryEntries, subjectLookup]);
+    const weeklyDiaryTasks = useMemo(() => {
+      try {
+        return buildDiaryTasksForWeek({
+          autoTasks: autoDiaryTasks,
+          diaryEntries: currentWeekDiaryEntries,
+          subjectsById: subjectLookup,
+          chapterGroupLookup
+        });
+      } catch (error) {
+        console.log("Unable to build weekly diary tasks:", error);
+        return [];
+      }
+    }, [autoDiaryTasks, chapterGroupLookup, currentWeekDiaryEntries, subjectLookup]);
     const visibleDiaryCompletions = useMemo(() => {
       const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : []).map((entry) => normalizeDiaryCompletionRecord(entry)).filter(Boolean);
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeRows.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeRows;
@@ -10209,32 +10259,44 @@ ${marker} `);
       return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
     }, [localTestTemplateLibrary, visibleTestTemplates]);
     const priorWeekAccumulatedTasks = useMemo(() => {
-      const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : []).filter((task) => (task == null ? void 0 : task.subject) && (task == null ? void 0 : task.lessonKey)).map((task) => `${task.subject}::${task.lessonKey}`));
-      return buildPriorWeeksCoveredTasks({
-        currentWeekStartDate: currentDiaryWeekStartDate,
-        accumulationMode: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode) || "rolling",
-        accumulationValue: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue) || 8,
-        yearStartDate: activeSchoolYearStartDate,
-        subjects: allSubjects,
-        grade,
-        getLessonGroups: getMergedLessonGroups,
-        getQuiz: getMergedQuiz,
-        currentWeekLessonKeys: currentKeys,
-        diaryEntries: visibleDiaryEntries,
-        diaryCompletions: visibleDiaryCompletions,
-        studentEmail: activeDiaryViewerStudentEmail
-      });
+      try {
+        const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : []).filter((task) => (task == null ? void 0 : task.subject) && (task == null ? void 0 : task.lessonKey)).map((task) => `${task.subject}::${task.lessonKey}`));
+        return buildPriorWeeksCoveredTasks({
+          currentWeekStartDate: currentDiaryWeekStartDate,
+          accumulationMode: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode) || "rolling",
+          accumulationValue: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue) || 8,
+          yearStartDate: activeSchoolYearStartDate,
+          subjects: allSubjects,
+          grade,
+          getLessonGroups: getMergedLessonGroups,
+          getQuiz: getMergedQuiz,
+          currentWeekLessonKeys: currentKeys,
+          diaryEntries: visibleDiaryEntries,
+          diaryCompletions: visibleDiaryCompletions,
+          studentEmail: activeDiaryViewerStudentEmail
+        });
+      } catch (error) {
+        console.log("Unable to calculate prior-week accumulated diary tasks:", error);
+        return [];
+      }
     }, [activeDiaryViewerStudentEmail, activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
-    const generatedWeeklyTestTemplate = useMemo(() => buildGeneratedWeeklyTestTemplate({
-      weekStartDate: currentDiaryWeekStartDate,
-      grade,
-      coveredTasks: weeklyDiaryTasks,
-      priorWeekTasks: priorWeekAccumulatedTasks,
-      getQuiz: getMergedQuiz,
-      subjectsById: subjectLookup,
-      accumulationMode: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode) || "rolling",
-      accumulationValue: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue) || 8
-    }), [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
+    const generatedWeeklyTestTemplate = useMemo(() => {
+      try {
+        return buildGeneratedWeeklyTestTemplate({
+          weekStartDate: currentDiaryWeekStartDate,
+          grade,
+          coveredTasks: weeklyDiaryTasks,
+          priorWeekTasks: priorWeekAccumulatedTasks,
+          getQuiz: getMergedQuiz,
+          subjectsById: subjectLookup,
+          accumulationMode: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode) || "rolling",
+          accumulationValue: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue) || 8
+        });
+      } catch (error) {
+        console.log("Unable to build generated weekly test template:", error);
+        return null;
+      }
+    }, [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
     const visibleWeeklyTestAssignments = useMemo(() => {
       const safeAssignments = (Array.isArray(contentRelationshipState.weeklyTestAssignments) ? contentRelationshipState.weeklyTestAssignments : []).map((entry) => normalizeWeeklyTestAssignmentRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => entry.weekStartDate === currentDiaryWeekStartDate);
       const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
@@ -19865,7 +19927,7 @@ ${error.message || error}`);
       setDiaryDraftLessonSection("");
     } }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose chapter", "\u0628\u0627\u0628 \u0686\u0646\u06CC\u06BA", language), language)), (diaryDraftSubjectId ? getMergedLessonGroups(diaryDraftSubjectId, grade) : []).map((group) => {
       var _a2;
-      return /* @__PURE__ */ React.createElement("option", { key: `tdiary_ch_${group.canonicalLessonKey}`, value: group.canonicalLessonKey }, ((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.canonicalLessonKey);
+      return /* @__PURE__ */ React.createElement("option", { key: `tdiary_ch_${group.canonicalLessonKey}`, value: group.canonicalLessonKey }, String(((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.canonicalLessonKey || "").trim());
     })), diaryDraftContentId ? (() => {
       const lessonGroup = chapterGroupLookup[`${diaryDraftSubjectId}::${Number(grade)}::${diaryDraftContentId}`];
       const lesson = lessonGroup == null ? void 0 : lessonGroup.activeLesson;
@@ -19921,7 +19983,7 @@ ${error.message || error}`);
       const completion = diaryCompletionLookup[`assignment::${buildDiaryTaskKey("assignment", entry)}`] || null;
       const isOverdue = !completion && entry.targetDate < diaryTodayIso;
       return /* @__PURE__ */ React.createElement("div", { key: `assignment_${entry.diaryId}`, className: `review-panel diary-day-card${completion ? " completed" : ""}`, "data-ui-language": language, style: { marginTop: 12, borderLeft: isOverdue ? "4px solid var(--danger, #e74c3c)" : completion ? "4px solid var(--success, #2ecc71)" : "4px solid var(--accent)" } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, completion ? /* @__PURE__ */ React.createElement("span", { style: { color: "var(--success, #2ecc71)", fontSize: 18 } }, "\u2713") : isOverdue ? /* @__PURE__ */ React.createElement("span", { style: { color: "var(--danger, #e74c3c)", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(joinLocalizedText("OVERDUE", "\u0645\u062F\u062A \u06AF\u0632\u0631 \u06AF\u0626\u06CC", language), language)) : null, renderLocalizedTextNode(entry.assignmentTitle || joinLocalizedText("Assignment", "\u062A\u0641\u0648\u06CC\u0636", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Due: ${entry.targetDate}`, `\u0622\u062E\u0631\u06CC \u062A\u0627\u0631\u06CC\u062E: ${entry.targetDate}`, language), language), " \u2022 ", renderLocalizedTextNode(joinLocalizedText(`By ${entry.teacherEmail}`, `\u0627\u0632 ${entry.teacherEmail}`, language), language)))), entry.note ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "10px 0" } }, renderLocalizedTextNode(entry.note, language)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenDiaryTask(taskForCompletion, orderedVisibleDiaryTasks) }, renderLocalizedTextNode(joinLocalizedText("Open", "\u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(taskForCompletion), disabled: contentRelationshipBusy }, renderLocalizedTextNode(completion ? joinLocalizedText("Completed", "\u0645\u06A9\u0645\u0644 \u0634\u062F\u06C1", language) : joinLocalizedText("Mark complete", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canManageDiary || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
-    }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No assignments yet. Teachers can create assignments using the form above.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0646\u06C1\u06CC\u06BA\u06D4 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0641\u0627\u0631\u0645 \u0633\u06D2 \u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0628\u0646\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "saturday" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Saturday Test Day", "\u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u0688\u06D2", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Teachers can assign a Saturday test; otherwise the app generates one from the week.", "\u0627\u0633\u0627\u062A\u0630\u06C1 \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u060C \u0648\u0631\u0646\u06C1 \u0627\u06CC\u067E \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0633\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0633\u0679 \u0628\u0646\u0627\u062A\u06CC \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getSaturdayDate(diaryWeekAnchorDate), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9EA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_u = (_t = currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.payload) == null ? void 0 : _t.questions) == null ? void 0 : _u.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Questions", "\u0633\u0648\u0627\u0644\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("Assigned", "\u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1", language) : joinLocalizedText("Generated", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Source", "\u0645\u0627\u062E\u0630", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, currentWeeklyStudentTestResult ? `${Math.round((currentWeeklyStudentTestResult.score || 0) / Math.max(1, currentWeeklyStudentTestResult.total || 1) * 100)}%` : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Latest", "\u062A\u0627\u0632\u06C1", language), language))))), canManageTests || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assign Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose a template for the full grade or one linked learner.", "\u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftScope, onChange: (event) => setTestAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), testAssignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftStudentEmail, onChange: (event) => setTestAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `weekly_test_student_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftTemplateId, onChange: (event) => setTestAssignmentDraftTemplateId(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose template", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0686\u0646\u06CC\u06BA", language), language)), availableTestTemplates.map((template) => /* @__PURE__ */ React.createElement("option", { key: `available_template_${template.templateId}`, value: template.templateId }, template.title))), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleAssignWeeklyTestTemplate, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Assign Test", "\u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeWeeklyTestSession ? /* @__PURE__ */ React.createElement("div", { className: "review-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(activeWeeklyTestSession.title, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Complete all question types, then submit once at the end.", "\u062A\u0645\u0627\u0645 \u0633\u0648\u0627\u0644\u06CC \u0627\u0642\u0633\u0627\u0645 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0622\u062E\u0631 \u0645\u06CC\u06BA \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, (activeWeeklyTestSession.questions || []).map((question, index) => {
+    }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No assignments yet. Teachers can create assignments using the form above.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0646\u06C1\u06CC\u06BA\u06D4 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0641\u0627\u0631\u0645 \u0633\u06D2 \u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0628\u0646\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "saturday" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Saturday Test Day", "\u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u0688\u06D2", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Teachers can assign a Saturday test; otherwise the app generates one from the week.", "\u0627\u0633\u0627\u062A\u0630\u06C1 \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u060C \u0648\u0631\u0646\u06C1 \u0627\u06CC\u067E \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0633\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0633\u0679 \u0628\u0646\u0627\u062A\u06CC \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getSaturdayDate(diaryWeekAnchorDate), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9EA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_u = (_t = currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.payload) == null ? void 0 : _t.questions) == null ? void 0 : _u.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Questions", "\u0633\u0648\u0627\u0644\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("Assigned", "\u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1", language) : joinLocalizedText("Generated", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Source", "\u0645\u0627\u062E\u0630", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, currentWeeklyStudentTestResult ? `${Math.round((currentWeeklyStudentTestResult.score || 0) / Math.max(1, currentWeeklyStudentTestResult.total || 1) * 100)}%` : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Latest", "\u062A\u0627\u0632\u06C1", language), language))))), canManageTests || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assign Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose a template for the full grade or one linked learner.", "\u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftScope, onChange: (event) => setTestAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), testAssignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftStudentEmail, onChange: (event) => setTestAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `weekly_test_student_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftTemplateId, onChange: (event) => setTestAssignmentDraftTemplateId(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose template", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0686\u0646\u06CC\u06BA", language), language)), availableTestTemplates.map((template) => /* @__PURE__ */ React.createElement("option", { key: `available_template_${template.templateId}`, value: template.templateId }, String(template.title || template.templateId || "").trim()))), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleAssignWeeklyTestTemplate, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Assign Test", "\u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeWeeklyTestSession ? /* @__PURE__ */ React.createElement("div", { className: "review-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(activeWeeklyTestSession.title, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Complete all question types, then submit once at the end.", "\u062A\u0645\u0627\u0645 \u0633\u0648\u0627\u0644\u06CC \u0627\u0642\u0633\u0627\u0645 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0622\u062E\u0631 \u0645\u06CC\u06BA \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, (activeWeeklyTestSession.questions || []).map((question, index) => {
       var _a2;
       return /* @__PURE__ */ React.createElement("div", { key: `weekly_test_q_${question.id}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`Q${index + 1}. ${question.prompt}`, `\u0633${index + 1}. ${question.prompt}`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(question.type, language))), question.type === "mcq" ? /* @__PURE__ */ React.createElement("div", { className: "quiz-options" }, (question.options || []).map((option, optionIndex) => {
         var _a3;
