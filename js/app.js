@@ -509,12 +509,78 @@ function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", ro
   return nodes;
 }
 
+function normalizeDiaryMatchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findDiarySubIndex(derivedSubs = [], options = {}) {
+  const safeSubs = Array.isArray(derivedSubs) ? derivedSubs : [];
+  if (!safeSubs.length) return -1;
+  const candidateKeys = [
+    options?.explicitSubKey,
+    options?.unitSourceKey,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  if (candidateKeys.length) {
+    const keyMatchIndex = safeSubs.findIndex((sub) => {
+      const subKeys = [
+        sub?.key,
+        sub?.id,
+        sub?.t,
+        sub?.title,
+        sub?.heading,
+        sub?.name,
+      ]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean);
+      return candidateKeys.some((candidate) => subKeys.includes(candidate));
+    });
+    if (keyMatchIndex >= 0) return keyMatchIndex;
+  }
+  const candidateTitles = [
+    options?.explicitSubTitle,
+    options?.unitSourceTitle,
+    options?.taskTitle,
+    options?.unitTitle,
+  ]
+    .map(normalizeDiaryMatchText)
+    .filter(Boolean);
+  if (!candidateTitles.length) return -1;
+  return safeSubs.findIndex((sub) => {
+    const subTitles = [
+      sub?.t,
+      sub?.title,
+      sub?.heading,
+      sub?.name,
+      sub?.label,
+      sub?.key,
+      sub?.id,
+    ]
+      .map(normalizeDiaryMatchText)
+      .filter(Boolean);
+    return candidateTitles.some((candidate) => (
+      subTitles.some((subTitle) => (
+        subTitle === candidate
+        || subTitle.includes(candidate)
+        || candidate.includes(subTitle)
+      ))
+    ));
+  });
+}
+
 function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}) {
   const safeSubTitle = String(sub?.t || sub?.title || sub?.heading || sub?.name || "").trim();
+  const safeSubKey = String(sub?.key || sub?.id || safeSubTitle || "").trim();
   const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(safeSubTitle) || isUrduText(sub?.c || "");
   const baseKey = String(sub?.key || sub?.id || safeSubTitle || "sub").trim() || "sub";
   const safeRouteMeta = {
     ...routeMeta,
+    subKey: safeSubKey,
     subTitle: safeSubTitle,
   };
   const children = [];
@@ -20874,16 +20940,14 @@ const lessons = getMergedLessons(subjectId, grade);
     if (!lesson || !subjectId) return [];
     if (lesson?.hasMathSub) {
       const derivedSubs = getDerivedLessonDiarySubs(lesson, subjectId);
-      const targetTitle = String(
-        task?.title
-        || task?.taskUnits?.[0]?.sourceMeta?.title
-        || task?.taskUnits?.[0]?.title
-        || ""
-      ).trim().toLowerCase();
-      const matchedSub = derivedSubs.find((sub) => {
-        const subTitle = String(sub?.t || "").trim().toLowerCase();
-        return targetTitle && subTitle && (subTitle === targetTitle || subTitle.includes(targetTitle) || targetTitle.includes(subTitle));
-      }) || derivedSubs[0] || null;
+      const leadUnit = task?.taskUnits?.[0] || null;
+      const matchedSubIndex = findDiarySubIndex(derivedSubs, {
+        unitSourceKey: leadUnit?.sourceMeta?.key,
+        unitSourceTitle: leadUnit?.sourceMeta?.title,
+        taskTitle: task?.title,
+        unitTitle: leadUnit?.title,
+      });
+      const matchedSub = (matchedSubIndex >= 0 ? derivedSubs[matchedSubIndex] : null) || derivedSubs[0] || null;
       if (matchedSub) {
         return [buildDiaryLessonOutlineFromSub(matchedSub, subjectId)];
       }
@@ -20981,6 +21045,7 @@ const lessons = getMergedLessons(subjectId, grade);
     setSelectedLesson(lesson);
 
     const explicitRouteMeta = routeMetaOverride && typeof routeMetaOverride === "object" ? routeMetaOverride : null;
+    const explicitSubKey = String(explicitRouteMeta?.subKey || "").trim();
     const explicitSubTitle = String(explicitRouteMeta?.subTitle || "").trim();
     const explicitSubTab = String(explicitRouteMeta?.subTab || "").trim();
     const explicitGroupLabel = String(explicitRouteMeta?.groupLabel || "").trim();
@@ -20990,10 +21055,13 @@ const lessons = getMergedLessons(subjectId, grade);
     if (lesson?.hasMathSub) {
       const derivedSubs = getDerivedLessonDiarySubs(lesson, subject.id);
       const targetUnit = task.taskUnits?.[0] || null;
-      const unitTitle = String(explicitSubTitle || targetUnit?.sourceMeta?.title || task?.title || targetUnit?.title || "").trim().toLowerCase();
-      const matchedSubIndex = derivedSubs.findIndex((sub) => {
-        const subTitle = String(sub?.t || "").trim().toLowerCase();
-        return unitTitle && subTitle && (subTitle.includes(unitTitle) || unitTitle.includes(subTitle));
+      const matchedSubIndex = findDiarySubIndex(derivedSubs, {
+        explicitSubKey,
+        explicitSubTitle,
+        unitSourceKey: targetUnit?.sourceMeta?.key,
+        unitSourceTitle: targetUnit?.sourceMeta?.title,
+        taskTitle: task?.title,
+        unitTitle: targetUnit?.title,
       });
       if (matchedSubIndex >= 0) {
         const lessonRouteKey = String(getLessonKeyValue(lesson) || lesson.id || "lesson").trim();

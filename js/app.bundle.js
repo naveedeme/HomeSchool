@@ -453,12 +453,58 @@
     });
     return nodes;
   }
+  function normalizeDiaryMatchText(value) {
+    return String(value || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  }
+  function findDiarySubIndex(derivedSubs = [], options = {}) {
+    const safeSubs = Array.isArray(derivedSubs) ? derivedSubs : [];
+    if (!safeSubs.length) return -1;
+    const candidateKeys = [
+      options == null ? void 0 : options.explicitSubKey,
+      options == null ? void 0 : options.unitSourceKey
+    ].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean);
+    if (candidateKeys.length) {
+      const keyMatchIndex = safeSubs.findIndex((sub) => {
+        const subKeys = [
+          sub == null ? void 0 : sub.key,
+          sub == null ? void 0 : sub.id,
+          sub == null ? void 0 : sub.t,
+          sub == null ? void 0 : sub.title,
+          sub == null ? void 0 : sub.heading,
+          sub == null ? void 0 : sub.name
+        ].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean);
+        return candidateKeys.some((candidate) => subKeys.includes(candidate));
+      });
+      if (keyMatchIndex >= 0) return keyMatchIndex;
+    }
+    const candidateTitles = [
+      options == null ? void 0 : options.explicitSubTitle,
+      options == null ? void 0 : options.unitSourceTitle,
+      options == null ? void 0 : options.taskTitle,
+      options == null ? void 0 : options.unitTitle
+    ].map(normalizeDiaryMatchText).filter(Boolean);
+    if (!candidateTitles.length) return -1;
+    return safeSubs.findIndex((sub) => {
+      const subTitles = [
+        sub == null ? void 0 : sub.t,
+        sub == null ? void 0 : sub.title,
+        sub == null ? void 0 : sub.heading,
+        sub == null ? void 0 : sub.name,
+        sub == null ? void 0 : sub.label,
+        sub == null ? void 0 : sub.key,
+        sub == null ? void 0 : sub.id
+      ].map(normalizeDiaryMatchText).filter(Boolean);
+      return candidateTitles.some((candidate) => subTitles.some((subTitle) => subTitle === candidate || subTitle.includes(candidate) || candidate.includes(subTitle)));
+    });
+  }
   function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}) {
     const safeSubTitle = String((sub == null ? void 0 : sub.t) || (sub == null ? void 0 : sub.title) || (sub == null ? void 0 : sub.heading) || (sub == null ? void 0 : sub.name) || "").trim();
+    const safeSubKey = String((sub == null ? void 0 : sub.key) || (sub == null ? void 0 : sub.id) || safeSubTitle || "").trim();
     const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(safeSubTitle) || isUrduText((sub == null ? void 0 : sub.c) || "");
     const baseKey = String((sub == null ? void 0 : sub.key) || (sub == null ? void 0 : sub.id) || safeSubTitle || "sub").trim() || "sub";
     const safeRouteMeta = {
       ...routeMeta,
+      subKey: safeSubKey,
       subTitle: safeSubTitle
     };
     const children = [];
@@ -18229,19 +18275,20 @@ ${error.message || error}`);
       });
     }, [daySectionSettings]);
     const buildDiaryTaskOutline = useCallback((task) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2;
+      var _a2, _b2, _c2, _d2;
       const lesson = (task == null ? void 0 : task.lesson) || ((_a2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _a2.activeLesson) || null;
       const subjectId = String((task == null ? void 0 : task.subject) || "").trim();
       if (!lesson || !subjectId) return [];
       if (lesson == null ? void 0 : lesson.hasMathSub) {
         const derivedSubs = getDerivedLessonDiarySubs(lesson, subjectId);
-        const targetTitle = String(
-          (task == null ? void 0 : task.title) || ((_d2 = (_c2 = (_b2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _b2[0]) == null ? void 0 : _c2.sourceMeta) == null ? void 0 : _d2.title) || ((_f2 = (_e2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _e2[0]) == null ? void 0 : _f2.title) || ""
-        ).trim().toLowerCase();
-        const matchedSub = derivedSubs.find((sub) => {
-          const subTitle = String((sub == null ? void 0 : sub.t) || "").trim().toLowerCase();
-          return targetTitle && subTitle && (subTitle === targetTitle || subTitle.includes(targetTitle) || targetTitle.includes(subTitle));
-        }) || derivedSubs[0] || null;
+        const leadUnit = ((_b2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _b2[0]) || null;
+        const matchedSubIndex = findDiarySubIndex(derivedSubs, {
+          unitSourceKey: (_c2 = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _c2.key,
+          unitSourceTitle: (_d2 = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _d2.title,
+          taskTitle: task == null ? void 0 : task.title,
+          unitTitle: leadUnit == null ? void 0 : leadUnit.title
+        });
+        const matchedSub = (matchedSubIndex >= 0 ? derivedSubs[matchedSubIndex] : null) || derivedSubs[0] || null;
         if (matchedSub) {
           return [buildDiaryLessonOutlineFromSub(matchedSub, subjectId)];
         }
@@ -18300,7 +18347,7 @@ ${error.message || error}`);
       }
     }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate, headerHideOffset]);
     const handleOpenDiaryTask = useCallback((task, orderedTasks = [], routeMetaOverride = null) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2;
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2;
       const taskTargetStudentEmail = String(((_a2 = task == null ? void 0 : task.rawEntry) == null ? void 0 : _a2.targetStudentEmail) || (task == null ? void 0 : task.targetStudentEmail) || "").trim().toLowerCase();
       if (taskTargetStudentEmail && taskTargetStudentEmail !== String(activeDiaryViewerStudentEmail || "").trim().toLowerCase()) {
         setPerformanceStudentEmail(taskTargetStudentEmail);
@@ -18335,6 +18382,7 @@ ${error.message || error}`);
       clearLessonSelections();
       setSelectedLesson(lesson);
       const explicitRouteMeta = routeMetaOverride && typeof routeMetaOverride === "object" ? routeMetaOverride : null;
+      const explicitSubKey = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subKey) || "").trim();
       const explicitSubTitle = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subTitle) || "").trim();
       const explicitSubTab = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subTab) || "").trim();
       const explicitGroupLabel = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.groupLabel) || "").trim();
@@ -18343,10 +18391,13 @@ ${error.message || error}`);
       if (lesson == null ? void 0 : lesson.hasMathSub) {
         const derivedSubs = getDerivedLessonDiarySubs(lesson, subject.id);
         const targetUnit = ((_b2 = task.taskUnits) == null ? void 0 : _b2[0]) || null;
-        const unitTitle = String(explicitSubTitle || ((_c2 = targetUnit == null ? void 0 : targetUnit.sourceMeta) == null ? void 0 : _c2.title) || (task == null ? void 0 : task.title) || (targetUnit == null ? void 0 : targetUnit.title) || "").trim().toLowerCase();
-        const matchedSubIndex = derivedSubs.findIndex((sub) => {
-          const subTitle = String((sub == null ? void 0 : sub.t) || "").trim().toLowerCase();
-          return unitTitle && subTitle && (subTitle.includes(unitTitle) || unitTitle.includes(subTitle));
+        const matchedSubIndex = findDiarySubIndex(derivedSubs, {
+          explicitSubKey,
+          explicitSubTitle,
+          unitSourceKey: (_c2 = targetUnit == null ? void 0 : targetUnit.sourceMeta) == null ? void 0 : _c2.key,
+          unitSourceTitle: (_d2 = targetUnit == null ? void 0 : targetUnit.sourceMeta) == null ? void 0 : _d2.title,
+          taskTitle: task == null ? void 0 : task.title,
+          unitTitle: targetUnit == null ? void 0 : targetUnit.title
         });
         if (matchedSubIndex >= 0) {
           const lessonRouteKey = String(getLessonKeyValue(lesson) || lesson.id || "lesson").trim();
@@ -18355,7 +18406,7 @@ ${error.message || error}`);
           setMathSubTab(explicitSubTab || "examples");
           setSubExerciseGroupIdx(null);
           setSubQuizGroupIdx(null);
-          if ((explicitSubTab === "exercises" || explicitExerciseKind) && Array.isArray((_d2 = derivedSubs[matchedSubIndex]) == null ? void 0 : _d2.exerciseGroups)) {
+          if ((explicitSubTab === "exercises" || explicitExerciseKind) && Array.isArray((_e2 = derivedSubs[matchedSubIndex]) == null ? void 0 : _e2.exerciseGroups)) {
             let exerciseIndex = -1;
             const preferredGroupLabel = explicitGroupLabel || (Number(task == null ? void 0 : task.dayIndex) > 0 ? [joinLocalizedText(`Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`, language), `Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`].find((label) => derivedSubs[matchedSubIndex].exerciseGroups.some((group) => String((group == null ? void 0 : group.label) || "").trim() === String(label || "").trim())) : "");
             if (preferredGroupLabel) {
@@ -18370,10 +18421,10 @@ ${error.message || error}`);
               nextViewTargetId = explicitTargetScope === "tab" ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises` : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
             }
           }
-          if ((explicitSubTab === "exercises" || explicitExerciseKind) && !Array.isArray((_e2 = derivedSubs[matchedSubIndex]) == null ? void 0 : _e2.exerciseGroups)) {
+          if ((explicitSubTab === "exercises" || explicitExerciseKind) && !Array.isArray((_f2 = derivedSubs[matchedSubIndex]) == null ? void 0 : _f2.exerciseGroups)) {
             nextViewTargetId = explicitExerciseKind ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercise_${explicitExerciseKind}` : explicitTargetScope === "tab" ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises` : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
           }
-          if (explicitSubTab === "quiz" && Array.isArray((_f2 = derivedSubs[matchedSubIndex]) == null ? void 0 : _f2.quizGroups)) {
+          if (explicitSubTab === "quiz" && Array.isArray((_g2 = derivedSubs[matchedSubIndex]) == null ? void 0 : _g2.quizGroups)) {
             const preferredQuizGroupLabel = explicitGroupLabel || (Number(task == null ? void 0 : task.dayIndex) > 0 ? [joinLocalizedText(`Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`, language), `Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`].find((label) => derivedSubs[matchedSubIndex].quizGroups.some((group) => String((group == null ? void 0 : group.label) || "").trim() === String(label || "").trim())) : "");
             const quizIndex = preferredQuizGroupLabel ? derivedSubs[matchedSubIndex].quizGroups.findIndex((group) => String((group == null ? void 0 : group.label) || "").trim() === preferredQuizGroupLabel) : -1;
             if (quizIndex >= 0) setSubQuizGroupIdx(quizIndex);
@@ -18386,17 +18437,17 @@ ${error.message || error}`);
           setViewTargetId(nextViewTargetId);
         }
       } else if (lesson == null ? void 0 : lesson.hasTenses) {
-        const targetUnitTitle = String(((_h2 = (_g2 = task.taskUnits) == null ? void 0 : _g2[0]) == null ? void 0 : _h2.title) || "").trim();
-        const tenseItems = ((_j2 = (_i2 = TENSES == null ? void 0 : TENSES[tenseMain]) == null ? void 0 : _i2[tenseSub]) == null ? void 0 : _j2.items) || [];
+        const targetUnitTitle = String(((_i2 = (_h2 = task.taskUnits) == null ? void 0 : _h2[0]) == null ? void 0 : _i2.title) || "").trim();
+        const tenseItems = ((_k2 = (_j2 = TENSES == null ? void 0 : TENSES[tenseMain]) == null ? void 0 : _j2[tenseSub]) == null ? void 0 : _k2.items) || [];
         const targetParagraph = tenseItems.find((item) => String((item == null ? void 0 : item.title) || "").trim() === targetUnitTitle) || null;
         if (targetParagraph) setSelectedTensePara(targetParagraph);
       } else if (lesson == null ? void 0 : lesson.hasVocab) {
-        const preferredDay = Number((_m2 = (_l2 = (_k2 = task.taskUnits) == null ? void 0 : _k2[0]) == null ? void 0 : _l2.sourceMeta) == null ? void 0 : _m2.day) || Number(task.dayIndex) || null;
+        const preferredDay = Number((_n2 = (_m2 = (_l2 = task.taskUnits) == null ? void 0 : _l2[0]) == null ? void 0 : _m2.sourceMeta) == null ? void 0 : _n2.day) || Number(task.dayIndex) || null;
         const fallbackDay = preferredDay ? pacedVocab.find((entry) => Number(entry == null ? void 0 : entry.day) === preferredDay) || null : null;
         if (fallbackDay) setSelectedVocabDay(fallbackDay);
       } else if (lesson == null ? void 0 : lesson.hasAdverbs) {
-        const preferredTab = getSubsectionSettingKey(((_p2 = (_o2 = (_n2 = task.taskUnits) == null ? void 0 : _n2[0]) == null ? void 0 : _o2.sourceMeta) == null ? void 0 : _p2.title) || "") || posTab;
-        const preferredDay = Number((_s2 = (_r2 = (_q2 = task.taskUnits) == null ? void 0 : _q2[0]) == null ? void 0 : _r2.sourceMeta) == null ? void 0 : _s2.day) || Number(task.dayIndex) || null;
+        const preferredTab = getSubsectionSettingKey(((_q2 = (_p2 = (_o2 = task.taskUnits) == null ? void 0 : _o2[0]) == null ? void 0 : _p2.sourceMeta) == null ? void 0 : _q2.title) || "") || posTab;
+        const preferredDay = Number((_t2 = (_s2 = (_r2 = task.taskUnits) == null ? void 0 : _r2[0]) == null ? void 0 : _s2.sourceMeta) == null ? void 0 : _t2.day) || Number(task.dayIndex) || null;
         const activePosGroups = pacedPos[preferredTab] || [];
         const fallbackDay = preferredDay ? activePosGroups.find((entry) => Number(entry == null ? void 0 : entry.day) === preferredDay) || null : null;
         if (fallbackDay) {
