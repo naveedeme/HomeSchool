@@ -12319,6 +12319,8 @@ function HomeschoolApp() {
   const pronunciationRecognitionRef = useRef(null);
   const pronunciationSessionActiveRef = useRef(false);
   const pronunciationLastErrorRef = useRef("");
+  const pronunciationTranscriptRef = useRef("");
+  const pronunciationFinalizedRef = useRef(false);
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
   const profileSwitcherButtonRef = useRef(null);
@@ -14879,7 +14881,11 @@ const headerHideTimerRef = useRef(null);
     }
     pronunciationSessionActiveRef.current = true;
     pronunciationLastErrorRef.current = "";
+    pronunciationTranscriptRef.current = "";
+    pronunciationFinalizedRef.current = false;
     const finalizeAttempt = (transcript) => {
+      if (pronunciationFinalizedRef.current) return;
+      pronunciationFinalizedRef.current = true;
       const normalizedTranscript = String(transcript || "").trim();
       const assessment = assessPronunciationAttempt(
         activePronunciationCard.pronunciationTarget,
@@ -14915,8 +14921,8 @@ const headerHideTimerRef = useRef(null);
       score: 0,
       transcript: "",
       feedback: joinLocalizedText(
-        "Listening now. Speak the target phrase clearly.",
-        "اب سن رہا ہے۔ ہدفی فقرہ واضح انداز میں بولیں۔",
+        "Listening now. Speak the target phrase, then press Stop Listening to check it.",
+        "اب سن رہا ہے۔ ہدفی فقرہ بولیں، پھر جانچنے کے لیے سننا بند کریں دبائیں۔",
         language,
       ),
     });
@@ -14924,21 +14930,26 @@ const headerHideTimerRef = useRef(null);
       if (!pronunciationSessionActiveRef.current) return;
       const recognition = new SpeechRecognitionClass();
       recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
-      recognition.interimResults = false;
-      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.continuous = true;
       recognition.maxAlternatives = 1;
       recognition.onstart = () => {
         pronunciationLastErrorRef.current = "";
         setPronunciationLabListening(true);
       };
       recognition.onresult = (event) => {
-        const transcript = Array.from(event.results || [])
-          .map((result) => result?.[0]?.transcript || "")
-          .join(" ")
-          .trim();
-        if (transcript) {
-          finalizeAttempt(transcript);
-        }
+        let finalTranscript = "";
+        let interimTranscript = "";
+        Array.from(event.results || []).forEach((result) => {
+          const text = String(result?.[0]?.transcript || "").trim();
+          if (!text) return;
+          if (result.isFinal) finalTranscript = [finalTranscript, text].filter(Boolean).join(" ").trim();
+          else interimTranscript = [interimTranscript, text].filter(Boolean).join(" ").trim();
+        });
+        const transcript = [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
+        if (!transcript) return;
+        pronunciationTranscriptRef.current = transcript;
+        setPronunciationLabTranscript(transcript);
       };
       recognition.onerror = (event) => {
         const errorCode = String(event?.error || "").trim().toLowerCase();
@@ -14957,6 +14968,10 @@ const headerHideTimerRef = useRef(null);
       recognition.onend = () => {
         pronunciationRecognitionRef.current = null;
         if (!pronunciationSessionActiveRef.current) {
+          const finalTranscript = String(pronunciationTranscriptRef.current || "").trim();
+          if (!pronunciationFinalizedRef.current && finalTranscript && !pronunciationLastErrorRef.current) {
+            finalizeAttempt(finalTranscript);
+          }
           setPronunciationLabListening(false);
           return;
         }

@@ -10156,6 +10156,8 @@ ${marker} `);
     const pronunciationRecognitionRef = useRef(null);
     const pronunciationSessionActiveRef = useRef(false);
     const pronunciationLastErrorRef = useRef("");
+    const pronunciationTranscriptRef = useRef("");
+    const pronunciationFinalizedRef = useRef(false);
     const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
     const studentProfilesRef = useRef(initialStudentProfiles);
     const profileSwitcherButtonRef = useRef(null);
@@ -12574,8 +12576,12 @@ ${marker} `);
       }
       pronunciationSessionActiveRef.current = true;
       pronunciationLastErrorRef.current = "";
+      pronunciationTranscriptRef.current = "";
+      pronunciationFinalizedRef.current = false;
       const finalizeAttempt = (transcript) => {
         var _a3, _b3;
+        if (pronunciationFinalizedRef.current) return;
+        pronunciationFinalizedRef.current = true;
         const normalizedTranscript = String(transcript || "").trim();
         const assessment = assessPronunciationAttempt(
           activePronunciationCard.pronunciationTarget,
@@ -12612,8 +12618,8 @@ ${marker} `);
         score: 0,
         transcript: "",
         feedback: joinLocalizedText(
-          "Listening now. Speak the target phrase clearly.",
-          "\u0627\u0628 \u0633\u0646 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4 \u06C1\u062F\u0641\u06CC \u0641\u0642\u0631\u06C1 \u0648\u0627\u0636\u062D \u0627\u0646\u062F\u0627\u0632 \u0645\u06CC\u06BA \u0628\u0648\u0644\u06CC\u06BA\u06D4",
+          "Listening now. Speak the target phrase, then press Stop Listening to check it.",
+          "\u0627\u0628 \u0633\u0646 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4 \u06C1\u062F\u0641\u06CC \u0641\u0642\u0631\u06C1 \u0628\u0648\u0644\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062C\u0627\u0646\u0686\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0633\u0646\u0646\u0627 \u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA \u062F\u0628\u0627\u0626\u06CC\u06BA\u06D4",
           language
         )
       });
@@ -12621,21 +12627,27 @@ ${marker} `);
         if (!pronunciationSessionActiveRef.current) return;
         const recognition = new SpeechRecognitionClass();
         recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
-        recognition.interimResults = false;
-        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.continuous = true;
         recognition.maxAlternatives = 1;
         recognition.onstart = () => {
           pronunciationLastErrorRef.current = "";
           setPronunciationLabListening(true);
         };
         recognition.onresult = (event) => {
-          const transcript = Array.from(event.results || []).map((result) => {
+          let finalTranscript = "";
+          let interimTranscript = "";
+          Array.from(event.results || []).forEach((result) => {
             var _a3;
-            return ((_a3 = result == null ? void 0 : result[0]) == null ? void 0 : _a3.transcript) || "";
-          }).join(" ").trim();
-          if (transcript) {
-            finalizeAttempt(transcript);
-          }
+            const text = String(((_a3 = result == null ? void 0 : result[0]) == null ? void 0 : _a3.transcript) || "").trim();
+            if (!text) return;
+            if (result.isFinal) finalTranscript = [finalTranscript, text].filter(Boolean).join(" ").trim();
+            else interimTranscript = [interimTranscript, text].filter(Boolean).join(" ").trim();
+          });
+          const transcript = [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
+          if (!transcript) return;
+          pronunciationTranscriptRef.current = transcript;
+          setPronunciationLabTranscript(transcript);
         };
         recognition.onerror = (event) => {
           const errorCode = String((event == null ? void 0 : event.error) || "").trim().toLowerCase();
@@ -12654,6 +12666,10 @@ ${marker} `);
         recognition.onend = () => {
           pronunciationRecognitionRef.current = null;
           if (!pronunciationSessionActiveRef.current) {
+            const finalTranscript = String(pronunciationTranscriptRef.current || "").trim();
+            if (!pronunciationFinalizedRef.current && finalTranscript && !pronunciationLastErrorRef.current) {
+              finalizeAttempt(finalTranscript);
+            }
             setPronunciationLabListening(false);
             return;
           }
