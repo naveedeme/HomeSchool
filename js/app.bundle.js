@@ -10411,8 +10411,8 @@ ${marker} `);
       if (!pronunciationLabDeck.length) {
         alert(
           joinLocalizedText(
-            `${(activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "This subject"} does not have enough speaking prompts for Pronunciation Lab yet.`,
-            `${(activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr) || "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646"} \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u0644\u0641\u0638 \u0644\u06CC\u0628 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0627\u0641\u06CC \u0628\u0648\u0644\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0627\u0628\u06BE\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA \u06C1\u06CC\u06BA\u06D4`,
+            "This subject does not have enough speaking prompts for Pronunciation Lab yet.",
+            "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u0644\u0641\u0638 \u0644\u06CC\u0628 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0627\u0641\u06CC \u0628\u0648\u0644\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0627\u0628\u06BE\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA \u06C1\u06CC\u06BA\u06D4",
             language
           )
         );
@@ -10423,7 +10423,7 @@ ${marker} `);
       setPronunciationLabResult(null);
       setPronunciationLabHistory({});
       setPronunciationLabOpen(true);
-    }, [activePracticeSubject == null ? void 0 : activePracticeSubject.name, activePracticeSubject == null ? void 0 : activePracticeSubject.nameUr, language, pronunciationLabDeck.length]);
+    }, [language, pronunciationLabDeck.length]);
     const handleClosePronunciationLab = useCallback(() => {
       stopPronunciationListening();
       setPronunciationLabListening(false);
