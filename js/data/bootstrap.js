@@ -13,6 +13,8 @@
   "./js/data/english/tenses.js",
   "./js/data/english/urdu-to-english.js",
   "./js/data/english/vocabulary.js",
+  "./js/data/english/vocabulary-levels.js",
+  "./js/data/english/speaking-skills.js",
   "./js/data/english/adverb-phrases.js",
   "./js/data/english/opposites.js",
   "./js/data/english/sentences.js",

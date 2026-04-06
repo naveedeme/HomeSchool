@@ -1,4 +1,4 @@
-const CACHE_NAME = "homeschool-static-v5";
+const CACHE_NAME = "homeschool-static-v6";
 const APP_SHELL = [
   "./css/app.css",
   "./HomeSchool.html",
@@ -38,6 +38,8 @@ const APP_SHELL = [
   "./js/data/english/tenses.js",
   "./js/data/english/verbs.js",
   "./js/data/english/vocabulary.js",
+  "./js/data/english/vocabulary-levels.js",
+  "./js/data/english/speaking-skills.js",
   "./js/data/index.js",
   "./js/data/math/grade-1.js",
   "./js/data/math/grade-10.js",
