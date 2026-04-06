@@ -484,6 +484,37 @@ function normalizeDiaryOutlineLabel(rawLabel, fallbackLabel) {
   return cleaned || String(fallbackLabel || "").trim();
 }
 
+function sanitizeDiaryTargetSegment(value, fallback = "item") {
+  const normalized = slugifyCustomChapterKey(value);
+  return normalized || String(fallback || "item").trim().toLowerCase() || "item";
+}
+
+function buildDiaryLessonTargetBaseId(subjectId = "", lessonKey = "", subIndex = null) {
+  const safeSubjectId = sanitizeDiaryTargetSegment(subjectId, "subject");
+  const safeLessonKey = sanitizeDiaryTargetSegment(lessonKey, "lesson");
+  return Number.isInteger(subIndex) && subIndex >= 0
+    ? `diary_target_${safeSubjectId}_${safeLessonKey}_${subIndex}`
+    : `diary_target_${safeSubjectId}_${safeLessonKey}`;
+}
+
+function buildDiarySectionTargetId(targetBaseId = "", sectionKey = "") {
+  const safeBaseId = String(targetBaseId || "").trim();
+  if (!safeBaseId) return "";
+  return `${safeBaseId}_${sanitizeDiaryTargetSegment(sectionKey, "section")}`;
+}
+
+function buildDiaryExerciseTargetId(targetBaseId = "", exercise = {}, index = 0, groupLabel = "") {
+  const safeBaseId = String(targetBaseId || "").trim();
+  if (!safeBaseId) return "";
+  const safeGroup = sanitizeDiaryTargetSegment(groupLabel, "");
+  const explicitKey = exercise?.id || exercise?.key || exercise?.targetId || exercise?.exerciseId || "";
+  const explicitPrompt = exercise?.q || exercise?.prompt || exercise?.question || exercise?.label || "";
+  const safeExerciseKey = sanitizeDiaryTargetSegment(explicitKey || explicitPrompt, `item_${index + 1}`);
+  return safeGroup
+    ? `${safeBaseId}_exercise_${safeGroup}_${safeExerciseKey}`
+    : `${safeBaseId}_exercise_${safeExerciseKey}`;
+}
+
 function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
   const nodes = [];
   const seen = new Set();
@@ -491,7 +522,9 @@ function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", ro
     const kind = getExerciseKind(exercise?.q || "");
     const fallbackLabel = buildDiaryOutlineKindLabel(kind, isUrdu);
     const label = normalizeDiaryOutlineLabel(exercise?.q, fallbackLabel);
-    const dedupeKey = String(kind || label || index).trim().toLowerCase();
+    const groupLabel = String(exercise?.__groupLabel || routeMeta?.groupLabel || "").trim();
+    const targetId = buildDiaryExerciseTargetId(routeMeta?.targetBaseId, exercise, index, groupLabel);
+    const dedupeKey = String(targetId || `${groupLabel}_${kind || label || index}`).trim().toLowerCase();
     if (!dedupeKey || seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
     nodes.push({
@@ -501,7 +534,8 @@ function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", ro
         ...routeMeta,
         subTab: "exercises",
         exerciseKind: kind || "",
-        groupLabel: String(exercise?.__groupLabel || routeMeta?.groupLabel || "").trim(),
+        groupLabel,
+        targetId,
       },
       children: [],
     });
@@ -578,10 +612,13 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
   const safeSubKey = String(sub?.key || sub?.id || safeSubTitle || "").trim();
   const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(safeSubTitle) || isUrduText(sub?.c || "");
   const baseKey = String(sub?.key || sub?.id || safeSubTitle || "sub").trim() || "sub";
+  const targetBaseId = String(routeMeta?.targetBaseId || "").trim();
   const safeRouteMeta = {
     ...routeMeta,
     subKey: safeSubKey,
     subTitle: safeSubTitle,
+    targetBaseId,
+    targetId: buildDiarySectionTargetId(targetBaseId, "heading"),
   };
   const children = [];
   const hasExamples = Boolean(
@@ -599,6 +636,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
         ...safeRouteMeta,
         subTab: "examples",
         targetScope: "section",
+        targetId: buildDiarySectionTargetId(targetBaseId, "examples"),
       },
       children: [],
     });
@@ -624,6 +662,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
         ...safeRouteMeta,
         subTab: "exercises",
         targetScope: "section",
+        targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
       },
       children: collectDiaryExerciseOutlineNodes(
         exerciseEntries,
@@ -645,6 +684,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
         ...safeRouteMeta,
         subTab: "quiz",
         targetScope: "section",
+        targetId: buildDiarySectionTargetId(targetBaseId, "quiz"),
       },
       children: [],
     });
@@ -657,7 +697,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
   };
 }
 
-function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "") {
+function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "", routeMeta = {}) {
   const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(lesson?.title || "") || isUrduText(lesson?.content || "");
   const baseKey = String(getLessonKeyValue(lesson) || lesson?.id || lesson?.title || "lesson").trim() || "lesson";
   const children = [];
@@ -671,7 +711,7 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "") {
     children.push({
       key: `${baseKey}_examples`,
       label: isUrdu ? "مثالیں" : "Examples",
-      routeMeta: { subTab: "examples", targetScope: "section" },
+      routeMeta: { ...routeMeta, subTab: "examples", targetScope: "section" },
       children: [],
     });
   }
@@ -681,11 +721,11 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "") {
     children.push({
       key: `${baseKey}_exercises`,
       label: isUrdu ? "مشقیں" : "Exercises",
-      routeMeta: { subTab: "exercises", targetScope: "section" },
+      routeMeta: { ...routeMeta, subTab: "exercises", targetScope: "section" },
       children: collectDiaryExerciseOutlineNodes(
         exerciseEntries,
         `${baseKey}_exercises`,
-        {},
+        routeMeta,
         isUrdu,
       ),
     });
@@ -695,14 +735,14 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "") {
     children.push({
       key: `${baseKey}_quiz`,
       label: isUrdu ? "کوئز" : "Quiz",
-      routeMeta: { subTab: "quiz", targetScope: "section" },
+      routeMeta: { ...routeMeta, subTab: "quiz", targetScope: "section" },
       children: [],
     });
   }
   return {
     key: `${baseKey}_heading`,
     label: String(lesson?.title || lesson?.key || (isUrdu ? "سبق" : "Lesson")).trim() || (isUrdu ? "سبق" : "Lesson"),
-    routeMeta: {},
+    routeMeta: routeMeta || {},
     children,
   };
 }
@@ -716,6 +756,20 @@ function flattenDiaryOutlineLabels(nodes = [], labels = []) {
     }
   });
   return labels;
+}
+
+function inferDiaryTaskLanguage(task, outlineNodes = [], uiLanguage = "en") {
+  const sampleTexts = [
+    task?.lesson?.title,
+    task?.chapterGroup?.activeLesson?.title,
+    task?.title,
+    task?.taskUnits?.[0]?.sourceMeta?.title,
+    ...(Array.isArray(task?.taskUnits) ? task.taskUnits.slice(0, 3).map((unit) => unit?.title) : []),
+    ...flattenDiaryOutlineLabels(outlineNodes, []),
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return sampleTexts.some((text) => isUrduText(text)) ? "ur" : (uiLanguage === "ur" ? "ur" : "en");
 }
 
 function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5) {
@@ -20952,6 +21006,7 @@ const lessons = getMergedLessons(subjectId, grade);
     const lesson = task?.lesson || task?.chapterGroup?.activeLesson || null;
     const subjectId = String(task?.subject || "").trim();
     if (!lesson || !subjectId) return [];
+    const lessonRouteKey = String(getLessonKeyValue(lesson) || lesson?.id || "lesson").trim() || "lesson";
     if (lesson?.hasMathSub) {
       const derivedSubs = getDerivedLessonDiarySubs(lesson, subjectId);
       const leadUnit = task?.taskUnits?.[0] || null;
@@ -20961,9 +21016,12 @@ const lessons = getMergedLessons(subjectId, grade);
         taskTitle: task?.title,
         unitTitle: leadUnit?.title,
       });
-      const matchedSub = (matchedSubIndex >= 0 ? derivedSubs[matchedSubIndex] : null) || derivedSubs[0] || null;
+      const effectiveSubIndex = matchedSubIndex >= 0 ? matchedSubIndex : 0;
+      const matchedSub = (effectiveSubIndex >= 0 ? derivedSubs[effectiveSubIndex] : null) || null;
       if (matchedSub) {
-        return [buildDiaryLessonOutlineFromSub(matchedSub, subjectId)];
+        return [buildDiaryLessonOutlineFromSub(matchedSub, subjectId, {
+          targetBaseId: buildDiaryLessonTargetBaseId(subjectId, lessonRouteKey, effectiveSubIndex),
+        })];
       }
     }
     return [buildDiaryLessonOutlineFromLesson(lesson, subjectId)];
@@ -21095,6 +21153,7 @@ const lessons = getMergedLessons(subjectId, grade);
     const explicitGroupLabel = String(explicitRouteMeta?.groupLabel || "").trim();
     const explicitExerciseKind = String(explicitRouteMeta?.exerciseKind || "").trim();
     const explicitTargetScope = String(explicitRouteMeta?.targetScope || "").trim();
+    const explicitTargetId = String(explicitRouteMeta?.targetId || "").trim();
 
     if (lesson?.hasMathSub) {
       const derivedSubs = getDerivedLessonDiarySubs(lesson, subject.id);
@@ -21109,7 +21168,8 @@ const lessons = getMergedLessons(subjectId, grade);
       });
       if (matchedSubIndex >= 0) {
         const lessonRouteKey = String(getLessonKeyValue(lesson) || lesson.id || "lesson").trim();
-        let nextViewTargetId = `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_heading`;
+        const targetBaseId = buildDiaryLessonTargetBaseId(subject.id, lessonRouteKey, matchedSubIndex);
+        let nextViewTargetId = explicitTargetId || buildDiarySectionTargetId(targetBaseId, "heading");
         setMathSubIdx(matchedSubIndex);
         setMathSubTab(explicitSubTab || "examples");
         setSubExerciseGroupIdx(null);
@@ -21133,23 +21193,25 @@ const lessons = getMergedLessons(subjectId, grade);
           }
           if (exerciseIndex >= 0) {
             setSubExerciseGroupIdx(exerciseIndex);
-            nextViewTargetId = explicitExerciseKind
-              ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercise_${explicitExerciseKind}`
-              : explicitTargetScope === "tab"
-                ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises`
-                : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
+            nextViewTargetId = explicitTargetId || (
+              explicitTargetScope === "tab"
+                ? buildDiarySectionTargetId(targetBaseId, "tab_exercises")
+                : buildDiarySectionTargetId(targetBaseId, "exercises")
+            );
           } else {
-            nextViewTargetId = explicitTargetScope === "tab"
-              ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises`
-              : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
+            nextViewTargetId = explicitTargetId || (
+              explicitTargetScope === "tab"
+                ? buildDiarySectionTargetId(targetBaseId, "tab_exercises")
+                : buildDiarySectionTargetId(targetBaseId, "exercises")
+            );
           }
         }
         if ((explicitSubTab === "exercises" || explicitExerciseKind) && !Array.isArray(derivedSubs[matchedSubIndex]?.exerciseGroups)) {
-          nextViewTargetId = explicitExerciseKind
-            ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercise_${explicitExerciseKind}`
-            : explicitTargetScope === "tab"
-              ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises`
-              : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
+          nextViewTargetId = explicitTargetId || (
+            explicitTargetScope === "tab"
+              ? buildDiarySectionTargetId(targetBaseId, "tab_exercises")
+              : buildDiarySectionTargetId(targetBaseId, "exercises")
+          );
         }
         if (explicitSubTab === "quiz" && Array.isArray(derivedSubs[matchedSubIndex]?.quizGroups)) {
           const preferredQuizGroupLabel = explicitGroupLabel || (
@@ -21162,17 +21224,23 @@ const lessons = getMergedLessons(subjectId, grade);
             ? derivedSubs[matchedSubIndex].quizGroups.findIndex((group) => String(group?.label || "").trim() === preferredQuizGroupLabel)
             : -1;
           if (quizIndex >= 0) setSubQuizGroupIdx(quizIndex);
-          nextViewTargetId = explicitTargetScope === "tab"
-            ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_quiz`
-            : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_quiz`;
+          nextViewTargetId = explicitTargetId || (
+            explicitTargetScope === "tab"
+              ? buildDiarySectionTargetId(targetBaseId, "tab_quiz")
+              : buildDiarySectionTargetId(targetBaseId, "quiz")
+          );
         } else if (explicitSubTab === "quiz") {
-          nextViewTargetId = explicitTargetScope === "tab"
-            ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_quiz`
-            : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_quiz`;
+          nextViewTargetId = explicitTargetId || (
+            explicitTargetScope === "tab"
+              ? buildDiarySectionTargetId(targetBaseId, "tab_quiz")
+              : buildDiarySectionTargetId(targetBaseId, "quiz")
+          );
         } else if (explicitSubTab === "examples") {
-          nextViewTargetId = explicitTargetScope === "tab"
-            ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_examples`
-            : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_examples`;
+          nextViewTargetId = explicitTargetId || (
+            explicitTargetScope === "tab"
+              ? buildDiarySectionTargetId(targetBaseId, "tab_examples")
+              : buildDiarySectionTargetId(targetBaseId, "examples")
+          );
         }
         setViewTargetId(nextViewTargetId);
       }
@@ -21220,9 +21288,10 @@ const lessons = getMergedLessons(subjectId, grade);
         {nodes.map((node) => {
           const hasChildren = Array.isArray(node?.children) && node.children.length > 0;
           const label = String(node?.label || "").trim();
+          const nodeLanguage = isUrduText(label) ? "ur" : (language === "ur" ? "ur" : "en");
           if (!label) return null;
           return (
-            <div key={`diary_outline_${task?.taskKey || "task"}_${node.key || label}_${depth}`} className="diary-outline-node">
+            <div key={`diary_outline_${task?.taskKey || "task"}_${node.key || label}_${depth}`} className="diary-outline-node" data-task-language={nodeLanguage}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                 {depth === 0 ? (
                   <button
@@ -21232,7 +21301,7 @@ const lessons = getMergedLessons(subjectId, grade);
                     style={{
                       display: "block",
                       width: "100%",
-                      textAlign: language === "ur" ? "right" : "left",
+                      textAlign: nodeLanguage === "ur" ? "right" : "left",
                       border: "none",
                       background: "transparent",
                       padding: 0,
@@ -21240,6 +21309,8 @@ const lessons = getMergedLessons(subjectId, grade);
                       fontWeight: 700,
                       fontSize: 13,
                       cursor: "pointer",
+                      direction: nodeLanguage === "ur" ? "rtl" : "ltr",
+                      fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)",
                     }}
                   >
                     {renderLocalizedTextNode(label, language)}
@@ -21253,7 +21324,7 @@ const lessons = getMergedLessons(subjectId, grade);
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 8,
-                      textAlign: language === "ur" ? "right" : "left",
+                      textAlign: nodeLanguage === "ur" ? "right" : "left",
                       border: "none",
                       background: "transparent",
                       padding: 0,
@@ -21261,9 +21332,11 @@ const lessons = getMergedLessons(subjectId, grade);
                       fontSize: 12,
                       cursor: "pointer",
                       flex: 1,
+                      direction: nodeLanguage === "ur" ? "rtl" : "ltr",
+                      fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)",
                     }}
                   >
-                    <span style={{ opacity: 0.7 }}>•</span>
+                    <span style={{ opacity: 0.7 }}>{nodeLanguage === "ur" ? "•" : "•"}</span>
                     <span>{renderLocalizedTextNode(label, language)}</span>
                   </button>
                 )}
@@ -24352,7 +24425,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         const exercisesToRender = activeExerciseGroup ? activeExerciseGroup.exercises : (sub.exerciseGroups ? null : sub.exercises);
         const quizToRender = activeQuizGroup ? activeQuizGroup.questions : (sub.quizGroups ? null : sub.quiz);
         const urS = isUr ? {direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"} : {};
-        const diaryRouteBaseId = `diary_target_${selectedSubject?.id || "subject"}_${getLessonKeyValue(selectedLesson) || selectedLesson?.id || "lesson"}_${mathSubIdx}`;
+        const diaryRouteBaseId = buildDiaryLessonTargetBaseId(
+          selectedSubject?.id || "subject",
+          getLessonKeyValue(selectedLesson) || selectedLesson?.id || "lesson",
+          mathSubIdx,
+        );
         if (isTensesSub) {
           return (<>
             {!selectedTensePara ? (<>
@@ -24409,7 +24486,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </>);
         }
         return (<>
-        <div className="adverb-detail-section" data-study-id={`${diaryRouteBaseId}_heading`} style={{marginBottom:10,...urS}}>
+        <div className="adverb-detail-section" data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "heading")} style={{marginBottom:10,...urS}}>
           <h3 style={{color:"#FF6B35",...urS}}>{isUr?"📖":"📐"} {sub.t}</h3>
           {isMath ? <MathVisualDeck sub={sub} lessonTitle={selectedLesson?.title} /> : <>
           {sub.svgType === "placeValue" && <PlaceValueChart number={sub.svgData.number} />}
@@ -24495,11 +24572,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
 
         <div style={{display:"flex",gap:6,marginBottom:14,direction:isUr?"rtl":"ltr"}}>
           {[{id:"examples",label:isUr?"💡 مثالیں":"💡 Examples",c:"#38BDF8"},{id:"exercises",label:isUr?"✏️ مشقیں":"✏️ Exercises",c:"#22C55E"},{id:"quiz",label:isUr?"🎯 امتحان":"🎯 Quiz",c:"#F59E0B"}].map(t=>(
-            <button key={t.id} data-study-id={`${diaryRouteBaseId}_tab_${t.id}`} onClick={()=>{setMathSubTab(t.id);setSubExerciseGroupIdx(null);setSubQuizGroupIdx(null);setRevealedEx({});}} style={{flex:1,padding:"10px 6px",borderRadius:10,border:mathSubTab===t.id?"2px solid "+t.c:"1px solid var(--border)",background:mathSubTab===t.id?t.c+"22":"var(--bg-elevated)",color:mathSubTab===t.id?t.c:"var(--text-muted)",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",fontSize:isUr?14:13,fontWeight:700,cursor:"pointer"}}>{t.label}</button>
+            <button key={t.id} data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, `tab_${t.id}`)} onClick={()=>{setMathSubTab(t.id);setSubExerciseGroupIdx(null);setSubQuizGroupIdx(null);setRevealedEx({});}} style={{flex:1,padding:"10px 6px",borderRadius:10,border:mathSubTab===t.id?"2px solid "+t.c:"1px solid var(--border)",background:mathSubTab===t.id?t.c+"22":"var(--bg-elevated)",color:mathSubTab===t.id?t.c:"var(--text-muted)",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",fontSize:isUr?14:13,fontWeight:700,cursor:"pointer"}}>{t.label}</button>
           ))}
         </div>
 
-        {mathSubTab === "examples" && adjustedDayLessons && (<div style={urS} data-study-id={`${diaryRouteBaseId}_examples`}>
+        {mathSubTab === "examples" && adjustedDayLessons && (<div style={urS} data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "examples")}>
           <h3 className="section-title" style={{color:"#38BDF8",marginBottom:12,direction:isUr?"rtl":"ltr",textAlign:isUr?"right":"left"}}>{sub.lessonLabel || (isUr?"📅 اسباق کے دن":"📅 Lesson Days")}</h3>
           {adjustedDayLessons.map((lessonDay, dayIdx) => (
             <div key={lessonDay.day || dayIdx} className="adverb-detail-section" style={urS}>
@@ -24552,7 +24629,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           ))}
         </div>)}
 
-        {mathSubTab === "examples" && sub.sentencePairs && (<div className="adverb-detail-section" data-study-id={`${diaryRouteBaseId}_examples`}>
+        {mathSubTab === "examples" && sub.sentencePairs && (<div className="adverb-detail-section" data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "examples")}>
           <h3 style={{color:"#38BDF8",marginBottom:10}}>{sub.examplesLabel || "🗣️ Sentences"}</h3>
           {regroupSentencePairs(sub.sentencePairs, daySectionSettings.sentences.itemsPerDay).map((group) => (
               <div key={group.day} style={{ marginBottom: 14 }}>
@@ -24563,7 +24640,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <button className="play-all-btn" onClick={()=>playAll(sub.sentencePairs.map(pair => pair.en).join(" "))}>▶️ Play All English Sentences</button>
         </div>)}
 
-        {mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && (<div className="adverb-detail-section" data-study-id={`${diaryRouteBaseId}_examples`} style={urS}>
+        {mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && (<div className="adverb-detail-section" data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "examples")} style={urS}>
           <h3 style={{color:"#38BDF8",marginBottom:10,...urS}}>{sub.examplesLabel || (isUr?"💡 مثالیں":"💡 Examples")}</h3>
           {sub.examples.map((ex,i) => (
             <div key={i} className="inline-study-row" style={{ direction: isUr ? "rtl" : "ltr" }}>
@@ -24582,7 +24659,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={()=>playAll(sub.examples.join(". "))}>{isUr?"▶️ سب سنیں":"▶️ Play All Examples"}</button>
         </div>)}
 
-        {mathSubTab === "exercises" && (sub.exerciseGroups || sub.exercises) && (<div style={urS} data-study-id={`${diaryRouteBaseId}_exercises`}>
+        {mathSubTab === "exercises" && (sub.exerciseGroups || sub.exercises) && (<div style={urS} data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "exercises")}>
           {sub.exerciseGroups && subExerciseGroupIdx === null ? (
             <>
               <h3 className="section-title" style={{color:"#22C55E",marginBottom:12,direction:isUr?"rtl":"ltr",textAlign:isUr?"right":"left"}}>{isUr?"✏️ مشق کے دن":"✏️ Exercise Days"}</h3>
@@ -24619,7 +24696,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               }
             }
             return (
-            <div key={ei} className="adverb-detail-section" data-study-id={`${diaryRouteBaseId}_exercise_${getExerciseKind(ex.q) || ei}`} style={{marginBottom:14,...urS}}>
+            <div key={ei} className="adverb-detail-section" data-study-id={buildDiaryExerciseTargetId(diaryRouteBaseId, ex, ei, activeExerciseGroup?.label)} style={{marginBottom:14,...urS}}>
               <div style={{display:"flex",direction:isUr?"rtl":"ltr",alignItems:"center",gap:10,marginBottom:10}}>
                 <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:36,height:36,borderRadius:10,background:qc+"22",border:"2px solid "+qc,color:qc,fontSize:13,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?("س"+(ei+1)):("Q"+(ei+1))}</span>
                 <div style={{flex:1}}><SpeakableSentence text={ex.q} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Questions` }} showStudyToolbar={false} /></div>
@@ -24779,7 +24856,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>)}
 
         {mathSubTab === "quiz" && (sub.quizGroups || sub.quiz) && (
-          <div data-study-id={`${diaryRouteBaseId}_quiz`}>
+          <div data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "quiz")}>
           {sub.quizGroups ? (
             subQuizGroupIdx === null ? (
               <div style={urS}>
@@ -25156,8 +25233,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
+                              const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
                               return (
-                                <div key={`today_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
+                                <div key={`today_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} data-task-language={taskLanguage} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
                                   <button type="button" className="diary-task-open-btn" onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget)}>
                                     <span className="diary-task-open-copy">
                                       <span className="diary-task-title-row">
@@ -25165,7 +25243,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                         <button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(chapterTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button>
                                       </span>
                                       {subsectionTitle && subsectionTitle !== chapterTitle ? <span className="diary-subtitle-line"><span>{renderLocalizedTextNode(subsectionTitle, language)}</span><button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(subsectionTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button></span> : null}
-                                      {!taskOutlineChildren.length && task.taskUnits?.length ? <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{task.taskUnits.slice(0, 3).map((u) => u.title).join(" · ")}</span> : null}
+                                      {!taskOutlineChildren.length && task.taskUnits?.length ? <span className="diary-task-summary-line">{task.taskUnits.slice(0, 3).map((u) => u.title).join(" · ")}</span> : null}
                                     </span>
                                     <span className="diary-task-open-arrow">{completion ? "✓" : language === "ur" ? "←" : "→"}</span>
                                   </button>
@@ -25211,8 +25289,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
+                              const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
                               return (
-                                <div key={`daily_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
+                                <div key={`daily_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} data-task-language={taskLanguage} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
                                   <button type="button" className="diary-task-open-btn" onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget)}>
                                     <span className="diary-task-open-copy">
                                       <span className="diary-task-title-row">
@@ -25220,7 +25299,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                         <button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(chapterTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button>
                                       </span>
                                       {subsectionTitle && subsectionTitle !== chapterTitle ? <span className="diary-subtitle-line"><span>{renderLocalizedTextNode(subsectionTitle, language)}</span><button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(subsectionTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button></span> : null}
-                                      {!taskOutlineChildren.length && task.taskUnits?.length ? <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{task.taskUnits.slice(0, 3).map((u) => u.title).join(" · ")}</span> : null}
+                                      {!taskOutlineChildren.length && task.taskUnits?.length ? <span className="diary-task-summary-line">{task.taskUnits.slice(0, 3).map((u) => u.title).join(" · ")}</span> : null}
                                     </span>
                                     <span className="diary-task-open-arrow">{completion ? "✓" : language === "ur" ? "←" : "→"}</span>
                                   </button>
