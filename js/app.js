@@ -472,33 +472,35 @@ function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5) {
   const safeStudyDays = Math.max(1, Number(studyDays) || 5);
   const safeUnits = Array.isArray(units) ? units.filter(Boolean) : [];
   if (!safeUnits.length) return Array.from({ length: safeStudyDays }, () => []);
+  const buckets = Array.from({ length: safeStudyDays }, () => []);
   if (safeUnits.length >= safeStudyDays) {
-    const buckets = Array.from({ length: safeStudyDays }, () => []);
-    let startIndex = 0;
-    for (let index = 0; index < safeStudyDays; index += 1) {
-      const remainingItems = safeUnits.length - startIndex;
-      const remainingBuckets = safeStudyDays - index;
-      const sliceSize = Math.max(1, Math.ceil(remainingItems / remainingBuckets));
-      buckets[index] = safeUnits.slice(startIndex, startIndex + sliceSize);
-      startIndex += sliceSize;
+    const baseCount = Math.floor(safeUnits.length / safeStudyDays);
+    let remainder = safeUnits.length % safeStudyDays;
+    let cursor = 0;
+    for (let dayIndex = 0; dayIndex < safeStudyDays; dayIndex += 1) {
+      const sliceSize = baseCount + (remainder > 0 ? 1 : 0);
+      if (remainder > 0) remainder -= 1;
+      buckets[dayIndex] = safeUnits.slice(cursor, cursor + sliceSize);
+      cursor += sliceSize;
     }
     return buckets;
   }
-  const buckets = Array.from({ length: safeStudyDays }, () => []);
   safeUnits.forEach((unit, index) => {
     buckets[index].push(unit);
   });
   const remainingDayCount = safeStudyDays - safeUnits.length;
-  if (remainingDayCount > 0) {
-    const reviewChunks = splitBalanced(safeUnits, remainingDayCount);
-    reviewChunks.forEach((chunk, index) => {
-      buckets[safeUnits.length + index] = chunk.map((unit) => ({
-        ...unit,
-        key: `${unit.key}_review_${index}`,
-        kind: "review",
-      }));
-    });
-  }
+  if (!remainingDayCount) return buckets;
+  const reviewChunks = splitBalanced(safeUnits, remainingDayCount);
+  reviewChunks.forEach((chunk, index) => {
+    const safeChunk = Array.isArray(chunk) && chunk.length
+      ? chunk
+      : [safeUnits[index % safeUnits.length]];
+    buckets[safeUnits.length + index] = safeChunk.map((unit, chunkIndex) => ({
+      ...unit,
+      key: `${unit.key}_review_${index}_${chunkIndex}`,
+      kind: "review",
+    }));
+  });
   return buckets;
 }
 
@@ -975,7 +977,7 @@ function buildAutoDiaryWeekPlan({
   });
 }
 
-function buildPriorWeeksCoveredTasks({
+function buildLegacyPriorWeeksCoveredTasks({
   currentWeekStartDate = "",
   accumulationMode = "rolling",
   accumulationValue = 8,
@@ -1038,6 +1040,185 @@ function buildPriorWeeksCoveredTasks({
   return priorTasks;
 }
 
+function resolveDiaryCoverageRangeStartDate({
+  currentWeekStartDate = "",
+  accumulationMode = "rolling",
+  accumulationValue = 8,
+  yearStartDate = "",
+  historyRows = [],
+}) {
+  const currentWeekStart = parseIsoDateValue(currentWeekStartDate);
+  if (!currentWeekStart) return "";
+  const mode = String(accumulationMode || "rolling").trim().toLowerCase();
+  if (mode === "rolling") {
+    const rollingWeeks = Math.max(1, Math.min(52, Number(accumulationValue) || 8));
+    const rangeStart = new Date(currentWeekStart.getTime());
+    rangeStart.setDate(rangeStart.getDate() - (rollingWeeks * 7));
+    return toIsoDateString(rangeStart);
+  }
+  if (mode === "academic_year") {
+    const yearStart = getWeekStartDate(yearStartDate || new Date(currentWeekStart.getFullYear(), 0, 1));
+    return toIsoDateString(yearStart || currentWeekStart);
+  }
+  const historyDates = (Array.isArray(historyRows) ? historyRows : [])
+    .map((row) => String(row?.targetDate || "").trim())
+    .filter(Boolean)
+    .sort();
+  if (historyDates.length) return historyDates[0];
+  return toIsoDateString(getWeekStartDate(yearStartDate || new Date(currentWeekStart.getFullYear(), 0, 1)) || currentWeekStart);
+}
+
+function buildHydratedHistoricalDiaryTask({
+  historyRecord,
+  subjects = [],
+  grade = null,
+  getLessonGroups,
+  getQuiz,
+  yearStartDate = "",
+}) {
+  if (!historyRecord || typeof getLessonGroups !== "function" || typeof getQuiz !== "function") return null;
+  const safeSubject = String(historyRecord.subject || "").trim();
+  const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey: historyRecord.lessonKey || "" });
+  if (!safeSubject || !safeLessonKey || !Number.isFinite(Number(grade))) return null;
+  const lessonGroups = (getLessonGroups(safeSubject, grade) || []).filter((group) => group?.activeLesson);
+  const chapterGroup = lessonGroups.find((group) => group?.canonicalLessonKey === safeLessonKey) || null;
+  if (!chapterGroup) return null;
+  const desiredContentId = String(historyRecord.contentId || "").trim();
+  const matchedVariant = desiredContentId
+    ? (chapterGroup.variants || []).find((variant) => String(variant?.contentId || "").trim() === desiredContentId)
+    : null;
+  const lesson = matchedVariant?.lesson || chapterGroup.activeLesson || null;
+  if (!lesson) return null;
+  const quizRows = getQuiz(safeSubject, grade, safeLessonKey);
+  const taskUnits = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
+  const subjectIndex = Math.max(0, (Array.isArray(subjects) ? subjects : []).findIndex((subject) => subject?.id === safeSubject));
+  const subjectEntry = (Array.isArray(subjects) ? subjects : []).find((subject) => subject?.id === safeSubject) || null;
+  const coveredAtDate = parseIsoDateValue(historyRecord.targetDate || "") || new Date(historyRecord.coveredAt || Date.now());
+  return {
+    taskKind: "auto",
+    taskKey: `history::${safeSubject}::${safeLessonKey}::${String(historyRecord.contentId || "builtin").trim() || "builtin"}::${toIsoDateString(coveredAtDate)}`,
+    schoolId: String(historyRecord.schoolId || "").trim(),
+    targetDate: toIsoDateString(coveredAtDate),
+    weekStartDate: toIsoDateString(getWeekStartDate(coveredAtDate)),
+    dayIndex: Math.max(1, Math.min(5, Number(historyRecord.dayIndex) || 1)),
+    academicWeekNumber: getAcademicWeekNumber(coveredAtDate, yearStartDate),
+    subject: safeSubject,
+    subjectLabel: subjectEntry?.name || safeSubject,
+    subjectLabelUr: subjectEntry?.nameUr || subjectEntry?.name || safeSubject,
+    lessonKey: safeLessonKey,
+    contentId: desiredContentId || String(chapterGroup.activeVariant?.contentId || "").trim(),
+    title: lesson.title || chapterGroup.activeLesson?.title || `${subjectEntry?.name || safeSubject} lesson`,
+    note: String(historyRecord.note || "").trim(),
+    source: historyRecord.source || "history",
+    taskUnits,
+    chapterGroup,
+    lesson,
+    subjectIndex,
+    coveredAt: Number(coveredAtDate.getTime()) || Date.now(),
+    coverageEvidence: String(historyRecord.coverageEvidence || "").trim() || "history",
+  };
+}
+
+function buildPriorWeeksCoveredTasks({
+  currentWeekStartDate = "",
+  accumulationMode = "rolling",
+  accumulationValue = 8,
+  yearStartDate = "",
+  subjects = [],
+  grade = null,
+  getLessonGroups,
+  getQuiz,
+  currentWeekLessonKeys = null,
+  diaryEntries = [],
+  diaryCompletions = [],
+  studentEmail = "",
+}) {
+  const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
+  const safeCurrentKeys = currentWeekLessonKeys instanceof Set ? currentWeekLessonKeys : new Set();
+  const normalizedCompletions = (Array.isArray(diaryCompletions) ? diaryCompletions : [])
+    .map((entry) => normalizeDiaryCompletionRecord(entry))
+    .filter(Boolean)
+    .filter((entry) => entry.studentEmail === safeStudentEmail && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate);
+  const normalizedEntries = (Array.isArray(diaryEntries) ? diaryEntries : [])
+    .map((entry) => normalizeDiaryEntryRecord(entry))
+    .filter(Boolean)
+    .filter((entry) => entry.entryType !== "assignment" && entry.subject && entry.lessonKey && entry.targetDate && entry.targetDate < currentWeekStartDate)
+    .filter((entry) => {
+      if (entry.targetType === "student") return entry.targetStudentEmail === safeStudentEmail;
+      return Number(entry.targetGrade) === Number(grade);
+    });
+  const historyRows = [
+    ...normalizedCompletions.map((entry) => ({
+      schoolId: entry.schoolId,
+      subject: entry.subject,
+      lessonKey: entry.lessonKey,
+      contentId: entry.contentId,
+      note: entry.completionPayload?.note || "",
+      targetDate: entry.targetDate,
+      coveredAt: Number(entry.completedAt || entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
+      coverageEvidence: "completion",
+      source: entry.completionPayload?.source || "history_completed",
+    })),
+    ...normalizedEntries.map((entry) => ({
+      schoolId: entry.schoolId,
+      subject: entry.subject,
+      lessonKey: entry.lessonKey,
+      contentId: entry.contentId,
+      note: entry.note,
+      targetDate: entry.targetDate,
+      coveredAt: Number(entry.updatedAt || Date.parse(entry.targetDate) || Date.now()),
+      coverageEvidence: "assigned",
+      source: "history_assigned",
+    })),
+  ];
+  const rangeStartDate = resolveDiaryCoverageRangeStartDate({
+    currentWeekStartDate,
+    accumulationMode,
+    accumulationValue,
+    yearStartDate,
+    historyRows,
+  });
+  const filteredHistoryRows = historyRows.filter((entry) => entry.targetDate >= rangeStartDate && entry.targetDate < currentWeekStartDate);
+  const historyByLesson = new Map();
+  filteredHistoryRows.forEach((entry) => {
+    const key = [
+      String(entry.subject || "").trim(),
+      resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
+      String(entry.contentId || "").trim() || "__default__",
+    ].join("::");
+    const currentLessonKey = `${String(entry.subject || "").trim()}::${resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" })}`;
+    if (!key || safeCurrentKeys.has(currentLessonKey)) return;
+    const existing = historyByLesson.get(key);
+    const existingRank = existing?.coverageEvidence === "completion" ? 2 : existing?.coverageEvidence === "assigned" ? 1 : 0;
+    const nextRank = entry.coverageEvidence === "completion" ? 2 : entry.coverageEvidence === "assigned" ? 1 : 0;
+    if (!existing || nextRank > existingRank || (nextRank === existingRank && Number(entry.coveredAt || 0) > Number(existing.coveredAt || 0))) {
+      historyByLesson.set(key, entry);
+    }
+  });
+  const hydratedHistory = Array.from(historyByLesson.values())
+    .sort((left, right) => Number(right.coveredAt || 0) - Number(left.coveredAt || 0))
+    .map((entry) => buildHydratedHistoricalDiaryTask({
+      historyRecord: entry,
+      subjects,
+      grade,
+      getLessonGroups,
+      getQuiz,
+      yearStartDate,
+    }))
+    .filter(Boolean);
+  if (hydratedHistory.length) return hydratedHistory;
+  return buildLegacyPriorWeeksCoveredTasks({
+    currentWeekStartDate,
+    accumulationMode,
+    accumulationValue,
+    yearStartDate,
+    subjects,
+    grade,
+    getLessonGroups,
+    currentWeekLessonKeys,
+  });
+}
+
 function buildDiaryTasksForWeek({
   autoTasks = [],
   diaryEntries = [],
@@ -1094,11 +1275,22 @@ function buildGeneratedWeeklyTestTemplate({
 }) {
   if (!weekStartDate || !Number.isFinite(Number(grade)) || typeof getQuiz !== "function") return null;
   const hasPriorPool = Array.isArray(priorWeekTasks) && priorWeekTasks.length > 0;
-  const extractBucket = (tasks, sourceTag, limits, lessonIndexOffset) => {
+  const truncateWeeklyTestText = (value, maxLength = 110) => {
+    const safeValue = String(value || "").replace(/\s+/g, " ").trim();
+    if (!safeValue) return "";
+    return safeValue.length > maxLength ? `${safeValue.slice(0, maxLength - 3)}...` : safeValue;
+  };
+  const buildAnswerSnippet = (unit = {}) => {
+    const title = truncateWeeklyTestText(unit?.sourceMeta?.title || unit?.title || "", 70);
+    const detail = truncateWeeklyTestText(unit?.detail || unit?.title || "", 90);
+    if (detail && normalizeText(detail) !== normalizeText(title)) return detail;
+    return title || detail;
+  };
+  const extractBucket = (tasks, sourceTag, lessonIndexOffset) => {
     const uniqueLessons = new Map();
     (Array.isArray(tasks) ? tasks : []).forEach((task) => {
       if (!task || !task.subject || !task.lessonKey) return;
-      const key = `${task.subject}::${task.lessonKey}`;
+      const key = `${task.subject}::${task.lessonKey}::${String(task.contentId || "").trim() || "__default__"}`;
       if (uniqueLessons.has(key)) return;
       uniqueLessons.set(key, task);
     });
@@ -1106,36 +1298,46 @@ function buildGeneratedWeeklyTestTemplate({
     const tf = [];
     const fill = [];
     const pairs = [];
+    const mcqSeen = new Set();
+    const tfSeen = new Set();
+    const fillSeen = new Set();
+    const pairSeen = new Set();
     let lessonOrdinal = 0;
     uniqueLessons.forEach((task) => {
       const lessonIndex = lessonIndexOffset + lessonOrdinal;
       lessonOrdinal += 1;
       const quizRows = getQuiz(task.subject, grade, task.lessonKey);
       const safeQuizRows = Array.isArray(quizRows) ? quizRows : [];
-      safeQuizRows.slice(0, 3).forEach((row, rowIndex) => {
+      safeQuizRows.forEach((row, rowIndex) => {
         const prompt = String(row?.q || "").trim();
         const options = Array.isArray(row?.a) ? row.a.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
         const correctIndex = Number(row?.c);
-        if (prompt && options.length >= 2 && Number.isFinite(correctIndex) && correctIndex >= 0 && correctIndex < options.length && mcq.length < limits.mcq) {
-          mcq.push({
-            id: `${task.subject}_${task.lessonKey}_${sourceTag}_mcq_${lessonIndex}_${rowIndex}`,
-            type: "mcq",
-            prompt,
-            options,
-            correctIndex,
-            subject: task.subject,
-            lessonKey: task.lessonKey,
-            source: sourceTag,
-          });
-          const correctAnswer = options[correctIndex];
-          const wrongOption = options.find((entry, optionIndex) => optionIndex !== correctIndex && entry !== correctAnswer) || correctAnswer;
-          if (tf.length < limits.tf) {
-            const useTrue = (lessonIndex + rowIndex) % 2 === 0;
+        if (prompt && options.length >= 2 && Number.isFinite(correctIndex) && correctIndex >= 0 && correctIndex < options.length) {
+          const promptKey = `${sourceTag}::mcq::${normalizeText(prompt)}::${task.subject}::${task.lessonKey}`;
+          if (!mcqSeen.has(promptKey)) {
+            mcqSeen.add(promptKey);
+            mcq.push({
+              id: `${task.subject}_${task.lessonKey}_${sourceTag}_mcq_${lessonIndex}_${rowIndex}`,
+              type: "mcq",
+              prompt,
+              options,
+              correctIndex,
+              subject: task.subject,
+              lessonKey: task.lessonKey,
+              source: sourceTag,
+            });
+          }
+          const correctAnswer = truncateWeeklyTestText(options[correctIndex], 70);
+          const wrongOption = truncateWeeklyTestText(options.find((entry, optionIndex) => optionIndex !== correctIndex && entry !== correctAnswer) || "", 70);
+          const tfPrompt = `${prompt} -> ${(lessonIndex + rowIndex) % 2 === 0 || !wrongOption ? correctAnswer : wrongOption}`;
+          const tfKey = `${sourceTag}::tf::${normalizeText(tfPrompt)}::${task.subject}::${task.lessonKey}`;
+          if (!tfSeen.has(tfKey)) {
+            tfSeen.add(tfKey);
             tf.push({
               id: `${task.subject}_${task.lessonKey}_${sourceTag}_tf_${lessonIndex}_${rowIndex}`,
               type: "truefalse",
-              prompt: `${prompt} -> ${useTrue ? correctAnswer : wrongOption}`,
-              correct: useTrue,
+              prompt: tfPrompt,
+              correct: (lessonIndex + rowIndex) % 2 === 0 || !wrongOption,
               subject: task.subject,
               lessonKey: task.lessonKey,
               source: sourceTag,
@@ -1143,53 +1345,122 @@ function buildGeneratedWeeklyTestTemplate({
           }
         }
       });
-      const firstUnit = Array.isArray(task.taskUnits) && task.taskUnits.length ? task.taskUnits[0] : null;
-      if (firstUnit?.title && firstUnit?.detail && fill.length < limits.fill) {
-        fill.push({
-          id: `${task.subject}_${task.lessonKey}_${sourceTag}_fill_${lessonIndex}`,
-          type: "fillblank",
-          prompt: `${firstUnit.title}: _____`,
-          answer: String(firstUnit.detail || "").trim().split(/[.!?]/)[0] || firstUnit.detail,
-          subject: task.subject,
-          lessonKey: task.lessonKey,
-          source: sourceTag,
-        });
-      }
-      const subject = subjectsById?.[task.subject] || null;
-      pairs.push({
-        left: subject?.name || task.subject,
-        right: task.title || task.lessonKey,
-        id: `${task.subject}_${task.lessonKey}_${sourceTag}_pair_${lessonIndex}`,
-        source: sourceTag,
+      const lessonUnits = Array.isArray(task.taskUnits) && task.taskUnits.length
+        ? task.taskUnits
+        : extractLessonWorkUnits(task.lesson || task.chapterGroup?.activeLesson || {}, safeQuizRows);
+      let lessonPairCount = 0;
+      lessonUnits.forEach((unit, unitIndex) => {
+        const unitTitle = truncateWeeklyTestText(unit?.sourceMeta?.title || unit?.title || "", 90);
+        const unitAnswer = buildAnswerSnippet(unit);
+        if (unitTitle && unitAnswer && normalizeText(unitTitle) !== normalizeText(unitAnswer)) {
+          const fillKey = `${sourceTag}::fill::${normalizeText(unitTitle)}::${normalizeText(unitAnswer)}::${task.subject}::${task.lessonKey}`;
+          if (!fillSeen.has(fillKey)) {
+            fillSeen.add(fillKey);
+            fill.push({
+              id: `${task.subject}_${task.lessonKey}_${sourceTag}_fill_${lessonIndex}_${unitIndex}`,
+              type: "fillblank",
+              prompt: `${unitTitle}: _____`,
+              answer: unitAnswer,
+              subject: task.subject,
+              lessonKey: task.lessonKey,
+              source: sourceTag,
+            });
+          }
+          const pairKey = `${normalizeText(unitTitle)}::${normalizeText(unitAnswer)}::${task.subject}::${task.lessonKey}`;
+          if (!pairSeen.has(pairKey)) {
+            pairSeen.add(pairKey);
+            pairs.push({
+              left: unitTitle,
+              right: unitAnswer,
+              id: `${task.subject}_${task.lessonKey}_${sourceTag}_pair_${lessonIndex}_${unitIndex}`,
+              source: sourceTag,
+            });
+            lessonPairCount += 1;
+          }
+        }
       });
+      if (!lessonPairCount) {
+        const subject = subjectsById?.[task.subject] || null;
+        const pairKey = `${normalizeText(subject?.name || task.subject)}::${normalizeText(task.title || task.lessonKey)}::fallback`;
+        if (!pairSeen.has(pairKey)) {
+          pairSeen.add(pairKey);
+          pairs.push({
+            left: subject?.name || task.subject,
+            right: task.title || task.lessonKey,
+            id: `${task.subject}_${task.lessonKey}_${sourceTag}_pair_${lessonIndex}_fallback`,
+            source: sourceTag,
+          });
+        }
+      }
     });
     return { mcq, tf, fill, pairs, lessonCount: uniqueLessons.size };
   };
-  const currentLimits = hasPriorPool ? { mcq: 4, tf: 2, fill: 2 } : { mcq: 8, tf: 4, fill: 4 };
-  const priorLimits = hasPriorPool ? { mcq: 4, tf: 2, fill: 2 } : { mcq: 0, tf: 0, fill: 0 };
-  const currentBucket = extractBucket(coveredTasks, "current", currentLimits, 0);
+  const currentBucket = extractBucket(coveredTasks, "current", 0);
   const priorBucket = hasPriorPool
-    ? extractBucket(priorWeekTasks, "prior", priorLimits, currentBucket.lessonCount)
+    ? extractBucket(priorWeekTasks, "prior", currentBucket.lessonCount)
     : { mcq: [], tf: [], fill: [], pairs: [], lessonCount: 0 };
-  const questions = [
-    ...currentBucket.mcq.slice(0, hasPriorPool ? 3 : 6),
-    ...priorBucket.mcq.slice(0, 3),
-    ...currentBucket.tf.slice(0, hasPriorPool ? 2 : 3),
-    ...priorBucket.tf.slice(0, 1),
-    ...currentBucket.fill.slice(0, hasPriorPool ? 2 : 3),
-    ...priorBucket.fill.slice(0, 1),
-  ];
-  const combinedPairs = [...currentBucket.pairs, ...priorBucket.pairs];
+  const questions = [];
+  const usedQuestionIds = new Set();
+  const takeQuestions = (items, limit = 0) => {
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      if (!item || !item.id || usedQuestionIds.has(item.id) || (limit > 0 && questions.length >= limit)) return;
+      usedQuestionIds.add(item.id);
+      questions.push(item);
+    });
+  };
+  if (hasPriorPool) {
+    takeQuestions(currentBucket.mcq.slice(0, 2), 10);
+    takeQuestions(priorBucket.mcq.slice(0, 2), 10);
+    takeQuestions(currentBucket.tf.slice(0, 1), 10);
+    takeQuestions(priorBucket.tf.slice(0, 1), 10);
+    takeQuestions(currentBucket.fill.slice(0, 1), 10);
+    takeQuestions(priorBucket.fill.slice(0, 1), 10);
+  } else {
+    takeQuestions(currentBucket.mcq.slice(0, 4), 8);
+    takeQuestions(currentBucket.tf.slice(0, 2), 8);
+    takeQuestions(currentBucket.fill.slice(0, 2), 8);
+  }
+  const combinedPairs = [
+    ...currentBucket.pairs.slice(0, hasPriorPool ? 2 : 4),
+    ...priorBucket.pairs.slice(0, 2),
+  ].slice(0, 5);
   if (combinedPairs.length >= 3) {
     questions.push({
       id: `matching_${weekStartDate}`,
       type: "matching",
-      prompt: "Match each subject with its weekly chapter",
-      pairs: combinedPairs.slice(0, 5),
+      prompt: hasPriorPool
+        ? "Match the covered lesson clues from this week and earlier weeks"
+        : "Match the covered lesson clues from this week",
+      pairs: combinedPairs,
       subject: "mixed",
       lessonKey: weekStartDate,
       source: hasPriorPool ? "mixed" : "current",
     });
+  }
+  const overflowPools = hasPriorPool
+    ? [
+      currentBucket.mcq.slice(2),
+      priorBucket.mcq.slice(2),
+      currentBucket.tf.slice(1),
+      priorBucket.tf.slice(1),
+      currentBucket.fill.slice(1),
+      priorBucket.fill.slice(1),
+    ]
+    : [
+      currentBucket.mcq.slice(4),
+      currentBucket.tf.slice(2),
+      currentBucket.fill.slice(2),
+    ];
+  const targetQuestionCount = hasPriorPool ? 10 : 8;
+  let overflowCursor = 0;
+  while (questions.length < targetQuestionCount && overflowPools.some((pool) => Array.isArray(pool) && pool.length)) {
+    const pool = overflowPools[overflowCursor % overflowPools.length];
+    overflowCursor += 1;
+    if (!Array.isArray(pool) || !pool.length) continue;
+    const candidate = pool.shift();
+    if (!candidate || usedQuestionIds.has(candidate.id)) continue;
+    usedQuestionIds.add(candidate.id);
+    questions.push(candidate);
   }
   if (!questions.length) return null;
   const accumulationScopeLabel = accumulationMode === "academic_year"
@@ -12028,9 +12299,13 @@ function HomeschoolApp() {
       subjects: allSubjects,
       grade,
       getLessonGroups: getMergedLessonGroups,
+      getQuiz: getMergedQuiz,
       currentWeekLessonKeys: currentKeys,
+      diaryEntries: visibleDiaryEntries,
+      diaryCompletions: visibleDiaryCompletions,
+      studentEmail: activeDiaryViewerStudentEmail,
     });
-  }, [activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, getMergedLessonGroups, grade, weeklyDiaryTasks]);
+  }, [activeDiaryViewerStudentEmail, activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
   const generatedWeeklyTestTemplate = useMemo(() => buildGeneratedWeeklyTestTemplate({
     weekStartDate: currentDiaryWeekStartDate,
     grade,
