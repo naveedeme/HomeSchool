@@ -11773,9 +11773,10 @@ function HomeschoolApp() {
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
   const profileSwitcherButtonRef = useRef(null);
-  const profileSwitcherMenuRef = useRef(null);
-  const headerRef = useRef(null);
-  const headerHideTimerRef = useRef(null);
+const profileSwitcherMenuRef = useRef(null);
+const headerRef = useRef(null);
+const contentRef = useRef(null);
+const headerHideTimerRef = useRef(null);
   const navBarRef = useRef(null);
   const navBarHideTimerRef = useRef(null);
   const copyToastTimerRef = useRef(null);
@@ -20982,6 +20983,12 @@ const lessons = getMergedLessons(subjectId, grade);
     const fallbackAnchorDate = String(diaryTaskNavigator?.returnAnchorDate || diaryWeekAnchorDate || toIsoDateString(Date.now())).trim();
     const returnTargetDate = String(diaryTaskNavigator?.returnTargetDate || "").trim();
     const returnTaskKey = String(diaryTaskNavigator?.returnTaskKey || "").trim();
+    const returnScrollTop = Number.isFinite(Number(diaryTaskNavigator?.returnScrollTop))
+      ? Math.max(0, Number(diaryTaskNavigator.returnScrollTop))
+      : null;
+    const returnViewportOffset = Number.isFinite(Number(diaryTaskNavigator?.returnViewportOffset))
+      ? Number(diaryTaskNavigator.returnViewportOffset)
+      : null;
     setTab("diary");
     setDiarySectionTab(String(diaryTaskNavigator?.returnSection || "daily").trim() || "daily");
     setDiaryWeekAnchorDate(fallbackAnchorDate);
@@ -20996,9 +21003,13 @@ const lessons = getMergedLessons(subjectId, grade);
     setQuizElapsedMs([]);
     setQuizIdx(0);
     setViewTargetId(null);
-    if (returnTargetDate || returnTaskKey) {
+    if (returnTargetDate || returnTaskKey || returnScrollTop !== null) {
       let retryCount = 0;
       const tryScrollBack = () => {
+        const scroller = contentRef.current;
+        if (scroller && returnScrollTop !== null) {
+          scroller.scrollTo({ top: returnScrollTop, behavior: "auto" });
+        }
         const taskSelector = returnTaskKey ? `[data-diary-task-key="${returnTaskKey.replace(/"/g, '\\"')}"]` : "";
         const daySelector = returnTargetDate ? `[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]` : "";
         const target = (taskSelector ? document.querySelector(taskSelector) : null)
@@ -21008,16 +21019,29 @@ const lessons = getMergedLessons(subjectId, grade);
           return;
         }
         target.classList.add("study-focus-active-manual");
-        const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
-        const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerOffset - 10);
-        window.scrollTo({ top, behavior: "smooth" });
+        if (returnViewportOffset !== null && taskSelector && scroller) {
+          const liveTaskTarget = document.querySelector(taskSelector) || target;
+          if (liveTaskTarget) {
+            const scrollerRect = scroller.getBoundingClientRect();
+            const currentOffset = liveTaskTarget.getBoundingClientRect().top - scrollerRect.top;
+            const absoluteTop = Math.max(
+              0,
+              scroller.scrollTop + currentOffset - returnViewportOffset,
+            );
+            scroller.scrollTo({ top: absoluteTop, behavior: "smooth" });
+          }
+        } else if (returnScrollTop === null && scroller) {
+          const scrollerRect = scroller.getBoundingClientRect();
+          const top = Math.max(0, scroller.scrollTop + (target.getBoundingClientRect().top - scrollerRect.top) - 10);
+          scroller.scrollTo({ top, behavior: "smooth" });
+        }
         setTimeout(() => target.classList.remove("study-focus-active-manual"), 1600);
       };
       setTimeout(tryScrollBack, 420);
     }
-  }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate, headerHideOffset]);
+  }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate]);
 
-  const handleOpenDiaryTask = useCallback((task, orderedTasks = [], routeMetaOverride = null) => {
+  const handleOpenDiaryTask = useCallback((task, orderedTasks = [], routeMetaOverride = null, originElement = null) => {
     const taskTargetStudentEmail = String(task?.rawEntry?.targetStudentEmail || task?.targetStudentEmail || "").trim().toLowerCase();
     if (taskTargetStudentEmail && taskTargetStudentEmail !== String(activeDiaryViewerStudentEmail || "").trim().toLowerCase()) {
       setPerformanceStudentEmail(taskTargetStudentEmail);
@@ -21025,12 +21049,19 @@ const lessons = getMergedLessons(subjectId, grade);
     const orderedKeys = (Array.isArray(orderedTasks) ? orderedTasks : [])
       .map((entry) => getDiaryTaskRouteKey(entry))
       .filter(Boolean);
+    const originTaskNode = originElement?.closest?.("[data-diary-task-key]") || null;
+    const scroller = contentRef.current;
+    const returnViewportOffset = (originTaskNode && scroller)
+      ? originTaskNode.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+      : null;
 
     setDiaryTaskNavigator({
       orderedTaskKeys: orderedKeys,
       activeTaskKey: getDiaryTaskRouteKey(task),
       returnSection: diarySectionTab,
       returnAnchorDate: diaryWeekAnchorDate,
+      returnScrollTop: scroller ? scroller.scrollTop : 0,
+      returnViewportOffset,
       returnTargetDate: String(task?.targetDate || "").trim(),
       returnTaskKey: getDiaryTaskRouteKey(task),
       returnStudentEmail: activeDiaryViewerStudentEmail,
@@ -21197,7 +21228,7 @@ const lessons = getMergedLessons(subjectId, grade);
                   <button
                     type="button"
                     className="diary-outline-heading-btn"
-                    onClick={() => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null)}
+                    onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget)}
                     style={{
                       display: "block",
                       width: "100%",
@@ -21217,7 +21248,7 @@ const lessons = getMergedLessons(subjectId, grade);
                   <button
                     type="button"
                     className="diary-outline-link-btn"
-                    onClick={() => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null)}
+                    onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget)}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -22386,7 +22417,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     <div className="app-body">
       {navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
       {navPosition === "left" ? renderNavBar("left") : null}
-      <div key={`${transitionMode}:${routeTransitionKey}`} className={`content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}${tab === "tutor" ? " tutor-tab-active" : ""}`} data-transition-mode={transitionMode} data-ui-language={language}>
+      <div ref={contentRef} key={`${transitionMode}:${routeTransitionKey}`} className={`content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}${tab === "tutor" ? " tutor-tab-active" : ""}`} data-transition-mode={transitionMode} data-ui-language={language}>
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
         <div className="welcome-card" data-ui-language={language}>
           <div className="welcome-card-head">
@@ -25127,7 +25158,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               return (
                                 <div key={`today_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
-                                  <button type="button" className="diary-task-open-btn" onClick={() => handleOpenDiaryTask(task, orderedVisibleDiaryTasks)}>
+                                  <button type="button" className="diary-task-open-btn" onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget)}>
                                     <span className="diary-task-open-copy">
                                       <span className="diary-task-title-row">
                                         <strong>{renderLocalizedTextNode(chapterTitle, language)}</strong>
@@ -25182,7 +25213,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               return (
                                 <div key={`daily_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
-                                  <button type="button" className="diary-task-open-btn" onClick={() => handleOpenDiaryTask(task, orderedVisibleDiaryTasks)}>
+                                  <button type="button" className="diary-task-open-btn" onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget)}>
                                     <span className="diary-task-open-copy">
                                       <span className="diary-task-title-row">
                                         <strong>{renderLocalizedTextNode(chapterTitle, language)}</strong>
@@ -25323,7 +25354,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                 const completion = diaryCompletionLookup[`assigned::${buildDiaryTaskKey("assigned", entry)}`] || null;
                                 return (
                                   <div key={`tdiary_e_${entry.diaryId}`} className={`diary-task-entry${completion ? " completed" : ""}`}>
-                                    <button type="button" className="diary-task-open-btn" onClick={() => handleOpenDiaryTask(taskForNav, orderedVisibleDiaryTasks)}>
+                                      <button type="button" className="diary-task-open-btn" onClick={(event) => handleOpenDiaryTask(taskForNav, orderedVisibleDiaryTasks, null, event.currentTarget)}>
                                       <span className="diary-task-open-copy">
                                         <strong>{renderLocalizedTextNode(lesson?.title || entry.lessonKey || joinLocalizedText("Free-text task", "آزاد متن کام", language), language)}</strong>
                                         {entry.note ? <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{renderLocalizedTextNode(entry.note, language)}</span> : null}
@@ -25423,7 +25454,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     </div>
                     {entry.note ? <div className="goal-progress-meta" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "10px 0" }}>{renderLocalizedTextNode(entry.note, language)}</div> : null}
                     <div className="result-actions chapter-card-actions">
-                      <button type="button" className="ghost-cta" onClick={() => handleOpenDiaryTask(taskForCompletion, orderedVisibleDiaryTasks)}>
+                        <button type="button" className="ghost-cta" onClick={(event) => handleOpenDiaryTask(taskForCompletion, orderedVisibleDiaryTasks, null, event.currentTarget)}>
                         {renderLocalizedTextNode(joinLocalizedText("Open", "کھولیں", language), language)}
                       </button>
                       <button type="button" className={`ghost-cta${completion ? " active" : ""}`} onClick={() => handleToggleDiaryCompletion(taskForCompletion)} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(completion ? joinLocalizedText("Completed", "مکمل شدہ", language) : joinLocalizedText("Mark complete", "مکمل کریں", language), language)}</button>
