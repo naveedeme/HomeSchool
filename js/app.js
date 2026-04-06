@@ -20867,7 +20867,7 @@ const lessons = getMergedLessons(subjectId, grade);
 
   const buildDiaryTaskAudioLines = useCallback((task, outlineNodes = []) => {
     const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || "").trim();
-    const subsectionTitle = String(task?.title || "").trim();
+    const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || task?.title || "").trim();
     const lines = [];
     if (chapterTitle) lines.push(chapterTitle);
     if (subsectionTitle && subsectionTitle !== chapterTitle) lines.push(subsectionTitle);
@@ -20896,11 +20896,13 @@ const lessons = getMergedLessons(subjectId, grade);
         const target = document.querySelector(`[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]`);
         if (!target) return;
         target.classList.add("study-focus-active-manual");
-        target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+        const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
+        const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerOffset - 10);
+        window.scrollTo({ top, behavior: "smooth" });
         setTimeout(() => target.classList.remove("study-focus-active-manual"), 1600);
       }, 220);
     }
-  }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate]);
+  }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate, headerHideOffset]);
 
   const handleOpenDiaryTask = useCallback((task, orderedTasks = [], routeMetaOverride = null) => {
     const taskTargetStudentEmail = String(task?.rawEntry?.targetStudentEmail || task?.targetStudentEmail || "").trim().toLowerCase();
@@ -25002,7 +25004,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const taskOutline = buildDiaryTaskOutline(task);
                               const taskOutlineChildren = taskOutline[0]?.children || [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
-                              const subsectionTitle = String(taskOutline[0]?.label || task?.title || "").trim();
+                              const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               return (
                                 <div key={`today_t_${task.taskKey}`} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
@@ -25057,7 +25059,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const taskOutline = buildDiaryTaskOutline(task);
                               const taskOutlineChildren = taskOutline[0]?.children || [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
-                              const subsectionTitle = String(taskOutline[0]?.label || task?.title || "").trim();
+                              const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               return (
                                 <div key={`daily_t_${task.taskKey}`} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
