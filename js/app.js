@@ -12411,6 +12411,12 @@ function HomeschoolApp() {
     });
     return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
   }, [localTestTemplateLibrary, visibleTestTemplates]);
+  const diaryViewerStudentEmailSeed = useMemo(() => {
+    if (performanceStudentEmail && accessibleStudentOptions.some((entry) => entry.email === performanceStudentEmail)) return performanceStudentEmail;
+    if (contentManagerRole === "student" && contentIdentityEmail) return contentIdentityEmail;
+    if (contentManagerRole === "parent" && linkedChildOptions[0]?.email) return linkedChildOptions[0].email;
+    return accessibleStudentOptions[0]?.email || contentIdentityEmail || "";
+  }, [accessibleStudentOptions, contentIdentityEmail, contentManagerRole, linkedChildOptions, performanceStudentEmail]);
   const priorWeekAccumulatedTasks = useMemo(() => {
     try {
       const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : [])
@@ -12428,13 +12434,13 @@ function HomeschoolApp() {
         currentWeekLessonKeys: currentKeys,
         diaryEntries: visibleDiaryEntries,
         diaryCompletions: visibleDiaryCompletions,
-        studentEmail: activeDiaryViewerStudentEmail,
+        studentEmail: diaryViewerStudentEmailSeed,
       });
     } catch (error) {
       console.log("Unable to calculate prior-week accumulated diary tasks:", error);
       return [];
     }
-  }, [activeDiaryViewerStudentEmail, activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
+  }, [activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
   const generatedWeeklyTestTemplate = useMemo(() => {
     try {
       return buildGeneratedWeeklyTestTemplate({

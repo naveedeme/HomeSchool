@@ -10258,6 +10258,13 @@ ${marker} `);
       });
       return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
     }, [localTestTemplateLibrary, visibleTestTemplates]);
+    const diaryViewerStudentEmailSeed = useMemo(() => {
+      var _a2, _b2;
+      if (performanceStudentEmail && accessibleStudentOptions.some((entry) => entry.email === performanceStudentEmail)) return performanceStudentEmail;
+      if (contentManagerRole === "student" && contentIdentityEmail) return contentIdentityEmail;
+      if (contentManagerRole === "parent" && ((_a2 = linkedChildOptions[0]) == null ? void 0 : _a2.email)) return linkedChildOptions[0].email;
+      return ((_b2 = accessibleStudentOptions[0]) == null ? void 0 : _b2.email) || contentIdentityEmail || "";
+    }, [accessibleStudentOptions, contentIdentityEmail, contentManagerRole, linkedChildOptions, performanceStudentEmail]);
     const priorWeekAccumulatedTasks = useMemo(() => {
       try {
         const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : []).filter((task) => (task == null ? void 0 : task.subject) && (task == null ? void 0 : task.lessonKey)).map((task) => `${task.subject}::${task.lessonKey}`));
@@ -10273,13 +10280,13 @@ ${marker} `);
           currentWeekLessonKeys: currentKeys,
           diaryEntries: visibleDiaryEntries,
           diaryCompletions: visibleDiaryCompletions,
-          studentEmail: activeDiaryViewerStudentEmail
+          studentEmail: diaryViewerStudentEmailSeed
         });
       } catch (error) {
         console.log("Unable to calculate prior-week accumulated diary tasks:", error);
         return [];
       }
-    }, [activeDiaryViewerStudentEmail, activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
+    }, [activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
     const generatedWeeklyTestTemplate = useMemo(() => {
       try {
         return buildGeneratedWeeklyTestTemplate({
