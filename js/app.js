@@ -9057,18 +9057,23 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
 
 function getBilingualExercisePromptParts(text) {
   const raw = String(text || "").trim();
-  if (!raw || !raw.includes(":")) return null;
-  const splitIndex = raw.indexOf(":");
-  const first = raw.slice(0, splitIndex).trim();
-  const second = raw.slice(splitIndex + 1).trim();
-  if (!first || !second) return null;
-  const firstUrdu = isUrduText(first);
-  const secondUrdu = isUrduText(second);
-  if (firstUrdu === secondUrdu) return null;
-  return {
-    english: firstUrdu ? second : first,
-    urdu: firstUrdu ? first : second,
-  };
+  if (!raw) return null;
+  const separators = [":", " — ", " – ", " - "];
+  for (const separator of separators) {
+    if (!raw.includes(separator)) continue;
+    const splitIndex = raw.indexOf(separator);
+    const first = raw.slice(0, splitIndex).trim();
+    const second = raw.slice(splitIndex + separator.length).trim();
+    if (!first || !second) continue;
+    const firstUrdu = isUrduText(first);
+    const secondUrdu = isUrduText(second);
+    if (firstUrdu === secondUrdu) continue;
+    return {
+      english: firstUrdu ? second : first,
+      urdu: firstUrdu ? first : second,
+    };
+  }
+  return null;
 }
 
 function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
@@ -25405,11 +25410,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           {sub.examples.map((ex,i) => (
             <div key={i} className="inline-study-row" style={{ direction: isUr ? "rtl" : "ltr" }}>
               <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
-                <SpeakableSentence
+                <ExercisePromptContent
                   text={ex}
-                  lang={isUr?"ur":"en"}
                   studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
-                  showStudyToolbar={false}
                   buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
                 />
               </div>

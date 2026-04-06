@@ -7299,18 +7299,23 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
   }
   function getBilingualExercisePromptParts(text) {
     const raw = String(text || "").trim();
-    if (!raw || !raw.includes(":")) return null;
-    const splitIndex = raw.indexOf(":");
-    const first = raw.slice(0, splitIndex).trim();
-    const second = raw.slice(splitIndex + 1).trim();
-    if (!first || !second) return null;
-    const firstUrdu = isUrduText(first);
-    const secondUrdu = isUrduText(second);
-    if (firstUrdu === secondUrdu) return null;
-    return {
-      english: firstUrdu ? second : first,
-      urdu: firstUrdu ? first : second
-    };
+    if (!raw) return null;
+    const separators = [":", " \u2014 ", " \u2013 ", " - "];
+    for (const separator of separators) {
+      if (!raw.includes(separator)) continue;
+      const splitIndex = raw.indexOf(separator);
+      const first = raw.slice(0, splitIndex).trim();
+      const second = raw.slice(splitIndex + separator.length).trim();
+      if (!first || !second) continue;
+      const firstUrdu = isUrduText(first);
+      const secondUrdu = isUrduText(second);
+      if (firstUrdu === secondUrdu) continue;
+      return {
+        english: firstUrdu ? second : first,
+        urdu: firstUrdu ? first : second
+      };
+    }
+    return null;
   }
   function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
     const bilingualPair = getBilingualExercisePromptParts(text);
@@ -20984,12 +20989,10 @@ ${error.message || error}`);
         const paragraphSentence = hasOpposites ? stripInlineUrduForKnownWords(s2, lessonDay.words || []) : s2;
         return hasOpposites ? /* @__PURE__ */ React.createElement(MixedUrduParagraphSentence, { key: i, text: paragraphSentence, highlight: sentenceHighlights, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` } }) : /* @__PURE__ */ React.createElement(SpeakableSentence, { key: i, text: s2, lang: "en", highlight: sentenceHighlights, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` } });
       }), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", onClick: () => playAll(lessonDay.paragraph) }, "\u25B6\uFE0F Play Entire Paragraph")), lessonDay.difficult && lessonDay.difficult.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: "#F59E0B", marginTop: 12, marginBottom: 8, fontFamily: "'Baloo 2',sans-serif" } }, isUr ? "\u{1F4DA} \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638" : "\u{1F4DA} Difficult Words"), lessonDay.difficult.map((w, i) => /* @__PURE__ */ React.createElement(WordRow, { key: i, en: w.en, ur: w.ur })))))), mathSubTab === "examples" && sub.sentencePairs && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "examples") }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 10 } }, sub.examplesLabel || "\u{1F5E3}\uFE0F Sentences"), regroupSentencePairs(sub.sentencePairs, daySectionSettings.sentences.itemsPerDay).map((group) => /* @__PURE__ */ React.createElement("div", { key: group.day, style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 12, fontWeight: 800, marginBottom: 8 } }, language === "ur" ? `\u0633\u06CC\u0679 ${group.day}` : `Set ${group.day}`), group.sentencePairs.map((pair, i) => /* @__PURE__ */ React.createElement(SentencePairRow, { key: `${group.day}_${i}`, en: pair.en, ur: pair.ur })))), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", onClick: () => playAll(sub.sentencePairs.map((pair) => pair.en).join(" ")) }, "\u25B6\uFE0F Play All English Sentences")), mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "examples"), style: urS }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 10, ...urS } }, sub.examplesLabel || (isUr ? "\u{1F4A1} \u0645\u062B\u0627\u0644\u06CC\u06BA" : "\u{1F4A1} Examples")), sub.examples.map((ex, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "inline-study-row", style: { direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex" } }, /* @__PURE__ */ React.createElement(
-        SpeakableSentence,
+        ExercisePromptContent,
         {
           text: ex,
-          lang: isUr ? "ur" : "en",
           studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` },
-          showStudyToolbar: false,
           buttonStyle: { marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }
         }
       )), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: ex, subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` } }))), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: isUr ? { fontFamily: "'Noto Nastaliq Urdu',serif", direction: "rtl" } : {}, onClick: () => playAll(sub.examples.join(". ")) }, isUr ? "\u25B6\uFE0F \u0633\u0628 \u0633\u0646\u06CC\u06BA" : "\u25B6\uFE0F Play All Examples")), mathSubTab === "exercises" && (sub.exerciseGroups || sub.exercises) && /* @__PURE__ */ React.createElement("div", { style: urS, "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "exercises") }, sub.exerciseGroups && subExerciseGroupIdx === null ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#22C55E", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, isUr ? "\u270F\uFE0F \u0645\u0634\u0642 \u06A9\u06D2 \u062F\u0646" : "\u270F\uFE0F Exercise Days"), sub.exerciseGroups.map((group, gi) => /* @__PURE__ */ React.createElement("div", { key: group.label, className: "adverb-day-card", onClick: () => {
