@@ -12593,6 +12593,32 @@ function HomeschoolApp() {
   const ensureSupabaseClientRef = useRef(() => {
     throw new Error("Supabase client not ready");
   });
+  const archiveMemberAuthoredContent = useCallback(async (client, schoolId, memberEmail) => {
+    const safeMemberEmail = String(memberEmail || "").trim().toLowerCase();
+    const safeSchoolId = String(schoolId || "").trim();
+    if (!safeMemberEmail || !safeSchoolId) return;
+    const nowIso = new Date().toISOString();
+    try {
+      await client
+        .from(SUPABASE_DIARY_ENTRIES_TABLE)
+        .update({ status: "archived", updated_at: nowIso })
+        .eq("school_id", safeSchoolId)
+        .eq("teacher_email", safeMemberEmail)
+        .eq("status", "active");
+    } catch (error) {
+      console.log("Unable to archive diary entries for removed member:", safeMemberEmail, error);
+    }
+    try {
+      await client
+        .from(SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE)
+        .update({ status: "archived", updated_at: nowIso })
+        .eq("school_id", safeSchoolId)
+        .eq("assigned_by_email", safeMemberEmail)
+        .eq("status", "active");
+    } catch (error) {
+      console.log("Unable to archive test assignments for removed member:", safeMemberEmail, error);
+    }
+  }, []);
   const handleSaveSchool = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage schools.", "آپ کے مواد والے کردار کو اسکول منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -12754,32 +12780,6 @@ function HomeschoolApp() {
       setContentRelationshipBusy(false);
     }
   }, [activeInstitutionSchoolIdResolved, canManageInstitution, contentIdentityEmail, language, schoolMemberDraftEmail, schoolMemberDraftGradeScope, schoolMemberDraftRole, showAppToast]);
-  const archiveMemberAuthoredContent = useCallback(async (client, schoolId, memberEmail) => {
-    const safeMemberEmail = String(memberEmail || "").trim().toLowerCase();
-    const safeSchoolId = String(schoolId || "").trim();
-    if (!safeMemberEmail || !safeSchoolId) return;
-    const nowIso = new Date().toISOString();
-    try {
-      await client
-        .from(SUPABASE_DIARY_ENTRIES_TABLE)
-        .update({ status: "archived", updated_at: nowIso })
-        .eq("school_id", safeSchoolId)
-        .eq("teacher_email", safeMemberEmail)
-        .eq("status", "active");
-    } catch (error) {
-      console.log("Unable to archive diary entries for removed member:", safeMemberEmail, error);
-    }
-    try {
-      await client
-        .from(SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE)
-        .update({ status: "archived", updated_at: nowIso })
-        .eq("school_id", safeSchoolId)
-        .eq("assigned_by_email", safeMemberEmail)
-        .eq("status", "active");
-    } catch (error) {
-      console.log("Unable to archive test assignments for removed member:", safeMemberEmail, error);
-    }
-  }, []);
   const handleDeleteSchoolMembership = useCallback(async (membership) => {
     const normalized = normalizeSchoolMembershipRecord(membership);
     if (!normalized?.membershipId) return;
