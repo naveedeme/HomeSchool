@@ -11763,7 +11763,7 @@ function HomeschoolApp() {
   const persistCustomizationRef = useRef(null);
   const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
   const [language, setLanguage] = useState(stored?.language || "en");
-  const [themeMode, setThemeMode] = useState(stored?.themeMode || "dark");
+  const [themeMode, setThemeMode] = useState(stored?.themeMode || "light");
   const [fontSizeMode, setFontSizeMode] = useState(["small", "normal", "large", "xlarge"].includes(stored?.fontSizeMode) ? stored.fontSizeMode : "normal");
   const [reducedMotion, setReducedMotion] = useState(Boolean(stored?.reducedMotion));
   const [highContrast, setHighContrast] = useState(Boolean(stored?.highContrast));
@@ -12064,7 +12064,7 @@ function HomeschoolApp() {
   const [copyToast, setCopyToast] = useState(null);
   const [profileDisclosureOpen, setProfileDisclosureOpen] = useState(false);
   const [tutorSetupOpen, setTutorSetupOpen] = useState(false);
-  const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "dark"));
+  const [resolvedTheme, setResolvedTheme] = useState(getResolvedTheme(stored?.themeMode || "light"));
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [installAvailability, setInstallAvailability] = useState(isStandaloneMode() ? "installed" : "unavailable");
   const [installBannerDismissed, setInstallBannerDismissed] = useState(Boolean(stored?.installBannerDismissed));
