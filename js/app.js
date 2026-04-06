@@ -531,6 +531,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
       routeMeta: {
         ...safeRouteMeta,
         subTab: "examples",
+        targetScope: "tab",
       },
       children: [],
     });
@@ -555,6 +556,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
       routeMeta: {
         ...safeRouteMeta,
         subTab: "exercises",
+        targetScope: "tab",
       },
       children: collectDiaryExerciseOutlineNodes(
         exerciseEntries,
@@ -575,6 +577,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
       routeMeta: {
         ...safeRouteMeta,
         subTab: "quiz",
+        targetScope: "tab",
       },
       children: [],
     });
@@ -20874,6 +20877,7 @@ const lessons = getMergedLessons(subjectId, grade);
 
   const restoreDiaryTaskNavigator = useCallback(() => {
     const fallbackAnchorDate = String(diaryTaskNavigator?.returnAnchorDate || diaryWeekAnchorDate || toIsoDateString(Date.now())).trim();
+    const returnTargetDate = String(diaryTaskNavigator?.returnTargetDate || "").trim();
     setTab("diary");
     setDiarySectionTab(String(diaryTaskNavigator?.returnSection || "daily").trim() || "daily");
     setDiaryWeekAnchorDate(fallbackAnchorDate);
@@ -20887,6 +20891,15 @@ const lessons = getMergedLessons(subjectId, grade);
     setQuizElapsedMs([]);
     setQuizIdx(0);
     setViewTargetId(null);
+    if (returnTargetDate) {
+      setTimeout(() => {
+        const target = document.querySelector(`[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]`);
+        if (!target) return;
+        target.classList.add("study-focus-active-manual");
+        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        setTimeout(() => target.classList.remove("study-focus-active-manual"), 1600);
+      }, 220);
+    }
   }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate]);
 
   const handleOpenDiaryTask = useCallback((task, orderedTasks = [], routeMetaOverride = null) => {
@@ -20903,6 +20916,7 @@ const lessons = getMergedLessons(subjectId, grade);
       activeTaskKey: getDiaryTaskRouteKey(task),
       returnSection: diarySectionTab,
       returnAnchorDate: diaryWeekAnchorDate,
+      returnTargetDate: String(task?.targetDate || "").trim(),
       returnStudentEmail: activeDiaryViewerStudentEmail,
     });
 
@@ -20932,6 +20946,7 @@ const lessons = getMergedLessons(subjectId, grade);
     const explicitSubTab = String(explicitRouteMeta?.subTab || "").trim();
     const explicitGroupLabel = String(explicitRouteMeta?.groupLabel || "").trim();
     const explicitExerciseKind = String(explicitRouteMeta?.exerciseKind || "").trim();
+    const explicitTargetScope = String(explicitRouteMeta?.targetScope || "").trim();
 
     if (lesson?.hasMathSub) {
       const derivedSubs = getDerivedLessonDiarySubs(lesson, subject.id);
@@ -20950,8 +20965,14 @@ const lessons = getMergedLessons(subjectId, grade);
         setSubQuizGroupIdx(null);
         if ((explicitSubTab === "exercises" || explicitExerciseKind) && Array.isArray(derivedSubs[matchedSubIndex]?.exerciseGroups)) {
           let exerciseIndex = -1;
-          if (explicitGroupLabel) {
-            exerciseIndex = derivedSubs[matchedSubIndex].exerciseGroups.findIndex((group) => String(group?.label || "").trim() === explicitGroupLabel);
+          const preferredGroupLabel = explicitGroupLabel || (
+            Number(task?.dayIndex) > 0
+              ? [joinLocalizedText(`Day ${task.dayIndex}`, `دن ${task.dayIndex}`, language), `Day ${task.dayIndex}`, `دن ${task.dayIndex}`]
+                  .find((label) => derivedSubs[matchedSubIndex].exerciseGroups.some((group) => String(group?.label || "").trim() === String(label || "").trim()))
+              : ""
+          );
+          if (preferredGroupLabel) {
+            exerciseIndex = derivedSubs[matchedSubIndex].exerciseGroups.findIndex((group) => String(group?.label || "").trim() === preferredGroupLabel);
           } else if (explicitExerciseKind) {
             exerciseIndex = derivedSubs[matchedSubIndex].exerciseGroups.findIndex((group) => (
               Array.isArray(group?.exercises)
@@ -20963,21 +20984,37 @@ const lessons = getMergedLessons(subjectId, grade);
             setSubExerciseGroupIdx(exerciseIndex);
             nextViewTargetId = explicitExerciseKind
               ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercise_${explicitExerciseKind}`
-              : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
+              : explicitTargetScope === "tab"
+                ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises`
+                : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
           } else {
-            nextViewTargetId = `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
+            nextViewTargetId = explicitTargetScope === "tab"
+              ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_exercises`
+              : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_exercises`;
           }
         }
         if (explicitSubTab === "quiz" && Array.isArray(derivedSubs[matchedSubIndex]?.quizGroups)) {
-          const quizIndex = explicitGroupLabel
-            ? derivedSubs[matchedSubIndex].quizGroups.findIndex((group) => String(group?.label || "").trim() === explicitGroupLabel)
+          const preferredQuizGroupLabel = explicitGroupLabel || (
+            Number(task?.dayIndex) > 0
+              ? [joinLocalizedText(`Day ${task.dayIndex}`, `دن ${task.dayIndex}`, language), `Day ${task.dayIndex}`, `دن ${task.dayIndex}`]
+                  .find((label) => derivedSubs[matchedSubIndex].quizGroups.some((group) => String(group?.label || "").trim() === String(label || "").trim()))
+              : ""
+          );
+          const quizIndex = preferredQuizGroupLabel
+            ? derivedSubs[matchedSubIndex].quizGroups.findIndex((group) => String(group?.label || "").trim() === preferredQuizGroupLabel)
             : -1;
           if (quizIndex >= 0) setSubQuizGroupIdx(quizIndex);
-          nextViewTargetId = `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_quiz`;
+          nextViewTargetId = explicitTargetScope === "tab"
+            ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_quiz`
+            : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_quiz`;
         } else if (explicitSubTab === "quiz") {
-          nextViewTargetId = `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_quiz`;
+          nextViewTargetId = explicitTargetScope === "tab"
+            ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_quiz`
+            : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_quiz`;
         } else if (explicitSubTab === "examples") {
-          nextViewTargetId = `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_examples`;
+          nextViewTargetId = explicitTargetScope === "tab"
+            ? `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_tab_examples`
+            : `diary_target_${subject.id}_${lessonRouteKey}_${matchedSubIndex}_examples`;
         }
         setViewTargetId(nextViewTargetId);
       }
@@ -24299,7 +24336,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
 
         <div style={{display:"flex",gap:6,marginBottom:14,direction:isUr?"rtl":"ltr"}}>
           {[{id:"examples",label:isUr?"💡 مثالیں":"💡 Examples",c:"#38BDF8"},{id:"exercises",label:isUr?"✏️ مشقیں":"✏️ Exercises",c:"#22C55E"},{id:"quiz",label:isUr?"🎯 امتحان":"🎯 Quiz",c:"#F59E0B"}].map(t=>(
-            <button key={t.id} onClick={()=>{setMathSubTab(t.id);setSubExerciseGroupIdx(null);setSubQuizGroupIdx(null);setRevealedEx({});}} style={{flex:1,padding:"10px 6px",borderRadius:10,border:mathSubTab===t.id?"2px solid "+t.c:"1px solid var(--border)",background:mathSubTab===t.id?t.c+"22":"var(--bg-elevated)",color:mathSubTab===t.id?t.c:"var(--text-muted)",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",fontSize:isUr?14:13,fontWeight:700,cursor:"pointer"}}>{t.label}</button>
+            <button key={t.id} data-study-id={`${diaryRouteBaseId}_tab_${t.id}`} onClick={()=>{setMathSubTab(t.id);setSubExerciseGroupIdx(null);setSubQuizGroupIdx(null);setRevealedEx({});}} style={{flex:1,padding:"10px 6px",borderRadius:10,border:mathSubTab===t.id?"2px solid "+t.c:"1px solid var(--border)",background:mathSubTab===t.id?t.c+"22":"var(--bg-elevated)",color:mathSubTab===t.id?t.c:"var(--text-muted)",fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",fontSize:isUr?14:13,fontWeight:700,cursor:"pointer"}}>{t.label}</button>
           ))}
         </div>
 
@@ -24933,7 +24970,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </div>
               </div>
               {todayDiaryGroup ? (
-                <div key={`today_diary_${todayDiaryGroup.targetDate}`} className="review-panel diary-day-card" data-ui-language={language} style={{ marginTop: 16, borderLeft: "4px solid var(--accent)", boxShadow: "0 12px 32px rgba(0,0,0,0.08)" }}>
+                <div key={`today_diary_${todayDiaryGroup.targetDate}`} className="review-panel diary-day-card" data-ui-language={language} data-diary-date={todayDiaryGroup.targetDate} style={{ marginTop: 16, borderLeft: "4px solid var(--accent)", boxShadow: "0 12px 32px rgba(0,0,0,0.08)" }}>
                   <div className="review-panel-head">
                     <div>
                       <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -24989,7 +25026,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </div>
               ) : null}
               {weeklyDiaryListGroups.length ? weeklyDiaryListGroups.map((group) => (
-                <div key={`daily_card_${group.targetDate}`} className="review-panel diary-day-card" data-ui-language={language} style={{ marginTop: 16, borderLeft: group.targetDate === diaryTodayIso ? "4px solid var(--accent)" : undefined }}>
+                <div key={`daily_card_${group.targetDate}`} className="review-panel diary-day-card" data-ui-language={language} data-diary-date={group.targetDate} style={{ marginTop: 16, borderLeft: group.targetDate === diaryTodayIso ? "4px solid var(--accent)" : undefined }}>
                   <div className="review-panel-head">
                     <div>
                       <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
