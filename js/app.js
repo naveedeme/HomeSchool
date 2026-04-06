@@ -12317,6 +12317,8 @@ function HomeschoolApp() {
   const testTemplateImportInputRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const pronunciationRecognitionRef = useRef(null);
+  const pronunciationSessionActiveRef = useRef(false);
+  const pronunciationLastErrorRef = useRef("");
   const activeStudentProfileIdRef = useRef(initialActiveStudentProfileId);
   const studentProfilesRef = useRef(initialStudentProfiles);
   const profileSwitcherButtonRef = useRef(null);
@@ -12620,6 +12622,8 @@ const headerHideTimerRef = useRef(null);
   }, [chatListening, language]);
 
   const stopPronunciationListening = useCallback(() => {
+    pronunciationSessionActiveRef.current = false;
+    pronunciationLastErrorRef.current = "";
     try {
       pronunciationRecognitionRef.current?.stop?.();
     } catch (error) {
@@ -14873,11 +14877,8 @@ const headerHideTimerRef = useRef(null);
     } catch (error) {
       // Ignore prior pronunciation recognition shutdown errors.
     }
-    const recognition = new SpeechRecognitionClass();
-    recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.maxAlternatives = 1;
+    pronunciationSessionActiveRef.current = true;
+    pronunciationLastErrorRef.current = "";
     const finalizeAttempt = (transcript) => {
       const normalizedTranscript = String(transcript || "").trim();
       const assessment = assessPronunciationAttempt(
@@ -14908,55 +14909,82 @@ const headerHideTimerRef = useRef(null);
         assessment.status === "exact" || assessment.status === "strong" ? "correct" : "wrong",
       );
     };
-    recognition.onstart = () => {
-      setPronunciationLabListening(true);
-      setPronunciationLabResult({
-        status: "idle",
-        score: 0,
-        transcript: "",
-        feedback: joinLocalizedText(
-          "Listening now. Speak the target phrase clearly.",
-          "اب سن رہا ہے۔ ہدفی فقرہ واضح انداز میں بولیں۔",
-          language,
-        ),
-      });
-    };
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results || [])
-        .map((result) => result?.[0]?.transcript || "")
-        .join(" ")
-        .trim();
-      finalizeAttempt(transcript);
-    };
-    recognition.onerror = (event) => {
-      setPronunciationLabResult({
-        status: "missing",
-        score: 0,
-        transcript: "",
-        feedback: buildPronunciationListeningFeedback(event?.error, language),
-      });
-      setPronunciationLabListening(false);
-    };
-    recognition.onend = () => {
-      setPronunciationLabListening(false);
-      pronunciationRecognitionRef.current = null;
-    };
-    pronunciationRecognitionRef.current = recognition;
     setPronunciationLabTranscript("");
-    setPronunciationLabResult(null);
-    setPronunciationLabListening(true);
-    try {
-      recognition.start();
-    } catch (error) {
-      setPronunciationLabListening(false);
-      setPronunciationLabResult({
-        status: "missing",
-        score: 0,
-        transcript: "",
-        feedback: buildPronunciationListeningFeedback(error?.name || error?.message, language),
-      });
-      pronunciationRecognitionRef.current = null;
-    }
+    setPronunciationLabResult({
+      status: "idle",
+      score: 0,
+      transcript: "",
+      feedback: joinLocalizedText(
+        "Listening now. Speak the target phrase clearly.",
+        "اب سن رہا ہے۔ ہدفی فقرہ واضح انداز میں بولیں۔",
+        language,
+      ),
+    });
+    const startRecognitionAttempt = () => {
+      if (!pronunciationSessionActiveRef.current) return;
+      const recognition = new SpeechRecognitionClass();
+      recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+      recognition.maxAlternatives = 1;
+      recognition.onstart = () => {
+        pronunciationLastErrorRef.current = "";
+        setPronunciationLabListening(true);
+      };
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results || [])
+          .map((result) => result?.[0]?.transcript || "")
+          .join(" ")
+          .trim();
+        if (transcript) {
+          finalizeAttempt(transcript);
+        }
+      };
+      recognition.onerror = (event) => {
+        const errorCode = String(event?.error || "").trim().toLowerCase();
+        pronunciationLastErrorRef.current = errorCode;
+        if (errorCode && errorCode !== "no-speech" && errorCode !== "aborted") {
+          pronunciationSessionActiveRef.current = false;
+          setPronunciationLabResult({
+            status: "missing",
+            score: 0,
+            transcript: "",
+            feedback: buildPronunciationListeningFeedback(errorCode, language),
+          });
+          setPronunciationLabListening(false);
+        }
+      };
+      recognition.onend = () => {
+        pronunciationRecognitionRef.current = null;
+        if (!pronunciationSessionActiveRef.current) {
+          setPronunciationLabListening(false);
+          return;
+        }
+        const lastError = pronunciationLastErrorRef.current;
+        if (lastError && lastError !== "no-speech" && lastError !== "aborted") {
+          setPronunciationLabListening(false);
+          return;
+        }
+        window.setTimeout(() => {
+          startRecognitionAttempt();
+        }, lastError === "no-speech" ? 180 : 60);
+      };
+      pronunciationRecognitionRef.current = recognition;
+      try {
+        recognition.start();
+      } catch (error) {
+        pronunciationSessionActiveRef.current = false;
+        setPronunciationLabListening(false);
+        setPronunciationLabResult({
+          status: "missing",
+          score: 0,
+          transcript: "",
+          feedback: buildPronunciationListeningFeedback(error?.name || error?.message, language),
+        });
+        pronunciationRecognitionRef.current = null;
+      }
+    };
+    startRecognitionAttempt();
   }, [activePronunciationCard, language, pronunciationLabIdx, pronunciationLabListening, stopPronunciationListening]);
   const practiceTimedChallengeReadyCount = useMemo(
     () => buildTimedChallengeDeck(practiceSubjectSourcePool, 6, 4).length,
