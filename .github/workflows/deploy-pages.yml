@@ -46,6 +46,9 @@ jobs:
           if [ -d vendor ]; then
             cp -R vendor .deploy/vendor
           fi
+          if [ -d typing-tutor ]; then
+            cp -R typing-tutor .deploy/typing-tutor
+          fi
           touch .deploy/.nojekyll
 
       - name: Publish to gh-pages
