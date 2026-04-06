@@ -20819,7 +20819,7 @@ const lessons = getMergedLessons(subjectId, grade);
         highlightNode.classList.add("study-focus-active-manual");
         if (String(viewTargetId).startsWith("diary_target_")) {
           const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
-          const top = Math.max(0, window.scrollY + highlightNode.getBoundingClientRect().top - headerOffset - 10);
+          const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerOffset - 10);
           window.scrollTo({ top, behavior: "smooth" });
         } else {
           highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
