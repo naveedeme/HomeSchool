@@ -15120,7 +15120,7 @@ const headerHideTimerRef = useRef(null);
   const dailyChallenges = useMemo(() => ([
     {
       id: "reviews",
-      icon: "🧠",
+      icon: "📋",
       titleEn: `Review ${dailyReviewChallengeTarget} cards`,
       titleUr: `${dailyReviewChallengeTarget} کارڈز دہرائیں`,
       bodyEn: "Keep your queue moving with a short review sprint.",
@@ -23001,7 +23001,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
   };
   const navItems = [
     { id: "home", icon: "🏠", label: ui.home },
-    { id: "review", icon: "🧠", label: ui.review },
+    { id: "review", icon: "📋", label: ui.review },
     { id: "progress", icon: "📊", label: ui.progress },
     { id: "diary", icon: "🗓️", label: joinLocalizedText("Diary", "ڈائری", language) },
     ...(readyAiProviderIds.length > 0 ? [{ id: "tutor", icon: "🤖", label: ui.tutor }] : []),
@@ -23298,7 +23298,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         >
         {homeSectionTab === "subjects" && <>
           <button className="adverb-home-banner" style={{ width: "100%", textAlign: "left", background: "linear-gradient(135deg,rgba(14,165,233,0.18),rgba(34,197,94,0.12))", borderColor: "rgba(56,189,248,0.35)" }} onClick={handleStartReview}>
-            <div className="banner-icon">🧠</div>
+            <div className="banner-icon">📋</div>
             <div className="banner-text">
               <h3>{renderLocalizedTextNode(ui.reviewReady, language)}</h3>
               <p>{renderLocalizedTextNode(
@@ -23993,7 +23993,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </div>
           <div className="stat-grid">
             <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{formatNumberLabel(profileLessonTotals.completed)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText(`Lessons done of ${profileLessonTotals.total || 0}`, `${profileLessonTotals.total || 0} میں سے مکمل اسباق`, language), language)}</div></div>
-            <div className="stat-card"><div className="stat-icon">🧠</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
+            <div className="stat-card"><div className="stat-icon">📋</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
             <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(weeklyStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("This week", "اس ہفتے", language), language)}</div></div>
             <div className="stat-card"><div className="stat-icon">📖</div><div className="stat-value">{formatNumberLabel(dictionaryStats.total || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Dictionary entries", "لغت اندراجات", language), language)}</div></div>
           </div>
@@ -24646,7 +24646,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </div>
             <div className="stat-grid" style={{ marginTop: 14 }}>
               <div className="stat-card"><div className="stat-icon">⏱️</div><div className="stat-value">{formatMinutesLabel(weeklyStudyMinutes, language)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Weekly study", "ہفتہ وار مطالعہ", language), language)}</div></div>
-              <div className="stat-card"><div className="stat-icon">🧠</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
+              <div className="stat-card"><div className="stat-icon">📋</div><div className="stat-value">{formatNumberLabel(reviewStats.due || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Review due", "ریویو باقی", language), language)}</div></div>
               <div className="stat-card"><div className="stat-icon">📚</div><div className="stat-value">{profileLessonCompletion}%</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Lesson completion", "سبق تکمیل", language), language)}</div></div>
               <div className="stat-card"><div className="stat-icon">🔥</div><div className="stat-value">{formatNumberLabel(streak || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Current streak", "موجودہ تسلسل", language), language)}</div></div>
             </div>
@@ -26639,7 +26639,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("timedtruefalse", "Quick judgement practice", "تیز فیصلہ والی مشق"), language)}</span>
               </button>
               <button className={`practice-mode-card${practiceModeAvailability.timedmatching ? "" : " disabled"}`} onClick={() => handleStartPractice("timedmatching")} disabled={!practiceModeAvailability.timedmatching}>
-                <span className="practice-mode-icon">🧠</span>
+                <span className="practice-mode-icon">🧩</span>
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Timed Match Pairs", "وقت والی جوڑیاں", language), language)}</strong>
                 <span className="practice-mode-meta">{renderLocalizedTextNode(getPracticeAvailabilityMeta("timedmatching", "Timed sets", "وقت والے سیٹ", 4), language)}</span>
               </button>
@@ -26654,7 +26654,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           {reviewSectionTab === "queue" && <div className="lesson-detail" style={{ textAlign: isUrduUi(language) ? "right" : "left", direction: isUrduUi(language) ? "rtl" : "ltr" }}>
             <h2>{renderLocalizedTextNode(ui.reviewReady, language)}</h2>
             <p>{renderLocalizedTextNode(ui.reviewHint, language)}</p>
-            <button className="start-quiz-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={handleStartReview} disabled={reviewLoading}>{reviewLoading ? "..." : `🧠 ${ui.startReview}`}</button>
+            <button className="start-quiz-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={handleStartReview} disabled={reviewLoading}>{reviewLoading ? "..." : `📋 ${ui.startReview}`}</button>
             {reviewStats.due === 0 && <p style={{ marginTop: 12, color: "var(--text-muted)" }}>{renderLocalizedTextNode(ui.noReviewsDue, language)}</p>}
           </div>}
 
@@ -27606,7 +27606,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </div>
           <WordCollectionToolbar card={activeReviewCard} />
         </div>}
-      {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">🧠</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => restoreReviewReturnSnapshot()}>{renderLocalizedTextNode(reviewReturnLabel, language)}</button><button className="next-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
+      {reviewSessionDone && <div className="quiz-result"><div className="result-emoji">📋</div><h2>{renderLocalizedTextNode(ui.reviewComplete, language)}</h2><p className="score-text">{renderLocalizedTextNode(ui.reviewEarnedXp, language)}</p><div className="score-big high">+{reviewSessionXp}</div><div className="result-actions"><button className="retry-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => restoreReviewReturnSnapshot()}>{renderLocalizedTextNode(reviewReturnLabel, language)}</button><button className="next-btn" style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}} onClick={() => { resetReviewSession(); handleStartReview(); }}>{renderLocalizedTextNode(ui.startReview, language)}</button></div></div>}
       </>)}
 
       {tab === "tutor" && (<>
