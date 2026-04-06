@@ -12350,6 +12350,14 @@ function HomeschoolApp() {
       };
     });
   }, [diaryTodayIso, language, subjectLookup, weeklyDiaryTaskGroups]);
+  const todayDiaryGroup = useMemo(
+    () => visibleDiaryDayGroups.find((group) => group?.targetDate === diaryTodayIso) || null,
+    [diaryTodayIso, visibleDiaryDayGroups],
+  );
+  const weeklyDiaryListGroups = useMemo(
+    () => [...visibleDiaryDayGroups].filter((group) => group?.targetDate !== diaryTodayIso).reverse(),
+    [diaryTodayIso, visibleDiaryDayGroups],
+  );
   const orderedVisibleDiaryTasks = useMemo(
     () => visibleDiaryDayGroups.flatMap((group) => group.subjectGroups.flatMap((subjectGroup) => subjectGroup.tasks)),
     [visibleDiaryDayGroups],
@@ -24478,8 +24486,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       {tab === "diary" && (<>
         <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "ڈائری حصے" : "Diary sections"}>
           <button type="button" className={`review-section-tab${diarySectionTab === "daily" ? " active" : ""}`} onClick={() => setDiarySectionTab("daily")}>{renderLocalizedTextNode(joinLocalizedText("Daily Diary", "روزانہ ڈائری", language), language)}</button>
-          {(canManageDiary || canManageInstitution || canManageContentAccess || visibleTeacherDiaryEntries.length > 0) ? <button type="button" className={`review-section-tab${diarySectionTab === "teacher" ? " active" : ""}`} onClick={() => setDiarySectionTab("teacher")}>{renderLocalizedTextNode(joinLocalizedText("Teacher's Diary", "استاد کی ڈائری", language), language)}</button> : null}
-          {(canManageDiary || canManageInstitution || canManageContentAccess || visibleAssignmentEntries.length > 0) ? <button type="button" className={`review-section-tab${diarySectionTab === "assignments" ? " active" : ""}`} onClick={() => setDiarySectionTab("assignments")}>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویضات", language), language)}</button> : null}
+          <button type="button" className={`review-section-tab${diarySectionTab === "teacher" ? " active" : ""}`} onClick={() => setDiarySectionTab("teacher")}>{renderLocalizedTextNode(joinLocalizedText("Teacher's Diary", "استاد کی ڈائری", language), language)}</button>
+          <button type="button" className={`review-section-tab${diarySectionTab === "assignments" ? " active" : ""}`} onClick={() => setDiarySectionTab("assignments")}>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویضات", language), language)}</button>
           <button type="button" className={`review-section-tab${diarySectionTab === "saturday" ? " active" : ""}`} onClick={() => setDiarySectionTab("saturday")}>{renderLocalizedTextNode(joinLocalizedText("Saturday Test", "ہفتہ ٹیسٹ", language), language)}</button>
           {(canManageTests || availableTestTemplates.length > 0) ? <button type="button" className={`review-section-tab${diarySectionTab === "templates" ? " active" : ""}`} onClick={() => setDiarySectionTab("templates")}>{renderLocalizedTextNode(joinLocalizedText("Templates", "ٹیمپلیٹس", language), language)}</button> : null}
           {(canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess) ? <button type="button" className={`review-section-tab${diarySectionTab === "dashboard" ? " active" : ""}`} onClick={() => setDiarySectionTab("dashboard")}>{renderLocalizedTextNode(joinLocalizedText("Performance", "کارکردگی", language), language)}</button> : null}
@@ -24558,7 +24566,52 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   {diaryViewerStudentOptions.length > 1 ? <select className="settings-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
                 </div>
               </div>
-              {[...visibleDiaryDayGroups].reverse().map((group) => (
+              {todayDiaryGroup ? (
+                <div key={`today_diary_${todayDiaryGroup.targetDate}`} className="review-panel diary-day-card" data-ui-language={language} style={{ marginTop: 16, borderLeft: "4px solid var(--accent)", boxShadow: "0 12px 32px rgba(0,0,0,0.08)" }}>
+                  <div className="review-panel-head">
+                    <div>
+                      <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 }}>{renderLocalizedTextNode(joinLocalizedText("TODAY", "آج", language), language)}</span>
+                        {renderLocalizedTextNode(joinLocalizedText("Today's Diary", "آج کی ڈائری", language), language)}
+                      </h3>
+                      <p>{renderLocalizedTextNode(joinLocalizedText(`${todayDiaryGroup.tasks.length} tasks across ${todayDiaryGroup.subjectGroups.length} subjects`, `${todayDiaryGroup.tasks.length} کام ${todayDiaryGroup.subjectGroups.length} مضامین میں`, language), language)}</p>
+                    </div>
+                    <span className="goal-progress-badge">{renderLocalizedTextNode(todayDiaryGroup.targetDate, language)}</span>
+                  </div>
+                  {todayDiaryGroup.subjectGroups.length ? (
+                    <div className="profile-report-list">
+                      {todayDiaryGroup.subjectGroups.map((subjectGroup) => (
+                        <div key={`today_sg_${todayDiaryGroup.targetDate}_${subjectGroup.subjectId}`} className="profile-report-item" style={{ borderBottom: "1px solid var(--border)" }}>
+                          <div className="profile-report-item-head" style={{ background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 }}>
+                            <strong style={{ fontSize: 14 }}>{renderLocalizedTextNode(subjectGroup.subjectLabel, language)}</strong>
+                            <span className="chapter-badge neutral" style={{ fontSize: 11 }}>{renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} کام`, language), language)}</span>
+                          </div>
+                          <div className="diary-task-list">
+                            {subjectGroup.tasks.map((task) => {
+                              const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
+                              return (
+                                <div key={`today_t_${task.taskKey}`} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
+                                  <button type="button" className="diary-task-open-btn" onClick={() => handleOpenDiaryTask(task, orderedVisibleDiaryTasks)}>
+                                    <span className="diary-task-open-copy">
+                                      <strong>{renderLocalizedTextNode(task.title, language)}</strong>
+                                      {task.taskUnits?.length ? <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{task.taskUnits.slice(0, 3).map((u) => u.title).join(" · ")}</span> : null}
+                                    </span>
+                                    <span className="diary-task-open-arrow">{completion ? "✓" : language === "ur" ? "←" : "→"}</span>
+                                  </button>
+                                  <div className="result-actions chapter-card-actions" style={{ marginTop: 4 }}>
+                                    <button type="button" className={`ghost-cta${completion ? " active" : ""}`} onClick={() => handleToggleDiaryCompletion(task)} disabled={contentRelationshipBusy} style={{ fontSize: 12 }}>{renderLocalizedTextNode(completion ? joinLocalizedText("Done", "مکمل", language) : joinLocalizedText("Mark done", "مکمل کریں", language), language)}</button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No tasks scheduled for today.", "آج کے لیے کوئی کام نہیں۔", language), language)}</p>}
+                </div>
+              ) : null}
+              {weeklyDiaryListGroups.length ? weeklyDiaryListGroups.map((group) => (
                 <div key={`daily_card_${group.targetDate}`} className="review-panel diary-day-card" data-ui-language={language} style={{ marginTop: 16, borderLeft: group.targetDate === diaryTodayIso ? "4px solid var(--accent)" : undefined }}>
                   <div className="review-panel-head">
                     <div>
@@ -24601,7 +24654,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     </div>
                   ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No tasks scheduled for this day.", "اس دن کے لیے کوئی کام نہیں۔", language), language)}</p>}
                 </div>
-              ))}
+              )) : !todayDiaryGroup ? (
+                <div className="review-panel diary-day-card" data-ui-language={language} style={{ marginTop: 16 }}>
+                  <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No diary tasks are scheduled for this week yet.", "اس ہفتے کے لیے ابھی کوئی ڈائری کام مقرر نہیں۔", language), language)}</p>
+                </div>
+              ) : null}
             </>
           ) : null}
           {diarySectionTab === "teacher" ? (
