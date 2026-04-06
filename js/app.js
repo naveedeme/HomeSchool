@@ -24671,7 +24671,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       <p>{renderLocalizedTextNode(joinLocalizedText("Select a subject and chapter, then optionally add a section cue or note. Students will see these alongside their auto diary.", "مضمون اور باب منتخب کریں، پھر چاہیں تو حصے کی نشانی یا نوٹ شامل کریں۔ طلبہ یہ اپنی خودکار ڈائری کے ساتھ دیکھیں گے۔", language), language)}</p>
                     </div>
                   </div>
-                  <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                  <div className="chapter-browser-filter-row diary-authoring-grid" style={{ alignItems: "stretch" }}>
                     <select className="settings-select" value={diaryDraftScope} onChange={(event) => setDiaryDraftScope(event.target.value)}>
                       <option value="grade">{renderLocalizedTextNode(joinLocalizedText("Grade-wide", "جماعت وار", language), language)}</option>
                       <option value="student">{renderLocalizedTextNode(joinLocalizedText("Student-specific", "طالب علم وار", language), language)}</option>
@@ -24683,7 +24683,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       <option value="week">{renderLocalizedTextNode(joinLocalizedText("Full week", "پورا ہفتہ", language), language)}</option>
                     </select>
                   </div>
-                  <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
+                  <div className="chapter-browser-filter-row diary-authoring-grid" style={{ alignItems: "stretch", marginTop: 10 }}>
                     <select className="settings-select" value={diaryDraftSubjectId} onChange={(event) => { setDiaryDraftSubjectId(event.target.value); setDiaryDraftContentId(""); setDiaryDraftLessonSection(""); }}>
                       <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose subject", "مضمون چنیں", language), language)}</option>
                       {allSubjects.map((subject) => <option key={`tdiary_sub_${subject.id}`} value={subject.id}>{subject.name}</option>)}
@@ -24702,9 +24702,24 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       </select> : null;
                     })() : null}
                   </div>
-                  <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
-                    <input className="settings-text-input" style={{ flex: "1 1 280px" }} value={diaryDraftNote} onChange={(event) => setDiaryDraftNote(event.target.value)} placeholder={language === "ur" ? "آزاد متن ہدایات / نوٹ (اختیاری)" : "Free-text instructions / note (optional)"} />
-                    <button type="button" className="study-tool-btn" onClick={handleSaveDiaryEntry} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Save Entry", "اندراج محفوظ کریں", language), language)}</button>
+                  <div className="diary-authoring-note-shell" style={{ marginTop: 12 }}>
+                    <label className="settings-input-label" htmlFor="teacher-diary-note">
+                      {renderLocalizedTextNode(joinLocalizedText("Instructions / Note", "ہدایات / نوٹ", language), language)}
+                    </label>
+                    <p className="diary-authoring-note-help">
+                      {renderLocalizedTextNode(joinLocalizedText("Write clear guidance for what the student should do, focus on, or bring prepared.", "واضح ہدایات لکھیں کہ طالب علم کو کیا کرنا ہے، کس بات پر توجہ دینی ہے، یا کیا تیار کر کے لانا ہے۔", language), language)}
+                    </p>
+                    <textarea
+                      id="teacher-diary-note"
+                      className={`diary-authoring-note-input${language === "ur" ? " urdu" : " english"}`}
+                      rows={5}
+                      value={diaryDraftNote}
+                      onChange={(event) => setDiaryDraftNote(event.target.value)}
+                      placeholder={language === "ur" ? "مثلاً: سبق دوبارہ پڑھیں، مثالیں حل کریں، اور مشکل الفاظ کے معنی لکھیں..." : "For example: revise the lesson, solve the examples, and write the meanings of difficult words..."}
+                    />
+                    <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
+                      <button type="button" className="study-tool-btn save" onClick={handleSaveDiaryEntry} disabled={contentRelationshipBusy}>{renderLocalizedTextNode(joinLocalizedText("Save Entry", "اندراج محفوظ کریں", language), language)}</button>
+                    </div>
                   </div>
                 </div>
               ) : null}
