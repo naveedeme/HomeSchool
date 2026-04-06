@@ -18173,13 +18173,20 @@ ${error.message || error}`);
       if (!viewTargetId) return void 0;
       let activeHighlightNode = null;
       const timeout = setTimeout(() => {
+        var _a2;
         const safeId = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(String(viewTargetId)) : String(viewTargetId).replace(/"/g, '\\"');
         const target = document.querySelector(`[data-study-id="${safeId}"]`);
         if (target) {
           const highlightNode = target.closest(".word-row, .lesson-detail, .adverb-detail-section, .study-word-card, .review-panel, .settings-item, .settings-profile-card") || target;
           activeHighlightNode = highlightNode;
           highlightNode.classList.add("study-focus-active-manual");
-          highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+          if (String(viewTargetId).startsWith("diary_target_")) {
+            const headerOffset = Math.max(0, Number(((_a2 = headerRef.current) == null ? void 0 : _a2.offsetHeight) || headerHideOffset || 0));
+            const top = Math.max(0, window.scrollY + highlightNode.getBoundingClientRect().top - headerOffset - 10);
+            window.scrollTo({ top, behavior: "smooth" });
+          } else {
+            highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+          }
         }
       }, 280);
       const cleanup = setTimeout(() => setViewTargetId(null), 1800);
@@ -18190,7 +18197,7 @@ ${error.message || error}`);
           activeHighlightNode.classList.remove("study-focus-active-manual");
         }
       };
-    }, [mathSubIdx, selectedAdverbDay, selectedAdjDay, selectedConjDay, selectedLesson, selectedNounDay, selectedPrepDay, selectedPronDay, selectedSubject, selectedTensePara, selectedVerbDay, selectedVocabDay, subExerciseGroupIdx, subQuizGroupIdx, tab, tenseMain, tenseSub, viewTargetId]);
+    }, [headerHideOffset, mathSubIdx, selectedAdverbDay, selectedAdjDay, selectedConjDay, selectedLesson, selectedNounDay, selectedPrepDay, selectedPronDay, selectedSubject, selectedTensePara, selectedVerbDay, selectedVocabDay, subExerciseGroupIdx, subQuizGroupIdx, tab, tenseMain, tenseSub, viewTargetId]);
     const getDerivedLessonDiarySubs = useCallback((lesson, subjectId) => {
       if (!(lesson == null ? void 0 : lesson.hasMathSub)) return [];
       if (lesson.key === "sentences") {
@@ -18236,6 +18243,7 @@ ${error.message || error}`);
     const restoreDiaryTaskNavigator = useCallback(() => {
       const fallbackAnchorDate = String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.returnAnchorDate) || diaryWeekAnchorDate || toIsoDateString(Date.now())).trim();
       const returnTargetDate = String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.returnTargetDate) || "").trim();
+      const returnTaskKey = String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.returnTaskKey) || "").trim();
       setTab("diary");
       setDiarySectionTab(String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.returnSection) || "daily").trim() || "daily");
       setDiaryWeekAnchorDate(fallbackAnchorDate);
@@ -18249,10 +18257,12 @@ ${error.message || error}`);
       setQuizElapsedMs([]);
       setQuizIdx(0);
       setViewTargetId(null);
-      if (returnTargetDate) {
+      if (returnTargetDate || returnTaskKey) {
         setTimeout(() => {
           var _a2;
-          const target = document.querySelector(`[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]`);
+          const taskSelector = returnTaskKey ? `[data-diary-task-key="${returnTaskKey.replace(/"/g, '\\"')}"]` : "";
+          const daySelector = returnTargetDate ? `[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]` : "";
+          const target = (taskSelector ? document.querySelector(taskSelector) : null) || (daySelector ? document.querySelector(daySelector) : null);
           if (!target) return;
           target.classList.add("study-focus-active-manual");
           const headerOffset = Math.max(0, Number(((_a2 = headerRef.current) == null ? void 0 : _a2.offsetHeight) || headerHideOffset || 0));
@@ -18275,6 +18285,7 @@ ${error.message || error}`);
         returnSection: diarySectionTab,
         returnAnchorDate: diaryWeekAnchorDate,
         returnTargetDate: String((task == null ? void 0 : task.targetDate) || "").trim(),
+        returnTaskKey: getDiaryTaskRouteKey(task),
         returnStudentEmail: activeDiaryViewerStudentEmail
       });
       const safeSubjectId = String((task == null ? void 0 : task.subject) || "").trim();
@@ -20295,7 +20306,7 @@ ${error.message || error}`);
       const chapterTitle = String(((_b2 = task == null ? void 0 : task.lesson) == null ? void 0 : _b2.title) || ((_d2 = (_c2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _c2.activeLesson) == null ? void 0 : _d2.title) || (task == null ? void 0 : task.title) || "").trim();
       const subsectionTitle = String(((_g2 = (_f2 = (_e2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _e2[0]) == null ? void 0 : _f2.sourceMeta) == null ? void 0 : _g2.title) || ((_h2 = taskOutline[0]) == null ? void 0 : _h2.label) || (task == null ? void 0 : task.title) || "").trim();
       const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
-      return /* @__PURE__ */ React.createElement("div", { key: `today_t_${task.taskKey}`, className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: () => handleOpenDiaryTask(task, orderedVisibleDiaryTasks) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
+      return /* @__PURE__ */ React.createElement("div", { key: `today_t_${task.taskKey}`, "data-diary-task-key": getDiaryTaskRouteKey(task), className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: () => handleOpenDiaryTask(task, orderedVisibleDiaryTasks) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
         event.stopPropagation();
         speakInlineText(chapterTitle);
       }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")), subsectionTitle && subsectionTitle !== chapterTitle ? /* @__PURE__ */ React.createElement("span", { className: "diary-subtitle-line" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(subsectionTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
@@ -20310,7 +20321,7 @@ ${error.message || error}`);
       const chapterTitle = String(((_b2 = task == null ? void 0 : task.lesson) == null ? void 0 : _b2.title) || ((_d2 = (_c2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _c2.activeLesson) == null ? void 0 : _d2.title) || (task == null ? void 0 : task.title) || "").trim();
       const subsectionTitle = String(((_g2 = (_f2 = (_e2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _e2[0]) == null ? void 0 : _f2.sourceMeta) == null ? void 0 : _g2.title) || ((_h2 = taskOutline[0]) == null ? void 0 : _h2.label) || (task == null ? void 0 : task.title) || "").trim();
       const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
-      return /* @__PURE__ */ React.createElement("div", { key: `daily_t_${task.taskKey}`, className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: () => handleOpenDiaryTask(task, orderedVisibleDiaryTasks) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
+      return /* @__PURE__ */ React.createElement("div", { key: `daily_t_${task.taskKey}`, "data-diary-task-key": getDiaryTaskRouteKey(task), className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: () => handleOpenDiaryTask(task, orderedVisibleDiaryTasks) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
         event.stopPropagation();
         speakInlineText(chapterTitle);
       }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")), subsectionTitle && subsectionTitle !== chapterTitle ? /* @__PURE__ */ React.createElement("span", { className: "diary-subtitle-line" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(subsectionTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {

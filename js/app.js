@@ -20817,7 +20817,13 @@ const lessons = getMergedLessons(subjectId, grade);
         const highlightNode = target.closest(".word-row, .lesson-detail, .adverb-detail-section, .study-word-card, .review-panel, .settings-item, .settings-profile-card") || target;
         activeHighlightNode = highlightNode;
         highlightNode.classList.add("study-focus-active-manual");
-        highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        if (String(viewTargetId).startsWith("diary_target_")) {
+          const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
+          const top = Math.max(0, window.scrollY + highlightNode.getBoundingClientRect().top - headerOffset - 10);
+          window.scrollTo({ top, behavior: "smooth" });
+        } else {
+          highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        }
       }
     }, 280);
     const cleanup = setTimeout(() => setViewTargetId(null), 1800);
@@ -20828,7 +20834,7 @@ const lessons = getMergedLessons(subjectId, grade);
         activeHighlightNode.classList.remove("study-focus-active-manual");
       }
     };
-  }, [mathSubIdx, selectedAdverbDay, selectedAdjDay, selectedConjDay, selectedLesson, selectedNounDay, selectedPrepDay, selectedPronDay, selectedSubject, selectedTensePara, selectedVerbDay, selectedVocabDay, subExerciseGroupIdx, subQuizGroupIdx, tab, tenseMain, tenseSub, viewTargetId]);
+  }, [headerHideOffset, mathSubIdx, selectedAdverbDay, selectedAdjDay, selectedConjDay, selectedLesson, selectedNounDay, selectedPrepDay, selectedPronDay, selectedSubject, selectedTensePara, selectedVerbDay, selectedVocabDay, subExerciseGroupIdx, subQuizGroupIdx, tab, tenseMain, tenseSub, viewTargetId]);
 
   const getDerivedLessonDiarySubs = useCallback((lesson, subjectId) => {
     if (!lesson?.hasMathSub) return [];
@@ -20878,6 +20884,7 @@ const lessons = getMergedLessons(subjectId, grade);
   const restoreDiaryTaskNavigator = useCallback(() => {
     const fallbackAnchorDate = String(diaryTaskNavigator?.returnAnchorDate || diaryWeekAnchorDate || toIsoDateString(Date.now())).trim();
     const returnTargetDate = String(diaryTaskNavigator?.returnTargetDate || "").trim();
+    const returnTaskKey = String(diaryTaskNavigator?.returnTaskKey || "").trim();
     setTab("diary");
     setDiarySectionTab(String(diaryTaskNavigator?.returnSection || "daily").trim() || "daily");
     setDiaryWeekAnchorDate(fallbackAnchorDate);
@@ -20891,9 +20898,12 @@ const lessons = getMergedLessons(subjectId, grade);
     setQuizElapsedMs([]);
     setQuizIdx(0);
     setViewTargetId(null);
-    if (returnTargetDate) {
+    if (returnTargetDate || returnTaskKey) {
       setTimeout(() => {
-        const target = document.querySelector(`[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]`);
+        const taskSelector = returnTaskKey ? `[data-diary-task-key="${returnTaskKey.replace(/"/g, '\\"')}"]` : "";
+        const daySelector = returnTargetDate ? `[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]` : "";
+        const target = (taskSelector ? document.querySelector(taskSelector) : null)
+          || (daySelector ? document.querySelector(daySelector) : null);
         if (!target) return;
         target.classList.add("study-focus-active-manual");
         const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
@@ -20919,6 +20929,7 @@ const lessons = getMergedLessons(subjectId, grade);
       returnSection: diarySectionTab,
       returnAnchorDate: diaryWeekAnchorDate,
       returnTargetDate: String(task?.targetDate || "").trim(),
+      returnTaskKey: getDiaryTaskRouteKey(task),
       returnStudentEmail: activeDiaryViewerStudentEmail,
     });
 
@@ -25007,7 +25018,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               return (
-                                <div key={`today_t_${task.taskKey}`} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
+                                <div key={`today_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
                                   <button type="button" className="diary-task-open-btn" onClick={() => handleOpenDiaryTask(task, orderedVisibleDiaryTasks)}>
                                     <span className="diary-task-open-copy">
                                       <span className="diary-task-title-row">
@@ -25062,7 +25073,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               return (
-                                <div key={`daily_t_${task.taskKey}`} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
+                                <div key={`daily_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
                                   <button type="button" className="diary-task-open-btn" onClick={() => handleOpenDiaryTask(task, orderedVisibleDiaryTasks)}>
                                     <span className="diary-task-open-copy">
                                       <span className="diary-task-title-row">
