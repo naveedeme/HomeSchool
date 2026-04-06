@@ -20890,9 +20890,22 @@ const lessons = getMergedLessons(subjectId, grade);
       activeHighlightNode = highlightNode;
       highlightNode.classList.add("study-focus-active-manual");
       if (isDiary) {
-        const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
-        const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerOffset);
-        window.scrollTo({ top, behavior: "smooth" });
+        const applyDiaryScroll = (behavior = "smooth") => {
+          if (cancelled) return;
+          const liveTarget = document.querySelector(`[data-study-id="${safeId}"]`) || target;
+          if (!liveTarget) return;
+          const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
+          const previousScrollMarginTop = liveTarget.style.scrollMarginTop;
+          liveTarget.style.scrollMarginTop = `${headerOffset}px`;
+          liveTarget.scrollIntoView({ behavior, block: "start", inline: "nearest" });
+          setTimeout(() => {
+            liveTarget.style.scrollMarginTop = previousScrollMarginTop;
+          }, behavior === "auto" ? 0 : 420);
+        };
+        applyDiaryScroll("smooth");
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => applyDiaryScroll("auto"));
+        });
       } else {
         highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
       }
