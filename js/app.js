@@ -6147,6 +6147,259 @@ function renderLocalizedTextNode(text, language, urStyle = {}) {
     }, urText));
 }
 
+function formatCalendarDisplayDate(value, language = "en") {
+  const date = parseIsoDateValue(value);
+  if (!date) return joinLocalizedText("Choose date", "تاریخ چنیں", language);
+  const locale = language === "ur" ? "ur-PK" : undefined;
+  return date.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+}
+
+function getCalendarMonthStart(value = Date.now()) {
+  const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (Number.isNaN(date.getTime())) return new Date();
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function buildCalendarDays(monthDate) {
+  const monthStart = getCalendarMonthStart(monthDate);
+  const firstWeekday = (monthStart.getDay() + 6) % 7;
+  const gridStart = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1 - firstWeekday);
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
+    return {
+      key: toIsoDateString(day),
+      date: day,
+      iso: toIsoDateString(day),
+      inMonth: day.getMonth() === monthStart.getMonth(),
+    };
+  });
+}
+
+function CalendarDateField({
+  value = "",
+  onChange,
+  language = "en",
+  placeholder = "",
+  className = "settings-text-input",
+}) {
+  const [open, setOpen] = useState(false);
+  const [renderPopover, setRenderPopover] = useState(false);
+  const [pickerMode, setPickerMode] = useState("days");
+  const shellRef = useRef(null);
+  const selectedDate = useMemo(() => parseIsoDateValue(value), [value]);
+  const [viewMonth, setViewMonth] = useState(() => getCalendarMonthStart(selectedDate || Date.now()));
+
+  useEffect(() => {
+    if (!open) {
+      setViewMonth(getCalendarMonthStart(selectedDate || Date.now()));
+      setPickerMode("days");
+    }
+  }, [open, selectedDate]);
+
+  useEffect(() => {
+    if (open) {
+      setRenderPopover(true);
+      return undefined;
+    }
+    if (!renderPopover) return undefined;
+    const timeout = setTimeout(() => setRenderPopover(false), 180);
+    return () => clearTimeout(timeout);
+  }, [open, renderPopover]);
+
+  useEffect(() => {
+    if (!renderPopover) return undefined;
+    const handlePointerDown = (event) => {
+      if (!shellRef.current?.contains(event.target)) setOpen(false);
+    };
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown, { passive: true });
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [renderPopover]);
+
+  const weekLabels = useMemo(() => (
+    language === "ur"
+      ? ["پ", "م", "ب", "ج", "ج", "ہ", "ا"]
+      : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+  ), [language]);
+
+  const calendarDays = useMemo(() => buildCalendarDays(viewMonth), [viewMonth]);
+  const viewMonthLabel = useMemo(() => (
+    viewMonth.toLocaleDateString(language === "ur" ? "ur-PK" : undefined, { month: "long", year: "numeric" })
+  ), [language, viewMonth]);
+  const monthLabels = useMemo(() => (
+    Array.from({ length: 12 }, (_, index) => new Date(2026, index, 1).toLocaleDateString(language === "ur" ? "ur-PK" : undefined, { month: "long" }))
+  ), [language]);
+  const yearOptions = useMemo(() => {
+    const centerYear = viewMonth.getFullYear();
+    return Array.from({ length: 17 }, (_, index) => centerYear - 8 + index);
+  }, [viewMonth]);
+  const displayLabel = String(value || "").trim()
+    ? formatCalendarDisplayDate(value, language)
+    : (placeholder || joinLocalizedText("Choose date", "تاریخ چنیں", language));
+
+  const handleSelectDate = (nextIso) => {
+    if (typeof onChange === "function") onChange(nextIso);
+    setOpen(false);
+  };
+
+  return React.createElement(
+    "div",
+    {
+      ref: shellRef,
+      className: `calendar-date-field-shell${open ? " open" : ""}${language === "ur" ? " urdu" : " english"}`,
+      "data-ui-language": language,
+    },
+    React.createElement(
+      "button",
+      {
+        type: "button",
+        className: `${className} calendar-date-trigger${!String(value || "").trim() ? " placeholder" : ""}`,
+        onClick: () => setOpen((current) => !current),
+        "aria-expanded": open ? "true" : "false",
+      },
+      React.createElement("span", { className: "calendar-date-trigger-copy" }, renderLocalizedTextNode(displayLabel, language)),
+      React.createElement("span", { className: "calendar-date-trigger-icon" }, "📅"),
+    ),
+    renderPopover ? React.createElement(
+      "div",
+      { className: `calendar-date-popover${open ? " open" : ""}` },
+      React.createElement(
+        "div",
+        { className: "calendar-date-head" },
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "calendar-date-nav",
+            onClick: () => setViewMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1)),
+          },
+          language === "ur" ? "→" : "←",
+        ),
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "calendar-date-title-btn",
+            onClick: () => setPickerMode((current) => current === "monthyear" ? "days" : "monthyear"),
+          },
+          React.createElement("strong", null, renderLocalizedTextNode(viewMonthLabel, language)),
+        ),
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "calendar-date-nav",
+            onClick: () => setViewMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1)),
+          },
+          language === "ur" ? "←" : "→",
+        ),
+      ),
+      React.createElement(
+        "div",
+        { className: `calendar-date-body${pickerMode === "monthyear" ? " picker-mode" : ""}` },
+        pickerMode === "monthyear"
+          ? React.createElement(
+            "div",
+            { className: "calendar-monthyear-panel" },
+            React.createElement(
+              "div",
+              { className: "calendar-monthyear-column" },
+              React.createElement("span", { className: "calendar-monthyear-label" }, renderLocalizedTextNode(joinLocalizedText("Months", "مہینے", language), language)),
+              React.createElement(
+                "div",
+                { className: "calendar-monthyear-list" },
+                monthLabels.map((label, index) => React.createElement(
+                  "button",
+                  {
+                    key: `calendar_month_${index}`,
+                    type: "button",
+                    className: `calendar-monthyear-option${viewMonth.getMonth() === index ? " selected" : ""}`,
+                    onClick: () => {
+                      setViewMonth((current) => new Date(current.getFullYear(), index, 1));
+                      setPickerMode("days");
+                    },
+                  },
+                  renderLocalizedTextNode(label, language),
+                )),
+              ),
+            ),
+            React.createElement(
+              "div",
+              { className: "calendar-monthyear-column" },
+              React.createElement("span", { className: "calendar-monthyear-label" }, renderLocalizedTextNode(joinLocalizedText("Years", "سال", language), language)),
+              React.createElement(
+                "div",
+                { className: "calendar-monthyear-list" },
+                yearOptions.map((year) => React.createElement(
+                  "button",
+                  {
+                    key: `calendar_year_${year}`,
+                    type: "button",
+                    className: `calendar-monthyear-option${viewMonth.getFullYear() === year ? " selected" : ""}`,
+                    onClick: () => {
+                      setViewMonth((current) => new Date(year, current.getMonth(), 1));
+                      setPickerMode("days");
+                    },
+                  },
+                  year,
+                )),
+              ),
+            ),
+          )
+          : React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+              "div",
+              { className: "calendar-date-weekdays" },
+              weekLabels.map((label) => React.createElement("span", { key: `calendar_weekday_${label}` }, renderLocalizedTextNode(label, language))),
+            ),
+            React.createElement(
+              "div",
+              { className: "calendar-date-grid" },
+              calendarDays.map((entry) => {
+                const isToday = entry.iso === toIsoDateString(Date.now());
+                const isSelected = entry.iso === String(value || "").trim();
+                return React.createElement(
+                  "button",
+                  {
+                    key: entry.key,
+                    type: "button",
+                    className: `calendar-date-cell${entry.inMonth ? "" : " outside"}${isToday ? " today" : ""}${isSelected ? " selected" : ""}`,
+                    onClick: () => handleSelectDate(entry.iso),
+                  },
+                  entry.date.getDate(),
+                );
+              }),
+            ),
+          ),
+      ),
+      React.createElement(
+        "div",
+        { className: "calendar-date-footer" },
+        React.createElement(
+          "button",
+          { type: "button", className: "ghost-cta", onClick: () => handleSelectDate(toIsoDateString(Date.now())) },
+          renderLocalizedTextNode(joinLocalizedText("Today", "آج", language), language),
+        ),
+        React.createElement(
+          "button",
+          { type: "button", className: "ghost-cta", onClick: () => setOpen(false) },
+          renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language),
+        ),
+      ),
+    ) : null,
+  );
+}
+
 function renderSeparatedLocalizedTextNode(enText, urText, language, options = {}) {
   const {
     gap = 4,
@@ -23415,7 +23668,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <input className="settings-text-input" value={schoolDraftName} onChange={(event) => setSchoolDraftName(event.target.value)} placeholder={language === "ur" ? "اسکول کا نام" : "School name"} />
                 <input className="settings-text-input" type="email" dir="ltr" value={schoolDraftOwnerEmail} onChange={(event) => setSchoolDraftOwnerEmail(event.target.value)} placeholder={language === "ur" ? "اسکول مالک ای میل" : "School owner email"} />
                 <input className="settings-text-input" type="email" dir="ltr" value={schoolDraftPrincipalEmail} onChange={(event) => setSchoolDraftPrincipalEmail(event.target.value)} placeholder={language === "ur" ? "پرنسپل ای میل" : "Principal email"} />
-                <input className="settings-text-input" type="date" value={schoolDraftYearStartDate} onChange={(event) => setSchoolDraftYearStartDate(event.target.value)} />
+                  <CalendarDateField value={schoolDraftYearStartDate} onChange={setSchoolDraftYearStartDate} language={language} />
               </div>
               <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
                 <select className="settings-select" value={schoolDraftAccumulationMode} onChange={(event) => setSchoolDraftAccumulationMode(event.target.value)}>
@@ -25201,7 +25454,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `ہفتہ ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language)}</span>
                 </div>
                 <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
-                  <input className="settings-text-input" type="date" value={diaryWeekAnchorDate} onChange={(event) => setDiaryWeekAnchorDate(event.target.value)} />
+                  <CalendarDateField value={diaryWeekAnchorDate} onChange={setDiaryWeekAnchorDate} language={language} />
                   {diaryViewerStudentOptions.length > 1 ? <select className="settings-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
                 </div>
               </div>
@@ -25340,7 +25593,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       <option value="student">{renderLocalizedTextNode(joinLocalizedText("Student-specific", "طالب علم وار", language), language)}</option>
                     </select>
                     {diaryDraftScope === "student" ? <select className="settings-select" value={diaryDraftStudentEmail} onChange={(event) => setDiaryDraftStudentEmail(event.target.value)}><option value="">{renderLocalizedTextNode(joinLocalizedText("Choose learner", "طالب علم چنیں", language), language)}</option>{visibleTeacherStudentLinks.map((entry) => <option key={`tdiary_s_${entry.linkId}`} value={entry.studentEmail}>{entry.studentLabel || entry.studentEmail}</option>)}</select> : null}
-                    <input className="settings-text-input" type="date" value={diaryDraftStartDate} onChange={(event) => setDiaryDraftStartDate(event.target.value)} />
+                    <CalendarDateField value={diaryDraftStartDate} onChange={setDiaryDraftStartDate} language={language} />
                     <select className="settings-select" value={diaryDraftRangeMode} onChange={(event) => setDiaryDraftRangeMode(event.target.value)}>
                       <option value="single">{renderLocalizedTextNode(joinLocalizedText("Single date", "ایک تاریخ", language), language)}</option>
                       <option value="week">{renderLocalizedTextNode(joinLocalizedText("Full week", "پورا ہفتہ", language), language)}</option>
@@ -25468,7 +25721,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   </div>
                   <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
                     <input className="settings-text-input" style={{ flex: "1 1 280px" }} value={assignmentDraftTitle} onChange={(event) => setAssignmentDraftTitle(event.target.value)} placeholder={language === "ur" ? "تفویض کا عنوان" : "Assignment title"} />
-                    <input className="settings-text-input" type="date" value={assignmentDraftDueDate} onChange={(event) => setAssignmentDraftDueDate(event.target.value)} />
+                    <CalendarDateField value={assignmentDraftDueDate} onChange={setAssignmentDraftDueDate} language={language} />
                   </div>
                   <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
                     <select className="settings-select" value={assignmentDraftScope} onChange={(event) => setAssignmentDraftScope(event.target.value)}>
