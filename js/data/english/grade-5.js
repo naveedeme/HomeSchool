@@ -17257,15 +17257,14 @@
   },
   {
     "title": "Speaking Skills",
-    "content": "Practise topic-based speaking phrases with Urdu meanings and pronunciation support, organised by real conversation themes.",
+    "content": "Practise topic-based speaking phrases with Urdu meanings, organised by real conversation themes.",
     "key": "speaking_skills",
     "hasMathSub": true,
     "subs": (window.HomeSchoolEnglishModules.SPEAKING_SKILLS_DATA || []).map((topic) => ({
       "t": topic.title,
       "c": topic.description,
-      "lessonLabel": "🗣️ Phrases",
-      "showWordSentences": true,
-      "dayLessons": topic.dayLessons
+      "examplesLabel": topic.examplesLabel,
+      "examples": topic.examples
     })),
     "id": "english_5_8"
   },
