@@ -15832,12 +15832,25 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         return nextState;
       }
       const fetchNormalizedRows = async (table, selectClause, normalizeFn, applyFilters = null, orderBy = "updated_at") => {
-        let query = client.from(table).select(selectClause);
-        if (applyFilters) query = applyFilters(query);
-        if (orderBy) query = query.order(orderBy, { ascending: false });
-        const { data, error } = await query;
-        if (error) throw error;
-        return Array.isArray(data) ? data.map((row) => normalizeFn(row)).filter(Boolean) : [];
+        const runQuery = async (activeSelectClause) => {
+          let query = client.from(table).select(activeSelectClause);
+          if (applyFilters) query = applyFilters(query);
+          if (orderBy) query = query.order(orderBy, { ascending: false });
+          return query;
+        };
+        let result = await runQuery(selectClause);
+        if (
+          result.error
+          && String(result.error.message || "").toLowerCase().includes("permissions_override")
+          && String(selectClause || "").includes("permissions_override")
+        ) {
+          const fallbackSelectClause = String(selectClause || "")
+            .replace(/,\s*permissions_override/g, "")
+            .replace(/permissions_override,\s*/g, "");
+          result = await runQuery(fallbackSelectClause);
+        }
+        if (result.error) throw result.error;
+        return Array.isArray(result.data) ? result.data.map((row) => normalizeFn(row)).filter(Boolean) : [];
       };
       const rowMaps = {
         schools: new Map(),
