@@ -483,14 +483,15 @@
   function normalizeSchoolMembershipRecord(raw) {
     const membershipId = String((raw == null ? void 0 : raw.membership_id) || (raw == null ? void 0 : raw.membershipId) || "").trim();
     const schoolId = String((raw == null ? void 0 : raw.school_id) || (raw == null ? void 0 : raw.schoolId) || "").trim();
-    const userEmail = String((raw == null ? void 0 : raw.user_email) || (raw == null ? void 0 : raw.userEmail) || "").trim().toLowerCase();
-    if (!membershipId || !schoolId || !userEmail) return null;
+    const memberEmail = String((raw == null ? void 0 : raw.member_email) || (raw == null ? void 0 : raw.memberEmail) || (raw == null ? void 0 : raw.user_email) || (raw == null ? void 0 : raw.userEmail) || "").trim().toLowerCase();
+    if (!membershipId || !schoolId || !memberEmail) return null;
     return {
       membershipId,
       schoolId,
-      userEmail,
+      memberEmail,
       role: normalizeContentManagerRole((raw == null ? void 0 : raw.role) || "student"),
       gradeScope: Array.isArray((raw == null ? void 0 : raw.grade_scope) || (raw == null ? void 0 : raw.gradeScope)) ? (raw.grade_scope || raw.gradeScope).map((value) => Number(value)).filter((value) => Number.isFinite(value)) : [],
+      permissionsOverride: normalizeContentPermissionOverride((raw == null ? void 0 : raw.permissions_override) || (raw == null ? void 0 : raw.permissionsOverride)),
       linkedByEmail: String((raw == null ? void 0 : raw.linked_by_email) || (raw == null ? void 0 : raw.linkedByEmail) || "").trim().toLowerCase(),
       status: String((raw == null ? void 0 : raw.status) || "active").trim().toLowerCase() || "active",
       createdAt: Number(new Date((raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || (raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now(),
@@ -563,9 +564,11 @@
   }
   function normalizeDiaryEntryRecord(raw) {
     const diaryId = String((raw == null ? void 0 : raw.diary_id) || (raw == null ? void 0 : raw.diaryId) || "").trim();
-    const subject = String((raw == null ? void 0 : raw.subject) || "").trim();
     const targetDate = String((raw == null ? void 0 : raw.target_date) || (raw == null ? void 0 : raw.targetDate) || "").trim();
-    if (!diaryId || !subject || !targetDate) return null;
+    if (!diaryId || !targetDate) return null;
+    const entryType = String((raw == null ? void 0 : raw.entry_type) || (raw == null ? void 0 : raw.entryType) || "diary").trim().toLowerCase();
+    const subject = String((raw == null ? void 0 : raw.subject) || "").trim();
+    if (entryType !== "assignment" && !subject) return null;
     return {
       diaryId,
       schoolId: String((raw == null ? void 0 : raw.school_id) || (raw == null ? void 0 : raw.schoolId) || "").trim(),
@@ -578,6 +581,8 @@
       lessonKey: resolveCustomChapterLessonKey({ lessonKey: (raw == null ? void 0 : raw.lesson_key) || (raw == null ? void 0 : raw.lessonKey) || "" }),
       contentId: String((raw == null ? void 0 : raw.content_id) || (raw == null ? void 0 : raw.contentId) || "").trim(),
       note: String((raw == null ? void 0 : raw.note) || "").trim(),
+      entryType,
+      assignmentTitle: String((raw == null ? void 0 : raw.assignment_title) || (raw == null ? void 0 : raw.assignmentTitle) || "").trim(),
       status: String((raw == null ? void 0 : raw.status) || "active").trim().toLowerCase() || "active",
       createdAt: Number(new Date((raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || (raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now(),
       updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || (raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || Date.now()).getTime()) || Date.now()
@@ -874,6 +879,67 @@
       }
     });
   }
+  function buildPriorWeeksCoveredTasks({
+    currentWeekStartDate = "",
+    accumulationMode = "rolling",
+    accumulationValue = 8,
+    yearStartDate = "",
+    subjects = [],
+    grade = null,
+    getLessonGroups,
+    currentWeekLessonKeys = null
+  }) {
+    const anchor = parseIsoDateValue(currentWeekStartDate);
+    if (!anchor || !Number.isFinite(Number(grade)) || typeof getLessonGroups !== "function") return [];
+    const mode = String(accumulationMode || "rolling").trim().toLowerCase();
+    const rollingMax = Math.max(1, Math.min(52, Number(accumulationValue) || 8));
+    const currentAcademicWeek = getAcademicWeekNumber(anchor, yearStartDate);
+    const priorWeeksAvailable = Math.max(0, currentAcademicWeek - 1);
+    const weekCount = mode === "academic_year" || mode === "since_start" ? Math.min(52, priorWeeksAvailable) : Math.min(rollingMax, priorWeeksAvailable);
+    if (weekCount <= 0) return [];
+    const safeCurrentKeys = currentWeekLessonKeys instanceof Set ? currentWeekLessonKeys : /* @__PURE__ */ new Set();
+    const priorTasks = [];
+    const seen = /* @__PURE__ */ new Set();
+    (Array.isArray(subjects) ? subjects : []).forEach((subject, subjectIndex) => {
+      var _a;
+      if (!subject || !subject.id) return;
+      try {
+        const lessonGroups = (getLessonGroups(subject.id, grade) || []).filter((group) => group == null ? void 0 : group.activeLesson);
+        if (!lessonGroups.length) return;
+        for (let offset = 1; offset <= weekCount; offset += 1) {
+          const priorAcademicWeek = currentAcademicWeek - offset;
+          if (priorAcademicWeek < 1) break;
+          const groupIndex = Math.min(lessonGroups.length - 1, Math.max(0, priorAcademicWeek - 1));
+          const group = lessonGroups[groupIndex];
+          const lesson = group == null ? void 0 : group.activeLesson;
+          if (!lesson || !(group == null ? void 0 : group.canonicalLessonKey)) continue;
+          const lessonKey = `${subject.id}::${group.canonicalLessonKey}`;
+          if (seen.has(lessonKey) || safeCurrentKeys.has(lessonKey)) continue;
+          seen.add(lessonKey);
+          priorTasks.push({
+            taskKind: "auto",
+            taskKey: `prior::${subject.id}::${group.canonicalLessonKey}::wk${priorAcademicWeek}`,
+            subject: subject.id,
+            subjectLabel: subject.name || subject.id,
+            subjectLabelUr: subject.nameUr || subject.name || subject.id,
+            lessonKey: group.canonicalLessonKey,
+            contentId: String(((_a = group.activeVariant) == null ? void 0 : _a.contentId) || "").trim(),
+            title: lesson.title || `${subject.name || subject.id} lesson`,
+            note: "",
+            source: "prior_auto",
+            taskUnits: [],
+            chapterGroup: group,
+            lesson,
+            subjectIndex,
+            priorAcademicWeek
+          });
+        }
+      } catch (error) {
+        console.log("Unable to build prior-week coverage for subject:", subject == null ? void 0 : subject.id, error);
+      }
+    });
+    return priorTasks;
+  }
   function buildDiaryTasksForWeek({
     autoTasks = [],
     diaryEntries = [],
@@ -920,97 +986,124 @@
     weekStartDate = "",
     grade = null,
     coveredTasks = [],
+    priorWeekTasks = [],
     getQuiz: getQuiz2,
     subjectsById = {},
     accumulationMode = "rolling",
     accumulationValue = 8
   }) {
     if (!weekStartDate || !Number.isFinite(Number(grade)) || typeof getQuiz2 !== "function") return null;
-    const uniqueLessons = /* @__PURE__ */ new Map();
-    (Array.isArray(coveredTasks) ? coveredTasks : []).forEach((task) => {
-      const key = `${task.subject}::${task.lessonKey}`;
-      if (!task.subject || !task.lessonKey || uniqueLessons.has(key)) return;
-      uniqueLessons.set(key, task);
-    });
-    const lessonList = Array.from(uniqueLessons.values());
-    const mcqQuestions = [];
-    const tfQuestions = [];
-    const fillQuestions = [];
-    const matchingPairs = [];
-    lessonList.forEach((task, lessonIndex) => {
-      const quizRows = getQuiz2(task.subject, grade, task.lessonKey);
-      const safeQuizRows = Array.isArray(quizRows) ? quizRows : [];
-      safeQuizRows.slice(0, 3).forEach((row, rowIndex) => {
-        const prompt2 = String((row == null ? void 0 : row.q) || "").trim();
-        const options = Array.isArray(row == null ? void 0 : row.a) ? row.a.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
-        const correctIndex = Number(row == null ? void 0 : row.c);
-        if (prompt2 && options.length >= 2 && Number.isFinite(correctIndex) && correctIndex >= 0 && correctIndex < options.length && mcqQuestions.length < 8) {
-          mcqQuestions.push({
-            id: `${task.subject}_${task.lessonKey}_mcq_${lessonIndex}_${rowIndex}`,
-            type: "mcq",
-            prompt: prompt2,
-            options,
-            correctIndex,
-            subject: task.subject,
-            lessonKey: task.lessonKey
-          });
-          const correctAnswer = options[correctIndex];
-          const wrongOption = options.find((entry, optionIndex) => optionIndex !== correctIndex && entry !== correctAnswer) || correctAnswer;
-          if (tfQuestions.length < 4) {
-            const useTrue = (lessonIndex + rowIndex) % 2 === 0;
-            tfQuestions.push({
-              id: `${task.subject}_${task.lessonKey}_tf_${lessonIndex}_${rowIndex}`,
-              type: "truefalse",
-              prompt: `${prompt2} -> ${useTrue ? correctAnswer : wrongOption}`,
-              correct: useTrue,
+    const hasPriorPool = Array.isArray(priorWeekTasks) && priorWeekTasks.length > 0;
+    const extractBucket = (tasks, sourceTag, limits, lessonIndexOffset) => {
+      const uniqueLessons = /* @__PURE__ */ new Map();
+      (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+        if (!task || !task.subject || !task.lessonKey) return;
+        const key = `${task.subject}::${task.lessonKey}`;
+        if (uniqueLessons.has(key)) return;
+        uniqueLessons.set(key, task);
+      });
+      const mcq = [];
+      const tf = [];
+      const fill = [];
+      const pairs = [];
+      let lessonOrdinal = 0;
+      uniqueLessons.forEach((task) => {
+        const lessonIndex = lessonIndexOffset + lessonOrdinal;
+        lessonOrdinal += 1;
+        const quizRows = getQuiz2(task.subject, grade, task.lessonKey);
+        const safeQuizRows = Array.isArray(quizRows) ? quizRows : [];
+        safeQuizRows.slice(0, 3).forEach((row, rowIndex) => {
+          const prompt2 = String((row == null ? void 0 : row.q) || "").trim();
+          const options = Array.isArray(row == null ? void 0 : row.a) ? row.a.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
+          const correctIndex = Number(row == null ? void 0 : row.c);
+          if (prompt2 && options.length >= 2 && Number.isFinite(correctIndex) && correctIndex >= 0 && correctIndex < options.length && mcq.length < limits.mcq) {
+            mcq.push({
+              id: `${task.subject}_${task.lessonKey}_${sourceTag}_mcq_${lessonIndex}_${rowIndex}`,
+              type: "mcq",
+              prompt: prompt2,
+              options,
+              correctIndex,
               subject: task.subject,
-              lessonKey: task.lessonKey
+              lessonKey: task.lessonKey,
+              source: sourceTag
             });
+            const correctAnswer = options[correctIndex];
+            const wrongOption = options.find((entry, optionIndex) => optionIndex !== correctIndex && entry !== correctAnswer) || correctAnswer;
+            if (tf.length < limits.tf) {
+              const useTrue = (lessonIndex + rowIndex) % 2 === 0;
+              tf.push({
+                id: `${task.subject}_${task.lessonKey}_${sourceTag}_tf_${lessonIndex}_${rowIndex}`,
+                type: "truefalse",
+                prompt: `${prompt2} -> ${useTrue ? correctAnswer : wrongOption}`,
+                correct: useTrue,
+                subject: task.subject,
+                lessonKey: task.lessonKey,
+                source: sourceTag
+              });
+            }
           }
-        }
-      });
-      const firstUnit = Array.isArray(task.taskUnits) && task.taskUnits.length ? task.taskUnits[0] : null;
-      if ((firstUnit == null ? void 0 : firstUnit.title) && (firstUnit == null ? void 0 : firstUnit.detail) && fillQuestions.length < 4) {
-        fillQuestions.push({
-          id: `${task.subject}_${task.lessonKey}_fill_${lessonIndex}`,
-          type: "fillblank",
-          prompt: `${firstUnit.title}: _____`,
-          answer: String(firstUnit.detail || "").trim().split(/[.!?]/)[0] || firstUnit.detail,
-          subject: task.subject,
-          lessonKey: task.lessonKey
         });
-      }
-      const subject = (subjectsById == null ? void 0 : subjectsById[task.subject]) || null;
-      matchingPairs.push({
-        left: (subject == null ? void 0 : subject.name) || task.subject,
-        right: task.title,
-        id: `${task.subject}_${task.lessonKey}_pair_${lessonIndex}`
+        const firstUnit = Array.isArray(task.taskUnits) && task.taskUnits.length ? task.taskUnits[0] : null;
+        if ((firstUnit == null ? void 0 : firstUnit.title) && (firstUnit == null ? void 0 : firstUnit.detail) && fill.length < limits.fill) {
+          fill.push({
+            id: `${task.subject}_${task.lessonKey}_${sourceTag}_fill_${lessonIndex}`,
+            type: "fillblank",
+            prompt: `${firstUnit.title}: _____`,
+            answer: String(firstUnit.detail || "").trim().split(/[.!?]/)[0] || firstUnit.detail,
+            subject: task.subject,
+            lessonKey: task.lessonKey,
+            source: sourceTag
+          });
+        }
+        const subject = (subjectsById == null ? void 0 : subjectsById[task.subject]) || null;
+        pairs.push({
+          left: (subject == null ? void 0 : subject.name) || task.subject,
+          right: task.title || task.lessonKey,
+          id: `${task.subject}_${task.lessonKey}_${sourceTag}_pair_${lessonIndex}`,
+          source: sourceTag
+        });
       });
-    });
+      return { mcq, tf, fill, pairs, lessonCount: uniqueLessons.size };
+    };
+    const currentLimits = hasPriorPool ? { mcq: 4, tf: 2, fill: 2 } : { mcq: 8, tf: 4, fill: 4 };
+    const priorLimits = hasPriorPool ? { mcq: 4, tf: 2, fill: 2 } : { mcq: 0, tf: 0, fill: 0 };
+    const currentBucket = extractBucket(coveredTasks, "current", currentLimits, 0);
+    const priorBucket = hasPriorPool ? extractBucket(priorWeekTasks, "prior", priorLimits, currentBucket.lessonCount) : { mcq: [], tf: [], fill: [], pairs: [], lessonCount: 0 };
     const questions = [
-      ...mcqQuestions.slice(0, 6),
-      ...tfQuestions.slice(0, 3),
-      ...fillQuestions.slice(0, 3)
+      ...currentBucket.mcq.slice(0, hasPriorPool ? 3 : 6),
+      ...priorBucket.mcq.slice(0, 3),
+      ...currentBucket.tf.slice(0, hasPriorPool ? 2 : 3),
+      ...priorBucket.tf.slice(0, 1),
+      ...currentBucket.fill.slice(0, hasPriorPool ? 2 : 3),
+      ...priorBucket.fill.slice(0, 1)
     ];
-    if (matchingPairs.length >= 3) {
+    const combinedPairs = [...currentBucket.pairs, ...priorBucket.pairs];
+    if (combinedPairs.length >= 3) {
       questions.push({
         id: `matching_${weekStartDate}`,
         type: "matching",
         prompt: "Match each subject with its weekly chapter",
-        pairs: matchingPairs.slice(0, 5),
+        pairs: combinedPairs.slice(0, 5),
         subject: "mixed",
-        lessonKey: weekStartDate
+        lessonKey: weekStartDate,
+        source: hasPriorPool ? "mixed" : "current"
       });
     }
     if (!questions.length) return null;
+    const accumulationScopeLabel = accumulationMode === "academic_year" ? "academic-year" : accumulationMode === "since_start" ? "since-app-start" : `rolling ${Math.max(1, Number(accumulationValue) || 8)}-week`;
+    const instructions = hasPriorPool ? `Saturday test: 50% from this week's chapters and 50% from prior weeks (${accumulationScopeLabel} scope). Pool: ${currentBucket.lessonCount} current + ${priorBucket.lessonCount} prior lessons.` : `Saturday test from this week's chapters (${accumulationScopeLabel} scope - no prior weeks covered yet).`;
+    const subjectScope = Array.from(new Set([
+      ...Array.isArray(coveredTasks) ? coveredTasks : [],
+      ...Array.isArray(priorWeekTasks) ? priorWeekTasks : []
+    ].map((task) => task == null ? void 0 : task.subject).filter(Boolean)));
     return normalizeLocalTestTemplateRecord({
       templateId: `generated_${weekStartDate}_${grade}`,
       title: `Saturday Test - Grade ${grade}`,
       grade,
-      subjectScope: lessonList.map((task) => task.subject).filter((value, index, list) => value && list.indexOf(value) === index),
+      subjectScope,
       payload: {
         title: `Saturday Test - Grade ${grade}`,
-        instructions: accumulationMode === "academic_year" ? `Generated from this week's lessons with year accumulation enabled.` : `Generated from this week's lessons with a rolling ${Math.max(1, Number(accumulationValue) || 8)}-week memory window.`,
+        instructions,
         questions
       },
       source: "generated"
@@ -3119,6 +3212,38 @@ create index if not exists content_role_assignments_role_idx
 
 alter table public.content_role_assignments enable row level security;
 
+create or replace function public.content_role_lowercase_email()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.email := lower(coalesce(new.email, ''));
+  return new;
+end;
+$$;
+
+drop trigger if exists content_role_assignments_lowercase_email on public.content_role_assignments;
+create trigger content_role_assignments_lowercase_email
+  before insert or update on public.content_role_assignments
+  for each row execute function public.content_role_lowercase_email();
+
+update public.content_role_assignments
+  set email = lower(email)
+  where email <> lower(email)
+    and not exists (
+      select 1 from public.content_role_assignments other
+      where other.email = lower(public.content_role_assignments.email)
+        and other.email <> public.content_role_assignments.email
+    );
+
+delete from public.content_role_assignments
+  where email <> lower(email)
+    and exists (
+      select 1 from public.content_role_assignments other
+      where other.email = lower(public.content_role_assignments.email)
+        and other.email <> public.content_role_assignments.email
+    );
+
 create table if not exists public.content_access_settings (
   scope text primary key,
   default_role text not null default 'student',
@@ -3205,11 +3330,15 @@ create table if not exists public.school_memberships (
   member_email text not null,
   role text not null,
   grade_scope jsonb not null default '[]'::jsonb,
+  permissions_override jsonb null,
   status text not null default 'active',
   linked_by_email text null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.school_memberships
+  add column if not exists permissions_override jsonb null;
 
 create table if not exists public.parent_student_links (
   link_id text primary key,
@@ -3236,10 +3365,18 @@ create table if not exists public.diary_entries (
   lesson_key text not null,
   content_id text null,
   note text null,
+  entry_type text not null default 'diary',
+  assignment_title text null,
   status text not null default 'active',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.diary_entries
+  add column if not exists entry_type text not null default 'diary';
+
+alter table if exists public.diary_entries
+  add column if not exists assignment_title text null;
 
 create table if not exists public.diary_task_completions (
   completion_id text primary key,
@@ -3570,7 +3707,7 @@ as $$
   select public.user_content_permission('publishContent')
 $$;
 
-create or replace function public.can_manage_teacher_student_link(target_teacher_email text)
+create or replace function public.can_manage_teacher_student_link(target_teacher_email text, target_school_id text default null)
 returns boolean
 language sql
 stable
@@ -3581,6 +3718,21 @@ as $$
     and (
       public.user_content_permission('manageContentAccess')
       or lower(coalesce(target_teacher_email, '')) = public.current_auth_email()
+      or (
+        target_school_id is not null
+        and exists (
+          select 1 from public.school_memberships
+          where school_id = target_school_id
+            and lower(member_email) = public.current_auth_email()
+            and status = 'active'
+        )
+        and exists (
+          select 1 from public.school_memberships
+          where school_id = target_school_id
+            and lower(member_email) = lower(coalesce(target_teacher_email, ''))
+            and status = 'active'
+        )
+      )
     )
 $$;
 
@@ -4638,6 +4790,9 @@ using (
     const safeEmail = String(email || "").trim().toLowerCase();
     if (!safeEmail) return null;
     return (Array.isArray(assignments) ? assignments : []).find((entry) => String((entry == null ? void 0 : entry.email) || "").trim().toLowerCase() === safeEmail) || null;
+  }
+  function escapeSupabaseLikePattern(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/[_%]/g, (ch) => `\\${ch}`);
   }
   function getContentManagerRoleLabel(role, language = "en") {
     const safeRole = normalizeContentManagerRole(role);
@@ -8668,7 +8823,7 @@ ${marker} `);
     const [homeSectionTab, setHomeSectionTab] = useState("subjects");
     const [progressSectionTab, setProgressSectionTab] = useState("overview");
     const [profilesSectionTab, setProfilesSectionTab] = useState("profiles");
-    const [diarySectionTab, setDiarySectionTab] = useState("week");
+    const [diarySectionTab, setDiarySectionTab] = useState("daily");
     const [diaryTaskNavigator, setDiaryTaskNavigator] = useState(null);
     const [selectedSubject, setSelectedSubject] = useState(null);
     const [selectedLesson, setSelectedLesson] = useState(null);
@@ -8756,6 +8911,12 @@ ${marker} `);
     const [diaryDraftSubjectId, setDiaryDraftSubjectId] = useState("");
     const [diaryDraftContentId, setDiaryDraftContentId] = useState("");
     const [diaryDraftNote, setDiaryDraftNote] = useState("");
+    const [assignmentDraftTitle, setAssignmentDraftTitle] = useState("");
+    const [assignmentDraftDescription, setAssignmentDraftDescription] = useState("");
+    const [assignmentDraftDueDate, setAssignmentDraftDueDate] = useState(toIsoDateString(Date.now()));
+    const [assignmentDraftScope, setAssignmentDraftScope] = useState("grade");
+    const [assignmentDraftStudentEmail, setAssignmentDraftStudentEmail] = useState("");
+    const [diaryDraftLessonSection, setDiaryDraftLessonSection] = useState("");
     const [localTestTemplateLibrary, setLocalTestTemplateLibrary] = useState(normalizeLocalTestTemplateLibrary((stored == null ? void 0 : stored.localTestTemplateLibrary) || []));
     const [testTemplateImportBusy, setTestTemplateImportBusy] = useState(false);
     const [testTemplatePublishBusy, setTestTemplatePublishBusy] = useState(false);
@@ -9419,30 +9580,107 @@ ${marker} `);
       [contentIdentityEmail, safeSchoolMemberships]
     );
     const accessibleSchools = useMemo(() => {
-      if (canManageContentAccess) return safeSchools;
+      if (canManageContentAccess) {
+        return safeSchools.filter((entry) => String((entry == null ? void 0 : entry.status) || "active").toLowerCase() !== "archived");
+      }
       const membershipIds = new Set(currentUserSchoolMemberships.map((entry) => entry.schoolId).filter(Boolean));
-      return safeSchools.filter((entry) => membershipIds.has(entry.schoolId));
-    }, [canManageContentAccess, currentUserSchoolMemberships, safeSchools]);
+      const safeEmail = String(contentIdentityEmail || "").trim().toLowerCase();
+      const parentLinkedSchoolIds = new Set(
+        (Array.isArray(safeParentStudentLinks) ? safeParentStudentLinks : []).filter((entry) => entry && entry.status === "active" && safeEmail && String(entry.parentEmail || "").trim().toLowerCase() === safeEmail).map((entry) => String(entry.schoolId || "").trim()).filter(Boolean)
+      );
+      return safeSchools.filter((entry) => {
+        if (!entry || String(entry.status || "active").toLowerCase() === "archived") return false;
+        if (membershipIds.has(entry.schoolId)) return true;
+        if (parentLinkedSchoolIds.has(entry.schoolId)) return true;
+        if (safeEmail && String(entry.ownerEmail || "").trim().toLowerCase() === safeEmail) return true;
+        if (safeEmail && String(entry.principalEmail || "").trim().toLowerCase() === safeEmail) return true;
+        return false;
+      });
+    }, [canManageContentAccess, contentIdentityEmail, currentUserSchoolMemberships, safeParentStudentLinks, safeSchools]);
     const activeInstitutionSchool = useMemo(() => {
       if (!accessibleSchools.length) return null;
       return accessibleSchools.find((entry) => entry.schoolId === activeInstitutionSchoolId) || accessibleSchools[0];
     }, [accessibleSchools, activeInstitutionSchoolId]);
     const activeInstitutionSchoolIdResolved = String((activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.schoolId) || "").trim();
     const currentUserInstitutionRole = useMemo(() => {
-      if (!currentUserSchoolMemberships.length) return "";
-      return getHighestInstitutionRole(currentUserSchoolMemberships.map((entry) => entry.role));
-    }, [currentUserSchoolMemberships]);
+      if (!currentUserSchoolMemberships.length || !activeInstitutionSchoolIdResolved) return "";
+      const scopedRoles = currentUserSchoolMemberships.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved).map((entry) => entry.role);
+      return getHighestInstitutionRole(scopedRoles);
+    }, [activeInstitutionSchoolIdResolved, currentUserSchoolMemberships]);
+    const activeInstitutionGradeScope = useMemo(() => {
+      if (!activeInstitutionSchoolIdResolved) return [];
+      const scopes = currentUserSchoolMemberships.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved).flatMap((entry) => Array.isArray(entry.gradeScope) ? entry.gradeScope : []);
+      return Array.from(new Set(scopes.filter((value) => Number.isFinite(Number(value)))));
+    }, [activeInstitutionSchoolIdResolved, currentUserSchoolMemberships]);
+    const gradeScopeFilterActive = useMemo(() => {
+      if (canManageContentAccess) return false;
+      if (!activeInstitutionSchoolIdResolved) return false;
+      const scopedMemberships = currentUserSchoolMemberships.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved);
+      if (!scopedMemberships.length) return false;
+      const everyMembershipScoped = scopedMemberships.every((entry) => Array.isArray(entry.gradeScope) && entry.gradeScope.length > 0);
+      return everyMembershipScoped && activeInstitutionGradeScope.length > 0;
+    }, [activeInstitutionGradeScope, activeInstitutionSchoolIdResolved, canManageContentAccess, currentUserSchoolMemberships]);
+    const isGradeInScope = useCallback((candidateGrade) => {
+      if (!gradeScopeFilterActive) return true;
+      if (candidateGrade === null || candidateGrade === void 0 || candidateGrade === "") return true;
+      const numericGrade = Number(candidateGrade);
+      if (!Number.isFinite(numericGrade)) return true;
+      return activeInstitutionGradeScope.some((value) => Number(value) === numericGrade);
+    }, [activeInstitutionGradeScope, gradeScopeFilterActive]);
+    const schoolEffectivePermission = useCallback((permissionKey) => {
+      const globalValue = Boolean(contentRoleCapabilities[permissionKey]);
+      if (canManageContentAccess) return globalValue;
+      if (!activeInstitutionSchoolIdResolved) return globalValue;
+      const scopedMemberships = currentUserSchoolMemberships.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved);
+      if (!scopedMemberships.length) return globalValue;
+      let overridden = false;
+      let overrideValue = false;
+      scopedMemberships.forEach((membership) => {
+        const override = membership.permissionsOverride || {};
+        if (Object.prototype.hasOwnProperty.call(override, permissionKey)) {
+          overridden = true;
+          if (Boolean(override[permissionKey])) overrideValue = true;
+        }
+      });
+      return overridden ? overrideValue : globalValue;
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentRoleCapabilities, currentUserSchoolMemberships]);
     const visibleTeacherStudentLinks = useMemo(() => {
-      const filtered = managedTeacherStudentLinks.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
-      if (filtered.length) return filtered;
-      return managedTeacherStudentLinks;
-    }, [activeInstitutionSchoolIdResolved, managedTeacherStudentLinks]);
+      const bySchool = activeInstitutionSchoolIdResolved ? managedTeacherStudentLinks.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : managedTeacherStudentLinks;
+      return bySchool.filter((entry) => isGradeInScope(entry.studentGrade));
+    }, [activeInstitutionSchoolIdResolved, isGradeInScope, managedTeacherStudentLinks]);
+    const studentGradeLookup = useMemo(() => {
+      const map = /* @__PURE__ */ new Map();
+      const rawLinks = Array.isArray(contentRelationshipState.links) ? contentRelationshipState.links : [];
+      rawLinks.forEach((link) => {
+        const studentEmail = String((link == null ? void 0 : link.studentEmail) || (link == null ? void 0 : link.student_email) || "").trim().toLowerCase();
+        const gradeValue = Number((link == null ? void 0 : link.studentGrade) || (link == null ? void 0 : link.student_grade));
+        if (!studentEmail || !Number.isFinite(gradeValue)) return;
+        if (!map.has(studentEmail)) map.set(studentEmail, gradeValue);
+      });
+      return map;
+    }, [contentRelationshipState.links]);
+    const studentSchoolLookup = useMemo(() => {
+      const map = /* @__PURE__ */ new Map();
+      const rawLinks = Array.isArray(contentRelationshipState.links) ? contentRelationshipState.links : [];
+      rawLinks.forEach((link) => {
+        const studentEmail = String((link == null ? void 0 : link.studentEmail) || (link == null ? void 0 : link.student_email) || "").trim().toLowerCase();
+        const schoolId = String((link == null ? void 0 : link.schoolId) || (link == null ? void 0 : link.school_id) || "").trim();
+        if (!studentEmail || !schoolId) return;
+        if (!map.has(studentEmail)) map.set(studentEmail, schoolId);
+      });
+      return map;
+    }, [contentRelationshipState.links]);
     const visibleParentStudentLinks = useMemo(() => {
-      const safeLinks = safeParentStudentLinks.filter((entry) => entry.status === "active");
+      const safeLinks = safeParentStudentLinks.filter((entry) => entry.status === "active").map((entry) => {
+        const schoolId = String(entry.schoolId || "").trim();
+        if (schoolId) return entry;
+        const inferredSchoolId = studentSchoolLookup.get(String(entry.studentEmail || "").trim().toLowerCase()) || "";
+        return inferredSchoolId ? { ...entry, schoolId: inferredSchoolId, __schoolIdInferred: true } : entry;
+      });
       const filtered = activeInstitutionSchoolIdResolved ? safeLinks.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeLinks;
       if (canManageContentAccess || canManageParentLinks || canManageInstitution) return filtered;
       return filtered.filter((entry) => entry.parentEmail === contentIdentityEmail || entry.studentEmail === contentIdentityEmail);
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageParentLinks, contentIdentityEmail, safeParentStudentLinks]);
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageParentLinks, contentIdentityEmail, safeParentStudentLinks, studentSchoolLookup]);
     const linkedChildOptions = useMemo(() => {
       const map = /* @__PURE__ */ new Map();
       visibleParentStudentLinks.filter((entry) => entry.parentEmail === contentIdentityEmail).forEach((entry) => {
@@ -9514,17 +9752,26 @@ ${marker} `);
     const visibleDiaryEntries = useMemo(() => {
       const safeEntries = (Array.isArray(contentRelationshipState.diaryEntries) ? contentRelationshipState.diaryEntries : []).map((entry) => normalizeDiaryEntryRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active");
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeEntries.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeEntries;
-      return filteredBySchool.filter((entry) => {
-        if (canManageContentAccess || canManageDiary || canManageInstitution) return true;
+      const scoped = filteredBySchool.filter((entry) => isGradeInScope(entry.targetGrade));
+      return scoped.filter((entry) => {
+        if (canManageContentAccess || schoolEffectivePermission("manageDiary") || schoolEffectivePermission("manageInstitution")) return true;
         if (entry.teacherEmail && entry.teacherEmail === contentIdentityEmail) return true;
         if (entry.targetType === "student" && entry.targetStudentEmail === contentIdentityEmail) return true;
         if (entry.targetType === "student" && linkedChildOptions.some((child) => child.email === entry.targetStudentEmail)) return true;
         return entry.targetType === "grade" && Number(entry.targetGrade) === Number(grade);
       });
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageDiary, canManageInstitution, contentIdentityEmail, contentRelationshipState.diaryEntries, grade, linkedChildOptions]);
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.diaryEntries, grade, isGradeInScope, linkedChildOptions, schoolEffectivePermission]);
     const currentWeekAssignedDiaryEntries = useMemo(
-      () => visibleDiaryEntries.filter((entry) => entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[4]),
+      () => visibleDiaryEntries.filter((entry) => entry.entryType !== "assignment" && entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[4]),
       [currentDiaryWeekDates, visibleDiaryEntries]
+    );
+    const visibleTeacherDiaryEntries = useMemo(
+      () => visibleDiaryEntries.filter((entry) => entry.entryType !== "assignment"),
+      [visibleDiaryEntries]
+    );
+    const visibleAssignmentEntries = useMemo(
+      () => visibleDiaryEntries.filter((entry) => entry.entryType === "assignment").sort((a, b) => String(b.targetDate || "").localeCompare(String(a.targetDate || ""))),
+      [visibleDiaryEntries]
     );
     const weeklyDiaryTasks = useMemo(() => buildDiaryTasksForWeek({
       autoTasks: autoDiaryTasks,
@@ -9535,14 +9782,18 @@ ${marker} `);
     const visibleDiaryCompletions = useMemo(() => {
       const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : []).map((entry) => normalizeDiaryCompletionRecord(entry)).filter(Boolean);
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeRows.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeRows;
+      const scoped = filteredBySchool.filter((entry) => {
+        const studentGradeValue = studentGradeLookup.get(String(entry.studentEmail || "").trim().toLowerCase());
+        return isGradeInScope(studentGradeValue === void 0 ? null : studentGradeValue);
+      });
       const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
-      return filteredBySchool.filter((entry) => {
-        if (canManageContentAccess || canManageDiary || canManageInstitution) return true;
+      return scoped.filter((entry) => {
+        if (canManageContentAccess || schoolEffectivePermission("manageDiary") || schoolEffectivePermission("manageInstitution")) return true;
         if (entry.studentEmail === contentIdentityEmail) return true;
         if (childEmails.has(entry.studentEmail)) return true;
         return visibleTeacherStudentLinks.some((link) => link.studentEmail === entry.studentEmail && link.teacherEmail === contentIdentityEmail);
       });
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageDiary, canManageInstitution, contentIdentityEmail, contentRelationshipState.diaryCompletions, linkedChildOptions, visibleTeacherStudentLinks]);
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.diaryCompletions, isGradeInScope, linkedChildOptions, schoolEffectivePermission, studentGradeLookup, visibleTeacherStudentLinks]);
     const diaryCompletionLookup = useMemo(() => visibleDiaryCompletions.reduce((acc, entry) => {
       acc[`${entry.taskKind}::${entry.taskKey}`] = entry;
       return acc;
@@ -9624,13 +9875,14 @@ ${marker} `);
     const visibleTestTemplates = useMemo(() => {
       const safeTemplates = (Array.isArray(contentRelationshipState.testTemplates) ? contentRelationshipState.testTemplates : []).map((entry) => normalizeTestTemplateRecord(entry)).filter(Boolean).filter((entry) => !entry.deletedAt);
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeTemplates.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeTemplates;
-      return filteredBySchool.filter((entry) => {
-        if (canManageContentAccess || canManageTests || canManageInstitution) return true;
+      const scoped = filteredBySchool.filter((entry) => isGradeInScope(entry.grade));
+      return scoped.filter((entry) => {
+        if (canManageContentAccess || schoolEffectivePermission("manageTests") || schoolEffectivePermission("manageInstitution")) return true;
         if (entry.authorEmail && entry.authorEmail === contentIdentityEmail) return true;
         if (!entry.grade || Number(entry.grade) === Number(grade)) return true;
         return false;
       });
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageTests, contentIdentityEmail, contentRelationshipState.testTemplates, grade]);
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.testTemplates, grade, isGradeInScope, schoolEffectivePermission]);
     const availableTestTemplates = useMemo(() => {
       const map = /* @__PURE__ */ new Map();
       normalizeLocalTestTemplateLibrary(localTestTemplateLibrary).forEach((entry) => {
@@ -9644,26 +9896,41 @@ ${marker} `);
       });
       return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
     }, [localTestTemplateLibrary, visibleTestTemplates]);
+    const priorWeekAccumulatedTasks = useMemo(() => {
+      const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : []).filter((task) => (task == null ? void 0 : task.subject) && (task == null ? void 0 : task.lessonKey)).map((task) => `${task.subject}::${task.lessonKey}`));
+      return buildPriorWeeksCoveredTasks({
+        currentWeekStartDate: currentDiaryWeekStartDate,
+        accumulationMode: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode) || "rolling",
+        accumulationValue: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue) || 8,
+        yearStartDate: activeSchoolYearStartDate,
+        subjects: allSubjects,
+        grade,
+        getLessonGroups: getMergedLessonGroups,
+        currentWeekLessonKeys: currentKeys
+      });
+    }, [activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, getMergedLessonGroups, grade, weeklyDiaryTasks]);
     const generatedWeeklyTestTemplate = useMemo(() => buildGeneratedWeeklyTestTemplate({
       weekStartDate: currentDiaryWeekStartDate,
       grade,
       coveredTasks: weeklyDiaryTasks,
+      priorWeekTasks: priorWeekAccumulatedTasks,
       getQuiz: getMergedQuiz,
       subjectsById: subjectLookup,
       accumulationMode: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode) || "rolling",
       accumulationValue: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue) || 8
-    }), [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, subjectLookup, weeklyDiaryTasks]);
+    }), [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
     const visibleWeeklyTestAssignments = useMemo(() => {
       const safeAssignments = (Array.isArray(contentRelationshipState.weeklyTestAssignments) ? contentRelationshipState.weeklyTestAssignments : []).map((entry) => normalizeWeeklyTestAssignmentRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => entry.weekStartDate === currentDiaryWeekStartDate);
       const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeAssignments.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeAssignments;
-      return filteredBySchool.filter((entry) => {
-        if (canManageContentAccess || canManageTests || canManageInstitution) return true;
+      const scoped = filteredBySchool.filter((entry) => isGradeInScope(entry.targetGrade));
+      return scoped.filter((entry) => {
+        if (canManageContentAccess || schoolEffectivePermission("manageTests") || schoolEffectivePermission("manageInstitution")) return true;
         if (entry.assignedByEmail === contentIdentityEmail) return true;
         if (entry.targetType === "student" && (entry.targetStudentEmail === contentIdentityEmail || childEmails.has(entry.targetStudentEmail))) return true;
         return entry.targetType === "grade" && Number(entry.targetGrade) === Number(grade);
       });
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageTests, contentIdentityEmail, contentRelationshipState.weeklyTestAssignments, currentDiaryWeekStartDate, grade, linkedChildOptions]);
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.weeklyTestAssignments, currentDiaryWeekStartDate, grade, isGradeInScope, linkedChildOptions, schoolEffectivePermission]);
     const currentWeeklyAssignedTemplate = useMemo(() => {
       const latestAssignment = [...visibleWeeklyTestAssignments].sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0] || null;
       if (!latestAssignment) return null;
@@ -9674,13 +9941,17 @@ ${marker} `);
       const safeResults = (Array.isArray(contentRelationshipState.weeklyTestResults) ? contentRelationshipState.weeklyTestResults : []).map((entry) => normalizeWeeklyTestResultRecord(entry)).filter(Boolean);
       const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeResults.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeResults;
-      return filteredBySchool.filter((entry) => {
-        if (canManageContentAccess || canManageTests || canManageInstitution) return true;
+      const scoped = filteredBySchool.filter((entry) => {
+        const studentGradeValue = studentGradeLookup.get(String(entry.studentEmail || "").trim().toLowerCase());
+        return isGradeInScope(studentGradeValue === void 0 ? null : studentGradeValue);
+      });
+      return scoped.filter((entry) => {
+        if (canManageContentAccess || schoolEffectivePermission("manageTests") || schoolEffectivePermission("manageInstitution")) return true;
         if (entry.studentEmail === contentIdentityEmail) return true;
         if (childEmails.has(entry.studentEmail)) return true;
         return visibleTeacherStudentLinks.some((link) => link.studentEmail === entry.studentEmail && link.teacherEmail === contentIdentityEmail);
       });
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, canManageTests, contentIdentityEmail, contentRelationshipState.weeklyTestResults, linkedChildOptions, visibleTeacherStudentLinks]);
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.weeklyTestResults, isGradeInScope, linkedChildOptions, schoolEffectivePermission, studentGradeLookup, visibleTeacherStudentLinks]);
     const diaryViewerStudentOptions = useMemo(() => {
       if (accessibleStudentOptions.length) return accessibleStudentOptions;
       if (contentIdentityEmail) {
@@ -9724,10 +9995,14 @@ ${marker} `);
       return diaryTasksByStudent;
     }, [currentDiaryWeekDates, diaryViewerStudentOptions, visibleDiaryCompletions, visibleWeeklyTestResults, weeklyDiaryTasks.length]);
     useEffect(() => {
-      if (!accessibleSchools.length) return;
-      if (activeInstitutionSchoolIdResolved) return;
-      setActiveInstitutionSchoolId(accessibleSchools[0].schoolId);
-    }, [accessibleSchools, activeInstitutionSchoolIdResolved]);
+      if (!accessibleSchools.length) {
+        if (activeInstitutionSchoolId) setActiveInstitutionSchoolId("");
+        return;
+      }
+      if (activeInstitutionSchoolId !== activeInstitutionSchoolIdResolved) {
+        setActiveInstitutionSchoolId(activeInstitutionSchoolIdResolved || accessibleSchools[0].schoolId);
+      }
+    }, [accessibleSchools, activeInstitutionSchoolId, activeInstitutionSchoolIdResolved]);
     useEffect(() => {
       if (!diaryViewerStudentOptions.length) return;
       if (activeDiaryViewerStudentEmail && diaryViewerStudentOptions.some((entry) => entry.email === activeDiaryViewerStudentEmail)) return;
@@ -9789,8 +10064,56 @@ ${marker} `);
           status: "active",
           updated_at: nowIso
         };
+        let existingSchoolRow = null;
+        try {
+          const { data: existingRows, error: lookupError } = await client.from(SUPABASE_SCHOOLS_TABLE).select("school_id, owner_email, principal_email").eq("school_id", schoolId).limit(1);
+          if (!lookupError && Array.isArray(existingRows) && existingRows.length) {
+            existingSchoolRow = existingRows[0];
+          }
+        } catch (lookupFailure) {
+          console.log("Unable to look up existing school before upsert:", lookupFailure);
+        }
         const { error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(baseRow, { onConflict: "school_id" });
         if (error) throw error;
+        const priorOwnerEmail = String((existingSchoolRow == null ? void 0 : existingSchoolRow.owner_email) || "").trim().toLowerCase();
+        const priorPrincipalEmail = String((existingSchoolRow == null ? void 0 : existingSchoolRow.principal_email) || "").trim().toLowerCase();
+        const activeMembers = new Set([ownerEmail, principalEmail].filter(Boolean));
+        const staleMembershipUpdates = [];
+        if (priorOwnerEmail && priorOwnerEmail !== ownerEmail && !activeMembers.has(priorOwnerEmail)) {
+          staleMembershipUpdates.push({
+            membership_id: `membership_${simpleHash(`${schoolId}_${priorOwnerEmail}_school_owner`)}`,
+            school_id: schoolId,
+            member_email: priorOwnerEmail,
+            role: "school_owner",
+            grade_scope: [],
+            status: "archived",
+            linked_by_email: contentIdentityEmail,
+            updated_at: nowIso
+          });
+        }
+        if (priorPrincipalEmail && priorPrincipalEmail !== principalEmail && !activeMembers.has(priorPrincipalEmail)) {
+          staleMembershipUpdates.push({
+            membership_id: `membership_${simpleHash(`${schoolId}_${priorPrincipalEmail}_principal`)}`,
+            school_id: schoolId,
+            member_email: priorPrincipalEmail,
+            role: "principal",
+            grade_scope: [],
+            status: "archived",
+            linked_by_email: contentIdentityEmail,
+            updated_at: nowIso
+          });
+        }
+        if (staleMembershipUpdates.length) {
+          try {
+            const { error: staleError } = await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).upsert(staleMembershipUpdates, { onConflict: "membership_id" });
+            if (staleError) console.log("Unable to archive stale memberships:", staleError);
+            for (const stale of staleMembershipUpdates) {
+              await archiveMemberAuthoredContent(client, schoolId, stale.member_email);
+            }
+          } catch (staleFailure) {
+            console.log("Unable to archive stale memberships:", staleFailure);
+          }
+        }
         await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).upsert([
           {
             membership_id: `membership_${simpleHash(`${schoolId}_${ownerEmail}_school_owner`)}`,
@@ -9821,7 +10144,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [canManageInstitution, contentIdentityEmail, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
+    }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
     const handleSaveSchoolMembership = useCallback(async () => {
       if (!canManageInstitution) {
         showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -9864,6 +10187,22 @@ ${marker} `);
         setContentRelationshipBusy(false);
       }
     }, [activeInstitutionSchoolIdResolved, canManageInstitution, contentIdentityEmail, language, schoolMemberDraftEmail, schoolMemberDraftGradeScope, schoolMemberDraftRole, showAppToast]);
+    const archiveMemberAuthoredContent = useCallback(async (client, schoolId, memberEmail) => {
+      const safeMemberEmail = String(memberEmail || "").trim().toLowerCase();
+      const safeSchoolId = String(schoolId || "").trim();
+      if (!safeMemberEmail || !safeSchoolId) return;
+      const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+      try {
+        await client.from(SUPABASE_DIARY_ENTRIES_TABLE).update({ status: "archived", updated_at: nowIso }).eq("school_id", safeSchoolId).eq("teacher_email", safeMemberEmail).eq("status", "active");
+      } catch (error) {
+        console.log("Unable to archive diary entries for removed member:", safeMemberEmail, error);
+      }
+      try {
+        await client.from(SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE).update({ status: "archived", updated_at: nowIso }).eq("school_id", safeSchoolId).eq("assigned_by_email", safeMemberEmail).eq("status", "active");
+      } catch (error) {
+        console.log("Unable to archive test assignments for removed member:", safeMemberEmail, error);
+      }
+    }, []);
     const handleDeleteSchoolMembership = useCallback(async (membership) => {
       const normalized = normalizeSchoolMembershipRecord(membership);
       if (!(normalized == null ? void 0 : normalized.membershipId)) return;
@@ -9876,14 +10215,61 @@ ${marker} `);
         const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).delete().eq("membership_id", normalized.membershipId);
         if (error) throw error;
+        await archiveMemberAuthoredContent(client, normalized.schoolId, normalized.memberEmail);
         await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText("School membership removed", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E \u06C1\u0679\u0627 \u062F\u06CC \u06AF\u0626\u06CC", language), "check");
+        showAppToast(joinLocalizedText("School membership removed and authored content archived", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E \u06C1\u0679\u0627 \u062F\u06CC \u06AF\u0626\u06CC \u0627\u0648\u0631 \u0645\u0648\u0627\u062F \u0622\u0631\u06A9\u0627\u0626\u06CC\u0648 \u06C1\u0648 \u06AF\u06CC\u0627", language), "check");
       } catch (error) {
         showAppToast(joinLocalizedText(`Unable to remove membership: ${(error == null ? void 0 : error.message) || error}`, `\u0645\u0645\u0628\u0631\u0634\u067E \u06C1\u0679\u0627\u0626\u06CC \u0646\u06C1\u06CC\u06BA \u062C\u0627 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [canManageInstitution, language, showAppToast]);
+    }, [archiveMemberAuthoredContent, canManageInstitution, language, showAppToast]);
+    const handleSetSchoolMemberPermission = useCallback(async (membership, permissionKey, nextValue) => {
+      var _a2;
+      const normalized = normalizeSchoolMembershipRecord(membership);
+      if (!(normalized == null ? void 0 : normalized.membershipId) || !normalized.schoolId) return;
+      const safePermission = String(permissionKey || "").trim();
+      if (!CONTENT_PERMISSION_KEYS.includes(safePermission) || safePermission === "manageContentAccess") {
+        showAppToast(joinLocalizedText("This permission cannot be overridden at the school level.", "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u06CC \u0633\u0637\u062D \u067E\u0631 \u0627\u0633 \u0627\u062C\u0627\u0632\u062A \u06A9\u0648 \u062A\u0628\u062F\u06CC\u0644 \u0646\u06C1\u06CC\u06BA \u06A9\u06CC\u0627 \u062C\u0627 \u0633\u06A9\u062A\u0627\u06D4", language), "alert");
+        return;
+      }
+      if (!canManageInstitution && !canManageContentAccess) {
+        showAppToast(joinLocalizedText("Your role cannot manage school member permissions.", "\u0622\u067E \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0632 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A\u06CC\u06BA \u0645\u0646\u0638\u0645 \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u0627\u06D4", language), "alert");
+        return;
+      }
+      const callerRank = getInstitutionRoleRank(currentUserInstitutionRole || contentManagerRole);
+      const targetRank = getInstitutionRoleRank(normalized.role);
+      if (!canManageContentAccess && targetRank >= callerRank) {
+        showAppToast(joinLocalizedText("You can only modify permissions for roles below your own.", "\u0622\u067E \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0633\u06D2 \u0646\u06CC\u0686\u06D2 \u06A9\u06D2 \u06A9\u0631\u062F\u0627\u0631\u0648\u06BA \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A\u06CC\u06BA \u062A\u0628\u062F\u06CC\u0644 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      setContentRelationshipBusy(true);
+      try {
+        const currentOverride = normalizeContentPermissionOverride(normalized.permissionsOverride);
+        const currentMatrix = normalizeContentPermissionMatrix(contentAccessState.rolePermissions);
+        const baseValue = Boolean((_a2 = currentMatrix[normalized.role]) == null ? void 0 : _a2[safePermission]);
+        const currentValue = Object.prototype.hasOwnProperty.call(currentOverride, safePermission) ? Boolean(currentOverride[safePermission]) : baseValue;
+        const desiredValue = nextValue === null || nextValue === void 0 ? !currentValue : Boolean(nextValue);
+        const nextOverride = { ...currentOverride };
+        if (desiredValue === baseValue) {
+          delete nextOverride[safePermission];
+        } else {
+          nextOverride[safePermission] = desiredValue;
+        }
+        const client = ensureSupabaseClientRef.current();
+        const { error } = await client.from(SUPABASE_SCHOOL_MEMBERSHIPS_TABLE).update({
+          permissions_override: Object.keys(nextOverride).length ? nextOverride : null,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("membership_id", normalized.membershipId);
+        if (error) throw error;
+        await refreshContentRelationshipStateRef.current();
+        showAppToast(joinLocalizedText("Member permission updated", "\u0645\u0645\u0628\u0631 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u062A\u0627\u0632\u06C1 \u06C1\u0648 \u06AF\u0626\u06CC", language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to update member permission: ${(error == null ? void 0 : error.message) || error}`, `\u0645\u0645\u0628\u0631 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentRelationshipBusy(false);
+      }
+    }, [canManageContentAccess, canManageInstitution, contentAccessState.rolePermissions, contentManagerRole, currentUserInstitutionRole, language, showAppToast]);
     const handleSaveParentStudentLink = useCallback(async () => {
       if (!canManageParentLinks && !canManageInstitution && !canManageContentAccess) {
         showAppToast(joinLocalizedText("Your content role cannot manage parent-child links.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0627\u0648\u0631 \u0628\u0686\u0648\u06BA \u06A9\u06D2 \u0631\u0648\u0627\u0628\u0637 \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -9957,6 +10343,7 @@ ${marker} `);
         const targetType = diaryDraftScope === "student" ? "student" : "grade";
         const lessonGroup = chapterGroupLookup[`${subjectId}::${Number(grade)}::${String(diaryDraftContentId || "").trim()}`] || null;
         const contentId = String(((_a2 = lessonGroup == null ? void 0 : lessonGroup.activeVariant) == null ? void 0 : _a2.contentId) || "").trim();
+        const sectionLabel = String(diaryDraftLessonSection || "").trim();
         const rows = targetDates.map((targetDate) => ({
           diary_id: `diary_${simpleHash(`${activeInstitutionSchoolIdResolved}_${targetType}_${diaryDraftStudentEmail}_${subjectId}_${diaryDraftContentId}_${targetDate}`)}`,
           school_id: activeInstitutionSchoolIdResolved || null,
@@ -9968,7 +10355,8 @@ ${marker} `);
           subject: subjectId,
           lesson_key: String(diaryDraftContentId || "").trim(),
           content_id: contentId || null,
-          note: String(diaryDraftNote || "").trim(),
+          note: sectionLabel ? `[${sectionLabel}] ${String(diaryDraftNote || "").trim()}` : String(diaryDraftNote || "").trim(),
+          entry_type: "diary",
           status: "active",
           updated_at: nowIso
         }));
@@ -9999,6 +10387,56 @@ ${marker} `);
         setContentRelationshipBusy(false);
       }
     }, [language, showAppToast]);
+    const handleSaveAssignment = useCallback(async () => {
+      if (!canManageDiary) {
+        showAppToast(joinLocalizedText("Your content role cannot create assignments.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u062A\u0641\u0648\u06CC\u0636 \u0628\u0646\u0627\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const title = String(assignmentDraftTitle || "").trim();
+      const description = String(assignmentDraftDescription || "").trim();
+      const dueDate = String(assignmentDraftDueDate || "").trim();
+      if (!title) {
+        showAppToast(joinLocalizedText("Enter an assignment title.", "\u062A\u0641\u0648\u06CC\u0636 \u06A9\u0627 \u0639\u0646\u0648\u0627\u0646 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      if (!dueDate) {
+        showAppToast(joinLocalizedText("Select a due date.", "\u0622\u062E\u0631\u06CC \u062A\u0627\u0631\u06CC\u062E \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      setContentRelationshipBusy(true);
+      try {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const targetType = assignmentDraftScope === "student" ? "student" : "grade";
+        const row = {
+          diary_id: `assignment_${simpleHash(`${activeInstitutionSchoolIdResolved}_${targetType}_${assignmentDraftStudentEmail}_${title}_${dueDate}`)}`,
+          school_id: activeInstitutionSchoolIdResolved || null,
+          teacher_email: contentIdentityEmail,
+          target_type: targetType,
+          target_grade: Number(grade) || null,
+          target_student_email: targetType === "student" ? String(assignmentDraftStudentEmail || "").trim().toLowerCase() : null,
+          target_date: dueDate,
+          subject: "__assignment__",
+          lesson_key: "",
+          content_id: null,
+          note: description,
+          entry_type: "assignment",
+          assignment_title: title,
+          status: "active",
+          updated_at: nowIso
+        };
+        const { error } = await client.from(SUPABASE_DIARY_ENTRIES_TABLE).upsert(row, { onConflict: "diary_id" });
+        if (error) throw error;
+        setAssignmentDraftTitle("");
+        setAssignmentDraftDescription("");
+        await refreshContentRelationshipStateRef.current();
+        showAppToast(joinLocalizedText("Assignment created", "\u062A\u0641\u0648\u06CC\u0636 \u0628\u0646\u0627\u0626\u06CC \u06AF\u0626\u06CC", language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to create assignment: ${(error == null ? void 0 : error.message) || error}`, `\u062A\u0641\u0648\u06CC\u0636 \u0646\u06C1\u06CC\u06BA \u0628\u0646\u0627\u0626\u06CC \u062C\u0627 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentRelationshipBusy(false);
+      }
+    }, [activeInstitutionSchoolIdResolved, assignmentDraftDescription, assignmentDraftDueDate, assignmentDraftScope, assignmentDraftStudentEmail, assignmentDraftTitle, canManageDiary, contentIdentityEmail, grade, language, showAppToast]);
     const handleToggleDiaryCompletion = useCallback(async (task, explicitDone = null) => {
       if (!task || !activeDiaryViewerStudentEmail) return;
       const current = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
@@ -11658,13 +12096,13 @@ ${marker} `);
           const orderByUpdated = Boolean(options.orderByUpdated || emailFilter);
           const limit = Number(options.limit || 0) || 0;
           let query = client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, permissions_override, updated_at, updated_by");
-          if (emailFilter) query = query.ilike("email", emailFilter);
+          if (emailFilter) query = query.ilike("email", escapeSupabaseLikePattern(emailFilter));
           if (orderByUpdated) query = query.order("updated_at", { ascending: false });
           if (limit > 0) query = query.limit(limit);
           let result = await query;
           if (result.error && String(result.error.message || "").toLowerCase().includes("permissions_override")) {
             query = client.from(SUPABASE_CONTENT_ROLE_TABLE).select("email, role, updated_at, updated_by");
-            if (emailFilter) query = query.ilike("email", emailFilter);
+            if (emailFilter) query = query.ilike("email", escapeSupabaseLikePattern(emailFilter));
             if (orderByUpdated) query = query.order("updated_at", { ascending: false });
             if (limit > 0) query = query.limit(limit);
             result = await query;
@@ -12338,7 +12776,7 @@ ${marker} `);
       setContentAccessBusy(true);
       try {
         const client = ensureSupabaseClient();
-        const { error } = await client.from(SUPABASE_CONTENT_ROLE_TABLE).delete().ilike("email", (targetEntry == null ? void 0 : targetEntry.emailKey) || safeEmail);
+        const { error } = await client.from(SUPABASE_CONTENT_ROLE_TABLE).delete().ilike("email", escapeSupabaseLikePattern((targetEntry == null ? void 0 : targetEntry.emailKey) || safeEmail));
         if (error) throw error;
         await refreshContentAccessState();
         showAppToast(joinLocalizedText("Content role removed", "\u0645\u0648\u0627\u062F \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u06C1\u0679\u0627 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
@@ -12659,7 +13097,7 @@ ${marker} `);
         };
         const selfMemberships = canManageContentAccess ? [] : await fetchNormalizedRows(
           SUPABASE_SCHOOL_MEMBERSHIPS_TABLE,
-          "membership_id, school_id, member_email, role, grade_scope, status, linked_by_email, created_at, updated_at",
+          "membership_id, school_id, member_email, role, grade_scope, permissions_override, status, linked_by_email, created_at, updated_at",
           normalizeSchoolMembershipRecord,
           (q) => q.eq("member_email", userEmail)
         );
@@ -12701,7 +13139,7 @@ ${marker} `);
         );
         await collectSchoolScoped(
           SUPABASE_SCHOOL_MEMBERSHIPS_TABLE,
-          "membership_id, school_id, member_email, role, grade_scope, status, linked_by_email, created_at, updated_at",
+          "membership_id, school_id, member_email, role, grade_scope, permissions_override, status, linked_by_email, created_at, updated_at",
           normalizeSchoolMembershipRecord,
           "memberships",
           "membershipId"
@@ -12729,7 +13167,7 @@ ${marker} `);
         );
         await collectSchoolScoped(
           SUPABASE_DIARY_ENTRIES_TABLE,
-          "diary_id, school_id, teacher_email, target_type, target_grade, target_student_email, target_date, subject, lesson_key, content_id, note, status, created_at, updated_at",
+          "diary_id, school_id, teacher_email, target_type, target_grade, target_student_email, target_date, subject, lesson_key, content_id, note, entry_type, assignment_title, status, created_at, updated_at",
           normalizeDiaryEntryRecord,
           "diaryEntries",
           "diaryId"
@@ -12814,6 +13252,15 @@ ${marker} `);
       if (teacherEmail === studentEmail) {
         showAppToast(joinLocalizedText("Teacher and student email should be different.", "\u0627\u0633\u062A\u0627\u062F \u0627\u0648\u0631 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u0627 \u0627\u06CC \u0645\u06CC\u0644 \u0645\u062E\u062A\u0644\u0641 \u06C1\u0648\u0646\u0627 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), "alert");
         return;
+      }
+      if (activeInstitutionSchoolIdResolved && !canManageContentAccess) {
+        const teacherIsMember = safeSchoolMemberships.some(
+          (entry) => entry.status === "active" && entry.schoolId === activeInstitutionSchoolIdResolved && entry.memberEmail === teacherEmail
+        );
+        if (!teacherIsMember) {
+          showAppToast(joinLocalizedText("The teacher must be a member of the active school first.", "\u0627\u0633\u062A\u0627\u062F \u06A9\u0648 \u067E\u06C1\u0644\u06D2 \u0641\u0639\u0627\u0644 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0645\u0645\u0628\u0631 \u06C1\u0648\u0646\u0627 \u0636\u0631\u0648\u0631\u06CC \u06C1\u06D2\u06D4", language), "alert");
+          return;
+        }
       }
       setContentRelationshipBusy(true);
       try {
@@ -17153,7 +17600,7 @@ ${error.message || error}`);
     const restoreDiaryTaskNavigator = useCallback(() => {
       const fallbackAnchorDate = String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.returnAnchorDate) || diaryWeekAnchorDate || toIsoDateString(Date.now())).trim();
       setTab("diary");
-      setDiarySectionTab(String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.returnSection) || "week").trim() || "week");
+      setDiarySectionTab(String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.returnSection) || "daily").trim() || "daily");
       setDiaryWeekAnchorDate(fallbackAnchorDate);
       if (diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.returnStudentEmail) setPerformanceStudentEmail(diaryTaskNavigator.returnStudentEmail);
       clearLessonSelections();
@@ -18564,7 +19011,15 @@ ${error.message || error}`);
         setChapterAssignmentDraftStudentEmail(link.studentEmail);
         setProfilesSectionTab("assignments");
       } }, renderLocalizedTextNode(joinLocalizedText("Assign Chapters", "\u0627\u0628\u0648\u0627\u0628 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteTeacherStudentLink(link), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove Link", "\u0631\u0628\u0637 \u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No learner links yet. Link a learner first, then use chapter assignments.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0631\u0628\u0637 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4 \u067E\u06C1\u0644\u06D2 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0628\u0627\u0628 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))) : null,
-      profilesSectionTab === "institution" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "\u0627\u0633\u06A9\u0648\u0644 \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "\u0627\u062F\u0627\u0631\u062A\u06CC \u0688\u06BE\u0627\u0646\u0686\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0628\u0646\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0633\u0627\u062A\u0630\u06C1 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06A9\u0627\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0628\u0686\u0648\u06BA \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(accessibleSchools.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(accessibleSchools.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Schools", "\u0627\u0633\u06A9\u0648\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F454}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Your institution role", "\u0622\u067E \u06A9\u0627 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Members in scope", "\u062F\u0627\u0626\u0631\u06C1 \u06A9\u06D2 \u0645\u0645\u0628\u0631\u0632", language), language)))), accessibleSchools.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 14 } }, accessibleSchools.map((school) => /* @__PURE__ */ React.createElement("button", { key: school.schoolId, type: "button", className: `profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`, onClick: () => setActiveInstitutionSchoolId(school.schoolId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-avatar", "aria-hidden": "true" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(school.schoolName, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "\u2014"}`, `\u067E\u0631\u0646\u0633\u067E\u0644 ${school.principalEmail || "\u2014"}`, language), language)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0633\u0644\u06A9 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create or Update School", "\u0627\u0633\u06A9\u0648\u0644 \u0628\u0646\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use one school record per institution, then link principals, teachers, students, and parents beneath it.", "\u06C1\u0631 \u0627\u062F\u0627\u0631\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u06A9\u06D2 \u0646\u06CC\u0686\u06D2 \u067E\u0631\u0646\u0633\u067E\u0644\u060C \u0627\u0633\u0627\u062A\u0630\u06C1\u060C \u0637\u0644\u0628\u06C1\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolDraftName, onChange: (event) => setSchoolDraftName(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0646\u0627\u0645" : "School name" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftOwnerEmail, onChange: (event) => setSchoolDraftOwnerEmail(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0627\u0644\u06A9 \u0627\u06CC \u0645\u06CC\u0644" : "School owner email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftPrincipalEmail, onChange: (event) => setSchoolDraftPrincipalEmail(event.target.value), placeholder: language === "ur" ? "\u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u06CC \u0645\u06CC\u0644" : "Principal email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "date", value: schoolDraftYearStartDate, onChange: (event) => setSchoolDraftYearStartDate(event.target.value) })), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftAccumulationMode, onChange: (event) => setSchoolDraftAccumulationMode(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "rolling" }, renderLocalizedTextNode(joinLocalizedText("Rolling last N weeks", "\u067E\u0686\u06BE\u0644\u06D2 N \u06C1\u0641\u062A\u06D2", language), language)), /* @__PURE__ */ React.createElement("option", { value: "academic_year" }, renderLocalizedTextNode(joinLocalizedText("Current academic year", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u0644", language), language)), /* @__PURE__ */ React.createElement("option", { value: "since_start" }, renderLocalizedTextNode(joinLocalizedText("Since app start", "\u0627\u06CC\u067E \u06A9\u06D2 \u0622\u063A\u0627\u0632 \u0633\u06D2", language), language))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "1", max: "52", value: schoolDraftAccumulationValue, onChange: (event) => setSchoolDraftAccumulationValue(event.target.value), placeholder: language === "ur" ? "\u06C1\u0641\u062A\u06D2" : "Weeks", style: { maxWidth: 140 } }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveSchool, disabled: contentRelationshipBusy }, renderLocalizedTextNode(contentRelationshipBusy ? joinLocalizedText("Saving...", "\u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Save School", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeInstitutionSchool ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Memberships", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E\u0633", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Membership decides who belongs to this school. Teacher-student links and family links then make the relationship graph precise.", "\u0645\u0645\u0628\u0631\u0634\u067E \u0637\u06D2 \u06A9\u0631\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u06A9\u0648\u0646 \u0627\u0633 \u0627\u0633\u06A9\u0648\u0644 \u0633\u06D2 \u062A\u0639\u0644\u0642 \u0631\u06A9\u06BE\u062A\u0627 \u06C1\u06D2\u06D4 \u0627\u0633 \u06A9\u06D2 \u0628\u0639\u062F \u0627\u0633\u062A\u0627\u062F-\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0627\u0648\u0631 \u062E\u0627\u0646\u062F\u0627\u0646\u06CC \u0631\u0648\u0627\u0628\u0637 \u0631\u0634\u062A\u0648\u06BA \u06A9\u0648 \u062F\u0631\u0633\u062A \u0628\u0646\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolMemberDraftEmail, onChange: (event) => setSchoolMemberDraftEmail(event.target.value), placeholder: language === "ur" ? "\u0645\u0645\u0628\u0631 \u0627\u06CC \u0645\u06CC\u0644" : "Member email" }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolMemberDraftRole, onChange: (event) => setSchoolMemberDraftRole(event.target.value) }, CONTENT_MANAGER_ROLES.map((role) => /* @__PURE__ */ React.createElement("option", { key: `membership_role_${role}`, value: role }, renderLocalizedTextNode(getContentManagerRoleLabel(role, language), language)))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolMemberDraftGradeScope, onChange: (event) => setSchoolMemberDraftGradeScope(event.target.value), placeholder: language === "ur" ? "\u062C\u0645\u0627\u0639\u062A\u06CC\u06BA\u060C \u0645\u062B\u0644\u0627\u064B 5,6" : "Grades, e.g. 5,6" }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveSchoolMembership, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Save Member", "\u0645\u0645\u0628\u0631 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, safeSchoolMemberships.filter((entry) => entry.status === "active" && entry.schoolId === activeInstitutionSchool.schoolId).map((entry) => /* @__PURE__ */ React.createElement("div", { key: `school_membership_${entry.membershipId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(entry.memberEmail, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(getContentManagerRoleLabel(entry.role, language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(entry.gradeScope.length ? joinLocalizedText(`Grades ${entry.gradeScope.join(", ")}`, `\u062C\u0645\u0627\u0639\u062A\u06CC\u06BA ${entry.gradeScope.join("\u060C ")}`, language) : joinLocalizedText("All grades in school scope", "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u062A\u0645\u0627\u0645 \u062F\u0631\u062C\u06D2", language), language)), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteSchoolMembership(entry), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language))) : null)))) : null) : null,
+      profilesSectionTab === "institution" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "\u0627\u0633\u06A9\u0648\u0644 \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "\u0627\u062F\u0627\u0631\u062A\u06CC \u0688\u06BE\u0627\u0646\u0686\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0628\u0646\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0633\u0627\u062A\u0630\u06C1 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06A9\u0627\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0628\u0686\u0648\u06BA \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(accessibleSchools.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(accessibleSchools.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Schools", "\u0627\u0633\u06A9\u0648\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F454}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Your institution role", "\u0622\u067E \u06A9\u0627 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Members in scope", "\u062F\u0627\u0626\u0631\u06C1 \u06A9\u06D2 \u0645\u0645\u0628\u0631\u0632", language), language)))), accessibleSchools.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 14 } }, accessibleSchools.map((school) => /* @__PURE__ */ React.createElement("button", { key: school.schoolId, type: "button", className: `profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`, onClick: () => setActiveInstitutionSchoolId(school.schoolId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-avatar", "aria-hidden": "true" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(school.schoolName, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "\u2014"}`, `\u067E\u0631\u0646\u0633\u067E\u0644 ${school.principalEmail || "\u2014"}`, language), language)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0633\u0644\u06A9 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create or Update School", "\u0627\u0633\u06A9\u0648\u0644 \u0628\u0646\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use one school record per institution, then link principals, teachers, students, and parents beneath it.", "\u06C1\u0631 \u0627\u062F\u0627\u0631\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u06A9\u06D2 \u0646\u06CC\u0686\u06D2 \u067E\u0631\u0646\u0633\u067E\u0644\u060C \u0627\u0633\u0627\u062A\u0630\u06C1\u060C \u0637\u0644\u0628\u06C1\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolDraftName, onChange: (event) => setSchoolDraftName(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0646\u0627\u0645" : "School name" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftOwnerEmail, onChange: (event) => setSchoolDraftOwnerEmail(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0627\u0644\u06A9 \u0627\u06CC \u0645\u06CC\u0644" : "School owner email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftPrincipalEmail, onChange: (event) => setSchoolDraftPrincipalEmail(event.target.value), placeholder: language === "ur" ? "\u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u06CC \u0645\u06CC\u0644" : "Principal email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "date", value: schoolDraftYearStartDate, onChange: (event) => setSchoolDraftYearStartDate(event.target.value) })), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftAccumulationMode, onChange: (event) => setSchoolDraftAccumulationMode(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "rolling" }, renderLocalizedTextNode(joinLocalizedText("Rolling last N weeks", "\u067E\u0686\u06BE\u0644\u06D2 N \u06C1\u0641\u062A\u06D2", language), language)), /* @__PURE__ */ React.createElement("option", { value: "academic_year" }, renderLocalizedTextNode(joinLocalizedText("Current academic year", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u0644", language), language)), /* @__PURE__ */ React.createElement("option", { value: "since_start" }, renderLocalizedTextNode(joinLocalizedText("Since app start", "\u0627\u06CC\u067E \u06A9\u06D2 \u0622\u063A\u0627\u0632 \u0633\u06D2", language), language))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "1", max: "52", value: schoolDraftAccumulationValue, onChange: (event) => setSchoolDraftAccumulationValue(event.target.value), placeholder: language === "ur" ? "\u06C1\u0641\u062A\u06D2" : "Weeks", style: { maxWidth: 140 } }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveSchool, disabled: contentRelationshipBusy }, renderLocalizedTextNode(contentRelationshipBusy ? joinLocalizedText("Saving...", "\u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Save School", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeInstitutionSchool ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Memberships", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E\u0633", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Membership decides who belongs to this school. Teacher-student links and family links then make the relationship graph precise.", "\u0645\u0645\u0628\u0631\u0634\u067E \u0637\u06D2 \u06A9\u0631\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u06A9\u0648\u0646 \u0627\u0633 \u0627\u0633\u06A9\u0648\u0644 \u0633\u06D2 \u062A\u0639\u0644\u0642 \u0631\u06A9\u06BE\u062A\u0627 \u06C1\u06D2\u06D4 \u0627\u0633 \u06A9\u06D2 \u0628\u0639\u062F \u0627\u0633\u062A\u0627\u062F-\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0627\u0648\u0631 \u062E\u0627\u0646\u062F\u0627\u0646\u06CC \u0631\u0648\u0627\u0628\u0637 \u0631\u0634\u062A\u0648\u06BA \u06A9\u0648 \u062F\u0631\u0633\u062A \u0628\u0646\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolMemberDraftEmail, onChange: (event) => setSchoolMemberDraftEmail(event.target.value), placeholder: language === "ur" ? "\u0645\u0645\u0628\u0631 \u0627\u06CC \u0645\u06CC\u0644" : "Member email" }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolMemberDraftRole, onChange: (event) => setSchoolMemberDraftRole(event.target.value) }, CONTENT_MANAGER_ROLES.map((role) => /* @__PURE__ */ React.createElement("option", { key: `membership_role_${role}`, value: role }, renderLocalizedTextNode(getContentManagerRoleLabel(role, language), language)))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolMemberDraftGradeScope, onChange: (event) => setSchoolMemberDraftGradeScope(event.target.value), placeholder: language === "ur" ? "\u062C\u0645\u0627\u0639\u062A\u06CC\u06BA\u060C \u0645\u062B\u0644\u0627\u064B 5,6" : "Grades, e.g. 5,6" }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveSchoolMembership, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Save Member", "\u0645\u0645\u0628\u0631 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, safeSchoolMemberships.filter((entry) => entry.status === "active" && entry.schoolId === activeInstitutionSchool.schoolId).map((entry) => /* @__PURE__ */ React.createElement("div", { key: `school_membership_${entry.membershipId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(entry.memberEmail, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(getContentManagerRoleLabel(entry.role, language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(entry.gradeScope.length ? joinLocalizedText(`Grades ${entry.gradeScope.join(", ")}`, `\u062C\u0645\u0627\u0639\u062A\u06CC\u06BA ${entry.gradeScope.join("\u060C ")}`, language) : joinLocalizedText("All grades in school scope", "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u062A\u0645\u0627\u0645 \u062F\u0631\u062C\u06D2", language), language)), (canManageInstitution || canManageContentAccess) && getInstitutionRoleRank(currentUserInstitutionRole || contentManagerRole) > getInstitutionRoleRank(entry.role) ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 } }, CONTENT_PERMISSION_KEYS.filter((key) => key !== "manageContentAccess").map((permKey) => {
+        var _a2;
+        const matrix = normalizeContentPermissionMatrix(contentAccessState.rolePermissions);
+        const baseValue = Boolean((_a2 = matrix[entry.role]) == null ? void 0 : _a2[permKey]);
+        const override = entry.permissionsOverride || {};
+        const isOverridden = Object.prototype.hasOwnProperty.call(override, permKey);
+        const effectiveValue = isOverridden ? Boolean(override[permKey]) : baseValue;
+        return /* @__PURE__ */ React.createElement("button", { key: `member_perm_${entry.membershipId}_${permKey}`, type: "button", className: effectiveValue ? "study-tool-btn" : "ghost-cta", style: { fontSize: 11, padding: "3px 8px", opacity: isOverridden ? 1 : 0.65 }, onClick: () => handleSetSchoolMemberPermission(entry, permKey), disabled: contentRelationshipBusy }, permKey.replace(/([A-Z])/g, " $1").trim());
+      })) : null, canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteSchoolMembership(entry), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language))) : null)))) : null) : null,
       profilesSectionTab === "family" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Parent & Children", "\u0648\u0627\u0644\u062F\u06CC\u0646 \u0627\u0648\u0631 \u0628\u0686\u06D2", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Parent access is now relationship-based. A parent only sees their linked children, while teachers stay limited to their learners.", "\u0648\u0627\u0644\u062F\u06CC\u0646 \u06A9\u06CC \u0631\u0633\u0627\u0626\u06CC \u0627\u0628 \u0631\u0634\u062A\u0648\u06BA \u06A9\u06CC \u0628\u0646\u06CC\u0627\u062F \u067E\u0631 \u06C1\u06D2\u06D4 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0645\u0646\u0633\u0644\u06A9 \u0628\u0686\u0648\u06BA \u06A9\u0648 \u062F\u06CC\u06A9\u06BE\u062A\u06D2 \u06C1\u06CC\u06BA\u060C \u062C\u0628\u06A9\u06C1 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0637\u0644\u0628\u06C1 \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(visibleParentStudentLinks.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(new Set(visibleParentStudentLinks.map((entry) => entry.parentEmail).filter(Boolean)).size)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Parents linked", "\u0645\u0646\u0633\u0644\u06A9 \u0648\u0627\u0644\u062F\u06CC\u0646", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9D2}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(new Set(visibleParentStudentLinks.map((entry) => entry.studentEmail).filter(Boolean)).size)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Children linked", "\u0645\u0646\u0633\u0644\u06A9 \u0628\u0686\u06D2", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1FAAA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(new Set(visibleParentStudentLinks.map((entry) => entry.familyIdentifier).filter(Boolean)).size)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Families", "\u062E\u0627\u0646\u062F\u0627\u0646", language), language))))), canManageParentLinks || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Link Parent to Child", "\u0648\u0627\u0644\u062F\u06CC\u0646 \u06A9\u0648 \u0628\u0686\u06D2 \u0633\u06D2 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use the real sign-in emails or identifiers the family already uses. This powers the parent dashboard automatically.", "\u0648\u06C1\u06CC \u062D\u0642\u06CC\u0642\u06CC \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u0627\u06CC \u0645\u06CC\u0644 \u06CC\u0627 \u0634\u0646\u0627\u062E\u062A \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA \u062C\u0648 \u062E\u0627\u0646\u062F\u0627\u0646 \u067E\u06C1\u0644\u06D2 \u0633\u06D2 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u062A\u0627 \u06C1\u06D2\u06D4 \u0627\u0633\u06CC \u0633\u06D2 \u0648\u0627\u0644\u062F\u06CC\u0646 \u06A9\u0627 \u0688\u06CC\u0634 \u0628\u0648\u0631\u0688 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0686\u0644\u062A\u0627 \u06C1\u06D2\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: parentLinkDraftParentEmail, onChange: (event) => setParentLinkDraftParentEmail(event.target.value), placeholder: language === "ur" ? "\u0648\u0627\u0644\u062F\u06CC\u0646 \u0627\u06CC \u0645\u06CC\u0644" : "Parent email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: parentLinkDraftStudentEmail, onChange: (event) => setParentLinkDraftStudentEmail(event.target.value), placeholder: language === "ur" ? "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0627\u06CC \u0645\u06CC\u0644" : "Student email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: parentLinkDraftRelationshipLabel, onChange: (event) => setParentLinkDraftRelationshipLabel(event.target.value), placeholder: language === "ur" ? "\u0645\u062B\u0644\u0627\u064B \u0648\u0627\u0644\u062F\u06C1" : "Relationship label" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: parentLinkDraftFamilyIdentifier, onChange: (event) => setParentLinkDraftFamilyIdentifier(event.target.value), placeholder: language === "ur" ? "\u0641\u06CC\u0645\u0644\u06CC \u0622\u0626\u06CC \u0688\u06CC / CNIC" : "Family ID / CNIC" }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveParentStudentLink, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Save Link", "\u0631\u0628\u0637 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, visibleParentStudentLinks.length ? visibleParentStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("div", { key: `parent_child_${entry.linkId}`, className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(entry.parentEmail, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${entry.studentEmail} \u2022 ${entry.relationshipLabel || "Parent"}`, `${entry.studentEmail} \u2022 ${entry.relationshipLabel || "\u0648\u0627\u0644\u062F\u06CC\u0646"}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(entry.familyIdentifier || joinLocalizedText("Family link", "\u062E\u0627\u0646\u062F\u0627\u0646\u06CC \u0631\u0628\u0637", language), language))), canManageParentLinks || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteParentStudentLink(entry), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language))) : null)) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No parent-child links yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0648\u0627\u0644\u062F\u06CC\u0646-\u0628\u0686\u06C1 \u0631\u0648\u0627\u0628\u0637 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : null,
       profilesSectionTab === "assignments" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Chapter Assignments", "\u0628\u0627\u0628 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("These assignments make published chapter copies flow automatically to the right grade or linked learner, without asking students to configure anything manually.", "\u06CC\u06C1 \u062A\u0641\u0648\u06CC\u0636 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0627\u067E\u06CC\u0627\u06BA \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u062F\u0631\u0633\u062A \u062C\u0645\u0627\u0639\u062A \u06CC\u0627 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u062A\u06A9 \u067E\u06C1\u0646\u0686\u0627\u062A\u06CC \u06C1\u06CC\u06BA\u060C \u062A\u0627\u06A9\u06C1 \u0637\u0644\u0628\u06C1 \u06A9\u0648 \u06A9\u0648\u0626\u06CC \u062F\u0633\u062A\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0646\u06C1 \u06A9\u0631\u0646\u06CC \u067E\u0691\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(visibleChapterAssignments.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(visibleChapterAssignments.filter((assignment) => assignment.targetType === "grade").length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9D1}\u200D\u{1F393}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(visibleChapterAssignments.filter((assignment) => assignment.targetType === "student").length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(new Set(visibleChapterAssignments.map((assignment) => `${assignment.subject}::${assignment.lessonKey}`)).size)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Lesson slots", "\u0633\u0628\u0642 \u062E\u0627\u0646\u06D2", language), language))))), canAssignContent ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginBottom: 0 } }, renderLocalizedTextNode(joinLocalizedText("Open any lesson and use the Assignment panel there to choose which published copy should go to a whole grade or to one linked learner.", "\u06A9\u0633\u06CC \u0628\u06BE\u06CC \u0633\u0628\u0642 \u06A9\u0648 \u06A9\u06BE\u0648\u0644\u06CC\u06BA \u0627\u0648\u0631 \u0648\u06C1\u0627\u06BA \u0645\u0648\u062C\u0648\u062F Assignment \u067E\u06CC\u0646\u0644 \u0633\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u06A9\u0648\u0646 \u0633\u06CC \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC \u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u0648 \u062F\u06CC \u062C\u0627\u0626\u06D2\u06D4", language), language))) : null, visibleChapterAssignments.length ? visibleChapterAssignments.map((assignment) => {
         var _a2, _b2;
@@ -19047,14 +19502,54 @@ ${error.message || error}`);
       progressSectionTab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 0, marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))),
       progressSectionTab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 0, marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Milestones & Momentum", "\u0633\u0646\u06AF\u0650 \u0645\u06CC\u0644 \u0627\u0648\u0631 \u0631\u0641\u062A\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track challenge wins, perfect days, and the next target worth chasing.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0686\u06CC\u0644\u0646\u062C\u060C \u067E\u0631\u0641\u06CC\u06A9\u0679 \u0688\u06CC\u0632\u060C \u0627\u0648\u0631 \u0627\u06AF\u0644\u06D2 \u0627\u06C1\u0645 \u06C1\u062F\u0641 \u06A9\u0648 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F31F}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(perfectDayCount)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Perfect Days", "\u067E\u0631\u0641\u06CC\u06A9\u0679 \u0688\u06CC\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F389}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel((gamificationState.celebrationHistory || []).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Celebrations", "\u062E\u0648\u0634\u06CC\u0648\u06BA \u06A9\u06D2 \u0644\u0645\u062D\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2728"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, nextXpMilestone ? formatNumberLabel(nextXpMilestone) : renderLocalizedTextNode(joinLocalizedText("Max", "\u0645\u06A9\u0645\u0644", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Next XP Target", "\u0627\u06AF\u0644\u0627 \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u06C1\u062F\u0641", language), language)))), (gamificationState.celebrationHistory || []).length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "milestone-history-list" }, (gamificationState.celebrationHistory || []).slice(0, 4).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.key, className: "milestone-history-item" }, /* @__PURE__ */ React.createElement("span", { className: "milestone-history-icon", "aria-hidden": "true" }, entry.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)))))) : null), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))),
       progressSectionTab === "timetracking" && /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 0 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.recentTimeHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See your latest class-time records, usage, and lateness at a glance.", "\u0627\u067E\u0646\u06D2 \u062D\u0627\u0644\u06CC\u06C1 \u06A9\u0644\u0627\u0633 \u0627\u0648\u0642\u0627\u062A\u060C \u0645\u0637\u0627\u0644\u0639\u06C1 \u0648\u0642\u062A\u060C \u0627\u0648\u0631 \u062A\u0627\u062E\u06CC\u0631 \u06A9\u0648 \u0627\u06CC\u06A9 \u0646\u0638\u0631 \u0645\u06CC\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), recentTimeHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentTimeHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(entry.dayKey, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(entry.status === "on-time" ? ui.classStatusOnTime : entry.status === "late" ? ui.classStatusLate : ui.classStatusNotStarted, language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Spent ${formatMinutesLabel(Math.round((entry.msSpent || 0) / 6e4), "en")} \u2022 Late by ${formatMinutesLabel(entry.latenessMinutes || 0, "en")}`, `${formatMinutesLabel(Math.round((entry.msSpent || 0) / 6e4), "ur")} \u0645\u0637\u0627\u0644\u0639\u06C1 \u2022 ${formatMinutesLabel(entry.latenessMinutes || 0, "ur")} \u062A\u0627\u062E\u06CC\u0631`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.classTrackingDisabled, language)))
-    )), tab === "diary" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-section-tabs", role: "tablist", "aria-label": language === "ur" ? "\u0688\u0627\u0626\u0631\u06CC \u062D\u0635\u06D2" : "Diary sections" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "week" ? " active" : ""}`, onClick: () => setDiarySectionTab("week") }, renderLocalizedTextNode(joinLocalizedText("This Week", "\u06CC\u06C1 \u06C1\u0641\u062A\u06C1", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "saturday" ? " active" : ""}`, onClick: () => setDiarySectionTab("saturday") }, renderLocalizedTextNode(joinLocalizedText("Saturday Test", "\u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679", language), language)), canManageDiary || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "manage" ? " active" : ""}`, onClick: () => setDiarySectionTab("manage") }, renderLocalizedTextNode(joinLocalizedText("Manage Diary", "\u0688\u0627\u0626\u0631\u06CC \u0645\u0646\u0638\u0645 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canManageTests || availableTestTemplates.length > 0 ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "templates" ? " active" : ""}`, onClick: () => setDiarySectionTab("templates") }, renderLocalizedTextNode(joinLocalizedText("Test Templates", "\u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679\u0633", language), language)) : null, canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "dashboard" ? " active" : ""}`, onClick: () => setDiarySectionTab("dashboard") }, renderLocalizedTextNode(joinLocalizedText("Performance", "\u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)) : null), /* @__PURE__ */ React.createElement("div", { key: `${transitionMode}:diary:${diarySectionTab}`, className: `review-section-transition${!reducedMotion && transitionMode !== "none" ? " transition-enabled" : ""}`, "data-transition-mode": transitionMode }, diarySectionTab === "week" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Weekly Diary", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Auto diary and assigned diary merge here by day. Each day keeps one card, with subjects as headings and their tasks listed underneath.", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0627\u0648\u0631 \u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1 \u0688\u0627\u0626\u0631\u06CC \u06CC\u06C1\u0627\u06BA \u0631\u0648\u0632\u0627\u0646\u06C1 \u06A9\u06CC \u0628\u0646\u06CC\u0627\u062F \u067E\u0631 \u0627\u06CC\u06A9 \u0633\u0627\u062A\u06BE \u062F\u06A9\u06BE\u0627\u0626\u06CC \u062C\u0627\u062A\u06CC \u06C1\u06D2\u06D4 \u06C1\u0631 \u062F\u0646 \u0627\u06CC\u06A9 \u06C1\u06CC \u06A9\u0627\u0631\u0688 \u0631\u06A9\u06BE\u062A\u0627 \u06C1\u06D2\u060C \u062C\u0633 \u0645\u06CC\u06BA \u0645\u0636\u0627\u0645\u06CC\u0646 \u0628\u0637\u0648\u0631 \u0633\u0631\u062E\u06CC \u0627\u0648\u0631 \u0627\u0646 \u06A9\u06D2 \u06A9\u0627\u0645 \u0646\u06CC\u0686\u06D2 \u062F\u0631\u062C \u06C1\u0648\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `\u06C1\u0641\u062A\u06C1 ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "date", value: diaryWeekAnchorDate, onChange: (event) => setDiaryWeekAnchorDate(event.target.value) }), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `diary_viewer_${entry.email}`, value: entry.email }, entry.label))) : null, /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode((activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.schoolName) || joinLocalizedText("Independent", "\u0622\u0632\u0627\u062F", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(
-      visibleDiaryDayGroups.some((group) => group.targetDate >= diaryTodayIso) ? joinLocalizedText("Only today and upcoming study days are shown first for easier daily follow-up.", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u06A9\u06CC \u0622\u0633\u0627\u0646 \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u06D2 \u0644\u06CC\u06D2 \u0622\u062C \u0627\u0648\u0631 \u0622\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0646 \u067E\u06C1\u0644\u06D2 \u062F\u06A9\u06BE\u0627\u0626\u06D2 \u062C\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language) : joinLocalizedText("This selected week has no remaining study days from today onward, so the full week is shown.", "\u0645\u0646\u062A\u062E\u0628 \u06C1\u0641\u062A\u06D2 \u0645\u06CC\u06BA \u0622\u062C \u0633\u06D2 \u0622\u06AF\u06D2 \u06A9\u0648\u0626\u06CC \u0628\u0627\u0642\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u062F\u0646 \u0646\u06C1\u06CC\u06BA\u060C \u0627\u0633 \u0644\u06CC\u06D2 \u067E\u0648\u0631\u0627 \u06C1\u0641\u062A\u06C1 \u062F\u06A9\u06BE\u0627\u06CC\u0627 \u062C\u0627 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4", language),
-      language
-    )), /* @__PURE__ */ React.createElement("div", { className: "stat-grid", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5D3}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(orderedVisibleDiaryTasks.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Visible tasks", "\u0646\u0638\u0631 \u0622\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u0627\u0645", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2705"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(visibleDiaryCompletions.filter((entry) => entry.studentEmail === activeDiaryViewerStudentEmail && visibleDiaryDayGroups.some((group) => group.targetDate === entry.targetDate)).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Completed", "\u0645\u06A9\u0645\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9D1}\u200D\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(currentWeekAssignedDiaryEntries.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Assigned", "\u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F916}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(autoDiaryTasks.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language))))), visibleDiaryDayGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: `diary_group_${group.targetDate}`, className: "review-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText(`Day ${group.dayIndex}`, `\u062F\u0646 ${group.dayIndex}`, language), language), " \u2022 ", renderLocalizedTextNode(group.targetDate, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.tasks.length} tasks`, `${group.tasks.length} \u06A9\u0627\u0645`, language), language)))), group.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, group.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `diary_subject_group_${group.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
+    )), tab === "diary" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-section-tabs", role: "tablist", "aria-label": language === "ur" ? "\u0688\u0627\u0626\u0631\u06CC \u062D\u0635\u06D2" : "Diary sections" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "daily" ? " active" : ""}`, onClick: () => setDiarySectionTab("daily") }, renderLocalizedTextNode(joinLocalizedText("Daily Diary", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0688\u0627\u0626\u0631\u06CC", language), language)), canManageDiary || canManageInstitution || canManageContentAccess || visibleTeacherDiaryEntries.length > 0 ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "teacher" ? " active" : ""}`, onClick: () => setDiarySectionTab("teacher") }, renderLocalizedTextNode(joinLocalizedText("Teacher's Diary", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language), language)) : null, canManageDiary || canManageInstitution || canManageContentAccess || visibleAssignmentEntries.length > 0 ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "assignments" ? " active" : ""}`, onClick: () => setDiarySectionTab("assignments") }, renderLocalizedTextNode(joinLocalizedText("Assignments", "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A", language), language)) : null, /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "saturday" ? " active" : ""}`, onClick: () => setDiarySectionTab("saturday") }, renderLocalizedTextNode(joinLocalizedText("Saturday Test", "\u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679", language), language)), canManageTests || availableTestTemplates.length > 0 ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "templates" ? " active" : ""}`, onClick: () => setDiarySectionTab("templates") }, renderLocalizedTextNode(joinLocalizedText("Templates", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679\u0633", language), language)) : null, canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "dashboard" ? " active" : ""}`, onClick: () => setDiarySectionTab("dashboard") }, renderLocalizedTextNode(joinLocalizedText("Performance", "\u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)) : null), /* @__PURE__ */ React.createElement("div", { key: `${transitionMode}:diary:${diarySectionTab}`, className: `review-section-transition${!reducedMotion && transitionMode !== "none" ? " transition-enabled" : ""}`, "data-transition-mode": transitionMode }, diarySectionTab === "daily" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Daily Diary", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your daily study plan, auto-generated from your grade curriculum. Each subject has its tasks for the day. Click any task to start studying.", "\u0622\u067E \u06A9\u0627 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627 \u0645\u0646\u0635\u0648\u0628\u06C1\u060C \u0622\u067E \u06A9\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0646\u0635\u0627\u0628 \u0633\u06D2 \u062E\u0648\u062F\u06A9\u0627\u0631\u06D4 \u06C1\u0631 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u062F\u0646 \u06A9\u06D2 \u06A9\u0627\u0645\u06D4 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0633\u06CC \u0628\u06BE\u06CC \u06A9\u0627\u0645 \u067E\u0631 \u06A9\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `\u06C1\u0641\u062A\u06C1 ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "date", value: diaryWeekAnchorDate, onChange: (event) => setDiaryWeekAnchorDate(event.target.value) }), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `diary_viewer_${entry.email}`, value: entry.email }, entry.label))) : null)), [...visibleDiaryDayGroups].reverse().map((group) => /* @__PURE__ */ React.createElement("div", { key: `daily_card_${group.targetDate}`, className: "review-panel diary-day-card", "data-ui-language": language, style: { marginTop: 16, borderLeft: group.targetDate === diaryTodayIso ? "4px solid var(--accent)" : void 0 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, group.targetDate === diaryTodayIso ? /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(joinLocalizedText("TODAY", "\u0622\u062C", language), language)) : null, renderLocalizedTextNode(group.targetDate, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Day ${group.dayIndex} \u2022 ${group.tasks.length} tasks across ${group.subjectGroups.length} subjects`, `\u062F\u0646 ${group.dayIndex} \u2022 ${group.tasks.length} \u06A9\u0627\u0645 ${group.subjectGroups.length} \u0645\u0636\u0627\u0645\u06CC\u0646 \u0645\u06CC\u06BA`, language), language)))), group.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, group.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `daily_sg_${group.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral", style: { fontSize: 11 } }, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
       var _a2;
       const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
-      return /* @__PURE__ */ React.createElement("div", { key: `diary_task_${task.taskKey}`, className: `diary-task-entry${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: () => handleOpenDiaryTask(task, orderedVisibleDiaryTasks) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(task.title, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(task.source === "assigned" ? joinLocalizedText("Assigned by teacher", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636", language) : joinLocalizedText("Auto diary task", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645", language), language))), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, language === "ur" ? "\u2190" : "\u2192")), task.note ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 6 } }, renderLocalizedTextNode(task.note, language)) : null, ((_a2 = task.taskUnits) == null ? void 0 : _a2.length) ? /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row", style: { marginTop: 8 } }, task.taskUnits.slice(0, 5).map((unit) => /* @__PURE__ */ React.createElement("span", { key: `task_unit_${task.taskKey}_${unit.key}`, className: "chapter-badge neutral" }, renderLocalizedTextNode(unit.title, language)))) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy }, renderLocalizedTextNode(completion ? joinLocalizedText("Marked done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
-    }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No diary tasks for this day yet.", "\u0627\u0628\u06BE\u06CC \u0627\u0633 \u062F\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))))) : null, diarySectionTab === "saturday" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Saturday Test Day", "\u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u0688\u06D2", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Teachers can assign a Saturday test; otherwise the app generates one from the week.", "\u0627\u0633\u0627\u062A\u0630\u06C1 \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u060C \u0648\u0631\u0646\u06C1 \u0627\u06CC\u067E \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0633\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0633\u0679 \u0628\u0646\u0627\u062A\u06CC \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getSaturdayDate(diaryWeekAnchorDate), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9EA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_t = (_s = currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.payload) == null ? void 0 : _s.questions) == null ? void 0 : _t.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Questions", "\u0633\u0648\u0627\u0644\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("Assigned", "\u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1", language) : joinLocalizedText("Generated", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Source", "\u0645\u0627\u062E\u0630", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, currentWeeklyStudentTestResult ? `${Math.round((currentWeeklyStudentTestResult.score || 0) / Math.max(1, currentWeeklyStudentTestResult.total || 1) * 100)}%` : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Latest", "\u062A\u0627\u0632\u06C1", language), language))))), canManageTests || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assign Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose a template for the full grade or one linked learner.", "\u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftScope, onChange: (event) => setTestAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), testAssignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftStudentEmail, onChange: (event) => setTestAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `weekly_test_student_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftTemplateId, onChange: (event) => setTestAssignmentDraftTemplateId(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose template", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0686\u0646\u06CC\u06BA", language), language)), availableTestTemplates.map((template) => /* @__PURE__ */ React.createElement("option", { key: `available_template_${template.templateId}`, value: template.templateId }, template.title))), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleAssignWeeklyTestTemplate, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Assign Test", "\u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeWeeklyTestSession ? /* @__PURE__ */ React.createElement("div", { className: "review-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(activeWeeklyTestSession.title, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Complete all question types, then submit once at the end.", "\u062A\u0645\u0627\u0645 \u0633\u0648\u0627\u0644\u06CC \u0627\u0642\u0633\u0627\u0645 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0622\u062E\u0631 \u0645\u06CC\u06BA \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, (activeWeeklyTestSession.questions || []).map((question, index) => {
+      return /* @__PURE__ */ React.createElement("div", { key: `daily_t_${task.taskKey}`, className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: () => handleOpenDiaryTask(task, orderedVisibleDiaryTasks) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(task.title, language)), ((_a2 = task.taskUnits) == null ? void 0 : _a2.length) ? /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, color: "var(--text-muted)" } }, task.taskUnits.slice(0, 3).map((u) => u.title).join(" \xB7 ")) : null), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, completion ? "\u2713" : language === "ur" ? "\u2190" : "\u2192")), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 4 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
+    }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No tasks scheduled for this day.", "\u0627\u0633 \u062F\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u06A9\u0627\u0645 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))))) : null, diarySectionTab === "teacher" ? /* @__PURE__ */ React.createElement(React.Fragment, null, canManageDiary || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create Teacher's Diary Entry", "\u0627\u0633\u062A\u0627\u062F \u06A9\u0627 \u0688\u0627\u0626\u0631\u06CC \u0627\u0646\u062F\u0631\u0627\u062C \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Select a subject and pick a lesson section from the curriculum, or write a free-text task. Students will see these alongside their auto diary.", "\u0645\u0636\u0645\u0648\u0646 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0646\u0635\u0627\u0628 \u0633\u06D2 \u0633\u0628\u0642 \u06A9\u0627 \u062D\u0635\u06C1 \u0686\u0646\u06CC\u06BA\u060C \u06CC\u0627 \u0622\u0632\u0627\u062F \u0645\u062A\u0646 \u06A9\u0627 \u06A9\u0627\u0645 \u0644\u06A9\u06BE\u06CC\u06BA\u06D4 \u0637\u0644\u0628\u06C1 \u06CC\u06C1 \u0627\u067E\u0646\u06CC \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06AF\u06D2\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftScope, onChange: (event) => setDiaryDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), diaryDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftStudentEmail, onChange: (event) => setDiaryDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `tdiary_s_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "date", value: diaryDraftStartDate, onChange: (event) => setDiaryDraftStartDate(event.target.value) }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftRangeMode, onChange: (event) => setDiaryDraftRangeMode(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "single" }, renderLocalizedTextNode(joinLocalizedText("Single date", "\u0627\u06CC\u06A9 \u062A\u0627\u0631\u06CC\u062E", language), language)), /* @__PURE__ */ React.createElement("option", { value: "week" }, renderLocalizedTextNode(joinLocalizedText("Full week", "\u067E\u0648\u0631\u0627 \u06C1\u0641\u062A\u06C1", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftSubjectId, onChange: (event) => {
+      setDiaryDraftSubjectId(event.target.value);
+      setDiaryDraftContentId("");
+      setDiaryDraftLessonSection("");
+    } }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose subject", "\u0645\u0636\u0645\u0648\u0646 \u0686\u0646\u06CC\u06BA", language), language)), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("option", { key: `tdiary_sub_${subject.id}`, value: subject.id }, subject.name))), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftContentId, onChange: (event) => {
+      setDiaryDraftContentId(event.target.value);
+      setDiaryDraftLessonSection("");
+    } }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose chapter", "\u0628\u0627\u0628 \u0686\u0646\u06CC\u06BA", language), language)), (diaryDraftSubjectId ? getMergedLessonGroups(diaryDraftSubjectId, grade) : []).map((group) => {
+      var _a2;
+      return /* @__PURE__ */ React.createElement("option", { key: `tdiary_ch_${group.canonicalLessonKey}`, value: group.canonicalLessonKey }, ((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.canonicalLessonKey);
+    })), diaryDraftContentId ? (() => {
+      const lessonGroup = chapterGroupLookup[`${diaryDraftSubjectId}::${Number(grade)}::${diaryDraftContentId}`];
+      const lesson = lessonGroup == null ? void 0 : lessonGroup.activeLesson;
+      const sections = ((lesson == null ? void 0 : lesson.subs) || (lesson == null ? void 0 : lesson.subsections) || (lesson == null ? void 0 : lesson.days) || []).map((s2, i) => ({ label: (s2 == null ? void 0 : s2.title) || (s2 == null ? void 0 : s2.name) || `Section ${i + 1}`, key: (s2 == null ? void 0 : s2.key) || (s2 == null ? void 0 : s2.id) || `section_${i}` })).filter((s2) => s2.label);
+      return sections.length ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftLessonSection, onChange: (event) => setDiaryDraftLessonSection(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("All sections", "\u062A\u0645\u0627\u0645 \u062D\u0635\u06D2", language), language)), sections.map((s2) => /* @__PURE__ */ React.createElement("option", { key: `tdiary_sec_${s2.key}`, value: s2.label }, s2.label))) : null;
+    })() : null), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", style: { flex: "1 1 280px" }, value: diaryDraftNote, onChange: (event) => setDiaryDraftNote(event.target.value), placeholder: language === "ur" ? "\u0622\u0632\u0627\u062F \u0645\u062A\u0646 \u06C1\u062F\u0627\u06CC\u0627\u062A / \u0646\u0648\u0679 (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)" : "Free-text instructions / note (optional)" }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveDiaryEntry, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Save Entry", "\u0627\u0646\u062F\u0631\u0627\u062C \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Teacher's Diary Entries", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u0688\u0627\u0626\u0631\u06CC \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Daily tasks assigned by teachers. These appear alongside the auto diary for students.", "\u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06D2 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u062F\u06C1 \u0631\u0648\u0632\u0627\u0646\u06C1 \u06A9\u0627\u0645\u06D4 \u06CC\u06C1 \u0637\u0644\u0628\u06C1 \u06A9\u06CC \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0638\u0627\u06C1\u0631 \u06C1\u0648\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(visibleTeacherDiaryEntries.length)))), visibleTeacherDiaryEntries.length ? (() => {
+      const byDate = /* @__PURE__ */ new Map();
+      visibleTeacherDiaryEntries.forEach((entry) => {
+        const list = byDate.get(entry.targetDate) || [];
+        list.push(entry);
+        byDate.set(entry.targetDate, list);
+      });
+      return Array.from(byDate.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([date, entries]) => {
+        const bySubject = /* @__PURE__ */ new Map();
+        entries.forEach((entry) => {
+          const subjectLabel = (subjectLookup == null ? void 0 : subjectLookup[entry.subject]) ? getSubjectDisplayName(subjectLookup[entry.subject], language) : entry.subject;
+          const list = bySubject.get(entry.subject) || { label: subjectLabel, entries: [] };
+          list.entries.push(entry);
+          bySubject.set(entry.subject, list);
+        });
+        return /* @__PURE__ */ React.createElement("div", { key: `teacher_diary_${date}`, className: "review-panel diary-day-card", "data-ui-language": language, style: { marginTop: 12, borderLeft: date === diaryTodayIso ? "4px solid var(--accent)" : void 0 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, date === diaryTodayIso ? /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700, marginRight: 8 } }, renderLocalizedTextNode(joinLocalizedText("TODAY", "\u0622\u062C", language), language)) : null, renderLocalizedTextNode(date, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${entries.length} entries from teacher`, `\u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 ${entries.length} \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, Array.from(bySubject.entries()).map(([subjectId, group]) => /* @__PURE__ */ React.createElement("div", { key: `tdiary_sg_${date}_${subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(group.label, language))), group.entries.map((entry) => {
+          const chapterGroup = (chapterGroupLookup == null ? void 0 : chapterGroupLookup[`${entry.subject}::${Number(grade)}::${entry.lessonKey}`]) || null;
+          const lesson = chapterGroup == null ? void 0 : chapterGroup.activeLesson;
+          const taskForNav = { taskKind: "assigned", taskKey: buildDiaryTaskKey("assigned", entry), subject: entry.subject, lessonKey: entry.lessonKey, title: (lesson == null ? void 0 : lesson.title) || entry.lessonKey, source: "assigned", chapterGroup, lesson };
+          const completion = diaryCompletionLookup[`assigned::${buildDiaryTaskKey("assigned", entry)}`] || null;
+          return /* @__PURE__ */ React.createElement("div", { key: `tdiary_e_${entry.diaryId}`, className: `diary-task-entry${completion ? " completed" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: () => lesson ? handleOpenDiaryTask(taskForNav, []) : null, disabled: !lesson }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode((lesson == null ? void 0 : lesson.title) || entry.lessonKey || joinLocalizedText("Free-text task", "\u0622\u0632\u0627\u062F \u0645\u062A\u0646 \u06A9\u0627\u0645", language), language)), entry.note ? /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, color: "var(--text-muted)" } }, renderLocalizedTextNode(entry.note, language)) : null), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, completion ? "\u2713" : lesson ? language === "ur" ? "\u2190" : "\u2192" : "")), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 4 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(taskForNav), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canManageDiary || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
+        })))));
+      });
+    })() : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No teacher diary entries yet. Teachers can create daily entries using the form above.", "\u0627\u0628\u06BE\u06CC \u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u06A9\u0648\u0626\u06CC \u0688\u0627\u0626\u0631\u06CC \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0646\u06C1\u06CC\u06BA\u06D4 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0641\u0627\u0631\u0645 \u0633\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0628\u0646\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "assignments" ? /* @__PURE__ */ React.createElement(React.Fragment, null, canManageDiary || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create Assignment / Project", "\u062A\u0641\u0648\u06CC\u0636 / \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Write a practical task for students. This can be anything \u2014 a project, homework, creative work, or field activity.", "\u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0639\u0645\u0644\u06CC \u06A9\u0627\u0645 \u0644\u06A9\u06BE\u06CC\u06BA\u06D4 \u06CC\u06C1 \u06A9\u0686\u06BE \u0628\u06BE\u06CC \u06C1\u0648 \u0633\u06A9\u062A\u0627 \u06C1\u06D2 \u2014 \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679\u060C \u06C1\u0648\u0645 \u0648\u0631\u06A9\u060C \u062A\u062E\u0644\u06CC\u0642\u06CC \u06A9\u0627\u0645\u060C \u06CC\u0627 \u0641\u06CC\u0644\u0688 \u0633\u0631\u06AF\u0631\u0645\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", style: { flex: "1 1 280px" }, value: assignmentDraftTitle, onChange: (event) => setAssignmentDraftTitle(event.target.value), placeholder: language === "ur" ? "\u062A\u0641\u0648\u06CC\u0636 \u06A9\u0627 \u0639\u0646\u0648\u0627\u0646" : "Assignment title" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "date", value: assignmentDraftDueDate, onChange: (event) => setAssignmentDraftDueDate(event.target.value) })), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: assignmentDraftScope, onChange: (event) => setAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), assignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: assignmentDraftStudentEmail, onChange: (event) => setAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `assgn_s_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("textarea", { className: "settings-text-input", rows: 4, style: { width: "100%", resize: "vertical", minHeight: 80 }, value: assignmentDraftDescription, onChange: (event) => setAssignmentDraftDescription(event.target.value), placeholder: language === "ur" ? "\u062A\u0641\u0635\u06CC\u0644\u06CC \u06C1\u062F\u0627\u06CC\u0627\u062A \u0644\u06A9\u06BE\u06CC\u06BA..." : "Write detailed instructions..." })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveAssignment, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Create Assignment", "\u062A\u0641\u0648\u06CC\u0636 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)))) : null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assignments & Projects", "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0627\u0648\u0631 \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679\u0633", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Practical tasks assigned by your teacher. Complete them and mark as done.", "\u0622\u067E \u06A9\u06D2 \u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u062F\u06C1 \u0639\u0645\u0644\u06CC \u06A9\u0627\u0645\u06D4 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0645\u06A9\u0645\u0644 \u0646\u0634\u0627\u0646 \u0644\u06AF\u0627\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(visibleAssignmentEntries.length)))), visibleAssignmentEntries.length ? visibleAssignmentEntries.map((entry) => {
+      const taskForCompletion = { taskKind: "assigned", taskKey: buildDiaryTaskKey("assigned", entry), subject: "__assignment__", lessonKey: "", title: entry.assignmentTitle || entry.note, source: "assigned" };
+      const completion = diaryCompletionLookup[`assigned::${buildDiaryTaskKey("assigned", entry)}`] || null;
+      const isOverdue = !completion && entry.targetDate < diaryTodayIso;
+      return /* @__PURE__ */ React.createElement("div", { key: `assignment_${entry.diaryId}`, className: `review-panel diary-day-card${completion ? " completed" : ""}`, "data-ui-language": language, style: { marginTop: 12, borderLeft: isOverdue ? "4px solid var(--danger, #e74c3c)" : completion ? "4px solid var(--success, #2ecc71)" : "4px solid var(--accent)" } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, completion ? /* @__PURE__ */ React.createElement("span", { style: { color: "var(--success, #2ecc71)", fontSize: 18 } }, "\u2713") : isOverdue ? /* @__PURE__ */ React.createElement("span", { style: { color: "var(--danger, #e74c3c)", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(joinLocalizedText("OVERDUE", "\u0645\u062F\u062A \u06AF\u0632\u0631 \u06AF\u0626\u06CC", language), language)) : null, renderLocalizedTextNode(entry.assignmentTitle || joinLocalizedText("Assignment", "\u062A\u0641\u0648\u06CC\u0636", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Due: ${entry.targetDate}`, `\u0622\u062E\u0631\u06CC \u062A\u0627\u0631\u06CC\u062E: ${entry.targetDate}`, language), language), " \u2022 ", renderLocalizedTextNode(joinLocalizedText(`By ${entry.teacherEmail}`, `\u0627\u0632 ${entry.teacherEmail}`, language), language)))), entry.note ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "10px 0" } }, renderLocalizedTextNode(entry.note, language)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(taskForCompletion), disabled: contentRelationshipBusy }, renderLocalizedTextNode(completion ? joinLocalizedText("Completed", "\u0645\u06A9\u0645\u0644 \u0634\u062F\u06C1", language) : joinLocalizedText("Mark complete", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canManageDiary || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
+    }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No assignments yet. Teachers can create assignments using the form above.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0646\u06C1\u06CC\u06BA\u06D4 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0641\u0627\u0631\u0645 \u0633\u06D2 \u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0628\u0646\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "saturday" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Saturday Test Day", "\u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u0688\u06D2", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Teachers can assign a Saturday test; otherwise the app generates one from the week.", "\u0627\u0633\u0627\u062A\u0630\u06C1 \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u060C \u0648\u0631\u0646\u06C1 \u0627\u06CC\u067E \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0633\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0633\u0679 \u0628\u0646\u0627\u062A\u06CC \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getSaturdayDate(diaryWeekAnchorDate), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9EA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_t = (_s = currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.payload) == null ? void 0 : _s.questions) == null ? void 0 : _t.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Questions", "\u0633\u0648\u0627\u0644\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("Assigned", "\u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1", language) : joinLocalizedText("Generated", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Source", "\u0645\u0627\u062E\u0630", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, currentWeeklyStudentTestResult ? `${Math.round((currentWeeklyStudentTestResult.score || 0) / Math.max(1, currentWeeklyStudentTestResult.total || 1) * 100)}%` : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Latest", "\u062A\u0627\u0632\u06C1", language), language))))), canManageTests || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assign Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose a template for the full grade or one linked learner.", "\u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftScope, onChange: (event) => setTestAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), testAssignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftStudentEmail, onChange: (event) => setTestAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `weekly_test_student_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftTemplateId, onChange: (event) => setTestAssignmentDraftTemplateId(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose template", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0686\u0646\u06CC\u06BA", language), language)), availableTestTemplates.map((template) => /* @__PURE__ */ React.createElement("option", { key: `available_template_${template.templateId}`, value: template.templateId }, template.title))), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleAssignWeeklyTestTemplate, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Assign Test", "\u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeWeeklyTestSession ? /* @__PURE__ */ React.createElement("div", { className: "review-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(activeWeeklyTestSession.title, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Complete all question types, then submit once at the end.", "\u062A\u0645\u0627\u0645 \u0633\u0648\u0627\u0644\u06CC \u0627\u0642\u0633\u0627\u0645 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0622\u062E\u0631 \u0645\u06CC\u06BA \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, (activeWeeklyTestSession.questions || []).map((question, index) => {
       var _a2;
       return /* @__PURE__ */ React.createElement("div", { key: `weekly_test_q_${question.id}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`Q${index + 1}. ${question.prompt}`, `\u0633${index + 1}. ${question.prompt}`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(question.type, language))), question.type === "mcq" ? /* @__PURE__ */ React.createElement("div", { className: "quiz-options" }, (question.options || []).map((option, optionIndex) => {
         var _a3;
@@ -19066,10 +19561,7 @@ ${error.message || error}`);
         var _a3, _b2;
         return /* @__PURE__ */ React.createElement("div", { key: `match_pair_${question.id}_${pair.id}`, className: "profile-report-item", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(pair.left, language))), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: ((_b2 = (_a3 = activeWeeklyTestSession.answers) == null ? void 0 : _a3[question.id]) == null ? void 0 : _b2[pair.id]) || "", onChange: (event) => handleWeeklyTestAnswerChange(question.id, event.target.value, pair.id) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose match", "\u0645\u0645\u0627\u062B\u0644 \u0686\u0646\u06CC\u06BA", language), language)), (question.pairs || []).map((option) => /* @__PURE__ */ React.createElement("option", { key: `match_option_${question.id}_${option.id}`, value: option.right }, option.right))));
       })) : null);
-    })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => setActiveWeeklyTestSession(null) }, renderLocalizedTextNode(joinLocalizedText("Cancel", "\u0645\u0646\u0633\u0648\u062E", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSubmitWeeklyTest, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Submit Test", "\u0679\u06CC\u0633\u0679 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA", language), language)))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode((currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.title) || joinLocalizedText("No Saturday test yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u0646\u06C1\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("This week's test came from an assigned template.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0627\u06CC\u06A9 \u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0633\u06D2 \u0622\u06CC\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText("This week's test is being generated from the covered lessons.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0632\u06CC\u0631\u0650 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u0633\u0628\u0627\u0642 \u0633\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4", language), language)))), currentWeeklyTestTemplate ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: () => handleStartWeeklyTestSession(currentWeeklyTestTemplate) }, renderLocalizedTextNode(joinLocalizedText("Start Test", "\u0679\u06CC\u0633\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), currentWeeklyStudentTestResult ? /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} latest`, `${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} \u062A\u0627\u0632\u06C1`, language), language)) : null) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No Saturday test is ready yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u062A\u06CC\u0627\u0631 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "manage" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assign Diary Work", "\u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Assigned diary stays separate from the auto diary so teachers can add precise homework or reinforcement.", "\u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1 \u0688\u0627\u0626\u0631\u06CC \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0633\u06D2 \u0627\u0644\u06AF \u0631\u06C1\u062A\u06CC \u06C1\u06D2 \u062A\u0627\u06A9\u06C1 \u0627\u0633\u062A\u0627\u062F \u062F\u0631\u0633\u062A \u06C1\u0648\u0645 \u0648\u0631\u06A9 \u06CC\u0627 \u062F\u06C1\u0631\u0627\u0626\u06CC \u062F\u06D2 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftScope, onChange: (event) => setDiaryDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), diaryDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftStudentEmail, onChange: (event) => setDiaryDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `diary_target_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftRangeMode, onChange: (event) => setDiaryDraftRangeMode(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "single" }, renderLocalizedTextNode(joinLocalizedText("Single date", "\u0627\u06CC\u06A9 \u062A\u0627\u0631\u06CC\u062E", language), language)), /* @__PURE__ */ React.createElement("option", { value: "week" }, renderLocalizedTextNode(joinLocalizedText("Date range", "\u062A\u0627\u0631\u06CC\u062E\u06CC \u062F\u0627\u0626\u0631\u06C1", language), language))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "date", value: diaryDraftStartDate, onChange: (event) => setDiaryDraftStartDate(event.target.value) }), diaryDraftRangeMode === "week" ? /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "date", value: diaryDraftEndDate, onChange: (event) => setDiaryDraftEndDate(event.target.value) }) : null), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftSubjectId, onChange: (event) => setDiaryDraftSubjectId(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose subject", "\u0645\u0636\u0645\u0648\u0646 \u0686\u0646\u06CC\u06BA", language), language)), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("option", { key: `diary_subject_${subject.id}`, value: subject.id }, subject.name))), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftContentId, onChange: (event) => setDiaryDraftContentId(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose chapter", "\u0628\u0627\u0628 \u0686\u0646\u06CC\u06BA", language), language)), (diaryDraftSubjectId ? getMergedLessonGroups(diaryDraftSubjectId, grade) : []).map((group) => {
-      var _a2;
-      return /* @__PURE__ */ React.createElement("option", { key: `diary_chapter_${group.preferenceKey}`, value: group.canonicalLessonKey }, ((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.canonicalLessonKey);
-    })), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: diaryDraftNote, onChange: (event) => setDiaryDraftNote(event.target.value), placeholder: language === "ur" ? "\u06C1\u062F\u0627\u06CC\u0627\u062A / \u0646\u0648\u0679" : "Instruction / note" }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveDiaryEntry, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Assign Diary", "\u0688\u0627\u0626\u0631\u06CC \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language))), currentWeekAssignedDiaryEntries.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, currentWeekAssignedDiaryEntries.map((entry) => /* @__PURE__ */ React.createElement("div", { key: `assigned_diary_${entry.diaryId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(entry.targetDate, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(entry.targetType === "student" ? entry.targetStudentEmail : joinLocalizedText(`Grade ${entry.targetGrade}`, `\u062C\u0645\u0627\u0639\u062A ${entry.targetGrade}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(entry.note || entry.lessonKey, language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)))))) : null) : null, diarySectionTab === "templates" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Test Template Library", "\u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0644\u0627\u0626\u0628\u0631\u06CC\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Import, export, publish, and reuse Saturday test templates.", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679\u0633 \u062F\u0631\u0622\u0645\u062F\u060C \u0628\u0631\u0622\u0645\u062F\u060C \u0634\u0627\u0626\u0639\u060C \u0627\u0648\u0631 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 0 } }, canManageTests ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenTestTemplateImport, disabled: testTemplateImportBusy }, renderLocalizedTextNode(testTemplateImportBusy ? joinLocalizedText("Importing...", "\u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import JSON", "JSON \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, availableTestTemplates.length ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => downloadJson(`test-template-pack-grade-${grade}.json`, buildTestTemplatePackExportPayload(availableTestTemplates, `Grade ${grade} templates`)) }, renderLocalizedTextNode(joinLocalizedText("Export All", "\u0633\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testTemplateDraftSubjectFilter, onChange: (event) => setTestTemplateDraftSubjectFilter(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("All subjects", "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("option", { key: `template_subject_${subject.id}`, value: subject.id }, subject.name))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: testTemplateDraftAuthorFilter, onChange: (event) => setTestTemplateDraftAuthorFilter(event.target.value), placeholder: language === "ur" ? "\u0639\u0646\u0648\u0627\u0646 \u06CC\u0627 \u0645\u0635\u0646\u0641 \u0641\u0644\u0679\u0631" : "Filter by title or author" })), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, availableTestTemplates.filter((template) => {
+    })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => setActiveWeeklyTestSession(null) }, renderLocalizedTextNode(joinLocalizedText("Cancel", "\u0645\u0646\u0633\u0648\u062E", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSubmitWeeklyTest, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Submit Test", "\u0679\u06CC\u0633\u0679 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA", language), language)))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode((currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.title) || joinLocalizedText("No Saturday test yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u0646\u06C1\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("This week's test came from an assigned template.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0627\u06CC\u06A9 \u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0633\u06D2 \u0622\u06CC\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText("This week's test is being generated from the covered lessons.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0632\u06CC\u0631\u0650 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u0633\u0628\u0627\u0642 \u0633\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4", language), language)))), currentWeeklyTestTemplate ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: () => handleStartWeeklyTestSession(currentWeeklyTestTemplate) }, renderLocalizedTextNode(joinLocalizedText("Start Test", "\u0679\u06CC\u0633\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), currentWeeklyStudentTestResult ? /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} latest`, `${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} \u062A\u0627\u0632\u06C1`, language), language)) : null) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No Saturday test is ready yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u062A\u06CC\u0627\u0631 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "templates" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Test Template Library", "\u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0644\u0627\u0626\u0628\u0631\u06CC\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Import, export, publish, and reuse Saturday test templates.", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679\u0633 \u062F\u0631\u0622\u0645\u062F\u060C \u0628\u0631\u0622\u0645\u062F\u060C \u0634\u0627\u0626\u0639\u060C \u0627\u0648\u0631 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 0 } }, canManageTests ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenTestTemplateImport, disabled: testTemplateImportBusy }, renderLocalizedTextNode(testTemplateImportBusy ? joinLocalizedText("Importing...", "\u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import JSON", "JSON \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, availableTestTemplates.length ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => downloadJson(`test-template-pack-grade-${grade}.json`, buildTestTemplatePackExportPayload(availableTestTemplates, `Grade ${grade} templates`)) }, renderLocalizedTextNode(joinLocalizedText("Export All", "\u0633\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testTemplateDraftSubjectFilter, onChange: (event) => setTestTemplateDraftSubjectFilter(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("All subjects", "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("option", { key: `template_subject_${subject.id}`, value: subject.id }, subject.name))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: testTemplateDraftAuthorFilter, onChange: (event) => setTestTemplateDraftAuthorFilter(event.target.value), placeholder: language === "ur" ? "\u0639\u0646\u0648\u0627\u0646 \u06CC\u0627 \u0645\u0635\u0646\u0641 \u0641\u0644\u0679\u0631" : "Filter by title or author" })), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, availableTestTemplates.filter((template) => {
       if (testTemplateDraftSubjectFilter !== "all" && !(template.subjectScope || []).includes(testTemplateDraftSubjectFilter)) return false;
       const filterText = String(testTemplateDraftAuthorFilter || "").trim().toLowerCase();
       return !filterText || `${template.title} ${template.authorEmail || ""}`.toLowerCase().includes(filterText);
