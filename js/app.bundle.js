@@ -7342,6 +7342,15 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
     }) : null;
     const focusProps = getStudyFocusProps(app, studyCard);
     const [speakingSide, setSpeakingSide] = useState("");
+    const bilingualContainerStyle = buttonStyle ? (() => {
+      const nextStyle = { ...buttonStyle };
+      delete nextStyle.display;
+      delete nextStyle.alignItems;
+      delete nextStyle.justifyContent;
+      delete nextStyle.flexDirection;
+      delete nextStyle.gap;
+      return nextStyle;
+    })() : void 0;
     const speakSide = (value, lang) => {
       var _a, _b;
       if (!isTtsEnabled()) return;
@@ -7354,7 +7363,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
       }
       setSpeakingSide("");
     };
-    return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: "exercise-bilingual-field", style: buttonStyle || void 0 }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: "exercise-bilingual-field", style: bilingualContainerStyle }, /* @__PURE__ */ React.createElement(
       "div",
       {
         role: "button",

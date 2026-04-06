@@ -9100,6 +9100,17 @@ function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
   }) : null;
   const focusProps = getStudyFocusProps(app, studyCard);
   const [speakingSide, setSpeakingSide] = useState("");
+  const bilingualContainerStyle = buttonStyle
+    ? (() => {
+        const nextStyle = { ...buttonStyle };
+        delete nextStyle.display;
+        delete nextStyle.alignItems;
+        delete nextStyle.justifyContent;
+        delete nextStyle.flexDirection;
+        delete nextStyle.gap;
+        return nextStyle;
+      })()
+    : undefined;
   const speakSide = (value, lang) => {
     if (!isTtsEnabled()) return;
     setSpeakingSide(lang);
@@ -9112,7 +9123,7 @@ function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
     setSpeakingSide("");
   };
   return (
-    <div {...focusProps} className="exercise-bilingual-field" style={buttonStyle || undefined}>
+    <div {...focusProps} className="exercise-bilingual-field" style={bilingualContainerStyle}>
       <div
         role="button"
         tabIndex={0}
