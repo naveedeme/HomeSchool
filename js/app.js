@@ -10109,6 +10109,49 @@ function buildPronunciationFeedback(status, language = "en") {
   );
 }
 
+function buildPronunciationListeningFeedback(errorCode, language = "en") {
+  switch (String(errorCode || "").trim().toLowerCase()) {
+    case "not-allowed":
+    case "service-not-allowed":
+    case "permission-denied":
+      return joinLocalizedText(
+        "Microphone permission is blocked. Please allow microphone access for this site and try again.",
+        "مائیکروفون کی اجازت بند ہے۔ اس سائٹ کے لیے مائیکروفون کی اجازت دیں اور دوبارہ کوشش کریں۔",
+        language,
+      );
+    case "audio-capture":
+      return joinLocalizedText(
+        "No microphone was found. Check your microphone and try again.",
+        "کوئی مائیکروفون نہیں ملا۔ اپنا مائیکروفون چیک کریں اور دوبارہ کوشش کریں۔",
+        language,
+      );
+    case "network":
+      return joinLocalizedText(
+        "Speech recognition could not reach the service right now. Please try again in a moment.",
+        "اس وقت آواز پہچاننے کی سروس سے رابطہ نہیں ہو سکا۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔",
+        language,
+      );
+    case "no-speech":
+      return joinLocalizedText(
+        "I did not catch any speech. Try again and speak a little closer to the microphone.",
+        "کوئی آواز واضح طور پر نہیں سنائی دی۔ دوبارہ کوشش کریں اور مائیکروفون کے قریب بولیں۔",
+        language,
+      );
+    case "aborted":
+      return joinLocalizedText(
+        "Listening was stopped before a result came back.",
+        "نتیجہ آنے سے پہلے سننے کا عمل روک دیا گیا۔",
+        language,
+      );
+    default:
+      return joinLocalizedText(
+        "The browser could not start speech recognition here. Chrome or Edge usually works best for microphone input.",
+        "یہ براؤزر یہاں آواز پہچاننا شروع نہیں کر سکا۔ مائیکروفون ان پٹ کے لیے عموماً Chrome یا Edge بہتر کام کرتا ہے۔",
+        language,
+      );
+  }
+}
+
 function buildPronunciationDeck(library = [], limit = 12) {
   const safeLimit = Math.max(4, Number(limit) || 12);
   const seen = new Set();
@@ -14796,12 +14839,45 @@ const headerHideTimerRef = useRef(null);
     setPronunciationLabTranscript("");
     setPronunciationLabResult(null);
   }, [stopPronunciationListening]);
-  const handlePronunciationListen = useCallback(() => {
+  const handlePronunciationListen = useCallback(async () => {
     const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!activePronunciationCard || !SpeechRecognitionClass) return;
+    if (!activePronunciationCard || !SpeechRecognitionClass) {
+      setPronunciationLabResult({
+        status: "missing",
+        score: 0,
+        transcript: "",
+        feedback: buildPronunciationListeningFeedback("unsupported", language),
+      });
+      return;
+    }
     if (pronunciationLabListening) {
       stopPronunciationListening();
       return;
+    }
+    if (window.isSecureContext === false) {
+      setPronunciationLabResult({
+        status: "missing",
+        score: 0,
+        transcript: "",
+        feedback: buildPronunciationListeningFeedback("unsupported", language),
+      });
+      return;
+    }
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStream.getTracks().forEach((track) => track.stop());
+      } catch (error) {
+        const errorName = String(error?.name || error?.code || "permission-denied");
+        setPronunciationLabListening(false);
+        setPronunciationLabResult({
+          status: "missing",
+          score: 0,
+          transcript: "",
+          feedback: buildPronunciationListeningFeedback(errorName, language),
+        });
+        return;
+      }
     }
     try {
       speechRecognitionRef.current?.stop?.();
@@ -14846,12 +14922,12 @@ const headerHideTimerRef = useRef(null);
         assessment.status === "exact" || assessment.status === "strong" ? "correct" : "wrong",
       );
     };
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
       setPronunciationLabResult({
         status: "missing",
         score: 0,
         transcript: "",
-        feedback: buildPronunciationFeedback("missing", language),
+        feedback: buildPronunciationListeningFeedback(event?.error, language),
       });
       setPronunciationLabListening(false);
     };
@@ -14863,7 +14939,17 @@ const headerHideTimerRef = useRef(null);
     setPronunciationLabTranscript("");
     setPronunciationLabResult(null);
     setPronunciationLabListening(true);
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (error) {
+      setPronunciationLabListening(false);
+      setPronunciationLabResult({
+        status: "missing",
+        score: 0,
+        transcript: "",
+        feedback: buildPronunciationListeningFeedback(error?.name || error?.message, language),
+      });
+    }
   }, [activePronunciationCard, language, pronunciationLabIdx, pronunciationLabListening, stopPronunciationListening]);
   const practiceTimedChallengeReadyCount = useMemo(
     () => buildTimedChallengeDeck(practiceSubjectSourcePool, 6, 4).length,
