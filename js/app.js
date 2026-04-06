@@ -12588,8 +12588,8 @@ const headerHideTimerRef = useRef(null);
     if (!pronunciationLabDeck.length) {
       alert(
         joinLocalizedText(
-          `${activePracticeSubject?.name || "This subject"} does not have enough speaking prompts for Pronunciation Lab yet.`,
-          `${activePracticeSubject?.nameUr || "اس مضمون"} کے لیے تلفظ لیب کے لیے کافی بولنے والے اشارے ابھی موجود نہیں ہیں۔`,
+          "This subject does not have enough speaking prompts for Pronunciation Lab yet.",
+          "اس مضمون کے لیے تلفظ لیب کے لیے کافی بولنے والے اشارے ابھی موجود نہیں ہیں۔",
           language,
         ),
       );
@@ -12600,7 +12600,7 @@ const headerHideTimerRef = useRef(null);
     setPronunciationLabResult(null);
     setPronunciationLabHistory({});
     setPronunciationLabOpen(true);
-  }, [activePracticeSubject?.name, activePracticeSubject?.nameUr, language, pronunciationLabDeck.length]);
+  }, [language, pronunciationLabDeck.length]);
 
   const handleClosePronunciationLab = useCallback(() => {
     stopPronunciationListening();
