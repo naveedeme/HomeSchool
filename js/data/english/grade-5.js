@@ -5,12 +5,6 @@
   window.HomeSchoolLessonModules.english = window.HomeSchoolLessonModules.english || {};
   window.HomeSchoolLessonModules.english[5] = [
   {
-    "title": "Grammar",
-    "content": "Tenses, subject-verb agreement.",
-    "key": "grammar",
-    "id": "english_5_0"
-  },
-  {
     "title": "Reading Comprehension",
     "content": "Build reading strength through guided tense-based passages, supporting details, and comprehension questions.",
     "key": "reading",
@@ -23,12 +17,6 @@
       }
     ],
     "id": "english_5_1"
-  },
-  {
-    "title": "Creative Writing",
-    "content": "Descriptive writing.",
-    "key": "creative",
-    "id": "english_5_2"
   },
   {
     "title": "Parts of Speech",
@@ -58758,6 +58746,18 @@
       }
     ],
     "id": "english_5_7"
+  },
+  {
+    "title": "Grammar",
+    "content": "Tenses, subject-verb agreement.",
+    "key": "grammar",
+    "id": "english_5_0"
+  },
+  {
+    "title": "Creative Writing",
+    "content": "Descriptive writing.",
+    "key": "creative",
+    "id": "english_5_2"
   }
 ];
 })();
