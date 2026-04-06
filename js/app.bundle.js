@@ -10407,133 +10407,6 @@ ${marker} `);
       } catch (error) {
       }
     }, []);
-    const handleOpenPronunciationLab = useCallback(() => {
-      if (!pronunciationLabDeck.length) {
-        alert(
-          joinLocalizedText(
-            "This subject does not have enough speaking prompts for Pronunciation Lab yet.",
-            "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u0644\u0641\u0638 \u0644\u06CC\u0628 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0627\u0641\u06CC \u0628\u0648\u0644\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0627\u0628\u06BE\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA \u06C1\u06CC\u06BA\u06D4",
-            language
-          )
-        );
-        return;
-      }
-      setPronunciationLabIdx(0);
-      setPronunciationLabTranscript("");
-      setPronunciationLabResult(null);
-      setPronunciationLabHistory({});
-      setPronunciationLabOpen(true);
-    }, [language, pronunciationLabDeck.length]);
-    const handleClosePronunciationLab = useCallback(() => {
-      stopPronunciationListening();
-      setPronunciationLabListening(false);
-      setPronunciationLabOpen(false);
-      setPronunciationLabTranscript("");
-      setPronunciationLabResult(null);
-      window.speechSynthesis.cancel();
-    }, [stopPronunciationListening]);
-    const handlePlayPronunciationModel = useCallback(() => {
-      var _a2, _b2;
-      if (!activePronunciationCard || audioMuted) return;
-      (_b2 = (_a2 = window.HomeSchoolUtils) == null ? void 0 : _a2.speakText) == null ? void 0 : _b2.call(
-        _a2,
-        activePronunciationCard.pronunciationTarget,
-        activePronunciationCard.pronunciationLang || "en"
-      );
-    }, [activePronunciationCard, audioMuted]);
-    const handlePronunciationPrev = useCallback(() => {
-      if (pronunciationLabIdx <= 0) return;
-      stopPronunciationListening();
-      setPronunciationLabListening(false);
-      setPronunciationLabIdx((current) => Math.max(0, current - 1));
-      setPronunciationLabTranscript("");
-      setPronunciationLabResult(null);
-    }, [pronunciationLabIdx, stopPronunciationListening]);
-    const handlePronunciationNext = useCallback(() => {
-      if (pronunciationLabIdx >= pronunciationLabDeck.length - 1) return;
-      stopPronunciationListening();
-      setPronunciationLabListening(false);
-      setPronunciationLabIdx((current) => Math.min(pronunciationLabDeck.length - 1, current + 1));
-      setPronunciationLabTranscript("");
-      setPronunciationLabResult(null);
-    }, [pronunciationLabDeck.length, pronunciationLabIdx, stopPronunciationListening]);
-    const handlePronunciationRetry = useCallback(() => {
-      stopPronunciationListening();
-      setPronunciationLabListening(false);
-      setPronunciationLabTranscript("");
-      setPronunciationLabResult(null);
-    }, [stopPronunciationListening]);
-    const handlePronunciationListen = useCallback(() => {
-      var _a2, _b2;
-      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!activePronunciationCard || !SpeechRecognitionClass) return;
-      if (pronunciationLabListening) {
-        stopPronunciationListening();
-        return;
-      }
-      try {
-        (_b2 = (_a2 = speechRecognitionRef.current) == null ? void 0 : _a2.stop) == null ? void 0 : _b2.call(_a2);
-      } catch (error) {
-      }
-      const recognition = new SpeechRecognitionClass();
-      recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
-      recognition.interimResults = false;
-      recognition.continuous = false;
-      recognition.maxAlternatives = 1;
-      recognition.onresult = (event) => {
-        var _a3, _b3;
-        const transcript = Array.from(event.results || []).map((result) => {
-          var _a4;
-          return ((_a4 = result == null ? void 0 : result[0]) == null ? void 0 : _a4.transcript) || "";
-        }).join(" ").trim();
-        const assessment = assessPronunciationAttempt(
-          activePronunciationCard.pronunciationTarget,
-          transcript,
-          activePronunciationCard.pronunciationLang || "en"
-        );
-        const resultPayload = {
-          ...assessment,
-          transcript,
-          feedback: buildPronunciationFeedback(assessment.status, language)
-        };
-        setPronunciationLabTranscript(transcript);
-        setPronunciationLabResult(resultPayload);
-        setPronunciationLabHistory((current) => {
-          const key = String(activePronunciationCard.id || activePronunciationCard.pronunciationTarget || pronunciationLabIdx);
-          const existing = (current == null ? void 0 : current[key]) || { attempts: 0, bestScore: 0 };
-          return {
-            ...current || {},
-            [key]: {
-              attempts: existing.attempts + 1,
-              bestScore: Math.max(existing.bestScore || 0, assessment.score || 0),
-              status: assessment.status
-            }
-          };
-        });
-        (_b3 = (_a3 = window.HomeSchoolUtils) == null ? void 0 : _a3.playFeedbackSound) == null ? void 0 : _b3.call(
-          _a3,
-          assessment.status === "exact" || assessment.status === "strong" ? "correct" : "wrong"
-        );
-      };
-      recognition.onerror = () => {
-        setPronunciationLabResult({
-          status: "missing",
-          score: 0,
-          transcript: "",
-          feedback: buildPronunciationFeedback("missing", language)
-        });
-        setPronunciationLabListening(false);
-      };
-      recognition.onend = () => {
-        setPronunciationLabListening(false);
-        pronunciationRecognitionRef.current = null;
-      };
-      pronunciationRecognitionRef.current = recognition;
-      setPronunciationLabTranscript("");
-      setPronunciationLabResult(null);
-      setPronunciationLabListening(true);
-      recognition.start();
-    }, [activePronunciationCard, language, pronunciationLabIdx, pronunciationLabListening, stopPronunciationListening]);
     const handleCopyWordMeaning = useCallback(() => {
       if (!wordMeaningPopover) return;
       copyTextToClipboard(buildWordMeaningCopyText(wordMeaningPopover));
@@ -12564,6 +12437,133 @@ ${marker} `);
       [practiceSubjectSourcePool]
     );
     const pronunciationLabReadyCount = pronunciationLabDeck.length;
+    const handleOpenPronunciationLab = useCallback(() => {
+      if (!pronunciationLabDeck.length) {
+        alert(
+          joinLocalizedText(
+            "This subject does not have enough speaking prompts for Pronunciation Lab yet.",
+            "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u0644\u0641\u0638 \u0644\u06CC\u0628 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0627\u0641\u06CC \u0628\u0648\u0644\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0627\u0628\u06BE\u06CC \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA \u06C1\u06CC\u06BA\u06D4",
+            language
+          )
+        );
+        return;
+      }
+      setPronunciationLabIdx(0);
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+      setPronunciationLabHistory({});
+      setPronunciationLabOpen(true);
+    }, [language, pronunciationLabDeck.length]);
+    const handleClosePronunciationLab = useCallback(() => {
+      stopPronunciationListening();
+      setPronunciationLabListening(false);
+      setPronunciationLabOpen(false);
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+      window.speechSynthesis.cancel();
+    }, [stopPronunciationListening]);
+    const handlePlayPronunciationModel = useCallback(() => {
+      var _a2, _b2;
+      if (!activePronunciationCard || audioMuted) return;
+      (_b2 = (_a2 = window.HomeSchoolUtils) == null ? void 0 : _a2.speakText) == null ? void 0 : _b2.call(
+        _a2,
+        activePronunciationCard.pronunciationTarget,
+        activePronunciationCard.pronunciationLang || "en"
+      );
+    }, [activePronunciationCard, audioMuted]);
+    const handlePronunciationPrev = useCallback(() => {
+      if (pronunciationLabIdx <= 0) return;
+      stopPronunciationListening();
+      setPronunciationLabListening(false);
+      setPronunciationLabIdx((current) => Math.max(0, current - 1));
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+    }, [pronunciationLabIdx, stopPronunciationListening]);
+    const handlePronunciationNext = useCallback(() => {
+      if (pronunciationLabIdx >= pronunciationLabDeck.length - 1) return;
+      stopPronunciationListening();
+      setPronunciationLabListening(false);
+      setPronunciationLabIdx((current) => Math.min(pronunciationLabDeck.length - 1, current + 1));
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+    }, [pronunciationLabDeck.length, pronunciationLabIdx, stopPronunciationListening]);
+    const handlePronunciationRetry = useCallback(() => {
+      stopPronunciationListening();
+      setPronunciationLabListening(false);
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+    }, [stopPronunciationListening]);
+    const handlePronunciationListen = useCallback(() => {
+      var _a2, _b2;
+      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!activePronunciationCard || !SpeechRecognitionClass) return;
+      if (pronunciationLabListening) {
+        stopPronunciationListening();
+        return;
+      }
+      try {
+        (_b2 = (_a2 = speechRecognitionRef.current) == null ? void 0 : _a2.stop) == null ? void 0 : _b2.call(_a2);
+      } catch (error) {
+      }
+      const recognition = new SpeechRecognitionClass();
+      recognition.lang = activePronunciationCard.pronunciationLang === "ur" ? "ur-PK" : "en-US";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        var _a3, _b3;
+        const transcript = Array.from(event.results || []).map((result) => {
+          var _a4;
+          return ((_a4 = result == null ? void 0 : result[0]) == null ? void 0 : _a4.transcript) || "";
+        }).join(" ").trim();
+        const assessment = assessPronunciationAttempt(
+          activePronunciationCard.pronunciationTarget,
+          transcript,
+          activePronunciationCard.pronunciationLang || "en"
+        );
+        const resultPayload = {
+          ...assessment,
+          transcript,
+          feedback: buildPronunciationFeedback(assessment.status, language)
+        };
+        setPronunciationLabTranscript(transcript);
+        setPronunciationLabResult(resultPayload);
+        setPronunciationLabHistory((current) => {
+          const key = String(activePronunciationCard.id || activePronunciationCard.pronunciationTarget || pronunciationLabIdx);
+          const existing = (current == null ? void 0 : current[key]) || { attempts: 0, bestScore: 0 };
+          return {
+            ...current || {},
+            [key]: {
+              attempts: existing.attempts + 1,
+              bestScore: Math.max(existing.bestScore || 0, assessment.score || 0),
+              status: assessment.status
+            }
+          };
+        });
+        (_b3 = (_a3 = window.HomeSchoolUtils) == null ? void 0 : _a3.playFeedbackSound) == null ? void 0 : _b3.call(
+          _a3,
+          assessment.status === "exact" || assessment.status === "strong" ? "correct" : "wrong"
+        );
+      };
+      recognition.onerror = () => {
+        setPronunciationLabResult({
+          status: "missing",
+          score: 0,
+          transcript: "",
+          feedback: buildPronunciationFeedback("missing", language)
+        });
+        setPronunciationLabListening(false);
+      };
+      recognition.onend = () => {
+        setPronunciationLabListening(false);
+        pronunciationRecognitionRef.current = null;
+      };
+      pronunciationRecognitionRef.current = recognition;
+      setPronunciationLabTranscript("");
+      setPronunciationLabResult(null);
+      setPronunciationLabListening(true);
+      recognition.start();
+    }, [activePronunciationCard, language, pronunciationLabIdx, pronunciationLabListening, stopPronunciationListening]);
     const practiceTimedChallengeReadyCount = useMemo(
       () => buildTimedChallengeDeck(practiceSubjectSourcePool, 6, 4).length,
       [practiceSubjectSourcePool]
