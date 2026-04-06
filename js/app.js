@@ -501,6 +501,7 @@ function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", ro
         ...routeMeta,
         subTab: "exercises",
         exerciseKind: kind || "",
+        groupLabel: String(exercise?.__groupLabel || routeMeta?.groupLabel || "").trim(),
       },
       children: [],
     });
@@ -531,7 +532,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
       routeMeta: {
         ...safeRouteMeta,
         subTab: "examples",
-        targetScope: "tab",
+        targetScope: "section",
       },
       children: [],
     });
@@ -556,7 +557,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
       routeMeta: {
         ...safeRouteMeta,
         subTab: "exercises",
-        targetScope: "tab",
+        targetScope: "section",
       },
       children: collectDiaryExerciseOutlineNodes(
         exerciseEntries,
@@ -577,7 +578,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
       routeMeta: {
         ...safeRouteMeta,
         subTab: "quiz",
-        targetScope: "tab",
+        targetScope: "section",
       },
       children: [],
     });
@@ -604,7 +605,7 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "") {
     children.push({
       key: `${baseKey}_examples`,
       label: isUrdu ? "مثالیں" : "Examples",
-      routeMeta: { subTab: "examples" },
+      routeMeta: { subTab: "examples", targetScope: "section" },
       children: [],
     });
   }
@@ -614,7 +615,7 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "") {
     children.push({
       key: `${baseKey}_exercises`,
       label: isUrdu ? "مشقیں" : "Exercises",
-      routeMeta: { subTab: "exercises" },
+      routeMeta: { subTab: "exercises", targetScope: "section" },
       children: collectDiaryExerciseOutlineNodes(
         exerciseEntries,
         `${baseKey}_exercises`,
@@ -628,7 +629,7 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "") {
     children.push({
       key: `${baseKey}_quiz`,
       label: isUrdu ? "کوئز" : "Quiz",
-      routeMeta: { subTab: "quiz" },
+      routeMeta: { subTab: "quiz", targetScope: "section" },
       children: [],
     });
   }
@@ -20810,24 +20811,43 @@ const lessons = getMergedLessons(subjectId, grade);
   useEffect(() => {
     if (!viewTargetId) return undefined;
     let activeHighlightNode = null;
-    const timeout = setTimeout(() => {
-      const safeId = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(String(viewTargetId)) : String(viewTargetId).replace(/"/g, '\\"');
+    let cancelled = false;
+    const safeId = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(String(viewTargetId)) : String(viewTargetId).replace(/"/g, '\\"');
+    const isDiary = String(viewTargetId).startsWith("diary_target_");
+    const scrollToTarget = () => {
+      if (cancelled) return;
+      const target = document.querySelector(`[data-study-id="${safeId}"]`);
+      if (!target) return;
+      const highlightNode = isDiary
+        ? target
+        : target.closest(".word-row, .lesson-detail, .adverb-detail-section, .study-word-card, .review-panel, .settings-item, .settings-profile-card") || target;
+      activeHighlightNode = highlightNode;
+      highlightNode.classList.add("study-focus-active-manual");
+      if (isDiary) {
+        const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
+        const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerOffset);
+        window.scrollTo({ top, behavior: "smooth" });
+      } else {
+        highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }
+    };
+    const initialDelay = isDiary ? 420 : 200;
+    let retryCount = 0;
+    const maxRetries = isDiary ? 6 : 3;
+    const tryFind = () => {
+      if (cancelled) return;
       const target = document.querySelector(`[data-study-id="${safeId}"]`);
       if (target) {
-        const highlightNode = target.closest(".word-row, .lesson-detail, .adverb-detail-section, .study-word-card, .review-panel, .settings-item, .settings-profile-card") || target;
-        activeHighlightNode = highlightNode;
-        highlightNode.classList.add("study-focus-active-manual");
-        if (String(viewTargetId).startsWith("diary_target_")) {
-          const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
-          const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerOffset - 10);
-          window.scrollTo({ top, behavior: "smooth" });
-        } else {
-          highlightNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-        }
+        scrollToTarget();
+      } else if (retryCount < maxRetries) {
+        retryCount++;
+        setTimeout(tryFind, 180);
       }
-    }, 280);
-    const cleanup = setTimeout(() => setViewTargetId(null), 1800);
+    };
+    const timeout = setTimeout(tryFind, initialDelay);
+    const cleanup = setTimeout(() => setViewTargetId(null), 3000);
     return () => {
+      cancelled = true;
       clearTimeout(timeout);
       clearTimeout(cleanup);
       if (activeHighlightNode) {
@@ -20889,6 +20909,7 @@ const lessons = getMergedLessons(subjectId, grade);
     setDiarySectionTab(String(diaryTaskNavigator?.returnSection || "daily").trim() || "daily");
     setDiaryWeekAnchorDate(fallbackAnchorDate);
     if (diaryTaskNavigator?.returnStudentEmail) setPerformanceStudentEmail(diaryTaskNavigator.returnStudentEmail);
+    setDiaryTaskNavigator(null);
     clearLessonSelections();
     setSelectedLesson(null);
     setSelectedSubject(null);
@@ -20899,18 +20920,23 @@ const lessons = getMergedLessons(subjectId, grade);
     setQuizIdx(0);
     setViewTargetId(null);
     if (returnTargetDate || returnTaskKey) {
-      setTimeout(() => {
+      let retryCount = 0;
+      const tryScrollBack = () => {
         const taskSelector = returnTaskKey ? `[data-diary-task-key="${returnTaskKey.replace(/"/g, '\\"')}"]` : "";
         const daySelector = returnTargetDate ? `[data-diary-date="${returnTargetDate.replace(/"/g, '\\"')}"]` : "";
         const target = (taskSelector ? document.querySelector(taskSelector) : null)
           || (daySelector ? document.querySelector(daySelector) : null);
-        if (!target) return;
+        if (!target) {
+          if (retryCount < 6) { retryCount++; setTimeout(tryScrollBack, 180); }
+          return;
+        }
         target.classList.add("study-focus-active-manual");
         const headerOffset = Math.max(0, Number(headerRef.current?.offsetHeight || headerHideOffset || 0));
         const top = Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerOffset - 10);
         window.scrollTo({ top, behavior: "smooth" });
         setTimeout(() => target.classList.remove("study-focus-active-manual"), 1600);
-      }, 220);
+      };
+      setTimeout(tryScrollBack, 420);
     }
   }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate, headerHideOffset]);
 
@@ -21928,6 +21954,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     clearQuizAdvanceTimeout();
     setNavHidden(Boolean(navAutoHide));
     setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top"));
+    setDiaryTaskNavigator(null);
     setTab("home");
     setSelectedSubject(null);
     setSelectedLesson(null);
