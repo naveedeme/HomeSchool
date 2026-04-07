@@ -387,6 +387,22 @@ function splitBalanced(items = [], groups = 1) {
   return buckets;
 }
 
+function normalizeTextArray(raw) {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .filter((value, index, list) => list.indexOf(value) === index);
+  }
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  return text
+    .split(/[,\n]+/)
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value, index, list) => list.indexOf(value) === index);
+}
+
 function normalizeLessonWorkUnit(raw, lesson = {}, index = 0) {
   if (raw == null) return null;
   if (typeof raw === "string") {
@@ -809,6 +825,82 @@ function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5) {
   return buckets;
 }
 
+function buildAutoDiaryLessonCoverageLookup({
+  diaryCompletions = [],
+  studentEmail = "",
+  schoolId = "",
+  currentWeekStartDate = "",
+  studyDays = 5,
+}) {
+  const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
+  const safeSchoolId = String(schoolId || "").trim();
+  const safeWeekStart = String(currentWeekStartDate || "").trim();
+  const safeStudyDays = Math.max(1, Number(studyDays) || 5);
+  const lessonCoverage = new Map();
+  if (!safeStudentEmail) return lessonCoverage;
+  (Array.isArray(diaryCompletions) ? diaryCompletions : [])
+    .map((entry) => normalizeDiaryCompletionRecord(entry))
+    .filter(Boolean)
+    .filter((entry) => (
+      entry.taskKind === "auto"
+      && entry.studentEmail === safeStudentEmail
+      && (!safeSchoolId || String(entry.schoolId || "").trim() === safeSchoolId)
+      && entry.subject
+      && entry.lessonKey
+      && (!safeWeekStart || entry.targetDate < safeWeekStart)
+    ))
+    .sort((left, right) => (
+      String(left.targetDate || "").localeCompare(String(right.targetDate || ""))
+      || Number(left.completedAt || 0) - Number(right.completedAt || 0)
+    ))
+    .forEach((entry) => {
+      const coverageKey = [
+        String(entry.subject || "").trim(),
+        resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
+        String(entry.contentId || "").trim() || "__default__",
+      ].join("::");
+      if (!coverageKey) return;
+      const current = lessonCoverage.get(coverageKey) || { taskKeys: new Set(), count: 0 };
+      if (current.taskKeys.has(entry.taskKey)) return;
+      current.taskKeys.add(entry.taskKey);
+      current.count = Math.min(safeStudyDays, current.taskKeys.size);
+      lessonCoverage.set(coverageKey, current);
+    });
+  return lessonCoverage;
+}
+
+function getAutoDiaryLessonCoverageSlots({
+  subjectId = "",
+  chapterGroup = null,
+  completedQuizzes = {},
+  practiceLessonProgress = {},
+  lessonCoverageLookup = new Map(),
+  studyDays = 5,
+}) {
+  const lesson = chapterGroup?.activeLesson || null;
+  if (!lesson || !chapterGroup) return 0;
+  if (isLessonProgressComplete(lesson, completedQuizzes, practiceLessonProgress)) {
+    return Math.max(1, Number(studyDays) || 5);
+  }
+  const coverageKey = [
+    String(subjectId || "").trim(),
+    resolveCustomChapterLessonKey({ lessonKey: chapterGroup.canonicalLessonKey || "" }),
+    String(chapterGroup?.activeVariant?.contentId || "").trim() || "__default__",
+  ].join("::");
+  return Math.min(Math.max(0, Number(lessonCoverageLookup.get(coverageKey)?.count || 0)), Math.max(1, Number(studyDays) || 5));
+}
+
+function shouldIncludeAutoDiarySubject(subject, {
+  autoDiarySubjectMode = "all",
+  autoDiarySubjectIds = [],
+} = {}) {
+  const safeSubjectId = String(subject?.id || "").trim();
+  if (!safeSubjectId) return false;
+  if (String(autoDiarySubjectMode || "all").trim().toLowerCase() !== "selected") return true;
+  const allowedIds = new Set(normalizeTextArray(autoDiarySubjectIds));
+  return allowedIds.has(safeSubjectId);
+}
+
 function createEmptyContentRelationshipState() {
   return {
     loaded: false,
@@ -835,6 +927,11 @@ function normalizeSchoolRecord(raw) {
     ownerEmail: String(raw?.owner_email || raw?.ownerEmail || "").trim().toLowerCase(),
     principalEmail: String(raw?.principal_email || raw?.principalEmail || "").trim().toLowerCase(),
     yearStartDate: String(raw?.year_start_date || raw?.yearStartDate || "").trim(),
+    autoDiaryStartDate: String(raw?.auto_diary_start_date || raw?.autoDiaryStartDate || raw?.year_start_date || raw?.yearStartDate || "").trim(),
+    autoDiarySubjectMode: String(raw?.auto_diary_subject_mode || raw?.autoDiarySubjectMode || "all").trim().toLowerCase() === "selected" ? "selected" : "all",
+    autoDiarySubjectIds: normalizeTextArray(raw?.auto_diary_subject_ids || raw?.autoDiarySubjectIds),
+    autoDiaryPlanMode: String(raw?.auto_diary_plan_mode || raw?.autoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" ? "subject_rotation" : "all_subjects_daily",
+    autoDiaryAdvanceMode: String(raw?.auto_diary_advance_mode || raw?.autoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() === "weekly_lesson" ? "weekly_lesson" : "carry_forward",
     weekAccumulationMode: String(raw?.week_accumulation_mode || raw?.weekAccumulationMode || "rolling").trim().toLowerCase() || "rolling",
     weekAccumulationValue: Math.max(1, Number(raw?.week_accumulation_value || raw?.weekAccumulationValue) || 8),
     status: String(raw?.status || "active").trim().toLowerCase() || "active",
@@ -1224,29 +1321,96 @@ function buildAutoDiaryWeekPlan({
   grade = null,
   weekDates = [],
   yearStartDate = "",
+  autoDiaryStartDate = "",
+  autoDiarySubjectMode = "all",
+  autoDiarySubjectIds = [],
+  autoDiaryPlanMode = "all_subjects_daily",
+  autoDiaryAdvanceMode = "carry_forward",
+  schoolId = "",
   getLessonGroups,
   getQuiz,
   completedQuizzes = {},
   practiceLessonProgress = {},
+  diaryCompletions = [],
+  studentEmail = "",
 }) {
   if (!Number.isFinite(Number(grade)) || !Array.isArray(weekDates) || weekDates.length < 5 || typeof getLessonGroups !== "function" || typeof getQuiz !== "function") {
     return [];
   }
-  const academicWeekNumber = getAcademicWeekNumber(weekDates[0] || Date.now(), yearStartDate);
-  return (Array.isArray(subjects) ? subjects : []).flatMap((subject, subjectIndex) => {
+  const safeWeekDates = weekDates.slice(0, 5);
+  const academicWeekNumber = getAcademicWeekNumber(safeWeekDates[0] || Date.now(), yearStartDate);
+  const safeStudyDays = safeWeekDates.length || 5;
+  const safeSubjects = (Array.isArray(subjects) ? subjects : []).filter((subject) => shouldIncludeAutoDiarySubject(subject, { autoDiarySubjectMode, autoDiarySubjectIds }));
+  const safeAutoDiaryStartDate = String(autoDiaryStartDate || "").trim();
+  const lessonCoverageLookup = buildAutoDiaryLessonCoverageLookup({
+    diaryCompletions,
+    studentEmail,
+    schoolId,
+    currentWeekStartDate: safeWeekDates[0] || "",
+    studyDays: safeStudyDays,
+  });
+  const rotationSubjectIds = safeSubjects.map((subject) => String(subject?.id || "").trim()).filter(Boolean);
+  return safeSubjects.flatMap((subject, subjectIndex) => {
     try {
       const lessonGroups = (getLessonGroups(subject.id, grade) || []).filter((group) => group?.activeLesson);
       if (!lessonGroups.length) return [];
-      const unfinishedIndex = lessonGroups.findIndex((group) => !isLessonProgressComplete(group.activeLesson, completedQuizzes, practiceLessonProgress));
-      const selectedGroupIndex = unfinishedIndex >= 0 ? unfinishedIndex : Math.min(lessonGroups.length - 1, Math.max(0, academicWeekNumber - 1));
-      const selectedGroup = lessonGroups[selectedGroupIndex] || lessonGroups[0];
-      const lesson = selectedGroup?.activeLesson;
-      if (!lesson) return [];
-      const quizRows = getQuiz(subject.id, grade, lesson.key);
-      const units = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
-      const buckets = distributeWorkUnitsAcrossStudyDays(units, 5);
-      return weekDates.slice(0, 5).map((targetDate, dayIndex) => {
-        const bucketUnits = Array.isArray(buckets[dayIndex]) ? buckets[dayIndex] : [];
+      const lessonPlans = lessonGroups.map((group) => {
+        const lesson = group?.activeLesson;
+        const canonicalLessonKey = resolveCustomChapterLessonKey({ lessonKey: group?.canonicalLessonKey || lesson?.key || lesson?.id || "" });
+        const quizRows = getQuiz(subject.id, grade, canonicalLessonKey);
+        const units = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
+        return {
+          chapterGroup: group,
+          lesson,
+          canonicalLessonKey,
+          units,
+          buckets: distributeWorkUnitsAcrossStudyDays(units, safeStudyDays),
+          completedSlots: getAutoDiaryLessonCoverageSlots({
+            subjectId: subject.id,
+            chapterGroup: group,
+            completedQuizzes,
+            practiceLessonProgress,
+            lessonCoverageLookup,
+            studyDays: safeStudyDays,
+          }),
+        };
+      }).filter((entry) => entry.lesson && entry.canonicalLessonKey);
+      if (!lessonPlans.length) return [];
+      const carryForwardEnabled = String(autoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() !== "weekly_lesson";
+      const weeklyLessonIndex = (() => {
+        const unfinishedIndex = lessonPlans.findIndex((entry) => entry.completedSlots < safeStudyDays);
+        return unfinishedIndex >= 0 ? unfinishedIndex : Math.min(lessonPlans.length - 1, Math.max(0, academicWeekNumber - 1));
+      })();
+      let currentLessonIndex = carryForwardEnabled ? lessonPlans.findIndex((entry) => entry.completedSlots < safeStudyDays) : weeklyLessonIndex;
+      if (currentLessonIndex < 0) currentLessonIndex = lessonPlans.length - 1;
+      let currentSlotIndex = carryForwardEnabled ? Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1) : 0;
+      const allLessonsCompleted = carryForwardEnabled && lessonPlans.every((entry) => entry.completedSlots >= safeStudyDays);
+      return safeWeekDates.flatMap((targetDate, dayIndex) => {
+        if (safeAutoDiaryStartDate && targetDate < safeAutoDiaryStartDate) return [];
+        if (String(autoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" && rotationSubjectIds.length) {
+          const rotationSubjectId = rotationSubjectIds[(Math.max(0, academicWeekNumber - 1) + dayIndex) % rotationSubjectIds.length];
+          if (rotationSubjectId !== subject.id) return [];
+        }
+        let selectedPlan = null;
+        let bucketIndex = 0;
+        if (!carryForwardEnabled) {
+          selectedPlan = lessonPlans[weeklyLessonIndex] || lessonPlans[0];
+          bucketIndex = dayIndex % safeStudyDays;
+        } else if (allLessonsCompleted) {
+          selectedPlan = lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
+          bucketIndex = dayIndex % safeStudyDays;
+        } else {
+          while (currentLessonIndex < lessonPlans.length && (lessonPlans[currentLessonIndex]?.completedSlots || 0) >= safeStudyDays) {
+            currentLessonIndex += 1;
+            currentSlotIndex = Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1);
+          }
+          selectedPlan = lessonPlans[currentLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
+          bucketIndex = Math.min(currentSlotIndex, safeStudyDays - 1);
+        }
+        const selectedGroup = selectedPlan?.chapterGroup || null;
+        const lesson = selectedPlan?.lesson || null;
+        if (!selectedGroup || !lesson) return [];
+        const bucketUnits = Array.isArray(selectedPlan?.buckets?.[bucketIndex]) ? selectedPlan.buckets[bucketIndex] : [];
         const fallbackUnit = {
           key: `${subject.id}_${selectedGroup.canonicalLessonKey}_overview_${dayIndex + 1}`,
           title: lesson.title || `${subject.name || subject.id} lesson`,
@@ -1256,7 +1420,7 @@ function buildAutoDiaryWeekPlan({
         const leadUnit = bucketUnits[0] || fallbackUnit;
         const derivedTaskTitle = String(leadUnit?.sourceMeta?.title || leadUnit?.title || lesson.title || `${subject.name || subject.id} lesson`).trim()
           || String(lesson.title || `${subject.name || subject.id} lesson`).trim();
-        return {
+        const task = {
           taskKind: "auto",
           taskKey: buildDiaryTaskKey("auto", {
             subject: subject.id,
@@ -1266,7 +1430,7 @@ function buildAutoDiaryWeekPlan({
           }),
           schoolId: "",
           targetDate,
-          weekStartDate: weekDates[0],
+          weekStartDate: safeWeekDates[0],
           dayIndex: dayIndex + 1,
           academicWeekNumber,
           subject: subject.id,
@@ -1282,6 +1446,14 @@ function buildAutoDiaryWeekPlan({
           lesson,
           subjectIndex,
         };
+        if (carryForwardEnabled && !allLessonsCompleted) {
+          currentSlotIndex += 1;
+          if (currentSlotIndex >= safeStudyDays) {
+            currentLessonIndex += 1;
+            currentSlotIndex = Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1);
+          }
+        }
+        return [task];
       });
     } catch (error) {
       console.log("Unable to build auto diary task for subject:", subject?.id, error);
@@ -1546,6 +1718,7 @@ function buildDiaryTasksForWeek({
   diaryEntries = [],
   subjectsById = {},
   chapterGroupLookup = {},
+  yearStartDate = "",
 }) {
   const normalizedEntries = Array.isArray(diaryEntries) ? diaryEntries : [];
   const assignedTasks = normalizedEntries
@@ -1564,7 +1737,7 @@ function buildDiaryTasksForWeek({
       targetDate: entry.targetDate,
       weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
       dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
-      academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
+      academicWeekNumber: getAcademicWeekNumber(entry.targetDate, yearStartDate),
       subject: entry.subject,
       subjectLabel: subject?.name || entry.subject,
       subjectLabelUr: subject?.nameUr || subject?.name || entry.subject,
@@ -1601,7 +1774,7 @@ function buildDiaryTasksForWeek({
         targetDate: entry.targetDate,
         weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
         dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
-        academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
+        academicWeekNumber: getAcademicWeekNumber(entry.targetDate, yearStartDate),
         subject: hasLinkedLesson ? linkedSubjectId : "__assignment__",
         subjectLabel: hasLinkedLesson ? (subject?.name || linkedSubjectId) : joinLocalizedText("Assignments & Projects", "تفویضات اور پروجیکٹس", "en"),
         subjectLabelUr: hasLinkedLesson ? (subject?.nameUr || subject?.name || linkedSubjectId) : "تفویضات اور پروجیکٹس",
@@ -4204,12 +4377,32 @@ create table if not exists public.schools (
   owner_email text not null,
   principal_email text null,
   year_start_date date null,
+  auto_diary_start_date date null,
+  auto_diary_subject_mode text not null default 'all',
+  auto_diary_subject_ids jsonb not null default '[]'::jsonb,
+  auto_diary_plan_mode text not null default 'all_subjects_daily',
+  auto_diary_advance_mode text not null default 'carry_forward',
   week_accumulation_mode text not null default 'rolling',
   week_accumulation_value integer not null default 8,
   status text not null default 'active',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.schools
+  add column if not exists auto_diary_start_date date null;
+
+alter table if exists public.schools
+  add column if not exists auto_diary_subject_mode text not null default 'all';
+
+alter table if exists public.schools
+  add column if not exists auto_diary_subject_ids jsonb not null default '[]'::jsonb;
+
+alter table if exists public.schools
+  add column if not exists auto_diary_plan_mode text not null default 'all_subjects_daily';
+
+alter table if exists public.schools
+  add column if not exists auto_diary_advance_mode text not null default 'carry_forward';
 
 create table if not exists public.school_memberships (
   membership_id text primary key,
@@ -12116,6 +12309,11 @@ function HomeschoolApp() {
   const [schoolDraftOwnerEmail, setSchoolDraftOwnerEmail] = useState("");
   const [schoolDraftPrincipalEmail, setSchoolDraftPrincipalEmail] = useState("");
   const [schoolDraftYearStartDate, setSchoolDraftYearStartDate] = useState(toIsoDateString(new Date(new Date().getFullYear(), 0, 1)));
+  const [schoolDraftAutoDiaryStartDate, setSchoolDraftAutoDiaryStartDate] = useState(toIsoDateString(new Date(new Date().getFullYear(), 0, 1)));
+  const [schoolDraftAutoDiarySubjectMode, setSchoolDraftAutoDiarySubjectMode] = useState("all");
+  const [schoolDraftAutoDiarySubjectIds, setSchoolDraftAutoDiarySubjectIds] = useState([]);
+  const [schoolDraftAutoDiaryPlanMode, setSchoolDraftAutoDiaryPlanMode] = useState("all_subjects_daily");
+  const [schoolDraftAutoDiaryAdvanceMode, setSchoolDraftAutoDiaryAdvanceMode] = useState("carry_forward");
   const [schoolDraftAccumulationMode, setSchoolDraftAccumulationMode] = useState("rolling");
   const [schoolDraftAccumulationValue, setSchoolDraftAccumulationValue] = useState(8);
   const [schoolMemberDraftEmail, setSchoolMemberDraftEmail] = useState("");
@@ -12943,6 +13141,20 @@ const headerHideTimerRef = useRef(null);
     if (!accessibleSchools.length) return null;
     return accessibleSchools.find((entry) => entry.schoolId === activeInstitutionSchoolId) || accessibleSchools[0];
   }, [accessibleSchools, activeInstitutionSchoolId]);
+  useEffect(() => {
+    if (!activeInstitutionSchool) return;
+    setSchoolDraftName(String(activeInstitutionSchool.schoolName || "").trim());
+    setSchoolDraftOwnerEmail(String(activeInstitutionSchool.ownerEmail || "").trim());
+    setSchoolDraftPrincipalEmail(String(activeInstitutionSchool.principalEmail || "").trim());
+    setSchoolDraftYearStartDate(String(activeInstitutionSchool.yearStartDate || toIsoDateString(new Date(new Date().getFullYear(), 0, 1))).trim());
+    setSchoolDraftAutoDiaryStartDate(String(activeInstitutionSchool.autoDiaryStartDate || activeInstitutionSchool.yearStartDate || toIsoDateString(new Date(new Date().getFullYear(), 0, 1))).trim());
+    setSchoolDraftAutoDiarySubjectMode(String(activeInstitutionSchool.autoDiarySubjectMode || "all").trim().toLowerCase() === "selected" ? "selected" : "all");
+    setSchoolDraftAutoDiarySubjectIds(normalizeTextArray(activeInstitutionSchool.autoDiarySubjectIds));
+    setSchoolDraftAutoDiaryPlanMode(String(activeInstitutionSchool.autoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" ? "subject_rotation" : "all_subjects_daily");
+    setSchoolDraftAutoDiaryAdvanceMode(String(activeInstitutionSchool.autoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() === "weekly_lesson" ? "weekly_lesson" : "carry_forward");
+    setSchoolDraftAccumulationMode(String(activeInstitutionSchool.weekAccumulationMode || "rolling").trim().toLowerCase() || "rolling");
+    setSchoolDraftAccumulationValue(Math.max(1, Number(activeInstitutionSchool.weekAccumulationValue) || 8));
+  }, [activeInstitutionSchool]);
   const activeInstitutionSchoolIdResolved = String(activeInstitutionSchool?.schoolId || "").trim();
   const currentUserInstitutionRole = useMemo(() => {
     if (!currentUserSchoolMemberships.length || !activeInstitutionSchoolIdResolved) return "";
@@ -13093,16 +13305,35 @@ const headerHideTimerRef = useRef(null);
   const currentDiaryWeekDates = useMemo(() => getWeekDates(diaryWeekAnchorDate), [diaryWeekAnchorDate]);
   const currentDiaryWeekStartDate = currentDiaryWeekDates[0] || toIsoDateString(getWeekStartDate(Date.now()));
   const activeSchoolYearStartDate = String(activeInstitutionSchool?.yearStartDate || "").trim();
+  const activeAutoDiaryStartDate = String(activeInstitutionSchool?.autoDiaryStartDate || activeSchoolYearStartDate || "").trim();
+  const activeAutoDiarySubjectMode = String(activeInstitutionSchool?.autoDiarySubjectMode || "all").trim().toLowerCase() === "selected" ? "selected" : "all";
+  const activeAutoDiarySubjectIds = normalizeTextArray(activeInstitutionSchool?.autoDiarySubjectIds);
+  const activeAutoDiaryPlanMode = String(activeInstitutionSchool?.autoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" ? "subject_rotation" : "all_subjects_daily";
+  const activeAutoDiaryAdvanceMode = String(activeInstitutionSchool?.autoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() === "weekly_lesson" ? "weekly_lesson" : "carry_forward";
+  const diaryViewerStudentEmailSeed = useMemo(() => {
+    if (performanceStudentEmail && accessibleStudentOptions.some((entry) => entry.email === performanceStudentEmail)) return performanceStudentEmail;
+    if (contentManagerRole === "student" && contentIdentityEmail) return contentIdentityEmail;
+    if (contentManagerRole === "parent" && linkedChildOptions[0]?.email) return linkedChildOptions[0].email;
+    return accessibleStudentOptions[0]?.email || contentIdentityEmail || "";
+  }, [accessibleStudentOptions, contentIdentityEmail, contentManagerRole, linkedChildOptions, performanceStudentEmail]);
   const autoDiaryTasks = useMemo(() => buildAutoDiaryWeekPlan({
     subjects: allSubjects,
     grade,
     weekDates: currentDiaryWeekDates.slice(0, 5),
     yearStartDate: activeSchoolYearStartDate,
+    autoDiaryStartDate: activeAutoDiaryStartDate,
+    autoDiarySubjectMode: activeAutoDiarySubjectMode,
+    autoDiarySubjectIds: activeAutoDiarySubjectIds,
+    autoDiaryPlanMode: activeAutoDiaryPlanMode,
+    autoDiaryAdvanceMode: activeAutoDiaryAdvanceMode,
+    schoolId: activeInstitutionSchoolIdResolved,
     getLessonGroups: getMergedLessonGroups,
     getQuiz: getMergedQuiz,
     completedQuizzes,
     practiceLessonProgress,
-  }), [activeSchoolYearStartDate, allSubjects, completedQuizzes, currentDiaryWeekDates, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+    diaryCompletions: contentRelationshipState.diaryCompletions,
+    studentEmail: diaryViewerStudentEmailSeed,
+  }), [activeAutoDiaryAdvanceMode, activeAutoDiaryPlanMode, activeAutoDiaryStartDate, activeAutoDiarySubjectIds, activeAutoDiarySubjectMode, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
   const visibleDiaryEntries = useMemo(() => {
     const safeEntries = (Array.isArray(contentRelationshipState.diaryEntries) ? contentRelationshipState.diaryEntries : [])
       .map((entry) => normalizeDiaryEntryRecord(entry))
@@ -13147,12 +13378,13 @@ const headerHideTimerRef = useRef(null);
         diaryEntries: currentWeekDiaryEntries,
         subjectsById: subjectLookup,
         chapterGroupLookup,
+        yearStartDate: activeSchoolYearStartDate,
       });
     } catch (error) {
       console.log("Unable to build weekly diary tasks:", error);
       return [];
     }
-  }, [autoDiaryTasks, chapterGroupLookup, currentWeekDiaryEntries, subjectLookup]);
+  }, [activeSchoolYearStartDate, autoDiaryTasks, chapterGroupLookup, currentWeekDiaryEntries, subjectLookup]);
   const visibleDiaryCompletions = useMemo(() => {
     const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : [])
       .map((entry) => normalizeDiaryCompletionRecord(entry))
@@ -13303,12 +13535,6 @@ const headerHideTimerRef = useRef(null);
     });
     return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
   }, [localTestTemplateLibrary, visibleTestTemplates]);
-  const diaryViewerStudentEmailSeed = useMemo(() => {
-    if (performanceStudentEmail && accessibleStudentOptions.some((entry) => entry.email === performanceStudentEmail)) return performanceStudentEmail;
-    if (contentManagerRole === "student" && contentIdentityEmail) return contentIdentityEmail;
-    if (contentManagerRole === "parent" && linkedChildOptions[0]?.email) return linkedChildOptions[0].email;
-    return accessibleStudentOptions[0]?.email || contentIdentityEmail || "";
-  }, [accessibleStudentOptions, contentIdentityEmail, contentManagerRole, linkedChildOptions, performanceStudentEmail]);
   const priorWeekAccumulatedTasks = useMemo(() => {
     try {
       const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : [])
@@ -13538,6 +13764,11 @@ const headerHideTimerRef = useRef(null);
         owner_email: ownerEmail,
         principal_email: principalEmail,
         year_start_date: String(schoolDraftYearStartDate || toIsoDateString(getWeekStartDate(Date.now()))).trim(),
+        auto_diary_start_date: String(schoolDraftAutoDiaryStartDate || schoolDraftYearStartDate || toIsoDateString(getWeekStartDate(Date.now()))).trim(),
+        auto_diary_subject_mode: String(schoolDraftAutoDiarySubjectMode || "all").trim().toLowerCase() === "selected" ? "selected" : "all",
+        auto_diary_subject_ids: normalizeTextArray(schoolDraftAutoDiarySubjectIds),
+        auto_diary_plan_mode: String(schoolDraftAutoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" ? "subject_rotation" : "all_subjects_daily",
+        auto_diary_advance_mode: String(schoolDraftAutoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() === "weekly_lesson" ? "weekly_lesson" : "carry_forward",
         week_accumulation_mode: String(schoolDraftAccumulationMode || "rolling").trim().toLowerCase(),
         week_accumulation_value: Math.max(1, Number(schoolDraftAccumulationValue) || 8),
         status: "active",
@@ -13556,7 +13787,16 @@ const headerHideTimerRef = useRef(null);
       } catch (lookupFailure) {
         console.log("Unable to look up existing school before upsert:", lookupFailure);
       }
-      const { error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(baseRow, { onConflict: "school_id" });
+      let { error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(baseRow, { onConflict: "school_id" });
+      if (error && String(error.message || "").toLowerCase().includes("auto_diary_")) {
+        const fallbackRow = { ...baseRow };
+        delete fallbackRow.auto_diary_start_date;
+        delete fallbackRow.auto_diary_subject_mode;
+        delete fallbackRow.auto_diary_subject_ids;
+        delete fallbackRow.auto_diary_plan_mode;
+        delete fallbackRow.auto_diary_advance_mode;
+        ({ error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(fallbackRow, { onConflict: "school_id" }));
+      }
       if (error) throw error;
       const priorOwnerEmail = String(existingSchoolRow?.owner_email || "").trim().toLowerCase();
       const priorPrincipalEmail = String(existingSchoolRow?.principal_email || "").trim().toLowerCase();
@@ -13629,7 +13869,17 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
+  }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftAutoDiaryAdvanceMode, schoolDraftAutoDiaryPlanMode, schoolDraftAutoDiaryStartDate, schoolDraftAutoDiarySubjectIds, schoolDraftAutoDiarySubjectMode, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
+  const handleToggleSchoolDraftAutoDiarySubject = useCallback((subjectId) => {
+    const safeSubjectId = String(subjectId || "").trim();
+    if (!safeSubjectId) return;
+    setSchoolDraftAutoDiarySubjectIds((current) => {
+      const safeCurrent = normalizeTextArray(current);
+      return safeCurrent.includes(safeSubjectId)
+        ? safeCurrent.filter((entry) => entry !== safeSubjectId)
+        : [...safeCurrent, safeSubjectId];
+    });
+  }, []);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -16975,6 +17225,24 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
             .replace(/permissions_override,\s*/g, "");
           result = await runQuery(fallbackSelectClause);
         }
+        if (
+          result.error
+          && table === SUPABASE_SCHOOLS_TABLE
+          && String(selectClause || "").includes("auto_diary_")
+        ) {
+          const fallbackSelectClause = String(selectClause || "")
+            .replace(/,\s*auto_diary_start_date/g, "")
+            .replace(/auto_diary_start_date,\s*/g, "")
+            .replace(/,\s*auto_diary_subject_mode/g, "")
+            .replace(/auto_diary_subject_mode,\s*/g, "")
+            .replace(/,\s*auto_diary_subject_ids/g, "")
+            .replace(/auto_diary_subject_ids,\s*/g, "")
+            .replace(/,\s*auto_diary_plan_mode/g, "")
+            .replace(/auto_diary_plan_mode,\s*/g, "")
+            .replace(/,\s*auto_diary_advance_mode/g, "")
+            .replace(/auto_diary_advance_mode,\s*/g, "");
+          result = await runQuery(fallbackSelectClause);
+        }
         if (result.error) throw result.error;
         return Array.isArray(result.data) ? result.data.map((row) => normalizeFn(row)).filter(Boolean) : [];
       };
@@ -17046,7 +17314,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
 
       await collectSchoolScoped(
         SUPABASE_SCHOOLS_TABLE,
-        "school_id, school_name, owner_email, principal_email, year_start_date, week_accumulation_mode, week_accumulation_value, status, created_at, updated_at",
+        "school_id, school_name, owner_email, principal_email, year_start_date, auto_diary_start_date, auto_diary_subject_mode, auto_diary_subject_ids, auto_diary_plan_mode, auto_diary_advance_mode, week_accumulation_mode, week_accumulation_value, status, created_at, updated_at",
         normalizeSchoolRecord,
         "schools",
         "schoolId",
@@ -24220,7 +24488,51 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <input className="settings-text-input" value={schoolDraftName} onChange={(event) => setSchoolDraftName(event.target.value)} placeholder={language === "ur" ? "اسکول کا نام" : "School name"} />
                 <input className="settings-text-input" type="email" dir="ltr" value={schoolDraftOwnerEmail} onChange={(event) => setSchoolDraftOwnerEmail(event.target.value)} placeholder={language === "ur" ? "اسکول مالک ای میل" : "School owner email"} />
                 <input className="settings-text-input" type="email" dir="ltr" value={schoolDraftPrincipalEmail} onChange={(event) => setSchoolDraftPrincipalEmail(event.target.value)} placeholder={language === "ur" ? "پرنسپل ای میل" : "Principal email"} />
-                  <CalendarDateField value={schoolDraftYearStartDate} onChange={setSchoolDraftYearStartDate} language={language} />
+                <CalendarDateField value={schoolDraftYearStartDate} onChange={setSchoolDraftYearStartDate} language={language} />
+              </div>
+              <div className="profile-report-item" style={{ marginTop: 10 }}>
+                <div className="profile-report-item-head">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Auto Diary Setup", "خودکار ڈائری سیٹ اپ", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Daily study generation", "روزانہ مطالعہ جنریشن", language), language)}</span>
+                </div>
+                <div className="goal-progress-meta" style={{ marginTop: 6 }}>
+                  {renderLocalizedTextNode(joinLocalizedText("Choose when auto diary starts, which subjects it includes, whether all subjects appear daily or rotate, and whether unfinished chapters carry forward automatically.", "منتخب کریں کہ خودکار ڈائری کب شروع ہو، کون سے مضامین شامل ہوں، کیا ہر روز سب مضامین آئیں یا باری باری، اور کیا نامکمل ابواب خود بخود اگلے ہفتے جاری رہیں۔", language), language)}
+                </div>
+                <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
+                  <CalendarDateField value={schoolDraftAutoDiaryStartDate} onChange={setSchoolDraftAutoDiaryStartDate} language={language} />
+                  <select className="settings-select" value={schoolDraftAutoDiarySubjectMode} onChange={(event) => setSchoolDraftAutoDiarySubjectMode(event.target.value)}>
+                    <option value="all">{renderLocalizedTextNode(joinLocalizedText("Include every subject", "تمام مضامین شامل کریں", language), language)}</option>
+                    <option value="selected">{renderLocalizedTextNode(joinLocalizedText("Choose subjects manually", "مضامین خود منتخب کریں", language), language)}</option>
+                  </select>
+                  <select className="settings-select" value={schoolDraftAutoDiaryPlanMode} onChange={(event) => setSchoolDraftAutoDiaryPlanMode(event.target.value)}>
+                    <option value="all_subjects_daily">{renderLocalizedTextNode(joinLocalizedText("All subjects each day", "ہر روز تمام مضامین", language), language)}</option>
+                    <option value="subject_rotation">{renderLocalizedTextNode(joinLocalizedText("Rotate subjects through the week", "ہفتے میں مضامین باری باری", language), language)}</option>
+                  </select>
+                  <select className="settings-select" value={schoolDraftAutoDiaryAdvanceMode} onChange={(event) => setSchoolDraftAutoDiaryAdvanceMode(event.target.value)}>
+                    <option value="carry_forward">{renderLocalizedTextNode(joinLocalizedText("Carry unfinished chapter slices forward", "نامکمل باب کے حصے آگے بڑھائیں", language), language)}</option>
+                    <option value="weekly_lesson">{renderLocalizedTextNode(joinLocalizedText("Keep one lesson focus per week", "ہر ہفتے ایک سبق مرکز رکھیں", language), language)}</option>
+                  </select>
+                </div>
+                {schoolDraftAutoDiarySubjectMode === "selected" ? (
+                  <div className="profile-switcher-chip-row" style={{ marginTop: 10 }}>
+                    {allSubjects.map((subject) => {
+                      const selected = schoolDraftAutoDiarySubjectIds.includes(subject.id);
+                      return (
+                        <button
+                          key={`auto_diary_subject_${subject.id}`}
+                          type="button"
+                          className={`profile-switcher-chip${selected ? " active" : ""}`}
+                          onClick={() => handleToggleSchoolDraftAutoDiarySubject(subject.id)}
+                        >
+                          <span className="profile-switcher-chip-copy">
+                            <strong>{renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)}</strong>
+                            <span>{renderLocalizedTextNode(selected ? joinLocalizedText("Included in daily diary", "روزانہ ڈائری میں شامل", language) : joinLocalizedText("Tap to include", "شامل کرنے کے لیے منتخب کریں", language), language)}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
               <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
                 <select className="settings-select" value={schoolDraftAccumulationMode} onChange={(event) => setSchoolDraftAccumulationMode(event.target.value)}>
