@@ -28992,10 +28992,15 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <CalendarDateField value={diaryWeekAnchorDate} onChange={handleDiaryWeekAnchorDateChange} language={language} />
                   <button
                     type="button"
-                    className={`ghost-cta diary-detail-toggle${showDetailedDiary ? " active" : ""}`}
+                    className={`diary-detail-toggle${showDetailedDiary ? " active" : ""}`}
                     onClick={() => setShowDetailedDiary((current) => !current)}
                   >
-                    {renderLocalizedTextNode(showDetailedDiary ? joinLocalizedText("Hide detailed diary", "تفصیلی ڈائری چھپائیں", language) : joinLocalizedText("Show detailed diary", "تفصیلی ڈائری دکھائیں", language), language)}
+                    <span className="diary-detail-toggle-label">
+                      {renderLocalizedTextNode(joinLocalizedText("Detailed View", "تفصیلی منظر", language), language)}
+                    </span>
+                    <span className="diary-detail-toggle-state">
+                      {renderLocalizedTextNode(showDetailedDiary ? joinLocalizedText("On", "چالو", language) : joinLocalizedText("Off", "بند", language), language)}
+                    </span>
                   </button>
                   {diaryViewerStudentOptions.length > 1 ? <select className="settings-select diary-viewer-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
                 </div>
@@ -29030,6 +29035,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const detailedTaskOutline = showDetailedDiary ? buildDetailedDiaryTaskOutline(task) : [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
+                              const focusSummary = (Array.isArray(task?.taskUnits) ? task.taskUnits : [])
+                                .map((unit) => String(unit?.title || unit?.detail || "").trim())
+                                .filter(Boolean)
+                                .filter((value, index, list) => list.indexOf(value) === index)
+                                .slice(0, 4)
+                                .join(" · ");
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
                               return (
@@ -29041,7 +29052,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                         <button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(chapterTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button>
                                       </span>
                                       {subsectionTitle && subsectionTitle !== chapterTitle ? <span className="diary-subtitle-line"><span>{renderLocalizedTextNode(subsectionTitle, language)}</span><button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(subsectionTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button></span> : null}
-                                      {!taskOutlineChildren.length && task.taskUnits?.length ? <span className="diary-task-summary-line">{task.taskUnits.slice(0, 3).map((u) => u.title).join(" · ")}</span> : null}
+                                      {focusSummary && focusSummary !== subsectionTitle && focusSummary !== chapterTitle ? <span className="diary-task-summary-line">{renderLocalizedTextNode(focusSummary, language)}</span> : null}
                                     </span>
                                     <span className="diary-task-open-arrow">{completion ? "✓" : language === "ur" ? "←" : "→"}</span>
                                   </button>
@@ -29092,6 +29103,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const detailedTaskOutline = showDetailedDiary ? buildDetailedDiaryTaskOutline(task) : [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
+                              const focusSummary = (Array.isArray(task?.taskUnits) ? task.taskUnits : [])
+                                .map((unit) => String(unit?.title || unit?.detail || "").trim())
+                                .filter(Boolean)
+                                .filter((value, index, list) => list.indexOf(value) === index)
+                                .slice(0, 4)
+                                .join(" · ");
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
                               return (
@@ -29103,7 +29120,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                         <button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(chapterTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button>
                                       </span>
                                       {subsectionTitle && subsectionTitle !== chapterTitle ? <span className="diary-subtitle-line"><span>{renderLocalizedTextNode(subsectionTitle, language)}</span><button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(subsectionTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button></span> : null}
-                                      {!taskOutlineChildren.length && task.taskUnits?.length ? <span className="diary-task-summary-line">{task.taskUnits.slice(0, 3).map((u) => u.title).join(" · ")}</span> : null}
+                                      {focusSummary && focusSummary !== subsectionTitle && focusSummary !== chapterTitle ? <span className="diary-task-summary-line">{renderLocalizedTextNode(focusSummary, language)}</span> : null}
                                     </span>
                                     <span className="diary-task-open-arrow">{completion ? "✓" : language === "ur" ? "←" : "→"}</span>
                                   </button>
