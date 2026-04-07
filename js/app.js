@@ -12125,7 +12125,10 @@ function HomeschoolApp() {
   const [parentLinkDraftStudentEmail, setParentLinkDraftStudentEmail] = useState("");
   const [parentLinkDraftRelationshipLabel, setParentLinkDraftRelationshipLabel] = useState("");
   const [parentLinkDraftFamilyIdentifier, setParentLinkDraftFamilyIdentifier] = useState("");
+  const [todayIso, setTodayIso] = useState(() => toIsoDateString(Date.now()));
+  const previousTodayIsoRef = useRef(todayIso);
   const [diaryWeekAnchorDate, setDiaryWeekAnchorDate] = useState(toIsoDateString(Date.now()));
+  const [diaryWeekAnchorFollowsToday, setDiaryWeekAnchorFollowsToday] = useState(true);
   const [diaryDraftScope, setDiaryDraftScope] = useState("grade");
   const [diaryDraftStudentEmail, setDiaryDraftStudentEmail] = useState("");
   const [diaryDraftRangeMode, setDiaryDraftRangeMode] = useState("single");
@@ -12312,6 +12315,31 @@ function HomeschoolApp() {
   const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
   const canSeeLearnerManagement = canManageStudentLinks || canManageContentAccess;
   const contentIdentityEmail = String(supabaseAuthState.email || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
+  useEffect(() => {
+    const refreshTodayIso = () => {
+      const nextTodayIso = toIsoDateString(Date.now());
+      setTodayIso((current) => (current === nextTodayIso ? current : nextTodayIso));
+    };
+    refreshTodayIso();
+    const intervalId = window.setInterval(refreshTodayIso, 60000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+  useEffect(() => {
+    const previousTodayIso = previousTodayIsoRef.current;
+    if (todayIso && previousTodayIso && previousTodayIso !== todayIso) {
+      if (diaryWeekAnchorFollowsToday || !diaryWeekAnchorDate || diaryWeekAnchorDate === previousTodayIso) {
+        setDiaryWeekAnchorDate(todayIso);
+        setDiaryWeekAnchorFollowsToday(true);
+      }
+    }
+    previousTodayIsoRef.current = todayIso;
+  }, [diaryWeekAnchorDate, diaryWeekAnchorFollowsToday, todayIso]);
+  const handleDiaryWeekAnchorDateChange = useCallback((nextValue) => {
+    const fallbackTodayIso = String(todayIso || toIsoDateString(Date.now())).trim();
+    const nextAnchorDate = String(nextValue || fallbackTodayIso).trim() || fallbackTodayIso;
+    setDiaryWeekAnchorDate(nextAnchorDate);
+    setDiaryWeekAnchorFollowsToday(nextAnchorDate === fallbackTodayIso);
+  }, [todayIso]);
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
   const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
   const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -13153,7 +13181,7 @@ const headerHideTimerRef = useRef(null);
     dayIndex: index + 1,
     tasks: weeklyDiaryTasks.filter((task) => task.targetDate === targetDate),
   })), [currentDiaryWeekDates, weeklyDiaryTasks]);
-  const diaryTodayIso = useMemo(() => toIsoDateString(Date.now()), []);
+  const diaryTodayIso = todayIso;
   const visibleDiaryDayGroups = useMemo(() => {
     const safeGroups = weeklyDiaryTaskGroups
       .filter((group) => group?.targetDate && group.targetDate >= diaryTodayIso)
@@ -21826,6 +21854,7 @@ const lessons = getMergedLessons(subjectId, grade);
     setTab("diary");
     setDiarySectionTab(String(diaryTaskNavigator?.returnSection || "daily").trim() || "daily");
     setDiaryWeekAnchorDate(fallbackAnchorDate);
+    setDiaryWeekAnchorFollowsToday(fallbackAnchorDate === String(todayIso || "").trim());
     if (diaryTaskNavigator?.returnStudentEmail) setPerformanceStudentEmail(diaryTaskNavigator.returnStudentEmail);
     setDiaryTaskNavigator(null);
     clearLessonSelections();
@@ -21873,7 +21902,7 @@ const lessons = getMergedLessons(subjectId, grade);
       };
       setTimeout(tryScrollBack, 420);
     }
-  }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate]);
+  }, [clearLessonSelections, diaryTaskNavigator, diaryWeekAnchorDate, todayIso]);
 
   const handleOpenDiaryTask = useCallback((task, orderedTasks = [], routeMetaOverride = null, originElement = null) => {
     const taskTargetStudentEmail = String(task?.rawEntry?.targetStudentEmail || task?.targetStudentEmail || "").trim().toLowerCase();
@@ -25975,7 +26004,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `ہفتہ ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language)}</span>
                 </div>
                 <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
-                  <CalendarDateField value={diaryWeekAnchorDate} onChange={setDiaryWeekAnchorDate} language={language} />
+                  <CalendarDateField value={diaryWeekAnchorDate} onChange={handleDiaryWeekAnchorDateChange} language={language} />
                   {diaryViewerStudentOptions.length > 1 ? <select className="settings-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
                 </div>
               </div>
