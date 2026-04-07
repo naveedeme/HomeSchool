@@ -13559,6 +13559,7 @@ function HomeschoolApp() {
   const [parentLinkDraftFamilyIdentifier, setParentLinkDraftFamilyIdentifier] = useState("");
   const [todayIso, setTodayIso] = useState(() => toIsoDateString(Date.now()));
   const previousTodayIsoRef = useRef(todayIso);
+  const buildDiaryOverrideSourceSegmentRef = useRef(() => null);
   const [diaryWeekAnchorDate, setDiaryWeekAnchorDate] = useState(toIsoDateString(Date.now()));
   const [diaryWeekAnchorFollowsToday, setDiaryWeekAnchorFollowsToday] = useState(true);
   const [diaryDraftScope, setDiaryDraftScope] = useState("grade");
@@ -14717,7 +14718,7 @@ const headerHideTimerRef = useRef(null);
       const overrideSources = Array.isArray(overrideRecord?.overridePayload?.sources) ? overrideRecord.overridePayload.sources : [];
       if (!overrideSources.length) return task;
       const taskSegments = overrideSources
-        .map((source) => buildDiaryOverrideSourceSegment(source, task))
+        .map((source) => buildDiaryOverrideSourceSegmentRef.current(source, task))
         .filter(Boolean);
       if (!taskSegments.length) return task;
       const primarySegment = taskSegments[0];
@@ -14734,7 +14735,7 @@ const headerHideTimerRef = useRef(null);
         taskSegments,
       };
     }),
-    [buildDiaryOverrideSourceSegment],
+    [],
   );
   const renderedAutoDiaryTasks = useMemo(
     () => hydrateAutoDiaryOverrideTasks(autoDiaryTasks),
@@ -15695,7 +15696,7 @@ const headerHideTimerRef = useRef(null);
       ? []
       : (Array.isArray(autoDiaryOverrideDraftSources) ? autoDiaryOverrideDraftSources : [])
         .map((source) => createAutoDiaryOverrideDraftSource(source))
-        .map((source) => buildDiaryOverrideSourceSegment(source, anchorTask))
+        .map((source) => buildDiaryOverrideSourceSegmentRef.current(source, anchorTask))
         .filter(Boolean)
         .map((segment, index) => ({
           sourceId: String(autoDiaryOverrideDraftSources[index]?.sourceId || segment.sourceId || `source_${index + 1}`).trim(),
@@ -15760,7 +15761,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [activeInstitutionSchoolIdResolved, autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideDraftSources, autoDiaryOverrideEditingAnchorTask, autoDiaryOverrideNote, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, autoDiaryOverrideScope, buildDiaryOverrideSourceSegment, canManageAutoDiaryOverrides, contentIdentityEmail, createAutoDiaryOverrideDraftSource, ensureSupabaseClientRef, grade, handleCancelAutoDiaryOverrideEditor, language, showAppToast]);
+  }, [activeInstitutionSchoolIdResolved, autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideDraftSources, autoDiaryOverrideEditingAnchorTask, autoDiaryOverrideNote, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, autoDiaryOverrideScope, canManageAutoDiaryOverrides, contentIdentityEmail, createAutoDiaryOverrideDraftSource, ensureSupabaseClientRef, grade, handleCancelAutoDiaryOverrideEditor, language, showAppToast]);
   const handleDeleteAutoDiaryOverride = useCallback(async (overrideEntry) => {
     const normalized = normalizeAutoDiaryOverrideRecord(overrideEntry);
     if (!normalized?.overrideId) return;
@@ -23898,6 +23899,7 @@ const lessons = getMergedLessons(subjectId, grade);
       taskUnits: Array.isArray(fallbackTask?.taskUnits) ? fallbackTask.taskUnits : [],
     };
   }, [allSubjects, buildDiaryChapterOutlineTree, getMergedLessonGroups, grade, language, subjectLookup]);
+  buildDiaryOverrideSourceSegmentRef.current = buildDiaryOverrideSourceSegment;
 
   const buildDiaryTaskOutline = useCallback((task) => {
     if (Array.isArray(task?.taskSegments) && task.taskSegments.length) {

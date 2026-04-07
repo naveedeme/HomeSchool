@@ -11231,6 +11231,7 @@ ${marker} `);
     const [parentLinkDraftFamilyIdentifier, setParentLinkDraftFamilyIdentifier] = useState("");
     const [todayIso, setTodayIso] = useState(() => toIsoDateString(Date.now()));
     const previousTodayIsoRef = useRef(todayIso);
+    const buildDiaryOverrideSourceSegmentRef = useRef(() => null);
     const [diaryWeekAnchorDate, setDiaryWeekAnchorDate] = useState(toIsoDateString(Date.now()));
     const [diaryWeekAnchorFollowsToday, setDiaryWeekAnchorFollowsToday] = useState(true);
     const [diaryDraftScope, setDiaryDraftScope] = useState("grade");
@@ -12323,7 +12324,7 @@ ${marker} `);
         const overrideRecord = normalizeAutoDiaryOverrideRecord((task == null ? void 0 : task.overrideRecord) || task);
         const overrideSources = Array.isArray((_a2 = overrideRecord == null ? void 0 : overrideRecord.overridePayload) == null ? void 0 : _a2.sources) ? overrideRecord.overridePayload.sources : [];
         if (!overrideSources.length) return task;
-        const taskSegments = overrideSources.map((source) => buildDiaryOverrideSourceSegment(source, task)).filter(Boolean);
+        const taskSegments = overrideSources.map((source) => buildDiaryOverrideSourceSegmentRef.current(source, task)).filter(Boolean);
         if (!taskSegments.length) return task;
         const primarySegment = taskSegments[0];
         return {
@@ -12339,7 +12340,7 @@ ${marker} `);
           taskSegments
         };
       }),
-      [buildDiaryOverrideSourceSegment]
+      []
     );
     const renderedAutoDiaryTasks = useMemo(
       () => hydrateAutoDiaryOverrideTasks(autoDiaryTasks),
@@ -13219,7 +13220,7 @@ ${marker} `);
         showAppToast(joinLocalizedText("Choose a student first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
-      const normalizedDraftSources = normalizedAction === "skip" ? [] : (Array.isArray(autoDiaryOverrideDraftSources) ? autoDiaryOverrideDraftSources : []).map((source) => createAutoDiaryOverrideDraftSource(source)).map((source) => buildDiaryOverrideSourceSegment(source, anchorTask)).filter(Boolean).map((segment, index) => {
+      const normalizedDraftSources = normalizedAction === "skip" ? [] : (Array.isArray(autoDiaryOverrideDraftSources) ? autoDiaryOverrideDraftSources : []).map((source) => createAutoDiaryOverrideDraftSource(source)).map((source) => buildDiaryOverrideSourceSegmentRef.current(source, anchorTask)).filter(Boolean).map((segment, index) => {
         var _a2, _b2;
         return {
           sourceId: String(((_a2 = autoDiaryOverrideDraftSources[index]) == null ? void 0 : _a2.sourceId) || segment.sourceId || `source_${index + 1}`).trim(),
@@ -13280,7 +13281,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeInstitutionSchoolIdResolved, autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideDraftSources, autoDiaryOverrideEditingAnchorTask, autoDiaryOverrideNote, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, autoDiaryOverrideScope, buildDiaryOverrideSourceSegment, canManageAutoDiaryOverrides, contentIdentityEmail, createAutoDiaryOverrideDraftSource, ensureSupabaseClientRef, grade, handleCancelAutoDiaryOverrideEditor, language, showAppToast]);
+    }, [activeInstitutionSchoolIdResolved, autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideDraftSources, autoDiaryOverrideEditingAnchorTask, autoDiaryOverrideNote, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, autoDiaryOverrideScope, canManageAutoDiaryOverrides, contentIdentityEmail, createAutoDiaryOverrideDraftSource, ensureSupabaseClientRef, grade, handleCancelAutoDiaryOverrideEditor, language, showAppToast]);
     const handleDeleteAutoDiaryOverride = useCallback(async (overrideEntry) => {
       var _a2;
       const normalized = normalizeAutoDiaryOverrideRecord(overrideEntry);
@@ -20944,6 +20945,7 @@ ${error.message || error}`);
         taskUnits: Array.isArray(fallbackTask == null ? void 0 : fallbackTask.taskUnits) ? fallbackTask.taskUnits : []
       };
     }, [allSubjects, buildDiaryChapterOutlineTree, getMergedLessonGroups, grade, language, subjectLookup]);
+    buildDiaryOverrideSourceSegmentRef.current = buildDiaryOverrideSourceSegment;
     const buildDiaryTaskOutline = useCallback((task) => {
       var _a2, _b2, _c2, _d2;
       if (Array.isArray(task == null ? void 0 : task.taskSegments) && task.taskSegments.length) {
