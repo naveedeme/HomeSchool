@@ -26795,6 +26795,10 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                                 contentId: task.contentId,
                                               })]).map((sourceDraft, sourceIndex) => {
                                                 const sourceSubjectId = String(sourceDraft?.subject || task.subject || "").trim();
+                                                const sourceSubject = allSubjects.find((subjectOption) => String(subjectOption?.id || "").trim() === sourceSubjectId) || subjectLookup?.[sourceSubjectId] || null;
+                                                const localizedSourceSubjectTitle = sourceSubject
+                                                  ? getSubjectDisplayName(sourceSubject, language)
+                                                  : sourceSubjectId || joinLocalizedText("Choose a subject", "ایک مضمون منتخب کریں", language);
                                                 const sourceChapterGroups = sourceSubjectId && grade ? getMergedLessonGroups(sourceSubjectId, grade) : [];
                                                 const sourceChapterGroup = sourceChapterGroups.find((groupOption) => groupOption.canonicalLessonKey === resolveCustomChapterLessonKey({ lessonKey: sourceDraft?.lessonKey || "" }))
                                                   || sourceChapterGroups[0]
@@ -26825,7 +26829,18 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                                     <span>{renderLocalizedTextNode(joinLocalizedText(`${selectedCount} picked`, `${selectedCount} منتخب`, language), language)}</span>
                                                   </summary>
                                                   <div className="goal-progress-row" style={{ marginTop: 8 }}>
-                                                    <span className="goal-progress-meta">{renderLocalizedTextNode(sourceChapterGroup?.activeLesson?.title || joinLocalizedText("Choose a chapter", "ایک باب منتخب کریں", language), language)}</span>
+                                                    <span className="goal-progress-meta">
+                                                      {renderLocalizedTextNode(
+                                                        sourceChapterGroup?.activeLesson?.title
+                                                          ? joinLocalizedText(
+                                                              `${localizedSourceSubjectTitle} • ${sourceChapterGroup.activeLesson.title}`,
+                                                              `${localizedSourceSubjectTitle} • ${sourceChapterGroup.activeLesson.title}`,
+                                                              language,
+                                                            )
+                                                          : localizedSourceSubjectTitle,
+                                                        language,
+                                                      )}
+                                                    </span>
                                                     {autoDiaryOverrideDraftSources.length > 1 ? <button type="button" className="ghost-cta" onClick={() => handleRemoveAutoDiaryOverrideDraftSource(sourceDraft.sourceId)}>{renderLocalizedTextNode(joinLocalizedText("Remove", "ہٹائیں", language), language)}</button> : <span className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Primary source", "بنیادی ذریعہ", language), language)}</span>}
                                                   </div>
                                                   <div className="auto-diary-labeled-grid" style={{ marginTop: 10 }}>
