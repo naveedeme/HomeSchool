@@ -13002,9 +13002,10 @@ function HomeschoolApp() {
   }, [updateSchoolDraftAutoDiarySettings]);
   const handleMoveSchoolDraftSubjectPriority = useCallback((subjectId, direction) => {
     updateSchoolDraftAutoDiarySettings((current) => {
+      const availableSubjects = mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {}));
       const visibleSubjectIds = current.subjects.mode === "selected"
         ? normalizeTextArray(current.subjects.selectedSubjectIds)
-        : (Array.isArray(allSubjects) ? allSubjects.map((subject) => String(subject?.id || "").trim()).filter(Boolean) : []);
+        : (Array.isArray(availableSubjects) ? availableSubjects.map((subject) => String(subject?.id || "").trim()).filter(Boolean) : []);
       const seededPriorityOrder = [
         ...normalizeTextArray(current.subjects.priorityOrder).filter((value) => visibleSubjectIds.includes(value)),
         ...visibleSubjectIds.filter((value) => !normalizeTextArray(current.subjects.priorityOrder).includes(value)),
@@ -13017,7 +13018,7 @@ function HomeschoolApp() {
         },
       };
     });
-  }, [allSubjects, updateSchoolDraftAutoDiarySettings]);
+  }, [customContentState.subjectsById, updateSchoolDraftAutoDiarySettings]);
   const handleAddSchoolDraftHolidayDate = useCallback(() => {
     const todayValue = String(schoolDraftHolidayDateInput || todayIso || toIsoDateString(Date.now())).trim();
     updateSchoolDraftAutoDiarySettings((current) => ({
