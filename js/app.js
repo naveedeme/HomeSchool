@@ -11726,6 +11726,13 @@ function formatProjectedDateLabel(value, language = "en") {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+function formatReadableDateLabel(value, language = "en") {
+  const parsedDate = parseIsoDateValue(value);
+  if (!parsedDate) return joinLocalizedText("Not set", "متعین نہیں", language);
+  const locale = language === "ur" ? "ur-PK" : undefined;
+  return parsedDate.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
+}
+
 function getForgettingCurveLabel(bucketId, language = "en") {
   const labels = {
     same_day: joinLocalizedText("Same day", "اسی دن", language),

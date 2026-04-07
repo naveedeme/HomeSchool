@@ -9634,6 +9634,12 @@ ${marker} `);
     if (Number.isNaN(date.getTime())) return joinLocalizedText("Not enough data yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0627\u0641\u06CC \u0688\u06CC\u0679\u0627 \u0646\u06C1\u06CC\u06BA", language);
     return date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
   }
+  function formatReadableDateLabel(value, language = "en") {
+    const parsedDate = parseIsoDateValue(value);
+    if (!parsedDate) return joinLocalizedText("Not set", "\u0645\u062A\u0639\u06CC\u0646 \u0646\u06C1\u06CC\u06BA", language);
+    const locale = language === "ur" ? "ur-PK" : void 0;
+    return parsedDate.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
+  }
   function getForgettingCurveLabel(bucketId, language = "en") {
     const labels = {
       same_day: joinLocalizedText("Same day", "\u0627\u0633\u06CC \u062F\u0646", language),
