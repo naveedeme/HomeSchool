@@ -18375,14 +18375,27 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   useEffect(() => {
     const availableTabs = ["profiles", "reports", "chapters", "library", "cloud", "notifications"];
     if (canSeeLearnerManagement) availableTabs.splice(2, 0, "learners");
-    if (canAssignContent || canManageContentAccess || visibleChapterAssignments.length > 0) {
+    if (canManageInstitution || accessibleSchools.length > 0) {
       const insertionIndex = canSeeLearnerManagement ? 3 : 2;
+      availableTabs.splice(insertionIndex, 0, "institution");
+    }
+    if (canManageParentLinks || linkedChildOptions.length > 0 || visibleParentStudentLinks.length > 0) {
+      const institutionIndex = availableTabs.includes("institution") ? availableTabs.indexOf("institution") + 1 : (canSeeLearnerManagement ? 3 : 2);
+      availableTabs.splice(institutionIndex, 0, "family");
+    }
+    if (canAssignContent || canManageContentAccess || visibleChapterAssignments.length > 0) {
+      const familyIndex = availableTabs.includes("family")
+        ? availableTabs.indexOf("family") + 1
+        : availableTabs.includes("institution")
+          ? availableTabs.indexOf("institution") + 1
+          : (canSeeLearnerManagement ? 3 : 2);
+      const insertionIndex = Math.max(0, familyIndex);
       availableTabs.splice(insertionIndex, 0, "assignments");
     }
     if (!availableTabs.includes(profilesSectionTab)) {
       setProfilesSectionTab(availableTabs[0]);
     }
-  }, [canAssignContent, canManageContentAccess, canSeeLearnerManagement, profilesSectionTab, visibleChapterAssignments.length]);
+  }, [accessibleSchools.length, canAssignContent, canManageContentAccess, canManageInstitution, canManageParentLinks, canSeeLearnerManagement, linkedChildOptions.length, profilesSectionTab, visibleChapterAssignments.length, visibleParentStudentLinks.length]);
 
   useEffect(() => {
     if (!activePracticeSubjectId || !practiceSubjectLessons.length) return;
