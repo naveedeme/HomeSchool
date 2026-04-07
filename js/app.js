@@ -354,7 +354,7 @@ function getWeekStartDate(value = Date.now()) {
 function getWeekDates(value = Date.now()) {
   const weekStart = getWeekStartDate(value);
   if (!weekStart) return [];
-  return Array.from({ length: 6 }, (_, index) => {
+  return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(weekStart.getTime());
     date.setDate(weekStart.getDate() + index);
     return toIsoDateString(date);
@@ -401,6 +401,328 @@ function normalizeTextArray(raw) {
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index);
+}
+
+const AUTO_DIARY_ISO_DAY_OPTIONS = [
+  { value: 1, en: "Monday", ur: "پیر" },
+  { value: 2, en: "Tuesday", ur: "منگل" },
+  { value: 3, en: "Wednesday", ur: "بدھ" },
+  { value: 4, en: "Thursday", ur: "جمعرات" },
+  { value: 5, en: "Friday", ur: "جمعہ" },
+  { value: 6, en: "Saturday", ur: "ہفتہ" },
+  { value: 7, en: "Sunday", ur: "اتوار" },
+];
+
+function normalizeAutoDiaryIsoDayList(raw, fallback = [1, 2, 3, 4, 5]) {
+  const source = Array.isArray(raw) ? raw : normalizeTextArray(raw);
+  const values = source
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 7)
+    .filter((value, index, list) => list.indexOf(value) === index)
+    .sort((left, right) => left - right);
+  const safeFallback = Array.isArray(fallback) ? fallback.filter((value) => Number.isFinite(Number(value))) : [1, 2, 3, 4, 5];
+  return values.length ? values : safeFallback;
+}
+
+function normalizeAutoDiaryWeightMap(raw, validKeys = [], fallbackValue = 1, min = 0, max = 10) {
+  const safeValidKeys = Array.isArray(validKeys) ? validKeys.map((value) => String(value || "").trim()).filter(Boolean) : [];
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  return safeValidKeys.reduce((acc, key) => {
+    const numericValue = Number(source[key]);
+    acc[key] = Number.isFinite(numericValue)
+      ? Math.min(max, Math.max(min, numericValue))
+      : fallbackValue;
+    return acc;
+  }, {});
+}
+
+function createDefaultAutoDiarySettings(fallbackStartDate = "") {
+  const safeStartDate = String(fallbackStartDate || "").trim();
+  return {
+    calendar: {
+      startDate: safeStartDate,
+      studyDays: [1, 2, 3, 4, 5],
+      testDay: 6,
+      holidayDates: [],
+    },
+    subjects: {
+      mode: "all",
+      selectedSubjectIds: [],
+      priorityOrder: [],
+      weightsBySubject: {},
+    },
+    dailyLayout: {
+      mode: "all_subjects_daily",
+      hybridCoreSubjectIds: [],
+      minSubjectsPerDay: 1,
+      maxSubjectsPerDay: 5,
+    },
+    progression: {
+      chapterSelectionMode: "progress_first",
+      advanceMode: "carry_forward",
+      skipCompletedLessons: true,
+      preferAssignedContent: true,
+      preferPublishedContent: true,
+      minimumUnitsPerDay: 1,
+      reviewWhenShort: true,
+      completionMode: "any",
+      countMarkedDone: true,
+      countQuizComplete: true,
+      countLessonProgress: true,
+      lessonProgressThreshold: 100,
+    },
+    saturdayTest: {
+      enabled: true,
+      accumulationMode: "rolling",
+      accumulationValue: 8,
+      currentWeekWeight: 50,
+      priorWeeksWeight: 50,
+      difficulty: "standard",
+      questionTypeWeights: {
+        mcq: 35,
+        truefalse: 20,
+        fillblank: 25,
+        matching: 20,
+      },
+    },
+  };
+}
+
+function normalizeAutoDiarySettings(raw = {}, legacy = {}) {
+  const safeRaw = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const defaults = createDefaultAutoDiarySettings(
+    safeRaw?.calendar?.startDate
+    || safeRaw?.startDate
+    || legacy?.autoDiaryStartDate
+    || legacy?.yearStartDate
+    || "",
+  );
+  const safeSubjectIds = normalizeTextArray(
+    safeRaw?.subjects?.selectedSubjectIds
+    || safeRaw?.selectedSubjectIds
+    || legacy?.autoDiarySubjectIds,
+  );
+  const safePriorityOrder = normalizeTextArray(
+    safeRaw?.subjects?.priorityOrder
+    || safeRaw?.priorityOrder
+    || safeSubjectIds,
+  );
+  return {
+    calendar: {
+      startDate: String(
+        safeRaw?.calendar?.startDate
+        || safeRaw?.startDate
+        || legacy?.autoDiaryStartDate
+        || legacy?.yearStartDate
+        || defaults.calendar.startDate,
+      ).trim(),
+      studyDays: normalizeAutoDiaryIsoDayList(
+        safeRaw?.calendar?.studyDays
+        || safeRaw?.studyDays,
+        defaults.calendar.studyDays,
+      ),
+      testDay: (() => {
+        const numericValue = Number(safeRaw?.calendar?.testDay ?? safeRaw?.testDay);
+        return Number.isFinite(numericValue) && numericValue >= 1 && numericValue <= 7 ? numericValue : defaults.calendar.testDay;
+      })(),
+      holidayDates: normalizeTextArray(safeRaw?.calendar?.holidayDates || safeRaw?.holidayDates).filter((value) => Boolean(parseIsoDateValue(value))),
+    },
+    subjects: {
+      mode: String(
+        safeRaw?.subjects?.mode
+        || safeRaw?.mode
+        || legacy?.autoDiarySubjectMode
+        || defaults.subjects.mode,
+      ).trim().toLowerCase() === "selected" ? "selected" : "all",
+      selectedSubjectIds: safeSubjectIds,
+      priorityOrder: safePriorityOrder.length ? safePriorityOrder : safeSubjectIds,
+      weightsBySubject: safeRaw?.subjects?.weightsBySubject && typeof safeRaw.subjects.weightsBySubject === "object"
+        ? { ...safeRaw.subjects.weightsBySubject }
+        : safeRaw?.weightsBySubject && typeof safeRaw.weightsBySubject === "object"
+          ? { ...safeRaw.weightsBySubject }
+          : {},
+    },
+    dailyLayout: {
+      mode: (() => {
+        const safeMode = String(safeRaw?.dailyLayout?.mode || safeRaw?.layoutMode || safeRaw?.mode || legacy?.autoDiaryPlanMode || defaults.dailyLayout.mode).trim().toLowerCase();
+        if (safeMode === "subject_rotation") return "subject_rotation";
+        if (safeMode === "hybrid") return "hybrid";
+        return "all_subjects_daily";
+      })(),
+      hybridCoreSubjectIds: normalizeTextArray(safeRaw?.dailyLayout?.hybridCoreSubjectIds || safeRaw?.hybridCoreSubjectIds),
+      minSubjectsPerDay: Math.max(1, Math.min(8, Number(safeRaw?.dailyLayout?.minSubjectsPerDay ?? safeRaw?.minSubjectsPerDay) || defaults.dailyLayout.minSubjectsPerDay)),
+      maxSubjectsPerDay: Math.max(1, Math.min(8, Number(safeRaw?.dailyLayout?.maxSubjectsPerDay ?? safeRaw?.maxSubjectsPerDay) || defaults.dailyLayout.maxSubjectsPerDay)),
+    },
+    progression: {
+      chapterSelectionMode: (() => {
+        const safeMode = String(safeRaw?.progression?.chapterSelectionMode || safeRaw?.chapterSelectionMode || defaults.progression.chapterSelectionMode).trim().toLowerCase();
+        return safeMode === "curriculum_order" ? "curriculum_order" : "progress_first";
+      })(),
+      advanceMode: (() => {
+        const safeMode = String(safeRaw?.progression?.advanceMode || safeRaw?.advanceMode || legacy?.autoDiaryAdvanceMode || defaults.progression.advanceMode).trim().toLowerCase();
+        return safeMode === "weekly_lesson" ? "weekly_lesson" : "carry_forward";
+      })(),
+      skipCompletedLessons: Boolean(safeRaw?.progression?.skipCompletedLessons ?? safeRaw?.skipCompletedLessons ?? defaults.progression.skipCompletedLessons),
+      preferAssignedContent: Boolean(safeRaw?.progression?.preferAssignedContent ?? safeRaw?.preferAssignedContent ?? defaults.progression.preferAssignedContent),
+      preferPublishedContent: Boolean(safeRaw?.progression?.preferPublishedContent ?? safeRaw?.preferPublishedContent ?? defaults.progression.preferPublishedContent),
+      minimumUnitsPerDay: Math.max(1, Math.min(6, Number(safeRaw?.progression?.minimumUnitsPerDay ?? safeRaw?.minimumUnitsPerDay) || defaults.progression.minimumUnitsPerDay)),
+      reviewWhenShort: Boolean(safeRaw?.progression?.reviewWhenShort ?? safeRaw?.reviewWhenShort ?? defaults.progression.reviewWhenShort),
+      completionMode: String(safeRaw?.progression?.completionMode || safeRaw?.completionMode || defaults.progression.completionMode).trim().toLowerCase() === "all" ? "all" : "any",
+      countMarkedDone: Boolean(safeRaw?.progression?.countMarkedDone ?? safeRaw?.countMarkedDone ?? defaults.progression.countMarkedDone),
+      countQuizComplete: Boolean(safeRaw?.progression?.countQuizComplete ?? safeRaw?.countQuizComplete ?? defaults.progression.countQuizComplete),
+      countLessonProgress: Boolean(safeRaw?.progression?.countLessonProgress ?? safeRaw?.countLessonProgress ?? defaults.progression.countLessonProgress),
+      lessonProgressThreshold: Math.max(1, Math.min(100, Number(safeRaw?.progression?.lessonProgressThreshold ?? safeRaw?.lessonProgressThreshold) || defaults.progression.lessonProgressThreshold)),
+    },
+    saturdayTest: {
+      enabled: Boolean(safeRaw?.saturdayTest?.enabled ?? safeRaw?.weeklyTestEnabled ?? defaults.saturdayTest.enabled),
+      accumulationMode: String(
+        safeRaw?.saturdayTest?.accumulationMode
+        || safeRaw?.accumulationMode
+        || legacy?.weekAccumulationMode
+        || defaults.saturdayTest.accumulationMode,
+      ).trim().toLowerCase() || defaults.saturdayTest.accumulationMode,
+      accumulationValue: Math.max(1, Math.min(52, Number(
+        safeRaw?.saturdayTest?.accumulationValue
+        ?? safeRaw?.accumulationValue
+        ?? legacy?.weekAccumulationValue
+        ?? defaults.saturdayTest.accumulationValue,
+      ) || defaults.saturdayTest.accumulationValue)),
+      currentWeekWeight: Math.max(0, Math.min(100, Number(safeRaw?.saturdayTest?.currentWeekWeight ?? safeRaw?.currentWeekWeight) || defaults.saturdayTest.currentWeekWeight)),
+      priorWeeksWeight: Math.max(0, Math.min(100, Number(safeRaw?.saturdayTest?.priorWeeksWeight ?? safeRaw?.priorWeeksWeight) || defaults.saturdayTest.priorWeeksWeight)),
+      difficulty: (() => {
+        const safeValue = String(safeRaw?.saturdayTest?.difficulty || safeRaw?.difficulty || defaults.saturdayTest.difficulty).trim().toLowerCase();
+        if (["light", "standard", "rigorous"].includes(safeValue)) return safeValue;
+        return defaults.saturdayTest.difficulty;
+      })(),
+      questionTypeWeights: {
+        mcq: Math.max(0, Math.min(100, Number(safeRaw?.saturdayTest?.questionTypeWeights?.mcq ?? safeRaw?.questionTypeWeights?.mcq) || defaults.saturdayTest.questionTypeWeights.mcq)),
+        truefalse: Math.max(0, Math.min(100, Number(safeRaw?.saturdayTest?.questionTypeWeights?.truefalse ?? safeRaw?.questionTypeWeights?.truefalse) || defaults.saturdayTest.questionTypeWeights.truefalse)),
+        fillblank: Math.max(0, Math.min(100, Number(safeRaw?.saturdayTest?.questionTypeWeights?.fillblank ?? safeRaw?.questionTypeWeights?.fillblank) || defaults.saturdayTest.questionTypeWeights.fillblank)),
+        matching: Math.max(0, Math.min(100, Number(safeRaw?.saturdayTest?.questionTypeWeights?.matching ?? safeRaw?.questionTypeWeights?.matching) || defaults.saturdayTest.questionTypeWeights.matching)),
+      },
+    },
+  };
+}
+
+function buildAutoDiaryLegacyFields(autoDiarySettings = null, fallbackYearStartDate = "") {
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {}, { yearStartDate: fallbackYearStartDate });
+  return {
+    auto_diary_settings: settings,
+    auto_diary_start_date: String(settings.calendar.startDate || fallbackYearStartDate || "").trim() || null,
+    auto_diary_subject_mode: settings.subjects.mode === "selected" ? "selected" : "all",
+    auto_diary_subject_ids: normalizeTextArray(settings.subjects.selectedSubjectIds),
+    auto_diary_plan_mode: String(settings.dailyLayout.mode || "all_subjects_daily").trim(),
+    auto_diary_advance_mode: String(settings.progression.advanceMode || "carry_forward").trim(),
+    week_accumulation_mode: String(settings.saturdayTest.accumulationMode || "rolling").trim().toLowerCase(),
+    week_accumulation_value: Math.max(1, Number(settings.saturdayTest.accumulationValue) || 8),
+  };
+}
+
+function moveAutoDiarySubjectPriority(priorityOrder = [], subjectId = "", direction = 0) {
+  const safeSubjectId = String(subjectId || "").trim();
+  if (!safeSubjectId || !Array.isArray(priorityOrder) || !priorityOrder.length || !direction) return Array.isArray(priorityOrder) ? priorityOrder : [];
+  const next = [...priorityOrder];
+  const currentIndex = next.findIndex((entry) => String(entry || "").trim() === safeSubjectId);
+  if (currentIndex < 0) return next;
+  const targetIndex = currentIndex + direction;
+  if (targetIndex < 0 || targetIndex >= next.length) return next;
+  const [entry] = next.splice(currentIndex, 1);
+  next.splice(targetIndex, 0, entry);
+  return next;
+}
+
+function getAutoDiaryWeekdayLabel(isoDay, language = "en") {
+  const match = AUTO_DIARY_ISO_DAY_OPTIONS.find((entry) => entry.value === Number(isoDay));
+  if (!match) return String(isoDay || "");
+  return language === "ur" ? match.ur : match.en;
+}
+
+function getConfiguredStudyDates(weekDates = [], autoDiarySettings = null) {
+  const safeWeekDates = Array.isArray(weekDates) ? weekDates : [];
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+  const holidayDates = new Set(normalizeTextArray(settings.calendar.holidayDates));
+  return settings.calendar.studyDays
+    .map((isoDay) => safeWeekDates[isoDay - 1])
+    .filter(Boolean)
+    .filter((date) => !holidayDates.has(date));
+}
+
+function getConfiguredTestDate(weekDates = [], autoDiarySettings = null) {
+  const safeWeekDates = Array.isArray(weekDates) ? weekDates : [];
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+  const candidate = safeWeekDates[Math.max(0, settings.calendar.testDay - 1)] || "";
+  return normalizeTextArray(settings.calendar.holidayDates).includes(candidate) ? "" : candidate;
+}
+
+function orderAutoDiarySubjects(subjects = [], autoDiarySettings = null) {
+  const safeSubjects = Array.isArray(subjects) ? subjects.filter(Boolean) : [];
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+  const priorityOrder = settings.subjects.priorityOrder;
+  const priorityMap = priorityOrder.reduce((acc, subjectId, index) => {
+    acc[String(subjectId || "").trim()] = index;
+    return acc;
+  }, {});
+  const weightMap = settings.subjects.weightsBySubject || {};
+  return [...safeSubjects].sort((left, right) => {
+    const leftId = String(left?.id || "").trim();
+    const rightId = String(right?.id || "").trim();
+    const leftPriority = Object.prototype.hasOwnProperty.call(priorityMap, leftId) ? priorityMap[leftId] : Number.MAX_SAFE_INTEGER;
+    const rightPriority = Object.prototype.hasOwnProperty.call(priorityMap, rightId) ? priorityMap[rightId] : Number.MAX_SAFE_INTEGER;
+    if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+    const leftWeight = Number(weightMap[leftId]) || 1;
+    const rightWeight = Number(weightMap[rightId]) || 1;
+    if (leftWeight !== rightWeight) return rightWeight - leftWeight;
+    return String(left?.name || leftId).localeCompare(String(right?.name || rightId));
+  });
+}
+
+function buildAutoDiaryDailySubjectPlanLookup(subjects = [], studyDates = [], autoDiarySettings = null) {
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+  const sortedSubjects = orderAutoDiarySubjects(subjects, settings);
+  const subjectIds = sortedSubjects.map((subject) => String(subject?.id || "").trim()).filter(Boolean);
+  const result = {};
+  const safeStudyDates = Array.isArray(studyDates) ? studyDates.filter(Boolean) : [];
+  if (!subjectIds.length || !safeStudyDates.length) return result;
+  const minSubjects = Math.max(1, Math.min(subjectIds.length, Number(settings.dailyLayout.minSubjectsPerDay) || 1));
+  const maxSubjects = Math.max(minSubjects, Math.min(subjectIds.length, Number(settings.dailyLayout.maxSubjectsPerDay) || subjectIds.length));
+  const dailyCount = Math.max(minSubjects, Math.min(maxSubjects, subjectIds.length));
+  if (settings.dailyLayout.mode === "all_subjects_daily") {
+    safeStudyDates.forEach((date) => {
+      result[date] = subjectIds.slice(0, dailyCount);
+    });
+    return result;
+  }
+  if (settings.dailyLayout.mode === "hybrid") {
+    const coreIds = subjectIds.filter((subjectId) => settings.dailyLayout.hybridCoreSubjectIds.includes(subjectId)).slice(0, maxSubjects);
+    const rotatingIds = subjectIds.filter((subjectId) => !coreIds.includes(subjectId));
+    const rotationPerDay = rotatingIds.length
+      ? Math.max(0, Math.min(maxSubjects - coreIds.length, Math.max(minSubjects - coreIds.length, Math.ceil(rotatingIds.length / Math.max(1, safeStudyDates.length)))))
+      : 0;
+    let cursor = 0;
+    safeStudyDates.forEach((date) => {
+      const todaysSubjects = [...coreIds];
+      for (let index = 0; index < rotationPerDay; index += 1) {
+        if (!rotatingIds.length) break;
+        const nextSubjectId = rotatingIds[(cursor + index) % rotatingIds.length];
+        if (nextSubjectId && !todaysSubjects.includes(nextSubjectId)) todaysSubjects.push(nextSubjectId);
+      }
+      cursor += rotationPerDay || 1;
+      result[date] = todaysSubjects.slice(0, maxSubjects);
+    });
+    return result;
+  }
+  let cursor = 0;
+  safeStudyDates.forEach((date) => {
+    const todaysSubjects = [];
+    for (let index = 0; index < dailyCount; index += 1) {
+      if (!subjectIds.length) break;
+      const nextSubjectId = subjectIds[(cursor + index) % subjectIds.length];
+      if (nextSubjectId && !todaysSubjects.includes(nextSubjectId)) todaysSubjects.push(nextSubjectId);
+    }
+    cursor += dailyCount;
+    result[date] = todaysSubjects;
+  });
+  return result;
 }
 
 function normalizeLessonWorkUnit(raw, lesson = {}, index = 0) {
@@ -789,20 +1111,33 @@ function inferDiaryTaskLanguage(task, outlineNodes = [], uiLanguage = "en") {
   return sampleTexts.some((text) => isUrduText(text)) ? "ur" : (uiLanguage === "ur" ? "ur" : "en");
 }
 
-function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5) {
+function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5, options = {}) {
   const safeStudyDays = Math.max(1, Number(studyDays) || 5);
   const safeUnits = Array.isArray(units) ? units.filter(Boolean) : [];
+  const minimumUnitsPerDay = Math.max(1, Math.min(6, Number(options?.minimumUnitsPerDay) || 1));
+  const reviewWhenShort = options?.reviewWhenShort !== false;
   if (!safeUnits.length) return Array.from({ length: safeStudyDays }, () => []);
   const buckets = Array.from({ length: safeStudyDays }, () => []);
   if (safeUnits.length >= safeStudyDays) {
-    const baseCount = Math.floor(safeUnits.length / safeStudyDays);
-    let remainder = safeUnits.length % safeStudyDays;
     let cursor = 0;
     for (let dayIndex = 0; dayIndex < safeStudyDays; dayIndex += 1) {
-      const sliceSize = baseCount + (remainder > 0 ? 1 : 0);
-      if (remainder > 0) remainder -= 1;
+      const daysRemaining = safeStudyDays - dayIndex;
+      const unitsRemaining = safeUnits.length - cursor;
+      const minimumRequiredForFutureDays = Math.max(0, (daysRemaining - 1) * minimumUnitsPerDay);
+      const todaysBaseCount = Math.max(
+        minimumUnitsPerDay,
+        Math.ceil(Math.max(0, unitsRemaining - minimumRequiredForFutureDays) / Math.max(1, daysRemaining)),
+      );
+      const sliceSize = Math.min(unitsRemaining, Math.max(minimumUnitsPerDay, todaysBaseCount));
       buckets[dayIndex] = safeUnits.slice(cursor, cursor + sliceSize);
       cursor += sliceSize;
+    }
+    while (cursor < safeUnits.length) {
+      const targetBucketIndex = buckets.reduce((bestIndex, bucket, bucketIndex, bucketList) => (
+        bucket.length < bucketList[bestIndex].length ? bucketIndex : bestIndex
+      ), 0);
+      buckets[targetBucketIndex].push(safeUnits[cursor]);
+      cursor += 1;
     }
     return buckets;
   }
@@ -810,7 +1145,7 @@ function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5) {
     buckets[index].push(unit);
   });
   const remainingDayCount = safeStudyDays - safeUnits.length;
-  if (!remainingDayCount) return buckets;
+  if (!remainingDayCount || !reviewWhenShort) return buckets;
   const reviewChunks = splitBalanced(safeUnits, remainingDayCount);
   reviewChunks.forEach((chunk, index) => {
     const safeChunk = Array.isArray(chunk) && chunk.length
@@ -876,12 +1211,15 @@ function getAutoDiaryLessonCoverageSlots({
   practiceLessonProgress = {},
   lessonCoverageLookup = new Map(),
   studyDays = 5,
+  autoDiarySettings = null,
 }) {
   const lesson = chapterGroup?.activeLesson || null;
   if (!lesson || !chapterGroup) return 0;
-  if (isLessonProgressComplete(lesson, completedQuizzes, practiceLessonProgress)) {
+  if (isLessonProgressComplete(lesson, completedQuizzes, practiceLessonProgress, autoDiarySettings)) {
     return Math.max(1, Number(studyDays) || 5);
   }
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+  if (!settings.progression.countMarkedDone) return 0;
   const coverageKey = [
     String(subjectId || "").trim(),
     resolveCustomChapterLessonKey({ lessonKey: chapterGroup.canonicalLessonKey || "" }),
@@ -890,14 +1228,12 @@ function getAutoDiaryLessonCoverageSlots({
   return Math.min(Math.max(0, Number(lessonCoverageLookup.get(coverageKey)?.count || 0)), Math.max(1, Number(studyDays) || 5));
 }
 
-function shouldIncludeAutoDiarySubject(subject, {
-  autoDiarySubjectMode = "all",
-  autoDiarySubjectIds = [],
-} = {}) {
+function shouldIncludeAutoDiarySubject(subject, autoDiarySettings = null) {
   const safeSubjectId = String(subject?.id || "").trim();
   if (!safeSubjectId) return false;
-  if (String(autoDiarySubjectMode || "all").trim().toLowerCase() !== "selected") return true;
-  const allowedIds = new Set(normalizeTextArray(autoDiarySubjectIds));
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+  if (settings.subjects.mode !== "selected") return true;
+  const allowedIds = new Set(normalizeTextArray(settings.subjects.selectedSubjectIds));
   return allowedIds.has(safeSubjectId);
 }
 
@@ -921,17 +1257,29 @@ function createEmptyContentRelationshipState() {
 function normalizeSchoolRecord(raw) {
   const schoolId = String(raw?.school_id || raw?.schoolId || "").trim();
   if (!schoolId) return null;
+  const rawAutoDiarySettings = raw?.auto_diary_settings || raw?.autoDiarySettings || {};
+  const normalizedAutoDiarySettings = normalizeAutoDiarySettings(rawAutoDiarySettings, {
+    autoDiaryStartDate: raw?.auto_diary_start_date || raw?.autoDiaryStartDate || "",
+    autoDiarySubjectMode: raw?.auto_diary_subject_mode || raw?.autoDiarySubjectMode || "all",
+    autoDiarySubjectIds: raw?.auto_diary_subject_ids || raw?.autoDiarySubjectIds || [],
+    autoDiaryPlanMode: raw?.auto_diary_plan_mode || raw?.autoDiaryPlanMode || "all_subjects_daily",
+    autoDiaryAdvanceMode: raw?.auto_diary_advance_mode || raw?.autoDiaryAdvanceMode || "carry_forward",
+    yearStartDate: raw?.year_start_date || raw?.yearStartDate || "",
+    weekAccumulationMode: raw?.week_accumulation_mode || raw?.weekAccumulationMode || "rolling",
+    weekAccumulationValue: raw?.week_accumulation_value || raw?.weekAccumulationValue || 8,
+  });
   return {
     schoolId,
     schoolName: String(raw?.school_name || raw?.schoolName || "").trim() || schoolId,
     ownerEmail: String(raw?.owner_email || raw?.ownerEmail || "").trim().toLowerCase(),
     principalEmail: String(raw?.principal_email || raw?.principalEmail || "").trim().toLowerCase(),
     yearStartDate: String(raw?.year_start_date || raw?.yearStartDate || "").trim(),
-    autoDiaryStartDate: String(raw?.auto_diary_start_date || raw?.autoDiaryStartDate || raw?.year_start_date || raw?.yearStartDate || "").trim(),
-    autoDiarySubjectMode: String(raw?.auto_diary_subject_mode || raw?.autoDiarySubjectMode || "all").trim().toLowerCase() === "selected" ? "selected" : "all",
-    autoDiarySubjectIds: normalizeTextArray(raw?.auto_diary_subject_ids || raw?.autoDiarySubjectIds),
-    autoDiaryPlanMode: String(raw?.auto_diary_plan_mode || raw?.autoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" ? "subject_rotation" : "all_subjects_daily",
-    autoDiaryAdvanceMode: String(raw?.auto_diary_advance_mode || raw?.autoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() === "weekly_lesson" ? "weekly_lesson" : "carry_forward",
+    autoDiarySettings: normalizedAutoDiarySettings,
+    autoDiaryStartDate: normalizedAutoDiarySettings.calendar.startDate,
+    autoDiarySubjectMode: normalizedAutoDiarySettings.subjects.mode,
+    autoDiarySubjectIds: normalizedAutoDiarySettings.subjects.selectedSubjectIds,
+    autoDiaryPlanMode: normalizedAutoDiarySettings.dailyLayout.mode,
+    autoDiaryAdvanceMode: normalizedAutoDiarySettings.progression.advanceMode,
     weekAccumulationMode: String(raw?.week_accumulation_mode || raw?.weekAccumulationMode || "rolling").trim().toLowerCase() || "rolling",
     weekAccumulationValue: Math.max(1, Number(raw?.week_accumulation_value || raw?.weekAccumulationValue) || 8),
     status: String(raw?.status || "active").trim().toLowerCase() || "active",
@@ -1303,17 +1651,33 @@ function getDiaryTaskRouteKey(task) {
   return `${String(task.taskKind || "").trim().toLowerCase()}::${String(task.taskKey || "").trim()}`;
 }
 
-function isLessonProgressComplete(lesson, completedQuizzes = {}, practiceLessonProgress = {}) {
+function isLessonProgressComplete(lesson, completedQuizzes = {}, practiceLessonProgress = {}, autoDiarySettings = null) {
   if (!lesson) return false;
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
   const lessonId = String(lesson.id || "").trim();
   const lessonKey = String(getLessonKeyValue(lesson) || lesson.key || "").trim();
-  if (lessonId && completedQuizzes?.[lessonId]) return true;
+  const checks = [];
+  if (settings.progression.countQuizComplete && lessonId) {
+    checks.push(Boolean(completedQuizzes?.[lessonId]));
+  }
   if (lessonKey) {
     const progress = practiceLessonProgress?.[lessonKey];
-    if (progress?.completed) return true;
-    if (Number(progress?.percentComplete) >= 100) return true;
+    if (settings.progression.countLessonProgress) {
+      checks.push(Boolean(progress?.completed) || Number(progress?.percentComplete) >= Number(settings.progression.lessonProgressThreshold || 100));
+    }
   }
-  return false;
+  if (!checks.length) {
+    if (lessonId && completedQuizzes?.[lessonId]) return true;
+    if (lessonKey) {
+      const progress = practiceLessonProgress?.[lessonKey];
+      if (progress?.completed) return true;
+      if (Number(progress?.percentComplete) >= 100) return true;
+    }
+    return false;
+  }
+  return settings.progression.completionMode === "all"
+    ? checks.every(Boolean)
+    : checks.some(Boolean);
 }
 
 function buildAutoDiaryWeekPlan({
@@ -1321,11 +1685,7 @@ function buildAutoDiaryWeekPlan({
   grade = null,
   weekDates = [],
   yearStartDate = "",
-  autoDiaryStartDate = "",
-  autoDiarySubjectMode = "all",
-  autoDiarySubjectIds = [],
-  autoDiaryPlanMode = "all_subjects_daily",
-  autoDiaryAdvanceMode = "carry_forward",
+  autoDiarySettings = null,
   schoolId = "",
   getLessonGroups,
   getQuiz,
@@ -1334,22 +1694,26 @@ function buildAutoDiaryWeekPlan({
   diaryCompletions = [],
   studentEmail = "",
 }) {
-  if (!Number.isFinite(Number(grade)) || !Array.isArray(weekDates) || weekDates.length < 5 || typeof getLessonGroups !== "function" || typeof getQuiz !== "function") {
+  if (!Number.isFinite(Number(grade)) || !Array.isArray(weekDates) || weekDates.length < 7 || typeof getLessonGroups !== "function" || typeof getQuiz !== "function") {
     return [];
   }
-  const safeWeekDates = weekDates.slice(0, 5);
-  const academicWeekNumber = getAcademicWeekNumber(safeWeekDates[0] || Date.now(), yearStartDate);
-  const safeStudyDays = safeWeekDates.length || 5;
-  const safeSubjects = (Array.isArray(subjects) ? subjects : []).filter((subject) => shouldIncludeAutoDiarySubject(subject, { autoDiarySubjectMode, autoDiarySubjectIds }));
-  const safeAutoDiaryStartDate = String(autoDiaryStartDate || "").trim();
+  const settings = normalizeAutoDiarySettings(autoDiarySettings || {}, { yearStartDate });
+  const studyDates = getConfiguredStudyDates(weekDates, settings);
+  const academicWeekNumber = getAcademicWeekNumber(studyDates[0] || weekDates[0] || Date.now(), yearStartDate);
+  const safeStudyDays = studyDates.length || settings.calendar.studyDays.length || 5;
+  const safeSubjects = orderAutoDiarySubjects(
+    (Array.isArray(subjects) ? subjects : []).filter((subject) => shouldIncludeAutoDiarySubject(subject, settings)),
+    settings,
+  );
+  const safeAutoDiaryStartDate = String(settings.calendar.startDate || "").trim();
   const lessonCoverageLookup = buildAutoDiaryLessonCoverageLookup({
     diaryCompletions,
     studentEmail,
     schoolId,
-    currentWeekStartDate: safeWeekDates[0] || "",
+    currentWeekStartDate: studyDates[0] || weekDates[0] || "",
     studyDays: safeStudyDays,
   });
-  const rotationSubjectIds = safeSubjects.map((subject) => String(subject?.id || "").trim()).filter(Boolean);
+  const dailySubjectPlanLookup = buildAutoDiaryDailySubjectPlanLookup(safeSubjects, studyDates, settings);
   return safeSubjects.flatMap((subject, subjectIndex) => {
     try {
       const lessonGroups = (getLessonGroups(subject.id, grade) || []).filter((group) => group?.activeLesson);
@@ -1364,7 +1728,10 @@ function buildAutoDiaryWeekPlan({
           lesson,
           canonicalLessonKey,
           units,
-          buckets: distributeWorkUnitsAcrossStudyDays(units, safeStudyDays),
+          buckets: distributeWorkUnitsAcrossStudyDays(units, safeStudyDays, {
+            minimumUnitsPerDay: settings.progression.minimumUnitsPerDay,
+            reviewWhenShort: settings.progression.reviewWhenShort,
+          }),
           completedSlots: getAutoDiaryLessonCoverageSlots({
             subjectId: subject.id,
             chapterGroup: group,
@@ -1372,24 +1739,37 @@ function buildAutoDiaryWeekPlan({
             practiceLessonProgress,
             lessonCoverageLookup,
             studyDays: safeStudyDays,
+            autoDiarySettings: settings,
           }),
         };
       }).filter((entry) => entry.lesson && entry.canonicalLessonKey);
       if (!lessonPlans.length) return [];
-      const carryForwardEnabled = String(autoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() !== "weekly_lesson";
+      const carryForwardEnabled = settings.progression.advanceMode !== "weekly_lesson";
       const weeklyLessonIndex = (() => {
-        const unfinishedIndex = lessonPlans.findIndex((entry) => entry.completedSlots < safeStudyDays);
+        if (settings.progression.chapterSelectionMode === "curriculum_order") {
+          return Math.min(lessonPlans.length - 1, Math.max(0, academicWeekNumber - 1));
+        }
+        const unfinishedIndex = lessonPlans.findIndex((entry) => (
+          settings.progression.skipCompletedLessons
+            ? entry.completedSlots < safeStudyDays
+            : true
+        ));
         return unfinishedIndex >= 0 ? unfinishedIndex : Math.min(lessonPlans.length - 1, Math.max(0, academicWeekNumber - 1));
       })();
-      let currentLessonIndex = carryForwardEnabled ? lessonPlans.findIndex((entry) => entry.completedSlots < safeStudyDays) : weeklyLessonIndex;
+      let currentLessonIndex = carryForwardEnabled
+        ? lessonPlans.findIndex((entry) => (
+          settings.progression.skipCompletedLessons
+            ? entry.completedSlots < safeStudyDays
+            : true
+        ))
+        : weeklyLessonIndex;
       if (currentLessonIndex < 0) currentLessonIndex = lessonPlans.length - 1;
       let currentSlotIndex = carryForwardEnabled ? Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1) : 0;
       const allLessonsCompleted = carryForwardEnabled && lessonPlans.every((entry) => entry.completedSlots >= safeStudyDays);
-      return safeWeekDates.flatMap((targetDate, dayIndex) => {
+      return studyDates.flatMap((targetDate, dayIndex) => {
         if (safeAutoDiaryStartDate && targetDate < safeAutoDiaryStartDate) return [];
-        if (String(autoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" && rotationSubjectIds.length) {
-          const rotationSubjectId = rotationSubjectIds[(Math.max(0, academicWeekNumber - 1) + dayIndex) % rotationSubjectIds.length];
-          if (rotationSubjectId !== subject.id) return [];
+        if (!Array.isArray(dailySubjectPlanLookup[targetDate]) || !dailySubjectPlanLookup[targetDate].includes(subject.id)) {
+          return [];
         }
         let selectedPlan = null;
         let bucketIndex = 0;
@@ -1428,9 +1808,9 @@ function buildAutoDiaryWeekPlan({
             dayIndex: dayIndex + 1,
             unitKey: bucketUnits[0]?.key || fallbackUnit.key,
           }),
-          schoolId: "",
+          schoolId: schoolId || "",
           targetDate,
-          weekStartDate: safeWeekDates[0],
+          weekStartDate: weekDates[0],
           dayIndex: dayIndex + 1,
           academicWeekNumber,
           subject: subject.id,
@@ -1586,7 +1966,7 @@ function buildHydratedHistoricalDiaryTask({
       schoolId: String(historyRecord.schoolId || "").trim(),
       targetDate: toIsoDateString(coveredAtDate),
       weekStartDate: toIsoDateString(getWeekStartDate(coveredAtDate)),
-      dayIndex: Math.max(1, Math.min(5, Number(historyRecord.dayIndex) || 1)),
+      dayIndex: Math.max(1, Math.min(7, Number(historyRecord.dayIndex) || 1)),
       academicWeekNumber: getAcademicWeekNumber(coveredAtDate, yearStartDate),
       subject: safeSubject,
       subjectLabel: subjectEntry?.name || safeSubject,
@@ -1736,7 +2116,7 @@ function buildDiaryTasksForWeek({
       schoolId: entry.schoolId,
       targetDate: entry.targetDate,
       weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
-      dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
+      dayIndex: Math.max(1, Math.min(7, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
       academicWeekNumber: getAcademicWeekNumber(entry.targetDate, yearStartDate),
       subject: entry.subject,
       subjectLabel: subject?.name || entry.subject,
@@ -1773,7 +2153,7 @@ function buildDiaryTasksForWeek({
         schoolId: entry.schoolId,
         targetDate: entry.targetDate,
         weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
-        dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
+        dayIndex: Math.max(1, Math.min(7, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
         academicWeekNumber: getAcademicWeekNumber(entry.targetDate, yearStartDate),
         subject: hasLinkedLesson ? linkedSubjectId : "__assignment__",
         subjectLabel: hasLinkedLesson ? (subject?.name || linkedSubjectId) : joinLocalizedText("Assignments & Projects", "تفویضات اور پروجیکٹس", "en"),
@@ -1823,10 +2203,13 @@ function buildGeneratedWeeklyTestTemplate({
   priorWeekTasks = [],
   getQuiz,
   subjectsById = {},
-  accumulationMode = "rolling",
-  accumulationValue = 8,
+  saturdayTestSettings = null,
 }) {
   if (!weekStartDate || !Number.isFinite(Number(grade)) || typeof getQuiz !== "function") return null;
+  const settings = normalizeAutoDiarySettings({ saturdayTest: saturdayTestSettings || {} }).saturdayTest;
+  if (settings.enabled === false) return null;
+  const accumulationMode = settings.accumulationMode || "rolling";
+  const accumulationValue = settings.accumulationValue || 8;
   const hasPriorPool = Array.isArray(priorWeekTasks) && priorWeekTasks.length > 0;
   const truncateWeeklyTestText = (value, maxLength = 110) => {
     const safeValue = String(value || "").replace(/\s+/g, " ").trim();
@@ -1961,23 +2344,57 @@ function buildGeneratedWeeklyTestTemplate({
       questions.push(item);
     });
   };
-  if (hasPriorPool) {
-    takeQuestions(currentBucket.mcq.slice(0, 2), 10);
-    takeQuestions(priorBucket.mcq.slice(0, 2), 10);
-    takeQuestions(currentBucket.tf.slice(0, 1), 10);
-    takeQuestions(priorBucket.tf.slice(0, 1), 10);
-    takeQuestions(currentBucket.fill.slice(0, 1), 10);
-    takeQuestions(priorBucket.fill.slice(0, 1), 10);
-  } else {
-    takeQuestions(currentBucket.mcq.slice(0, 4), 8);
-    takeQuestions(currentBucket.tf.slice(0, 2), 8);
-    takeQuestions(currentBucket.fill.slice(0, 2), 8);
-  }
+  const difficultyQuestionCounts = {
+    light: 8,
+    standard: 10,
+    rigorous: 12,
+  };
+  const targetQuestionCount = difficultyQuestionCounts[settings.difficulty] || difficultyQuestionCounts.standard;
+  const desiredTypeCounts = (() => {
+    const weightMap = settings.questionTypeWeights || {};
+    const normalizedWeights = {
+      mcq: Math.max(0, Number(weightMap.mcq) || 0),
+      truefalse: Math.max(0, Number(weightMap.truefalse) || 0),
+      fillblank: Math.max(0, Number(weightMap.fillblank) || 0),
+      matching: Math.max(0, Number(weightMap.matching) || 0),
+    };
+    const totalWeight = Object.values(normalizedWeights).reduce((sum, value) => sum + value, 0) || 1;
+    const counts = {};
+    let usedCount = 0;
+    ["mcq", "truefalse", "fillblank", "matching"].forEach((type, index, list) => {
+      if (index === list.length - 1) {
+        counts[type] = Math.max(0, targetQuestionCount - usedCount);
+      } else {
+        counts[type] = Math.max(0, Math.round((normalizedWeights[type] / totalWeight) * targetQuestionCount));
+        usedCount += counts[type];
+      }
+    });
+    return counts;
+  })();
+  const currentWeight = Math.max(0, Number(settings.currentWeekWeight) || 0);
+  const priorWeight = Math.max(0, Number(settings.priorWeeksWeight) || 0);
+  const totalWeekWeight = currentWeight + priorWeight || 1;
+  const getPoolTakeCount = (desiredCount, source) => {
+    if (!hasPriorPool || desiredCount <= 0) return source === "current" ? desiredCount : 0;
+    if (source === "current") return Math.max(0, Math.round((currentWeight / totalWeekWeight) * desiredCount));
+    return Math.max(0, desiredCount - Math.round((currentWeight / totalWeekWeight) * desiredCount));
+  };
+  const addWeightedType = (type, currentItems, priorItems) => {
+    const desiredCount = desiredTypeCounts[type] || 0;
+    if (desiredCount <= 0) return;
+    takeQuestions((Array.isArray(currentItems) ? currentItems : []).slice(0, getPoolTakeCount(desiredCount, "current")), targetQuestionCount);
+    takeQuestions((Array.isArray(priorItems) ? priorItems : []).slice(0, getPoolTakeCount(desiredCount, "prior")), targetQuestionCount);
+  };
+  addWeightedType("mcq", currentBucket.mcq, priorBucket.mcq);
+  addWeightedType("truefalse", currentBucket.tf, priorBucket.tf);
+  addWeightedType("fillblank", currentBucket.fill, priorBucket.fill);
+  const desiredMatchingCount = desiredTypeCounts.matching || 0;
   const combinedPairs = [
-    ...currentBucket.pairs.slice(0, hasPriorPool ? 2 : 4),
-    ...priorBucket.pairs.slice(0, 2),
-  ].slice(0, 5);
-  if (combinedPairs.length >= 3) {
+    ...currentBucket.pairs.slice(0, Math.max(2, getPoolTakeCount(desiredMatchingCount, "current") * 2)),
+    ...priorBucket.pairs.slice(0, Math.max(0, getPoolTakeCount(desiredMatchingCount, "prior") * 2)),
+  ].slice(0, Math.max(3, desiredMatchingCount * 2));
+  if (desiredMatchingCount > 0 && combinedPairs.length >= 3) {
+    usedQuestionIds.add(`matching_${weekStartDate}`);
     questions.push({
       id: `matching_${weekStartDate}`,
       type: "matching",
@@ -1992,19 +2409,18 @@ function buildGeneratedWeeklyTestTemplate({
   }
   const overflowPools = hasPriorPool
     ? [
-      currentBucket.mcq.slice(2),
-      priorBucket.mcq.slice(2),
-      currentBucket.tf.slice(1),
-      priorBucket.tf.slice(1),
-      currentBucket.fill.slice(1),
-      priorBucket.fill.slice(1),
+      currentBucket.mcq,
+      priorBucket.mcq,
+      currentBucket.tf,
+      priorBucket.tf,
+      currentBucket.fill,
+      priorBucket.fill,
     ]
     : [
-      currentBucket.mcq.slice(4),
-      currentBucket.tf.slice(2),
-      currentBucket.fill.slice(2),
+      currentBucket.mcq,
+      currentBucket.tf,
+      currentBucket.fill,
     ];
-  const targetQuestionCount = hasPriorPool ? 10 : 8;
   let overflowCursor = 0;
   while (questions.length < targetQuestionCount && overflowPools.some((pool) => Array.isArray(pool) && pool.length)) {
     const pool = overflowPools[overflowCursor % overflowPools.length];
@@ -2022,19 +2438,19 @@ function buildGeneratedWeeklyTestTemplate({
       ? "since-app-start"
       : `rolling ${Math.max(1, Number(accumulationValue) || 8)}-week`;
   const instructions = hasPriorPool
-    ? `Saturday test: 50% from this week's chapters and 50% from prior weeks (${accumulationScopeLabel} scope). Pool: ${currentBucket.lessonCount} current + ${priorBucket.lessonCount} prior lessons.`
-    : `Saturday test from this week's chapters (${accumulationScopeLabel} scope - no prior weeks covered yet).`;
+    ? `Weekly test: ${currentWeight}% from this week's chapters and ${priorWeight}% from prior weeks (${accumulationScopeLabel} scope). Pool: ${currentBucket.lessonCount} current + ${priorBucket.lessonCount} prior lessons.`
+    : `Weekly test from this week's chapters (${accumulationScopeLabel} scope - no prior weeks covered yet).`;
   const subjectScope = Array.from(new Set([
     ...(Array.isArray(coveredTasks) ? coveredTasks : []),
     ...(Array.isArray(priorWeekTasks) ? priorWeekTasks : []),
   ].map((task) => task?.subject).filter(Boolean)));
   return normalizeLocalTestTemplateRecord({
     templateId: `generated_${weekStartDate}_${grade}`,
-    title: `Saturday Test - Grade ${grade}`,
+    title: `Weekly Test - Grade ${grade}`,
     grade,
     subjectScope,
     payload: {
-      title: `Saturday Test - Grade ${grade}`,
+      title: `Weekly Test - Grade ${grade}`,
       instructions,
       questions,
     },
@@ -4377,6 +4793,7 @@ create table if not exists public.schools (
   owner_email text not null,
   principal_email text null,
   year_start_date date null,
+  auto_diary_settings jsonb not null default '{}'::jsonb,
   auto_diary_start_date date null,
   auto_diary_subject_mode text not null default 'all',
   auto_diary_subject_ids jsonb not null default '[]'::jsonb,
@@ -4388,6 +4805,9 @@ create table if not exists public.schools (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.schools
+  add column if not exists auto_diary_settings jsonb not null default '{}'::jsonb;
 
 alter table if exists public.schools
   add column if not exists auto_diary_start_date date null;
@@ -12309,16 +12729,11 @@ function HomeschoolApp() {
   const [schoolDraftOwnerEmail, setSchoolDraftOwnerEmail] = useState("");
   const [schoolDraftPrincipalEmail, setSchoolDraftPrincipalEmail] = useState("");
   const [schoolDraftYearStartDate, setSchoolDraftYearStartDate] = useState(toIsoDateString(new Date(new Date().getFullYear(), 0, 1)));
-  const [schoolDraftAutoDiaryStartDate, setSchoolDraftAutoDiaryStartDate] = useState(toIsoDateString(new Date(new Date().getFullYear(), 0, 1)));
-  const [schoolDraftAutoDiarySubjectMode, setSchoolDraftAutoDiarySubjectMode] = useState("all");
-  const [schoolDraftAutoDiarySubjectIds, setSchoolDraftAutoDiarySubjectIds] = useState([]);
-  const [schoolDraftAutoDiaryPlanMode, setSchoolDraftAutoDiaryPlanMode] = useState("all_subjects_daily");
-  const [schoolDraftAutoDiaryAdvanceMode, setSchoolDraftAutoDiaryAdvanceMode] = useState("carry_forward");
-  const [schoolDraftAccumulationMode, setSchoolDraftAccumulationMode] = useState("rolling");
-  const [schoolDraftAccumulationValue, setSchoolDraftAccumulationValue] = useState(8);
+  const [schoolDraftAutoDiarySettings, setSchoolDraftAutoDiarySettings] = useState(() => createDefaultAutoDiarySettings(toIsoDateString(new Date(new Date().getFullYear(), 0, 1))));
   const [schoolMemberDraftEmail, setSchoolMemberDraftEmail] = useState("");
   const [schoolMemberDraftRole, setSchoolMemberDraftRole] = useState("student");
   const [schoolMemberDraftGradeScope, setSchoolMemberDraftGradeScope] = useState("");
+  const [schoolDraftHolidayDateInput, setSchoolDraftHolidayDateInput] = useState(toIsoDateString(Date.now()));
   const [parentLinkDraftParentEmail, setParentLinkDraftParentEmail] = useState("");
   const [parentLinkDraftStudentEmail, setParentLinkDraftStudentEmail] = useState("");
   const [parentLinkDraftRelationshipLabel, setParentLinkDraftRelationshipLabel] = useState("");
@@ -12513,6 +12928,10 @@ function HomeschoolApp() {
   const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
   const canSeeLearnerManagement = canManageStudentLinks || canManageContentAccess;
   const contentIdentityEmail = String(supabaseAuthState.email || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
+  const schoolDraftNormalizedAutoDiarySettings = useMemo(
+    () => normalizeAutoDiarySettings(schoolDraftAutoDiarySettings, { yearStartDate: schoolDraftYearStartDate }),
+    [schoolDraftAutoDiarySettings, schoolDraftYearStartDate],
+  );
   useEffect(() => {
     const refreshTodayIso = () => {
       const nextTodayIso = toIsoDateString(Date.now());
@@ -12538,6 +12957,86 @@ function HomeschoolApp() {
     setDiaryWeekAnchorDate(nextAnchorDate);
     setDiaryWeekAnchorFollowsToday(nextAnchorDate === fallbackTodayIso);
   }, [todayIso]);
+  const updateSchoolDraftAutoDiarySettings = useCallback((updater) => {
+    setSchoolDraftAutoDiarySettings((current) => {
+      const base = normalizeAutoDiarySettings(current, { yearStartDate: schoolDraftYearStartDate });
+      const nextValue = typeof updater === "function" ? updater(base) : updater;
+      return normalizeAutoDiarySettings(nextValue, { yearStartDate: schoolDraftYearStartDate });
+    });
+  }, [schoolDraftYearStartDate]);
+  const handleToggleSchoolDraftStudyDay = useCallback((isoDay) => {
+    updateSchoolDraftAutoDiarySettings((current) => {
+      const safeDay = Number(isoDay);
+      const currentDays = normalizeAutoDiaryIsoDayList(current.calendar.studyDays);
+      const nextDays = currentDays.includes(safeDay)
+        ? currentDays.filter((value) => value !== safeDay)
+        : [...currentDays, safeDay];
+      return {
+        ...current,
+        calendar: {
+          ...current.calendar,
+          studyDays: normalizeAutoDiaryIsoDayList(nextDays, currentDays),
+        },
+      };
+    });
+  }, [updateSchoolDraftAutoDiarySettings]);
+  const handleToggleSchoolDraftSubjectSelection = useCallback((subjectId) => {
+    const safeSubjectId = String(subjectId || "").trim();
+    if (!safeSubjectId) return;
+    updateSchoolDraftAutoDiarySettings((current) => {
+      const currentSelected = normalizeTextArray(current.subjects.selectedSubjectIds);
+      const nextSelected = currentSelected.includes(safeSubjectId)
+        ? currentSelected.filter((value) => value !== safeSubjectId)
+        : [...currentSelected, safeSubjectId];
+      const currentPriority = normalizeTextArray(current.subjects.priorityOrder).filter((value) => value !== safeSubjectId);
+      if (!currentSelected.includes(safeSubjectId) && nextSelected.includes(safeSubjectId)) currentPriority.push(safeSubjectId);
+      return {
+        ...current,
+        subjects: {
+          ...current.subjects,
+          selectedSubjectIds: nextSelected,
+          priorityOrder: current.subjects.mode === "selected" ? currentPriority.filter((value) => nextSelected.includes(value)) : current.subjects.priorityOrder,
+        },
+      };
+    });
+  }, [updateSchoolDraftAutoDiarySettings]);
+  const handleMoveSchoolDraftSubjectPriority = useCallback((subjectId, direction) => {
+    updateSchoolDraftAutoDiarySettings((current) => {
+      const visibleSubjectIds = current.subjects.mode === "selected"
+        ? normalizeTextArray(current.subjects.selectedSubjectIds)
+        : (Array.isArray(allSubjects) ? allSubjects.map((subject) => String(subject?.id || "").trim()).filter(Boolean) : []);
+      const seededPriorityOrder = [
+        ...normalizeTextArray(current.subjects.priorityOrder).filter((value) => visibleSubjectIds.includes(value)),
+        ...visibleSubjectIds.filter((value) => !normalizeTextArray(current.subjects.priorityOrder).includes(value)),
+      ];
+      return {
+        ...current,
+        subjects: {
+          ...current.subjects,
+          priorityOrder: moveAutoDiarySubjectPriority(seededPriorityOrder, subjectId, direction),
+        },
+      };
+    });
+  }, [allSubjects, updateSchoolDraftAutoDiarySettings]);
+  const handleAddSchoolDraftHolidayDate = useCallback(() => {
+    const todayValue = String(schoolDraftHolidayDateInput || todayIso || toIsoDateString(Date.now())).trim();
+    updateSchoolDraftAutoDiarySettings((current) => ({
+      ...current,
+      calendar: {
+        ...current.calendar,
+        holidayDates: normalizeTextArray([...(current.calendar.holidayDates || []), todayValue]),
+      },
+    }));
+  }, [schoolDraftHolidayDateInput, todayIso, updateSchoolDraftAutoDiarySettings]);
+  const handleRemoveSchoolDraftHolidayDate = useCallback((holidayDate) => {
+    updateSchoolDraftAutoDiarySettings((current) => ({
+      ...current,
+      calendar: {
+        ...current.calendar,
+        holidayDates: normalizeTextArray(current.calendar.holidayDates).filter((value) => value !== holidayDate),
+      },
+    }));
+  }, [updateSchoolDraftAutoDiarySettings]);
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
   const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
   const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -13147,14 +13646,18 @@ const headerHideTimerRef = useRef(null);
     setSchoolDraftOwnerEmail(String(activeInstitutionSchool.ownerEmail || "").trim());
     setSchoolDraftPrincipalEmail(String(activeInstitutionSchool.principalEmail || "").trim());
     setSchoolDraftYearStartDate(String(activeInstitutionSchool.yearStartDate || toIsoDateString(new Date(new Date().getFullYear(), 0, 1))).trim());
-    setSchoolDraftAutoDiaryStartDate(String(activeInstitutionSchool.autoDiaryStartDate || activeInstitutionSchool.yearStartDate || toIsoDateString(new Date(new Date().getFullYear(), 0, 1))).trim());
-    setSchoolDraftAutoDiarySubjectMode(String(activeInstitutionSchool.autoDiarySubjectMode || "all").trim().toLowerCase() === "selected" ? "selected" : "all");
-    setSchoolDraftAutoDiarySubjectIds(normalizeTextArray(activeInstitutionSchool.autoDiarySubjectIds));
-    setSchoolDraftAutoDiaryPlanMode(String(activeInstitutionSchool.autoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" ? "subject_rotation" : "all_subjects_daily");
-    setSchoolDraftAutoDiaryAdvanceMode(String(activeInstitutionSchool.autoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() === "weekly_lesson" ? "weekly_lesson" : "carry_forward");
-    setSchoolDraftAccumulationMode(String(activeInstitutionSchool.weekAccumulationMode || "rolling").trim().toLowerCase() || "rolling");
-    setSchoolDraftAccumulationValue(Math.max(1, Number(activeInstitutionSchool.weekAccumulationValue) || 8));
-  }, [activeInstitutionSchool]);
+    setSchoolDraftAutoDiarySettings(normalizeAutoDiarySettings(activeInstitutionSchool.autoDiarySettings || {}, {
+      autoDiaryStartDate: activeInstitutionSchool.autoDiaryStartDate,
+      autoDiarySubjectMode: activeInstitutionSchool.autoDiarySubjectMode,
+      autoDiarySubjectIds: activeInstitutionSchool.autoDiarySubjectIds,
+      autoDiaryPlanMode: activeInstitutionSchool.autoDiaryPlanMode,
+      autoDiaryAdvanceMode: activeInstitutionSchool.autoDiaryAdvanceMode,
+      yearStartDate: activeInstitutionSchool.yearStartDate,
+      weekAccumulationMode: activeInstitutionSchool.weekAccumulationMode,
+      weekAccumulationValue: activeInstitutionSchool.weekAccumulationValue,
+    }));
+    setSchoolDraftHolidayDateInput(String(activeInstitutionSchool.autoDiaryStartDate || activeInstitutionSchool.yearStartDate || todayIso || toIsoDateString(Date.now())).trim());
+  }, [activeInstitutionSchool, todayIso]);
   const activeInstitutionSchoolIdResolved = String(activeInstitutionSchool?.schoolId || "").trim();
   const currentUserInstitutionRole = useMemo(() => {
     if (!currentUserSchoolMemberships.length || !activeInstitutionSchoolIdResolved) return "";
@@ -13305,11 +13808,28 @@ const headerHideTimerRef = useRef(null);
   const currentDiaryWeekDates = useMemo(() => getWeekDates(diaryWeekAnchorDate), [diaryWeekAnchorDate]);
   const currentDiaryWeekStartDate = currentDiaryWeekDates[0] || toIsoDateString(getWeekStartDate(Date.now()));
   const activeSchoolYearStartDate = String(activeInstitutionSchool?.yearStartDate || "").trim();
-  const activeAutoDiaryStartDate = String(activeInstitutionSchool?.autoDiaryStartDate || activeSchoolYearStartDate || "").trim();
-  const activeAutoDiarySubjectMode = String(activeInstitutionSchool?.autoDiarySubjectMode || "all").trim().toLowerCase() === "selected" ? "selected" : "all";
-  const activeAutoDiarySubjectIds = normalizeTextArray(activeInstitutionSchool?.autoDiarySubjectIds);
-  const activeAutoDiaryPlanMode = String(activeInstitutionSchool?.autoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" ? "subject_rotation" : "all_subjects_daily";
-  const activeAutoDiaryAdvanceMode = String(activeInstitutionSchool?.autoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() === "weekly_lesson" ? "weekly_lesson" : "carry_forward";
+  const activeAutoDiarySettings = useMemo(() => normalizeAutoDiarySettings(activeInstitutionSchool?.autoDiarySettings || {}, {
+    autoDiaryStartDate: activeInstitutionSchool?.autoDiaryStartDate,
+    autoDiarySubjectMode: activeInstitutionSchool?.autoDiarySubjectMode,
+    autoDiarySubjectIds: activeInstitutionSchool?.autoDiarySubjectIds,
+    autoDiaryPlanMode: activeInstitutionSchool?.autoDiaryPlanMode,
+    autoDiaryAdvanceMode: activeInstitutionSchool?.autoDiaryAdvanceMode,
+    yearStartDate: activeSchoolYearStartDate,
+    weekAccumulationMode: activeInstitutionSchool?.weekAccumulationMode,
+    weekAccumulationValue: activeInstitutionSchool?.weekAccumulationValue,
+  }), [activeInstitutionSchool, activeSchoolYearStartDate]);
+  const currentStudyWeekDates = useMemo(
+    () => getConfiguredStudyDates(currentDiaryWeekDates, activeAutoDiarySettings),
+    [activeAutoDiarySettings, currentDiaryWeekDates],
+  );
+  const currentWeeklyTestDate = useMemo(
+    () => getConfiguredTestDate(currentDiaryWeekDates, activeAutoDiarySettings),
+    [activeAutoDiarySettings, currentDiaryWeekDates],
+  );
+  const currentWeeklyTestDayLabel = useMemo(
+    () => getAutoDiaryWeekdayLabel(activeAutoDiarySettings?.calendar?.testDay, language),
+    [activeAutoDiarySettings, language],
+  );
   const diaryViewerStudentEmailSeed = useMemo(() => {
     if (performanceStudentEmail && accessibleStudentOptions.some((entry) => entry.email === performanceStudentEmail)) return performanceStudentEmail;
     if (contentManagerRole === "student" && contentIdentityEmail) return contentIdentityEmail;
@@ -13319,13 +13839,9 @@ const headerHideTimerRef = useRef(null);
   const autoDiaryTasks = useMemo(() => buildAutoDiaryWeekPlan({
     subjects: allSubjects,
     grade,
-    weekDates: currentDiaryWeekDates.slice(0, 5),
+    weekDates: currentDiaryWeekDates,
     yearStartDate: activeSchoolYearStartDate,
-    autoDiaryStartDate: activeAutoDiaryStartDate,
-    autoDiarySubjectMode: activeAutoDiarySubjectMode,
-    autoDiarySubjectIds: activeAutoDiarySubjectIds,
-    autoDiaryPlanMode: activeAutoDiaryPlanMode,
-    autoDiaryAdvanceMode: activeAutoDiaryAdvanceMode,
+    autoDiarySettings: activeAutoDiarySettings,
     schoolId: activeInstitutionSchoolIdResolved,
     getLessonGroups: getMergedLessonGroups,
     getQuiz: getMergedQuiz,
@@ -13333,7 +13849,7 @@ const headerHideTimerRef = useRef(null);
     practiceLessonProgress,
     diaryCompletions: contentRelationshipState.diaryCompletions,
     studentEmail: diaryViewerStudentEmailSeed,
-  }), [activeAutoDiaryAdvanceMode, activeAutoDiaryPlanMode, activeAutoDiaryStartDate, activeAutoDiarySubjectIds, activeAutoDiarySubjectMode, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+  }), [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
   const visibleDiaryEntries = useMemo(() => {
     const safeEntries = (Array.isArray(contentRelationshipState.diaryEntries) ? contentRelationshipState.diaryEntries : [])
       .map((entry) => normalizeDiaryEntryRecord(entry))
@@ -13353,7 +13869,7 @@ const headerHideTimerRef = useRef(null);
   }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.diaryEntries, grade, isGradeInScope, linkedChildOptions, schoolEffectivePermission]);
   const currentWeekDiaryEntries = useMemo(
     () => visibleDiaryEntries
-      .filter((entry) => entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[4])
+      .filter((entry) => entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[6])
       .filter((entry) => {
         const diaryViewerFilterEmail = String(performanceStudentEmail || contentIdentityEmail || linkedChildOptions[0]?.email || "").trim().toLowerCase();
         if (entry.targetType === "student") {
@@ -13408,11 +13924,23 @@ const headerHideTimerRef = useRef(null);
     acc[`${entry.taskKind}::${entry.taskKey}`] = entry;
     return acc;
   }, {}), [visibleDiaryCompletions]);
-  const weeklyDiaryTaskGroups = useMemo(() => currentDiaryWeekDates.slice(0, 5).map((targetDate, index) => ({
+  const diaryVisibleWeekDates = useMemo(() => {
+    const dates = new Set([
+      ...currentStudyWeekDates,
+      ...currentWeekDiaryEntries.map((entry) => entry.targetDate),
+      ...autoDiaryTasks.map((entry) => entry.targetDate),
+    ].filter(Boolean));
+    if (currentWeeklyTestDate && activeAutoDiarySettings?.saturdayTest?.enabled !== false) {
+      dates.add(currentWeeklyTestDate);
+    }
+    const ordered = currentDiaryWeekDates.filter((date) => dates.has(date));
+    return ordered.length ? ordered : currentStudyWeekDates;
+  }, [activeAutoDiarySettings?.saturdayTest?.enabled, autoDiaryTasks, currentDiaryWeekDates, currentStudyWeekDates, currentWeekDiaryEntries, currentWeeklyTestDate]);
+  const weeklyDiaryTaskGroups = useMemo(() => diaryVisibleWeekDates.map((targetDate, index) => ({
     targetDate,
     dayIndex: index + 1,
     tasks: weeklyDiaryTasks.filter((task) => task.targetDate === targetDate),
-  })), [currentDiaryWeekDates, weeklyDiaryTasks]);
+  })), [diaryVisibleWeekDates, weeklyDiaryTasks]);
   const diaryTodayIso = todayIso;
   const visibleDiaryDayGroups = useMemo(() => {
     const safeGroups = weeklyDiaryTaskGroups
@@ -13542,8 +14070,8 @@ const headerHideTimerRef = useRef(null);
         .map((task) => `${task.subject}::${task.lessonKey}`));
       return buildPriorWeeksCoveredTasks({
         currentWeekStartDate: currentDiaryWeekStartDate,
-        accumulationMode: activeInstitutionSchool?.weekAccumulationMode || "rolling",
-        accumulationValue: activeInstitutionSchool?.weekAccumulationValue || 8,
+        accumulationMode: activeAutoDiarySettings?.saturdayTest?.accumulationMode || "rolling",
+        accumulationValue: activeAutoDiarySettings?.saturdayTest?.accumulationValue || 8,
         yearStartDate: activeSchoolYearStartDate,
         subjects: allSubjects,
         grade,
@@ -13558,7 +14086,7 @@ const headerHideTimerRef = useRef(null);
       console.log("Unable to calculate prior-week accumulated diary tasks:", error);
       return [];
     }
-  }, [activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
+  }, [activeAutoDiarySettings, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
   const generatedWeeklyTestTemplate = useMemo(() => {
     try {
       return buildGeneratedWeeklyTestTemplate({
@@ -13568,14 +14096,13 @@ const headerHideTimerRef = useRef(null);
         priorWeekTasks: priorWeekAccumulatedTasks,
         getQuiz: getMergedQuiz,
         subjectsById: subjectLookup,
-        accumulationMode: activeInstitutionSchool?.weekAccumulationMode || "rolling",
-        accumulationValue: activeInstitutionSchool?.weekAccumulationValue || 8,
+        saturdayTestSettings: activeAutoDiarySettings?.saturdayTest,
       });
     } catch (error) {
       console.log("Unable to build generated weekly test template:", error);
       return null;
     }
-  }, [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
+  }, [activeAutoDiarySettings, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
   const visibleWeeklyTestAssignments = useMemo(() => {
     const safeAssignments = (Array.isArray(contentRelationshipState.weeklyTestAssignments) ? contentRelationshipState.weeklyTestAssignments : [])
       .map((entry) => normalizeWeeklyTestAssignmentRecord(entry))
@@ -13650,7 +14177,7 @@ const headerHideTimerRef = useRef(null);
     diaryViewerStudentOptions.forEach((entry) => {
       const email = entry.email;
       const relevantCompletions = visibleDiaryCompletions.filter((row) => row.studentEmail === email);
-      const weeklyCompletions = relevantCompletions.filter((row) => row.targetDate >= currentDiaryWeekDates[0] && row.targetDate <= currentDiaryWeekDates[4]);
+      const weeklyCompletions = relevantCompletions.filter((row) => row.targetDate >= currentDiaryWeekDates[0] && row.targetDate <= currentDiaryWeekDates[6]);
       const weeklyResults = visibleWeeklyTestResults.filter((row) => row.studentEmail === email);
       diaryTasksByStudent[email] = {
         weeklyCompleted: weeklyCompletions.length,
@@ -13758,19 +14285,14 @@ const headerHideTimerRef = useRef(null);
       const principalEmail = String(schoolDraftPrincipalEmail || ownerEmail).trim().toLowerCase();
       const client = ensureSupabaseClientRef.current();
       const nowIso = new Date().toISOString();
+      const nextAutoDiarySettings = normalizeAutoDiarySettings(schoolDraftNormalizedAutoDiarySettings, { yearStartDate: schoolDraftYearStartDate });
       const baseRow = {
         school_id: schoolId,
         school_name: schoolName,
         owner_email: ownerEmail,
         principal_email: principalEmail,
         year_start_date: String(schoolDraftYearStartDate || toIsoDateString(getWeekStartDate(Date.now()))).trim(),
-        auto_diary_start_date: String(schoolDraftAutoDiaryStartDate || schoolDraftYearStartDate || toIsoDateString(getWeekStartDate(Date.now()))).trim(),
-        auto_diary_subject_mode: String(schoolDraftAutoDiarySubjectMode || "all").trim().toLowerCase() === "selected" ? "selected" : "all",
-        auto_diary_subject_ids: normalizeTextArray(schoolDraftAutoDiarySubjectIds),
-        auto_diary_plan_mode: String(schoolDraftAutoDiaryPlanMode || "all_subjects_daily").trim().toLowerCase() === "subject_rotation" ? "subject_rotation" : "all_subjects_daily",
-        auto_diary_advance_mode: String(schoolDraftAutoDiaryAdvanceMode || "carry_forward").trim().toLowerCase() === "weekly_lesson" ? "weekly_lesson" : "carry_forward",
-        week_accumulation_mode: String(schoolDraftAccumulationMode || "rolling").trim().toLowerCase(),
-        week_accumulation_value: Math.max(1, Number(schoolDraftAccumulationValue) || 8),
+        ...buildAutoDiaryLegacyFields(nextAutoDiarySettings, schoolDraftYearStartDate),
         status: "active",
         updated_at: nowIso,
       };
@@ -13788,8 +14310,9 @@ const headerHideTimerRef = useRef(null);
         console.log("Unable to look up existing school before upsert:", lookupFailure);
       }
       let { error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(baseRow, { onConflict: "school_id" });
-      if (error && String(error.message || "").toLowerCase().includes("auto_diary_")) {
+      if (error && /auto_diary_/.test(String(error.message || "").toLowerCase())) {
         const fallbackRow = { ...baseRow };
+        delete fallbackRow.auto_diary_settings;
         delete fallbackRow.auto_diary_start_date;
         delete fallbackRow.auto_diary_subject_mode;
         delete fallbackRow.auto_diary_subject_ids;
@@ -13869,17 +14392,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftAutoDiaryAdvanceMode, schoolDraftAutoDiaryPlanMode, schoolDraftAutoDiaryStartDate, schoolDraftAutoDiarySubjectIds, schoolDraftAutoDiarySubjectMode, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
-  const handleToggleSchoolDraftAutoDiarySubject = useCallback((subjectId) => {
-    const safeSubjectId = String(subjectId || "").trim();
-    if (!safeSubjectId) return;
-    setSchoolDraftAutoDiarySubjectIds((current) => {
-      const safeCurrent = normalizeTextArray(current);
-      return safeCurrent.includes(safeSubjectId)
-        ? safeCurrent.filter((entry) => entry !== safeSubjectId)
-        : [...safeCurrent, safeSubjectId];
-    });
-  }, []);
+  }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftName, schoolDraftNormalizedAutoDiarySettings, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -14050,10 +14563,10 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     const subjectId = String(diaryDraftSubjectId || selectedSubject?.id || "").trim();
+    const configuredWeekDates = currentStudyWeekDates.length ? currentStudyWeekDates : currentDiaryWeekDates.filter(Boolean);
     const targetDates = diaryDraftRangeMode === "week"
-      ? currentDiaryWeekDates.slice(0, 5)
-      : getWeekDates(diaryDraftStartDate || diaryWeekAnchorDate)
-        .slice(0, 5)
+      ? configuredWeekDates
+      : getConfiguredStudyDates(getWeekDates(diaryDraftStartDate || diaryWeekAnchorDate), activeAutoDiarySettings)
         .filter((date) => date >= String(diaryDraftStartDate || "").trim() && date <= String(diaryDraftEndDate || diaryDraftStartDate || "").trim());
     if (!subjectId || !diaryDraftContentId || !targetDates.length) {
       showAppToast(joinLocalizedText("Choose the diary dates, subject, and chapter first.", "پہلے ڈائری کی تاریخیں، مضمون، اور باب منتخب کریں۔", language), "alert");
@@ -14093,7 +14606,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [activeInstitutionSchoolIdResolved, canManageDiary, chapterGroupLookup, contentIdentityEmail, currentDiaryWeekDates, diaryDraftContentId, diaryDraftEndDate, diaryDraftNote, diaryDraftRangeMode, diaryDraftScope, diaryDraftStartDate, diaryDraftStudentEmail, diaryDraftSubjectId, diaryWeekAnchorDate, grade, language, selectedSubject?.id, showAppToast]);
+  }, [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, canManageDiary, chapterGroupLookup, contentIdentityEmail, currentDiaryWeekDates, currentStudyWeekDates, diaryDraftContentId, diaryDraftEndDate, diaryDraftNote, diaryDraftRangeMode, diaryDraftScope, diaryDraftStartDate, diaryDraftStudentEmail, diaryDraftSubjectId, diaryWeekAnchorDate, grade, language, selectedSubject?.id, showAppToast]);
   const handleDeleteDiaryEntry = useCallback(async (entry) => {
     const normalized = normalizeDiaryEntryRecord(entry);
     if (!normalized?.diaryId) return;
@@ -17228,9 +17741,11 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         if (
           result.error
           && table === SUPABASE_SCHOOLS_TABLE
-          && String(selectClause || "").includes("auto_diary_")
+          && (String(selectClause || "").includes("auto_diary_") || String(selectClause || "").includes("auto_diary_settings"))
         ) {
           const fallbackSelectClause = String(selectClause || "")
+            .replace(/,\s*auto_diary_settings/g, "")
+            .replace(/auto_diary_settings,\s*/g, "")
             .replace(/,\s*auto_diary_start_date/g, "")
             .replace(/auto_diary_start_date,\s*/g, "")
             .replace(/,\s*auto_diary_subject_mode/g, "")
@@ -17314,7 +17829,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
 
       await collectSchoolScoped(
         SUPABASE_SCHOOLS_TABLE,
-        "school_id, school_name, owner_email, principal_email, year_start_date, auto_diary_start_date, auto_diary_subject_mode, auto_diary_subject_ids, auto_diary_plan_mode, auto_diary_advance_mode, week_accumulation_mode, week_accumulation_value, status, created_at, updated_at",
+        "school_id, school_name, owner_email, principal_email, year_start_date, auto_diary_settings, auto_diary_start_date, auto_diary_subject_mode, auto_diary_subject_ids, auto_diary_plan_mode, auto_diary_advance_mode, week_accumulation_mode, week_accumulation_value, status, created_at, updated_at",
         normalizeSchoolRecord,
         "schools",
         "schoolId",
@@ -24505,55 +25020,96 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
               <div className="profile-report-item" style={{ marginTop: 10 }}>
                 <div className="profile-report-item-head">
-                  <strong>{renderLocalizedTextNode(joinLocalizedText("Auto Diary Setup", "خودکار ڈائری سیٹ اپ", language), language)}</strong>
-                  <span>{renderLocalizedTextNode(joinLocalizedText("Daily study generation", "روزانہ مطالعہ جنریشن", language), language)}</span>
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Auto Diary Control Center", "خودکار ڈائری کنٹرول سینٹر", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Calendar, subjects, progression, and weekly test", "کیلنڈر، مضامین، پیش رفت، اور ہفتہ وار ٹیسٹ", language), language)}</span>
                 </div>
-                <div className="goal-progress-meta" style={{ marginTop: 6 }}>
-                  {renderLocalizedTextNode(joinLocalizedText("Choose when auto diary starts, which subjects it includes, whether all subjects appear daily or rotate, and whether unfinished chapters carry forward automatically.", "منتخب کریں کہ خودکار ڈائری کب شروع ہو، کون سے مضامین شامل ہوں، کیا ہر روز سب مضامین آئیں یا باری باری، اور کیا نامکمل ابواب خود بخود اگلے ہفتے جاری رہیں۔", language), language)}
-                </div>
-                <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
-                  <CalendarDateField value={schoolDraftAutoDiaryStartDate} onChange={setSchoolDraftAutoDiaryStartDate} language={language} />
-                  <select className="settings-select" value={schoolDraftAutoDiarySubjectMode} onChange={(event) => setSchoolDraftAutoDiarySubjectMode(event.target.value)}>
-                    <option value="all">{renderLocalizedTextNode(joinLocalizedText("Include every subject", "تمام مضامین شامل کریں", language), language)}</option>
-                    <option value="selected">{renderLocalizedTextNode(joinLocalizedText("Choose subjects manually", "مضامین خود منتخب کریں", language), language)}</option>
-                  </select>
-                  <select className="settings-select" value={schoolDraftAutoDiaryPlanMode} onChange={(event) => setSchoolDraftAutoDiaryPlanMode(event.target.value)}>
-                    <option value="all_subjects_daily">{renderLocalizedTextNode(joinLocalizedText("All subjects each day", "ہر روز تمام مضامین", language), language)}</option>
-                    <option value="subject_rotation">{renderLocalizedTextNode(joinLocalizedText("Rotate subjects through the week", "ہفتے میں مضامین باری باری", language), language)}</option>
-                  </select>
-                  <select className="settings-select" value={schoolDraftAutoDiaryAdvanceMode} onChange={(event) => setSchoolDraftAutoDiaryAdvanceMode(event.target.value)}>
-                    <option value="carry_forward">{renderLocalizedTextNode(joinLocalizedText("Carry unfinished chapter slices forward", "نامکمل باب کے حصے آگے بڑھائیں", language), language)}</option>
-                    <option value="weekly_lesson">{renderLocalizedTextNode(joinLocalizedText("Keep one lesson focus per week", "ہر ہفتے ایک سبق مرکز رکھیں", language), language)}</option>
-                  </select>
-                </div>
-                {schoolDraftAutoDiarySubjectMode === "selected" ? (
-                  <div className="profile-switcher-chip-row" style={{ marginTop: 10 }}>
-                    {allSubjects.map((subject) => {
-                      const selected = schoolDraftAutoDiarySubjectIds.includes(subject.id);
-                      return (
-                        <button
-                          key={`auto_diary_subject_${subject.id}`}
-                          type="button"
-                          className={`profile-switcher-chip${selected ? " active" : ""}`}
-                          onClick={() => handleToggleSchoolDraftAutoDiarySubject(subject.id)}
-                        >
-                          <span className="profile-switcher-chip-copy">
-                            <strong>{renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)}</strong>
-                            <span>{renderLocalizedTextNode(selected ? joinLocalizedText("Included in daily diary", "روزانہ ڈائری میں شامل", language) : joinLocalizedText("Tap to include", "شامل کرنے کے لیے منتخب کریں", language), language)}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
+                <div className="profile-report-list" style={{ marginTop: 10 }}>
+                  <div className="profile-report-item">
+                    <div className="profile-report-item-head">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText("Calendar", "کیلنڈر", language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText("Start date, study days, holidays, test day", "آغاز، مطالعہ کے دن، تعطیلات، ٹیسٹ ڈے", language), language)}</span>
+                    </div>
+                    <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 8 }}>
+                      <CalendarDateField value={schoolDraftNormalizedAutoDiarySettings.calendar.startDate} onChange={(value) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, startDate: value } }))} language={language} />
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.calendar.testDay} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, testDay: Number(event.target.value) || 6 } }))}>
+                        {AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => <option key={`auto_test_day_${entry.value}`} value={entry.value}>{renderLocalizedTextNode(language === "ur" ? entry.ur : entry.en, language)}</option>)}
+                      </select>
+                      <CalendarDateField value={schoolDraftHolidayDateInput} onChange={setSchoolDraftHolidayDateInput} language={language} />
+                      <button type="button" className="ghost-cta" onClick={handleAddSchoolDraftHolidayDate}>{renderLocalizedTextNode(joinLocalizedText("Add holiday", "تعطیل شامل کریں", language), language)}</button>
+                    </div>
+                    <div className="profile-switcher-chip-row" style={{ marginTop: 8 }}>
+                      {AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => {
+                        const selected = schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.includes(entry.value);
+                        return <button key={`study_day_${entry.value}`} type="button" className={`profile-switcher-chip${selected ? " active" : ""}`} onClick={() => handleToggleSchoolDraftStudyDay(entry.value)}><span className="profile-switcher-chip-copy"><strong>{renderLocalizedTextNode(language === "ur" ? entry.ur : entry.en, language)}</strong><span>{renderLocalizedTextNode(selected ? joinLocalizedText("Study day", "مطالعہ کا دن", language) : joinLocalizedText("Off day", "چھٹی", language), language)}</span></span></button>;
+                      })}
+                    </div>
+                    {schoolDraftNormalizedAutoDiarySettings.calendar.holidayDates.length ? <div className="chapter-badge-row" style={{ marginTop: 8 }}>{schoolDraftNormalizedAutoDiarySettings.calendar.holidayDates.map((holidayDate) => <button key={`holiday_${holidayDate}`} type="button" className="chapter-badge neutral" onClick={() => handleRemoveSchoolDraftHolidayDate(holidayDate)}>{renderLocalizedTextNode(holidayDate, language)}</button>)}</div> : null}
                   </div>
-                ) : null}
+                  <div className="profile-report-item">
+                    <div className="profile-report-item-head">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText("Subjects & Layout", "مضامین اور ترتیب", language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText("Inclusion, priority, weights, and day layout", "شمولیت، ترجیح، وزن، اور روزانہ ترتیب", language), language)}</span>
+                    </div>
+                    <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 8 }}>
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.subjects.mode} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, subjects: { ...current.subjects, mode: event.target.value === "selected" ? "selected" : "all" } }))}>
+                        <option value="all">{renderLocalizedTextNode(joinLocalizedText("All subjects", "تمام مضامین", language), language)}</option>
+                        <option value="selected">{renderLocalizedTextNode(joinLocalizedText("Selected subjects only", "صرف منتخب مضامین", language), language)}</option>
+                      </select>
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.dailyLayout.mode} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, mode: event.target.value } }))}>
+                        <option value="all_subjects_daily">{renderLocalizedTextNode(joinLocalizedText("All subjects daily", "ہر روز تمام مضامین", language), language)}</option>
+                        <option value="subject_rotation">{renderLocalizedTextNode(joinLocalizedText("Rotate through the week", "ہفتے میں باری باری", language), language)}</option>
+                        <option value="hybrid">{renderLocalizedTextNode(joinLocalizedText("Hybrid core + rotation", "ہائبرڈ بنیادی + گردش", language), language)}</option>
+                      </select>
+                      <input className="settings-text-input" type="number" min="1" max="8" value={schoolDraftNormalizedAutoDiarySettings.dailyLayout.minSubjectsPerDay} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, minSubjectsPerDay: Math.max(1, Math.min(8, Number(event.target.value) || 1)) } }))} placeholder={language === "ur" ? "کم از کم مضامین" : "Min/day"} style={{ maxWidth: 130 }} />
+                      <input className="settings-text-input" type="number" min="1" max="8" value={schoolDraftNormalizedAutoDiarySettings.dailyLayout.maxSubjectsPerDay} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, maxSubjectsPerDay: Math.max(1, Math.min(8, Number(event.target.value) || 1)) } }))} placeholder={language === "ur" ? "زیادہ سے زیادہ مضامین" : "Max/day"} style={{ maxWidth: 130 }} />
+                    </div>
+                    <div className="profile-switcher-chip-row" style={{ marginTop: 8 }}>
+                      {allSubjects.map((subject) => {
+                        const subjectId = String(subject.id || "").trim();
+                        const selected = schoolDraftNormalizedAutoDiarySettings.subjects.mode === "all" || schoolDraftNormalizedAutoDiarySettings.subjects.selectedSubjectIds.includes(subjectId);
+                        return <button key={`auto_subject_pick_${subjectId}`} type="button" className={`profile-switcher-chip${selected ? " active" : ""}`} onClick={() => handleToggleSchoolDraftSubjectSelection(subjectId)}><span className="profile-switcher-chip-copy"><strong>{renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)}</strong><span>{renderLocalizedTextNode(selected ? joinLocalizedText("Included", "شامل", language) : joinLocalizedText("Tap to include", "شامل کرنے کے لیے منتخب کریں", language), language)}</span></span></button>;
+                      })}
+                    </div>
+                    <div className="profile-report-list" style={{ marginTop: 8 }}>
+                      {orderAutoDiarySubjects(schoolDraftNormalizedAutoDiarySettings.subjects.mode === "selected" ? allSubjects.filter((subject) => schoolDraftNormalizedAutoDiarySettings.subjects.selectedSubjectIds.includes(subject.id)) : allSubjects, schoolDraftNormalizedAutoDiarySettings).map((subject) => {
+                        const subjectId = String(subject.id || "").trim();
+                        const weightValue = Number(schoolDraftNormalizedAutoDiarySettings.subjects.weightsBySubject?.[subjectId]) || 1;
+                        const subjectOrderIndex = normalizeTextArray(schoolDraftNormalizedAutoDiarySettings.subjects.priorityOrder).findIndex((entry) => entry === subjectId);
+                        const hybridCoreSelected = schoolDraftNormalizedAutoDiarySettings.dailyLayout.hybridCoreSubjectIds.includes(subjectId);
+                        return <div key={`auto_subject_priority_${subjectId}`} className="profile-report-item"><div className="profile-report-item-head"><strong>{renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)}</strong><span>{renderLocalizedTextNode(joinLocalizedText(`Priority ${subjectOrderIndex >= 0 ? subjectOrderIndex + 1 : "—"}`, `ترجیح ${subjectOrderIndex >= 0 ? subjectOrderIndex + 1 : "—"}`, language), language)}</span></div><div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 8 }}><input className="settings-text-input" type="number" min="0" max="10" value={weightValue} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, subjects: { ...current.subjects, weightsBySubject: { ...(current.subjects.weightsBySubject || {}), [subjectId]: Math.max(0, Math.min(10, Number(event.target.value) || 0)) } } }))} placeholder={language === "ur" ? "وزن" : "Weight"} style={{ maxWidth: 110 }} /><button type="button" className="ghost-cta" onClick={() => handleMoveSchoolDraftSubjectPriority(subjectId, -1)}>{renderLocalizedTextNode(joinLocalizedText("Up", "اوپر", language), language)}</button><button type="button" className="ghost-cta" onClick={() => handleMoveSchoolDraftSubjectPriority(subjectId, 1)}>{renderLocalizedTextNode(joinLocalizedText("Down", "نیچے", language), language)}</button>{schoolDraftNormalizedAutoDiarySettings.dailyLayout.mode === "hybrid" ? <button type="button" className={`chapter-badge ${hybridCoreSelected ? "active" : "neutral"}`} onClick={() => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, hybridCoreSubjectIds: hybridCoreSelected ? normalizeTextArray(current.dailyLayout.hybridCoreSubjectIds).filter((value) => value !== subjectId) : [...normalizeTextArray(current.dailyLayout.hybridCoreSubjectIds), subjectId] } }))}>{renderLocalizedTextNode(hybridCoreSelected ? joinLocalizedText("Core", "بنیادی", language) : joinLocalizedText("Make core", "بنیادی بنائیں", language), language)}</button> : null}</div></div>;
+                      })}
+                    </div>
+                  </div>
+                  <div className="profile-report-item">
+                    <div className="profile-report-item-head">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText("Progression & Weekly Test", "پیش رفت اور ہفتہ وار ٹیسٹ", language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText("Completion rules, carry-forward, difficulty, and question mix", "تکمیل کے قواعد، آگے بڑھاؤ، مشکل، اور سوالات کی ترتیب", language), language)}</span>
+                    </div>
+                    <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 8 }}>
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.progression.chapterSelectionMode} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, chapterSelectionMode: event.target.value === "curriculum_order" ? "curriculum_order" : "progress_first" } }))}><option value="progress_first">{renderLocalizedTextNode(joinLocalizedText("Next unfinished chapter", "اگلا نامکمل باب", language), language)}</option><option value="curriculum_order">{renderLocalizedTextNode(joinLocalizedText("Curriculum order", "نصابی ترتیب", language), language)}</option></select>
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.progression.advanceMode} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, advanceMode: event.target.value === "weekly_lesson" ? "weekly_lesson" : "carry_forward" } }))}><option value="carry_forward">{renderLocalizedTextNode(joinLocalizedText("Carry forward", "آگے بڑھائیں", language), language)}</option><option value="weekly_lesson">{renderLocalizedTextNode(joinLocalizedText("Weekly focus", "ہفتہ وار توجہ", language), language)}</option></select>
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.progression.completionMode} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, completionMode: event.target.value === "all" ? "all" : "any" } }))}><option value="any">{renderLocalizedTextNode(joinLocalizedText("Any enabled signal", "کوئی بھی فعال اشارہ", language), language)}</option><option value="all">{renderLocalizedTextNode(joinLocalizedText("All enabled signals", "تمام فعال اشارے", language), language)}</option></select>
+                      <input className="settings-text-input" type="number" min="1" max="6" value={schoolDraftNormalizedAutoDiarySettings.progression.minimumUnitsPerDay} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, minimumUnitsPerDay: Math.max(1, Math.min(6, Number(event.target.value) || 1)) } }))} placeholder={language === "ur" ? "یونٹس/دن" : "Units/day"} style={{ maxWidth: 120 }} />
+                      <input className="settings-text-input" type="number" min="1" max="100" value={schoolDraftNormalizedAutoDiarySettings.progression.lessonProgressThreshold} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, lessonProgressThreshold: Math.max(1, Math.min(100, Number(event.target.value) || 1)) } }))} placeholder={language === "ur" ? "ترقی٪" : "Progress %"} style={{ maxWidth: 120 }} />
+                    </div>
+                    <div className="chapter-badge-row" style={{ marginTop: 8 }}>
+                      {["skipCompletedLessons", "reviewWhenShort", "countMarkedDone", "countQuizComplete", "countLessonProgress"].map((key) => <button key={`progression_toggle_${key}`} type="button" className={`chapter-badge ${schoolDraftNormalizedAutoDiarySettings.progression[key] ? "active" : "neutral"}`} onClick={() => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, [key]: !current.progression[key] } }))}>{renderLocalizedTextNode(key === "skipCompletedLessons" ? joinLocalizedText("Skip completed", "مکمل چھوڑیں", language) : key === "reviewWhenShort" ? joinLocalizedText("Review short lessons", "مختصر سبق دہرائیں", language) : key === "countMarkedDone" ? joinLocalizedText("Manual done counts", "دستی مکمل شمار ہو", language) : key === "countQuizComplete" ? joinLocalizedText("Quiz counts", "کوئز شمار ہو", language) : joinLocalizedText("Lesson progress counts", "سبق پیش رفت شمار ہو", language), language)}</button>)}
+                    </div>
+                    <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 8 }}>
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.saturdayTest.accumulationMode} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, accumulationMode: event.target.value } }))}><option value="rolling">{renderLocalizedTextNode(joinLocalizedText("Rolling last N weeks", "پچھلے N ہفتے", language), language)}</option><option value="academic_year">{renderLocalizedTextNode(joinLocalizedText("Academic year", "تعلیمی سال", language), language)}</option><option value="since_start">{renderLocalizedTextNode(joinLocalizedText("Since app start", "ایپ کے آغاز سے", language), language)}</option></select>
+                      <input className="settings-text-input" type="number" min="1" max="52" value={schoolDraftNormalizedAutoDiarySettings.saturdayTest.accumulationValue} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, accumulationValue: Math.max(1, Math.min(52, Number(event.target.value) || 1)) } }))} placeholder={language === "ur" ? "ہفتے" : "Weeks"} style={{ maxWidth: 110 }} />
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.saturdayTest.difficulty} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, difficulty: event.target.value } }))}><option value="light">{renderLocalizedTextNode(joinLocalizedText("Light", "ہلکا", language), language)}</option><option value="standard">{renderLocalizedTextNode(joinLocalizedText("Standard", "معیاری", language), language)}</option><option value="rigorous">{renderLocalizedTextNode(joinLocalizedText("Rigorous", "سخت", language), language)}</option></select>
+                      <input className="settings-text-input" type="number" min="0" max="100" value={schoolDraftNormalizedAutoDiarySettings.saturdayTest.currentWeekWeight} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, currentWeekWeight: Math.max(0, Math.min(100, Number(event.target.value) || 0)) } }))} placeholder={language === "ur" ? "موجودہ٪" : "Current %"} style={{ maxWidth: 110 }} />
+                      <input className="settings-text-input" type="number" min="0" max="100" value={schoolDraftNormalizedAutoDiarySettings.saturdayTest.priorWeeksWeight} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, priorWeeksWeight: Math.max(0, Math.min(100, Number(event.target.value) || 0)) } }))} placeholder={language === "ur" ? "پچھلا٪" : "Prior %"} style={{ maxWidth: 110 }} />
+                    </div>
+                    <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 8 }}>
+                      {["mcq", "truefalse", "fillblank", "matching"].map((type) => <input key={`test_weight_${type}`} className="settings-text-input" type="number" min="0" max="100" value={schoolDraftNormalizedAutoDiarySettings.saturdayTest.questionTypeWeights[type]} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, questionTypeWeights: { ...current.saturdayTest.questionTypeWeights, [type]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) } } }))} placeholder={type} style={{ maxWidth: 110 }} />)}
+                      <button type="button" className={`chapter-badge ${schoolDraftNormalizedAutoDiarySettings.saturdayTest.enabled ? "active" : "neutral"}`} onClick={() => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, enabled: !current.saturdayTest.enabled } }))}>{renderLocalizedTextNode(schoolDraftNormalizedAutoDiarySettings.saturdayTest.enabled ? joinLocalizedText("Weekly test enabled", "ہفتہ وار ٹیسٹ فعال", language) : joinLocalizedText("Weekly test disabled", "ہفتہ وار ٹیسٹ غیر فعال", language), language)}</button>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
-                <select className="settings-select" value={schoolDraftAccumulationMode} onChange={(event) => setSchoolDraftAccumulationMode(event.target.value)}>
-                  <option value="rolling">{renderLocalizedTextNode(joinLocalizedText("Rolling last N weeks", "پچھلے N ہفتے", language), language)}</option>
-                  <option value="academic_year">{renderLocalizedTextNode(joinLocalizedText("Current academic year", "موجودہ تعلیمی سال", language), language)}</option>
-                  <option value="since_start">{renderLocalizedTextNode(joinLocalizedText("Since app start", "ایپ کے آغاز سے", language), language)}</option>
-                </select>
-                <input className="settings-text-input" type="number" min="1" max="52" value={schoolDraftAccumulationValue} onChange={(event) => setSchoolDraftAccumulationValue(event.target.value)} placeholder={language === "ur" ? "ہفتے" : "Weeks"} style={{ maxWidth: 140 }} />
                 <button type="button" className="study-tool-btn" onClick={handleSaveSchool} disabled={contentRelationshipBusy}>
                   {renderLocalizedTextNode(contentRelationshipBusy ? joinLocalizedText("Saving...", "محفوظ ہو رہا ہے...", language) : joinLocalizedText("Save School", "اسکول محفوظ کریں", language), language)}
                 </button>
@@ -26255,7 +26811,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <button type="button" className={`review-section-tab${diarySectionTab === "daily" ? " active" : ""}`} onClick={() => setDiarySectionTab("daily")}>{renderLocalizedTextNode(joinLocalizedText("Daily Diary", "روزانہ ڈائری", language), language)}</button>
           <button type="button" className={`review-section-tab${diarySectionTab === "teacher" ? " active" : ""}`} onClick={() => setDiarySectionTab("teacher")}>{renderLocalizedTextNode(joinLocalizedText("Teacher's Diary", "استاد کی ڈائری", language), language)}</button>
           <button type="button" className={`review-section-tab${diarySectionTab === "assignments" ? " active" : ""}`} onClick={() => setDiarySectionTab("assignments")}>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویضات", language), language)}</button>
-          <button type="button" className={`review-section-tab${diarySectionTab === "saturday" ? " active" : ""}`} onClick={() => setDiarySectionTab("saturday")}>{renderLocalizedTextNode(joinLocalizedText("Saturday Test", "ہفتہ ٹیسٹ", language), language)}</button>
+<button type="button" className={`review-section-tab${diarySectionTab === "saturday" ? " active" : ""}`} onClick={() => setDiarySectionTab("saturday")}>{renderLocalizedTextNode(joinLocalizedText("Weekly Test", "ہفتہ وار ٹیسٹ", language), language)}</button>
           {(canManageTests || availableTestTemplates.length > 0) ? <button type="button" className={`review-section-tab${diarySectionTab === "templates" ? " active" : ""}`} onClick={() => setDiarySectionTab("templates")}>{renderLocalizedTextNode(joinLocalizedText("Templates", "ٹیمپلیٹس", language), language)}</button> : null}
           {(canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess) ? <button type="button" className={`review-section-tab${diarySectionTab === "dashboard" ? " active" : ""}`} onClick={() => setDiarySectionTab("dashboard")}>{renderLocalizedTextNode(joinLocalizedText("Performance", "کارکردگی", language), language)}</button> : null}
         </div>
@@ -26677,10 +27233,10 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <div className="review-panel chapter-management-panel" data-ui-language={language}>
                 <div className="review-panel-head">
                   <div>
-                    <h3>{renderLocalizedTextNode(joinLocalizedText("Saturday Test Day", "ہفتہ ٹیسٹ ڈے", language), language)}</h3>
-                    <p>{renderLocalizedTextNode(joinLocalizedText("Teachers can assign a Saturday test; otherwise the app generates one from the week.", "اساتذہ ہفتہ ٹیسٹ تفویض کر سکتے ہیں، ورنہ ایپ ہفتے کے مواد سے ایک ٹیسٹ بناتی ہے۔", language), language)}</p>
+                    <h3>{renderLocalizedTextNode(joinLocalizedText("Weekly Test Day", "ہفتہ وار ٹیسٹ ڈے", language), language)}</h3>
+                    <p>{renderLocalizedTextNode(joinLocalizedText("Teachers can assign a weekly test; otherwise the app generates one from the configured study scope.", "اساتذہ ہفتہ وار ٹیسٹ تفویض کر سکتے ہیں، ورنہ ایپ ترتیب دیے گئے مطالعاتی دائرے سے ٹیسٹ بناتی ہے۔", language), language)}</p>
                   </div>
-                  <span className="goal-progress-badge">{renderLocalizedTextNode(getSaturdayDate(diaryWeekAnchorDate), language)}</span>
+                  <span className="goal-progress-badge">{renderLocalizedTextNode(currentWeeklyTestDate || currentWeeklyTestDayLabel, language)}</span>
                 </div>
                 <div className="stat-grid">
                   <div className="stat-card"><div className="stat-icon">🧪</div><div className="stat-value">{formatNumberLabel(currentWeeklyTestTemplate?.payload?.questions?.length || 0)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Questions", "سوالات", language), language)}</div></div>
@@ -26741,11 +27297,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <div className="review-panel" style={{ marginTop: 16 }}>
                   <div className="review-panel-head">
                     <div>
-                      <h3>{renderLocalizedTextNode(currentWeeklyTestTemplate?.title || joinLocalizedText("No Saturday test yet", "ابھی کوئی ہفتہ ٹیسٹ نہیں", language), language)}</h3>
+                      <h3>{renderLocalizedTextNode(currentWeeklyTestTemplate?.title || joinLocalizedText("No weekly test yet", "ابھی کوئی ہفتہ وار ٹیسٹ نہیں", language), language)}</h3>
                       <p>{renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("This week's test came from an assigned template.", "اس ہفتے کا ٹیسٹ ایک تفویض شدہ ٹیمپلیٹ سے آیا ہے۔", language) : joinLocalizedText("This week's test is being generated from the covered lessons.", "اس ہفتے کا ٹیسٹ زیرِ مطالعہ اسباق سے تیار ہو رہا ہے۔", language), language)}</p>
                     </div>
                   </div>
-                  {currentWeeklyTestTemplate ? <div className="result-actions chapter-card-actions"><button type="button" className="study-tool-btn" onClick={() => handleStartWeeklyTestSession(currentWeeklyTestTemplate)}>{renderLocalizedTextNode(joinLocalizedText("Start Test", "ٹیسٹ شروع کریں", language), language)}</button>{currentWeeklyStudentTestResult ? <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} latest`, `${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} تازہ`, language), language)}</span> : null}</div> : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No Saturday test is ready yet.", "ابھی کوئی ہفتہ ٹیسٹ تیار نہیں۔", language), language)}</p>}
+                  {currentWeeklyTestTemplate ? <div className="result-actions chapter-card-actions"><button type="button" className="study-tool-btn" onClick={() => handleStartWeeklyTestSession(currentWeeklyTestTemplate)}>{renderLocalizedTextNode(joinLocalizedText("Start Test", "ٹیسٹ شروع کریں", language), language)}</button>{currentWeeklyStudentTestResult ? <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} latest`, `${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} تازہ`, language), language)}</span> : null}</div> : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No weekly test is ready yet.", "ابھی کوئی ہفتہ وار ٹیسٹ تیار نہیں۔", language), language)}</p>}
                 </div>
               )}
             </>
