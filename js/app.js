@@ -1146,6 +1146,18 @@ function buildDiaryExerciseTargetId(targetBaseId = "", exercise = {}, index = 0,
     : `${safeBaseId}_exercise_${safeExerciseKey}`;
 }
 
+function buildDiaryQuizQuestionTargetId(targetBaseId = "", question = {}, index = 0, groupLabel = "") {
+  const safeBaseId = String(targetBaseId || "").trim();
+  if (!safeBaseId) return "";
+  const safeGroup = sanitizeDiaryTargetSegment(groupLabel, "");
+  const explicitKey = question?.id || question?.key || question?.targetId || "";
+  const explicitPrompt = question?.q || question?.prompt || question?.question || question?.label || "";
+  const safeQuestionKey = sanitizeDiaryTargetSegment(explicitKey || explicitPrompt, `question_${index + 1}`);
+  return safeGroup
+    ? `${safeBaseId}_quiz_${safeGroup}_${safeQuestionKey}`
+    : `${safeBaseId}_quiz_${safeQuestionKey}`;
+}
+
 function normalizeDiaryOutlineLeafLabel(entry, fallbackLabel = "") {
   if (typeof entry === "string" || typeof entry === "number") {
     return String(entry || "").replace(/\s+/g, " ").trim() || String(fallbackLabel || "").trim();
@@ -1204,13 +1216,17 @@ function collectDiaryQuizOutlineNodes(quizEntries = [], baseKey = "", routeMeta 
     const dedupeKey = String(label || `${baseKey}_${index}`).trim().toLowerCase();
     if (!label || seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
+    const groupLabel = String(routeMeta?.groupLabel || "").trim();
     nodes.push({
       key: `${baseKey}_quiz_${index}`,
       label,
       routeMeta: {
         ...routeMeta,
         subTab: "quiz",
-        targetId: String(routeMeta?.targetId || buildDiarySectionTargetId(routeMeta?.targetBaseId, "quiz") || "").trim(),
+        groupLabel,
+        questionIndex: index,
+        targetId: buildDiaryQuizQuestionTargetId(routeMeta?.targetBaseId, question, index, groupLabel)
+          || String(routeMeta?.targetId || buildDiarySectionTargetId(routeMeta?.targetBaseId, "quiz") || "").trim(),
       },
       children: [],
     });
@@ -10275,7 +10291,7 @@ function MathVisualDeck({ sub, lessonTitle }) {
 }
 
 // ─── Math Sub-Quiz Component (proper hooks) ───
-function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2000 }) {
+function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2000, initialQuestionIndex = 0, targetBaseId = "", groupLabel = "" }) {
   const QUESTION_TIME_LIMIT_SECONDS = Math.max(5, Math.min(90, Number(questionTimeLimitSeconds) || 15));
   const REFLECTION_DELAY_MS = Math.max(500, Math.min(10000, Number(reflectionDelayMs) || 2000));
   const [mqIdx, setMqIdx] = useState(0);
@@ -10315,6 +10331,17 @@ function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflect
     setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
     setMqElapsedMs([]);
   }, [QUESTION_TIME_LIMIT_SECONDS, clearAdvanceTimeout]);
+  useEffect(() => {
+    const nextIndex = Math.max(0, Math.min((Array.isArray(questions) ? questions.length : 1) - 1, Number(initialQuestionIndex) || 0));
+    clearAdvanceTimeout();
+    questionStartedAtRef.current = Date.now();
+    setMqIdx(nextIndex);
+    setMqAns([]);
+    setMqRev(false);
+    setMqDone(false);
+    setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
+    setMqElapsedMs([]);
+  }, [QUESTION_TIME_LIMIT_SECONDS, clearAdvanceTimeout, initialQuestionIndex, questions]);
   const speakText = useCallback((txt, e) => {
     if (e) e.stopPropagation();
     if (!isTtsEnabled()) return;
@@ -10417,7 +10444,12 @@ function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflect
   return (
     <div className="quiz-container" style={questionIsUrdu?{direction:"rtl"}:{}}>
       <div className="quiz-progress">{mq.map((_, i) => <div key={i} className={"qp-dot" + (i < mqIdx ? " done" : i === mqIdx ? " current" : "")} />)}</div>
-      <div className="quiz-question" onClick={()=>speakText(currentQ.q)} style={{cursor:"pointer",direction:questionIsUrdu?"rtl":"ltr",fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit",textAlign:questionIsUrdu?"right":"left"}}>
+      <div
+        className="quiz-question"
+        data-study-id={buildDiaryQuizQuestionTargetId(targetBaseId, currentQ, mqIdx, groupLabel) || undefined}
+        onClick={()=>speakText(currentQ.q)}
+        style={{cursor:"pointer",direction:questionIsUrdu?"rtl":"ltr",fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit",textAlign:questionIsUrdu?"right":"left"}}
+      >
         <div className="quiz-meta-row">
           <div className="q-num" style={{textAlign:questionIsUrdu?"right":"left",marginBottom:0,fontFamily:questionIsUrdu?"'Noto Nastaliq Urdu',serif":"inherit"}}>{questionIsUrdu?("سوال "+(mqIdx+1)+" از "+mq.length):("Q "+(mqIdx+1)+" of "+mq.length)} <span style={{fontSize:14,opacity:0.5,marginLeft:6}}>🔈</span></div>
           <div className={`quiz-timer-pill${mqTimerRemaining <= 5 ? " danger" : ""}`}>{isUrdu ? `${mqTimerRemaining} سیکنڈ` : `${mqTimerRemaining}s`}</div>
@@ -13779,6 +13811,7 @@ function HomeschoolApp() {
   const [mathSubTab, setMathSubTab] = useState("examples");
   const [subExerciseGroupIdx, setSubExerciseGroupIdx] = useState(null);
   const [subQuizGroupIdx, setSubQuizGroupIdx] = useState(null);
+  const [subQuizQuestionIdx, setSubQuizQuestionIdx] = useState(0);
   const [revealedEx, setRevealedEx] = useState({});
   const [completedQuizzes, setCompletedQuizzes] = useState(stored?.completedQuizzes || {});
   const [totalScore, setTotalScore] = useState(stored?.totalScore || 0);
@@ -24535,6 +24568,7 @@ const lessons = getMergedLessons(subjectId, grade);
         setMathSubTab(explicitSubTab || "examples");
         setSubExerciseGroupIdx(null);
         setSubQuizGroupIdx(null);
+        setSubQuizQuestionIdx(0);
         if ((explicitSubTab === "exercises" || explicitExerciseKind) && Array.isArray(derivedSubs[matchedSubIndex]?.exerciseGroups)) {
           let exerciseIndex = -1;
           const preferredGroupLabel = explicitGroupLabel || (
@@ -24585,12 +24619,14 @@ const lessons = getMergedLessons(subjectId, grade);
             ? derivedSubs[matchedSubIndex].quizGroups.findIndex((group) => String(group?.label || "").trim() === preferredQuizGroupLabel)
             : -1;
           if (quizIndex >= 0) setSubQuizGroupIdx(quizIndex);
+          if (Number.isFinite(Number(explicitRouteMeta?.questionIndex))) setSubQuizQuestionIdx(Math.max(0, Number(explicitRouteMeta.questionIndex)));
           nextViewTargetId = explicitTargetId || (
             explicitTargetScope === "tab"
               ? buildDiarySectionTargetId(targetBaseId, "tab_quiz")
               : buildDiarySectionTargetId(targetBaseId, "quiz")
           );
         } else if (explicitSubTab === "quiz") {
+          if (Number.isFinite(Number(explicitRouteMeta?.questionIndex))) setSubQuizQuestionIdx(Math.max(0, Number(explicitRouteMeta.questionIndex)));
           nextViewTargetId = explicitTargetId || (
             explicitTargetScope === "tab"
               ? buildDiarySectionTargetId(targetBaseId, "tab_quiz")
@@ -24742,7 +24778,8 @@ const lessons = getMergedLessons(subjectId, grade);
                     onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget)}
                     style={{
                       display: "block",
-                      width: "100%",
+                      flex: 1,
+                      minWidth: 0,
                       textAlign: nodeLanguage === "ur" ? "right" : "left",
                       border: "none",
                       background: "transparent",
@@ -24750,6 +24787,9 @@ const lessons = getMergedLessons(subjectId, grade);
                       color: "var(--text)",
                       fontWeight: 700,
                       fontSize: 13,
+                      lineHeight: 1.5,
+                      whiteSpace: "normal",
+                      overflowWrap: "anywhere",
                       cursor: "pointer",
                       direction: nodeLanguage === "ur" ? "rtl" : "ltr",
                       fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)",
@@ -24774,6 +24814,10 @@ const lessons = getMergedLessons(subjectId, grade);
                       fontSize: 12,
                       cursor: "pointer",
                       flex: 1,
+                      minWidth: 0,
+                      lineHeight: 1.5,
+                      whiteSpace: "normal",
+                      overflowWrap: "anywhere",
                       direction: nodeLanguage === "ur" ? "rtl" : "ltr",
                       fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)",
                     }}
@@ -28825,7 +28869,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <div style={urS}>
                 <h3 className="section-title" style={{color:"#F59E0B",marginBottom:12,direction:isUr?"rtl":"ltr",textAlign:isUr?"right":"left"}}>{isUr?"🎯 کوئز کے دن":"🎯 Quiz Days"}</h3>
                 {sub.quizGroups.map((group, gi) => (
-                  <div key={group.label} className="adverb-day-card" onClick={() => setSubQuizGroupIdx(gi)} style={{display:"flex",alignItems:"center",gap:14,direction:isUr?"rtl":"ltr"}}>
+                  <div key={group.label} className="adverb-day-card" onClick={() => { setSubQuizGroupIdx(gi); setSubQuizQuestionIdx(0); }} style={{display:"flex",alignItems:"center",gap:14,direction:isUr?"rtl":"ltr"}}>
                     <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:40,height:40,borderRadius:12,background:"#F59E0B22",border:"2px solid #F59E0B",color:"#F59E0B",fontSize:16,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{gi + 1}</span>
                     <div style={{flex:1,textAlign:isUr?"right":"left"}}>
                       <h3 style={{fontSize:16,fontWeight:700,margin:0,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit"}}>{group.label}</h3>
@@ -28839,14 +28883,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {activeQuizGroup && <div className="adverb-detail-section" style={{marginBottom:14,...urS}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",direction:isUr?"rtl":"ltr"}}>
                     <h3 style={{color:"#F59E0B",margin:0,...urS}}>{activeQuizGroup.label}</h3>
-<button className="play-all-btn" style={dayGroupBackButtonStyle} onClick={() => setSubQuizGroupIdx(null)}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
+<button className="play-all-btn" style={dayGroupBackButtonStyle} onClick={() => { setSubQuizGroupIdx(null); setSubQuizQuestionIdx(0); }}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
                   </div>
                 </div>}
-                {quizToRender && <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizGroupIdx} questions={quizToRender} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} />}
+                {quizToRender && <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizGroupIdx+"_"+subQuizQuestionIdx} questions={quizToRender} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} initialQuestionIndex={subQuizQuestionIdx} targetBaseId={diaryRouteBaseId} groupLabel={activeQuizGroup?.label || ""} />}
               </div>
             )
           ) : (
-            <MathSubQuiz key={"mq_"+mathSubIdx} questions={sub.quiz} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} />
+            <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizQuestionIdx} questions={sub.quiz} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} initialQuestionIndex={subQuizQuestionIdx} targetBaseId={diaryRouteBaseId} groupLabel="" />
           )}
           </div>
         )}

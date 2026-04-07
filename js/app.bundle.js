@@ -1,7 +1,6 @@
 (() => {
-  // js/app.js
-  var { useState, useEffect, useRef, useCallback, useContext, useMemo } = React;
-  var {
+  const { useState, useEffect, useRef, useCallback, useContext, useMemo } = React;
+  const {
     SUBJECTS,
     GRADES,
     BADGES,
@@ -11,9 +10,9 @@
     getLessons,
     getQuiz
   } = window.HomeSchoolData;
-  var { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, checkServiceWorkerForUpdates, applyServiceWorkerUpdate, setPendingReviewBadge, getSpeechConfig } = window.HomeSchoolUtils;
-  var { SettingsPanel } = window.HomeSchoolSettings || {};
-  var {
+  const { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, checkServiceWorkerForUpdates, applyServiceWorkerUpdate, setPendingReviewBadge, getSpeechConfig } = window.HomeSchoolUtils;
+  const { SettingsPanel } = window.HomeSchoolSettings || {};
+  const {
     adverbs: ADVERBS_DATA,
     prepositions: PREPOSITIONS_DATA,
     adjectives: ADJECTIVES_DATA,
@@ -22,8 +21,8 @@
     collectiveNouns: COLLECTIVE_NOUNS_DATA,
     verbs: VERBS_DATA
   } = POS_DATA;
-  var AppContext = React.createContext(null);
-  var TYPING_TUTOR_EMBED_PATH = "./typing-tutor/index.html";
+  const AppContext = React.createContext(null);
+  const TYPING_TUTOR_EMBED_PATH = "./typing-tutor/index.html";
   function createEmptyCustomContentState() {
     return {
       subjectsById: {},
@@ -341,7 +340,7 @@
     if (!text) return [];
     return text.split(/[,\n]+/).map((value) => String(value || "").trim()).filter(Boolean).filter((value, index, list) => list.indexOf(value) === index);
   }
-  var AUTO_DIARY_ISO_DAY_OPTIONS = [
+  const AUTO_DIARY_ISO_DAY_OPTIONS = [
     { value: 1, en: "Monday", ur: "\u067E\u06CC\u0631" },
     { value: 2, en: "Tuesday", ur: "\u0645\u0646\u06AF\u0644" },
     { value: 3, en: "Wednesday", ur: "\u0628\u062F\u06BE" },
@@ -1016,6 +1015,15 @@
     const safeExerciseKey = sanitizeDiaryTargetSegment(explicitKey || explicitPrompt, `item_${index + 1}`);
     return safeGroup ? `${safeBaseId}_exercise_${safeGroup}_${safeExerciseKey}` : `${safeBaseId}_exercise_${safeExerciseKey}`;
   }
+  function buildDiaryQuizQuestionTargetId(targetBaseId = "", question = {}, index = 0, groupLabel = "") {
+    const safeBaseId = String(targetBaseId || "").trim();
+    if (!safeBaseId) return "";
+    const safeGroup = sanitizeDiaryTargetSegment(groupLabel, "");
+    const explicitKey = (question == null ? void 0 : question.id) || (question == null ? void 0 : question.key) || (question == null ? void 0 : question.targetId) || "";
+    const explicitPrompt = (question == null ? void 0 : question.q) || (question == null ? void 0 : question.prompt) || (question == null ? void 0 : question.question) || (question == null ? void 0 : question.label) || "";
+    const safeQuestionKey = sanitizeDiaryTargetSegment(explicitKey || explicitPrompt, `question_${index + 1}`);
+    return safeGroup ? `${safeBaseId}_quiz_${safeGroup}_${safeQuestionKey}` : `${safeBaseId}_quiz_${safeQuestionKey}`;
+  }
   function normalizeDiaryOutlineLeafLabel(entry, fallbackLabel = "") {
     if (typeof entry === "string" || typeof entry === "number") {
       return String(entry || "").replace(/\s+/g, " ").trim() || String(fallbackLabel || "").trim();
@@ -1059,13 +1067,16 @@
       const dedupeKey = String(label || `${baseKey}_${index}`).trim().toLowerCase();
       if (!label || seen.has(dedupeKey)) return;
       seen.add(dedupeKey);
+      const groupLabel = String((routeMeta == null ? void 0 : routeMeta.groupLabel) || "").trim();
       nodes.push({
         key: `${baseKey}_quiz_${index}`,
         label,
         routeMeta: {
           ...routeMeta,
           subTab: "quiz",
-          targetId: String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "quiz") || "").trim()
+          groupLabel,
+          questionIndex: index,
+          targetId: buildDiaryQuizQuestionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, question, index, groupLabel) || String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "quiz") || "").trim()
         },
         children: []
       });
@@ -3350,7 +3361,7 @@
       chapters: [normalizeCustomChapterImportPayload(safePayload, context)]
     };
   }
-  var UI_TEXT = {
+  const UI_TEXT = {
     en: {
       loadingHome: "Loading HomeSchool...",
       loadingDb: "Setting up your learning database",
@@ -3888,7 +3899,7 @@
       hideBanner: "\u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA"
     }
   };
-  var DAY_SECTION_META = {
+  const DAY_SECTION_META = {
     adverbs: { labelEn: "Adverbs", labelUr: "\u0642\u06CC\u062F", unitEn: "words", unitUr: "\u0627\u0644\u0641\u0627\u0638", defaultSize: 3, max: 10 },
     prepositions: { labelEn: "Prepositions", labelUr: "\u062D\u0631\u0648\u0641 \u062C\u0627\u0631", unitEn: "words", unitUr: "\u0627\u0644\u0641\u0627\u0638", defaultSize: 3, max: 10 },
     adjectives: { labelEn: "Adjectives", labelUr: "\u0635\u0641\u0627\u062A", unitEn: "words", unitUr: "\u0627\u0644\u0641\u0627\u0638", defaultSize: 3, max: 10 },
@@ -3903,9 +3914,9 @@
     sentences: { labelEn: "Sentence Sections", labelUr: "\u062C\u0645\u0644\u0648\u06BA \u0648\u0627\u0644\u06D2 \u0633\u06CC\u06A9\u0634\u0646", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 10, max: 20 },
     urduToEnglish: { labelEn: "Urdu to English", labelUr: "\u0627\u0631\u062F\u0648 \u0633\u06D2 \u0627\u0646\u06AF\u0631\u06CC\u0632\u06CC", unitEn: "sentences", unitUr: "\u062C\u0645\u0644\u06D2", defaultSize: 5, max: 20 }
   };
-  var AI_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "cohere", "nvidia", "mistral", "groq", "openrouter", "deepseek", "huggingface", "zsky", "ollama"];
-  var WORD_MEANING_PRIORITY_OPTIONS = ["local-cache-ai", "cache-local-ai", "ai-cache-local", "ai-local-cache"];
-  var AI_PROVIDER_DEFS = {
+  const AI_PROVIDER_ORDER = ["openai", "anthropic", "gemini", "cohere", "nvidia", "mistral", "groq", "openrouter", "deepseek", "huggingface", "zsky", "ollama"];
+  const WORD_MEANING_PRIORITY_OPTIONS = ["local-cache-ai", "cache-local-ai", "ai-cache-local", "ai-local-cache"];
+  const AI_PROVIDER_DEFS = {
     openai: {
       id: "openai",
       name: "ChatGPT",
@@ -4003,7 +4014,7 @@
       modelHints: ["gpt-oss:20b", "gpt-oss:120b", "llama3.2:latest"]
     }
   };
-  var OPENAI_COMPATIBLE_PROVIDER_META = {
+  const OPENAI_COMPATIBLE_PROVIDER_META = {
     openai: {
       baseUrl: "https://api.openai.com/v1",
       modelsPath: "/models",
@@ -4655,7 +4666,7 @@
   function containsUrduText(value) {
     return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(String(value || ""));
   }
-  var WORD_LOOKUP_STOPWORDS = /* @__PURE__ */ new Set([
+  const WORD_LOOKUP_STOPWORDS = /* @__PURE__ */ new Set([
     "a",
     "an",
     "and",
@@ -4861,7 +4872,7 @@
     });
     return nextMap;
   }
-  var DICTIONARY_SOURCE_PRIORITY = {
+  const DICTIONARY_SOURCE_PRIORITY = {
     curriculum: 40,
     imported: 32,
     trusted: 30,
@@ -5009,24 +5020,24 @@
     }
     return {};
   }
-  var SUPABASE_DICTIONARY_TABLE = "dictionary_entries";
-  var SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
-  var SUPABASE_PUBLISHED_CONTENT_TABLE = "published_chapters";
-  var SUPABASE_CONTENT_ROLE_TABLE = "content_role_assignments";
-  var SUPABASE_CONTENT_SETTINGS_TABLE = "content_access_settings";
-  var SUPABASE_TEACHER_STUDENT_LINKS_TABLE = "teacher_student_links";
-  var SUPABASE_CHAPTER_ASSIGNMENTS_TABLE = "chapter_assignments";
-  var SUPABASE_SCHOOLS_TABLE = "schools";
-  var SUPABASE_SCHOOL_MEMBERSHIPS_TABLE = "school_memberships";
-  var SUPABASE_PARENT_STUDENT_LINKS_TABLE = "parent_student_links";
-  var SUPABASE_DIARY_ENTRIES_TABLE = "diary_entries";
-  var SUPABASE_DIARY_COMPLETIONS_TABLE = "diary_task_completions";
-  var SUPABASE_AUTO_DIARY_OVERRIDES_TABLE = "auto_diary_overrides";
-  var SUPABASE_TEST_TEMPLATES_TABLE = "test_templates";
-  var SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE = "weekly_test_assignments";
-  var SUPABASE_WEEKLY_TEST_RESULTS_TABLE = "weekly_test_results";
-  var SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
-  var SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
+  const SUPABASE_DICTIONARY_TABLE = "dictionary_entries";
+  const SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
+  const SUPABASE_PUBLISHED_CONTENT_TABLE = "published_chapters";
+  const SUPABASE_CONTENT_ROLE_TABLE = "content_role_assignments";
+  const SUPABASE_CONTENT_SETTINGS_TABLE = "content_access_settings";
+  const SUPABASE_TEACHER_STUDENT_LINKS_TABLE = "teacher_student_links";
+  const SUPABASE_CHAPTER_ASSIGNMENTS_TABLE = "chapter_assignments";
+  const SUPABASE_SCHOOLS_TABLE = "schools";
+  const SUPABASE_SCHOOL_MEMBERSHIPS_TABLE = "school_memberships";
+  const SUPABASE_PARENT_STUDENT_LINKS_TABLE = "parent_student_links";
+  const SUPABASE_DIARY_ENTRIES_TABLE = "diary_entries";
+  const SUPABASE_DIARY_COMPLETIONS_TABLE = "diary_task_completions";
+  const SUPABASE_AUTO_DIARY_OVERRIDES_TABLE = "auto_diary_overrides";
+  const SUPABASE_TEST_TEMPLATES_TABLE = "test_templates";
+  const SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE = "weekly_test_assignments";
+  const SUPABASE_WEEKLY_TEST_RESULTS_TABLE = "weekly_test_results";
+  const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
+  const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
   normalized text not null,
   word text not null,
@@ -6707,8 +6718,8 @@ using (
     ).trim().toLowerCase();
     return role || "student";
   }
-  var CONTENT_MANAGER_ROLES = ["student", "parent", "teacher", "principal", "school_owner", "editor", "admin"];
-  var CONTENT_PERMISSION_KEYS = [
+  const CONTENT_MANAGER_ROLES = ["student", "parent", "teacher", "principal", "school_owner", "editor", "admin"];
+  const CONTENT_PERMISSION_KEYS = [
     "importChapters",
     "importSubjects",
     "exportContent",
@@ -8392,7 +8403,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
     ];
     return /* @__PURE__ */ React.createElement("div", { className: "math-visual-stack" }, cards.map((card, idx) => /* @__PURE__ */ React.createElement("div", { key: idx, className: "math-visual-panel" }, /* @__PURE__ */ React.createElement("div", { className: "math-visual-label" }, card.label), card.content)));
   }
-  function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2e3 }) {
+  function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2e3, initialQuestionIndex = 0, targetBaseId = "", groupLabel = "" }) {
     const QUESTION_TIME_LIMIT_SECONDS = Math.max(5, Math.min(90, Number(questionTimeLimitSeconds) || 15));
     const REFLECTION_DELAY_MS = Math.max(500, Math.min(1e4, Number(reflectionDelayMs) || 2e3));
     const [mqIdx, setMqIdx] = useState(0);
@@ -8435,6 +8446,17 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
       setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
       setMqElapsedMs([]);
     }, [QUESTION_TIME_LIMIT_SECONDS, clearAdvanceTimeout]);
+    useEffect(() => {
+      const nextIndex = Math.max(0, Math.min((Array.isArray(questions) ? questions.length : 1) - 1, Number(initialQuestionIndex) || 0));
+      clearAdvanceTimeout();
+      questionStartedAtRef.current = Date.now();
+      setMqIdx(nextIndex);
+      setMqAns([]);
+      setMqRev(false);
+      setMqDone(false);
+      setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
+      setMqElapsedMs([]);
+    }, [QUESTION_TIME_LIMIT_SECONDS, clearAdvanceTimeout, initialQuestionIndex, questions]);
     const speakText = useCallback((txt, e) => {
       if (e) e.stopPropagation();
       if (!isTtsEnabled()) return;
@@ -8538,7 +8560,17 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
       }, REFLECTION_DELAY_MS);
     }, [REFLECTION_DELAY_MS, clearAdvanceTimeout, moveToNextQuestion, mq, mqAns, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
     if (mqDone) return /* @__PURE__ */ React.createElement("div", { className: "quiz-result" }, /* @__PURE__ */ React.createElement("div", { className: "result-emoji" }, mqScore >= mq.length - 1 ? "\u{1F3C6}" : mqScore >= mq.length / 2 ? "\u{1F31F}" : "\u{1F4AA}"), /* @__PURE__ */ React.createElement("h2", null, mqScore, "/", mq.length, " Correct!"), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", marginBottom: 16, fontFamily: isUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit", direction: isUrdu ? "rtl" : "ltr" } }, mqScore >= mq.length - 1 ? isUrdu ? "\u0634\u0627\u0628\u0627\u0634! \u0622\u067E \u0646\u06D2 \u06CC\u06C1 \u0645\u0648\u0636\u0648\u0639 \u0633\u06CC\u06A9\u06BE \u0644\u06CC\u0627!" : "Excellent! You mastered this topic!" : mqScore >= mq.length / 2 ? isUrdu ? "\u0627\u0686\u06BE\u0627! \u063A\u0644\u0637 \u062C\u0648\u0627\u0628\u0627\u062A \u062F\u0648\u0628\u0627\u0631\u06C1 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4" : "Good job! Review the ones you missed." : isUrdu ? "\u0645\u0634\u0642 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA!" : "Keep practicing! You'll get better."), /* @__PURE__ */ React.createElement("div", { className: "quiz-time-summary", style: { direction: isUrdu ? "rtl" : "ltr", fontFamily: isUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, isUrdu ? "\u0644\u06CC\u0627 \u06AF\u06CC\u0627 \u0648\u0642\u062A" : "Time taken"), " ", /* @__PURE__ */ React.createElement("span", null, formatDuration(recordedTotalMs), " / ", formatDuration(totalAllowedMs))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, isUrdu ? "\u0641\u06CC \u0633\u0648\u0627\u0644 \u0627\u0648\u0633\u0637" : "Average per question"), " ", /* @__PURE__ */ React.createElement("span", null, formatDuration(averageQuestionMs)))), /* @__PURE__ */ React.createElement("button", { className: "start-quiz-btn", style: isUrdu ? { fontFamily: "'Noto Nastaliq Urdu',serif" } : {}, onClick: reset }, isUrdu ? "\u{1F504} \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634" : "\u{1F504} Retry Quiz"));
-    return /* @__PURE__ */ React.createElement("div", { className: "quiz-container", style: questionIsUrdu ? { direction: "rtl" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "quiz-progress" }, mq.map((_, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "qp-dot" + (i < mqIdx ? " done" : i === mqIdx ? " current" : "") }))), /* @__PURE__ */ React.createElement("div", { className: "quiz-question", onClick: () => speakText(currentQ.q), style: { cursor: "pointer", direction: questionIsUrdu ? "rtl" : "ltr", fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit", textAlign: questionIsUrdu ? "right" : "left" } }, /* @__PURE__ */ React.createElement("div", { className: "quiz-meta-row" }, /* @__PURE__ */ React.createElement("div", { className: "q-num", style: { textAlign: questionIsUrdu ? "right" : "left", marginBottom: 0, fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, questionIsUrdu ? "\u0633\u0648\u0627\u0644 " + (mqIdx + 1) + " \u0627\u0632 " + mq.length : "Q " + (mqIdx + 1) + " of " + mq.length, " ", /* @__PURE__ */ React.createElement("span", { style: { fontSize: 14, opacity: 0.5, marginLeft: 6 } }, "\u{1F508}")), /* @__PURE__ */ React.createElement("div", { className: `quiz-timer-pill${mqTimerRemaining <= 5 ? " danger" : ""}` }, isUrdu ? `${mqTimerRemaining} \u0633\u06CC\u06A9\u0646\u0688` : `${mqTimerRemaining}s`)), /* @__PURE__ */ React.createElement("h3", { style: { marginTop: 4, fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, currentQ.q)), /* @__PURE__ */ React.createElement("div", { className: "quiz-options", style: questionIsUrdu ? { direction: "rtl" } : {} }, (currentQ.a || []).map((opt, oi) => {
+    return /* @__PURE__ */ React.createElement("div", { className: "quiz-container", style: questionIsUrdu ? { direction: "rtl" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "quiz-progress" }, mq.map((_, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "qp-dot" + (i < mqIdx ? " done" : i === mqIdx ? " current" : "") }))), /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "quiz-question",
+        "data-study-id": buildDiaryQuizQuestionTargetId(targetBaseId, currentQ, mqIdx, groupLabel) || void 0,
+        onClick: () => speakText(currentQ.q),
+        style: { cursor: "pointer", direction: questionIsUrdu ? "rtl" : "ltr", fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit", textAlign: questionIsUrdu ? "right" : "left" }
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "quiz-meta-row" }, /* @__PURE__ */ React.createElement("div", { className: "q-num", style: { textAlign: questionIsUrdu ? "right" : "left", marginBottom: 0, fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, questionIsUrdu ? "\u0633\u0648\u0627\u0644 " + (mqIdx + 1) + " \u0627\u0632 " + mq.length : "Q " + (mqIdx + 1) + " of " + mq.length, " ", /* @__PURE__ */ React.createElement("span", { style: { fontSize: 14, opacity: 0.5, marginLeft: 6 } }, "\u{1F508}")), /* @__PURE__ */ React.createElement("div", { className: `quiz-timer-pill${mqTimerRemaining <= 5 ? " danger" : ""}` }, isUrdu ? `${mqTimerRemaining} \u0633\u06CC\u06A9\u0646\u0688` : `${mqTimerRemaining}s`)),
+      /* @__PURE__ */ React.createElement("h3", { style: { marginTop: 4, fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, currentQ.q)
+    ), /* @__PURE__ */ React.createElement("div", { className: "quiz-options", style: questionIsUrdu ? { direction: "rtl" } : {} }, (currentQ.a || []).map((opt, oi) => {
       const optionIsUrdu = isUrdu || isUrduText(opt);
       const sel = mqAns[mqIdx] === oi, cor = oi === mq[mqIdx].c;
       let cls = "quiz-option";
@@ -10843,9 +10875,9 @@ ${marker} `);
     const safeValue = Math.max(0, Number(value) || 0);
     return thresholds.find((threshold) => safeValue < threshold) || null;
   }
-  var XP_MILESTONES = [250, 500, 1e3, 2e3, 5e3];
-  var STREAK_MILESTONES = [3, 7, 14, 30];
-  var PERFECT_DAY_MILESTONES = [1, 3, 7, 14];
+  const XP_MILESTONES = [250, 500, 1e3, 2e3, 5e3];
+  const STREAK_MILESTONES = [3, 7, 14, 30];
+  const PERFECT_DAY_MILESTONES = [1, 3, 7, 14];
   function formatNotificationTime(createdAt, language = "en") {
     try {
       const stamp = new Date(createdAt || Date.now());
@@ -11434,6 +11466,7 @@ ${marker} `);
     const [mathSubTab, setMathSubTab] = useState("examples");
     const [subExerciseGroupIdx, setSubExerciseGroupIdx] = useState(null);
     const [subQuizGroupIdx, setSubQuizGroupIdx] = useState(null);
+    const [subQuizQuestionIdx, setSubQuizQuestionIdx] = useState(0);
     const [revealedEx, setRevealedEx] = useState({});
     const [completedQuizzes, setCompletedQuizzes] = useState((stored == null ? void 0 : stored.completedQuizzes) || {});
     const [totalScore, setTotalScore] = useState((stored == null ? void 0 : stored.totalScore) || 0);
@@ -21530,6 +21563,7 @@ ${error.message || error}`);
           setMathSubTab(explicitSubTab || "examples");
           setSubExerciseGroupIdx(null);
           setSubQuizGroupIdx(null);
+          setSubQuizQuestionIdx(0);
           if ((explicitSubTab === "exercises" || explicitExerciseKind) && Array.isArray((_f2 = derivedSubs[matchedSubIndex]) == null ? void 0 : _f2.exerciseGroups)) {
             let exerciseIndex = -1;
             const preferredGroupLabel = explicitGroupLabel || (Number(task == null ? void 0 : task.dayIndex) > 0 ? [joinLocalizedText(`Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`, language), `Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`].find((label) => derivedSubs[matchedSubIndex].exerciseGroups.some((group) => String((group == null ? void 0 : group.label) || "").trim() === String(label || "").trim())) : "");
@@ -21552,8 +21586,10 @@ ${error.message || error}`);
             const preferredQuizGroupLabel = explicitGroupLabel || (Number(task == null ? void 0 : task.dayIndex) > 0 ? [joinLocalizedText(`Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`, language), `Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`].find((label) => derivedSubs[matchedSubIndex].quizGroups.some((group) => String((group == null ? void 0 : group.label) || "").trim() === String(label || "").trim())) : "");
             const quizIndex = preferredQuizGroupLabel ? derivedSubs[matchedSubIndex].quizGroups.findIndex((group) => String((group == null ? void 0 : group.label) || "").trim() === preferredQuizGroupLabel) : -1;
             if (quizIndex >= 0) setSubQuizGroupIdx(quizIndex);
+            if (Number.isFinite(Number(explicitRouteMeta == null ? void 0 : explicitRouteMeta.questionIndex))) setSubQuizQuestionIdx(Math.max(0, Number(explicitRouteMeta.questionIndex)));
             nextViewTargetId = explicitTargetId || (explicitTargetScope === "tab" ? buildDiarySectionTargetId(targetBaseId, "tab_quiz") : buildDiarySectionTargetId(targetBaseId, "quiz"));
           } else if (explicitSubTab === "quiz") {
+            if (Number.isFinite(Number(explicitRouteMeta == null ? void 0 : explicitRouteMeta.questionIndex))) setSubQuizQuestionIdx(Math.max(0, Number(explicitRouteMeta.questionIndex)));
             nextViewTargetId = explicitTargetId || (explicitTargetScope === "tab" ? buildDiarySectionTargetId(targetBaseId, "tab_quiz") : buildDiarySectionTargetId(targetBaseId, "quiz"));
           } else if (explicitSubTab === "examples") {
             nextViewTargetId = explicitTargetId || (explicitTargetScope === "tab" ? buildDiarySectionTargetId(targetBaseId, "tab_examples") : buildDiarySectionTargetId(targetBaseId, "examples"));
@@ -21673,7 +21709,8 @@ ${error.message || error}`);
             onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget),
             style: {
               display: "block",
-              width: "100%",
+              flex: 1,
+              minWidth: 0,
               textAlign: nodeLanguage === "ur" ? "right" : "left",
               border: "none",
               background: "transparent",
@@ -21681,6 +21718,9 @@ ${error.message || error}`);
               color: "var(--text)",
               fontWeight: 700,
               fontSize: 13,
+              lineHeight: 1.5,
+              whiteSpace: "normal",
+              overflowWrap: "anywhere",
               cursor: "pointer",
               direction: nodeLanguage === "ur" ? "rtl" : "ltr",
               fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)"
@@ -21705,6 +21745,10 @@ ${error.message || error}`);
               fontSize: 12,
               cursor: "pointer",
               flex: 1,
+              minWidth: 0,
+              lineHeight: 1.5,
+              whiteSpace: "normal",
+              overflowWrap: "anywhere",
               direction: nodeLanguage === "ur" ? "rtl" : "ltr",
               fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)"
             }
@@ -23634,7 +23678,13 @@ ${error.message || error}`);
         const qText = isObj ? wp.q : wp;
         const aText = isObj ? wp.a : null;
         return /* @__PURE__ */ React.createElement("div", { key: wi, style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", direction: isUr ? "rtl" : "ltr", alignItems: "flex-start", gap: 10 } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 32, height: 32, borderRadius: 10, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 12, fontWeight: 800, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", flexShrink: 0 } }, isUr ? "\u0645" + (wi + 1) : "W" + (wi + 1)), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: qText, lang: isUr ? "ur" : "en", studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Word Problems` } }))), aText && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, marginLeft: isUr ? 0 : 42, marginRight: isUr ? 42 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: wordProblemAnswerPanelStyle }, /* @__PURE__ */ React.createElement("div", { style: wordProblemAnswerLabelStyle(isUr) }, isUr ? "\u2705 \u062C\u0648\u0627\u0628" : "\u2705 Answer"), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(aText), lang: isUr ? "ur" : "en", studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Word Problem Answers` }, buttonStyle: { ...revealedAnswerButtonStyle, marginBottom: 0 }, textStyle: { ...getRevealedAnswerTextStyle(isUr), lineHeight: 1.55 } }))));
-      })))), mathSubTab === "quiz" && (sub.quizGroups || sub.quiz) && /* @__PURE__ */ React.createElement("div", { "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "quiz") }, sub.quizGroups ? subQuizGroupIdx === null ? /* @__PURE__ */ React.createElement("div", { style: urS }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#F59E0B", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, isUr ? "\u{1F3AF} \u06A9\u0648\u0626\u0632 \u06A9\u06D2 \u062F\u0646" : "\u{1F3AF} Quiz Days"), sub.quizGroups.map((group, gi) => /* @__PURE__ */ React.createElement("div", { key: group.label, className: "adverb-day-card", onClick: () => setSubQuizGroupIdx(gi), style: { display: "flex", alignItems: "center", gap: 14, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 40, height: 40, borderRadius: 12, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 16, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, gi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, textAlign: isUr ? "right" : "left" } }, /* @__PURE__ */ React.createElement("h3", { style: { fontSize: 16, fontWeight: 700, margin: 0, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, group.label), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, isUr ? "\u0627\u0646 \u062F\u0646\u0648\u06BA \u06A9\u06D2 \u0633\u0648\u0627\u0644\u0627\u062A" : "Quiz questions for these days"))))) : /* @__PURE__ */ React.createElement("div", { style: urS }, activeQuizGroup && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 14, ...urS } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#F59E0B", margin: 0, ...urS } }, activeQuizGroup.label), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: dayGroupBackButtonStyle, onClick: () => setSubQuizGroupIdx(null) }, isUr ? "\u2190 \u062F\u0646\u0648\u06BA \u06A9\u06CC \u0641\u06C1\u0631\u0633\u062A" : "\u2190 Back to Day Groups"))), quizToRender && /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx + "_" + subQuizGroupIdx, questions: quizToRender, isUrdu: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu", questionTimeLimitSeconds: activeSubjectQuizTimeLimit, reflectionDelayMs: activeSubjectQuizReflectionDelayMs })) : /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx, questions: sub.quiz, isUrdu: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu", questionTimeLimitSeconds: activeSubjectQuizTimeLimit, reflectionDelayMs: activeSubjectQuizReflectionDelayMs })));
+      })))), mathSubTab === "quiz" && (sub.quizGroups || sub.quiz) && /* @__PURE__ */ React.createElement("div", { "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "quiz") }, sub.quizGroups ? subQuizGroupIdx === null ? /* @__PURE__ */ React.createElement("div", { style: urS }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#F59E0B", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, isUr ? "\u{1F3AF} \u06A9\u0648\u0626\u0632 \u06A9\u06D2 \u062F\u0646" : "\u{1F3AF} Quiz Days"), sub.quizGroups.map((group, gi) => /* @__PURE__ */ React.createElement("div", { key: group.label, className: "adverb-day-card", onClick: () => {
+        setSubQuizGroupIdx(gi);
+        setSubQuizQuestionIdx(0);
+      }, style: { display: "flex", alignItems: "center", gap: 14, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 40, height: 40, borderRadius: 12, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 16, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, gi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, textAlign: isUr ? "right" : "left" } }, /* @__PURE__ */ React.createElement("h3", { style: { fontSize: 16, fontWeight: 700, margin: 0, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, group.label), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, isUr ? "\u0627\u0646 \u062F\u0646\u0648\u06BA \u06A9\u06D2 \u0633\u0648\u0627\u0644\u0627\u062A" : "Quiz questions for these days"))))) : /* @__PURE__ */ React.createElement("div", { style: urS }, activeQuizGroup && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 14, ...urS } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#F59E0B", margin: 0, ...urS } }, activeQuizGroup.label), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: dayGroupBackButtonStyle, onClick: () => {
+        setSubQuizGroupIdx(null);
+        setSubQuizQuestionIdx(0);
+      } }, isUr ? "\u2190 \u062F\u0646\u0648\u06BA \u06A9\u06CC \u0641\u06C1\u0631\u0633\u062A" : "\u2190 Back to Day Groups"))), quizToRender && /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx + "_" + subQuizGroupIdx + "_" + subQuizQuestionIdx, questions: quizToRender, isUrdu: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu", questionTimeLimitSeconds: activeSubjectQuizTimeLimit, reflectionDelayMs: activeSubjectQuizReflectionDelayMs, initialQuestionIndex: subQuizQuestionIdx, targetBaseId: diaryRouteBaseId, groupLabel: (activeQuizGroup == null ? void 0 : activeQuizGroup.label) || "" })) : /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx + "_" + subQuizQuestionIdx, questions: sub.quiz, isUrdu: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu", questionTimeLimitSeconds: activeSubjectQuizTimeLimit, reflectionDelayMs: activeSubjectQuizReflectionDelayMs, initialQuestionIndex: subQuizQuestionIdx, targetBaseId: diaryRouteBaseId, groupLabel: "" })));
     })(), tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && !selectedVocabDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "lesson-detail" }, /* @__PURE__ */ React.createElement("h2", null, selectedLesson.title), /* @__PURE__ */ React.createElement("p", null, selectedLesson.content), /* @__PURE__ */ React.createElement(StudyItemInlineToolbar, { studyItem: { prompt: selectedLesson.content, subject: "english", section: "vocabulary", sectionLabel: selectedLesson.title } })), /* @__PURE__ */ React.createElement("div", { className: "tts-hint" }, "\u{1F50A} Tap English \u2192 English voice | Tap Urdu \u2192 Urdu voice | 55 Days of Vocabulary"), pacedVocab.map((day) => /* @__PURE__ */ React.createElement("div", { key: day.day, className: "adverb-day-card", onClick: () => setSelectedVocabDay(day) }, /* @__PURE__ */ React.createElement("span", { className: "day-num" }, getDayDisplayLabel(day.day, language)), /* @__PURE__ */ React.createElement("h3", null, day.words.map((w) => w.en).join(" \u2022 ")), /* @__PURE__ */ React.createElement("div", { className: "word-preview" }, day.words.map((w, i) => /* @__PURE__ */ React.createElement("span", { key: i, className: "word-chip" }, w.ur)))))), tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && selectedVocabDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tts-hint" }, "\u{1F50A} Tap English word \u2192 English voice | Tap Urdu \u2192 Urdu voice | Tap sentence \u2192 hear it!"), /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section" }, /* @__PURE__ */ React.createElement("h3", null, "\u{1F4DD} Day ", selectedVocabDay.day, " \u2014 Words"), selectedVocabDay.words.map((w, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { marginBottom: 10 } }, /* @__PURE__ */ React.createElement(WordRow, { en: w.en, ur: w.ur }), /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" } }, "\u2192 ", w.meaning)))), /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section" }, /* @__PURE__ */ React.createElement("h3", null, "\u{1F4D6} Practice Paragraph"), selectedVocabDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s2, i) => {
       const sentenceHighlights = selectedVocabDay.words.map((w) => w.en).filter(Boolean).filter((word) => s2.toLowerCase().includes(normalizeHighlightTerm(word)));
       return /* @__PURE__ */ React.createElement(SpeakableSentence, { key: i, text: s2, lang: "en", highlight: sentenceHighlights, studyItem: { subject: "english", section: "vocabularyParagraphs", sectionLabel: "Vocabulary Paragraphs" } });
