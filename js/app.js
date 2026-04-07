@@ -13771,6 +13771,13 @@ function HomeschoolApp() {
     }
     previousTodayIsoRef.current = todayIso;
   }, [diaryWeekAnchorDate, diaryWeekAnchorFollowsToday, todayIso]);
+  useEffect(() => {
+    const safeTodayIso = String(todayIso || "").trim();
+    if (!safeTodayIso) return;
+    if (!diaryWeekAnchorFollowsToday) return;
+    if (String(diaryWeekAnchorDate || "").trim() === safeTodayIso) return;
+    setDiaryWeekAnchorDate(safeTodayIso);
+  }, [diaryWeekAnchorDate, diaryWeekAnchorFollowsToday, todayIso]);
   const handleDiaryWeekAnchorDateChange = useCallback((nextValue) => {
     const fallbackTodayIso = String(todayIso || toIsoDateString(Date.now())).trim();
     const nextAnchorDate = String(nextValue || fallbackTodayIso).trim() || fallbackTodayIso;
