@@ -24060,6 +24060,51 @@ const lessons = getMergedLessons(subjectId, grade);
   }, [allSubjects, buildDiaryChapterOutlineTree, getMergedLessonGroups, grade, language, subjectLookup]);
   buildDiaryOverrideSourceSegmentRef.current = buildDiaryOverrideSourceSegment;
 
+  const collectDiaryTaskSelectedOutlineKeys = useCallback((nodes = [], task = null) => {
+    const candidateKeys = new Set();
+    const candidateTexts = new Set();
+    (Array.isArray(task?.taskUnits) ? task.taskUnits : []).forEach((unit) => {
+      [unit?.sourceMeta?.key, unit?.key]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .forEach((value) => candidateKeys.add(value));
+      [unit?.sourceMeta?.title, unit?.title, unit?.detail]
+        .map(normalizeDiaryMatchText)
+        .filter(Boolean)
+        .forEach((value) => candidateTexts.add(value));
+    });
+    [task?.subsectionKey]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .forEach((value) => candidateKeys.add(value));
+    [task?.subsectionTitle, task?.title]
+      .map(normalizeDiaryMatchText)
+      .filter(Boolean)
+      .forEach((value) => candidateTexts.add(value));
+    if (!candidateKeys.size && !candidateTexts.size) return [];
+    const matchedKeys = new Set();
+    const normalizedCandidates = Array.from(candidateTexts);
+    const walk = (node) => {
+      if (!node) return;
+      const nodeKey = String(node?.key || "").trim();
+      const routeMeta = node?.routeMeta || {};
+      const nodeKeys = [nodeKey, String(routeMeta?.subKey || "").trim(), String(routeMeta?.targetId || "").trim()].filter(Boolean);
+      const nodeTexts = [node?.label, routeMeta?.subTitle].map(normalizeDiaryMatchText).filter(Boolean);
+      const keyMatched = nodeKeys.some((value) => candidateKeys.has(value));
+      const textMatched = nodeTexts.some((nodeText) => (
+        normalizedCandidates.some((candidate) => (
+          nodeText === candidate
+          || nodeText.includes(candidate)
+          || candidate.includes(nodeText)
+        ))
+      ));
+      if ((keyMatched || textMatched) && nodeKey) matchedKeys.add(nodeKey);
+      (Array.isArray(node?.children) ? node.children : []).forEach(walk);
+    };
+    (Array.isArray(nodes) ? nodes : []).forEach(walk);
+    return Array.from(matchedKeys);
+  }, []);
+
   const buildDiaryTaskOutline = useCallback((task) => {
     if (Array.isArray(task?.taskSegments) && task.taskSegments.length) {
       return task.taskSegments.map((segment, index) => ({
@@ -24089,17 +24134,21 @@ const lessons = getMergedLessons(subjectId, grade);
       const effectiveSubIndex = matchedSubIndex >= 0 ? matchedSubIndex : 0;
       const matchedSub = (effectiveSubIndex >= 0 ? derivedSubs[effectiveSubIndex] : null) || null;
       if (matchedSub) {
-        return [buildDiaryLessonOutlineFromSub(matchedSub, subjectId, {
+        const fullOutline = [buildDiaryLessonOutlineFromSub(matchedSub, subjectId, {
           targetBaseId: buildDiaryLessonTargetBaseId(subjectId, lessonRouteKey, effectiveSubIndex),
         })];
+        const selectedOutlineKeys = collectDiaryTaskSelectedOutlineKeys(fullOutline, task);
+        return selectedOutlineKeys.length ? filterDiaryOutlineNodesBySelection(fullOutline, selectedOutlineKeys) : fullOutline;
       }
     }
-    return attachDiaryRouteMeta([buildDiaryLessonOutlineFromLesson(lesson, subjectId)], {
+    const fullOutline = attachDiaryRouteMeta([buildDiaryLessonOutlineFromLesson(lesson, subjectId)], {
       subjectId,
       lessonKey: lessonRouteKey,
       contentId: String(task?.contentId || "").trim(),
     });
-  }, [getDerivedLessonDiarySubs]);
+    const selectedOutlineKeys = collectDiaryTaskSelectedOutlineKeys(fullOutline, task);
+    return selectedOutlineKeys.length ? filterDiaryOutlineNodesBySelection(fullOutline, selectedOutlineKeys) : fullOutline;
+  }, [collectDiaryTaskSelectedOutlineKeys, getDerivedLessonDiarySubs]);
 
   const buildDetailedDiaryTaskOutline = useCallback((task) => {
     if (Array.isArray(task?.taskSegments) && task.taskSegments.length) {
@@ -28939,7 +28988,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   </div>
                   <span className="goal-progress-badge">{renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `ہفتہ ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language)}</span>
                 </div>
-                <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                <div className="diary-daily-toolbar">
                   <CalendarDateField value={diaryWeekAnchorDate} onChange={handleDiaryWeekAnchorDateChange} language={language} />
                   <button
                     type="button"
@@ -28948,7 +28997,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   >
                     {renderLocalizedTextNode(showDetailedDiary ? joinLocalizedText("Hide detailed diary", "تفصیلی ڈائری چھپائیں", language) : joinLocalizedText("Show detailed diary", "تفصیلی ڈائری دکھائیں", language), language)}
                   </button>
-                  {diaryViewerStudentOptions.length > 1 ? <select className="settings-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
+                  {diaryViewerStudentOptions.length > 1 ? <select className="settings-select diary-viewer-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
                 </div>
               </div>
               {todayDiaryGroup ? (
