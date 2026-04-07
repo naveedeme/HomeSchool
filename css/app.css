@@ -239,6 +239,18 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .profile-report-list{display:grid;gap:10px;margin-top:14px}
 .profile-report-item{padding:12px 14px;border-radius:14px;border:1px solid var(--border);background:color-mix(in srgb,var(--bg-elevated) 72%,transparent)}
 .profile-report-item-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;font-size:13px}
+.auto-diary-control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.auto-diary-simple-block{display:flex;flex-direction:column;gap:8px}
+.auto-diary-field-stack{display:grid;gap:10px}
+.auto-diary-helper-copy{margin:0}
+.auto-diary-advanced-panel{padding:0;overflow:hidden}
+.auto-diary-advanced-summary{list-style:none;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px 16px;cursor:pointer}
+.auto-diary-advanced-summary::-webkit-details-marker{display:none}
+.auto-diary-advanced-summary span:first-child{font-weight:800;color:var(--text-primary)}
+.auto-diary-advanced-summary span:last-child{font-size:12px;line-height:1.6;color:var(--text-secondary);max-width:min(100%,560px)}
+.auto-diary-advanced-panel[open] .auto-diary-advanced-summary{border-bottom:1px solid color-mix(in srgb,var(--border) 88%,transparent)}
+.content[data-ui-language="ur"] .auto-diary-advanced-summary{direction:rtl;text-align:right}
+.content[data-ui-language="ur"] .auto-diary-advanced-summary span:last-child{margin-inline-start:auto}
 .sync-activity-panel .stat-card .stat-value{font-size:18px;line-height:1.35;word-break:break-word}
 .sync-activity-panel .stat-card .stat-label{line-height:1.45}
 .profile-switcher-panel[data-ui-language="ur"],.profile-report-panel[data-ui-language="ur"],.role-overview-panel[data-ui-language="ur"]{direction:rtl;text-align:right}

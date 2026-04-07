@@ -618,6 +618,161 @@ function buildAutoDiaryLegacyFields(autoDiarySettings = null, fallbackYearStartD
   };
 }
 
+function getAutoDiaryProgressionPresetSettings(preset = "balanced") {
+  const safePreset = String(preset || "balanced").trim().toLowerCase();
+  if (safePreset === "structured") {
+    return {
+      chapterSelectionMode: "curriculum_order",
+      advanceMode: "weekly_lesson",
+      skipCompletedLessons: true,
+      preferAssignedContent: true,
+      preferPublishedContent: true,
+      minimumUnitsPerDay: 1,
+      reviewWhenShort: false,
+      completionMode: "any",
+      countMarkedDone: false,
+      countQuizComplete: true,
+      countLessonProgress: true,
+      lessonProgressThreshold: 100,
+    };
+  }
+  if (safePreset === "mastery") {
+    return {
+      chapterSelectionMode: "progress_first",
+      advanceMode: "carry_forward",
+      skipCompletedLessons: true,
+      preferAssignedContent: true,
+      preferPublishedContent: true,
+      minimumUnitsPerDay: 2,
+      reviewWhenShort: false,
+      completionMode: "all",
+      countMarkedDone: false,
+      countQuizComplete: true,
+      countLessonProgress: true,
+      lessonProgressThreshold: 100,
+    };
+  }
+  return {
+    chapterSelectionMode: "progress_first",
+    advanceMode: "carry_forward",
+    skipCompletedLessons: true,
+    preferAssignedContent: true,
+    preferPublishedContent: true,
+    minimumUnitsPerDay: 1,
+    reviewWhenShort: true,
+    completionMode: "any",
+    countMarkedDone: true,
+    countQuizComplete: true,
+    countLessonProgress: true,
+    lessonProgressThreshold: 100,
+  };
+}
+
+function applyAutoDiaryProgressionPreset(settings = null, preset = "balanced") {
+  const normalized = normalizeAutoDiarySettings(settings || {});
+  return normalizeAutoDiarySettings({
+    ...normalized,
+    progression: {
+      ...normalized.progression,
+      ...getAutoDiaryProgressionPresetSettings(preset),
+    },
+  }, { yearStartDate: normalized.calendar.startDate });
+}
+
+function detectAutoDiaryProgressionPreset(settings = null) {
+  const normalized = normalizeAutoDiarySettings(settings || {});
+  const keys = [
+    "chapterSelectionMode",
+    "advanceMode",
+    "skipCompletedLessons",
+    "preferAssignedContent",
+    "preferPublishedContent",
+    "minimumUnitsPerDay",
+    "reviewWhenShort",
+    "completionMode",
+    "countMarkedDone",
+    "countQuizComplete",
+    "countLessonProgress",
+    "lessonProgressThreshold",
+  ];
+  const presets = ["balanced", "structured", "mastery"];
+  const matchedPreset = presets.find((preset) => {
+    const presetSettings = getAutoDiaryProgressionPresetSettings(preset);
+    return keys.every((key) => String(normalized.progression?.[key]) === String(presetSettings[key]));
+  });
+  return matchedPreset || "custom";
+}
+
+function getAutoDiaryWeeklyTestPresetSettings(preset = "standard") {
+  const safePreset = String(preset || "standard").trim().toLowerCase();
+  if (safePreset === "disabled") {
+    return {
+      enabled: false,
+      accumulationMode: "rolling",
+      accumulationValue: 8,
+      currentWeekWeight: 50,
+      priorWeeksWeight: 50,
+      difficulty: "standard",
+      questionTypeWeights: { mcq: 35, truefalse: 20, fillblank: 25, matching: 20 },
+    };
+  }
+  if (safePreset === "current_focus") {
+    return {
+      enabled: true,
+      accumulationMode: "rolling",
+      accumulationValue: 4,
+      currentWeekWeight: 70,
+      priorWeeksWeight: 30,
+      difficulty: "standard",
+      questionTypeWeights: { mcq: 40, truefalse: 20, fillblank: 25, matching: 15 },
+    };
+  }
+  if (safePreset === "revision_heavy") {
+    return {
+      enabled: true,
+      accumulationMode: "academic_year",
+      accumulationValue: 12,
+      currentWeekWeight: 30,
+      priorWeeksWeight: 70,
+      difficulty: "rigorous",
+      questionTypeWeights: { mcq: 30, truefalse: 20, fillblank: 30, matching: 20 },
+    };
+  }
+  return {
+    enabled: true,
+    accumulationMode: "rolling",
+    accumulationValue: 8,
+    currentWeekWeight: 50,
+    priorWeeksWeight: 50,
+    difficulty: "standard",
+    questionTypeWeights: { mcq: 35, truefalse: 20, fillblank: 25, matching: 20 },
+  };
+}
+
+function applyAutoDiaryWeeklyTestPreset(settings = null, preset = "standard") {
+  const normalized = normalizeAutoDiarySettings(settings || {});
+  return normalizeAutoDiarySettings({
+    ...normalized,
+    saturdayTest: {
+      ...normalized.saturdayTest,
+      ...getAutoDiaryWeeklyTestPresetSettings(preset),
+    },
+  }, { yearStartDate: normalized.calendar.startDate });
+}
+
+function detectAutoDiaryWeeklyTestPreset(settings = null) {
+  const normalized = normalizeAutoDiarySettings(settings || {});
+  const keys = ["enabled", "accumulationMode", "accumulationValue", "currentWeekWeight", "priorWeeksWeight", "difficulty"];
+  const questionTypeKeys = ["mcq", "truefalse", "fillblank", "matching"];
+  const presets = ["disabled", "standard", "current_focus", "revision_heavy"];
+  const matchedPreset = presets.find((preset) => {
+    const presetSettings = getAutoDiaryWeeklyTestPresetSettings(preset);
+    const scalarMatch = keys.every((key) => String(normalized.saturdayTest?.[key]) === String(presetSettings[key]));
+    return scalarMatch && questionTypeKeys.every((key) => String(normalized.saturdayTest?.questionTypeWeights?.[key]) === String(presetSettings.questionTypeWeights[key]));
+  });
+  return matchedPreset || "custom";
+}
+
 function moveAutoDiarySubjectPriority(priorityOrder = [], subjectId = "", direction = 0) {
   const safeSubjectId = String(subjectId || "").trim();
   if (!safeSubjectId || !Array.isArray(priorityOrder) || !priorityOrder.length || !direction) return Array.isArray(priorityOrder) ? priorityOrder : [];
@@ -13038,6 +13193,12 @@ function HomeschoolApp() {
       },
     }));
   }, [updateSchoolDraftAutoDiarySettings]);
+  const handleApplySchoolDraftProgressionPreset = useCallback((preset) => {
+    updateSchoolDraftAutoDiarySettings((current) => applyAutoDiaryProgressionPreset(current, preset));
+  }, [updateSchoolDraftAutoDiarySettings]);
+  const handleApplySchoolDraftWeeklyTestPreset = useCallback((preset) => {
+    updateSchoolDraftAutoDiarySettings((current) => applyAutoDiaryWeeklyTestPreset(current, preset));
+  }, [updateSchoolDraftAutoDiarySettings]);
   const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
   const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored?.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
   const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored?.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -13583,6 +13744,21 @@ const headerHideTimerRef = useRef(null);
   const allSubjects = useMemo(
     () => mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {})),
     [customContentState.subjectsById],
+  );
+  const schoolDraftAutoDiaryVisibleSubjects = useMemo(() => {
+    const normalized = schoolDraftNormalizedAutoDiarySettings;
+    const visibleSubjects = normalized.subjects.mode === "selected"
+      ? allSubjects.filter((subject) => normalized.subjects.selectedSubjectIds.includes(String(subject?.id || "").trim()))
+      : allSubjects;
+    return orderAutoDiarySubjects(visibleSubjects, normalized);
+  }, [allSubjects, schoolDraftNormalizedAutoDiarySettings]);
+  const schoolDraftAutoDiaryProgressionPreset = useMemo(
+    () => detectAutoDiaryProgressionPreset(schoolDraftNormalizedAutoDiarySettings),
+    [schoolDraftNormalizedAutoDiarySettings],
+  );
+  const schoolDraftAutoDiaryWeeklyTestPreset = useMemo(
+    () => detectAutoDiaryWeeklyTestPreset(schoolDraftNormalizedAutoDiarySettings),
+    [schoolDraftNormalizedAutoDiarySettings],
   );
   const subjectLookup = useMemo(
     () => Object.fromEntries(allSubjects.map((subject) => [subject.id, subject])),
@@ -25022,8 +25198,118 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <div className="profile-report-item" style={{ marginTop: 10 }}>
                 <div className="profile-report-item-head">
                   <strong>{renderLocalizedTextNode(joinLocalizedText("Auto Diary Control Center", "خودکار ڈائری کنٹرول سینٹر", language), language)}</strong>
-                  <span>{renderLocalizedTextNode(joinLocalizedText("Calendar, subjects, progression, and weekly test", "کیلنڈر، مضامین، پیش رفت، اور ہفتہ وار ٹیسٹ", language), language)}</span>
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Simple controls first. Open Advanced only when you really need to tune the engine.", "پہلے سادہ کنٹرولز۔ جدید سیٹنگز صرف اسی وقت کھولیں جب واقعی باریک ایڈجسٹمنٹ چاہیے ہو۔", language), language)}</span>
                 </div>
+                <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 10 }}>
+                  <div className="profile-report-summary-card">
+                    <strong>{renderLocalizedTextNode(joinLocalizedText("Calendar", "کیلنڈر", language), language)}</strong>
+                    <span>{renderLocalizedTextNode(joinLocalizedText(`${formatReadableDateLabel(schoolDraftNormalizedAutoDiarySettings.calendar.startDate, language)} start • ${schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.length} study days`, `${formatReadableDateLabel(schoolDraftNormalizedAutoDiarySettings.calendar.startDate, language)} آغاز • ${schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.length} مطالعہ کے دن`, language), language)}</span>
+                  </div>
+                  <div className="profile-report-summary-card">
+                    <strong>{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</strong>
+                    <span>{renderLocalizedTextNode(schoolDraftNormalizedAutoDiarySettings.subjects.mode === "all" ? joinLocalizedText("All current and future subjects are included.", "موجودہ اور آئندہ تمام مضامین شامل ہیں۔", language) : joinLocalizedText(`${schoolDraftAutoDiaryVisibleSubjects.length} selected subjects`, `${schoolDraftAutoDiaryVisibleSubjects.length} منتخب مضامین`, language), language)}</span>
+                  </div>
+                  <div className="profile-report-summary-card">
+                    <strong>{renderLocalizedTextNode(joinLocalizedText("Progression", "پیش رفت", language), language)}</strong>
+                    <span>{renderLocalizedTextNode(schoolDraftAutoDiaryProgressionPreset === "structured" ? joinLocalizedText("Steady curriculum", "نصابی رفتار", language) : schoolDraftAutoDiaryProgressionPreset === "mastery" ? joinLocalizedText("Mastery first", "پہلے مہارت", language) : schoolDraftAutoDiaryProgressionPreset === "balanced" ? joinLocalizedText("Balanced carry-forward", "متوازن آگے بڑھاؤ", language) : joinLocalizedText("Custom progression", "اپنی مرضی کی پیش رفت", language), language)}</span>
+                  </div>
+                  <div className="profile-report-summary-card">
+                    <strong>{renderLocalizedTextNode(joinLocalizedText("Weekly Test", "ہفتہ وار ٹیسٹ", language), language)}</strong>
+                    <span>{renderLocalizedTextNode(schoolDraftAutoDiaryWeeklyTestPreset === "disabled" ? joinLocalizedText("Disabled", "غیر فعال", language) : schoolDraftAutoDiaryWeeklyTestPreset === "current_focus" ? joinLocalizedText("Current week focused", "موجودہ ہفتے پر توجہ", language) : schoolDraftAutoDiaryWeeklyTestPreset === "revision_heavy" ? joinLocalizedText("Revision heavy", "زیادہ دہرائی", language) : schoolDraftAutoDiaryWeeklyTestPreset === "standard" ? joinLocalizedText("Standard balance", "معیاری توازن", language) : joinLocalizedText("Custom weekly test", "اپنی مرضی کا ہفتہ وار ٹیسٹ", language), language)}</span>
+                  </div>
+                </div>
+                <div className="auto-diary-control-grid" style={{ marginTop: 12 }}>
+                  <div className="profile-report-item auto-diary-simple-block">
+                    <div className="profile-report-item-head">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText("Calendar", "کیلنڈر", language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText("When the diary starts and which days it runs.", "ڈائری کب شروع ہو اور کن دنوں میں چلے۔", language), language)}</span>
+                    </div>
+                    <div className="auto-diary-field-stack">
+                      <CalendarDateField value={schoolDraftNormalizedAutoDiarySettings.calendar.startDate} onChange={(value) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, startDate: value } }))} language={language} />
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.calendar.testDay} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, testDay: Number(event.target.value) || 6 } }))}>
+                        {AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => <option key={`auto_test_day_quick_${entry.value}`} value={entry.value}>{renderLocalizedTextNode(joinLocalizedText(`Test day: ${entry.en}`, `ٹیسٹ کا دن: ${entry.ur}`, language), language)}</option>)}
+                      </select>
+                    </div>
+                    <div className="profile-switcher-chip-row" style={{ marginTop: 10 }}>
+                      {AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => {
+                        const selected = schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.includes(entry.value);
+                        return <button key={`study_day_quick_${entry.value}`} type="button" className={`profile-switcher-chip${selected ? " active" : ""}`} onClick={() => handleToggleSchoolDraftStudyDay(entry.value)}><span className="profile-switcher-chip-copy"><strong>{renderLocalizedTextNode(language === "ur" ? entry.ur : entry.en, language)}</strong><span>{renderLocalizedTextNode(selected ? joinLocalizedText("Included in study week", "مطالعہ کے ہفتے میں شامل", language) : joinLocalizedText("Not used for auto diary", "خودکار ڈائری میں شامل نہیں", language), language)}</span></span></button>;
+                      })}
+                    </div>
+                  </div>
+                  <div className="profile-report-item auto-diary-simple-block">
+                    <div className="profile-report-item-head">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText("Choose whether every subject joins automatically or only the ones you pick.", "طے کریں کہ ہر مضمون خودکار طور پر شامل ہو یا صرف منتخب مضامین۔", language), language)}</span>
+                    </div>
+                    <div className="auto-diary-field-stack">
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.subjects.mode} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, subjects: { ...current.subjects, mode: event.target.value === "selected" ? "selected" : "all" } }))}>
+                        <option value="all">{renderLocalizedTextNode(joinLocalizedText("Include all subjects", "تمام مضامین شامل کریں", language), language)}</option>
+                        <option value="selected">{renderLocalizedTextNode(joinLocalizedText("Use only selected subjects", "صرف منتخب مضامین استعمال کریں", language), language)}</option>
+                      </select>
+                    </div>
+                    {schoolDraftNormalizedAutoDiarySettings.subjects.mode === "selected" ? (
+                      <div className="profile-switcher-chip-row" style={{ marginTop: 10 }}>
+                        {allSubjects.map((subject) => {
+                          const subjectId = String(subject.id || "").trim();
+                          const selected = schoolDraftNormalizedAutoDiarySettings.subjects.selectedSubjectIds.includes(subjectId);
+                          return <button key={`auto_subject_pick_quick_${subjectId}`} type="button" className={`profile-switcher-chip${selected ? " active" : ""}`} onClick={() => handleToggleSchoolDraftSubjectSelection(subjectId)}><span className="profile-switcher-chip-copy"><strong>{renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)}</strong><span>{renderLocalizedTextNode(selected ? joinLocalizedText("Included", "شامل", language) : joinLocalizedText("Tap to include", "شامل کرنے کے لیے منتخب کریں", language), language)}</span></span></button>;
+                        })}
+                      </div>
+                    ) : (
+                      <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Any new subject added later will join the auto diary automatically.", "بعد میں شامل ہونے والا ہر نیا مضمون خودکار ڈائری میں خود شامل ہو جائے گا۔", language), language)}</p>
+                    )}
+                  </div>
+                  <div className="profile-report-item auto-diary-simple-block">
+                    <div className="profile-report-item-head">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText("Daily Plan", "روزانہ پلان", language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText("How subjects show up each day and how chapters move forward.", "ہر دن مضامین کیسے آئیں اور ابواب کیسے آگے بڑھیں۔", language), language)}</span>
+                    </div>
+                    <div className="auto-diary-field-stack">
+                      <select className="settings-select" value={schoolDraftNormalizedAutoDiarySettings.dailyLayout.mode} onChange={(event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, mode: event.target.value } }))}>
+                        <option value="all_subjects_daily">{renderLocalizedTextNode(joinLocalizedText("All selected subjects every study day", "ہر مطالعہ والے دن تمام منتخب مضامین", language), language)}</option>
+                        <option value="subject_rotation">{renderLocalizedTextNode(joinLocalizedText("Rotate subjects across the week", "ہفتے میں مضامین باری باری", language), language)}</option>
+                        <option value="hybrid">{renderLocalizedTextNode(joinLocalizedText("Core subjects daily, others rotate", "بنیادی مضامین روزانہ، باقی باری باری", language), language)}</option>
+                      </select>
+                      <select className="settings-select" value={schoolDraftAutoDiaryProgressionPreset} onChange={(event) => {
+                        const nextValue = String(event.target.value || "balanced");
+                        if (nextValue === "custom") return;
+                        handleApplySchoolDraftProgressionPreset(nextValue);
+                      }}>
+                        <option value="balanced">{renderLocalizedTextNode(joinLocalizedText("Balanced carry-forward", "متوازن آگے بڑھاؤ", language), language)}</option>
+                        <option value="structured">{renderLocalizedTextNode(joinLocalizedText("Steady curriculum", "نصابی رفتار", language), language)}</option>
+                        <option value="mastery">{renderLocalizedTextNode(joinLocalizedText("Mastery first", "پہلے مہارت", language), language)}</option>
+                        <option value="custom">{renderLocalizedTextNode(joinLocalizedText("Custom (from advanced settings)", "اپنی مرضی کا (جدید سیٹنگز سے)", language), language)}</option>
+                      </select>
+                    </div>
+                    <p className="goal-progress-meta auto-diary-helper-copy">{renderLocalizedTextNode(schoolDraftAutoDiaryProgressionPreset === "structured" ? joinLocalizedText("Follows the curriculum in a steadier order and changes chapters weekly.", "یہ نصاب کی ترتیب کو زیادہ سیدھے انداز میں فالو کرتا ہے اور ابواب کو ہفتہ وار بدلتا ہے۔", language) : schoolDraftAutoDiaryProgressionPreset === "mastery" ? joinLocalizedText("Stays longer on weaker lessons and demands stronger completion signals.", "یہ کمزور اسباق پر زیادہ دیر رکتا ہے اور مضبوط تکمیل کے اشارے مانگتا ہے۔", language) : schoolDraftAutoDiaryProgressionPreset === "balanced" ? joinLocalizedText("Moves with learner progress while still carrying unfinished slices forward.", "یہ طالب علم کی پیش رفت کے ساتھ چلتا ہے اور نامکمل حصے اگلے دنوں میں لے جاتا ہے۔", language) : joinLocalizedText("This school is using a custom progression mix from the Advanced panel.", "یہ اسکول Advanced پینل سے اپنی مرضی کی پیش رفت استعمال کر رہا ہے۔", language), language)}</p>
+                  </div>
+                  <div className="profile-report-item auto-diary-simple-block">
+                    <div className="profile-report-item-head">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText("Weekly Test", "ہفتہ وار ٹیسٹ", language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText("Choose the overall weekly-test behavior without tuning every percentage manually.", "ہر فیصد کو الگ چھیڑے بغیر ہفتہ وار ٹیسٹ کا مجموعی انداز منتخب کریں۔", language), language)}</span>
+                    </div>
+                    <div className="auto-diary-field-stack">
+                      <select className="settings-select" value={schoolDraftAutoDiaryWeeklyTestPreset} onChange={(event) => {
+                        const nextValue = String(event.target.value || "standard");
+                        if (nextValue === "custom") return;
+                        handleApplySchoolDraftWeeklyTestPreset(nextValue);
+                      }}>
+                        <option value="standard">{renderLocalizedTextNode(joinLocalizedText("Standard balance", "معیاری توازن", language), language)}</option>
+                        <option value="current_focus">{renderLocalizedTextNode(joinLocalizedText("Current week focused", "موجودہ ہفتے پر توجہ", language), language)}</option>
+                        <option value="revision_heavy">{renderLocalizedTextNode(joinLocalizedText("Revision heavy", "زیادہ دہرائی", language), language)}</option>
+                        <option value="disabled">{renderLocalizedTextNode(joinLocalizedText("Disable weekly test", "ہفتہ وار ٹیسٹ بند کریں", language), language)}</option>
+                        <option value="custom">{renderLocalizedTextNode(joinLocalizedText("Custom (from advanced settings)", "اپنی مرضی کا (جدید سیٹنگز سے)", language), language)}</option>
+                      </select>
+                    </div>
+                    <p className="goal-progress-meta auto-diary-helper-copy">{renderLocalizedTextNode(schoolDraftAutoDiaryWeeklyTestPreset === "current_focus" ? joinLocalizedText("Mostly tests the current week, with a smaller memory check from previous work.", "یہ زیادہ تر موجودہ ہفتے کو جانچتا ہے اور پچھلے کام سے تھوڑی دہرائی بھی رکھتا ہے۔", language) : schoolDraftAutoDiaryWeeklyTestPreset === "revision_heavy" ? joinLocalizedText("Builds a stronger revision paper from older covered work.", "یہ پہلے پڑھے گئے مواد سے زیادہ مضبوط دہرائی والا پرچہ بناتا ہے۔", language) : schoolDraftAutoDiaryWeeklyTestPreset === "disabled" ? joinLocalizedText("No weekly test will be generated until you enable it again.", "جب تک آپ اسے دوبارہ فعال نہ کریں ہفتہ وار ٹیسٹ نہیں بنے گا۔", language) : schoolDraftAutoDiaryWeeklyTestPreset === "standard" ? joinLocalizedText("Keeps a balanced paper between this week and prior covered work.", "یہ موجودہ ہفتے اور پہلے پڑھے گئے مواد کے درمیان متوازن پرچہ رکھتا ہے۔", language) : joinLocalizedText("This school is using a custom weekly-test setup from the Advanced panel.", "یہ اسکول Advanced پینل سے اپنی مرضی کی ہفتہ وار ٹیسٹ سیٹنگ استعمال کر رہا ہے۔", language), language)}</p>
+                  </div>
+                </div>
+                <details className="profile-report-item auto-diary-advanced-panel" style={{ marginTop: 12 }}>
+                  <summary className="auto-diary-advanced-summary">
+                    <span>{renderLocalizedTextNode(joinLocalizedText("Advanced controls", "جدید کنٹرولز", language), language)}</span>
+                    <span>{renderLocalizedTextNode(joinLocalizedText("Priorities, holidays, thresholds, hybrid core, and detailed weekly-test weights", "ترجیحات، تعطیلات، حدیں، بنیادی مضامین، اور ہفتہ وار ٹیسٹ کے تفصیلی وزن", language), language)}</span>
+                  </summary>
                 <div className="profile-report-list" style={{ marginTop: 10 }}>
                   <div className="profile-report-item">
                     <div className="profile-report-item-head">
@@ -25109,6 +25395,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     </div>
                   </div>
                 </div>
+                </details>
               </div>
               <div className="chapter-browser-filter-row" style={{ alignItems: "stretch", marginTop: 10 }}>
                 <button type="button" className="study-tool-btn" onClick={handleSaveSchool} disabled={contentRelationshipBusy}>
