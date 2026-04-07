@@ -797,13 +797,143 @@
       }
     };
   }
+  function createStructuredLessonWorkUnit(lesson = {}, index = 0, title = "", detail = "", options = {}) {
+    const safeTitle = String(title || "").replace(/\s+/g, " ").trim();
+    const safeDetail = String(detail || safeTitle).replace(/\s+/g, " ").trim();
+    if (!safeTitle && !safeDetail) return null;
+    const sourceMeta = (options == null ? void 0 : options.sourceMeta) && typeof options.sourceMeta === "object" ? options.sourceMeta : {};
+    return {
+      key: String((options == null ? void 0 : options.key) || `${getLessonKeyValue(lesson) || lesson.id || "lesson"}_unit_${index}`).trim(),
+      title: safeTitle || safeDetail,
+      detail: safeDetail || safeTitle,
+      kind: String((options == null ? void 0 : options.kind) || "study").trim() || "study",
+      sourceMeta: {
+        key: String((sourceMeta == null ? void 0 : sourceMeta.key) || "").trim(),
+        title: String((sourceMeta == null ? void 0 : sourceMeta.title) || "").trim(),
+        heading: String((sourceMeta == null ? void 0 : sourceMeta.heading) || "").trim(),
+        day: Number.isFinite(Number(sourceMeta == null ? void 0 : sourceMeta.day)) ? Number(sourceMeta.day) : null
+      }
+    };
+  }
+  function buildSectionStructuredWorkUnits(section = {}, lesson = {}, unitIndexRef = { current: 0 }) {
+    if (!section || typeof section !== "object") return [];
+    const subsectionTitle = String((section == null ? void 0 : section.t) || (section == null ? void 0 : section.title) || (section == null ? void 0 : section.heading) || (section == null ? void 0 : section.name) || (section == null ? void 0 : section.label) || "").trim();
+    const subsectionKey = String((section == null ? void 0 : section.key) || (section == null ? void 0 : section.id) || sanitizeDiaryTargetSegment(subsectionTitle, `subsection_${unitIndexRef.current + 1}`)).trim();
+    const isUrdu = containsUrduText(subsectionTitle) || containsUrduText(section == null ? void 0 : section.intro) || containsUrduText(section == null ? void 0 : section.summary) || containsUrduText(section == null ? void 0 : section.q);
+    const nextIndex = () => {
+      const current = unitIndexRef.current;
+      unitIndexRef.current += 1;
+      return current;
+    };
+    const createUnit = (partKey, title, detail, kind = "study") => createStructuredLessonWorkUnit(
+      lesson,
+      nextIndex(),
+      title,
+      detail,
+      {
+        key: `${subsectionKey}_${partKey}`,
+        kind,
+        sourceMeta: {
+          key: subsectionKey,
+          title: subsectionTitle,
+          heading: subsectionTitle,
+          day: Number.isFinite(Number(section == null ? void 0 : section.day)) ? Number(section.day) : null
+        }
+      }
+    );
+    const units = [];
+    const pushUnit = (unit) => {
+      if (unit) units.push(unit);
+    };
+    const examples = [
+      ...Array.isArray(section == null ? void 0 : section.examples) ? section.examples : [],
+      ...Array.isArray(section == null ? void 0 : section.exampleParagraphs) ? section.exampleParagraphs : [],
+      ...Array.isArray(section == null ? void 0 : section.paragraphs) ? section.paragraphs : []
+    ].map((entry) => normalizeDiaryOutlineLeafLabel(entry)).filter(Boolean);
+    if (examples.length) {
+      pushUnit(createUnit(
+        "examples",
+        isUrdu ? "\u0645\u062B\u0627\u0644\u06CC\u06BA" : "Examples",
+        examples.slice(0, 2).join(" \u2022 "),
+        "practice"
+      ));
+    }
+    const sentencePairs = Array.isArray(section == null ? void 0 : section.sentencePairs) ? section.sentencePairs : [];
+    if (sentencePairs.length) {
+      const sentencePreview = normalizeDiaryOutlineLeafLabel(sentencePairs[0], isUrdu ? "\u062C\u0645\u0644\u06D2" : "Sentence practice");
+      pushUnit(createUnit(
+        "sentence_pairs",
+        isUrdu ? "\u062C\u0645\u0644\u0648\u06BA \u06A9\u06CC \u0645\u0634\u0642" : "Sentence Practice",
+        sentencePreview,
+        "practice"
+      ));
+    }
+    const words = Array.isArray(section == null ? void 0 : section.words) ? section.words : [];
+    if (words.length) {
+      const wordPreview = normalizeDiaryOutlineLeafLabel(words[0], isUrdu ? "\u0627\u0644\u0641\u0627\u0638" : "Words");
+      pushUnit(createUnit(
+        "words",
+        isUrdu ? "\u0627\u0644\u0641\u0627\u0638" : "Vocabulary",
+        wordPreview,
+        "practice"
+      ));
+    }
+    const exercises = Array.isArray(section == null ? void 0 : section.exercises) ? section.exercises : [];
+    if (exercises.length) {
+      exercises.forEach((exercise, exerciseIndex) => {
+        const kind = getExerciseKind(exercise == null ? void 0 : exercise.q);
+        const label = normalizeDiaryOutlineLabel(exercise == null ? void 0 : exercise.q, buildDiaryOutlineKindLabel(kind, isUrdu));
+        const firstPart = Array.isArray(exercise == null ? void 0 : exercise.parts) ? normalizeDiaryOutlineLeafLabel(exercise.parts[0]) : "";
+        const firstAnswer = Array.isArray(exercise == null ? void 0 : exercise.ans) ? normalizeDiaryOutlineLeafLabel(exercise.ans[0]) : "";
+        pushUnit(createUnit(
+          `exercise_${exerciseIndex + 1}`,
+          label,
+          firstPart || firstAnswer || label,
+          "practice"
+        ));
+      });
+    }
+    const wordProblems = Array.isArray(section == null ? void 0 : section.wordProblems) ? section.wordProblems : [];
+    if (wordProblems.length) {
+      const firstProblem = normalizeDiaryOutlineLeafLabel(wordProblems[0], isUrdu ? "\u0644\u0641\u0638\u06CC \u0633\u0648\u0627\u0644" : "Word problem");
+      pushUnit(createUnit(
+        "word_problems",
+        isUrdu ? "\u0644\u0641\u0638\u06CC \u0633\u0648\u0627\u0644" : "Word Problems",
+        firstProblem,
+        "practice"
+      ));
+    }
+    const quizEntries = Array.isArray(section == null ? void 0 : section.quiz) ? section.quiz : [];
+    if (quizEntries.length) {
+      const firstQuestion = normalizeDiaryOutlineLeafLabel(quizEntries[0], isUrdu ? "\u06A9\u0648\u0626\u0632" : "Quiz");
+      pushUnit(createUnit(
+        "quiz",
+        isUrdu ? "\u06A9\u0648\u0626\u0632" : "Quiz",
+        firstQuestion,
+        "practice"
+      ));
+    }
+    if (!units.length) {
+      pushUnit(normalizeLessonWorkUnit(section, lesson, nextIndex()));
+    }
+    return units;
+  }
   function extractLessonWorkUnits(lesson = {}, quizQuestions = []) {
     const units = [];
+    const unitIndexRef = { current: 0 };
     const pushCollection = (collection) => {
       if (!Array.isArray(collection)) return;
       collection.forEach((entry, index) => {
-        const normalized = normalizeLessonWorkUnit(entry, lesson, units.length + index);
-        if (normalized) units.push(normalized);
+        const structuredUnits = buildSectionStructuredWorkUnits(entry, lesson, unitIndexRef);
+        if (structuredUnits.length) {
+          structuredUnits.forEach((unit) => units.push(unit));
+          return;
+        }
+        const normalized = normalizeLessonWorkUnit(entry, lesson, unitIndexRef.current + index);
+        if (normalized) {
+          units.push(normalized);
+          unitIndexRef.current += 1;
+        }
       });
     };
     [
@@ -823,7 +953,7 @@
     if (!units.length && typeof lesson.content === "string" && lesson.content.trim()) {
       const paragraphs = lesson.content.split(/\n+/).map((entry) => entry.trim()).filter(Boolean);
       (paragraphs.length ? paragraphs : [lesson.content]).forEach((entry, index) => {
-        const normalized = normalizeLessonWorkUnit(entry, lesson, index);
+        const normalized = normalizeLessonWorkUnit(entry, lesson, unitIndexRef.current + index);
         if (normalized) units.push(normalized);
       });
     }
@@ -21098,31 +21228,40 @@ ${error.message || error}`);
     }, [allSubjects, buildDiaryChapterOutlineTree, getMergedLessonGroups, grade, language, subjectLookup]);
     buildDiaryOverrideSourceSegmentRef.current = buildDiaryOverrideSourceSegment;
     const collectDiaryTaskSelectedOutlineKeys = useCallback((nodes = [], task = null) => {
-      const candidateKeys = /* @__PURE__ */ new Set();
-      const candidateTexts = /* @__PURE__ */ new Set();
+      const unitKeyCandidates = /* @__PURE__ */ new Set();
+      const unitTextCandidates = /* @__PURE__ */ new Set();
+      const fallbackKeyCandidates = /* @__PURE__ */ new Set();
+      const fallbackTextCandidates = /* @__PURE__ */ new Set();
       (Array.isArray(task == null ? void 0 : task.taskUnits) ? task.taskUnits : []).forEach((unit) => {
         var _a2, _b2;
-        [(_a2 = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _a2.key, unit == null ? void 0 : unit.key].map((value) => String(value || "").trim()).filter(Boolean).forEach((value) => candidateKeys.add(value));
-        [(_b2 = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _b2.title, unit == null ? void 0 : unit.title, unit == null ? void 0 : unit.detail].map(normalizeDiaryMatchText).filter(Boolean).forEach((value) => candidateTexts.add(value));
+        [unit == null ? void 0 : unit.key].map((value) => String(value || "").trim()).filter(Boolean).forEach((value) => unitKeyCandidates.add(value));
+        [unit == null ? void 0 : unit.title, unit == null ? void 0 : unit.detail].map(normalizeDiaryMatchText).filter(Boolean).forEach((value) => unitTextCandidates.add(value));
+        [(_a2 = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _a2.key].map((value) => String(value || "").trim()).filter(Boolean).forEach((value) => fallbackKeyCandidates.add(value));
+        [(_b2 = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _b2.title].map(normalizeDiaryMatchText).filter(Boolean).forEach((value) => fallbackTextCandidates.add(value));
       });
-      [task == null ? void 0 : task.subsectionKey].map((value) => String(value || "").trim()).filter(Boolean).forEach((value) => candidateKeys.add(value));
-      [task == null ? void 0 : task.subsectionTitle, task == null ? void 0 : task.title].map(normalizeDiaryMatchText).filter(Boolean).forEach((value) => candidateTexts.add(value));
-      if (!candidateKeys.size && !candidateTexts.size) return [];
-      const matchedKeys = /* @__PURE__ */ new Set();
-      const normalizedCandidates = Array.from(candidateTexts);
-      const walk = (node) => {
-        if (!node) return;
-        const nodeKey = String((node == null ? void 0 : node.key) || "").trim();
-        const routeMeta = (node == null ? void 0 : node.routeMeta) || {};
-        const nodeKeys = [nodeKey, String((routeMeta == null ? void 0 : routeMeta.subKey) || "").trim(), String((routeMeta == null ? void 0 : routeMeta.targetId) || "").trim()].filter(Boolean);
-        const nodeTexts = [node == null ? void 0 : node.label, routeMeta == null ? void 0 : routeMeta.subTitle].map(normalizeDiaryMatchText).filter(Boolean);
-        const keyMatched = nodeKeys.some((value) => candidateKeys.has(value));
-        const textMatched = nodeTexts.some((nodeText) => normalizedCandidates.some((candidate) => nodeText === candidate || nodeText.includes(candidate) || candidate.includes(nodeText)));
-        if ((keyMatched || textMatched) && nodeKey) matchedKeys.add(nodeKey);
-        (Array.isArray(node == null ? void 0 : node.children) ? node.children : []).forEach(walk);
+      [task == null ? void 0 : task.subsectionKey].map((value) => String(value || "").trim()).filter(Boolean).forEach((value) => fallbackKeyCandidates.add(value));
+      [task == null ? void 0 : task.subsectionTitle, task == null ? void 0 : task.title].map(normalizeDiaryMatchText).filter(Boolean).forEach((value) => fallbackTextCandidates.add(value));
+      const collectMatches = (candidateKeys, candidateTexts) => {
+        if (!candidateKeys.size && !candidateTexts.size) return [];
+        const matchedKeys = /* @__PURE__ */ new Set();
+        const normalizedCandidates = Array.from(candidateTexts);
+        const walk = (node) => {
+          if (!node) return;
+          const nodeKey = String((node == null ? void 0 : node.key) || "").trim();
+          const routeMeta = (node == null ? void 0 : node.routeMeta) || {};
+          const nodeKeys = [nodeKey, String((routeMeta == null ? void 0 : routeMeta.subKey) || "").trim(), String((routeMeta == null ? void 0 : routeMeta.targetId) || "").trim()].filter(Boolean);
+          const nodeTexts = [node == null ? void 0 : node.label, routeMeta == null ? void 0 : routeMeta.subTitle].map(normalizeDiaryMatchText).filter(Boolean);
+          const keyMatched = nodeKeys.some((value) => candidateKeys.has(value));
+          const textMatched = nodeTexts.some((nodeText) => normalizedCandidates.some((candidate) => nodeText === candidate || nodeText.includes(candidate) || candidate.includes(nodeText)));
+          if ((keyMatched || textMatched) && nodeKey) matchedKeys.add(nodeKey);
+          (Array.isArray(node == null ? void 0 : node.children) ? node.children : []).forEach(walk);
+        };
+        (Array.isArray(nodes) ? nodes : []).forEach(walk);
+        return Array.from(matchedKeys);
       };
-      (Array.isArray(nodes) ? nodes : []).forEach(walk);
-      return Array.from(matchedKeys);
+      const unitMatches = collectMatches(unitKeyCandidates, unitTextCandidates);
+      if (unitMatches.length) return unitMatches;
+      return collectMatches(fallbackKeyCandidates, fallbackTextCandidates);
     }, []);
     const buildDiaryTaskOutline = useCallback((task) => {
       var _a2, _b2, _c2, _d2;
@@ -21570,7 +21709,6 @@ ${error.message || error}`);
               fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)"
             }
           },
-          /* @__PURE__ */ React.createElement("span", { style: { opacity: 0.7 } }, nodeLanguage === "ur" ? "\u2022" : "\u2022"),
           /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(label, language))
         ), /* @__PURE__ */ React.createElement(
           "button",
@@ -21582,13 +21720,36 @@ ${error.message || error}`);
               const routeLabel = String(((_a2 = node == null ? void 0 : node.routeMeta) == null ? void 0 : _a2.subTitle) || "").trim();
               speakInlineText(routeLabel ? `${routeLabel}. ${label}` : label);
             },
-            title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language),
-            style: { border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: 15, padding: 0, flex: "0 0 auto" }
+            title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language)
           },
           "\u{1F508}"
         )), hasChildren ? renderDiaryOutlineNodes(task, node.children, depth + 1) : null);
       }));
     };
+    const mergeDetailedDiaryRouteMeta = useCallback((detailedNodes = [], standardNodes = []) => {
+      const safeDetailed = Array.isArray(detailedNodes) ? detailedNodes : [];
+      const safeStandard = Array.isArray(standardNodes) ? standardNodes : [];
+      const standardLookup = /* @__PURE__ */ new Map();
+      safeStandard.forEach((node) => {
+        const key = String((node == null ? void 0 : node.key) || "").trim();
+        const label = normalizeDiaryMatchText((node == null ? void 0 : node.label) || "");
+        if (key) standardLookup.set(`key:${key}`, node);
+        if (label) standardLookup.set(`label:${label}`, node);
+      });
+      return safeDetailed.map((node) => {
+        const nodeKey = String((node == null ? void 0 : node.key) || "").trim();
+        const nodeLabel = normalizeDiaryMatchText((node == null ? void 0 : node.label) || "");
+        const matchedStandard = standardLookup.get(`key:${nodeKey}`) || standardLookup.get(`label:${nodeLabel}`) || null;
+        return {
+          ...node,
+          routeMeta: {
+            ...(node == null ? void 0 : node.routeMeta) || {},
+            ...(matchedStandard == null ? void 0 : matchedStandard.routeMeta) || {}
+          },
+          children: mergeDetailedDiaryRouteMeta((node == null ? void 0 : node.children) || [], (matchedStandard == null ? void 0 : matchedStandard.children) || [])
+        };
+      });
+    }, []);
     const handleToggleFavorite = useCallback(async (cardId) => {
       if (!window.HomeSchoolDB || !cardId) return null;
       const nextMeta = await window.HomeSchoolDB.toggleWordFavorite(cardId);
@@ -23548,22 +23709,25 @@ ${error.message || error}`);
         disabled: activeDiaryTaskIndex < 0 || activeDiaryTaskIndex >= orderedVisibleDiaryTasks.length - 1
       },
       renderLocalizedTextNode(joinLocalizedText("Next Task", "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0645", language), language)
-    ))) : null, diarySectionTab === "daily" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Daily Diary", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your daily study plan, auto-generated from your grade curriculum. Each subject has its tasks for the day. Click any task to start studying.", "\u0622\u067E \u06A9\u0627 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627 \u0645\u0646\u0635\u0648\u0628\u06C1\u060C \u0622\u067E \u06A9\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0646\u0635\u0627\u0628 \u0633\u06D2 \u062E\u0648\u062F\u06A9\u0627\u0631\u06D4 \u06C1\u0631 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u062F\u0646 \u06A9\u06D2 \u06A9\u0627\u0645\u06D4 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0633\u06CC \u0628\u06BE\u06CC \u06A9\u0627\u0645 \u067E\u0631 \u06A9\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `\u06C1\u0641\u062A\u06C1 ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-daily-toolbar" }, /* @__PURE__ */ React.createElement(CalendarDateField, { value: diaryWeekAnchorDate, onChange: handleDiaryWeekAnchorDateChange, language }), /* @__PURE__ */ React.createElement(
+    ))) : null, diarySectionTab === "daily" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Daily Diary", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your daily study plan, auto-generated from your grade curriculum. Each subject has its tasks for the day. Click any task to start studying.", "\u0622\u067E \u06A9\u0627 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627 \u0645\u0646\u0635\u0648\u0628\u06C1\u060C \u0622\u067E \u06A9\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0646\u0635\u0627\u0628 \u0633\u06D2 \u062E\u0648\u062F\u06A9\u0627\u0631\u06D4 \u06C1\u0631 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u062F\u0646 \u06A9\u06D2 \u06A9\u0627\u0645\u06D4 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0633\u06CC \u0628\u06BE\u06CC \u06A9\u0627\u0645 \u067E\u0631 \u06A9\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `\u06C1\u0641\u062A\u06C1 ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-daily-toolbar" }, /* @__PURE__ */ React.createElement(CalendarDateField, { value: diaryWeekAnchorDate, onChange: handleDiaryWeekAnchorDateChange, language }), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("select", { className: "settings-select diary-viewer-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `diary_viewer_${entry.email}`, value: entry.email }, entry.label))) : null, /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
-        className: `ghost-cta diary-detail-toggle${showDetailedDiary ? " active" : ""}`,
+        className: `diary-detail-toggle${showDetailedDiary ? " active" : ""}`,
+        "aria-pressed": showDetailedDiary,
         onClick: () => setShowDetailedDiary((current) => !current)
       },
-      renderLocalizedTextNode(showDetailedDiary ? joinLocalizedText("Hide detailed diary", "\u062A\u0641\u0635\u06CC\u0644\u06CC \u0688\u0627\u0626\u0631\u06CC \u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show detailed diary", "\u062A\u0641\u0635\u06CC\u0644\u06CC \u0688\u0627\u0626\u0631\u06CC \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language)
-    ), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("select", { className: "settings-select diary-viewer-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `diary_viewer_${entry.email}`, value: entry.email }, entry.label))) : null)), todayDiaryGroup ? /* @__PURE__ */ React.createElement("div", { key: `today_diary_${todayDiaryGroup.targetDate}`, className: "review-panel diary-day-card", "data-ui-language": language, "data-diary-date": todayDiaryGroup.targetDate, style: { marginTop: 16, borderLeft: "4px solid var(--accent)", boxShadow: "0 12px 32px rgba(0,0,0,0.08)" } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("TODAY", "\u0622\u062C", language) : joinLocalizedText("ACTIVE DAY", "\u0641\u0639\u0627\u0644 \u062F\u0646", language), language)), renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("Today's Diary", "\u0622\u062C \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language) : joinLocalizedText("Active Diary Day", "\u0641\u0639\u0627\u0644 \u0688\u0627\u0626\u0631\u06CC \u062F\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${todayDiaryGroup.tasks.length} tasks across ${todayDiaryGroup.subjectGroups.length} subjects`, `${todayDiaryGroup.tasks.length} \u06A9\u0627\u0645 ${todayDiaryGroup.subjectGroups.length} \u0645\u0636\u0627\u0645\u06CC\u0646 \u0645\u06CC\u06BA`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(todayDiaryGroup.targetDate, language))), todayDiaryGroup.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, todayDiaryGroup.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `today_sg_${todayDiaryGroup.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral", style: { fontSize: 11 } }, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2;
+      /* @__PURE__ */ React.createElement("span", { className: "diary-detail-toggle-label" }, renderLocalizedTextNode(joinLocalizedText("Detailed diary", "\u062A\u0641\u0635\u06CC\u0644\u06CC \u0688\u0627\u0626\u0631\u06CC", language), language)),
+      /* @__PURE__ */ React.createElement("span", { className: "diary-detail-toggle-switch", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("span", null))
+    ))), todayDiaryGroup ? /* @__PURE__ */ React.createElement("div", { key: `today_diary_${todayDiaryGroup.targetDate}`, className: "review-panel diary-day-card", "data-ui-language": language, "data-diary-date": todayDiaryGroup.targetDate, style: { marginTop: 16, borderLeft: "4px solid var(--accent)", boxShadow: "0 12px 32px rgba(0,0,0,0.08)" } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("TODAY", "\u0622\u062C", language) : joinLocalizedText("ACTIVE DAY", "\u0641\u0639\u0627\u0644 \u062F\u0646", language), language)), renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("Today's Diary", "\u0622\u062C \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language) : joinLocalizedText("Active Diary Day", "\u0641\u0639\u0627\u0644 \u0688\u0627\u0626\u0631\u06CC \u062F\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${todayDiaryGroup.tasks.length} tasks across ${todayDiaryGroup.subjectGroups.length} subjects`, `${todayDiaryGroup.tasks.length} \u06A9\u0627\u0645 ${todayDiaryGroup.subjectGroups.length} \u0645\u0636\u0627\u0645\u06CC\u0646 \u0645\u06CC\u06BA`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(todayDiaryGroup.targetDate, language))), todayDiaryGroup.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, todayDiaryGroup.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `today_sg_${todayDiaryGroup.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral", style: { fontSize: 11 } }, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2;
       const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
       const taskOutline = buildDiaryTaskOutline(task);
       const taskOutlineChildren = ((_a2 = taskOutline[0]) == null ? void 0 : _a2.children) || [];
-      const detailedTaskOutline = showDetailedDiary ? buildDetailedDiaryTaskOutline(task) : [];
+      const detailedTaskOutline = showDetailedDiary ? mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline) : [];
       const chapterTitle = String(((_b2 = task == null ? void 0 : task.lesson) == null ? void 0 : _b2.title) || ((_d2 = (_c2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _c2.activeLesson) == null ? void 0 : _d2.title) || (task == null ? void 0 : task.title) || "").trim();
       const subsectionTitle = String(((_g2 = (_f2 = (_e2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _e2[0]) == null ? void 0 : _f2.sourceMeta) == null ? void 0 : _g2.title) || ((_h2 = taskOutline[0]) == null ? void 0 : _h2.label) || (task == null ? void 0 : task.title) || "").trim();
+      const focusSummary = (Array.isArray(task == null ? void 0 : task.taskUnits) ? task.taskUnits : []).map((unit) => String((unit == null ? void 0 : unit.title) || (unit == null ? void 0 : unit.detail) || "").trim()).filter(Boolean).filter((value, index, list) => list.indexOf(value) === index).slice(0, 4).join(" \xB7 ");
       const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
       const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
       return /* @__PURE__ */ React.createElement("div", { key: `today_t_${task.taskKey}`, "data-diary-task-key": getDiaryTaskRouteKey(task), "data-task-language": taskLanguage, className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
@@ -23572,15 +23736,16 @@ ${error.message || error}`);
       }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")), subsectionTitle && subsectionTitle !== chapterTitle ? /* @__PURE__ */ React.createElement("span", { className: "diary-subtitle-line" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(subsectionTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
         event.stopPropagation();
         speakInlineText(subsectionTitle);
-      }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")) : null, !taskOutlineChildren.length && ((_i2 = task.taskUnits) == null ? void 0 : _i2.length) ? /* @__PURE__ */ React.createElement("span", { className: "diary-task-summary-line" }, task.taskUnits.slice(0, 3).map((u) => u.title).join(" \xB7 ")) : null), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, completion ? "\u2713" : language === "ur" ? "\u2190" : "\u2192")), taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null, showDetailedDiary && detailedTaskOutline.length ? /* @__PURE__ */ React.createElement("div", { className: "diary-detailed-outline", style: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" } }, renderDiaryOutlineNodes(task, detailedTaskOutline, 0)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions diary-task-footer-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => playDiaryAudioSequence(allAudioLines), disabled: !allAudioLines.length }, renderLocalizedTextNode(joinLocalizedText("Play all", "\u0633\u0628 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
+      }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")) : null, focusSummary && focusSummary !== subsectionTitle && focusSummary !== chapterTitle ? /* @__PURE__ */ React.createElement("span", { className: "diary-task-summary-line" }, renderLocalizedTextNode(focusSummary, language)) : null)), taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null, showDetailedDiary && detailedTaskOutline.length ? /* @__PURE__ */ React.createElement("div", { className: "diary-detailed-outline", style: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" } }, renderDiaryOutlineNodes(task, detailedTaskOutline, 0)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions diary-task-footer-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => playDiaryAudioSequence(allAudioLines), disabled: !allAudioLines.length }, renderLocalizedTextNode(joinLocalizedText("Play all", "\u0633\u0628 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
     }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No tasks scheduled for today.", "\u0622\u062C \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u06A9\u0627\u0645 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))) : null, weeklyDiaryListGroups.length ? weeklyDiaryListGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: `daily_card_${group.targetDate}`, className: "review-panel diary-day-card", "data-ui-language": language, "data-diary-date": group.targetDate, style: { marginTop: 16, borderLeft: group.targetDate === diaryTodayIso ? "4px solid var(--accent)" : void 0 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, group.targetDate === diaryTodayIso ? /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(joinLocalizedText("TODAY", "\u0622\u062C", language), language)) : null, renderLocalizedTextNode(group.targetDate, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Day ${group.dayIndex} \u2022 ${group.tasks.length} tasks across ${group.subjectGroups.length} subjects`, `\u062F\u0646 ${group.dayIndex} \u2022 ${group.tasks.length} \u06A9\u0627\u0645 ${group.subjectGroups.length} \u0645\u0636\u0627\u0645\u06CC\u0646 \u0645\u06CC\u06BA`, language), language)))), group.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, group.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `daily_sg_${group.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral", style: { fontSize: 11 } }, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2;
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2;
       const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
       const taskOutline = buildDiaryTaskOutline(task);
       const taskOutlineChildren = ((_a2 = taskOutline[0]) == null ? void 0 : _a2.children) || [];
-      const detailedTaskOutline = showDetailedDiary ? buildDetailedDiaryTaskOutline(task) : [];
+      const detailedTaskOutline = showDetailedDiary ? mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline) : [];
       const chapterTitle = String(((_b2 = task == null ? void 0 : task.lesson) == null ? void 0 : _b2.title) || ((_d2 = (_c2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _c2.activeLesson) == null ? void 0 : _d2.title) || (task == null ? void 0 : task.title) || "").trim();
       const subsectionTitle = String(((_g2 = (_f2 = (_e2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _e2[0]) == null ? void 0 : _f2.sourceMeta) == null ? void 0 : _g2.title) || ((_h2 = taskOutline[0]) == null ? void 0 : _h2.label) || (task == null ? void 0 : task.title) || "").trim();
+      const focusSummary = (Array.isArray(task == null ? void 0 : task.taskUnits) ? task.taskUnits : []).map((unit) => String((unit == null ? void 0 : unit.title) || (unit == null ? void 0 : unit.detail) || "").trim()).filter(Boolean).filter((value, index, list) => list.indexOf(value) === index).slice(0, 4).join(" \xB7 ");
       const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
       const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
       return /* @__PURE__ */ React.createElement("div", { key: `daily_t_${task.taskKey}`, "data-diary-task-key": getDiaryTaskRouteKey(task), "data-task-language": taskLanguage, className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
@@ -23589,7 +23754,7 @@ ${error.message || error}`);
       }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")), subsectionTitle && subsectionTitle !== chapterTitle ? /* @__PURE__ */ React.createElement("span", { className: "diary-subtitle-line" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(subsectionTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
         event.stopPropagation();
         speakInlineText(subsectionTitle);
-      }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")) : null, !taskOutlineChildren.length && ((_i2 = task.taskUnits) == null ? void 0 : _i2.length) ? /* @__PURE__ */ React.createElement("span", { className: "diary-task-summary-line" }, task.taskUnits.slice(0, 3).map((u) => u.title).join(" \xB7 ")) : null), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, completion ? "\u2713" : language === "ur" ? "\u2190" : "\u2192")), taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null, showDetailedDiary && detailedTaskOutline.length ? /* @__PURE__ */ React.createElement("div", { className: "diary-detailed-outline", style: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" } }, renderDiaryOutlineNodes(task, detailedTaskOutline, 0)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions diary-task-footer-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => playDiaryAudioSequence(allAudioLines), disabled: !allAudioLines.length }, renderLocalizedTextNode(joinLocalizedText("Play all", "\u0633\u0628 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
+      }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")) : null, focusSummary && focusSummary !== subsectionTitle && focusSummary !== chapterTitle ? /* @__PURE__ */ React.createElement("span", { className: "diary-task-summary-line" }, renderLocalizedTextNode(focusSummary, language)) : null)), taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null, showDetailedDiary && detailedTaskOutline.length ? /* @__PURE__ */ React.createElement("div", { className: "diary-detailed-outline", style: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" } }, renderDiaryOutlineNodes(task, detailedTaskOutline, 0)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions diary-task-footer-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => playDiaryAudioSequence(allAudioLines), disabled: !allAudioLines.length }, renderLocalizedTextNode(joinLocalizedText("Play all", "\u0633\u0628 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
     }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No tasks scheduled for this day.", "\u0627\u0633 \u062F\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u06A9\u0627\u0645 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : !todayDiaryGroup ? /* @__PURE__ */ React.createElement("div", { className: "review-panel diary-day-card", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No diary tasks are scheduled for this week yet.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645 \u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))) : null) : null, diarySectionTab === "teacher" ? /* @__PURE__ */ React.createElement(React.Fragment, null, canManageDiary || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create Teacher's Diary Entry", "\u0627\u0633\u062A\u0627\u062F \u06A9\u0627 \u0688\u0627\u0626\u0631\u06CC \u0627\u0646\u062F\u0631\u0627\u062C \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Select a subject and chapter, then optionally add a section cue or note. Students will see these alongside their auto diary.", "\u0645\u0636\u0645\u0648\u0646 \u0627\u0648\u0631 \u0628\u0627\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0686\u0627\u06C1\u06CC\u06BA \u062A\u0648 \u062D\u0635\u06D2 \u06A9\u06CC \u0646\u0634\u0627\u0646\u06CC \u06CC\u0627 \u0646\u0648\u0679 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4 \u0637\u0644\u0628\u06C1 \u06CC\u06C1 \u0627\u067E\u0646\u06CC \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06AF\u06D2\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row diary-authoring-grid", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftScope, onChange: (event) => setDiaryDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), diaryDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftStudentEmail, onChange: (event) => setDiaryDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `tdiary_s_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement(CalendarDateField, { value: diaryDraftStartDate, onChange: setDiaryDraftStartDate, language }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftRangeMode, onChange: (event) => setDiaryDraftRangeMode(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "single" }, renderLocalizedTextNode(joinLocalizedText("Single date", "\u0627\u06CC\u06A9 \u062A\u0627\u0631\u06CC\u062E", language), language)), /* @__PURE__ */ React.createElement("option", { value: "week" }, renderLocalizedTextNode(joinLocalizedText("Full week", "\u067E\u0648\u0631\u0627 \u06C1\u0641\u062A\u06C1", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row diary-authoring-grid", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftSubjectId, onChange: (event) => {
       setDiaryDraftSubjectId(event.target.value);
       setDiaryDraftContentId("");
@@ -23635,7 +23800,7 @@ ${error.message || error}`);
           const lesson = chapterGroup == null ? void 0 : chapterGroup.activeLesson;
           const taskForNav = { taskKind: "assigned", taskKey: buildDiaryTaskKey("assigned", entry), subject: entry.subject, lessonKey: entry.lessonKey, title: (lesson == null ? void 0 : lesson.title) || entry.lessonKey, source: "assigned", chapterGroup, lesson };
           const completion = diaryCompletionLookup[`assigned::${buildDiaryTaskKey("assigned", entry)}`] || null;
-          return /* @__PURE__ */ React.createElement("div", { key: `tdiary_e_${entry.diaryId}`, className: `diary-task-entry${completion ? " completed" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(taskForNav, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode((lesson == null ? void 0 : lesson.title) || entry.lessonKey || joinLocalizedText("Free-text task", "\u0622\u0632\u0627\u062F \u0645\u062A\u0646 \u06A9\u0627\u0645", language), language)), entry.note ? /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, color: "var(--text-muted)" } }, renderLocalizedTextNode(entry.note, language)) : null), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, completion ? "\u2713" : language === "ur" ? "\u2190" : "\u2192")), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 4 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(taskForNav), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canManageDiary || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
+          return /* @__PURE__ */ React.createElement("div", { key: `tdiary_e_${entry.diaryId}`, className: `diary-task-entry${completion ? " completed" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(taskForNav, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode((lesson == null ? void 0 : lesson.title) || entry.lessonKey || joinLocalizedText("Free-text task", "\u0622\u0632\u0627\u062F \u0645\u062A\u0646 \u06A9\u0627\u0645", language), language)), entry.note ? /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, color: "var(--text-muted)" } }, renderLocalizedTextNode(entry.note, language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 4 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(taskForNav), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canManageDiary || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
         })))));
       });
     })() : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No teacher diary entries yet. Teachers can create daily entries using the form above.", "\u0627\u0628\u06BE\u06CC \u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u06A9\u0648\u0626\u06CC \u0688\u0627\u0626\u0631\u06CC \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0646\u06C1\u06CC\u06BA\u06D4 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0641\u0627\u0631\u0645 \u0633\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0628\u0646\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "assignments" ? /* @__PURE__ */ React.createElement(React.Fragment, null, canManageDiary || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create Assignment / Project", "\u062A\u0641\u0648\u06CC\u0636 / \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Write a practical task for students. These assignments stay separate from auto diary, but now flow through the same weekly task and completion system.", "\u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0639\u0645\u0644\u06CC \u06A9\u0627\u0645 \u0644\u06A9\u06BE\u06CC\u06BA\u06D4 \u06CC\u06C1 \u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0633\u06D2 \u0627\u0644\u06AF \u0631\u06C1\u062A\u06CC \u06C1\u06CC\u06BA\u060C \u0645\u06AF\u0631 \u0627\u0628 \u0627\u0633\u06CC \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u06A9\u0627\u0645 \u0627\u0648\u0631 \u062A\u06A9\u0645\u06CC\u0644 \u0646\u0638\u0627\u0645 \u0645\u06CC\u06BA \u0634\u0627\u0645\u0644 \u06C1\u0648\u062A\u06CC \u06C1\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", style: { flex: "1 1 280px" }, value: assignmentDraftTitle, onChange: (event) => setAssignmentDraftTitle(event.target.value), placeholder: language === "ur" ? "\u062A\u0641\u0648\u06CC\u0636 \u06A9\u0627 \u0639\u0646\u0648\u0627\u0646" : "Assignment title" }), /* @__PURE__ */ React.createElement(CalendarDateField, { value: assignmentDraftDueDate, onChange: setAssignmentDraftDueDate, language })), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: assignmentDraftScope, onChange: (event) => setAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), assignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: assignmentDraftStudentEmail, onChange: (event) => setAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `assgn_s_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("textarea", { className: "settings-text-input", rows: 4, style: { width: "100%", resize: "vertical", minHeight: 80 }, value: assignmentDraftDescription, onChange: (event) => setAssignmentDraftDescription(event.target.value), placeholder: language === "ur" ? "\u062A\u0641\u0635\u06CC\u0644\u06CC \u06C1\u062F\u0627\u06CC\u0627\u062A \u0644\u06A9\u06BE\u06CC\u06BA..." : "Write detailed instructions..." })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveAssignment, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Create Assignment", "\u062A\u0641\u0648\u06CC\u0636 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)))) : null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assignments & Projects", "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0627\u0648\u0631 \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679\u0633", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Practical tasks assigned by your teacher. Complete them and mark as done.", "\u0622\u067E \u06A9\u06D2 \u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u062F\u06C1 \u0639\u0645\u0644\u06CC \u06A9\u0627\u0645\u06D4 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0645\u06A9\u0645\u0644 \u0646\u0634\u0627\u0646 \u0644\u06AF\u0627\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(visibleAssignmentEntries.length)))), visibleAssignmentEntries.length ? visibleAssignmentEntries.map((entry) => {
