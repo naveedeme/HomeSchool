@@ -1256,7 +1256,7 @@ function findDiarySubIndex(derivedSubs = [], options = {}) {
   });
 }
 
-function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}) {
+function buildDiarySelectionOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}) {
   const safeSubTitle = String(sub?.t || sub?.title || sub?.heading || sub?.name || "").trim();
   const safeSubKey = String(sub?.key || sub?.id || safeSubTitle || "").trim();
   const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(safeSubTitle) || isUrduText(sub?.c || "");
@@ -1401,7 +1401,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
   };
 }
 
-function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "", routeMeta = {}) {
+function buildDiarySelectionOutlineFromLesson(lesson = {}, subjectId = "", routeMeta = {}) {
   const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(lesson?.title || "") || isUrduText(lesson?.content || "");
   const baseKey = String(getLessonKeyValue(lesson) || lesson?.id || lesson?.title || "lesson").trim() || "lesson";
   const children = [];
@@ -1470,6 +1470,149 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "", routeMet
             }, isUrdu),
           }))
         : collectDiaryQuizOutlineNodes(lesson?.quiz, `${baseKey}_quiz`, routeMeta, isUrdu),
+    });
+  }
+  return {
+    key: `${baseKey}_heading`,
+    label: String(lesson?.title || lesson?.key || (isUrdu ? "سبق" : "Lesson")).trim() || (isUrdu ? "سبق" : "Lesson"),
+    routeMeta: routeMeta || {},
+    children,
+  };
+}
+
+function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}) {
+  const safeSubTitle = String(sub?.t || sub?.title || sub?.heading || sub?.name || "").trim();
+  const safeSubKey = String(sub?.key || sub?.id || safeSubTitle || "").trim();
+  const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(safeSubTitle) || isUrduText(sub?.c || "");
+  const baseKey = String(sub?.key || sub?.id || safeSubTitle || "sub").trim() || "sub";
+  const targetBaseId = String(routeMeta?.targetBaseId || "").trim();
+  const safeRouteMeta = {
+    ...routeMeta,
+    subKey: safeSubKey,
+    subTitle: safeSubTitle,
+    targetBaseId,
+    targetId: buildDiarySectionTargetId(targetBaseId, "heading"),
+  };
+  const children = [];
+  const hasExamples = Boolean(
+    (Array.isArray(sub?.examples) && sub.examples.length)
+    || (Array.isArray(sub?.sentencePairs) && sub.sentencePairs.length)
+    || (Array.isArray(sub?.dayLessons) && sub.dayLessons.length)
+    || (Array.isArray(sub?.examplesData) && sub.examplesData.length)
+    || (typeof sub?.c === "string" && sub.c.trim())
+  );
+  if (hasExamples) {
+    children.push({
+      key: `${baseKey}_examples`,
+      label: normalizeDiaryOutlineLabel(sub?.examplesLabel, isUrdu ? "مثالیں" : "Examples"),
+      routeMeta: {
+        ...safeRouteMeta,
+        subTab: "examples",
+        targetScope: "section",
+        targetId: buildDiarySectionTargetId(targetBaseId, "examples"),
+      },
+      children: [],
+    });
+  }
+  const exerciseEntries = [];
+  if (Array.isArray(sub?.exercises)) {
+    exerciseEntries.push(...sub.exercises);
+  } else if (Array.isArray(sub?.exerciseGroups)) {
+    sub.exerciseGroups.forEach((group) => {
+      (Array.isArray(group?.exercises) ? group.exercises : []).forEach((exercise) => {
+        exerciseEntries.push({
+          ...exercise,
+          __groupLabel: String(group?.label || "").trim(),
+        });
+      });
+    });
+  }
+  if (exerciseEntries.length) {
+    children.push({
+      key: `${baseKey}_exercises`,
+      label: isUrdu ? "مشقیں" : "Exercises",
+      routeMeta: {
+        ...safeRouteMeta,
+        subTab: "exercises",
+        targetScope: "section",
+        targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
+      },
+      children: collectDiaryExerciseOutlineNodes(
+        exerciseEntries,
+        `${baseKey}_exercises`,
+        safeRouteMeta,
+        isUrdu,
+      ),
+    });
+  }
+  const hasQuiz = Boolean(
+    (Array.isArray(sub?.quiz) && sub.quiz.length)
+    || (Array.isArray(sub?.quizGroups) && sub.quizGroups.length)
+  );
+  if (hasQuiz) {
+    children.push({
+      key: `${baseKey}_quiz`,
+      label: isUrdu ? "کوئز" : "Quiz",
+      routeMeta: {
+        ...safeRouteMeta,
+        subTab: "quiz",
+        targetScope: "section",
+        targetId: buildDiarySectionTargetId(targetBaseId, "quiz"),
+      },
+      children: [],
+    });
+  }
+  return {
+    key: `${baseKey}_heading`,
+    label: safeSubTitle || (isUrdu ? "سبق" : "Lesson"),
+    routeMeta: safeRouteMeta,
+    children,
+  };
+}
+
+function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "", routeMeta = {}) {
+  const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(lesson?.title || "") || isUrduText(lesson?.content || "");
+  const baseKey = String(getLessonKeyValue(lesson) || lesson?.id || lesson?.title || "lesson").trim() || "lesson";
+  const children = [];
+  const hasExamples = Boolean(
+    (Array.isArray(lesson?.examples) && lesson.examples.length)
+    || (Array.isArray(lesson?.sections) && lesson.sections.length)
+    || (Array.isArray(lesson?.subsections) && lesson.subsections.length)
+    || (typeof lesson?.content === "string" && lesson.content.trim())
+  );
+  if (hasExamples) {
+    children.push({
+      key: `${baseKey}_examples`,
+      label: isUrdu ? "مثالیں" : "Examples",
+      routeMeta: { ...routeMeta, subTab: "examples", targetScope: "section" },
+      children: [],
+    });
+  }
+  const exerciseEntries = [];
+  if (Array.isArray(lesson?.exercises)) exerciseEntries.push(...lesson.exercises);
+  if (exerciseEntries.length) {
+    children.push({
+      key: `${baseKey}_exercises`,
+      label: isUrdu ? "مشقیں" : "Exercises",
+      routeMeta: { ...routeMeta, subTab: "exercises", targetScope: "section" },
+      children: collectDiaryExerciseOutlineNodes(
+        exerciseEntries,
+        `${baseKey}_exercises`,
+        routeMeta,
+        isUrdu,
+      ),
+    });
+  }
+  const hasQuiz = Boolean(
+    (Array.isArray(lesson?.quiz) && lesson.quiz.length)
+    || (Array.isArray(lesson?.quizGroups) && lesson.quizGroups.length)
+  );
+  if (hasQuiz) {
+    children.push({
+      key: `${baseKey}_quiz`,
+      label: isUrdu ? "کوئز" : "Quiz",
+      routeMeta: { ...routeMeta, subTab: "quiz", targetScope: "section" },
+      children: [],
     });
   }
   return {
@@ -13759,7 +13902,17 @@ function HomeschoolApp() {
     };
     refreshTodayIso();
     const intervalId = window.setInterval(refreshTodayIso, 60000);
-    return () => window.clearInterval(intervalId);
+    const handleWindowFocus = () => refreshTodayIso();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshTodayIso();
+    };
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
   useEffect(() => {
     const previousTodayIso = previousTodayIsoRef.current;
@@ -13784,6 +13937,20 @@ function HomeschoolApp() {
     setDiaryWeekAnchorDate(nextAnchorDate);
     setDiaryWeekAnchorFollowsToday(nextAnchorDate === fallbackTodayIso);
   }, [todayIso]);
+  const handleJumpDiaryToToday = useCallback(() => {
+    const safeTodayIso = String(todayIso || toIsoDateString(Date.now())).trim();
+    if (!safeTodayIso) return;
+    setDiaryWeekAnchorDate(safeTodayIso);
+    setDiaryWeekAnchorFollowsToday(true);
+  }, [todayIso]);
+  const handleMoveDiaryToNextDay = useCallback(() => {
+    const baseDate = parseIsoDateValue(diaryWeekAnchorDate || todayIso || Date.now()) || new Date();
+    baseDate.setDate(baseDate.getDate() + 1);
+    const nextIso = toIsoDateString(baseDate);
+    if (!nextIso) return;
+    setDiaryWeekAnchorDate(nextIso);
+    setDiaryWeekAnchorFollowsToday(nextIso === String(todayIso || "").trim());
+  }, [diaryWeekAnchorDate, todayIso]);
   const updateSchoolDraftAutoDiarySettings = useCallback((updater) => {
     setSchoolDraftAutoDiarySettings((current) => {
       const base = normalizeAutoDiarySettings(current, { yearStartDate: schoolDraftYearStartDate });
@@ -14840,9 +15007,16 @@ const headerHideTimerRef = useRef(null);
     tasks: weeklyDiaryTasks.filter((task) => task.targetDate === targetDate),
   })), [diaryVisibleWeekDates, weeklyDiaryTasks]);
   const diaryTodayIso = todayIso;
+  const activeDiaryStartIso = useMemo(() => {
+    const safeTodayIso = String(diaryTodayIso || "").trim();
+    const safeAnchorIso = String(diaryWeekAnchorDate || "").trim();
+    if (!safeTodayIso) return safeAnchorIso;
+    if (!safeAnchorIso) return safeTodayIso;
+    return safeAnchorIso > safeTodayIso ? safeAnchorIso : safeTodayIso;
+  }, [diaryTodayIso, diaryWeekAnchorDate]);
   const visibleDiaryDayGroups = useMemo(() => {
     const safeGroups = weeklyDiaryTaskGroups
-      .filter((group) => group?.targetDate && group.targetDate >= diaryTodayIso)
+      .filter((group) => group?.targetDate && group.targetDate >= activeDiaryStartIso)
       .map((group) => {
         const subjectGroups = [];
         const subjectMap = new Map();
@@ -14891,14 +15065,14 @@ const headerHideTimerRef = useRef(null);
         subjectGroups,
       };
     });
-  }, [diaryTodayIso, language, subjectLookup, weeklyDiaryTaskGroups]);
+  }, [activeDiaryStartIso, language, subjectLookup, weeklyDiaryTaskGroups]);
   const todayDiaryGroup = useMemo(
-    () => visibleDiaryDayGroups.find((group) => group?.targetDate === diaryTodayIso) || null,
-    [diaryTodayIso, visibleDiaryDayGroups],
+    () => visibleDiaryDayGroups.find((group) => group?.targetDate === activeDiaryStartIso) || null,
+    [activeDiaryStartIso, visibleDiaryDayGroups],
   );
   const weeklyDiaryListGroups = useMemo(
-    () => [...visibleDiaryDayGroups].filter((group) => group?.targetDate !== diaryTodayIso).reverse(),
-    [diaryTodayIso, visibleDiaryDayGroups],
+    () => [...visibleDiaryDayGroups].filter((group) => group?.targetDate !== activeDiaryStartIso).reverse(),
+    [activeDiaryStartIso, visibleDiaryDayGroups],
   );
   const orderedVisibleDiaryTasks = useMemo(
     () => visibleDiaryDayGroups.flatMap((group) => group.subjectGroups.flatMap((subjectGroup) => subjectGroup.tasks)),
@@ -23830,7 +24004,7 @@ const lessons = getMergedLessons(subjectId, grade);
     if (lesson?.hasMathSub) {
       const derivedSubs = getDerivedLessonDiarySubs(lesson, safeSubjectId);
       return derivedSubs.map((sub, index) => attachDiaryRouteMeta([
-        buildDiaryLessonOutlineFromSub(sub, safeSubjectId, {
+        buildDiarySelectionOutlineFromSub(sub, safeSubjectId, {
           targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey, index),
         }),
       ], extraRouteMeta)[0]).filter(Boolean);
@@ -23850,13 +24024,13 @@ const lessons = getMergedLessons(subjectId, grade);
       || [];
     if (subsectionObjects.length) {
       return subsectionObjects.map((sub, index) => attachDiaryRouteMeta([
-        buildDiaryLessonOutlineFromSub(sub, safeSubjectId, {
+        buildDiarySelectionOutlineFromSub(sub, safeSubjectId, {
           targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey, index),
         }),
       ], extraRouteMeta)[0]).filter(Boolean);
     }
     return attachDiaryRouteMeta([
-      buildDiaryLessonOutlineFromLesson(lesson, safeSubjectId, {
+      buildDiarySelectionOutlineFromLesson(lesson, safeSubjectId, {
         targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey),
       }),
     ], extraRouteMeta);
@@ -28711,6 +28885,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </div>
                 <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
                   <CalendarDateField value={diaryWeekAnchorDate} onChange={handleDiaryWeekAnchorDateChange} language={language} />
+                  <button type="button" className="ghost-cta" onClick={handleJumpDiaryToToday}>
+                    {renderLocalizedTextNode(joinLocalizedText("Today", "آج", language), language)}
+                  </button>
+                  <button type="button" className="ghost-cta" onClick={handleMoveDiaryToNextDay}>
+                    {renderLocalizedTextNode(joinLocalizedText("Next day", "اگلا دن", language), language)}
+                  </button>
                   {diaryViewerStudentOptions.length > 1 ? <select className="settings-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
                 </div>
               </div>
@@ -28719,8 +28899,10 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <div className="review-panel-head">
                     <div>
                       <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 }}>{renderLocalizedTextNode(joinLocalizedText("TODAY", "آج", language), language)}</span>
-                        {renderLocalizedTextNode(joinLocalizedText("Today's Diary", "آج کی ڈائری", language), language)}
+                        <span style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 }}>
+                          {renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("TODAY", "آج", language) : joinLocalizedText("ACTIVE DAY", "فعال دن", language), language)}
+                        </span>
+                        {renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("Today's Diary", "آج کی ڈائری", language) : joinLocalizedText("Active Diary Day", "فعال ڈائری دن", language), language)}
                       </h3>
                       <p>{renderLocalizedTextNode(joinLocalizedText(`${todayDiaryGroup.tasks.length} tasks across ${todayDiaryGroup.subjectGroups.length} subjects`, `${todayDiaryGroup.tasks.length} کام ${todayDiaryGroup.subjectGroups.length} مضامین میں`, language), language)}</p>
                     </div>
