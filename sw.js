@@ -1,4 +1,4 @@
-const CACHE_NAME = "homeschool-static-v6";
+const CACHE_NAME = "homeschool-static-v7";
 const APP_SHELL = [
   "./css/app.css",
   "./HomeSchool.html",
