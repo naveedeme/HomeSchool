@@ -1009,6 +1009,123 @@ function buildDiaryExerciseTargetId(targetBaseId = "", exercise = {}, index = 0,
     : `${safeBaseId}_exercise_${safeExerciseKey}`;
 }
 
+function normalizeDiaryOutlineLeafLabel(entry, fallbackLabel = "") {
+  if (typeof entry === "string" || typeof entry === "number") {
+    return String(entry || "").replace(/\s+/g, " ").trim() || String(fallbackLabel || "").trim();
+  }
+  if (!entry || typeof entry !== "object") {
+    return String(fallbackLabel || "").trim();
+  }
+  const pairLeft = String(entry?.en || entry?.english || entry?.left || "").trim();
+  const pairRight = String(entry?.ur || entry?.urdu || entry?.right || "").trim();
+  if (pairLeft && pairRight) return `${pairLeft} — ${pairRight}`;
+  return String(
+    entry?.q
+    || entry?.prompt
+    || entry?.question
+    || entry?.label
+    || entry?.title
+    || entry?.name
+    || entry?.heading
+    || entry?.text
+    || entry?.content
+    || entry?.c
+    || pairLeft
+    || pairRight
+    || fallbackLabel
+    || "",
+  ).replace(/\s+/g, " ").trim();
+}
+
+function collectDiaryExampleOutlineNodes(exampleEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
+  const nodes = [];
+  const seen = new Set();
+  (Array.isArray(exampleEntries) ? exampleEntries : []).forEach((entry, index) => {
+    const label = normalizeDiaryOutlineLeafLabel(entry, isUrdu ? `مثال ${index + 1}` : `Example ${index + 1}`);
+    const dedupeKey = String(label || `${baseKey}_${index}`).trim().toLowerCase();
+    if (!label || seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    nodes.push({
+      key: `${baseKey}_example_${index}`,
+      label,
+      routeMeta: {
+        ...routeMeta,
+        subTab: "examples",
+        targetId: String(routeMeta?.targetId || buildDiarySectionTargetId(routeMeta?.targetBaseId, "examples") || "").trim(),
+      },
+      children: [],
+    });
+  });
+  return nodes;
+}
+
+function collectDiaryQuizOutlineNodes(quizEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
+  const nodes = [];
+  const seen = new Set();
+  (Array.isArray(quizEntries) ? quizEntries : []).forEach((question, index) => {
+    const label = normalizeDiaryOutlineLeafLabel(question, isUrdu ? `سوال ${index + 1}` : `Question ${index + 1}`);
+    const dedupeKey = String(label || `${baseKey}_${index}`).trim().toLowerCase();
+    if (!label || seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    nodes.push({
+      key: `${baseKey}_quiz_${index}`,
+      label,
+      routeMeta: {
+        ...routeMeta,
+        subTab: "quiz",
+        targetId: String(routeMeta?.targetId || buildDiarySectionTargetId(routeMeta?.targetBaseId, "quiz") || "").trim(),
+      },
+      children: [],
+    });
+  });
+  return nodes;
+}
+
+function attachDiaryRouteMeta(nodes = [], extraRouteMeta = {}) {
+  return (Array.isArray(nodes) ? nodes : []).map((node) => ({
+    ...node,
+    routeMeta: {
+      ...(node?.routeMeta || {}),
+      ...(extraRouteMeta || {}),
+    },
+    children: attachDiaryRouteMeta(node?.children || [], extraRouteMeta),
+  }));
+}
+
+function filterDiaryOutlineNodesBySelection(nodes = [], selectedNodeKeys = []) {
+  const selectedSet = new Set((Array.isArray(selectedNodeKeys) ? selectedNodeKeys : []).map((entry) => String(entry || "").trim()).filter(Boolean));
+  if (!selectedSet.size) return Array.isArray(nodes) ? nodes : [];
+  const walk = (node, ancestorSelected = false) => {
+    if (!node) return null;
+    const ownSelected = selectedSet.has(String(node.key || "").trim());
+    if (ancestorSelected || ownSelected) {
+      return {
+        ...node,
+        children: Array.isArray(node.children) ? node.children.map((child) => walk(child, true)).filter(Boolean) : [],
+      };
+    }
+    const filteredChildren = Array.isArray(node.children)
+      ? node.children.map((child) => walk(child, false)).filter(Boolean)
+      : [];
+    if (filteredChildren.length) {
+      return {
+        ...node,
+        children: filteredChildren,
+      };
+    }
+    return null;
+  };
+  return (Array.isArray(nodes) ? nodes : []).map((node) => walk(node, false)).filter(Boolean);
+}
+
+function collectDiaryOutlineNodeKeys(node, keys = []) {
+  if (!node) return keys;
+  const ownKey = String(node?.key || "").trim();
+  if (ownKey) keys.push(ownKey);
+  (Array.isArray(node?.children) ? node.children : []).forEach((child) => collectDiaryOutlineNodeKeys(child, keys));
+  return keys;
+}
+
 function getAutoDiaryUnitSubsectionTitle(unit = {}, fallbackTitle = "") {
   return String(
     unit?.sourceMeta?.title
@@ -1161,6 +1278,41 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
     || (typeof sub?.c === "string" && sub.c.trim())
   );
   if (hasExamples) {
+    const exampleChildren = [];
+    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.examples, `${baseKey}_examples`, safeRouteMeta, isUrdu));
+    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.sentencePairs, `${baseKey}_examples_pairs`, safeRouteMeta, isUrdu));
+    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.examplesData, `${baseKey}_examples_data`, safeRouteMeta, isUrdu));
+    if (Array.isArray(sub?.dayLessons)) {
+      sub.dayLessons.forEach((dayEntry, index) => {
+        const dayLabel = normalizeDiaryOutlineLeafLabel(
+          dayEntry,
+          isUrdu ? `سبق حصہ ${index + 1}` : `Lesson part ${index + 1}`,
+        );
+        const dayChildren = [
+          ...collectDiaryExampleOutlineNodes(dayEntry?.paragraphs, `${baseKey}_day_${index}_paragraphs`, safeRouteMeta, isUrdu),
+          ...collectDiaryExampleOutlineNodes(dayEntry?.examples, `${baseKey}_day_${index}_examples`, safeRouteMeta, isUrdu),
+          ...collectDiaryExampleOutlineNodes(dayEntry?.sentencePairs, `${baseKey}_day_${index}_pairs`, safeRouteMeta, isUrdu),
+        ];
+        exampleChildren.push({
+          key: `${baseKey}_examples_day_${index}`,
+          label: dayLabel,
+          routeMeta: {
+            ...safeRouteMeta,
+            subTab: "examples",
+            targetId: buildDiarySectionTargetId(targetBaseId, "examples"),
+          },
+          children: dayChildren,
+        });
+      });
+    }
+    if (!exampleChildren.length && typeof sub?.c === "string" && sub.c.trim()) {
+      exampleChildren.push(...collectDiaryExampleOutlineNodes(
+        sub.c.split(/\n+/).map((entry) => entry.trim()).filter(Boolean),
+        `${baseKey}_examples_content`,
+        safeRouteMeta,
+        isUrdu,
+      ));
+    }
     children.push({
       key: `${baseKey}_examples`,
       label: normalizeDiaryOutlineLabel(sub?.examplesLabel, isUrdu ? "مثالیں" : "Examples"),
@@ -1170,7 +1322,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
         targetScope: "section",
         targetId: buildDiarySectionTargetId(targetBaseId, "examples"),
       },
-      children: [],
+      children: exampleChildren,
     });
   }
   const exerciseEntries = [];
@@ -1209,6 +1361,26 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
     || (Array.isArray(sub?.quizGroups) && sub.quizGroups.length)
   );
   if (hasQuiz) {
+    const quizChildren = Array.isArray(sub?.quizGroups) && sub.quizGroups.length
+      ? sub.quizGroups.map((group, groupIndex) => ({
+          key: `${baseKey}_quiz_group_${groupIndex}`,
+          label: normalizeDiaryOutlineLeafLabel(group, isUrdu ? `کوئز گروپ ${groupIndex + 1}` : `Quiz Group ${groupIndex + 1}`),
+          routeMeta: {
+            ...safeRouteMeta,
+            subTab: "quiz",
+            groupLabel: String(group?.label || group?.title || "").trim(),
+            targetId: buildDiarySectionTargetId(targetBaseId, "quiz"),
+          },
+          children: collectDiaryQuizOutlineNodes(group?.questions, `${baseKey}_quiz_group_${groupIndex}`, {
+            ...safeRouteMeta,
+            groupLabel: String(group?.label || group?.title || "").trim(),
+            targetId: buildDiarySectionTargetId(targetBaseId, "quiz"),
+          }, isUrdu),
+        }))
+      : collectDiaryQuizOutlineNodes(sub?.quiz, `${baseKey}_quiz`, {
+          ...safeRouteMeta,
+          targetId: buildDiarySectionTargetId(targetBaseId, "quiz"),
+        }, isUrdu);
     children.push({
       key: `${baseKey}_quiz`,
       label: isUrdu ? "کوئز" : "Quiz",
@@ -1218,7 +1390,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
         targetScope: "section",
         targetId: buildDiarySectionTargetId(targetBaseId, "quiz"),
       },
-      children: [],
+      children: quizChildren,
     });
   }
   return {
@@ -1240,11 +1412,22 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "", routeMet
     || (typeof lesson?.content === "string" && lesson.content.trim())
   );
   if (hasExamples) {
+    const exampleChildren = [
+      ...collectDiaryExampleOutlineNodes(lesson?.examples, `${baseKey}_examples`, routeMeta, isUrdu),
+      ...collectDiaryExampleOutlineNodes(
+        typeof lesson?.content === "string" && lesson.content.trim()
+          ? lesson.content.split(/\n+/).map((entry) => entry.trim()).filter(Boolean)
+          : [],
+        `${baseKey}_examples_content`,
+        routeMeta,
+        isUrdu,
+      ),
+    ];
     children.push({
       key: `${baseKey}_examples`,
       label: isUrdu ? "مثالیں" : "Examples",
       routeMeta: { ...routeMeta, subTab: "examples", targetScope: "section" },
-      children: [],
+      children: exampleChildren,
     });
   }
   const exerciseEntries = [];
@@ -1262,13 +1445,31 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "", routeMet
       ),
     });
   }
-  const hasQuiz = Boolean(Array.isArray(lesson?.quiz) && lesson.quiz.length);
+  const hasQuiz = Boolean(
+    (Array.isArray(lesson?.quiz) && lesson.quiz.length)
+    || (Array.isArray(lesson?.quizGroups) && lesson.quizGroups.length)
+  );
   if (hasQuiz) {
     children.push({
       key: `${baseKey}_quiz`,
       label: isUrdu ? "کوئز" : "Quiz",
       routeMeta: { ...routeMeta, subTab: "quiz", targetScope: "section" },
-      children: [],
+      children: Array.isArray(lesson?.quizGroups) && lesson.quizGroups.length
+        ? lesson.quizGroups.map((group, groupIndex) => ({
+            key: `${baseKey}_quiz_group_${groupIndex}`,
+            label: normalizeDiaryOutlineLeafLabel(group, isUrdu ? `کوئز گروپ ${groupIndex + 1}` : `Quiz Group ${groupIndex + 1}`),
+            routeMeta: {
+              ...routeMeta,
+              subTab: "quiz",
+              groupLabel: String(group?.label || group?.title || "").trim(),
+            },
+            children: collectDiaryQuizOutlineNodes(group?.questions, `${baseKey}_quiz_group_${groupIndex}`, {
+              ...routeMeta,
+              subTab: "quiz",
+              groupLabel: String(group?.label || group?.title || "").trim(),
+            }, isUrdu),
+          }))
+        : collectDiaryQuizOutlineNodes(lesson?.quiz, `${baseKey}_quiz`, routeMeta, isUrdu),
     });
   }
   return {
@@ -1636,6 +1837,56 @@ function normalizeAutoDiaryOverrideRecord(raw) {
   if (!overrideId || !weekStartDate || !targetDate) return null;
   const action = String(raw?.action || "").trim().toLowerCase();
   if (!["skip", "replace", "add"].includes(action)) return null;
+  const legacyOverrideSubject = String(raw?.override_subject || raw?.overrideSubject || "").trim();
+  const legacyOverrideLessonKey = resolveCustomChapterLessonKey({ lessonKey: raw?.override_lesson_key || raw?.overrideLessonKey || "" });
+  const legacyOverrideContentId = String(raw?.override_content_id || raw?.overrideContentId || "").trim();
+  const legacyOverrideSubsectionKey = String(raw?.override_subsection_key || raw?.overrideSubsectionKey || "").trim();
+  const legacyOverrideSubsectionTitle = String(raw?.override_subsection_title || raw?.overrideSubsectionTitle || "").trim();
+  const legacyOverrideUnitKeys = (() => {
+    const directKeys = normalizeTextArray(raw?.override_unit_keys || raw?.overrideUnitKeys);
+    if (directKeys.length) return directKeys;
+    const fallbackKey = String(raw?.override_unit_key || raw?.overrideUnitKey || "").trim();
+    return fallbackKey ? [fallbackKey] : [];
+  })();
+  const rawPayload = cloneSerializableValue(raw?.override_payload || raw?.overridePayload || {}) || {};
+  const normalizedPayloadSources = Array.isArray(rawPayload?.sources)
+    ? rawPayload.sources
+        .map((source, index) => {
+          const subject = String(source?.subject || source?.subjectId || "").trim();
+          const lessonKey = resolveCustomChapterLessonKey({ lessonKey: source?.lessonKey || source?.overrideLessonKey || "" });
+          if (!subject || !lessonKey) return null;
+          return {
+            sourceId: String(source?.sourceId || source?.id || `source_${index + 1}`).trim() || `source_${index + 1}`,
+            subject,
+            lessonKey,
+            contentId: String(source?.contentId || source?.overrideContentId || "").trim(),
+            selectedNodeKeys: normalizeTextArray(source?.selectedNodeKeys),
+            expandedNodeKeys: normalizeTextArray(source?.expandedNodeKeys),
+            legacySubsectionKey: String(source?.subsectionKey || source?.overrideSubsectionKey || "").trim(),
+            legacySubsectionTitle: String(source?.subsectionTitle || source?.overrideSubsectionTitle || "").trim(),
+            legacyUnitKeys: normalizeTextArray(source?.selectedUnitKeys || source?.overrideUnitKeys),
+          };
+        })
+        .filter(Boolean)
+    : [];
+  const normalizedOverridePayload = {
+    ...rawPayload,
+    sources: normalizedPayloadSources.length
+      ? normalizedPayloadSources
+      : (legacyOverrideSubject && legacyOverrideLessonKey
+        ? [{
+            sourceId: "legacy_source_1",
+            subject: legacyOverrideSubject,
+            lessonKey: legacyOverrideLessonKey,
+            contentId: legacyOverrideContentId,
+            selectedNodeKeys: [],
+            expandedNodeKeys: [],
+            legacySubsectionKey: legacyOverrideSubsectionKey,
+            legacySubsectionTitle: legacyOverrideSubsectionTitle,
+            legacyUnitKeys: legacyOverrideUnitKeys,
+          }]
+        : []),
+  };
   return {
     overrideId,
     schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
@@ -1648,18 +1899,14 @@ function normalizeAutoDiaryOverrideRecord(raw) {
     subject: String(raw?.subject || "").trim(),
     baseTaskKey: String(raw?.base_task_key || raw?.baseTaskKey || "").trim(),
     action,
-    overrideSubject: String(raw?.override_subject || raw?.overrideSubject || "").trim(),
-    overrideLessonKey: resolveCustomChapterLessonKey({ lessonKey: raw?.override_lesson_key || raw?.overrideLessonKey || "" }),
-    overrideContentId: String(raw?.override_content_id || raw?.overrideContentId || "").trim(),
-    overrideSubsectionKey: String(raw?.override_subsection_key || raw?.overrideSubsectionKey || "").trim(),
-    overrideSubsectionTitle: String(raw?.override_subsection_title || raw?.overrideSubsectionTitle || "").trim(),
-    overrideUnitKeys: (() => {
-      const directKeys = normalizeTextArray(raw?.override_unit_keys || raw?.overrideUnitKeys);
-      if (directKeys.length) return directKeys;
-      const fallbackKey = String(raw?.override_unit_key || raw?.overrideUnitKey || "").trim();
-      return fallbackKey ? [fallbackKey] : [];
-    })(),
+    overrideSubject: legacyOverrideSubject,
+    overrideLessonKey: legacyOverrideLessonKey,
+    overrideContentId: legacyOverrideContentId,
+    overrideSubsectionKey: legacyOverrideSubsectionKey,
+    overrideSubsectionTitle: legacyOverrideSubsectionTitle,
+    overrideUnitKeys: legacyOverrideUnitKeys,
     overrideUnitKey: String(raw?.override_unit_key || raw?.overrideUnitKey || "").trim(),
+    overridePayload: normalizedOverridePayload,
     note: String(raw?.note || "").trim(),
     displayOrder: Number(raw?.display_order || raw?.displayOrder) || 0,
     status: String(raw?.status || "active").trim().toLowerCase() || "active",
@@ -5357,6 +5604,7 @@ create table if not exists public.auto_diary_overrides (
   override_subject text null,
   override_lesson_key text null,
   override_content_id text null,
+  override_payload jsonb not null default '{}'::jsonb,
   override_subsection_key text null,
   override_subsection_title text null,
   override_unit_keys jsonb not null default '[]'::jsonb,
@@ -5367,6 +5615,9 @@ create table if not exists public.auto_diary_overrides (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.auto_diary_overrides
+  add column if not exists override_payload jsonb not null default '{}'::jsonb;
 
 alter table if exists public.auto_diary_overrides
   add column if not exists override_subsection_key text null;
@@ -13300,12 +13551,7 @@ function HomeschoolApp() {
   const [autoDiaryOverrideWeekStartDate, setAutoDiaryOverrideWeekStartDate] = useState(toIsoDateString(getWeekStartDate(Date.now())));
   const [autoDiaryOverrideEditingAnchorKey, setAutoDiaryOverrideEditingAnchorKey] = useState("");
   const [autoDiaryOverrideEditingMode, setAutoDiaryOverrideEditingMode] = useState("replace");
-  const [autoDiaryOverrideSubjectId, setAutoDiaryOverrideSubjectId] = useState("");
-  const [autoDiaryOverrideLessonKey, setAutoDiaryOverrideLessonKey] = useState("");
-  const [autoDiaryOverrideContentId, setAutoDiaryOverrideContentId] = useState("");
-  const [autoDiaryOverrideSubsectionKey, setAutoDiaryOverrideSubsectionKey] = useState("");
-  const [autoDiaryOverrideExpandedSubsectionKey, setAutoDiaryOverrideExpandedSubsectionKey] = useState("");
-  const [autoDiaryOverrideSelectedUnitKeys, setAutoDiaryOverrideSelectedUnitKeys] = useState([]);
+  const [autoDiaryOverrideDraftSources, setAutoDiaryOverrideDraftSources] = useState([]);
   const [autoDiaryOverrideNote, setAutoDiaryOverrideNote] = useState("");
   const [parentLinkDraftParentEmail, setParentLinkDraftParentEmail] = useState("");
   const [parentLinkDraftStudentEmail, setParentLinkDraftStudentEmail] = useState("");
@@ -14465,6 +14711,35 @@ const headerHideTimerRef = useRef(null);
     getQuiz: getMergedQuiz,
     yearStartDate: activeSchoolYearStartDate,
   }), [activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, rawAutoDiaryTasks, visibleAutoDiaryOverrides]);
+  const hydrateAutoDiaryOverrideTasks = useCallback(
+    (tasks = []) => (Array.isArray(tasks) ? tasks : []).map((task) => {
+      const overrideRecord = normalizeAutoDiaryOverrideRecord(task?.overrideRecord || task);
+      const overrideSources = Array.isArray(overrideRecord?.overridePayload?.sources) ? overrideRecord.overridePayload.sources : [];
+      if (!overrideSources.length) return task;
+      const taskSegments = overrideSources
+        .map((source) => buildDiaryOverrideSourceSegment(source, task))
+        .filter(Boolean);
+      if (!taskSegments.length) return task;
+      const primarySegment = taskSegments[0];
+      return {
+        ...task,
+        subject: primarySegment.subjectId,
+        subjectLabel: primarySegment.subjectLabel,
+        lessonKey: primarySegment.lessonKey,
+        contentId: primarySegment.contentId,
+        chapterGroup: primarySegment.chapterGroup,
+        lesson: primarySegment.lesson,
+        title: primarySegment.subsectionTitle || primarySegment.chapterTitle || task.title,
+        taskUnits: primarySegment.taskUnits?.length ? primarySegment.taskUnits : task.taskUnits,
+        taskSegments,
+      };
+    }),
+    [buildDiaryOverrideSourceSegment],
+  );
+  const renderedAutoDiaryTasks = useMemo(
+    () => hydrateAutoDiaryOverrideTasks(autoDiaryTasks),
+    [autoDiaryTasks, hydrateAutoDiaryOverrideTasks],
+  );
   const visibleDiaryEntries = useMemo(() => {
     const safeEntries = (Array.isArray(contentRelationshipState.diaryEntries) ? contentRelationshipState.diaryEntries : [])
       .map((entry) => normalizeDiaryEntryRecord(entry))
@@ -14505,7 +14780,7 @@ const headerHideTimerRef = useRef(null);
   const weeklyDiaryTasks = useMemo(() => {
     try {
       return buildDiaryTasksForWeek({
-        autoTasks: autoDiaryTasks,
+        autoTasks: renderedAutoDiaryTasks,
         diaryEntries: currentWeekDiaryEntries,
         subjectsById: subjectLookup,
         chapterGroupLookup,
@@ -14515,7 +14790,7 @@ const headerHideTimerRef = useRef(null);
       console.log("Unable to build weekly diary tasks:", error);
       return [];
     }
-  }, [activeSchoolYearStartDate, autoDiaryTasks, chapterGroupLookup, currentWeekDiaryEntries, subjectLookup]);
+  }, [activeSchoolYearStartDate, chapterGroupLookup, currentWeekDiaryEntries, renderedAutoDiaryTasks, subjectLookup]);
   const visibleDiaryCompletions = useMemo(() => {
     const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : [])
       .map((entry) => normalizeDiaryCompletionRecord(entry))
@@ -14831,12 +15106,16 @@ const headerHideTimerRef = useRef(null);
     yearStartDate: activeSchoolYearStartDate,
     includeSkippedTasks: true,
   }), [activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, autoDiaryOverrideBaseTasks, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, getMergedLessonGroups, getMergedQuiz, grade, visibleAutoDiaryOverrides]);
+  const renderedAutoDiaryOverridePreviewTasks = useMemo(
+    () => hydrateAutoDiaryOverrideTasks(autoDiaryOverridePreviewTasks),
+    [autoDiaryOverridePreviewTasks, hydrateAutoDiaryOverrideTasks],
+  );
   const autoDiaryOverridePreviewDayGroups = useMemo(
     () => autoDiaryOverridePreviewVisibleDates.map((date) => ({
       date,
-      tasks: autoDiaryOverridePreviewTasks.filter((task) => task.targetDate === date),
+      tasks: renderedAutoDiaryOverridePreviewTasks.filter((task) => task.targetDate === date),
     })),
-    [autoDiaryOverridePreviewTasks, autoDiaryOverridePreviewVisibleDates],
+    [autoDiaryOverridePreviewVisibleDates, renderedAutoDiaryOverridePreviewTasks],
   );
   const autoDiaryOverrideAnchorTaskLookup = useMemo(
     () => new Map(autoDiaryOverrideBaseTasks.map((task) => [String(task.taskKey || "").trim(), task])),
@@ -14845,66 +15124,6 @@ const headerHideTimerRef = useRef(null);
   const autoDiaryOverrideEditingAnchorTask = useMemo(
     () => autoDiaryOverrideAnchorTaskLookup.get(String(autoDiaryOverrideEditingAnchorKey || "").trim()) || null,
     [autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideEditingAnchorKey],
-  );
-  const autoDiaryOverrideEditorSubjectIdResolved = String(autoDiaryOverrideSubjectId || autoDiaryOverrideEditingAnchorTask?.subject || "").trim();
-  const autoDiaryOverrideEditorChapterGroups = useMemo(
-    () => (autoDiaryOverrideEditorSubjectIdResolved && grade ? getMergedLessonGroups(autoDiaryOverrideEditorSubjectIdResolved, grade) : []),
-    [autoDiaryOverrideEditorSubjectIdResolved, getMergedLessonGroups, grade],
-  );
-  const autoDiaryOverrideEditorChapterGroup = useMemo(
-    () => autoDiaryOverrideEditorChapterGroups.find((group) => group.canonicalLessonKey === autoDiaryOverrideLessonKey)
-      || autoDiaryOverrideEditorChapterGroups[0]
-      || null,
-    [autoDiaryOverrideEditorChapterGroups, autoDiaryOverrideLessonKey],
-  );
-  const autoDiaryOverrideEditorContentOptions = useMemo(
-    () => (autoDiaryOverrideEditorChapterGroup?.variants || []).map((variant) => ({
-      contentId: String(variant?.contentId || "").trim(),
-      label: variant?.sourceType === "builtin"
-        ? joinLocalizedText("Built-in copy", "بنیادی کاپی", language)
-        : variant?.sourceType === "custom"
-          ? joinLocalizedText("Local custom copy", "مقامی ذاتی کاپی", language)
-          : (String(variant?.authorUsername || "").trim()
-            ? joinLocalizedText(`Published by ${variant.authorUsername}`, `${variant.authorUsername} کی شائع شدہ کاپی`, language)
-            : joinLocalizedText("Published copy", "شائع شدہ کاپی", language)),
-      variant,
-    })),
-    [autoDiaryOverrideEditorChapterGroup, language],
-  );
-  const autoDiaryOverrideEditorResolvedContentId = useMemo(() => {
-    if (autoDiaryOverrideContentId && autoDiaryOverrideEditorContentOptions.some((entry) => entry.contentId === autoDiaryOverrideContentId)) return autoDiaryOverrideContentId;
-    return autoDiaryOverrideEditorContentOptions[0]?.contentId || "";
-  }, [autoDiaryOverrideContentId, autoDiaryOverrideEditorContentOptions]);
-  const autoDiaryOverrideEditorUnits = useMemo(() => {
-    if (!autoDiaryOverrideEditorChapterGroup || !grade || !autoDiaryOverrideEditorSubjectIdResolved) return [];
-    const desiredContentId = autoDiaryOverrideEditorResolvedContentId;
-    const matchedVariant = desiredContentId
-      ? (autoDiaryOverrideEditorChapterGroup.variants || []).find((variant) => String(variant?.contentId || "").trim() === desiredContentId)
-      : null;
-    const lesson = matchedVariant?.lesson || autoDiaryOverrideEditorChapterGroup.activeLesson || null;
-    if (!lesson) return [];
-    return extractLessonWorkUnits(
-      lesson,
-      Array.isArray(getMergedQuiz(autoDiaryOverrideEditorSubjectIdResolved, grade, autoDiaryOverrideEditorChapterGroup.canonicalLessonKey))
-        ? getMergedQuiz(autoDiaryOverrideEditorSubjectIdResolved, grade, autoDiaryOverrideEditorChapterGroup.canonicalLessonKey)
-        : [],
-    );
-  }, [autoDiaryOverrideEditorChapterGroup, autoDiaryOverrideEditorResolvedContentId, autoDiaryOverrideEditorSubjectIdResolved, getMergedQuiz, grade]);
-  const autoDiaryOverrideEditorSubsectionGroups = useMemo(
-    () => groupAutoDiaryUnitsBySubsection(autoDiaryOverrideEditorUnits, autoDiaryOverrideEditorChapterGroup?.activeLesson?.title || autoDiaryOverrideEditingAnchorTask?.lesson?.title || ""),
-    [autoDiaryOverrideEditorChapterGroup?.activeLesson?.title, autoDiaryOverrideEditingAnchorTask?.lesson?.title, autoDiaryOverrideEditorUnits],
-  );
-  const autoDiaryOverrideEditorResolvedSubsectionKey = useMemo(() => {
-    if (autoDiaryOverrideSubsectionKey && autoDiaryOverrideEditorSubsectionGroups.some((group) => group.key === autoDiaryOverrideSubsectionKey)) return autoDiaryOverrideSubsectionKey;
-    return autoDiaryOverrideEditorSubsectionGroups[0]?.key || "";
-  }, [autoDiaryOverrideEditorSubsectionGroups, autoDiaryOverrideSubsectionKey]);
-  const autoDiaryOverrideEditorResolvedSubsection = useMemo(
-    () => autoDiaryOverrideEditorSubsectionGroups.find((group) => group.key === autoDiaryOverrideEditorResolvedSubsectionKey) || null,
-    [autoDiaryOverrideEditorResolvedSubsectionKey, autoDiaryOverrideEditorSubsectionGroups],
-  );
-  const autoDiaryOverrideEditorSelectableUnits = useMemo(
-    () => Array.isArray(autoDiaryOverrideEditorResolvedSubsection?.units) ? autoDiaryOverrideEditorResolvedSubsection.units : [],
-    [autoDiaryOverrideEditorResolvedSubsection],
   );
   const currentWeeklyStudentTestResult = useMemo(
     () => visibleWeeklyTestResults
@@ -14951,35 +15170,6 @@ const headerHideTimerRef = useRef(null);
     if (autoDiaryOverrideStudentEmail && autoDiaryOverridePreviewStudentOptions.some((entry) => entry.email === autoDiaryOverrideStudentEmail)) return;
     setAutoDiaryOverrideStudentEmail(autoDiaryOverridePreviewStudentOptions[0].email);
   }, [autoDiaryOverridePreviewStudentOptions, autoDiaryOverrideScope, autoDiaryOverrideStudentEmail]);
-  useEffect(() => {
-    if (!autoDiaryOverrideEditingAnchorKey) return;
-    if (autoDiaryOverrideEditorChapterGroups.length && !autoDiaryOverrideEditorChapterGroups.some((group) => group.canonicalLessonKey === autoDiaryOverrideLessonKey)) {
-      setAutoDiaryOverrideLessonKey(autoDiaryOverrideEditorChapterGroups[0].canonicalLessonKey);
-    }
-  }, [autoDiaryOverrideEditingAnchorKey, autoDiaryOverrideEditorChapterGroups, autoDiaryOverrideLessonKey]);
-  useEffect(() => {
-    if (!autoDiaryOverrideEditingAnchorKey) return;
-    if (autoDiaryOverrideEditorContentOptions.length && !autoDiaryOverrideEditorContentOptions.some((entry) => entry.contentId === autoDiaryOverrideContentId)) {
-      setAutoDiaryOverrideContentId(autoDiaryOverrideEditorContentOptions[0].contentId);
-    }
-  }, [autoDiaryOverrideContentId, autoDiaryOverrideEditorContentOptions, autoDiaryOverrideEditingAnchorKey]);
-  useEffect(() => {
-    if (!autoDiaryOverrideEditingAnchorKey) return;
-    if (autoDiaryOverrideEditorSubsectionGroups.length && !autoDiaryOverrideEditorSubsectionGroups.some((group) => group.key === autoDiaryOverrideSubsectionKey)) {
-      const nextKey = autoDiaryOverrideEditorSubsectionGroups[0].key;
-      setAutoDiaryOverrideSubsectionKey(nextKey);
-      setAutoDiaryOverrideExpandedSubsectionKey(nextKey);
-    }
-  }, [autoDiaryOverrideEditingAnchorKey, autoDiaryOverrideEditorSubsectionGroups, autoDiaryOverrideSubsectionKey]);
-  useEffect(() => {
-    if (!autoDiaryOverrideEditingAnchorKey) return;
-    if (!autoDiaryOverrideEditorResolvedSubsection) return;
-    const validKeys = new Set(autoDiaryOverrideEditorSelectableUnits.map((entry) => String(entry?.key || "").trim()).filter(Boolean));
-    const retainedKeys = (Array.isArray(autoDiaryOverrideSelectedUnitKeys) ? autoDiaryOverrideSelectedUnitKeys : []).filter((key) => validKeys.has(String(key || "").trim()));
-    if (retainedKeys.length === validKeys.size && validKeys.size) return;
-    if (retainedKeys.length && retainedKeys.length === (Array.isArray(autoDiaryOverrideSelectedUnitKeys) ? autoDiaryOverrideSelectedUnitKeys : []).length) return;
-    setAutoDiaryOverrideSelectedUnitKeys(retainedKeys.length ? retainedKeys : Array.from(validKeys));
-  }, [autoDiaryOverrideEditingAnchorKey, autoDiaryOverrideEditorResolvedSubsection, autoDiaryOverrideEditorSelectableUnits, autoDiaryOverrideSelectedUnitKeys]);
   const selectedLessonCanonicalKey = useMemo(
     () => getCanonicalLessonKeyForLesson(selectedLesson),
     [selectedLesson],
@@ -15398,6 +15588,46 @@ const headerHideTimerRef = useRef(null);
       setContentRelationshipBusy(false);
     }
   }, [language, showAppToast]);
+  const createAutoDiaryOverrideDraftSource = useCallback((seed = {}) => ({
+    sourceId: String(seed?.sourceId || seed?.id || `source_${simpleHash(`${Date.now()}_${Math.random()}`)}`).trim(),
+    subject: String(seed?.subject || seed?.subjectId || "").trim(),
+    lessonKey: resolveCustomChapterLessonKey({ lessonKey: seed?.lessonKey || seed?.overrideLessonKey || "" }),
+    contentId: String(seed?.contentId || seed?.overrideContentId || "").trim(),
+    selectedNodeKeys: normalizeTextArray(seed?.selectedNodeKeys),
+    expandedNodeKeys: normalizeTextArray(seed?.expandedNodeKeys),
+    legacySubsectionKey: String(seed?.legacySubsectionKey || seed?.subsectionKey || "").trim(),
+    legacySubsectionTitle: String(seed?.legacySubsectionTitle || seed?.subsectionTitle || "").trim(),
+    legacyUnitKeys: normalizeTextArray(seed?.legacyUnitKeys || seed?.selectedUnitKeys),
+  }), []);
+  const handleUpdateAutoDiaryOverrideDraftSource = useCallback((sourceId, updater) => {
+    setAutoDiaryOverrideDraftSources((current) => current.map((source) => {
+      if (String(source?.sourceId || "") !== String(sourceId || "")) return source;
+      const nextValue = typeof updater === "function" ? updater(source) : { ...source, ...(updater || {}) };
+      return {
+        ...source,
+        ...(nextValue || {}),
+      };
+    }));
+  }, []);
+  const handleAddAutoDiaryOverrideDraftSource = useCallback(() => {
+    setAutoDiaryOverrideDraftSources((current) => {
+      const firstSource = Array.isArray(current) && current.length ? current[0] : null;
+      return [
+        ...(Array.isArray(current) ? current : []),
+        createAutoDiaryOverrideDraftSource({
+          subject: firstSource?.subject || autoDiaryOverrideEditingAnchorTask?.subject || "",
+          lessonKey: firstSource?.lessonKey || autoDiaryOverrideEditingAnchorTask?.lessonKey || "",
+          contentId: firstSource?.contentId || autoDiaryOverrideEditingAnchorTask?.contentId || "",
+        }),
+      ];
+    });
+  }, [autoDiaryOverrideEditingAnchorTask, createAutoDiaryOverrideDraftSource]);
+  const handleRemoveAutoDiaryOverrideDraftSource = useCallback((sourceId) => {
+    setAutoDiaryOverrideDraftSources((current) => {
+      const nextSources = (Array.isArray(current) ? current : []).filter((source) => String(source?.sourceId || "") !== String(sourceId || ""));
+      return nextSources.length ? nextSources : current;
+    });
+  }, []);
   const handleOpenAutoDiaryOverrideEditor = useCallback((task, mode = "replace") => {
     const sourceTask = task?.overrideRecord?.baseTaskKey
       ? (autoDiaryOverrideAnchorTaskLookup.get(String(task.overrideRecord.baseTaskKey || "").trim()) || task)
@@ -15405,42 +15635,37 @@ const headerHideTimerRef = useRef(null);
     if (!sourceTask?.taskKey) return;
     const normalizedMode = mode === "add" ? "add" : "replace";
     const existingOverride = task?.overrideRecord || null;
-    const defaultSubsectionKey = String(
-      existingOverride?.overrideSubsectionKey
-      || task?.subsectionKey
+    const overridePayloadSources = Array.isArray(existingOverride?.overridePayload?.sources) ? existingOverride.overridePayload.sources : [];
+    const fallbackSelectedKey = String(
+      task?.subsectionKey
       || sourceTask?.subsectionKey
       || getAutoDiaryUnitSubsectionKey(task?.taskUnits?.[0] || sourceTask?.taskUnits?.[0] || {}, 0, task?.subsectionTitle || sourceTask?.subsectionTitle || "")
       || "",
     ).trim();
-    const defaultUnitKeys = (() => {
-      const overrideKeys = Array.isArray(existingOverride?.overrideUnitKeys) ? existingOverride.overrideUnitKeys.filter(Boolean) : [];
-      if (overrideKeys.length) return overrideKeys;
-      const taskKeys = (Array.isArray(task?.taskUnits) ? task.taskUnits : Array.isArray(sourceTask?.taskUnits) ? sourceTask.taskUnits : [])
-        .map((entry) => String(entry?.key || "").trim())
-        .filter(Boolean);
-      return taskKeys;
-    })();
+    const draftSources = overridePayloadSources.length
+      ? overridePayloadSources.map((source) => createAutoDiaryOverrideDraftSource(source))
+      : [createAutoDiaryOverrideDraftSource({
+          subject: String(existingOverride?.overrideSubject || task?.subject || sourceTask.subject || "").trim(),
+          lessonKey: existingOverride?.overrideLessonKey || task?.lessonKey || sourceTask.lessonKey || "",
+          contentId: String(existingOverride?.overrideContentId || task?.contentId || sourceTask.contentId || "").trim(),
+          selectedNodeKeys: fallbackSelectedKey ? [fallbackSelectedKey] : [],
+          legacySubsectionKey: existingOverride?.overrideSubsectionKey || fallbackSelectedKey,
+          legacySubsectionTitle: existingOverride?.overrideSubsectionTitle || task?.subsectionTitle || sourceTask?.subsectionTitle || "",
+          legacyUnitKeys: Array.isArray(existingOverride?.overrideUnitKeys) && existingOverride.overrideUnitKeys.length
+            ? existingOverride.overrideUnitKeys
+            : (Array.isArray(task?.taskUnits) ? task.taskUnits : Array.isArray(sourceTask?.taskUnits) ? sourceTask.taskUnits : [])
+              .map((entry) => String(entry?.key || "").trim())
+              .filter(Boolean),
+        })];
     setAutoDiaryOverrideEditingAnchorKey(String(sourceTask.taskKey || "").trim());
     setAutoDiaryOverrideEditingMode(normalizedMode);
-    setAutoDiaryOverrideSubjectId(String(existingOverride?.overrideSubject || task?.subject || sourceTask.subject || "").trim());
-    setAutoDiaryOverrideLessonKey(resolveCustomChapterLessonKey({
-      lessonKey: existingOverride?.overrideLessonKey || task?.lessonKey || sourceTask.lessonKey || "",
-    }));
-    setAutoDiaryOverrideContentId(String(existingOverride?.overrideContentId || task?.contentId || sourceTask.contentId || "").trim());
-    setAutoDiaryOverrideSubsectionKey(defaultSubsectionKey);
-    setAutoDiaryOverrideExpandedSubsectionKey(defaultSubsectionKey);
-    setAutoDiaryOverrideSelectedUnitKeys(defaultUnitKeys);
+    setAutoDiaryOverrideDraftSources(draftSources);
     setAutoDiaryOverrideNote(String(existingOverride?.note || "").trim());
-  }, [autoDiaryOverrideAnchorTaskLookup]);
+  }, [autoDiaryOverrideAnchorTaskLookup, createAutoDiaryOverrideDraftSource]);
   const handleCancelAutoDiaryOverrideEditor = useCallback(() => {
     setAutoDiaryOverrideEditingAnchorKey("");
     setAutoDiaryOverrideEditingMode("replace");
-    setAutoDiaryOverrideSubjectId("");
-    setAutoDiaryOverrideLessonKey("");
-    setAutoDiaryOverrideContentId("");
-    setAutoDiaryOverrideSubsectionKey("");
-    setAutoDiaryOverrideExpandedSubsectionKey("");
-    setAutoDiaryOverrideSelectedUnitKeys([]);
+    setAutoDiaryOverrideDraftSources([]);
     setAutoDiaryOverrideNote("");
   }, []);
   const handleSaveAutoDiaryOverride = useCallback(async (task, action = "replace") => {
@@ -15466,25 +15691,28 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Choose a student first.", "پہلے ایک طالب علم منتخب کریں۔", language), "alert");
       return;
     }
-    const overrideSubject = normalizedAction === "skip" ? "" : String(autoDiaryOverrideEditorSubjectIdResolved || anchorTask.subject || "").trim();
-    const overrideLessonKey = normalizedAction === "skip" ? "" : resolveCustomChapterLessonKey({ lessonKey: autoDiaryOverrideEditorChapterGroup?.canonicalLessonKey || autoDiaryOverrideLessonKey || anchorTask.lessonKey || "" });
-    if (normalizedAction !== "skip" && (!overrideSubject || !overrideLessonKey)) {
-      showAppToast(joinLocalizedText("Choose the replacement chapter first.", "پہلے متبادل باب منتخب کریں۔", language), "alert");
-      return;
-    }
-    const overrideSubsection = normalizedAction === "skip" ? null : autoDiaryOverrideEditorResolvedSubsection;
-    const overrideUnitKeys = normalizedAction === "skip"
+    const normalizedDraftSources = normalizedAction === "skip"
       ? []
-      : (Array.isArray(autoDiaryOverrideSelectedUnitKeys) ? autoDiaryOverrideSelectedUnitKeys : [])
-        .map((entry) => String(entry || "").trim())
-        .filter((entry) => autoDiaryOverrideEditorSelectableUnits.some((unit) => String(unit?.key || "").trim() === entry));
-    const fallbackUnitKeys = overrideSubsection?.units?.map((unit) => String(unit?.key || "").trim()).filter(Boolean) || [];
-    const resolvedUnitKeys = overrideUnitKeys.length ? overrideUnitKeys : fallbackUnitKeys;
-    const overrideUnitKey = normalizedAction === "skip" ? "" : String(resolvedUnitKeys[0] || "").trim();
-    if (normalizedAction !== "skip" && (!overrideSubsection?.key || !resolvedUnitKeys.length)) {
-      showAppToast(joinLocalizedText("Choose the subsection and what to include first.", "پہلے ذیلی حصہ اور شامل کرنے والی چیزیں منتخب کریں۔", language), "alert");
+      : (Array.isArray(autoDiaryOverrideDraftSources) ? autoDiaryOverrideDraftSources : [])
+        .map((source) => createAutoDiaryOverrideDraftSource(source))
+        .map((source) => buildDiaryOverrideSourceSegment(source, anchorTask))
+        .filter(Boolean)
+        .map((segment, index) => ({
+          sourceId: String(autoDiaryOverrideDraftSources[index]?.sourceId || segment.sourceId || `source_${index + 1}`).trim(),
+          subject: segment.subjectId,
+          lessonKey: segment.lessonKey,
+          contentId: segment.contentId,
+          selectedNodeKeys: normalizeTextArray(autoDiaryOverrideDraftSources[index]?.selectedNodeKeys),
+        }))
+        .filter((source) => source.subject && source.lessonKey && source.selectedNodeKeys.length);
+    if (normalizedAction !== "skip" && !normalizedDraftSources.length) {
+      showAppToast(joinLocalizedText("Choose at least one chapter subsection tree first.", "پہلے کم از کم ایک باب کا ذیلی درخت منتخب کریں۔", language), "alert");
       return;
     }
+    const primarySource = normalizedDraftSources[0] || null;
+    const overrideSubject = normalizedAction === "skip" ? "" : String(primarySource?.subject || "").trim();
+    const overrideLessonKey = normalizedAction === "skip" ? "" : resolveCustomChapterLessonKey({ lessonKey: primarySource?.lessonKey || "" });
+    const overrideContentId = normalizedAction === "skip" ? "" : String(primarySource?.contentId || "").trim();
     const overrideId = `auto_override_${simpleHash(`${activeInstitutionSchoolIdResolved || "global"}::${targetType}::${Number(grade) || 0}::${targetStudentEmail}::${autoDiaryOverridePreviewWeekStartDate}::${anchorTask.targetDate}::${anchorTask.taskKey}::${normalizedAction}`)}`;
     setContentRelationshipBusy(true);
     try {
@@ -15504,11 +15732,12 @@ const headerHideTimerRef = useRef(null);
         action: normalizedAction,
         override_subject: normalizedAction === "skip" ? null : overrideSubject,
         override_lesson_key: normalizedAction === "skip" ? null : overrideLessonKey,
-        override_content_id: normalizedAction === "skip" ? null : (autoDiaryOverrideEditorResolvedContentId || null),
-        override_subsection_key: normalizedAction === "skip" ? null : (overrideSubsection?.key || null),
-        override_subsection_title: normalizedAction === "skip" ? null : (overrideSubsection?.title || null),
-        override_unit_keys: normalizedAction === "skip" ? [] : resolvedUnitKeys,
-        override_unit_key: normalizedAction === "skip" ? null : (overrideUnitKey || null),
+        override_content_id: normalizedAction === "skip" ? null : (overrideContentId || null),
+        override_subsection_key: null,
+        override_subsection_title: null,
+        override_unit_keys: [],
+        override_unit_key: null,
+        override_payload: normalizedAction === "skip" ? { sources: [] } : { sources: normalizedDraftSources },
         note: String(autoDiaryOverrideNote || "").trim() || null,
         display_order: normalizedAction === "add" ? 1 : 0,
         status: "active",
@@ -15531,7 +15760,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [activeInstitutionSchoolIdResolved, autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideEditingAnchorTask, autoDiaryOverrideEditorChapterGroup?.canonicalLessonKey, autoDiaryOverrideEditorResolvedContentId, autoDiaryOverrideEditorResolvedSubsection, autoDiaryOverrideEditorSelectableUnits, autoDiaryOverrideEditorSubjectIdResolved, autoDiaryOverrideLessonKey, autoDiaryOverrideNote, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, autoDiaryOverrideScope, autoDiaryOverrideSelectedUnitKeys, canManageAutoDiaryOverrides, contentIdentityEmail, ensureSupabaseClientRef, grade, handleCancelAutoDiaryOverrideEditor, language, showAppToast]);
+  }, [activeInstitutionSchoolIdResolved, autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideDraftSources, autoDiaryOverrideEditingAnchorTask, autoDiaryOverrideNote, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, autoDiaryOverrideScope, buildDiaryOverrideSourceSegment, canManageAutoDiaryOverrides, contentIdentityEmail, createAutoDiaryOverrideDraftSource, ensureSupabaseClientRef, grade, handleCancelAutoDiaryOverrideEditor, language, showAppToast]);
   const handleDeleteAutoDiaryOverride = useCallback(async (overrideEntry) => {
     const normalized = normalizeAutoDiaryOverrideRecord(overrideEntry);
     if (!normalized?.overrideId) return;
@@ -18690,12 +18919,16 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
           result.error
           && table === SUPABASE_AUTO_DIARY_OVERRIDES_TABLE
           && (
-            String(result.error.message || "").toLowerCase().includes("override_subsection_key")
+            String(result.error.message || "").toLowerCase().includes("override_payload")
+            || String(result.error.message || "").toLowerCase().includes("overridepayload")
+            || String(result.error.message || "").toLowerCase().includes("override_subsection_key")
             || String(result.error.message || "").toLowerCase().includes("override_subsection_title")
             || String(result.error.message || "").toLowerCase().includes("override_unit_keys")
           )
         ) {
           const fallbackSelectClause = String(selectClause || "")
+            .replace(/,\s*override_payload/g, "")
+            .replace(/override_payload,\s*/g, "")
             .replace(/,\s*override_subsection_key/g, "")
             .replace(/override_subsection_key,\s*/g, "")
             .replace(/,\s*override_subsection_title/g, "")
@@ -18835,7 +19068,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       );
       await collectSchoolScoped(
         SUPABASE_AUTO_DIARY_OVERRIDES_TABLE,
-        "override_id, school_id, created_by_email, target_type, target_grade, target_student_email, week_start_date, target_date, subject, base_task_key, action, override_subject, override_lesson_key, override_content_id, override_subsection_key, override_subsection_title, override_unit_keys, override_unit_key, note, display_order, status, created_at, updated_at",
+        "override_id, school_id, created_by_email, target_type, target_grade, target_student_email, week_start_date, target_date, subject, base_task_key, action, override_subject, override_lesson_key, override_content_id, override_payload, override_subsection_key, override_subsection_title, override_unit_keys, override_unit_key, note, display_order, status, created_at, updated_at",
         normalizeAutoDiaryOverrideRecord,
         "autoDiaryOverrides",
         "overrideId",
@@ -23577,7 +23810,108 @@ const lessons = getMergedLessons(subjectId, grade);
     });
   }, [daySectionSettings]);
 
+  const buildDiaryChapterOutlineTree = useCallback((lesson, subjectId, lessonKeyOverride = "", contentIdOverride = "") => {
+    const safeSubjectId = String(subjectId || "").trim();
+    if (!lesson || !safeSubjectId) return [];
+    const lessonRouteKey = String(lessonKeyOverride || getLessonKeyValue(lesson) || lesson?.id || "lesson").trim() || "lesson";
+    const extraRouteMeta = {
+      subjectId: safeSubjectId,
+      lessonKey: lessonRouteKey,
+      contentId: String(contentIdOverride || "").trim(),
+    };
+    if (lesson?.hasMathSub) {
+      const derivedSubs = getDerivedLessonDiarySubs(lesson, safeSubjectId);
+      return derivedSubs.map((sub, index) => attachDiaryRouteMeta([
+        buildDiaryLessonOutlineFromSub(sub, safeSubjectId, {
+          targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey, index),
+        }),
+      ], extraRouteMeta)[0]).filter(Boolean);
+    }
+    const subsectionCollections = [
+      lesson?.subsections,
+      lesson?.subs,
+      lesson?.sections,
+      lesson?.subLessons,
+      lesson?.days,
+      lesson?.mathSubs,
+      lesson?.topics,
+    ];
+    const subsectionObjects = subsectionCollections
+      .find((collection) => Array.isArray(collection) && collection.some((entry) => entry && typeof entry === "object"))
+      ?.filter((entry) => entry && typeof entry === "object")
+      || [];
+    if (subsectionObjects.length) {
+      return subsectionObjects.map((sub, index) => attachDiaryRouteMeta([
+        buildDiaryLessonOutlineFromSub(sub, safeSubjectId, {
+          targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey, index),
+        }),
+      ], extraRouteMeta)[0]).filter(Boolean);
+    }
+    return attachDiaryRouteMeta([
+      buildDiaryLessonOutlineFromLesson(lesson, safeSubjectId, {
+        targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey),
+      }),
+    ], extraRouteMeta);
+  }, [getDerivedLessonDiarySubs]);
+
+  const buildDiaryOverrideSourceSegment = useCallback((source, fallbackTask = null) => {
+    const subjectId = String(source?.subject || source?.subjectId || "").trim();
+    const lessonKey = resolveCustomChapterLessonKey({ lessonKey: source?.lessonKey || source?.overrideLessonKey || "" });
+    if (!subjectId || !lessonKey || !Number.isFinite(Number(grade))) return null;
+    const chapterGroups = getMergedLessonGroups(subjectId, grade) || [];
+    const chapterGroup = chapterGroups.find((group) => group?.canonicalLessonKey === lessonKey) || null;
+    if (!chapterGroup) return null;
+    const desiredContentId = String(source?.contentId || source?.overrideContentId || "").trim();
+    const matchedVariant = desiredContentId
+      ? (chapterGroup.variants || []).find((variant) => String(variant?.contentId || "").trim() === desiredContentId)
+      : null;
+    const lesson = matchedVariant?.lesson || chapterGroup.activeLesson || null;
+    if (!lesson) return null;
+    const fullOutlineNodes = buildDiaryChapterOutlineTree(lesson, subjectId, lessonKey, desiredContentId || String(chapterGroup.activeVariant?.contentId || "").trim());
+    let selectedNodeKeys = normalizeTextArray(source?.selectedNodeKeys);
+    if (!selectedNodeKeys.length) {
+      const legacySubsectionKey = String(source?.legacySubsectionKey || "").trim();
+      const legacySubsectionTitle = String(source?.legacySubsectionTitle || "").trim();
+      if (legacySubsectionKey || legacySubsectionTitle) {
+        const matchedNode = fullOutlineNodes.find((node) => (
+          String(node?.routeMeta?.subKey || "").trim() === legacySubsectionKey
+          || String(node?.label || "").trim() === legacySubsectionTitle
+        ));
+        if (matchedNode?.key) selectedNodeKeys = [matchedNode.key];
+      }
+    }
+    const outlineNodes = selectedNodeKeys.length ? filterDiaryOutlineNodesBySelection(fullOutlineNodes, selectedNodeKeys) : fullOutlineNodes;
+    const subjectEntry = allSubjects.find((entry) => String(entry?.id || "").trim() === subjectId) || subjectLookup?.[subjectId] || null;
+    return {
+      sourceId: String(source?.sourceId || source?.id || "").trim() || `source_${simpleHash(`${subjectId}_${lessonKey}_${desiredContentId}`)}`,
+      subjectId,
+      subjectLabel: subjectEntry ? getSubjectDisplayName(subjectEntry, language) : subjectId,
+      lessonKey,
+      contentId: desiredContentId || String(chapterGroup.activeVariant?.contentId || "").trim(),
+      chapterGroup,
+      lesson,
+      chapterTitle: String(lesson?.title || chapterGroup?.activeLesson?.title || fallbackTask?.title || lessonKey).trim() || lessonKey,
+      subsectionTitle: String(outlineNodes?.[0]?.label || "").trim(),
+      fullOutlineNodes,
+      outlineNodes,
+      selectedNodeKeys,
+      taskUnits: Array.isArray(fallbackTask?.taskUnits) ? fallbackTask.taskUnits : [],
+    };
+  }, [allSubjects, buildDiaryChapterOutlineTree, getMergedLessonGroups, grade, language, subjectLookup]);
+
   const buildDiaryTaskOutline = useCallback((task) => {
+    if (Array.isArray(task?.taskSegments) && task.taskSegments.length) {
+      return task.taskSegments.map((segment, index) => ({
+        key: `override_segment_${segment.sourceId || index}`,
+        label: String(segment?.chapterTitle || segment?.lesson?.title || `Chapter ${index + 1}`).trim() || `Chapter ${index + 1}`,
+        routeMeta: {
+          subjectId: String(segment?.subjectId || "").trim(),
+          lessonKey: String(segment?.lessonKey || "").trim(),
+          contentId: String(segment?.contentId || "").trim(),
+        },
+        children: Array.isArray(segment?.outlineNodes) ? segment.outlineNodes : [],
+      }));
+    }
     const lesson = task?.lesson || task?.chapterGroup?.activeLesson || null;
     const subjectId = String(task?.subject || "").trim();
     if (!lesson || !subjectId) return [];
@@ -23599,7 +23933,11 @@ const lessons = getMergedLessons(subjectId, grade);
         })];
       }
     }
-    return [buildDiaryLessonOutlineFromLesson(lesson, subjectId)];
+    return attachDiaryRouteMeta([buildDiaryLessonOutlineFromLesson(lesson, subjectId)], {
+      subjectId,
+      lessonKey: lessonRouteKey,
+      contentId: String(task?.contentId || "").trim(),
+    });
   }, [getDerivedLessonDiarySubs]);
 
   const buildDiaryTaskAudioLines = useCallback((task, outlineNodes = []) => {
@@ -23701,16 +24039,32 @@ const lessons = getMergedLessons(subjectId, grade);
       returnStudentEmail: activeDiaryViewerStudentEmail,
     });
 
-    const safeSubjectId = String(task?.subject || "").trim();
-    const safeLessonKey = String(task?.lessonKey || "").trim();
+    const explicitRouteMeta = routeMetaOverride && typeof routeMetaOverride === "object" ? routeMetaOverride : null;
+    const explicitSubKey = String(explicitRouteMeta?.subKey || "").trim();
+    const explicitSubTitle = String(explicitRouteMeta?.subTitle || "").trim();
+    const explicitSubTab = String(explicitRouteMeta?.subTab || "").trim();
+    const explicitGroupLabel = String(explicitRouteMeta?.groupLabel || "").trim();
+    const explicitExerciseKind = String(explicitRouteMeta?.exerciseKind || "").trim();
+    const explicitTargetScope = String(explicitRouteMeta?.targetScope || "").trim();
+    const explicitTargetId = String(explicitRouteMeta?.targetId || "").trim();
+    const explicitSubjectId = String(explicitRouteMeta?.subjectId || "").trim();
+    const explicitLessonKey = resolveCustomChapterLessonKey({ lessonKey: explicitRouteMeta?.lessonKey || "" });
+    const explicitContentId = String(explicitRouteMeta?.contentId || "").trim();
+    const safeSubjectId = explicitSubjectId || String(task?.subject || "").trim();
+    const safeLessonKey = explicitLessonKey || String(task?.lessonKey || "").trim();
     const canOpenLesson = safeSubjectId && safeSubjectId !== "__assignment__" && safeLessonKey;
     if (!canOpenLesson) {
       setTab("diary");
       return;
     }
     const subject = allSubjects.find((entry) => entry.id === safeSubjectId) || subjectLookup?.[safeSubjectId] || null;
-    const chapterGroup = task.chapterGroup || getMergedLessonGroups(safeSubjectId, grade).find((group) => group?.canonicalLessonKey === safeLessonKey) || null;
-    const lesson = chapterGroup?.activeLesson || task.lesson || null;
+    const chapterGroup = getMergedLessonGroups(safeSubjectId, grade).find((group) => group?.canonicalLessonKey === safeLessonKey)
+      || task.chapterGroup
+      || null;
+    const matchedVariant = explicitContentId
+      ? (chapterGroup?.variants || []).find((variant) => String(variant?.contentId || "").trim() === explicitContentId)
+      : null;
+    const lesson = matchedVariant?.lesson || chapterGroup?.activeLesson || task.lesson || null;
     if (!subject || !lesson) {
       showAppToast(joinLocalizedText("This diary task could not find its lesson.", "اس ڈائری کام کے لیے متعلقہ سبق نہیں ملا۔", language), "alert");
       return;
@@ -23721,15 +24075,6 @@ const lessons = getMergedLessons(subjectId, grade);
     setSelectedSubject(subject);
     clearLessonSelections();
     setSelectedLesson(lesson);
-
-    const explicitRouteMeta = routeMetaOverride && typeof routeMetaOverride === "object" ? routeMetaOverride : null;
-    const explicitSubKey = String(explicitRouteMeta?.subKey || "").trim();
-    const explicitSubTitle = String(explicitRouteMeta?.subTitle || "").trim();
-    const explicitSubTab = String(explicitRouteMeta?.subTab || "").trim();
-    const explicitGroupLabel = String(explicitRouteMeta?.groupLabel || "").trim();
-    const explicitExerciseKind = String(explicitRouteMeta?.exerciseKind || "").trim();
-    const explicitTargetScope = String(explicitRouteMeta?.targetScope || "").trim();
-    const explicitTargetId = String(explicitRouteMeta?.targetId || "").trim();
 
     if (lesson?.hasMathSub) {
       const derivedSubs = getDerivedLessonDiarySubs(lesson, subject.id);
@@ -23856,6 +24201,87 @@ const lessons = getMergedLessons(subjectId, grade);
     if (!nextTask) return;
     handleOpenDiaryTask(nextTask, orderedVisibleDiaryTasks);
   }, [activeDiaryTaskIndex, handleOpenDiaryTask, orderedVisibleDiaryTasks]);
+
+  const handleToggleAutoDiaryOverrideSourceNode = useCallback((sourceId, node, checked) => {
+    const nodeKey = String(node?.key || "").trim();
+    if (!nodeKey) return;
+    const descendantKeys = collectDiaryOutlineNodeKeys(node, []).filter((key) => key !== nodeKey);
+    handleUpdateAutoDiaryOverrideDraftSource(sourceId, (source) => {
+      const currentKeys = new Set(normalizeTextArray(source?.selectedNodeKeys));
+      if (checked) {
+        descendantKeys.forEach((key) => currentKeys.delete(key));
+        currentKeys.add(nodeKey);
+      } else {
+        currentKeys.delete(nodeKey);
+      }
+      return {
+        ...source,
+        selectedNodeKeys: Array.from(currentKeys),
+      };
+    });
+  }, [handleUpdateAutoDiaryOverrideDraftSource]);
+
+  const handleToggleAutoDiaryOverrideSourceExpand = useCallback((sourceId, nodeKey) => {
+    const safeNodeKey = String(nodeKey || "").trim();
+    if (!safeNodeKey) return;
+    handleUpdateAutoDiaryOverrideDraftSource(sourceId, (source) => {
+      const expanded = new Set(normalizeTextArray(source?.expandedNodeKeys));
+      if (expanded.has(safeNodeKey)) expanded.delete(safeNodeKey);
+      else expanded.add(safeNodeKey);
+      return {
+        ...source,
+        expandedNodeKeys: Array.from(expanded),
+      };
+    });
+  }, [handleUpdateAutoDiaryOverrideDraftSource]);
+
+  const renderAutoDiaryOverrideSelectionNodes = (source, nodes = [], ancestorSelected = false, depth = 0) => {
+    if (!Array.isArray(nodes) || !nodes.length) return null;
+    const selectedSet = new Set(normalizeTextArray(source?.selectedNodeKeys));
+    const expandedSet = new Set(normalizeTextArray(source?.expandedNodeKeys));
+    return (
+      <div className={`diary-outline depth-${depth}`} style={{ display: "grid", gap: 8, marginTop: depth === 0 ? 8 : 6, paddingInlineStart: depth > 0 ? 14 : 0 }}>
+        {nodes.map((node) => {
+          const nodeKey = String(node?.key || "").trim();
+          const hasChildren = Array.isArray(node?.children) && node.children.length > 0;
+          const ownSelected = selectedSet.has(nodeKey);
+          const isSelected = ancestorSelected || ownSelected;
+          const isExpanded = hasChildren && (expandedSet.has(nodeKey) || depth === 0);
+          const label = String(node?.label || "").trim();
+          if (!label) return null;
+          const nodeLanguage = isUrduText(label) ? "ur" : (language === "ur" ? "ur" : "en");
+          return (
+            <div key={`override_pick_${source?.sourceId || "source"}_${nodeKey || label}`} className="profile-report-item" data-task-language={nodeLanguage}>
+              <div className="goal-progress-row" style={{ alignItems: "center", gap: 10 }}>
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    className="ghost-cta"
+                    onClick={() => handleToggleAutoDiaryOverrideSourceExpand(source.sourceId, nodeKey)}
+                    style={{ minWidth: 34, paddingInline: 10 }}
+                  >
+                    {isExpanded ? (language === "ur" ? "−" : "−") : (language === "ur" ? "+" : "+")}
+                  </button>
+                ) : <span style={{ width: 34, opacity: 0.35, textAlign: "center" }}>•</span>}
+                <label style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: ancestorSelected ? "default" : "pointer", direction: nodeLanguage === "ur" ? "rtl" : "ltr" }}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    disabled={ancestorSelected}
+                    onChange={(event) => handleToggleAutoDiaryOverrideSourceNode(source.sourceId, node, Boolean(event.target.checked))}
+                  />
+                  <span style={{ fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)", textAlign: nodeLanguage === "ur" ? "right" : "left", color: "var(--text)" }}>
+                    {renderLocalizedTextNode(label, language)}
+                  </span>
+                </label>
+              </div>
+              {hasChildren && isExpanded ? renderAutoDiaryOverrideSelectionNodes(source, node.children, isSelected, depth + 1) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   const renderDiaryOutlineNodes = (task, nodes = [], depth = 0) => {
     if (!Array.isArray(nodes) || !nodes.length) return null;
@@ -26324,12 +26750,18 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                               : joinLocalizedText("Auto", "خودکار", language);
                                         const chapterTitle = String(task.chapterGroup?.activeLesson?.title || task.lesson?.title || "").trim();
                                         const unitTitle = String(task.taskUnits?.[0]?.sourceMeta?.title || task.taskUnits?.[0]?.title || task.title || "").trim();
+                                        const taskSegmentTitles = Array.isArray(task.taskSegments)
+                                          ? task.taskSegments
+                                              .map((segment) => String(segment?.chapterTitle || "").trim())
+                                              .filter(Boolean)
+                                          : [];
                                         return <div key={`override_task_${group.date}_${task.taskKey}`} className="profile-report-item">
                                           <div className="profile-report-item-head">
                                             <strong>{renderLocalizedTextNode(chapterTitle || unitTitle, language)}</strong>
                                             <span>{renderLocalizedTextNode(statusLabel, language)}</span>
                                           </div>
                                           {unitTitle && unitTitle !== chapterTitle ? <div className="goal-progress-meta">{renderLocalizedTextNode(unitTitle, language)}</div> : null}
+                                          {taskSegmentTitles.length > 1 ? <div className="goal-progress-meta" style={{ marginTop: 4 }}>{renderLocalizedTextNode(taskSegmentTitles.join(" • "), language)}</div> : null}
                                           {task.note ? <div className="goal-progress-meta" style={{ marginTop: 4 }}>{renderLocalizedTextNode(task.note, language)}</div> : null}
                                           <div className="result-actions chapter-card-actions" style={{ marginTop: 8 }}>
                                             {task.source === "auto" ? <>
@@ -26350,100 +26782,108 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                             <div className="goal-progress-row">
                                               <div>
                                                 <strong>{renderLocalizedTextNode(autoDiaryOverrideEditingMode === "add" ? joinLocalizedText("Add an extra task", "ایک اضافی کام شامل کریں", language) : joinLocalizedText("Replace this task", "اس کام کو بدلیں", language), language)}</strong>
-                                                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Pick the subject, chapter copy, subsection, and the exact items the learner should see here.", "وہ مضمون، باب کی کاپی، ذیلی حصہ، اور درست چیزیں منتخب کریں جو سیکھنے والا یہاں دیکھے۔", language), language)}</div>
+                                                <div className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Build the exact live diary structure here. Add one or more chapter sources, then choose the exact subsection tree and internal items/questions to show.", "یہاں وہی حقیقی ڈائری ساخت بنائیں۔ ایک یا زیادہ بابی ذرائع شامل کریں، پھر درست ذیلی حصہ، اندرونی چیزیں، اور سوالات منتخب کریں۔", language), language)}</div>
                                               </div>
+                                              <button type="button" className="ghost-cta" onClick={handleAddAutoDiaryOverrideDraftSource}>{renderLocalizedTextNode(joinLocalizedText("Add chapter source", "بابی ذریعہ شامل کریں", language), language)}</button>
                                             </div>
-                                            <div className="auto-diary-labeled-grid" style={{ marginTop: 10 }}>
-                                              <label className="auto-diary-labeled-field">
-                                                <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Subject", "مضمون", language), language)}</span>
-                                                <select className="settings-select" value={autoDiaryOverrideEditorSubjectIdResolved} onChange={(event) => setAutoDiaryOverrideSubjectId(event.target.value)}>
-                                                  {allSubjects.map((subjectOption) => <option key={`override_subject_pick_${subjectOption.id}`} value={subjectOption.id}>{renderLocalizedTextNode(getSubjectDisplayName(subjectOption, language), language)}</option>)}
-                                                </select>
-                                              </label>
-                                              <label className="auto-diary-labeled-field">
-                                                <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Chapter", "باب", language), language)}</span>
-                                                <select className="settings-select" value={autoDiaryOverrideEditorChapterGroup?.canonicalLessonKey || ""} onChange={(event) => setAutoDiaryOverrideLessonKey(event.target.value)}>
-                                                  {autoDiaryOverrideEditorChapterGroups.map((groupOption) => <option key={`override_chapter_${groupOption.canonicalLessonKey}`} value={groupOption.canonicalLessonKey}>{renderLocalizedTextNode(groupOption.activeLesson?.title || groupOption.canonicalLessonKey, language)}</option>)}
-                                                </select>
-                                              </label>
-                                              <label className="auto-diary-labeled-field">
-                                                <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Chapter copy", "باب کی کاپی", language), language)}</span>
-                                                <select className="settings-select" value={autoDiaryOverrideEditorResolvedContentId} onChange={(event) => setAutoDiaryOverrideContentId(event.target.value)}>
-                                                  {autoDiaryOverrideEditorContentOptions.map((entry) => <option key={`override_content_${entry.contentId || "default"}`} value={entry.contentId}>{renderLocalizedTextNode(entry.label, language)}</option>)}
-                                                </select>
-                                              </label>
-                                            </div>
-                                            <label className="auto-diary-labeled-field" style={{ marginTop: 10 }}>
-                                              <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Subsection and included items", "ذیلی حصہ اور شامل چیزیں", language), language)}</span>
-                                              <div className="goal-progress-meta" style={{ marginBottom: 8 }}>
-                                                {renderLocalizedTextNode(joinLocalizedText("Choose one subsection, then expand it to select exactly what should appear in the diary task.", "ایک ذیلی حصہ منتخب کریں، پھر اسے کھول کر وہی چیزیں منتخب کریں جو ڈائری کام میں دکھنی چاہئیں۔", language), language)}
-                                              </div>
-                                              <div className="profile-report-list">
-                                                {autoDiaryOverrideEditorSubsectionGroups.length ? autoDiaryOverrideEditorSubsectionGroups.map((subsectionGroup) => {
-                                                  const isExpanded = autoDiaryOverrideExpandedSubsectionKey === subsectionGroup.key;
-                                                  const isSelected = autoDiaryOverrideEditorResolvedSubsectionKey === subsectionGroup.key;
-                                                  const subsectionUnitKeySet = new Set((subsectionGroup.units || []).map((unit) => String(unit?.key || "").trim()).filter(Boolean));
-                                                  const selectedCount = (Array.isArray(autoDiaryOverrideSelectedUnitKeys) ? autoDiaryOverrideSelectedUnitKeys : []).filter((key) => subsectionUnitKeySet.has(String(key || "").trim())).length;
-                                                  return <div key={`override_subsection_${subsectionGroup.key}`} className="profile-report-item">
-                                                    <div className="profile-report-item-head">
-                                                      <strong>{renderLocalizedTextNode(subsectionGroup.title, language)}</strong>
-                                                      <span>{renderLocalizedTextNode(joinLocalizedText(`${selectedCount || subsectionGroup.units.length} selected`, `${selectedCount || subsectionGroup.units.length} منتخب`, language), language)}</span>
-                                                    </div>
-                                                    <div className="result-actions chapter-card-actions" style={{ marginTop: 8 }}>
-                                                      <button
-                                                        type="button"
-                                                        className={isSelected ? "study-tool-btn" : "ghost-cta"}
-                                                        onClick={() => {
-                                                          setAutoDiaryOverrideSubsectionKey(subsectionGroup.key);
-                                                          setAutoDiaryOverrideExpandedSubsectionKey(subsectionGroup.key);
-                                                          setAutoDiaryOverrideSelectedUnitKeys((subsectionGroup.units || []).map((unit) => String(unit?.key || "").trim()).filter(Boolean));
-                                                        }}
-                                                      >
-                                                        {renderLocalizedTextNode(isSelected ? joinLocalizedText("Selected subsection", "منتخب ذیلی حصہ", language) : joinLocalizedText("Use this subsection", "یہ ذیلی حصہ استعمال کریں", language), language)}
-                                                      </button>
-                                                      <button
-                                                        type="button"
-                                                        className="ghost-cta"
-                                                        onClick={() => setAutoDiaryOverrideExpandedSubsectionKey((current) => current === subsectionGroup.key ? "" : subsectionGroup.key)}
-                                                      >
-                                                        {renderLocalizedTextNode(isExpanded ? joinLocalizedText("Collapse", "سکیڑیں", language) : joinLocalizedText("Expand items", "چیزیں دکھائیں", language), language)}
-                                                      </button>
-                                                    </div>
-                                                    {isExpanded ? <div className="profile-report-list" style={{ marginTop: 10 }}>
-                                                      {(subsectionGroup.units || []).map((unit, unitIndex) => {
-                                                        const unitKey = String(unit?.key || "").trim();
-                                                        const isChecked = (Array.isArray(autoDiaryOverrideSelectedUnitKeys) ? autoDiaryOverrideSelectedUnitKeys : []).includes(unitKey);
-                                                        const unitLabel = String(unit?.title || unit?.sourceMeta?.title || unitKey || `${unitIndex + 1}`).trim() || `${unitIndex + 1}`;
-                                                        return <label key={`override_subsection_unit_${subsectionGroup.key}_${unitKey || unitIndex}`} className="profile-report-item" style={{ cursor: "pointer" }}>
-                                                          <div className="goal-progress-row">
-                                                            <span>{renderLocalizedTextNode(unitLabel, language)}</span>
-                                                            <input
-                                                              type="checkbox"
-                                                              checked={isChecked}
-                                                              onChange={(event) => {
-                                                                const checked = Boolean(event.target.checked);
-                                                                setAutoDiaryOverrideSubsectionKey(subsectionGroup.key);
-                                                                setAutoDiaryOverrideExpandedSubsectionKey(subsectionGroup.key);
-                                                                setAutoDiaryOverrideSelectedUnitKeys((current) => {
-                                                                  const currentKeys = Array.isArray(current) ? current.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
-                                                                  if (checked) return Array.from(new Set([...currentKeys, unitKey]));
-                                                                  return currentKeys.filter((entry) => entry !== unitKey);
-                                                                });
-                                                              }}
-                                                            />
-                                                          </div>
-                                                        </label>;
-                                                      })}
-                                                    </div> : null}
-                                                  </div>;
-                                                }) : <div className="profile-report-item">
-                                                  <div className="profile-report-item-head">
-                                                    <strong>{renderLocalizedTextNode(joinLocalizedText("No subsections available", "کوئی ذیلی حصے دستیاب نہیں", language), language)}</strong>
-                                                    <span>{renderLocalizedTextNode(joinLocalizedText("Pick another chapter copy or chapter to continue.", "آگے بڑھنے کے لیے دوسرا باب یا باب کی کاپی منتخب کریں۔", language), language)}</span>
+                                            <div className="profile-report-list" style={{ marginTop: 10 }}>
+                                              {(autoDiaryOverrideDraftSources.length ? autoDiaryOverrideDraftSources : [createAutoDiaryOverrideDraftSource({
+                                                subject: task.subject,
+                                                lessonKey: task.lessonKey,
+                                                contentId: task.contentId,
+                                              })]).map((sourceDraft, sourceIndex) => {
+                                                const sourceSubjectId = String(sourceDraft?.subject || task.subject || "").trim();
+                                                const sourceChapterGroups = sourceSubjectId && grade ? getMergedLessonGroups(sourceSubjectId, grade) : [];
+                                                const sourceChapterGroup = sourceChapterGroups.find((groupOption) => groupOption.canonicalLessonKey === resolveCustomChapterLessonKey({ lessonKey: sourceDraft?.lessonKey || "" }))
+                                                  || sourceChapterGroups[0]
+                                                  || null;
+                                                const sourceContentOptions = (sourceChapterGroup?.variants || []).map((entry) => ({
+                                                  contentId: String(entry?.contentId || "").trim(),
+                                                  label: entry?.sourceType === "builtin"
+                                                    ? joinLocalizedText("Built-in copy", "بنیادی کاپی", language)
+                                                    : entry?.sourceType === "custom"
+                                                      ? joinLocalizedText("Local custom copy", "مقامی ذاتی کاپی", language)
+                                                      : (String(entry?.authorUsername || "").trim()
+                                                        ? joinLocalizedText(`Published by ${entry.authorUsername}`, `${entry.authorUsername} کی شائع شدہ کاپی`, language)
+                                                        : joinLocalizedText("Published copy", "شائع شدہ کاپی", language)),
+                                                }));
+                                                const resolvedContentId = sourceContentOptions.some((entry) => entry.contentId === String(sourceDraft?.contentId || "").trim())
+                                                  ? String(sourceDraft?.contentId || "").trim()
+                                                  : (sourceContentOptions[0]?.contentId || "");
+                                                const sourceContext = buildDiaryOverrideSourceSegment({
+                                                  ...sourceDraft,
+                                                  lessonKey: sourceChapterGroup?.canonicalLessonKey || sourceDraft?.lessonKey || "",
+                                                  contentId: resolvedContentId,
+                                                }, task);
+                                                const chapterOutlineNodes = Array.isArray(sourceContext?.fullOutlineNodes) ? sourceContext.fullOutlineNodes : [];
+                                                const selectedCount = normalizeTextArray(sourceDraft?.selectedNodeKeys).length;
+                                                return <details key={`override_source_block_${sourceDraft.sourceId || sourceIndex}`} className="profile-report-item" open={sourceIndex === 0}>
+                                                  <summary className="profile-report-item-head" style={{ cursor: "pointer", listStyle: "none" }}>
+                                                    <strong>{renderLocalizedTextNode(joinLocalizedText(`Chapter Source ${sourceIndex + 1}`, `بابی ذریعہ ${sourceIndex + 1}`, language), language)}</strong>
+                                                    <span>{renderLocalizedTextNode(joinLocalizedText(`${selectedCount} picked`, `${selectedCount} منتخب`, language), language)}</span>
+                                                  </summary>
+                                                  <div className="goal-progress-row" style={{ marginTop: 8 }}>
+                                                    <span className="goal-progress-meta">{renderLocalizedTextNode(sourceChapterGroup?.activeLesson?.title || joinLocalizedText("Choose a chapter", "ایک باب منتخب کریں", language), language)}</span>
+                                                    {autoDiaryOverrideDraftSources.length > 1 ? <button type="button" className="ghost-cta" onClick={() => handleRemoveAutoDiaryOverrideDraftSource(sourceDraft.sourceId)}>{renderLocalizedTextNode(joinLocalizedText("Remove", "ہٹائیں", language), language)}</button> : <span className="goal-progress-meta">{renderLocalizedTextNode(joinLocalizedText("Primary source", "بنیادی ذریعہ", language), language)}</span>}
                                                   </div>
-                                                </div>}
-                                              </div>
-                                            </label>
+                                                  <div className="auto-diary-labeled-grid" style={{ marginTop: 10 }}>
+                                                    <label className="auto-diary-labeled-field">
+                                                      <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Subject", "مضمون", language), language)}</span>
+                                                      <select className="settings-select" value={sourceSubjectId} onChange={(event) => {
+                                                        const nextSubjectId = String(event.target.value || "").trim();
+                                                        const nextChapterGroups = nextSubjectId && grade ? getMergedLessonGroups(nextSubjectId, grade) : [];
+                                                        handleUpdateAutoDiaryOverrideDraftSource(sourceDraft.sourceId, {
+                                                          subject: nextSubjectId,
+                                                          lessonKey: nextChapterGroups[0]?.canonicalLessonKey || "",
+                                                          contentId: String(nextChapterGroups[0]?.activeVariant?.contentId || "").trim(),
+                                                          selectedNodeKeys: [],
+                                                          expandedNodeKeys: [],
+                                                        });
+                                                      }}>
+                                                        {allSubjects.map((subjectOption) => <option key={`override_subject_pick_${sourceDraft.sourceId}_${subjectOption.id}`} value={subjectOption.id}>{renderLocalizedTextNode(getSubjectDisplayName(subjectOption, language), language)}</option>)}
+                                                      </select>
+                                                    </label>
+                                                    <label className="auto-diary-labeled-field">
+                                                      <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Chapter", "باب", language), language)}</span>
+                                                      <select className="settings-select" value={sourceChapterGroup?.canonicalLessonKey || ""} onChange={(event) => {
+                                                        const nextLessonKey = String(event.target.value || "").trim();
+                                                        const nextGroup = sourceChapterGroups.find((groupOption) => groupOption.canonicalLessonKey === nextLessonKey) || null;
+                                                        handleUpdateAutoDiaryOverrideDraftSource(sourceDraft.sourceId, {
+                                                          lessonKey: nextLessonKey,
+                                                          contentId: String(nextGroup?.activeVariant?.contentId || "").trim(),
+                                                          selectedNodeKeys: [],
+                                                          expandedNodeKeys: [],
+                                                        });
+                                                      }}>
+                                                        {sourceChapterGroups.map((groupOption) => <option key={`override_chapter_${sourceDraft.sourceId}_${groupOption.canonicalLessonKey}`} value={groupOption.canonicalLessonKey}>{renderLocalizedTextNode(groupOption.activeLesson?.title || groupOption.canonicalLessonKey, language)}</option>)}
+                                                      </select>
+                                                    </label>
+                                                    <label className="auto-diary-labeled-field">
+                                                      <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Chapter copy", "باب کی کاپی", language), language)}</span>
+                                                      <select className="settings-select" value={resolvedContentId} onChange={(event) => handleUpdateAutoDiaryOverrideDraftSource(sourceDraft.sourceId, {
+                                                        contentId: event.target.value,
+                                                        selectedNodeKeys: [],
+                                                        expandedNodeKeys: [],
+                                                      })}>
+                                                        {sourceContentOptions.map((entry) => <option key={`override_content_${sourceDraft.sourceId}_${entry.contentId || "default"}`} value={entry.contentId}>{renderLocalizedTextNode(entry.label, language)}</option>)}
+                                                      </select>
+                                                    </label>
+                                                  </div>
+                                                  <label className="auto-diary-labeled-field" style={{ marginTop: 10 }}>
+                                                    <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Live chapter structure", "باب کی حقیقی ساخت", language), language)}</span>
+                                                    <div className="goal-progress-meta" style={{ marginBottom: 8 }}>
+                                                      {renderLocalizedTextNode(joinLocalizedText("Select whole subsections or expand them and pick exact internal items and questions. This mirrors the live diary structure.", "پورے ذیلی حصے منتخب کریں یا انہیں کھول کر درست اندرونی چیزیں اور سوالات منتخب کریں۔ یہی حقیقی ڈائری ساخت ہے۔", language), language)}
+                                                    </div>
+                                                    {chapterOutlineNodes.length ? renderAutoDiaryOverrideSelectionNodes(sourceDraft, chapterOutlineNodes, false, 0) : <div className="profile-report-item">
+                                                      <div className="profile-report-item-head">
+                                                        <strong>{renderLocalizedTextNode(joinLocalizedText("No chapter structure available", "باب کی ساخت دستیاب نہیں", language), language)}</strong>
+                                                        <span>{renderLocalizedTextNode(joinLocalizedText("Choose another chapter or chapter copy to continue.", "آگے بڑھنے کے لیے دوسرا باب یا باب کی کاپی منتخب کریں۔", language), language)}</span>
+                                                      </div>
+                                                    </div>}
+                                                  </label>
+                                                </details>;
+                                              })}
+                                            </div>
                                             <label className="auto-diary-labeled-field" style={{ marginTop: 10 }}>
                                               <span className="auto-diary-labeled-label">{renderLocalizedTextNode(joinLocalizedText("Teacher note", "استاد کا نوٹ", language), language)}</span>
                                               <textarea className="settings-text-input" value={autoDiaryOverrideNote} onChange={(event) => setAutoDiaryOverrideNote(event.target.value)} rows={3} />
