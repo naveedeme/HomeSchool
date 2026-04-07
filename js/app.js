@@ -13932,6 +13932,14 @@ function HomeschoolApp() {
     if (String(diaryWeekAnchorDate || "").trim() === safeTodayIso) return;
     setDiaryWeekAnchorDate(safeTodayIso);
   }, [diaryWeekAnchorDate, diaryWeekAnchorFollowsToday, todayIso]);
+  useEffect(() => {
+    const safeTodayIso = String(todayIso || "").trim();
+    const safeAnchorIso = String(diaryWeekAnchorDate || "").trim();
+    if (!safeTodayIso || !safeAnchorIso) return;
+    if (safeAnchorIso >= safeTodayIso) return;
+    setDiaryWeekAnchorDate(safeTodayIso);
+    setDiaryWeekAnchorFollowsToday(true);
+  }, [diaryWeekAnchorDate, todayIso]);
   const handleDiaryWeekAnchorDateChange = useCallback((nextValue) => {
     const fallbackTodayIso = String(todayIso || toIsoDateString(Date.now())).trim();
     const nextAnchorDate = String(nextValue || fallbackTodayIso).trim() || fallbackTodayIso;
@@ -28935,18 +28943,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <CalendarDateField value={diaryWeekAnchorDate} onChange={handleDiaryWeekAnchorDateChange} language={language} />
                   <button
                     type="button"
-                    className={`ghost-cta${showDetailedDiary ? " active" : ""}`}
+                    className={`ghost-cta diary-detail-toggle${showDetailedDiary ? " active" : ""}`}
                     onClick={() => setShowDetailedDiary((current) => !current)}
-                    style={{
-                      alignSelf: "center",
-                      flex: "0 0 auto",
-                      width: "auto",
-                      minWidth: 0,
-                      padding: "8px 12px",
-                      borderRadius: 999,
-                      fontSize: 12,
-                      whiteSpace: "nowrap",
-                    }}
                   >
                     {renderLocalizedTextNode(showDetailedDiary ? joinLocalizedText("Hide detailed diary", "تفصیلی ڈائری چھپائیں", language) : joinLocalizedText("Show detailed diary", "تفصیلی ڈائری دکھائیں", language), language)}
                   </button>

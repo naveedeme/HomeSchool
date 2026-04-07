@@ -11592,6 +11592,14 @@ ${marker} `);
       if (String(diaryWeekAnchorDate || "").trim() === safeTodayIso) return;
       setDiaryWeekAnchorDate(safeTodayIso);
     }, [diaryWeekAnchorDate, diaryWeekAnchorFollowsToday, todayIso]);
+    useEffect(() => {
+      const safeTodayIso = String(todayIso || "").trim();
+      const safeAnchorIso = String(diaryWeekAnchorDate || "").trim();
+      if (!safeTodayIso || !safeAnchorIso) return;
+      if (safeAnchorIso >= safeTodayIso) return;
+      setDiaryWeekAnchorDate(safeTodayIso);
+      setDiaryWeekAnchorFollowsToday(true);
+    }, [diaryWeekAnchorDate, todayIso]);
     const handleDiaryWeekAnchorDateChange = useCallback((nextValue) => {
       const fallbackTodayIso = String(todayIso || toIsoDateString(Date.now())).trim();
       const nextAnchorDate = String(nextValue || fallbackTodayIso).trim() || fallbackTodayIso;
@@ -23513,18 +23521,8 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: `ghost-cta${showDetailedDiary ? " active" : ""}`,
-        onClick: () => setShowDetailedDiary((current) => !current),
-        style: {
-          alignSelf: "center",
-          flex: "0 0 auto",
-          width: "auto",
-          minWidth: 0,
-          padding: "8px 12px",
-          borderRadius: 999,
-          fontSize: 12,
-          whiteSpace: "nowrap"
-        }
+        className: `ghost-cta diary-detail-toggle${showDetailedDiary ? " active" : ""}`,
+        onClick: () => setShowDetailedDiary((current) => !current)
       },
       renderLocalizedTextNode(showDetailedDiary ? joinLocalizedText("Hide detailed diary", "\u062A\u0641\u0635\u06CC\u0644\u06CC \u0688\u0627\u0626\u0631\u06CC \u0686\u06BE\u067E\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show detailed diary", "\u062A\u0641\u0635\u06CC\u0644\u06CC \u0688\u0627\u0626\u0631\u06CC \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language)
     ), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `diary_viewer_${entry.email}`, value: entry.email }, entry.label))) : null)), todayDiaryGroup ? /* @__PURE__ */ React.createElement("div", { key: `today_diary_${todayDiaryGroup.targetDate}`, className: "review-panel diary-day-card", "data-ui-language": language, "data-diary-date": todayDiaryGroup.targetDate, style: { marginTop: 16, borderLeft: "4px solid var(--accent)", boxShadow: "0 12px 32px rgba(0,0,0,0.08)" } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("TODAY", "\u0622\u062C", language) : joinLocalizedText("ACTIVE DAY", "\u0641\u0639\u0627\u0644 \u062F\u0646", language), language)), renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("Today's Diary", "\u0622\u062C \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language) : joinLocalizedText("Active Diary Day", "\u0641\u0639\u0627\u0644 \u0688\u0627\u0626\u0631\u06CC \u062F\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${todayDiaryGroup.tasks.length} tasks across ${todayDiaryGroup.subjectGroups.length} subjects`, `${todayDiaryGroup.tasks.length} \u06A9\u0627\u0645 ${todayDiaryGroup.subjectGroups.length} \u0645\u0636\u0627\u0645\u06CC\u0646 \u0645\u06CC\u06BA`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(todayDiaryGroup.targetDate, language))), todayDiaryGroup.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, todayDiaryGroup.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `today_sg_${todayDiaryGroup.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral", style: { fontSize: 11 } }, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
