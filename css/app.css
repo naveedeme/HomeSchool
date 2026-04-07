@@ -248,6 +248,7 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .auto-diary-labeled-field--compact .settings-text-input{max-width:100%}
 .auto-diary-labeled-label{font-size:12px;font-weight:800;line-height:1.35;color:var(--text-secondary)}
 .content[data-ui-language="ur"] .auto-diary-labeled-field{direction:rtl;text-align:right}
+.profile-switcher-chip.readonly{cursor:default;opacity:.88}
 .auto-diary-helper-copy{margin:0}
 .auto-diary-advanced-panel{padding:0;overflow:hidden}
 .auto-diary-advanced-summary{list-style:none;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px 16px;cursor:pointer}
