@@ -7327,16 +7327,21 @@ function getSupabaseAuthRedirectUrl() {
 }
 
 function getSupabaseUserRole(user) {
-  const role = String(
-    user?.app_metadata?.homeschoolRole
-    || user?.app_metadata?.contentRole
-    || user?.app_metadata?.role
-    || user?.user_metadata?.homeschoolRole
-    || user?.user_metadata?.contentRole
-    || user?.user_metadata?.role
-    || "student",
-  ).trim().toLowerCase();
-  return role || "student";
+  const genericSupabaseRoles = new Set(["authenticated", "anon", "anonymous", "service_role", "service-role"]);
+  const candidates = [
+    user?.app_metadata?.homeschoolRole,
+    user?.app_metadata?.contentRole,
+    user?.user_metadata?.homeschoolRole,
+    user?.user_metadata?.contentRole,
+    user?.user_metadata?.role,
+    user?.app_metadata?.role,
+  ];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const safeRole = String(candidates[index] || "").trim().toLowerCase();
+    if (!safeRole || genericSupabaseRoles.has(safeRole)) continue;
+    return safeRole;
+  }
+  return "student";
 }
 
 const CONTENT_MANAGER_ROLES = ["student", "parent", "teacher", "principal", "school_owner", "editor", "admin"];
@@ -7360,7 +7365,20 @@ const CONTENT_PERMISSION_KEYS = [
 
 function normalizeContentManagerRole(role) {
   const safeRole = String(role || "").trim().toLowerCase();
-  return CONTENT_MANAGER_ROLES.includes(safeRole) ? safeRole : "student";
+  const aliasMap = {
+    administrator: "admin",
+    app_admin: "admin",
+    "app-admin": "admin",
+    global_admin: "admin",
+    "global-admin": "admin",
+    super_admin: "admin",
+    "super-admin": "admin",
+    superadmin: "admin",
+    system_admin: "admin",
+    "system-admin": "admin",
+  };
+  const normalizedRole = aliasMap[safeRole] || safeRole;
+  return CONTENT_MANAGER_ROLES.includes(normalizedRole) ? normalizedRole : "student";
 }
 
 function createDefaultContentRoleCapabilities() {
@@ -14175,6 +14193,16 @@ function HomeschoolApp() {
   const canUnpublishContent = Boolean(contentRoleCapabilities.unpublishContent);
   const canDeleteLocalContent = Boolean(contentRoleCapabilities.deleteLocalContent);
   const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
+  const canAdministerLessonLibrary = useMemo(() => {
+    if (canManageContentAccess) return true;
+    const roleCandidates = [
+      contentAccessState.currentRole,
+      liveContentRole,
+      contentManagerRole,
+      supabaseAuthState.role,
+    ];
+    return roleCandidates.some((role) => normalizeContentManagerRole(role) === "admin");
+  }, [canManageContentAccess, contentAccessState.currentRole, contentManagerRole, liveContentRole, supabaseAuthState.role]);
   const canSeeLearnerManagement = canManageStudentLinks || canManageContentAccess;
   const contentIdentityEmail = String(supabaseAuthState.email || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
   const schoolDraftNormalizedAutoDiarySettings = useMemo(
@@ -17116,7 +17144,7 @@ const headerHideTimerRef = useRef(null);
     }
   }, [canSavePublishedLocally, getMergedQuiz, language, refreshCustomContentState, showAppToast]);
   const handleDeleteLocalChapter = useCallback(async (group) => {
-    if (!canManageContentAccess) {
+    if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can delete local chapter copies.", "صرف ایڈمن مقامی ابواب کی کاپیاں حذف کر سکتے ہیں۔", language), "alert");
       return;
     }
@@ -17136,9 +17164,9 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [canManageContentAccess, language, refreshCustomContentState, showAppToast, updateChapterSourceSelection]);
+  }, [canAdministerLessonLibrary, language, refreshCustomContentState, showAppToast, updateChapterSourceSelection]);
   const handleArchiveBuiltinLesson = useCallback(async (group) => {
-    if (!canManageContentAccess) {
+    if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can remove default lessons.", "صرف ایڈمن بنیادی اسباق ہٹا سکتے ہیں۔", language), "alert");
       return;
     }
@@ -17179,10 +17207,10 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  }, [activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
   const handleRestoreLessonArchive = useCallback(async (archive) => {
     const normalized = normalizeLessonArchiveRecord(archive);
-    if (!canManageContentAccess) {
+    if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can restore removed lessons.", "صرف ایڈمن ہٹائے گئے اسباق بحال کر سکتے ہیں۔", language), "alert");
       return;
     }
@@ -17199,7 +17227,7 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [canManageContentAccess, language, showAppToast]);
+  }, [canAdministerLessonLibrary, language, showAppToast]);
   useEffect(() => {
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);
@@ -27959,7 +27987,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <div className="result-actions chapter-card-actions">
                   <button type="button" className="ghost-cta" onClick={() => handleOpenChapterVariant(group.subjectId, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Open", "کھولیں", language), language)}</button>
                   {canExportContent ? <button type="button" className="ghost-cta" onClick={() => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Export", "برآمد کریں", language), language)}</button> : null}
-                  {localVariant && canManageContentAccess ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(group)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}</button> : null}
+                  {localVariant && canAdministerLessonLibrary ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(group)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}</button> : null}
                   {ownedPublishedVariant && canUnpublishContent ? <button type="button" className="ghost-cta" onClick={() => handleUnpublishChapterVariant(group, ownedPublishedVariant)}>{renderLocalizedTextNode(joinLocalizedText("Unpublish", "غیر شائع کریں", language), language)}</button> : null}
                 </div>
               </div>
@@ -27969,7 +27997,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No local or owned published chapters yet. Import one from a subject first.", "ابھی کوئی مقامی یا آپ کی شائع شدہ باب موجود نہیں۔ پہلے کسی مضمون سے ایک باب درآمد کریں۔", language), language)}</p>
             </div>
           )}
-          {canManageContentAccess && visibleBuiltinLessonArchives.length ? (
+          {canAdministerLessonLibrary && visibleBuiltinLessonArchives.length ? (
             <div className="review-panel chapter-management-panel" data-ui-language={language} style={{ marginTop: 16 }}>
               <div className="review-panel-head">
                 <div>
@@ -28454,7 +28482,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
               </button>
             ) : null}
-            {canManageContentAccess && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
+            {canAdministerLessonLibrary && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
               <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)}>
                 {renderLocalizedTextNode(joinLocalizedText("Remove Default", "بنیادی سبق ہٹائیں", language), language)}
               </button>
