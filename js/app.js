@@ -106,6 +106,11 @@ function updateEditableLessonDraft(source, descriptor, nextValue = "") {
 function removeEditableLessonField(source, descriptor) {
   if (!source) return source;
   if (Array.isArray(descriptor)) {
+    const lastSegment = descriptor[descriptor.length - 1];
+    const collectionSegment = descriptor[descriptor.length - 3];
+    if (lastSegment === "q" && (collectionSegment === "exercises" || collectionSegment === "quiz" || collectionSegment === "questions")) {
+      return removeEditableValueAtPath(source, descriptor.slice(0, -1));
+    }
     return removeEditableValueAtPath(source, descriptor);
   }
   if (descriptor && typeof descriptor === "object" && descriptor.type === "paragraphSentence") {
@@ -11603,7 +11608,7 @@ function ensureExerciseCount(exercise, kind, pairs, isUrdu) {
 }
 
 function normalizeSubLesson(sub, subjectId) {
-  if (!sub || !Array.isArray(sub.exercises)) return sub;
+  if (!sub || !Array.isArray(sub.exercises) || sub.__manualExercises) return sub;
 
   const isUrdu = subjectId === "urdu" || isUrduText(sub.t) || isUrduText(sub.c);
   const isScience = subjectId === "science";
@@ -11773,14 +11778,18 @@ function buildDaySectionQuiz(dayEntry, settingKey, subjectId) {
 function buildDerivedDayBasedSub(sub, settingKey, itemsPerDay, subjectId) {
   if (!sub || !Array.isArray(sub.dayLessons)) return sub;
   const adjustedDayLessons = regroupDayEntries(sub.dayLessons, itemsPerDay);
-  const exerciseGroups = adjustedDayLessons.map((lessonDay) => ({
-    label: formatDerivedDayLabel(lessonDay, subjectId === "urdu"),
-    exercises: buildDaySectionExercises(lessonDay, settingKey, subjectId),
-  }));
-  const quizGroups = adjustedDayLessons.map((lessonDay) => ({
-    label: formatDerivedDayLabel(lessonDay, subjectId === "urdu"),
-    questions: buildDaySectionQuiz(lessonDay, settingKey, subjectId),
-  }));
+  const exerciseGroups = sub.__manualExerciseGroups && Array.isArray(sub.exerciseGroups)
+    ? sub.exerciseGroups
+    : adjustedDayLessons.map((lessonDay) => ({
+      label: formatDerivedDayLabel(lessonDay, subjectId === "urdu"),
+      exercises: buildDaySectionExercises(lessonDay, settingKey, subjectId),
+    }));
+  const quizGroups = sub.__manualQuizGroups && Array.isArray(sub.quizGroups)
+    ? sub.quizGroups
+    : adjustedDayLessons.map((lessonDay) => ({
+      label: formatDerivedDayLabel(lessonDay, subjectId === "urdu"),
+      questions: buildDaySectionQuiz(lessonDay, settingKey, subjectId),
+    }));
   return {
     ...sub,
     dayLessons: adjustedDayLessons,
@@ -11791,6 +11800,40 @@ function buildDerivedDayBasedSub(sub, settingKey, itemsPerDay, subjectId) {
 
 function getTenseSubsectionIndex(lesson) {
   return Array.isArray(lesson?.subs) ? lesson.subs.findIndex((sub) => sub?.isTensesSub) : -1;
+}
+
+function materializeEditableLessonData(lesson, subjectId, daySectionSettings = {}) {
+  const safeLesson = cloneSerializableValue(stripRuntimeLessonMarkers(lesson)) || {};
+  if (!safeLesson?.hasMathSub || !Array.isArray(safeLesson.subs)) {
+    return safeLesson;
+  }
+  if (safeLesson.key === "sentences") {
+    return {
+      ...safeLesson,
+      __manualSentenceSubs: true,
+      subs: buildDerivedSentenceSub(safeLesson.subs || [], daySectionSettings?.sentences?.itemsPerDay || 5, subjectId).map((sub) => ({
+        ...cloneSerializableValue(sub),
+        __manualExercises: true,
+      })),
+    };
+  }
+  return {
+    ...safeLesson,
+    subs: safeLesson.subs.map((sub) => {
+      let nextSub = cloneSerializableValue(sub) || {};
+      if (Array.isArray(nextSub.exercises)) {
+        nextSub = cloneSerializableValue(normalizeSubLesson(nextSub, subjectId)) || nextSub;
+        nextSub.__manualExercises = true;
+      }
+      const settingKey = getSubsectionSettingKey(nextSub.t);
+      if (settingKey) {
+        nextSub = cloneSerializableValue(buildDerivedDayBasedSub(nextSub, settingKey, daySectionSettings?.[settingKey]?.itemsPerDay || 5, subjectId)) || nextSub;
+        nextSub.__manualExerciseGroups = true;
+        nextSub.__manualQuizGroups = true;
+      }
+      return nextSub;
+    }),
+  };
 }
 
 function buildDerivedSentenceSub(subs, itemsPerDay, subjectId) {
@@ -17466,9 +17509,9 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     if (!selectedLesson) return;
-    setLessonEditDraft(cloneSerializableValue(stripRuntimeLessonMarkers(selectedLesson)) || {});
+    setLessonEditDraft(materializeEditableLessonData(selectedLesson, selectedSubject?.id, daySectionSettings));
     setLessonEditMode(true);
-  }, [canAdministerLessonLibrary, language, selectedLesson, showAppToast]);
+  }, [canAdministerLessonLibrary, daySectionSettings, language, selectedLesson, selectedSubject?.id, showAppToast]);
   const handleCancelLessonEditMode = useCallback(() => {
     setLessonEditMode(false);
     setLessonEditDraft(null);
@@ -21943,7 +21986,9 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   const activeSelectedVocabDay = useMemo(() => resolveDayEntryByDay(pacedVocab, selectedVocabDay), [pacedVocab, selectedVocabDay]);
   const activeLessonSubs = lessonRenderSource?.hasMathSub
     ? (lessonRenderSource.key === "sentences"
-      ? buildDerivedSentenceSub(lessonRenderSource.subs || [], daySectionSettings.sentences.itemsPerDay, selectedSubject?.id)
+      ? (lessonRenderSource.__manualSentenceSubs && Array.isArray(lessonRenderSource.subs)
+        ? lessonRenderSource.subs
+        : buildDerivedSentenceSub(lessonRenderSource.subs || [], daySectionSettings.sentences.itemsPerDay, selectedSubject?.id))
       : (lessonRenderSource.subs || []).map((sub) => {
         const settingKey = getSubsectionSettingKey(sub.t);
         if (!settingKey) return sub;
@@ -24700,7 +24745,9 @@ const lessons = getMergedLessons(subjectId, grade);
       if (targetParagraph) setSelectedTensePara(targetParagraph);
     } else if (lesson?.hasMathSub) {
       const derivedSubs = lesson.key === "sentences"
-        ? buildDerivedSentenceSub(lesson.subs || [], daySectionSettings.sentences.itemsPerDay, subjectId)
+        ? (lesson.__manualSentenceSubs && Array.isArray(lesson.subs)
+          ? lesson.subs
+          : buildDerivedSentenceSub(lesson.subs || [], daySectionSettings.sentences.itemsPerDay, subjectId))
         : (lesson.subs || []).map((sub) => {
           const settingKey = getSubsectionSettingKey(sub.t);
           if (!settingKey) return sub;
@@ -24792,7 +24839,9 @@ const lessons = getMergedLessons(subjectId, grade);
   const getDerivedLessonDiarySubs = useCallback((lesson, subjectId) => {
     if (!lesson?.hasMathSub) return [];
     if (lesson.key === "sentences") {
-      return buildDerivedSentenceSub(lesson.subs || [], daySectionSettings.sentences.itemsPerDay, subjectId);
+      return lesson.__manualSentenceSubs && Array.isArray(lesson.subs)
+        ? lesson.subs
+        : buildDerivedSentenceSub(lesson.subs || [], daySectionSettings.sentences.itemsPerDay, subjectId);
     }
     return (lesson.subs || []).map((sub) => {
       const settingKey = getSubsectionSettingKey(sub.t);
