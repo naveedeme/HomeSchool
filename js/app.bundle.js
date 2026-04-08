@@ -1997,7 +1997,9 @@
     if (!safeSubjectId) return false;
     const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
     if (settings.subjects.mode !== "selected") return true;
-    const allowedIds = new Set(normalizeTextArray(settings.subjects.selectedSubjectIds));
+    const normalizedIds = normalizeTextArray(settings.subjects.selectedSubjectIds);
+    if (!normalizedIds.length) return true;
+    const allowedIds = new Set(normalizedIds);
     return allowedIds.has(safeSubjectId);
   }
   function createEmptyContentRelationshipState() {
