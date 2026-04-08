@@ -523,6 +523,163 @@ function buildLessonArchiveKey(subject, grade, canonicalLessonKey, sourceType = 
   return `${buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey)}::${safeSourceType}::${safeContentId}`;
 }
 
+function buildContentActivationPreferenceKey({
+  activationType = "lesson",
+  subject = "",
+  lessonKey = "",
+  scopeType = "school",
+  schoolId = "",
+  targetGrade = null,
+  targetStudentEmail = "",
+}) {
+  return [
+    String(activationType || "").trim().toLowerCase() || "lesson",
+    String(subject || "").trim().toLowerCase(),
+    resolveCustomChapterLessonKey({ lessonKey }),
+    String(scopeType || "").trim().toLowerCase() || "school",
+    String(schoolId || "").trim(),
+    targetGrade === null || targetGrade === undefined || targetGrade === "" ? "__all__" : String(Number(targetGrade) || ""),
+    String(targetStudentEmail || "").trim().toLowerCase(),
+  ].join("::");
+}
+
+function normalizeContentActivationRecord(raw) {
+  const activationId = String(raw?.activation_id || raw?.activationId || "").trim();
+  const activationType = ["lesson", "subject"].includes(String(raw?.activation_type || raw?.activationType || "").trim().toLowerCase())
+    ? String(raw?.activation_type || raw?.activationType || "").trim().toLowerCase()
+    : "lesson";
+  const scopeType = ["global", "school", "grade", "student"].includes(String(raw?.scope_type || raw?.scopeType || "").trim().toLowerCase())
+    ? String(raw?.scope_type || raw?.scopeType || "").trim().toLowerCase()
+    : "school";
+  const subject = String(raw?.subject || "").trim().toLowerCase();
+  const lessonKey = activationType === "lesson"
+    ? resolveCustomChapterLessonKey({ lessonKey: raw?.lesson_key || raw?.lessonKey || "" })
+    : "";
+  const sourceKind = [
+    "builtin_lesson",
+    "published_lesson",
+    "builtin_subject",
+    "published_subject",
+  ].includes(String(raw?.source_kind || raw?.sourceKind || "").trim().toLowerCase())
+    ? String(raw?.source_kind || raw?.sourceKind || "").trim().toLowerCase()
+    : (activationType === "subject" ? "builtin_subject" : "builtin_lesson");
+  if (!activationId || !subject || (activationType === "lesson" && !lessonKey)) return null;
+  const normalizedTargetGrade = raw?.target_grade === null || typeof raw?.target_grade === "undefined"
+    ? (raw?.targetGrade === null || typeof raw?.targetGrade === "undefined" ? null : Number(raw?.targetGrade))
+    : Number(raw?.target_grade);
+  return {
+    activationId,
+    activationType,
+    scopeType,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    subject,
+    lessonKey,
+    targetGrade: Number.isFinite(normalizedTargetGrade) ? normalizedTargetGrade : null,
+    targetStudentEmail: String(raw?.target_student_email || raw?.targetStudentEmail || "").trim().toLowerCase(),
+    sourceKind,
+    contentId: String(raw?.content_id || raw?.contentId || "").trim(),
+    subjectSourceId: String(raw?.subject_source_id || raw?.subjectSourceId || "").trim(),
+    label: String(raw?.label || "").trim(),
+    createdByEmail: String(raw?.created_by_email || raw?.createdByEmail || "").trim().toLowerCase(),
+    note: String(raw?.note || "").trim(),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizePublishedSubjectSourceRecord(raw) {
+  const sourceId = String(raw?.source_id || raw?.sourceId || "").trim();
+  const subject = String(raw?.subject || "").trim().toLowerCase();
+  const grade = Number(raw?.grade);
+  const payload = raw?.payload && typeof raw.payload === "object" ? cloneSerializableValue(raw.payload) : null;
+  if (!sourceId || !subject || !payload || typeof payload !== "object") return null;
+  return {
+    sourceId,
+    authorUserId: String(raw?.author_user_id || raw?.authorUserId || "").trim(),
+    authorUsername: String(raw?.author_username || raw?.authorUsername || "").trim(),
+    subject,
+    grade: Number.isFinite(grade) ? grade : null,
+    label: String(raw?.label || payload?.label || "").trim(),
+    payload,
+    isPublished: Boolean(raw?.is_published ?? raw?.isPublished ?? true),
+    publishedAt: Number(new Date(raw?.published_at || raw?.publishedAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.published_at || raw?.publishedAt || Date.now()).getTime()) || Date.now(),
+    deletedAt: raw?.deleted_at || raw?.deletedAt ? Number(new Date(raw?.deleted_at || raw?.deletedAt).getTime()) || Date.now() : null,
+  };
+}
+
+function materializeSubjectSourceChapters(sourceRecord, targetSubjectId = "", targetGrade = null) {
+  const normalized = normalizePublishedSubjectSourceRecord(sourceRecord);
+  if (!normalized?.payload) return [];
+  const chapters = Array.isArray(normalized.payload?.chapters) ? normalized.payload.chapters : [];
+  return chapters.map((entry, index) => {
+    const chapter = normalizeCustomChapterImportPayload(entry, {
+      subject: targetSubjectId || normalized.subject,
+      grade: Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : Number(normalized.grade) || 1,
+      nextLessonNumber: index + 1,
+    });
+    return {
+      subject: String(targetSubjectId || chapter.subject || normalized.subject).trim().toLowerCase(),
+      grade: Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : Number(chapter.grade) || Number(normalized.grade) || 1,
+      lessonKey: chapter.lessonKey,
+      lesson: {
+        ...(cloneSerializableValue(chapter.data) || {}),
+        key: chapter.lessonKey,
+        id: `subject_source_${normalized.sourceId}_${chapter.lessonKey}`,
+        __publishedSubjectSource: true,
+        __subjectSourceId: normalized.sourceId,
+        __subjectSourceLabel: normalized.label || `${normalized.subject} source`,
+      },
+      questions: Array.isArray(chapter.questions) ? cloneSerializableValue(chapter.questions) : [],
+    };
+  });
+}
+
+function resolveScopedActivation(records = [], {
+  activationType = "lesson",
+  subject = "",
+  lessonKey = "",
+  schoolId = "",
+  targetGrade = null,
+  targetStudentEmail = "",
+} = {}) {
+  const safeActivationType = String(activationType || "lesson").trim().toLowerCase();
+  const safeSubject = String(subject || "").trim().toLowerCase();
+  const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey });
+  const safeSchoolId = String(schoolId || "").trim();
+  const safeStudentEmail = String(targetStudentEmail || "").trim().toLowerCase();
+  const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
+  const matches = (Array.isArray(records) ? records : [])
+    .map((entry) => normalizeContentActivationRecord(entry))
+    .filter(Boolean)
+    .filter((entry) => entry.status === "active")
+    .filter((entry) => entry.activationType === safeActivationType)
+    .filter((entry) => entry.subject === safeSubject)
+    .filter((entry) => safeActivationType !== "lesson" || entry.lessonKey === safeLessonKey)
+    .filter((entry) => {
+      if (entry.scopeType === "global") return true;
+      if (!safeSchoolId) return false;
+      if (entry.schoolId !== safeSchoolId) return false;
+      if (entry.scopeType === "school") return true;
+      if (entry.scopeType === "grade") {
+        return entry.targetGrade === null || (numericGrade !== null && Number(entry.targetGrade) === numericGrade);
+      }
+      if (entry.scopeType === "student") {
+        if (!safeStudentEmail || entry.targetStudentEmail !== safeStudentEmail) return false;
+        return entry.targetGrade === null || (numericGrade !== null && Number(entry.targetGrade) === numericGrade);
+      }
+      return false;
+    })
+    .sort((left, right) => {
+      const leftScopeScore = left.scopeType === "student" ? 4 : left.scopeType === "grade" ? 3 : left.scopeType === "school" ? 2 : 1;
+      const rightScopeScore = right.scopeType === "student" ? 4 : right.scopeType === "grade" ? 3 : right.scopeType === "school" ? 2 : 1;
+      if (leftScopeScore !== rightScopeScore) return rightScopeScore - leftScopeScore;
+      return (right.updatedAt || 0) - (left.updatedAt || 0);
+    });
+  return matches[0] || null;
+}
+
 function applySavedLessonOrder(groups = [], lessonOrderPreferences = {}, subjectId = "", grade = 0) {
   const safeGroups = Array.isArray(groups) ? groups : [];
   if (!safeGroups.length) return [];
@@ -2257,6 +2414,8 @@ function createEmptyContentRelationshipState() {
     memberships: [],
     parentLinks: [],
     links: [],
+    contentActivations: [],
+    publishedSubjectSources: [],
     lessonArchives: [],
     assignments: [],
     diaryEntries: [],
@@ -5894,10 +6053,12 @@ function normalizeDictionaryImportPayload(rawPayload, options = {}) {
 const SUPABASE_DICTIONARY_TABLE = "dictionary_entries";
 const SUPABASE_CLOUD_DATA_TABLE = "user_data_rows";
 const SUPABASE_PUBLISHED_CONTENT_TABLE = "published_chapters";
+const SUPABASE_PUBLISHED_SUBJECT_SOURCES_TABLE = "published_subject_sources";
 const SUPABASE_CONTENT_ROLE_TABLE = "content_role_assignments";
 const SUPABASE_CONTENT_SETTINGS_TABLE = "content_access_settings";
 const SUPABASE_TEACHER_STUDENT_LINKS_TABLE = "teacher_student_links";
 const SUPABASE_CHAPTER_ASSIGNMENTS_TABLE = "chapter_assignments";
+const SUPABASE_CONTENT_ACTIVATIONS_TABLE = "content_activations";
 const SUPABASE_SCHOOLS_TABLE = "schools";
 const SUPABASE_SCHOOL_MEMBERSHIPS_TABLE = "school_memberships";
 const SUPABASE_PARENT_STUDENT_LINKS_TABLE = "parent_student_links";
@@ -14473,6 +14634,12 @@ function HomeschoolApp() {
   const [chapterAssignmentDraftStudentEmail, setChapterAssignmentDraftStudentEmail] = useState("");
   const [chapterAssignmentDraftContentId, setChapterAssignmentDraftContentId] = useState("");
   const [chapterAssignmentDraftNote, setChapterAssignmentDraftNote] = useState("");
+  const [contentActivationDraftScope, setContentActivationDraftScope] = useState("school");
+  const [contentActivationDraftSchoolId, setContentActivationDraftSchoolId] = useState(String(stored?.activeInstitutionSchoolId || "").trim());
+  const [contentActivationDraftGrade, setContentActivationDraftGrade] = useState("current");
+  const [contentActivationDraftStudentEmail, setContentActivationDraftStudentEmail] = useState("");
+  const [subjectSourceDraftId, setSubjectSourceDraftId] = useState("__builtin__");
+  const [subjectSourcePublishBusy, setSubjectSourcePublishBusy] = useState(false);
   const [schoolDraftName, setSchoolDraftName] = useState("");
   const [schoolDraftOwnerEmail, setSchoolDraftOwnerEmail] = useState("");
   const [schoolDraftPrincipalEmail, setSchoolDraftPrincipalEmail] = useState("");
@@ -15353,13 +15520,89 @@ const headerHideTimerRef = useRef(null);
       .filter((entry) => !activeInstitutionSchoolId || entry.schoolId === activeInstitutionSchoolId)
       .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
   }, [activeInstitutionSchoolId, contentRelationshipState.lessonArchives]);
+  const visibleContentActivations = useMemo(() => {
+    const safeRows = Array.isArray(contentRelationshipState.contentActivations) ? contentRelationshipState.contentActivations : [];
+    return safeRows
+      .map((entry) => normalizeContentActivationRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.status === "active")
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [contentRelationshipState.contentActivations]);
+  const visiblePublishedSubjectSources = useMemo(() => {
+    const safeRows = Array.isArray(contentRelationshipState.publishedSubjectSources) ? contentRelationshipState.publishedSubjectSources : [];
+    return safeRows
+      .map((entry) => normalizePublishedSubjectSourceRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.isPublished && !entry.deletedAt)
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [contentRelationshipState.publishedSubjectSources]);
   const archivedLessonVariantKeys = useMemo(() => new Set(
     visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId)),
   ), [visibleLessonArchives]);
+  const publishedLessonContentLookup = useMemo(() => {
+    const lookup = new Map();
+    Object.values(publishedContentState.lessonsBySubjectGrade || {}).forEach((bucket) => {
+      (Array.isArray(bucket) ? bucket : []).forEach((lesson) => {
+        const contentId = String(lesson?.publication?.contentId || lesson?.__contentId || "").trim();
+        if (contentId) lookup.set(contentId, lesson);
+      });
+    });
+    return lookup;
+  }, [publishedContentState.lessonsBySubjectGrade]);
+  const publishedLessonQuestionLookup = useMemo(() => {
+    const lookup = new Map();
+    Object.entries(publishedContentState.quizzesByKey || {}).forEach(([bucketKey, questions]) => {
+      const parts = String(bucketKey || "").split("::");
+      const runtimeLessonKey = parts[2] || "";
+      const contentIdMatch = String(runtimeLessonKey || "").match(/__published_([a-z0-9]+)/i);
+      if (!contentIdMatch) return;
+      const contentIdFragment = contentIdMatch[1];
+      const match = Array.from(publishedLessonContentLookup.entries()).find(([contentId]) => String(contentId || "").startsWith(contentIdFragment));
+      if (match?.[0]) lookup.set(match[0], Array.isArray(questions) ? cloneSerializableValue(questions) : []);
+    });
+    return lookup;
+  }, [publishedContentState.quizzesByKey, publishedLessonContentLookup]);
+  const publishedSubjectSourceLookup = useMemo(() => {
+    const lookup = new Map();
+    visiblePublishedSubjectSources.forEach((entry) => {
+      if (entry?.sourceId) lookup.set(entry.sourceId, entry);
+    });
+    return lookup;
+  }, [visiblePublishedSubjectSources]);
+  const scopedContentActivationViewerEmail = useMemo(
+    () => (canChooseContentSource ? "" : String(contentIdentityEmail || "").trim().toLowerCase()),
+    [canChooseContentSource, contentIdentityEmail],
+  );
+  const getEffectiveSubjectActivation = useCallback((subjectId, targetGrade) => resolveScopedActivation(visibleContentActivations, {
+    activationType: "subject",
+    subject: subjectId,
+    schoolId: activeInstitutionSchoolIdResolved,
+    targetGrade,
+    targetStudentEmail: scopedContentActivationViewerEmail,
+  }), [activeInstitutionSchoolIdResolved, scopedContentActivationViewerEmail, visibleContentActivations]);
+  const getEffectiveLessonActivation = useCallback((subjectId, targetGrade, lessonKey) => resolveScopedActivation(visibleContentActivations, {
+    activationType: "lesson",
+    subject: subjectId,
+    lessonKey,
+    schoolId: activeInstitutionSchoolIdResolved,
+    targetGrade,
+    targetStudentEmail: scopedContentActivationViewerEmail,
+  }), [activeInstitutionSchoolIdResolved, scopedContentActivationViewerEmail, visibleContentActivations]);
   const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
-    const baseLessons = getLessons(subjectId, targetGrade) || [];
-    const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
-    const publishedLessons = publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
+    const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
+    const activeSubjectSource = subjectActivation?.sourceKind === "published_subject"
+      ? publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null
+      : null;
+    const sourceChapters = activeSubjectSource ? materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade) : [];
+    const baseLessons = activeSubjectSource
+      ? sourceChapters.map((entry) => entry.lesson).filter(Boolean)
+      : (getLessons(subjectId, targetGrade) || []);
+    const customLessons = activeSubjectSource
+      ? []
+      : (customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || []);
+    const publishedLessons = activeSubjectSource
+      ? []
+      : (publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || []);
     const mergedGroups = buildChapterVariantGroups({
       subjectId,
       targetGrade,
@@ -15371,8 +15614,44 @@ const headerHideTimerRef = useRef(null);
       currentUserId: supabaseAuthState.userId,
       archivedVariantKeys: archivedLessonVariantKeys,
     });
-    return applySavedLessonOrder(mergedGroups, lessonOrderPreferences, subjectId, targetGrade);
-  }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
+    const activationAdjustedGroups = mergedGroups.map((group) => {
+      const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, group.canonicalLessonKey);
+      if (!lessonActivation) return group;
+      if (lessonActivation.sourceKind === "builtin_lesson") {
+        const builtinVariant = group.variants.find((variant) => variant.sourceType === "builtin") || null;
+        return builtinVariant ? { ...group, activeVariant: builtinVariant, activeLesson: builtinVariant.lesson, activationSelection: lessonActivation } : group;
+      }
+      if (lessonActivation.sourceKind === "published_lesson" && lessonActivation.contentId) {
+        const existingPublishedVariant = group.variants.find((variant) => variant.sourceType === "published" && String(variant.contentId || "").trim() === lessonActivation.contentId) || null;
+        if (existingPublishedVariant) {
+          return { ...group, activeVariant: existingPublishedVariant, activeLesson: existingPublishedVariant.lesson, activationSelection: lessonActivation };
+        }
+        const publishedLesson = publishedLessonContentLookup.get(String(lessonActivation.contentId || "").trim()) || null;
+        if (publishedLesson) {
+          const injectedVariant = {
+            lesson: publishedLesson,
+            sourceType: "published",
+            sourceKey: getLessonVariantIdentity(publishedLesson),
+            contentId: String(publishedLesson?.publication?.contentId || publishedLesson?.__contentId || "").trim(),
+            authorUserId: String(publishedLesson?.publication?.authorUserId || publishedLesson?.__contentOwnerId || "").trim(),
+            authorUsername: String(publishedLesson?.publication?.authorUsername || publishedLesson?.__publishedBy || "").trim(),
+            forkedFromContentId: String(publishedLesson?.publication?.forkedFromContentId || publishedLesson?.__forkedFromContentId || "").trim(),
+            ownedByCurrentUser: Boolean(supabaseAuthState.userId) && String(publishedLesson?.publication?.authorUserId || publishedLesson?.__contentOwnerId || "").trim() === String(supabaseAuthState.userId || "").trim(),
+            updatedAt: Number(publishedLesson?.publication?.updatedAt || publishedLesson?.publication?.publishedAt || 0) || 0,
+          };
+          return {
+            ...group,
+            variants: [...group.variants, injectedVariant],
+            activeVariant: injectedVariant,
+            activeLesson: injectedVariant.lesson,
+            activationSelection: lessonActivation,
+          };
+        }
+      }
+      return group;
+    });
+    return applySavedLessonOrder(activationAdjustedGroups, lessonOrderPreferences, subjectId, targetGrade);
+  }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
   const getMergedLessons = useCallback((subjectId, targetGrade) => (
     getMergedLessonGroups(subjectId, targetGrade)
       .map((group) => group.activeLesson)
@@ -15380,12 +15659,24 @@ const headerHideTimerRef = useRef(null);
   ), [getMergedLessonGroups]);
   const getMergedQuiz = useCallback((subjectId, targetGrade, lessonKey) => {
     const normalizedLessonKey = String(lessonKey || "").trim();
+    const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
+    if (subjectActivation?.sourceKind === "published_subject" && subjectActivation.subjectSourceId) {
+      const subjectSource = publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null;
+      const sourceChapter = materializeSubjectSourceChapters(subjectSource, subjectId, targetGrade)
+        .find((entry) => String(entry.lessonKey || "").trim() === normalizedLessonKey);
+      if (Array.isArray(sourceChapter?.questions) && sourceChapter.questions.length > 0) return sourceChapter.questions;
+    }
+    const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, normalizedLessonKey);
+    if (lessonActivation?.sourceKind === "published_lesson" && lessonActivation.contentId) {
+      const publishedQuestions = publishedLessonQuestionLookup.get(String(lessonActivation.contentId || "").trim());
+      if (Array.isArray(publishedQuestions) && publishedQuestions.length > 0) return publishedQuestions;
+    }
     const customQuiz = customContentState.quizzesByKey?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
     if (Array.isArray(customQuiz) && customQuiz.length > 0) return customQuiz;
     const publishedQuiz = publishedContentState.quizzesByKey?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
     if (Array.isArray(publishedQuiz) && publishedQuiz.length > 0) return publishedQuiz;
     return getQuiz(subjectId, targetGrade, normalizedLessonKey) || [];
-  }, [customContentState.quizzesByKey, publishedContentState.quizzesByKey]);
+  }, [customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
   const contentDataLoader = useMemo(() => ({
     ...window.HomeSchoolData,
     SUBJECTS: mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {})),
@@ -15443,6 +15734,35 @@ const headerHideTimerRef = useRef(null);
     () => (Array.isArray(contentRelationshipState.memberships) ? contentRelationshipState.memberships.map((entry) => normalizeSchoolMembershipRecord(entry)).filter(Boolean) : []),
     [contentRelationshipState.memberships],
   );
+  const activationStudentOptions = useMemo(() => {
+    const map = new Map((Array.isArray(linkedStudentOptions) ? linkedStudentOptions : []).map((entry) => [entry.studentEmail, entry]));
+    safeSchoolMemberships
+      .filter((entry) => entry.status === "active")
+      .filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved)
+      .filter((entry) => String(entry.role || "").trim().toLowerCase() === "student")
+      .forEach((entry) => {
+        const studentEmail = String(entry.memberEmail || "").trim().toLowerCase();
+        if (!studentEmail) return;
+        const firstScopedGrade = Array.isArray(entry.gradeScope) ? Number(entry.gradeScope[0]) : null;
+        if (!map.has(studentEmail)) {
+          map.set(studentEmail, {
+            studentEmail,
+            studentGrade: Number.isFinite(firstScopedGrade) ? firstScopedGrade : null,
+            updatedAt: entry.updatedAt,
+          });
+        }
+      });
+    return Array.from(map.values()).sort((left, right) => {
+      if ((left.studentGrade || 999) !== (right.studentGrade || 999)) return (left.studentGrade || 999) - (right.studentGrade || 999);
+      return String(left.studentEmail || "").localeCompare(String(right.studentEmail || ""));
+    });
+  }, [activeInstitutionSchoolIdResolved, linkedStudentOptions, safeSchoolMemberships]);
+  useEffect(() => {
+    if (contentActivationDraftScope !== "student") return;
+    if (!activationStudentOptions.length) return;
+    if (contentActivationDraftStudentEmail && activationStudentOptions.some((entry) => entry.studentEmail === contentActivationDraftStudentEmail)) return;
+    setContentActivationDraftStudentEmail(activationStudentOptions[0].studentEmail);
+  }, [activationStudentOptions, contentActivationDraftScope, contentActivationDraftStudentEmail]);
   const safeParentStudentLinks = useMemo(
     () => (Array.isArray(contentRelationshipState.parentLinks) ? contentRelationshipState.parentLinks.map((entry) => normalizeParentStudentLinkRecord(entry)).filter(Boolean) : []),
     [contentRelationshipState.parentLinks],
@@ -15495,6 +15815,10 @@ const headerHideTimerRef = useRef(null);
     setSchoolDraftHolidayDateInput(String(activeInstitutionSchool.autoDiaryStartDate || activeInstitutionSchool.yearStartDate || todayIso || toIsoDateString(Date.now())).trim());
   }, [activeInstitutionSchool, todayIso]);
   const activeInstitutionSchoolIdResolved = String(activeInstitutionSchool?.schoolId || "").trim();
+  useEffect(() => {
+    if (!activeInstitutionSchoolIdResolved) return;
+    setContentActivationDraftSchoolId((current) => current || activeInstitutionSchoolIdResolved);
+  }, [activeInstitutionSchoolIdResolved]);
   const currentUserInstitutionRole = useMemo(() => {
     if (!currentUserSchoolMemberships.length || !activeInstitutionSchoolIdResolved) return "";
     const scopedRoles = currentUserSchoolMemberships
@@ -15543,6 +15867,16 @@ const headerHideTimerRef = useRef(null);
     });
     return overridden ? overrideValue : globalValue;
   }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentRoleCapabilities, currentUserSchoolMemberships]);
+  const canManageScopedCurriculum = useMemo(
+    () => Boolean(
+      canManageContentAccess
+      || canAdministerLessonLibrary
+      || schoolEffectivePermission("chooseContentSource")
+      || schoolEffectivePermission("assignContent")
+      || schoolEffectivePermission("manageInstitution")
+    ),
+    [canAdministerLessonLibrary, canManageContentAccess, schoolEffectivePermission],
+  );
   const visibleTeacherStudentLinks = useMemo(() => {
     const bySchool = activeInstitutionSchoolIdResolved
       ? managedTeacherStudentLinks.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
@@ -17464,6 +17798,11 @@ const headerHideTimerRef = useRef(null);
             grade,
             nextLessonNumber: selectedSubjectLessons.length + importedChapters.size + 1,
           });
+          const normalizedKind = String(normalized?.kind || "").trim().toLowerCase();
+          const importedSourceId = normalizedKind === "homeschool-subject-pack"
+            ? `local_subject_source_${simpleHash(`${Date.now()}_${file?.name || ""}_${Math.random()}`)}`
+            : "";
+          const importedSourceLabel = String(parsed?.label || file?.name || "").trim();
           const includesSubjectImport = (normalized.subjects || []).some((subject) => {
             const normalizedSubject = normalizeSubjectDefinition(subject);
             return normalizedSubject.id && !builtinSubjectIds.has(normalizedSubject.id) && !existingSubjectIds.has(normalizedSubject.id);
@@ -17482,7 +17821,15 @@ const headerHideTimerRef = useRef(null);
           });
           (normalized.chapters || []).forEach((chapter) => {
             const chapterKey = `${chapter.subject}::${chapter.grade}::${chapter.lessonKey}`;
-            importedChapters.set(chapterKey, chapter);
+            const nextChapter = cloneSerializableValue(chapter) || chapter;
+            if (importedSourceId && nextChapter?.data && typeof nextChapter.data === "object") {
+              nextChapter.data.__subjectSource = {
+                sourceType: "local_import",
+                sourceId: importedSourceId,
+                label: importedSourceLabel || `${chapter.subject} subject source`,
+              };
+            }
+            importedChapters.set(chapterKey, nextChapter);
           });
         } catch (error) {
           failures.push({
@@ -17609,6 +17956,27 @@ const headerHideTimerRef = useRef(null);
       fallbackNumber: index + 1,
     } : null)
     .filter(Boolean), [getMergedQuiz, selectedChapterKeys, selectedSubjectChapterGroups]);
+  const selectedSubjectPublishedSources = useMemo(() => (
+    selectedSubject && grade
+      ? visiblePublishedSubjectSources.filter((entry) => entry.subject === selectedSubject.id)
+      : []
+  ), [grade, selectedSubject, visiblePublishedSubjectSources]);
+  const selectedSubjectActiveSourceActivation = useMemo(
+    () => (selectedSubject && grade ? getEffectiveSubjectActivation(selectedSubject.id, grade) : null),
+    [getEffectiveSubjectActivation, grade, selectedSubject],
+  );
+  const selectedSubjectActivePublishedSource = useMemo(
+    () => (selectedSubjectActiveSourceActivation?.subjectSourceId
+      ? publishedSubjectSourceLookup.get(String(selectedSubjectActiveSourceActivation.subjectSourceId || "").trim()) || null
+      : null),
+    [publishedSubjectSourceLookup, selectedSubjectActiveSourceActivation],
+  );
+  useEffect(() => {
+    const availableIds = new Set(["__builtin__", ...selectedSubjectPublishedSources.map((entry) => entry.sourceId)]);
+    if (!availableIds.has(subjectSourceDraftId)) {
+      setSubjectSourceDraftId(selectedSubjectActivePublishedSource?.sourceId || "__builtin__");
+    }
+  }, [selectedSubjectActivePublishedSource?.sourceId, selectedSubjectPublishedSources, subjectSourceDraftId]);
   const handleToggleChapterSelectionMode = useCallback(() => {
     setChapterSelectionMode((current) => {
       if (current) setSelectedChapterKeys([]);
@@ -17812,6 +18180,222 @@ const headerHideTimerRef = useRef(null);
     );
     showAppToast(joinLocalizedText("Subject exported", "مضمون برآمد ہو گیا", language), "copy");
   }, [canExportContent, grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
+  const getScopedActivationSchoolId = useCallback((scopeType) => {
+    if (scopeType === "global") return "";
+    if (canManageContentAccess) return String(contentActivationDraftSchoolId || activeInstitutionSchoolIdResolved || "").trim();
+    return String(activeInstitutionSchoolIdResolved || "").trim();
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentActivationDraftSchoolId]);
+  const getScopedActivationTargetGrade = useCallback((scopeType) => {
+    if (scopeType !== "grade" && scopeType !== "student") return null;
+    if (String(contentActivationDraftGrade || "").trim().toLowerCase() === "all") return null;
+    if (String(contentActivationDraftGrade || "").trim().toLowerCase() === "current") return Number(grade) || null;
+    const numeric = Number(contentActivationDraftGrade);
+    return Number.isFinite(numeric) ? Math.max(1, Math.min(12, numeric)) : (Number(grade) || null);
+  }, [contentActivationDraftGrade, grade]);
+  const handleSaveScopedContentActivation = useCallback(async ({
+    activationType = "lesson",
+    subjectId = "",
+    lessonKey = "",
+    sourceKind = "",
+    contentId = "",
+    subjectSourceId = "",
+    label = "",
+    forcedScopeType = "",
+  } = {}) => {
+    const scopeType = ["global", "school", "grade", "student"].includes(String(forcedScopeType || contentActivationDraftScope || "").trim().toLowerCase())
+      ? String(forcedScopeType || contentActivationDraftScope || "").trim().toLowerCase()
+      : "school";
+    if (!(canAdministerLessonLibrary || schoolEffectivePermission("chooseContentSource") || schoolEffectivePermission("manageInstitution"))) {
+      showAppToast(joinLocalizedText("Your role cannot activate curriculum sources here.", "آپ کے کردار کو یہاں نصابی ماخذ فعال کرنے کی اجازت نہیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to change active curriculum sources.", "فعال نصابی ماخذ بدلنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    const safeActivationType = activationType === "subject" ? "subject" : "lesson";
+    const safeSubjectId = String(subjectId || "").trim().toLowerCase();
+    const safeLessonKey = safeActivationType === "lesson" ? resolveCustomChapterLessonKey({ lessonKey }) : "";
+    const schoolId = getScopedActivationSchoolId(scopeType);
+    const targetGrade = getScopedActivationTargetGrade(scopeType);
+    const targetStudentEmail = scopeType === "student" ? String(contentActivationDraftStudentEmail || "").trim().toLowerCase() : "";
+    if (!safeSubjectId || (safeActivationType === "lesson" && !safeLessonKey)) {
+      showAppToast(joinLocalizedText("Choose a lesson or subject source first.", "پہلے ایک سبق یا مضمون کا ماخذ منتخب کریں۔", language), "alert");
+      return;
+    }
+    if (!sourceKind) {
+      showAppToast(joinLocalizedText("Choose a source first.", "پہلے ایک ماخذ منتخب کریں۔", language), "alert");
+      return;
+    }
+    if (scopeType !== "global" && !schoolId) {
+      showAppToast(joinLocalizedText("Choose a school first.", "پہلے ایک اسکول منتخب کریں۔", language), "alert");
+      return;
+    }
+    if (scopeType === "student" && !targetStudentEmail) {
+      showAppToast(joinLocalizedText("Choose a learner first.", "پہلے ایک سیکھنے والا منتخب کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const nowIso = new Date().toISOString();
+      const activationId = `activation_${simpleHash(buildContentActivationPreferenceKey({
+        activationType: safeActivationType,
+        subject: safeSubjectId,
+        lessonKey: safeLessonKey,
+        scopeType,
+        schoolId,
+        targetGrade,
+        targetStudentEmail,
+      }))}`;
+      const row = {
+        activation_id: activationId,
+        activation_type: safeActivationType,
+        scope_type: scopeType,
+        school_id: scopeType === "global" ? null : schoolId || null,
+        target_grade: scopeType === "grade" || scopeType === "student" ? targetGrade : null,
+        target_student_email: scopeType === "student" ? targetStudentEmail : null,
+        subject: safeSubjectId,
+        lesson_key: safeActivationType === "lesson" ? safeLessonKey : null,
+        source_kind: sourceKind,
+        content_id: contentId || null,
+        subject_source_id: subjectSourceId || null,
+        label: String(label || "").trim() || null,
+        created_by_email: contentIdentityEmail,
+        note: null,
+        status: "active",
+        updated_at: nowIso,
+      };
+      const { error } = await client.from(SUPABASE_CONTENT_ACTIVATIONS_TABLE).upsert(row, { onConflict: "activation_id" });
+      if (error) throw error;
+      const normalized = normalizeContentActivationRecord(row);
+      if (normalized) {
+        setContentRelationshipState((state) => ({
+          ...state,
+          contentActivations: [
+            ...(Array.isArray(state?.contentActivations) ? state.contentActivations : []).filter((entry) => normalizeContentActivationRecord(entry)?.activationId !== normalized.activationId),
+            normalized,
+          ],
+        }));
+      }
+      await refreshContentRelationshipState();
+      showAppToast(joinLocalizedText("Active curriculum source saved", "فعال نصابی ماخذ محفوظ ہو گیا", language), "check");
+    } catch (error) {
+      const activationErrorMessage = String(error?.message || error || "").trim();
+      const missingTable = String(error?.code || "").trim() === "42P01" || /content_activations|does not exist|could not find the table/i.test(activationErrorMessage);
+      showAppToast(
+        joinLocalizedText(
+          missingTable
+            ? "Unable to save active source: the new curriculum activation table is missing. Run the latest setup SQL once, then try again."
+            : `Unable to save active source: ${activationErrorMessage}`,
+          missingTable
+            ? "فعال ماخذ محفوظ نہیں ہو سکا: نیا curriculum activation جدول موجود نہیں۔ ایک بار تازہ setup SQL چلائیں، پھر دوبارہ کوشش کریں۔"
+            : `فعال ماخذ محفوظ نہیں ہو سکا: ${activationErrorMessage}`,
+          language,
+        ),
+        "alert",
+      );
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canAdministerLessonLibrary, contentActivationDraftScope, contentActivationDraftStudentEmail, contentIdentityEmail, ensureSupabaseClient, getScopedActivationSchoolId, getScopedActivationTargetGrade, language, refreshContentRelationshipState, schoolEffectivePermission, showAppToast, supabaseAuthState.userId]);
+  const handleActivateSelectedLessonScoped = useCallback(async (forcedScopeType = "") => {
+    if (!selectedLessonChapterGroup || !selectedLessonOpenedVariant) return;
+    const sourceType = String(selectedLessonOpenedVariant.sourceType || "").trim();
+    if (sourceType === "custom" && !selectedLessonSourceScopeSummary.contentId) {
+      showAppToast(joinLocalizedText("Publish this lesson copy first, then activate it for schools, grades, or learners.", "اس سبق کی کاپی پہلے شائع کریں، پھر اسے اسکول، جماعت، یا طالب علم کے لیے فعال کریں۔", language), "alert");
+      return;
+    }
+    await handleSaveScopedContentActivation({
+      activationType: "lesson",
+      subjectId: selectedLessonChapterGroup.subjectId,
+      lessonKey: selectedLessonChapterGroup.canonicalLessonKey,
+      sourceKind: sourceType === "builtin" ? "builtin_lesson" : "published_lesson",
+      contentId: sourceType === "builtin" ? "" : String(selectedLessonSourceScopeSummary.contentId || "").trim(),
+      label: getChapterVariantDisplayLabel(selectedLessonOpenedVariant),
+      forcedScopeType,
+    });
+  }, [handleSaveScopedContentActivation, language, selectedLessonChapterGroup, selectedLessonOpenedVariant, selectedLessonSourceScopeSummary.contentId, selectedLessonSourceScopeSummary.contentId, showAppToast]);
+  const handlePublishWholeSubjectSource = useCallback(async () => {
+    if (!effectiveCanPublishContent) {
+      showAppToast(joinLocalizedText("Only authorized editors or admins can publish subject sources.", "صرف مجاز ایڈیٹر یا ایڈمن مضمون کے ماخذ شائع کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!selectedSubject || !grade || !selectedSubjectExportEntries.length) {
+      showAppToast(joinLocalizedText("Open a subject with lessons first.", "پہلے ایسا مضمون کھولیں جس میں اسباق موجود ہوں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId) {
+      showAppToast(joinLocalizedText("Sign in first to publish subject sources.", "مضمون کے ماخذ شائع کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    setSubjectSourcePublishBusy(true);
+    try {
+      const client = ensureSupabaseClient();
+      const currentSource = selectedSubjectPublishedSources.find((entry) => entry.sourceId === subjectSourceDraftId && String(entry.authorUserId || "").trim() === String(supabaseAuthState.userId || "").trim()) || null;
+      const sourceId = currentSource?.sourceId || `subject_source_${simpleHash(`${supabaseAuthState.userId}_${selectedSubject.id}_${grade}_${Date.now()}_${Math.random()}`)}`;
+      const nowIso = new Date().toISOString();
+      const payload = buildCustomChapterPackExportPayload({
+        subject: selectedSubject.id,
+        grade,
+        subjectMeta: selectedSubject,
+        lessons: selectedSubjectExportEntries,
+        label: `${selectedSubject.name || selectedSubject.id} subject source`,
+      });
+      const { error } = await client.from(SUPABASE_PUBLISHED_SUBJECT_SOURCES_TABLE).upsert({
+        source_id: sourceId,
+        author_user_id: supabaseAuthState.userId,
+        author_username: sanitizeAccountUsername(supabaseAccountUsername || supabaseAuthState.email || ""),
+        subject: selectedSubject.id,
+        grade: Number(grade),
+        label: String(payload.label || `${selectedSubject.name || selectedSubject.id} subject source`).trim(),
+        payload,
+        is_published: true,
+        published_at: currentSource?.publishedAt ? new Date(Number(currentSource.publishedAt)).toISOString() : nowIso,
+        updated_at: nowIso,
+        deleted_at: null,
+      }, { onConflict: "source_id" });
+      if (error) throw error;
+      setSubjectSourceDraftId(sourceId);
+      await refreshContentRelationshipState();
+      showAppToast(joinLocalizedText("Subject source published", "مضمون کا ماخذ شائع ہو گیا", language), "check");
+    } catch (error) {
+      const publishErrorMessage = String(error?.message || error || "").trim();
+      const missingTable = String(error?.code || "").trim() === "42P01" || /published_subject_sources|does not exist|could not find the table/i.test(publishErrorMessage);
+      showAppToast(
+        joinLocalizedText(
+          missingTable
+            ? "Unable to publish subject source: the new subject-source table is missing. Run the latest setup SQL once, then try again."
+            : `Unable to publish subject source: ${publishErrorMessage}`,
+          missingTable
+            ? "مضمون کا ماخذ شائع نہیں ہو سکا: نیا subject-source جدول موجود نہیں۔ ایک بار تازہ setup SQL چلائیں، پھر دوبارہ کوشش کریں۔"
+            : `مضمون کا ماخذ شائع نہیں ہو سکا: ${publishErrorMessage}`,
+          language,
+        ),
+        "alert",
+      );
+    } finally {
+      setSubjectSourcePublishBusy(false);
+    }
+  }, [effectiveCanPublishContent, ensureSupabaseClient, grade, language, refreshContentRelationshipState, selectedSubject, selectedSubjectExportEntries, selectedSubjectPublishedSources, showAppToast, subjectSourceDraftId, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
+  const handleActivateSelectedSubjectSourceScoped = useCallback(async (forcedScopeType = "") => {
+    if (!selectedSubject || !grade) return;
+    const selectedSource = subjectSourceDraftId === "__builtin__"
+      ? null
+      : selectedSubjectPublishedSources.find((entry) => entry.sourceId === subjectSourceDraftId) || null;
+    if (subjectSourceDraftId !== "__builtin__" && !selectedSource) {
+      showAppToast(joinLocalizedText("Choose a published subject source first.", "پہلے ایک شائع شدہ مضمون کا ماخذ منتخب کریں۔", language), "alert");
+      return;
+    }
+    await handleSaveScopedContentActivation({
+      activationType: "subject",
+      subjectId: selectedSubject.id,
+      sourceKind: selectedSource ? "published_subject" : "builtin_subject",
+      subjectSourceId: selectedSource?.sourceId || "",
+      label: selectedSource?.label || `${selectedSubject.name || selectedSubject.id}`,
+      forcedScopeType,
+    });
+  }, [grade, handleSaveScopedContentActivation, language, selectedSubject, selectedSubjectPublishedSources, showAppToast, subjectSourceDraftId]);
   const updateChapterSourceSelection = useCallback((subjectId, targetGrade, canonicalLessonKey, nextSelection = null, options = {}) => {
     if (!canChooseContentSource && !options.force) {
       if (!options.silent) {
@@ -20485,6 +21069,26 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         ) {
           return [];
         }
+        if (
+          result.error
+          && table === SUPABASE_CONTENT_ACTIVATIONS_TABLE
+          && (
+            String(result.error.code || "").trim() === "42P01"
+            || /does not exist|could not find the table|relation .*content_activations/i.test(String(result.error.message || ""))
+          )
+        ) {
+          return [];
+        }
+        if (
+          result.error
+          && table === SUPABASE_PUBLISHED_SUBJECT_SOURCES_TABLE
+          && (
+            String(result.error.code || "").trim() === "42P01"
+            || /does not exist|could not find the table|relation .*published_subject_sources/i.test(String(result.error.message || ""))
+          )
+        ) {
+          return [];
+        }
         if (result.error) throw result.error;
         return Array.isArray(result.data) ? result.data.map((row) => normalizeFn(row)).filter(Boolean) : [];
       };
@@ -20493,6 +21097,8 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         memberships: new Map(),
         parentLinks: new Map(),
         links: new Map(),
+        contentActivations: new Map(),
+        publishedSubjectSources: new Map(),
         lessonArchives: new Map(),
         assignments: new Map(),
         diaryEntries: new Map(),
@@ -20585,12 +21191,33 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         "linkId",
       );
       await collectSchoolScoped(
+        SUPABASE_CONTENT_ACTIVATIONS_TABLE,
+        "activation_id, activation_type, scope_type, school_id, target_grade, target_student_email, subject, lesson_key, source_kind, content_id, subject_source_id, label, created_by_email, note, status, created_at, updated_at",
+        normalizeContentActivationRecord,
+        "contentActivations",
+        "activationId",
+      );
+      if (!canManageContentAccess) {
+        collectRows("contentActivations", await fetchNormalizedRows(
+          SUPABASE_CONTENT_ACTIVATIONS_TABLE,
+          "activation_id, activation_type, scope_type, school_id, target_grade, target_student_email, subject, lesson_key, source_kind, content_id, subject_source_id, label, created_by_email, note, status, created_at, updated_at",
+          normalizeContentActivationRecord,
+          (q) => q.is("school_id", null),
+        ), "activationId");
+      }
+      await collectSchoolScoped(
         SUPABASE_LESSON_ARCHIVES_TABLE,
         "archive_id, school_id, subject, grade, lesson_key, source_type, content_id, title, archived_by_email, status, created_at, updated_at",
         normalizeLessonArchiveRecord,
         "lessonArchives",
         "archiveId",
       );
+      collectRows("publishedSubjectSources", await fetchNormalizedRows(
+        SUPABASE_PUBLISHED_SUBJECT_SOURCES_TABLE,
+        "source_id, author_user_id, author_username, subject, grade, label, payload, is_published, published_at, updated_at, deleted_at",
+        normalizePublishedSubjectSourceRecord,
+        (q) => q.eq("is_published", true).is("deleted_at", null),
+      ), "sourceId");
       if (!canManageContentAccess && canAdministerLessonLibrary && activeInstitutionSchoolIdResolved) {
         collectRows("lessonArchives", await fetchNormalizedRows(
           SUPABASE_LESSON_ARCHIVES_TABLE,
@@ -20664,6 +21291,8 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         memberships: Array.from(rowMaps.memberships.values()),
         parentLinks: Array.from(rowMaps.parentLinks.values()),
         links: Array.from(rowMaps.links.values()),
+        contentActivations: Array.from(rowMaps.contentActivations.values()),
+        publishedSubjectSources: Array.from(rowMaps.publishedSubjectSources.values()).filter((entry) => !entry.deletedAt),
         lessonArchives: Array.from(rowMaps.lessonArchives.values()),
         assignments: Array.from(rowMaps.assignments.values()),
         diaryEntries: Array.from(rowMaps.diaryEntries.values()),
@@ -29475,6 +30104,81 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             )}
           </div>
         </div>
+        {canManageScopedCurriculum ? (
+          <div className="review-panel chapter-scope-panel" data-ui-language={language} style={{ marginBottom: 16 }}>
+            <div className="review-panel-head">
+              <div>
+                <h3>{renderLocalizedTextNode(joinLocalizedText("Subject Source Control", "مضمون ماخذ کنٹرول", language), language)}</h3>
+                <p>{renderLocalizedTextNode(joinLocalizedText("Publish this subject as one reusable source, then activate it for one school, one grade, one learner, or everywhere.", "اس مضمون کو ایک قابلِ استعمال ماخذ کے طور پر شائع کریں، پھر اسے ایک اسکول، ایک جماعت، ایک طالب علم، یا ہر جگہ کے لیے فعال کریں۔", language), language)}</p>
+              </div>
+              <span className="goal-progress-badge">
+                {renderLocalizedTextNode(
+                  selectedSubjectActivePublishedSource?.label
+                    || joinLocalizedText("Built-in subject", "بنیادی مضمون", language),
+                  language,
+                )}
+              </span>
+            </div>
+            <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+              {canManageContentAccess ? (
+                <select className="dictionary-select" value={contentActivationDraftSchoolId} onChange={(event) => setContentActivationDraftSchoolId(event.target.value)}>
+                  <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose school", "اسکول منتخب کریں", language), language)}</option>
+                  {accessibleSchools.map((school) => (
+                    <option key={`subject_scope_school_${school.schoolId}`} value={school.schoolId}>
+                      {school.schoolName}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <select className="dictionary-select" value={subjectSourceDraftId} onChange={(event) => setSubjectSourceDraftId(event.target.value)}>
+                <option value="__builtin__">{renderLocalizedTextNode(joinLocalizedText("Built-in subject library", "بنیادی مضمون لائبریری", language), language)}</option>
+                {selectedSubjectPublishedSources.map((entry) => (
+                  <option key={`subject_source_${entry.sourceId}`} value={entry.sourceId}>
+                    {entry.label || `${selectedSubject?.name || selectedSubject?.id} source`}
+                  </option>
+                ))}
+              </select>
+              <select className="dictionary-select" value={contentActivationDraftGrade} onChange={(event) => setContentActivationDraftGrade(event.target.value)}>
+                <option value="current">{renderLocalizedTextNode(joinLocalizedText(`Current grade (${grade})`, `موجودہ جماعت (${grade})`, language), language)}</option>
+                <option value="all">{renderLocalizedTextNode(joinLocalizedText("All grades", "تمام جماعتیں", language), language)}</option>
+                {GRADES.map((entry) => (
+                  <option key={`subject_scope_grade_${entry}`} value={String(entry)}>
+                    {renderLocalizedTextNode(joinLocalizedText(`Grade ${entry}`, `جماعت ${entry}`, language), language)}
+                  </option>
+                ))}
+              </select>
+              <select className="dictionary-select" value={contentActivationDraftStudentEmail} onChange={(event) => setContentActivationDraftStudentEmail(event.target.value)} disabled={!activationStudentOptions.length}>
+                <option value="">{renderLocalizedTextNode(joinLocalizedText("Specific learner", "مخصوص طالب علم", language), language)}</option>
+                {activationStudentOptions.map((entry) => (
+                  <option key={`subject_scope_student_${entry.studentEmail}`} value={entry.studentEmail}>
+                    {entry.studentEmail}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
+              {effectiveCanPublishContent ? (
+                <button type="button" className="ghost-cta" onClick={handlePublishWholeSubjectSource} disabled={subjectSourcePublishBusy || !selectedSubjectLessons.length}>
+                  {renderLocalizedTextNode(subjectSourcePublishBusy ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language) : joinLocalizedText("Publish Subject Source", "مضمون ماخذ شائع کریں", language), language)}
+                </button>
+              ) : null}
+              <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("school")} disabled={contentRelationshipBusy}>
+                {renderLocalizedTextNode(joinLocalizedText("Set Active For School", "اسکول کے لیے فعال کریں", language), language)}
+              </button>
+              <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("grade")} disabled={contentRelationshipBusy}>
+                {renderLocalizedTextNode(joinLocalizedText("Set Active For Grade", "جماعت کے لیے فعال کریں", language), language)}
+              </button>
+              <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
+                {renderLocalizedTextNode(joinLocalizedText("Set Active For Learner", "طالب علم کے لیے فعال کریں", language), language)}
+              </button>
+              {canManageContentAccess ? (
+                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("global")} disabled={contentRelationshipBusy}>
+                  {renderLocalizedTextNode(joinLocalizedText("Replace Default Everywhere", "ہر جگہ بنیادی ماخذ بدلیں", language), language)}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <div className="lesson-list" style={(selectedSubject?.id === "urdu" || isUrduUi(language)) ? { direction: "rtl" } : {}}>
           {selectedSubjectArrangementGroups.map((group, index) => {
             const lesson = group.activeLesson;
@@ -29676,6 +30380,60 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          ) : null}
+          {selectedLesson && selectedLessonChapterGroup && canManageScopedCurriculum ? (
+            <div className="review-panel chapter-scope-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Curriculum Actions", "نصابی اعمال", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Use explicit admin actions here: keep a local draft private, publish it for everyone, activate it for one school or grade, activate it for one learner, replace the default everywhere, or hide the built-in source.", "یہاں واضح ایڈمن اعمال استعمال کریں: مقامی مسودہ نجی رکھیں، سب کے لیے شائع کریں، ایک اسکول یا جماعت کے لیے فعال کریں، ایک طالب علم کے لیے فعال کریں، ہر جگہ بنیادی ماخذ بدلیں، یا بنیادی ماخذ چھپا دیں۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+                {canManageContentAccess ? (
+                  <select className="dictionary-select" value={contentActivationDraftSchoolId} onChange={(event) => setContentActivationDraftSchoolId(event.target.value)}>
+                    <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose school", "اسکول منتخب کریں", language), language)}</option>
+                    {accessibleSchools.map((school) => (
+                      <option key={`lesson_scope_school_${school.schoolId}`} value={school.schoolId}>{school.schoolName}</option>
+                    ))}
+                  </select>
+                ) : null}
+                <select className="dictionary-select" value={contentActivationDraftGrade} onChange={(event) => setContentActivationDraftGrade(event.target.value)}>
+                  <option value="current">{renderLocalizedTextNode(joinLocalizedText(`Current grade (${grade})`, `موجودہ جماعت (${grade})`, language), language)}</option>
+                  <option value="all">{renderLocalizedTextNode(joinLocalizedText("All grades", "تمام جماعتیں", language), language)}</option>
+                  {GRADES.map((entry) => (
+                    <option key={`lesson_scope_grade_${entry}`} value={String(entry)}>{renderLocalizedTextNode(joinLocalizedText(`Grade ${entry}`, `جماعت ${entry}`, language), language)}</option>
+                  ))}
+                </select>
+                <select className="dictionary-select" value={contentActivationDraftStudentEmail} onChange={(event) => setContentActivationDraftStudentEmail(event.target.value)} disabled={!activationStudentOptions.length}>
+                  <option value="">{renderLocalizedTextNode(joinLocalizedText("Specific learner", "مخصوص طالب علم", language), language)}</option>
+                  {activationStudentOptions.map((entry) => (
+                    <option key={`lesson_scope_student_${entry.studentEmail}`} value={entry.studentEmail}>{entry.studentEmail}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
+                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy}>
+                  {renderLocalizedTextNode(joinLocalizedText("Set Active For School", "اسکول کے لیے فعال کریں", language), language)}
+                </button>
+                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("grade")} disabled={contentRelationshipBusy}>
+                  {renderLocalizedTextNode(joinLocalizedText("Set Active For Grade", "جماعت کے لیے فعال کریں", language), language)}
+                </button>
+                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
+                  {renderLocalizedTextNode(joinLocalizedText("Set Active For Learner", "طالب علم کے لیے فعال کریں", language), language)}
+                </button>
+                {canManageContentAccess ? (
+                  <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("global")} disabled={contentRelationshipBusy}>
+                    {renderLocalizedTextNode(joinLocalizedText("Replace Default Everywhere", "ہر جگہ بنیادی ماخذ بدلیں", language), language)}
+                  </button>
+                ) : null}
+                {selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
+                  <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)}>
+                    {renderLocalizedTextNode(joinLocalizedText("Hide Built-in Source", "بنیادی ماخذ چھپائیں", language), language)}
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}
