@@ -1190,7 +1190,9 @@ direction:ltr;
 .diary-inline-detail-chevron{display:inline-block;font-size:15px;line-height:1;transition:transform .16s ease}
 .diary-inline-detail-toggle.active .diary-inline-detail-chevron{transform:rotate(90deg)}
 .diary-outline-leaf-bullet{display:inline-flex;align-items:center;justify-content:flex-end;min-width:18px;color:var(--text-muted);font-size:12px;line-height:1;flex-shrink:0;font-weight:700}
-.diary-task-footer-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.diary-task-footer-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;direction:ltr}
+.diary-task-footer-btn{display:inline-flex;align-items:center;justify-content:center;min-width:96px;min-height:34px;padding:8px 12px;flex:0 0 auto;font-family:var(--font)!important;line-height:1.2;text-align:center;white-space:nowrap}
+.diary-task-footer-btn.active{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--bg-elevated))}
 .diary-outline{padding-top:2px}
 .diary-day-card[data-ui-language="ur"] .review-panel-head{direction:rtl;text-align:right}
 .diary-day-card[data-ui-language="ur"] .review-panel-head h3{justify-content:flex-end}

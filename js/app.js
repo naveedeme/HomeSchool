@@ -30804,8 +30804,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                     </div>
                                   ) : null}
                                   <div className="result-actions chapter-card-actions diary-task-footer-actions" style={{ marginTop: 8 }}>
-                                    <button type="button" className="ghost-cta" onClick={() => playDiaryAudioSequence(allAudioLines)} disabled={!allAudioLines.length}>{renderLocalizedTextNode(joinLocalizedText("Play all", "سب سنیں", language), language)}</button>
-                                    <button type="button" className={`ghost-cta${completion ? " active" : ""}`} onClick={() => handleToggleDiaryCompletion(task)} disabled={contentRelationshipBusy} style={{ fontSize: 12 }}>{renderLocalizedTextNode(completion ? joinLocalizedText("Done", "مکمل", language) : joinLocalizedText("Mark done", "مکمل کریں", language), language)}</button>
+                                    <button type="button" className="ghost-cta diary-task-footer-btn" onClick={() => playDiaryAudioSequence(allAudioLines)} disabled={!allAudioLines.length}>{renderLocalizedTextNode(joinLocalizedText("Play all", "سب سنیں", language), language)}</button>
+                                    <button type="button" className={`ghost-cta diary-task-footer-btn${completion ? " active" : ""}`} onClick={() => handleToggleDiaryCompletion(task)} disabled={contentRelationshipBusy} style={{ fontSize: 12 }}>{renderLocalizedTextNode(completion ? joinLocalizedText("Done", "مکمل", language) : joinLocalizedText("Mark done", "مکمل کریں", language), language)}</button>
                                   </div>
                                 </div>
                               );
@@ -30870,8 +30870,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                                     </div>
                                   ) : null}
                                   <div className="result-actions chapter-card-actions diary-task-footer-actions" style={{ marginTop: 8 }}>
-                                    <button type="button" className="ghost-cta" onClick={() => playDiaryAudioSequence(allAudioLines)} disabled={!allAudioLines.length}>{renderLocalizedTextNode(joinLocalizedText("Play all", "سب سنیں", language), language)}</button>
-                                    <button type="button" className={`ghost-cta${completion ? " active" : ""}`} onClick={() => handleToggleDiaryCompletion(task)} disabled={contentRelationshipBusy} style={{ fontSize: 12 }}>{renderLocalizedTextNode(completion ? joinLocalizedText("Done", "مکمل", language) : joinLocalizedText("Mark done", "مکمل کریں", language), language)}</button>
+                                    <button type="button" className="ghost-cta diary-task-footer-btn" onClick={() => playDiaryAudioSequence(allAudioLines)} disabled={!allAudioLines.length}>{renderLocalizedTextNode(joinLocalizedText("Play all", "سب سنیں", language), language)}</button>
+                                    <button type="button" className={`ghost-cta diary-task-footer-btn${completion ? " active" : ""}`} onClick={() => handleToggleDiaryCompletion(task)} disabled={contentRelationshipBusy} style={{ fontSize: 12 }}>{renderLocalizedTextNode(completion ? joinLocalizedText("Done", "مکمل", language) : joinLocalizedText("Mark done", "مکمل کریں", language), language)}</button>
                                   </div>
                                 </div>
                               );
