@@ -318,6 +318,14 @@ function buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey) {
   return `${String(subject || "").trim()}::${Number(grade)}::${resolveCustomChapterLessonKey({ lessonKey: canonicalLessonKey })}`;
 }
 
+function buildLessonArchiveKey(subject, grade, canonicalLessonKey, sourceType = "builtin", contentId = "") {
+  const safeSourceType = ["builtin", "custom", "published"].includes(String(sourceType || "").trim())
+    ? String(sourceType || "").trim()
+    : "builtin";
+  const safeContentId = safeSourceType === "published" ? String(contentId || "").trim() : "";
+  return `${buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey)}::${safeSourceType}::${safeContentId}`;
+}
+
 function buildChapterAssignmentSlotKey(subject, grade, canonicalLessonKey, targetType = "grade", targetStudentEmail = "") {
   const safeTargetType = targetType === "student" ? "student" : "grade";
   const safeStudentEmail = safeTargetType === "student" ? String(targetStudentEmail || "").trim().toLowerCase() : "";
@@ -2010,6 +2018,7 @@ function createEmptyContentRelationshipState() {
     memberships: [],
     parentLinks: [],
     links: [],
+    lessonArchives: [],
     assignments: [],
     diaryEntries: [],
     diaryCompletions: [],
@@ -2018,6 +2027,31 @@ function createEmptyContentRelationshipState() {
     weeklyTestAssignments: [],
     weeklyTestResults: [],
     lastUpdatedAt: 0,
+  };
+}
+
+function normalizeLessonArchiveRecord(raw) {
+  const archiveId = String(raw?.archive_id || raw?.archiveId || "").trim();
+  const subject = String(raw?.subject || "").trim();
+  const grade = Number(raw?.grade);
+  const lessonKey = resolveCustomChapterLessonKey({ lessonKey: raw?.lesson_key || raw?.lessonKey || "" });
+  if (!archiveId || !subject || !Number.isFinite(grade) || !lessonKey) return null;
+  const sourceType = ["builtin", "custom", "published"].includes(String(raw?.source_type || raw?.sourceType || "").trim())
+    ? String(raw?.source_type || raw?.sourceType || "").trim()
+    : "builtin";
+  return {
+    archiveId,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    subject,
+    grade,
+    lessonKey,
+    sourceType,
+    contentId: sourceType === "published" ? String(raw?.content_id || raw?.contentId || "").trim() : "",
+    title: String(raw?.title || "").trim(),
+    archivedByEmail: String(raw?.archived_by_email || raw?.archivedByEmail || "").trim().toLowerCase(),
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
   };
 }
 
@@ -3639,6 +3673,7 @@ function buildChapterVariantGroups({
   preferences = {},
   assignmentSelections = {},
   currentUserId = "",
+  archivedVariantKeys = new Set(),
 }) {
   const groups = [];
   const groupMap = new Map();
@@ -3646,6 +3681,9 @@ function buildChapterVariantGroups({
     if (!lesson || typeof lesson !== "object") return;
     const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
     if (!canonicalLessonKey) return;
+    const contentId = String(lesson?.publication?.contentId || lesson?.__contentId || "").trim();
+    const archiveKey = buildLessonArchiveKey(subjectId, targetGrade, canonicalLessonKey, sourceType, contentId);
+    if (archivedVariantKeys instanceof Set && archivedVariantKeys.has(archiveKey)) return;
     let group = groupMap.get(canonicalLessonKey);
     if (!group) {
       group = {
@@ -3663,7 +3701,6 @@ function buildChapterVariantGroups({
     group.title = group.title || lesson.title || canonicalLessonKey;
     const sourceKey = getLessonVariantIdentity(lesson);
     if (group.variants.some((variant) => variant.sourceKey === sourceKey)) return;
-    const contentId = String(lesson?.publication?.contentId || lesson?.__contentId || "").trim();
     const authorUserId = String(lesson?.publication?.authorUserId || lesson?.__contentOwnerId || "").trim();
     const authorUsername = String(lesson?.publication?.authorUsername || lesson?.__publishedBy || "").trim();
     group.variants.push({
@@ -5601,6 +5638,7 @@ const SUPABASE_CHAPTER_ASSIGNMENTS_TABLE = "chapter_assignments";
 const SUPABASE_SCHOOLS_TABLE = "schools";
 const SUPABASE_SCHOOL_MEMBERSHIPS_TABLE = "school_memberships";
 const SUPABASE_PARENT_STUDENT_LINKS_TABLE = "parent_student_links";
+const SUPABASE_LESSON_ARCHIVES_TABLE = "lesson_archives";
 const SUPABASE_DIARY_ENTRIES_TABLE = "diary_entries";
 const SUPABASE_DIARY_COMPLETIONS_TABLE = "diary_task_completions";
 const SUPABASE_AUTO_DIARY_OVERRIDES_TABLE = "auto_diary_overrides";
@@ -14780,6 +14818,18 @@ const headerHideTimerRef = useRef(null);
       })
       .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
   }, [canAssignContent, canManageContentAccess, contentIdentityEmail, contentRelationshipState.assignments, grade]);
+  const visibleLessonArchives = useMemo(() => {
+    const safeArchives = Array.isArray(contentRelationshipState.lessonArchives) ? contentRelationshipState.lessonArchives : [];
+    return safeArchives
+      .map((entry) => normalizeLessonArchiveRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.status === "active")
+      .filter((entry) => !activeInstitutionSchoolId || entry.schoolId === activeInstitutionSchoolId)
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [activeInstitutionSchoolId, contentRelationshipState.lessonArchives]);
+  const archivedLessonVariantKeys = useMemo(() => new Set(
+    visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId)),
+  ), [visibleLessonArchives]);
   const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
     const baseLessons = getLessons(subjectId, targetGrade) || [];
     const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
@@ -14793,8 +14843,9 @@ const headerHideTimerRef = useRef(null);
       preferences: chapterSourcePreferences,
       assignmentSelections: effectiveChapterAssignmentSelections,
       currentUserId: supabaseAuthState.userId,
+      archivedVariantKeys: archivedLessonVariantKeys,
     });
-  }, [chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
+  }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
   const getMergedLessons = useCallback((subjectId, targetGrade) => (
     getMergedLessonGroups(subjectId, targetGrade)
       .map((group) => group.activeLesson)
@@ -16532,6 +16583,24 @@ const headerHideTimerRef = useRef(null);
   const myChapterGroups = useMemo(() => allChapterGroups.filter((group) => group.variants.some((variant) => (
     variant.sourceType === "custom" || (variant.sourceType === "published" && variant.ownedByCurrentUser)
   ))), [allChapterGroups]);
+  const builtinLessonLookup = useMemo(() => {
+    if (!dbLoaded || !grade) return {};
+    return Object.fromEntries(
+      allSubjects.flatMap((subject) => (
+        (getLessons(subject.id, grade) || []).map((lesson) => {
+          const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
+          return canonicalLessonKey
+            ? [[`${subject.id}::${Number(grade)}::${canonicalLessonKey}`, { subject, lesson }]]
+            : [];
+        })
+      )).flat(),
+    );
+  }, [allSubjects, dbLoaded, getLessons, grade]);
+  const visibleBuiltinLessonArchives = useMemo(() => (
+    visibleLessonArchives
+      .filter((entry) => entry.sourceType === "builtin")
+      .filter((entry) => !grade || Number(entry.grade) === Number(grade))
+  ), [grade, visibleLessonArchives]);
   const publishedChapterBrowserItems = useMemo(() => {
     const normalizedAuthorFilter = String(chapterBrowserAuthorFilter || "").trim().toLowerCase();
     return allChapterGroups.flatMap((group) => group.variants
@@ -17047,8 +17116,8 @@ const headerHideTimerRef = useRef(null);
     }
   }, [canSavePublishedLocally, getMergedQuiz, language, refreshCustomContentState, showAppToast]);
   const handleDeleteLocalChapter = useCallback(async (group) => {
-    if (!canDeleteLocalContent) {
-      showAppToast(joinLocalizedText("Your content role does not allow deleting local chapters.", "آپ کے مواد والے کردار کو مقامی ابواب حذف کرنے کی اجازت نہیں۔", language), "alert");
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only admins can delete local chapter copies.", "صرف ایڈمن مقامی ابواب کی کاپیاں حذف کر سکتے ہیں۔", language), "alert");
       return;
     }
     const localVariant = group?.variants?.find((variant) => variant.sourceType === "custom");
@@ -17067,7 +17136,70 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [canDeleteLocalContent, language, refreshCustomContentState, showAppToast, updateChapterSourceSelection]);
+  }, [canManageContentAccess, language, refreshCustomContentState, showAppToast, updateChapterSourceSelection]);
+  const handleArchiveBuiltinLesson = useCallback(async (group) => {
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only admins can remove default lessons.", "صرف ایڈمن بنیادی اسباق ہٹا سکتے ہیں۔", language), "alert");
+      return;
+    }
+    const builtinVariant = group?.variants?.find((variant) => variant.sourceType === "builtin") || null;
+    if (!builtinVariant) {
+      showAppToast(joinLocalizedText("No built-in lesson exists in this slot.", "اس خانے میں کوئی بنیادی سبق موجود نہیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in as admin first.", "پہلے ایڈمن کے طور پر سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    try {
+      const client = ensureSupabaseClientRef.current();
+      const nowIso = new Date().toISOString();
+      const archiveId = `lesson_archive_${simpleHash(`${activeInstitutionSchoolIdResolved || "global"}::${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}::builtin`)}`;
+      const row = {
+        archive_id: archiveId,
+        school_id: activeInstitutionSchoolIdResolved || null,
+        subject: group.subjectId,
+        grade: Number(group.grade),
+        lesson_key: group.canonicalLessonKey,
+        source_type: "builtin",
+        content_id: null,
+        title: String(group.title || group.activeLesson?.title || group.canonicalLessonKey).trim(),
+        archived_by_email: contentIdentityEmail,
+        status: "active",
+        updated_at: nowIso,
+      };
+      const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).upsert(row, { onConflict: "archive_id" });
+      if (error) throw error;
+      updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Default lesson removed", "بنیادی سبق ہٹا دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(`Unable to remove default lesson: ${error?.message || error}`, `بنیادی سبق ہٹایا نہیں جا سکا: ${error?.message || error}`, language),
+        "alert",
+      );
+    }
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  const handleRestoreLessonArchive = useCallback(async (archive) => {
+    const normalized = normalizeLessonArchiveRecord(archive);
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only admins can restore removed lessons.", "صرف ایڈمن ہٹائے گئے اسباق بحال کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!normalized) return;
+    try {
+      const client = ensureSupabaseClientRef.current();
+      const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Lesson restored", "سبق بحال کر دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(`Unable to restore lesson: ${error?.message || error}`, `سبق بحال نہیں ہو سکا: ${error?.message || error}`, language),
+        "alert",
+      );
+    }
+  }, [canManageContentAccess, language, showAppToast]);
   useEffect(() => {
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);
@@ -19354,6 +19486,16 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         ) {
           return [];
         }
+        if (
+          result.error
+          && table === SUPABASE_LESSON_ARCHIVES_TABLE
+          && (
+            String(result.error.code || "").trim() === "42P01"
+            || /does not exist|could not find the table|relation .*lesson_archives/i.test(String(result.error.message || ""))
+          )
+        ) {
+          return [];
+        }
         if (result.error) throw result.error;
         return Array.isArray(result.data) ? result.data.map((row) => normalizeFn(row)).filter(Boolean) : [];
       };
@@ -19362,6 +19504,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         memberships: new Map(),
         parentLinks: new Map(),
         links: new Map(),
+        lessonArchives: new Map(),
         assignments: new Map(),
         diaryEntries: new Map(),
         diaryCompletions: new Map(),
@@ -19453,6 +19596,13 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         "linkId",
       );
       await collectSchoolScoped(
+        SUPABASE_LESSON_ARCHIVES_TABLE,
+        "archive_id, school_id, subject, grade, lesson_key, source_type, content_id, title, archived_by_email, status, created_at, updated_at",
+        normalizeLessonArchiveRecord,
+        "lessonArchives",
+        "archiveId",
+      );
+      await collectSchoolScoped(
         SUPABASE_CHAPTER_ASSIGNMENTS_TABLE,
         "assignment_id, school_id, assigned_by_user_id, assigned_by_email, target_type, target_grade, target_student_email, subject, lesson_key, content_id, note, status, created_at, updated_at",
         normalizeChapterAssignmentRecord,
@@ -19517,6 +19667,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         memberships: Array.from(rowMaps.memberships.values()),
         parentLinks: Array.from(rowMaps.parentLinks.values()),
         links: Array.from(rowMaps.links.values()),
+        lessonArchives: Array.from(rowMaps.lessonArchives.values()),
         assignments: Array.from(rowMaps.assignments.values()),
         diaryEntries: Array.from(rowMaps.diaryEntries.values()),
         diaryCompletions: Array.from(rowMaps.diaryCompletions.values()),
@@ -20297,6 +20448,16 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
           if (!active) return;
           refreshContentRelationshipState().catch((error) => {
             console.log("Unable to refresh parent-student links from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_LESSON_ARCHIVES_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh lesson archives from realtime:", error);
           });
         })
         .on("postgres_changes", {
@@ -27798,7 +27959,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <div className="result-actions chapter-card-actions">
                   <button type="button" className="ghost-cta" onClick={() => handleOpenChapterVariant(group.subjectId, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Open", "کھولیں", language), language)}</button>
                   {canExportContent ? <button type="button" className="ghost-cta" onClick={() => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Export", "برآمد کریں", language), language)}</button> : null}
-                  {localVariant && canDeleteLocalContent ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(group)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}</button> : null}
+                  {localVariant && canManageContentAccess ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(group)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}</button> : null}
                   {ownedPublishedVariant && canUnpublishContent ? <button type="button" className="ghost-cta" onClick={() => handleUnpublishChapterVariant(group, ownedPublishedVariant)}>{renderLocalizedTextNode(joinLocalizedText("Unpublish", "غیر شائع کریں", language), language)}</button> : null}
                 </div>
               </div>
@@ -27808,6 +27969,36 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No local or owned published chapters yet. Import one from a subject first.", "ابھی کوئی مقامی یا آپ کی شائع شدہ باب موجود نہیں۔ پہلے کسی مضمون سے ایک باب درآمد کریں۔", language), language)}</p>
             </div>
           )}
+          {canManageContentAccess && visibleBuiltinLessonArchives.length ? (
+            <div className="review-panel chapter-management-panel" data-ui-language={language} style={{ marginTop: 16 }}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Removed Default Lessons", "ہٹائے گئے بنیادی اسباق", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Restore any built-in lesson slot that was soft-removed by an admin.", "کسی بھی بنیادی سبق خانے کو بحال کریں جسے ایڈمن نے نرم طریقے سے ہٹایا تھا۔", language), language)}</p>
+                </div>
+                <span className="goal-progress-badge">{formatNumberLabel(visibleBuiltinLessonArchives.length)}</span>
+              </div>
+              <div className="profile-report-list" style={{ marginTop: 14 }}>
+                {visibleBuiltinLessonArchives.map((entry) => {
+                  const lessonInfo = builtinLessonLookup[`${entry.subject}::${Number(entry.grade)}::${entry.lessonKey}`] || null;
+                  return (
+                    <div key={`lesson_archive_${entry.archiveId}`} className="profile-report-item">
+                      <div className="profile-report-item-head">
+                        <strong>{renderLocalizedTextNode(lessonInfo?.lesson?.title || entry.title || entry.lessonKey, language)}</strong>
+                        <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${entry.grade}`, `جماعت ${entry.grade}`, language), language)}</span>
+                      </div>
+                      <div className="goal-progress-meta">
+                        {renderLocalizedTextNode(joinLocalizedText(`${lessonInfo?.subject ? getSubjectDisplayName(lessonInfo.subject, "en") : entry.subject} • removed by ${entry.archivedByEmail || "admin"}`, `${lessonInfo?.subject ? getSubjectDisplayName(lessonInfo.subject, "ur") : entry.subject} • ${entry.archivedByEmail || "ایڈمن"} نے ہٹایا`, language), language)}
+                      </div>
+                      <div className="result-actions chapter-card-actions" style={{ marginTop: 8 }}>
+                        <button type="button" className="ghost-cta" onClick={() => handleRestoreLessonArchive(entry)}>{renderLocalizedTextNode(joinLocalizedText("Restore lesson", "سبق بحال کریں", language), language)}</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </>
         ) : null}
         {profilesSectionTab === "library" ? (
@@ -28258,9 +28449,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 )}
               </button>
             ) : null}
-            {canExportContent ? (
+          {canExportContent ? (
               <button type="button" className="ghost-cta" onClick={handleExportSelectedChapter}>
                 {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
+              </button>
+            ) : null}
+            {canManageContentAccess && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
+              <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)}>
+                {renderLocalizedTextNode(joinLocalizedText("Remove Default", "بنیادی سبق ہٹائیں", language), language)}
               </button>
             ) : null}
           </div>
