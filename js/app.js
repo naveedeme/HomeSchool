@@ -16169,6 +16169,26 @@ const headerHideTimerRef = useRef(null);
     () => (selectedLessonChapterGroup?.variants || []).filter((variant) => variant.sourceType === "published"),
     [selectedLessonChapterGroup],
   );
+  const selectedLessonOpenedVariant = useMemo(() => {
+    if (!selectedLessonChapterGroup || !selectedLesson) return null;
+    const selectedIdentity = getLessonVariantIdentity(selectedLesson);
+    return (selectedLessonChapterGroup.variants || []).find((variant) => variant.sourceKey === selectedIdentity) || null;
+  }, [selectedLesson, selectedLessonChapterGroup]);
+  const selectedLessonIsActiveLibrarySource = useMemo(() => {
+    if (!selectedLessonOpenedVariant || !selectedLessonChapterGroup?.activeVariant) return false;
+    return String(selectedLessonOpenedVariant.sourceKey || "").trim() === String(selectedLessonChapterGroup.activeVariant.sourceKey || "").trim();
+  }, [selectedLessonChapterGroup, selectedLessonOpenedVariant]);
+  const selectedLessonSourceScopeSummary = useMemo(() => {
+    const sourceType = String(selectedLessonOpenedVariant?.sourceType || getLessonVariantSourceType(selectedLesson) || "").trim();
+    const contentId = String(selectedLessonOpenedVariant?.contentId || selectedLesson?.publication?.contentId || "").trim();
+    return {
+      sourceType,
+      isLocalDraft: sourceType === "custom",
+      isPublished: sourceType === "published" || Boolean(contentId),
+      isBuiltin: sourceType === "builtin",
+      contentId,
+    };
+  }, [selectedLesson, selectedLessonOpenedVariant]);
   const selectedLessonManagedAssignments = useMemo(() => {
     if (!selectedLessonChapterGroup) return [];
     return managedChapterAssignments.filter((assignment) => (
@@ -16185,6 +16205,11 @@ const headerHideTimerRef = useRef(null);
       && Number(assignment.targetGrade) === Number(selectedLessonChapterGroup.grade)
     ));
   }, [selectedLessonChapterGroup, visibleChapterAssignments]);
+  const selectedLessonAssignmentsForOpenedVariant = useMemo(() => {
+    const safeContentId = String(selectedLessonSourceScopeSummary.contentId || "").trim();
+    if (!safeContentId) return [];
+    return selectedLessonVisibleAssignments.filter((assignment) => String(assignment.contentId || "").trim() === safeContentId);
+  }, [selectedLessonSourceScopeSummary.contentId, selectedLessonVisibleAssignments]);
   const refreshContentRelationshipStateRef = useRef(async () => createEmptyContentRelationshipState());
   const ensureSupabaseClientRef = useRef(() => {
     throw new Error("Supabase client not ready");
@@ -17823,6 +17848,42 @@ const headerHideTimerRef = useRef(null);
       );
     }
   }, [canChooseContentSource, language, showAppToast]);
+  const handleActivateSelectedLessonVariant = useCallback(() => {
+    if (!canAdministerLessonLibrary) {
+      showAppToast(joinLocalizedText("Only admins can change the active lesson source.", "صرف ایڈمن فعال سبق ماخذ تبدیل کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!selectedLessonChapterGroup || !selectedLessonOpenedVariant) return;
+    const selectionValue = selectedLessonOpenedVariant.sourceType === "published"
+      ? { mode: "published", contentId: selectedLessonOpenedVariant.contentId }
+      : selectedLessonOpenedVariant.sourceType === "custom"
+        ? { mode: "custom" }
+        : { mode: "builtin" };
+    updateChapterSourceSelection(
+      selectedLessonChapterGroup.subjectId,
+      selectedLessonChapterGroup.grade,
+      selectedLessonChapterGroup.canonicalLessonKey,
+      selectionValue,
+      { force: true },
+    );
+  }, [canAdministerLessonLibrary, language, selectedLessonChapterGroup, selectedLessonOpenedVariant, showAppToast, updateChapterSourceSelection]);
+  const handlePrepareSelectedLessonAssignment = useCallback((targetType = "grade") => {
+    if (!selectedLessonSourceScopeSummary.isPublished || !selectedLessonSourceScopeSummary.contentId) {
+      showAppToast(joinLocalizedText("Publish this lesson copy first, then assign it.", "اس سبق کی کاپی پہلے شائع کریں، پھر اسے تفویض کریں۔", language), "alert");
+      return;
+    }
+    setChapterAssignmentDraftContentId(selectedLessonSourceScopeSummary.contentId);
+    setChapterAssignmentDraftScope(targetType === "student" ? "student" : "grade");
+    if (targetType === "student" && linkedStudentOptions.length && !chapterAssignmentDraftStudentEmail) {
+      setChapterAssignmentDraftStudentEmail(linkedStudentOptions[0].studentEmail);
+    }
+    showAppToast(
+      targetType === "student"
+        ? joinLocalizedText("Student assignment form prepared below", "طالب علم کی تفویض کا فارم نیچے تیار کر دیا گیا", language)
+        : joinLocalizedText("Grade assignment form prepared below", "جماعت کی تفویض کا فارم نیچے تیار کر دیا گیا", language),
+      "check",
+    );
+  }, [chapterAssignmentDraftStudentEmail, language, linkedStudentOptions, selectedLessonSourceScopeSummary.contentId, selectedLessonSourceScopeSummary.isPublished, showAppToast]);
   const handleOpenChapterVariant = useCallback((subjectId, lesson) => {
     const subject = subjectLookup[subjectId] || null;
     if (!subject || !lesson) return;
@@ -20812,6 +20873,18 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       setContentRelationshipBusy(false);
     }
   }, [activeInstitutionSchoolIdResolved, canAssignContent, chapterAssignmentDraftContentId, chapterAssignmentDraftNote, chapterAssignmentDraftScope, chapterAssignmentDraftStudentEmail, contentIdentityEmail, ensureSupabaseClient, grade, language, linkedStudentOptions, refreshContentRelationshipState, selectedLessonChapterGroup, selectedLessonPublishedVariants, showAppToast, supabaseAuthState.userId]);
+  const handleQuickAssignSelectedLessonToGrade = useCallback(() => {
+    if (!selectedLessonSourceScopeSummary.isPublished || !selectedLessonSourceScopeSummary.contentId) {
+      showAppToast(joinLocalizedText("Publish this lesson copy first, then assign it to the grade.", "اس سبق کی کاپی پہلے شائع کریں، پھر اسے جماعت کو تفویض کریں۔", language), "alert");
+      return;
+    }
+    handleSaveChapterAssignment({
+      group: selectedLessonChapterGroup,
+      targetType: "grade",
+      contentId: selectedLessonSourceScopeSummary.contentId,
+      note: chapterAssignmentDraftNote,
+    });
+  }, [chapterAssignmentDraftNote, handleSaveChapterAssignment, language, selectedLessonChapterGroup, selectedLessonSourceScopeSummary.contentId, selectedLessonSourceScopeSummary.isPublished, showAppToast]);
 
   const handleDeleteChapterAssignment = useCallback(async (assignment) => {
     const normalized = normalizeChapterAssignmentRecord(assignment);
@@ -29544,6 +29617,68 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
             </div>
           ) : null}
+          {canAdministerLessonLibrary && selectedLesson && selectedLessonChapterGroup ? (
+            <div className="review-panel chapter-scope-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Lesson Scope", "سبق کا دائرہ", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Use one place to decide whether this copy stays private, becomes the active grade lesson, or is delivered to learners through assignments.", "ایک ہی جگہ سے طے کریں کہ یہ کاپی نجی رہے، جماعت کے فعال سبق کے طور پر کھلے، یا تفویض کے ذریعے طلبہ تک پہنچے۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="chapter-scope-grid">
+                <div className="chapter-scope-card">
+                  <span className="chapter-scope-label">{renderLocalizedTextNode(joinLocalizedText("Opened Copy", "کھلی ہوئی کاپی", language), language)}</span>
+                  <strong>{renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonOpenedVariant || selectedLessonChapterGroup.activeVariant), language)}</strong>
+                  <p>{renderLocalizedTextNode(
+                    selectedLessonSourceScopeSummary.isLocalDraft
+                      ? joinLocalizedText("This is a private local draft. Editing it does not replace the lesson for learners until you activate or assign it.", "یہ ایک نجی مقامی مسودہ ہے۔ اسے ترمیم کرنے سے سبق خود بخود طلبہ کے لیے تبدیل نہیں ہوتا، جب تک آپ اسے فعال یا تفویض نہ کریں۔", language)
+                      : selectedLessonSourceScopeSummary.isPublished
+                        ? joinLocalizedText("This copy is published and can be used directly for learner assignments.", "یہ کاپی شائع شدہ ہے اور اسے براہِ راست طلبہ کی تفویض کے لیے استعمال کیا جا سکتا ہے۔", language)
+                        : joinLocalizedText("This is the built-in verified lesson copy.", "یہ سبق کی بنیادی اور مصدقہ کاپی ہے۔", language),
+                    language,
+                  )}</p>
+                </div>
+                <div className="chapter-scope-card">
+                  <span className="chapter-scope-label">{renderLocalizedTextNode(joinLocalizedText("Grade Library", "جماعتی لائبریری", language), language)}</span>
+                  <strong>{renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant || selectedLessonChapterGroup.activeLesson), language)}</strong>
+                  <p>{renderLocalizedTextNode(
+                    selectedLessonIsActiveLibrarySource
+                      ? joinLocalizedText("This same copy already opens by default in the current subject and grade list.", "یہی کاپی موجودہ مضمون اور جماعت کی فہرست میں بطورِ طے شدہ کھل رہی ہے۔", language)
+                      : joinLocalizedText("The grade library still opens a different copy by default. Use the button below to replace that active source with the one you are viewing.", "جماعتی لائبریری میں ابھی کوئی دوسری کاپی بطورِ طے شدہ کھل رہی ہے۔ نیچے والا بٹن دبا کر موجودہ دیکھی جانے والی کاپی کو فعال ماخذ بنا دیں۔", language),
+                    language,
+                  )}</p>
+                  <div className="chapter-card-actions">
+                    <button type="button" className={`ghost-cta${selectedLessonIsActiveLibrarySource ? " active" : ""}`} onClick={handleActivateSelectedLessonVariant} disabled={selectedLessonIsActiveLibrarySource}>
+                      {renderLocalizedTextNode(selectedLessonIsActiveLibrarySource ? joinLocalizedText("Active In Grade Library", "جماعتی لائبریری میں فعال", language) : joinLocalizedText("Use This Copy In Grade Library", "اس کاپی کو جماعتی لائبریری میں فعال کریں", language), language)}
+                    </button>
+                  </div>
+                </div>
+                <div className="chapter-scope-card">
+                  <span className="chapter-scope-label">{renderLocalizedTextNode(joinLocalizedText("Learner Delivery", "طلبہ تک رسائی", language), language)}</span>
+                  <strong>{renderLocalizedTextNode(
+                    selectedLessonSourceScopeSummary.isPublished
+                      ? joinLocalizedText(`${selectedLessonAssignmentsForOpenedVariant.length} active assignments`, `${selectedLessonAssignmentsForOpenedVariant.length} فعال تفویض`, language)
+                      : joinLocalizedText("Publish needed", "شائع کرنا ضروری", language),
+                    language,
+                  )}</strong>
+                  <p>{renderLocalizedTextNode(
+                    selectedLessonSourceScopeSummary.isPublished
+                      ? joinLocalizedText("Assignments send this published copy to the grade or to one learner without changing the whole lesson library.", "تفویض اس شائع شدہ کاپی کو پوری لائبریری بدلے بغیر جماعت یا کسی ایک طالب علم تک پہنچاتی ہے۔", language)
+                      : joinLocalizedText("Assignments work from published copies. Publish first if you want learners to receive this exact lesson.", "تفویض شائع شدہ کاپیوں سے کام کرتی ہے۔ اگر آپ چاہتے ہیں کہ طلبہ کو یہی سبق ملے تو پہلے اسے شائع کریں۔", language),
+                    language,
+                  )}</p>
+                  <div className="chapter-card-actions">
+                    <button type="button" className="ghost-cta" onClick={handleQuickAssignSelectedLessonToGrade} disabled={!selectedLessonSourceScopeSummary.isPublished || contentRelationshipBusy}>
+                      {renderLocalizedTextNode(joinLocalizedText("Assign This Copy To Grade", "اس کاپی کو جماعت کو تفویض کریں", language), language)}
+                    </button>
+                    <button type="button" className="ghost-cta" onClick={() => handlePrepareSelectedLessonAssignment("student")} disabled={!selectedLessonSourceScopeSummary.isPublished}>
+                      {renderLocalizedTextNode(joinLocalizedText("Prepare Student Assignment", "طالب علم کی تفویض تیار کریں", language), language)}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="subject-chapter-toolbar" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
             {canImportChapters || canImportSubjects ? (
               <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
@@ -29605,7 +29740,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <div className="review-panel-head">
                 <div>
                   <h3>{renderLocalizedTextNode(joinLocalizedText("Chapter Source", "سبق ماخذ", language), language)}</h3>
-                  <p>{renderLocalizedTextNode(joinLocalizedText("Choose which copy of this chapter should appear in your subject list and open by default.", "منتخب کریں کہ اس سبق کی کون سی کاپی آپ کی مضمون فہرست میں نظر آئے اور بطورِ طے شدہ کھلے۔", language), language)}</p>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("This controls the active lesson copy for the current subject and grade library only. It changes what opens by default here, but it does not replace learner assignments by itself.", "یہ صرف موجودہ مضمون اور جماعت کی لائبریری کے فعال سبق کو کنٹرول کرتا ہے۔ اس سے یہاں بطورِ طے شدہ کھلنے والی کاپی بدلتی ہے، مگر یہ خود بخود طلبہ کی تفویض نہیں بدلتا۔", language), language)}</p>
                 </div>
                 <span className="goal-progress-badge">{renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language)}</span>
               </div>
@@ -29643,10 +29778,10 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {(selectedLessonPublishedVariants.length > 0 || selectedLessonVisibleAssignments.length > 0) ? (
           <div className="review-panel chapter-source-panel" data-ui-language={language}>
             <div className="review-panel-head">
-              <div>
-                <h3>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویض", language), language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText("Use published copies to set a grade-wide default or a student-specific assignment. Students then receive that chapter automatically without changing source settings themselves.", "شائع شدہ کاپیاں استعمال کر کے پوری جماعت کے لیے طے شدہ باب یا کسی ایک طالب علم کے لیے مخصوص تفویض مقرر کریں۔ پھر طلبہ خود ماخذ تبدیل کیے بغیر وہ باب خودکار طور پر پائیں گے۔", language), language)}</p>
-              </div>
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویض", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Assignments deliver a published copy to learners. They do not replace the whole lesson library source unless you also change the active grade source above.", "تفویض شائع شدہ کاپی کو طلبہ تک پہنچاتی ہے۔ جب تک آپ اوپر جماعتی فعال ماخذ نہ بدلیں، یہ پوری سبق لائبریری کو تبدیل نہیں کرتی۔", language), language)}</p>
+                </div>
               <span className="goal-progress-badge">{formatNumberLabel(selectedLessonVisibleAssignments.length)}</span>
             </div>
             {selectedLessonChapterGroup?.assignmentSelection?.assignment ? (
