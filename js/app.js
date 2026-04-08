@@ -699,6 +699,7 @@ function createDefaultAutoDiarySettings(fallbackStartDate = "") {
     progression: {
       chapterSelectionMode: "progress_first",
       advanceMode: "carry_forward",
+      autoMoveByDate: true,
       skipCompletedLessons: true,
       preferAssignedContent: true,
       preferPublishedContent: true,
@@ -801,6 +802,7 @@ function normalizeAutoDiarySettings(raw = {}, legacy = {}) {
         const safeMode = String(safeRaw?.progression?.advanceMode || safeRaw?.advanceMode || legacy?.autoDiaryAdvanceMode || defaults.progression.advanceMode).trim().toLowerCase();
         return safeMode === "weekly_lesson" ? "weekly_lesson" : "carry_forward";
       })(),
+      autoMoveByDate: Boolean(safeRaw?.progression?.autoMoveByDate ?? safeRaw?.autoMoveByDate ?? defaults.progression.autoMoveByDate),
       skipCompletedLessons: Boolean(safeRaw?.progression?.skipCompletedLessons ?? safeRaw?.skipCompletedLessons ?? defaults.progression.skipCompletedLessons),
       preferAssignedContent: Boolean(safeRaw?.progression?.preferAssignedContent ?? safeRaw?.preferAssignedContent ?? defaults.progression.preferAssignedContent),
       preferPublishedContent: Boolean(safeRaw?.progression?.preferPublishedContent ?? safeRaw?.preferPublishedContent ?? defaults.progression.preferPublishedContent),
@@ -863,6 +865,7 @@ function getAutoDiaryProgressionPresetSettings(preset = "balanced") {
     return {
       chapterSelectionMode: "curriculum_order",
       advanceMode: "weekly_lesson",
+      autoMoveByDate: true,
       skipCompletedLessons: true,
       preferAssignedContent: true,
       preferPublishedContent: true,
@@ -879,6 +882,7 @@ function getAutoDiaryProgressionPresetSettings(preset = "balanced") {
     return {
       chapterSelectionMode: "progress_first",
       advanceMode: "carry_forward",
+      autoMoveByDate: true,
       skipCompletedLessons: true,
       preferAssignedContent: true,
       preferPublishedContent: true,
@@ -894,6 +898,7 @@ function getAutoDiaryProgressionPresetSettings(preset = "balanced") {
   return {
     chapterSelectionMode: "progress_first",
     advanceMode: "carry_forward",
+    autoMoveByDate: true,
     skipCompletedLessons: true,
     preferAssignedContent: true,
     preferPublishedContent: true,
@@ -923,6 +928,7 @@ function detectAutoDiaryProgressionPreset(settings = null) {
   const keys = [
     "chapterSelectionMode",
     "advanceMode",
+    "autoMoveByDate",
     "skipCompletedLessons",
     "preferAssignedContent",
     "preferPublishedContent",
@@ -2887,6 +2893,7 @@ function buildAutoDiaryWeekPlan({
       }).filter((entry) => entry.lesson && entry.canonicalLessonKey);
       if (!lessonPlans.length) return [];
       const carryForwardEnabled = settings.progression.advanceMode !== "weekly_lesson";
+      const autoMoveByDate = Boolean(settings.progression.autoMoveByDate);
       const weeklyLessonIndex = (() => {
         if (settings.progression.chapterSelectionMode === "curriculum_order") {
           return Math.min(lessonPlans.length - 1, Math.max(0, academicWeekNumber - 1));
@@ -2906,7 +2913,7 @@ function buildAutoDiaryWeekPlan({
         ))
         : weeklyLessonIndex;
       if (currentLessonIndex < 0) currentLessonIndex = lessonPlans.length - 1;
-      let currentSlotIndex = carryForwardEnabled ? Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1) : 0;
+      let currentSlotIndex = carryForwardEnabled && !autoMoveByDate ? Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1) : 0;
       const allLessonsCompleted = carryForwardEnabled && lessonPlans.every((entry) => entry.completedSlots >= safeStudyDays);
       return studyDates.flatMap((targetDate, dayIndex) => {
         if (safeAutoDiaryStartDate && targetDate < safeAutoDiaryStartDate) return [];
@@ -2927,7 +2934,7 @@ function buildAutoDiaryWeekPlan({
             currentSlotIndex = Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1);
           }
           selectedPlan = lessonPlans[currentLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
-          bucketIndex = Math.min(currentSlotIndex, safeStudyDays - 1);
+          bucketIndex = autoMoveByDate ? (dayIndex % safeStudyDays) : Math.min(currentSlotIndex, safeStudyDays - 1);
         }
         const selectedGroup = selectedPlan?.chapterGroup || null;
         const lesson = selectedPlan?.lesson || null;
@@ -2972,7 +2979,7 @@ function buildAutoDiaryWeekPlan({
           lesson,
           subjectIndex,
         };
-        if (carryForwardEnabled && !allLessonsCompleted) {
+        if (carryForwardEnabled && !allLessonsCompleted && !autoMoveByDate) {
           currentSlotIndex += 1;
           if (currentSlotIndex >= safeStudyDays) {
             currentLessonIndex += 1;
@@ -28243,7 +28250,22 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                         <option value="custom">{renderLocalizedTextNode(joinLocalizedText("Custom (from advanced settings)", "اپنی مرضی کا (جدید سیٹنگز سے)", language), language)}</option>
                       </select>
                     </div>
+                    <div className="chapter-badge-row" style={{ marginTop: 10 }}>
+                      <button
+                        type="button"
+                        className={`chapter-badge ${schoolDraftNormalizedAutoDiarySettings.progression.autoMoveByDate ? "active" : "neutral"}`}
+                        onClick={() => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, autoMoveByDate: !current.progression.autoMoveByDate } }))}
+                      >
+                        {renderLocalizedTextNode(
+                          schoolDraftNormalizedAutoDiarySettings.progression.autoMoveByDate
+                            ? joinLocalizedText("Daily auto-move on", "روزانہ خودکار آگے بڑھاؤ فعال", language)
+                            : joinLocalizedText("Daily auto-move off", "روزانہ خودکار آگے بڑھاؤ بند", language),
+                          language,
+                        )}
+                      </button>
+                    </div>
                     <p className="goal-progress-meta auto-diary-helper-copy">{renderLocalizedTextNode(schoolDraftAutoDiaryProgressionPreset === "structured" ? joinLocalizedText("Follows the curriculum in a steadier order and changes chapters weekly.", "یہ نصاب کی ترتیب کو زیادہ سیدھے انداز میں فالو کرتا ہے اور ابواب کو ہفتہ وار بدلتا ہے۔", language) : schoolDraftAutoDiaryProgressionPreset === "mastery" ? joinLocalizedText("Stays longer on weaker lessons and demands stronger completion signals.", "یہ کمزور اسباق پر زیادہ دیر رکتا ہے اور مضبوط تکمیل کے اشارے مانگتا ہے۔", language) : schoolDraftAutoDiaryProgressionPreset === "balanced" ? joinLocalizedText("Moves with learner progress while still carrying unfinished slices forward.", "یہ طالب علم کی پیش رفت کے ساتھ چلتا ہے اور نامکمل حصے اگلے دنوں میں لے جاتا ہے۔", language) : joinLocalizedText("This school is using a custom progression mix from the Advanced panel.", "یہ اسکول Advanced پینل سے اپنی مرضی کی پیش رفت استعمال کر رہا ہے۔", language), language)}</p>
+                    <p className="goal-progress-meta auto-diary-helper-copy" style={{ marginTop: 8 }}>{renderLocalizedTextNode(schoolDraftNormalizedAutoDiarySettings.progression.autoMoveByDate ? joinLocalizedText("Students automatically see the next diary day when the date changes, even if they did not mark today complete.", "تاریخ بدلتے ہی طلبہ کو خودکار طور پر اگلے دن کی ڈائری نظر آئے گی، چاہے انہوں نے آج کو مکمل نشان زد نہ کیا ہو۔", language) : joinLocalizedText("Diary day advancement can wait for completion signals such as mark-done, quiz, or lesson progress.", "ڈائری کے دن کا آگے بڑھنا مکمل ہونے کے اشاروں جیسے مکمل نشان، کوئز، یا سبق کی پیش رفت کا انتظار کر سکتا ہے۔", language), language)}</p>
                   </div>
                   <div className="profile-report-item auto-diary-simple-block">
                     <div className="profile-report-item-head">
@@ -28380,7 +28402,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       </label>
                     </div>
                     <div className="chapter-badge-row" style={{ marginTop: 8 }}>
-                      {["skipCompletedLessons", "reviewWhenShort", "countMarkedDone", "countQuizComplete", "countLessonProgress"].map((key) => <button key={`progression_toggle_${key}`} type="button" className={`chapter-badge ${schoolDraftNormalizedAutoDiarySettings.progression[key] ? "active" : "neutral"}`} onClick={() => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, [key]: !current.progression[key] } }))}>{renderLocalizedTextNode(key === "skipCompletedLessons" ? joinLocalizedText("Skip completed", "مکمل چھوڑیں", language) : key === "reviewWhenShort" ? joinLocalizedText("Review short lessons", "مختصر سبق دہرائیں", language) : key === "countMarkedDone" ? joinLocalizedText("Manual done counts", "دستی مکمل شمار ہو", language) : key === "countQuizComplete" ? joinLocalizedText("Quiz counts", "کوئز شمار ہو", language) : joinLocalizedText("Lesson progress counts", "سبق پیش رفت شمار ہو", language), language)}</button>)}
+                      {["autoMoveByDate", "skipCompletedLessons", "reviewWhenShort", "countMarkedDone", "countQuizComplete", "countLessonProgress"].map((key) => <button key={`progression_toggle_${key}`} type="button" className={`chapter-badge ${schoolDraftNormalizedAutoDiarySettings.progression[key] ? "active" : "neutral"}`} onClick={() => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, [key]: !current.progression[key] } }))}>{renderLocalizedTextNode(key === "autoMoveByDate" ? joinLocalizedText("Daily auto-move", "روزانہ خودکار آگے بڑھاؤ", language) : key === "skipCompletedLessons" ? joinLocalizedText("Skip completed", "مکمل چھوڑیں", language) : key === "reviewWhenShort" ? joinLocalizedText("Review short lessons", "مختصر سبق دہرائیں", language) : key === "countMarkedDone" ? joinLocalizedText("Manual done counts", "دستی مکمل شمار ہو", language) : key === "countQuizComplete" ? joinLocalizedText("Quiz counts", "کوئز شمار ہو", language) : joinLocalizedText("Lesson progress counts", "سبق پیش رفت شمار ہو", language), language)}</button>)}
                     </div>
                     <div className="auto-diary-labeled-grid" style={{ marginTop: 8 }}>
                       <label className="auto-diary-labeled-field">
