@@ -1146,6 +1146,19 @@ function buildDiaryExerciseTargetId(targetBaseId = "", exercise = {}, index = 0,
     : `${safeBaseId}_exercise_${safeExerciseKey}`;
 }
 
+function buildDiaryExampleTargetId(targetBaseId = "", entry = null, index = 0, groupLabel = "", entryScope = "example") {
+  const safeBaseId = String(targetBaseId || "").trim();
+  if (!safeBaseId) return "";
+  const safeGroup = sanitizeDiaryTargetSegment(groupLabel, "");
+  const safeScope = sanitizeDiaryTargetSegment(entryScope, "example");
+  const label = normalizeDiaryOutlineLeafLabel(entry, `item_${index + 1}`);
+  const explicitKey = entry?.id || entry?.key || entry?.targetId || "";
+  const safeEntryKey = sanitizeDiaryTargetSegment(explicitKey || label, `item_${index + 1}`);
+  return safeGroup
+    ? `${safeBaseId}_${safeScope}_${safeGroup}_${safeEntryKey}`
+    : `${safeBaseId}_${safeScope}_${safeEntryKey}`;
+}
+
 function buildDiaryQuizQuestionTargetId(targetBaseId = "", question = {}, index = 0, groupLabel = "") {
   const safeBaseId = String(targetBaseId || "").trim();
   if (!safeBaseId) return "";
@@ -1200,7 +1213,13 @@ function collectDiaryExampleOutlineNodes(exampleEntries = [], baseKey = "", rout
       routeMeta: {
         ...routeMeta,
         subTab: "examples",
-        targetId: String(routeMeta?.targetId || buildDiarySectionTargetId(routeMeta?.targetBaseId, "examples") || "").trim(),
+        targetId: buildDiaryExampleTargetId(
+          routeMeta?.targetBaseId,
+          entry,
+          index,
+          String(routeMeta?.groupLabel || "").trim(),
+          String(routeMeta?.exampleScope || "example").trim(),
+        ) || String(routeMeta?.targetId || buildDiarySectionTargetId(routeMeta?.targetBaseId, "examples") || "").trim(),
       },
       children: [],
     });
@@ -1432,19 +1451,20 @@ function buildDiarySelectionOutlineFromSub(sub = {}, subjectId = "", routeMeta =
   );
   if (hasExamples) {
     const exampleChildren = [];
-    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.examples, `${baseKey}_examples`, safeRouteMeta, isUrdu));
-    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.sentencePairs, `${baseKey}_examples_pairs`, safeRouteMeta, isUrdu));
-    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.examplesData, `${baseKey}_examples_data`, safeRouteMeta, isUrdu));
+    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.examples, `${baseKey}_examples`, { ...safeRouteMeta, exampleScope: "examples" }, isUrdu));
+    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.sentencePairs, `${baseKey}_examples_pairs`, { ...safeRouteMeta, exampleScope: "pairs" }, isUrdu));
+    exampleChildren.push(...collectDiaryExampleOutlineNodes(sub?.examplesData, `${baseKey}_examples_data`, { ...safeRouteMeta, exampleScope: "examples" }, isUrdu));
     if (Array.isArray(sub?.dayLessons)) {
       sub.dayLessons.forEach((dayEntry, index) => {
         const dayLabel = normalizeDiaryOutlineLeafLabel(
           dayEntry,
           isUrdu ? `سبق حصہ ${index + 1}` : `Lesson part ${index + 1}`,
         );
+        const dayGroupLabel = `day_${dayEntry?.day || index + 1}`;
         const dayChildren = [
-          ...collectDiaryExampleOutlineNodes(dayEntry?.paragraphs, `${baseKey}_day_${index}_paragraphs`, safeRouteMeta, isUrdu),
-          ...collectDiaryExampleOutlineNodes(dayEntry?.examples, `${baseKey}_day_${index}_examples`, safeRouteMeta, isUrdu),
-          ...collectDiaryExampleOutlineNodes(dayEntry?.sentencePairs, `${baseKey}_day_${index}_pairs`, safeRouteMeta, isUrdu),
+          ...collectDiaryExampleOutlineNodes(dayEntry?.paragraphs, `${baseKey}_day_${index}_paragraphs`, { ...safeRouteMeta, groupLabel: dayGroupLabel, exampleScope: "paragraphs" }, isUrdu),
+          ...collectDiaryExampleOutlineNodes(dayEntry?.examples, `${baseKey}_day_${index}_examples`, { ...safeRouteMeta, groupLabel: dayGroupLabel, exampleScope: "examples" }, isUrdu),
+          ...collectDiaryExampleOutlineNodes(dayEntry?.sentencePairs, `${baseKey}_day_${index}_pairs`, { ...safeRouteMeta, groupLabel: dayGroupLabel, exampleScope: "pairs" }, isUrdu),
         ];
         exampleChildren.push({
           key: `${baseKey}_examples_day_${index}`,
@@ -1452,6 +1472,7 @@ function buildDiarySelectionOutlineFromSub(sub = {}, subjectId = "", routeMeta =
           routeMeta: {
             ...safeRouteMeta,
             subTab: "examples",
+            groupLabel: dayGroupLabel,
             targetId: buildDiarySectionTargetId(targetBaseId, "examples"),
           },
           children: dayChildren,
@@ -1462,7 +1483,7 @@ function buildDiarySelectionOutlineFromSub(sub = {}, subjectId = "", routeMeta =
       exampleChildren.push(...collectDiaryExampleOutlineNodes(
         sub.c.split(/\n+/).map((entry) => entry.trim()).filter(Boolean),
         `${baseKey}_examples_content`,
-        safeRouteMeta,
+        { ...safeRouteMeta, exampleScope: "content" },
         isUrdu,
       ));
     }
@@ -1566,13 +1587,13 @@ function buildDiarySelectionOutlineFromLesson(lesson = {}, subjectId = "", route
   );
   if (hasExamples) {
     const exampleChildren = [
-      ...collectDiaryExampleOutlineNodes(lesson?.examples, `${baseKey}_examples`, routeMeta, isUrdu),
+      ...collectDiaryExampleOutlineNodes(lesson?.examples, `${baseKey}_examples`, { ...routeMeta, exampleScope: "examples" }, isUrdu),
       ...collectDiaryExampleOutlineNodes(
         typeof lesson?.content === "string" && lesson.content.trim()
           ? lesson.content.split(/\n+/).map((entry) => entry.trim()).filter(Boolean)
           : [],
         `${baseKey}_examples_content`,
-        routeMeta,
+        { ...routeMeta, exampleScope: "content" },
         isUrdu,
       ),
     ];
@@ -28575,7 +28596,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </svg></div>
           </>}
           </>}
-          {sub.c.split(/(?<=[.!?۔؟])\s+/).filter(Boolean).map((s,i) => <SpeakableSentence key={i} text={s} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: sub.t }} />)}
+          {sub.c.split(/(?<=[.!?۔؟])\s+/).filter(Boolean).map((s,i) => (
+            <div key={i} data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, s, i, "", "content")}>
+              <SpeakableSentence text={s} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: sub.t }} />
+            </div>
+          ))}
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={() => playAll(sub.c)}>{isUr?"▶️ سنیں":"▶️ Play Explanation"}</button>
         </div>
 
@@ -28591,6 +28616,27 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             <div key={lessonDay.day || dayIdx} className="adverb-detail-section" style={urS}>
               <h3 style={{color:"#38BDF8",marginBottom:12,...urS}}>{isUr ? `📅 دن ${lessonDay.day}` : `📅 Day ${lessonDay.day}`}</h3>
               {lessonDay.title && <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 10, ...urS }}>{lessonDay.title}</p>}
+              {lessonDay.examples && lessonDay.examples.length ? (
+                <div style={{ marginBottom: 12 }}>
+                  {lessonDay.examples.map((exampleEntry, exampleIndex) => (
+                    <div
+                      key={`lesson_day_example_${lessonDay.day || dayIdx}_${exampleIndex}`}
+                      data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, exampleEntry, exampleIndex, `day_${lessonDay.day || dayIdx + 1}`, "examples")}
+                      className="inline-study-row"
+                      style={{ direction: isUr ? "rtl" : "ltr" }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
+                        <ExercisePromptContent
+                          text={normalizeDiaryOutlineLeafLabel(exampleEntry)}
+                          studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
+                          buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                        />
+                      </div>
+                      <InlineStudyActionBar studyItem={{ prompt: normalizeDiaryOutlineLeafLabel(exampleEntry), subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {lessonDay.words && lessonDay.words.map((w, i) => (
                 <div key={i} style={{ marginBottom: 10 }}>
                   {"opposite" in w || "oppositeUr" in w ? <OppositeWordRow en={w.en} ur={w.ur} opposite={w.opposite} oppositeUr={w.oppositeUr} /> : "comp" in w || "super" in w ? <AdjWordRow en={w.en} ur={w.ur} comp={w.comp} sup={w.super} /> : "v2" in w || "v3" in w ? <VerbWordRow en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} /> : <WordRow en={w.en} ur={w.ur} />}
@@ -28608,7 +28654,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </div>
               ))}
               {lessonDay.pairs && lessonDay.pairs.map((pair, i) => (
-                <div key={i} className="word-row" style={{cursor:"default",gap:10,flexDirection:"column",alignItems:"stretch"}}>
+                <div key={i} className="word-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, pair, i, `day_${lessonDay.day || dayIdx + 1}`, "pairs")} style={{cursor:"default",gap:10,flexDirection:"column",alignItems:"stretch"}}>
                   <div style={{display:"flex",alignItems:"stretch",gap:10,width:"100%"}}>
                   <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right }} /></div>
                   <span style={{color:"var(--accent)",fontWeight:800}}>↔</span>
@@ -28624,9 +28670,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   const hasOpposites = (lessonDay.words || []).some(w => "opposite" in w || "oppositeUr" in w);
                   const sentenceHighlights = (lessonDay.words || []).map(w => w.en).filter(Boolean).filter(word => s.toLowerCase().includes(normalizeHighlightTerm(word)));
                   const paragraphSentence = hasOpposites ? stripInlineUrduForKnownWords(s, lessonDay.words || []) : s;
-                  return hasOpposites
-                    ? <MixedUrduParagraphSentence key={i} text={paragraphSentence} highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} />
-                    : <SpeakableSentence key={i} text={s} lang="en" highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} />;
+                  return (
+                    <div key={i} data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, s, i, `day_${lessonDay.day || dayIdx + 1}`, "paragraphs")}>
+                      {hasOpposites
+                        ? <MixedUrduParagraphSentence text={paragraphSentence} highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} />
+                        : <SpeakableSentence text={s} lang="en" highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} />}
+                    </div>
+                  );
                 })}
                 <button className="play-all-btn" onClick={() => playAll(lessonDay.paragraph)}>▶️ Play Entire Paragraph</button>
               </>)}
@@ -28643,7 +28693,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           {regroupSentencePairs(sub.sentencePairs, daySectionSettings.sentences.itemsPerDay).map((group) => (
               <div key={group.day} style={{ marginBottom: 14 }}>
                 <div style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 800, marginBottom: 8 }}>{language === "ur" ? `سیٹ ${group.day}` : `Set ${group.day}`}</div>
-              {group.sentencePairs.map((pair, i) => <SentencePairRow key={`${group.day}_${i}`} en={pair.en} ur={pair.ur} />)}
+              {group.sentencePairs.map((pair, i) => (
+                <div key={`${group.day}_${i}`} data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, pair, i, "", "pairs")}>
+                  <SentencePairRow en={pair.en} ur={pair.ur} />
+                </div>
+              ))}
             </div>
           ))}
           <button className="play-all-btn" onClick={()=>playAll(sub.sentencePairs.map(pair => pair.en).join(" "))}>▶️ Play All English Sentences</button>
@@ -28652,7 +28706,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && (<div className="adverb-detail-section" data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "examples")} style={urS}>
           <h3 style={{color:"#38BDF8",marginBottom:10,...urS}}>{sub.examplesLabel || (isUr?"💡 مثالیں":"💡 Examples")}</h3>
           {sub.examples.map((ex,i) => (
-            <div key={i} className="inline-study-row" style={{ direction: isUr ? "rtl" : "ltr" }}>
+            <div key={i} className="inline-study-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
               <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
                 <ExercisePromptContent
                   text={ex}
@@ -28661,6 +28715,18 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 />
               </div>
               <InlineStudyActionBar studyItem={{ prompt: ex, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />
+            </div>
+          ))}
+          {sub.examplesData && sub.examplesData.map((ex,i) => (
+            <div key={`examples_data_${i}`} className="inline-study-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
+              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
+                <ExercisePromptContent
+                  text={normalizeDiaryOutlineLeafLabel(ex)}
+                  studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
+                  buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                />
+              </div>
+              <InlineStudyActionBar studyItem={{ prompt: normalizeDiaryOutlineLeafLabel(ex), subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />
             </div>
           ))}
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={()=>playAll(sub.examples.join(". "))}>{isUr?"▶️ سب سنیں":"▶️ Play All Examples"}</button>
