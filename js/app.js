@@ -488,8 +488,31 @@ function normalizeChapterSourcePreferences(rawPreferences = {}) {
   }, {});
 }
 
+function normalizeLessonOrderPreferences(rawPreferences = {}) {
+  const source = rawPreferences && typeof rawPreferences === "object" ? rawPreferences : {};
+  return Object.entries(source).reduce((acc, [rawKey, rawValue]) => {
+    const key = String(rawKey || "").trim();
+    if (!key) return acc;
+    const entries = Array.isArray(rawValue)
+      ? rawValue
+      : Array.isArray(rawValue?.lessonKeys)
+        ? rawValue.lessonKeys
+        : [];
+    const lessonKeys = Array.from(new Set(entries
+      .map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry }))
+      .filter(Boolean)));
+    if (!lessonKeys.length) return acc;
+    acc[key] = lessonKeys;
+    return acc;
+  }, {});
+}
+
 function buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey) {
   return `${String(subject || "").trim()}::${Number(grade)}::${resolveCustomChapterLessonKey({ lessonKey: canonicalLessonKey })}`;
+}
+
+function buildLessonOrderPreferenceKey(subject, grade) {
+  return `${String(subject || "").trim()}::${Number(grade)}`;
 }
 
 function buildLessonArchiveKey(subject, grade, canonicalLessonKey, sourceType = "builtin", contentId = "") {
@@ -498,6 +521,40 @@ function buildLessonArchiveKey(subject, grade, canonicalLessonKey, sourceType = 
     : "builtin";
   const safeContentId = safeSourceType === "published" ? String(contentId || "").trim() : "";
   return `${buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey)}::${safeSourceType}::${safeContentId}`;
+}
+
+function applySavedLessonOrder(groups = [], lessonOrderPreferences = {}, subjectId = "", grade = 0) {
+  const safeGroups = Array.isArray(groups) ? groups : [];
+  if (!safeGroups.length) return [];
+  const preferenceKey = buildLessonOrderPreferenceKey(subjectId, grade);
+  const savedOrder = Array.isArray(lessonOrderPreferences?.[preferenceKey]) ? lessonOrderPreferences[preferenceKey] : [];
+  if (!savedOrder.length) return [...safeGroups];
+  const orderLookup = new Map(savedOrder.map((lessonKey, index) => [String(lessonKey || "").trim(), index]));
+  return [...safeGroups].sort((left, right) => {
+    const leftIndex = orderLookup.has(left?.canonicalLessonKey) ? orderLookup.get(left.canonicalLessonKey) : Number.MAX_SAFE_INTEGER;
+    const rightIndex = orderLookup.has(right?.canonicalLessonKey) ? orderLookup.get(right.canonicalLessonKey) : Number.MAX_SAFE_INTEGER;
+    if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+    return (left?.orderHint || 0) - (right?.orderHint || 0)
+      || String(left?.title || "").localeCompare(String(right?.title || ""));
+  });
+}
+
+function moveArrayEntry(entries = [], fromIndex = -1, toIndex = -1) {
+  const safeEntries = Array.isArray(entries) ? [...entries] : [];
+  if (
+    !Number.isInteger(fromIndex)
+    || !Number.isInteger(toIndex)
+    || fromIndex < 0
+    || toIndex < 0
+    || fromIndex >= safeEntries.length
+    || toIndex >= safeEntries.length
+    || fromIndex === toIndex
+  ) {
+    return safeEntries;
+  }
+  const [moved] = safeEntries.splice(fromIndex, 1);
+  safeEntries.splice(toIndex, 0, moved);
+  return safeEntries;
 }
 
 function buildChapterAssignmentSlotKey(subject, grade, canonicalLessonKey, targetType = "grade", targetStudentEmail = "") {
@@ -14343,11 +14400,17 @@ function HomeschoolApp() {
   const [contentRelationshipState, setContentRelationshipState] = useState(createEmptyContentRelationshipState());
   const [activeInstitutionSchoolId, setActiveInstitutionSchoolId] = useState(String(stored?.activeInstitutionSchoolId || "").trim());
   const [chapterSourcePreferences, setChapterSourcePreferences] = useState(normalizeChapterSourcePreferences(stored?.chapterSourcePreferences || {}));
+  const [lessonOrderPreferences, setLessonOrderPreferences] = useState(normalizeLessonOrderPreferences(stored?.lessonOrderPreferences || {}));
   const [chapterImportBusy, setChapterImportBusy] = useState(false);
   const [chapterPublishBusy, setChapterPublishBusy] = useState(false);
   const [contentRelationshipBusy, setContentRelationshipBusy] = useState(false);
   const [chapterSelectionMode, setChapterSelectionMode] = useState(false);
   const [selectedChapterKeys, setSelectedChapterKeys] = useState([]);
+  const [subjectLessonArrangeMode, setSubjectLessonArrangeMode] = useState(false);
+  const [myChaptersArrangeMode, setMyChaptersArrangeMode] = useState(false);
+  const [myChaptersArrangeSubjectId, setMyChaptersArrangeSubjectId] = useState("all");
+  const [lessonOrderDrafts, setLessonOrderDrafts] = useState({});
+  const [lessonArrangeDragState, setLessonArrangeDragState] = useState(null);
   const [teacherStudentDraftEmail, setTeacherStudentDraftEmail] = useState("");
   const [teacherStudentDraftGrade, setTeacherStudentDraftGrade] = useState(initialActiveStudentProfile?.grade || stored?.grade || 5);
   const [teacherStudentDraftTeacherEmail, setTeacherStudentDraftTeacherEmail] = useState("");
@@ -15235,7 +15298,7 @@ const headerHideTimerRef = useRef(null);
     const baseLessons = getLessons(subjectId, targetGrade) || [];
     const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
     const publishedLessons = publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
-    return buildChapterVariantGroups({
+    const mergedGroups = buildChapterVariantGroups({
       subjectId,
       targetGrade,
       baseLessons,
@@ -15246,7 +15309,8 @@ const headerHideTimerRef = useRef(null);
       currentUserId: supabaseAuthState.userId,
       archivedVariantKeys: archivedLessonVariantKeys,
     });
-  }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
+    return applySavedLessonOrder(mergedGroups, lessonOrderPreferences, subjectId, targetGrade);
+  }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
   const getMergedLessons = useCallback((subjectId, targetGrade) => (
     getMergedLessonGroups(subjectId, targetGrade)
       .map((group) => group.activeLesson)
@@ -17003,6 +17067,99 @@ const headerHideTimerRef = useRef(null);
       .filter((entry) => entry.sourceType === "builtin")
       .filter((entry) => !grade || Number(entry.grade) === Number(grade))
   ), [grade, visibleLessonArchives]);
+  const buildLessonOrderDraftFromGroups = useCallback((groups = []) => (
+    Array.from(new Set((Array.isArray(groups) ? groups : [])
+      .map((group) => String(group?.canonicalLessonKey || "").trim())
+      .filter(Boolean)))
+  ), []);
+  const getLessonOrderDraft = useCallback((subjectId, targetGrade, fallbackGroups = []) => {
+    const preferenceKey = buildLessonOrderPreferenceKey(subjectId, targetGrade);
+    const draft = Array.isArray(lessonOrderDrafts?.[preferenceKey]) ? lessonOrderDrafts[preferenceKey] : [];
+    if (draft.length) return draft;
+    return buildLessonOrderDraftFromGroups(fallbackGroups);
+  }, [buildLessonOrderDraftFromGroups, lessonOrderDrafts]);
+  const reorderGroupsFromDraft = useCallback((groups = [], draft = []) => {
+    const safeGroups = Array.isArray(groups) ? groups : [];
+    const safeDraft = Array.isArray(draft) ? draft : [];
+    const orderLookup = new Map(safeDraft.map((entry, index) => [String(entry || "").trim(), index]));
+    return [...safeGroups].sort((left, right) => {
+      const leftIndex = orderLookup.has(left?.canonicalLessonKey) ? orderLookup.get(left.canonicalLessonKey) : Number.MAX_SAFE_INTEGER;
+      const rightIndex = orderLookup.has(right?.canonicalLessonKey) ? orderLookup.get(right.canonicalLessonKey) : Number.MAX_SAFE_INTEGER;
+      if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+      return (left?.orderHint || 0) - (right?.orderHint || 0)
+        || String(left?.title || "").localeCompare(String(right?.title || ""));
+    });
+  }, []);
+  const updateLessonOrderDraft = useCallback((subjectId, targetGrade, updater) => {
+    const safeSubjectId = String(subjectId || "").trim();
+    const safeGrade = Number(targetGrade);
+    if (!safeSubjectId || !safeGrade) return;
+    const preferenceKey = buildLessonOrderPreferenceKey(safeSubjectId, safeGrade);
+    setLessonOrderDrafts((current) => {
+      const baseGroups = getMergedLessonGroups(safeSubjectId, safeGrade);
+      const currentDraft = Array.isArray(current?.[preferenceKey]) && current[preferenceKey].length
+        ? current[preferenceKey]
+        : buildLessonOrderDraftFromGroups(baseGroups);
+      const nextDraftRaw = typeof updater === "function" ? updater(currentDraft, baseGroups) : updater;
+      const nextDraft = Array.from(new Set((Array.isArray(nextDraftRaw) ? nextDraftRaw : [])
+        .map((entry) => String(entry || "").trim())
+        .filter(Boolean)));
+      return {
+        ...(current || {}),
+        [preferenceKey]: nextDraft.length ? nextDraft : buildLessonOrderDraftFromGroups(baseGroups),
+      };
+    });
+  }, [buildLessonOrderDraftFromGroups, getMergedLessonGroups]);
+  const startLessonArrangeMode = useCallback((subjectId, targetGrade) => {
+    const safeSubjectId = String(subjectId || "").trim();
+    const safeGrade = Number(targetGrade);
+    if (!safeSubjectId || !safeGrade) return;
+    updateLessonOrderDraft(safeSubjectId, safeGrade, (currentDraft, baseGroups) => (
+      currentDraft.length ? currentDraft : buildLessonOrderDraftFromGroups(baseGroups)
+    ));
+  }, [buildLessonOrderDraftFromGroups, updateLessonOrderDraft]);
+  const saveLessonOrderDraft = useCallback((subjectId, targetGrade) => {
+    const safeSubjectId = String(subjectId || "").trim();
+    const safeGrade = Number(targetGrade);
+    if (!safeSubjectId || !safeGrade) return;
+    const preferenceKey = buildLessonOrderPreferenceKey(safeSubjectId, safeGrade);
+    const fallbackGroups = getMergedLessonGroups(safeSubjectId, safeGrade);
+    const nextOrder = getLessonOrderDraft(safeSubjectId, safeGrade, fallbackGroups);
+    setLessonOrderPreferences((current) => {
+      const next = { ...normalizeLessonOrderPreferences(current) };
+      if (nextOrder.length) next[preferenceKey] = nextOrder;
+      else delete next[preferenceKey];
+      return next;
+    });
+  }, [getLessonOrderDraft, getMergedLessonGroups]);
+  const clearLessonOrderDraft = useCallback((subjectId, targetGrade) => {
+    const preferenceKey = buildLessonOrderPreferenceKey(subjectId, targetGrade);
+    setLessonOrderDrafts((current) => {
+      if (!current || !current[preferenceKey]) return current;
+      const next = { ...current };
+      delete next[preferenceKey];
+      return next;
+    });
+  }, []);
+  const selectedSubjectArrangementGroups = useMemo(() => {
+    if (!subjectLessonArrangeMode || !selectedSubject || !grade) return selectedSubjectChapterGroups;
+    return reorderGroupsFromDraft(
+      selectedSubjectChapterGroups,
+      getLessonOrderDraft(selectedSubject.id, grade, selectedSubjectChapterGroups),
+    );
+  }, [getLessonOrderDraft, grade, reorderGroupsFromDraft, selectedSubject, selectedSubjectChapterGroups, subjectLessonArrangeMode]);
+  const myChapterArrangeSubjectOptions = useMemo(() => {
+    const subjectIds = Array.from(new Set(myChapterGroups.map((group) => String(group.subjectId || "").trim()).filter(Boolean)));
+    return allSubjects.filter((subject) => subjectIds.includes(subject.id));
+  }, [allSubjects, myChapterGroups]);
+  const myChapterVisibleGroups = useMemo(() => {
+    if (!myChaptersArrangeMode || myChaptersArrangeSubjectId === "all" || !grade) return myChapterGroups;
+    const scopedGroups = myChapterGroups.filter((group) => group.subjectId === myChaptersArrangeSubjectId && Number(group.grade) === Number(grade));
+    return reorderGroupsFromDraft(
+      scopedGroups,
+      getLessonOrderDraft(myChaptersArrangeSubjectId, grade, scopedGroups),
+    );
+  }, [getLessonOrderDraft, grade, myChapterGroups, myChaptersArrangeMode, myChaptersArrangeSubjectId, reorderGroupsFromDraft]);
   const publishedChapterBrowserItems = useMemo(() => {
     const normalizedAuthorFilter = String(chapterBrowserAuthorFilter || "").trim().toLowerCase();
     return allChapterGroups.flatMap((group) => group.variants
@@ -17345,6 +17502,111 @@ const headerHideTimerRef = useRef(null);
       return !current;
     });
   }, []);
+  const handleOpenSubjectLessonArrangeMode = useCallback(() => {
+    if (!canAdministerLessonLibrary || !selectedSubject || !grade) return;
+    setChapterSelectionMode(false);
+    setSelectedChapterKeys([]);
+    startLessonArrangeMode(selectedSubject.id, grade);
+    setSubjectLessonArrangeMode(true);
+  }, [canAdministerLessonLibrary, grade, selectedSubject, startLessonArrangeMode]);
+  const handleCancelSubjectLessonArrangeMode = useCallback(() => {
+    if (!selectedSubject || !grade) {
+      setSubjectLessonArrangeMode(false);
+      return;
+    }
+    clearLessonOrderDraft(selectedSubject.id, grade);
+    setLessonArrangeDragState(null);
+    setSubjectLessonArrangeMode(false);
+  }, [clearLessonOrderDraft, grade, selectedSubject]);
+  const handleSaveSubjectLessonOrder = useCallback(() => {
+    if (!selectedSubject || !grade) return;
+    saveLessonOrderDraft(selectedSubject.id, grade);
+    clearLessonOrderDraft(selectedSubject.id, grade);
+    setLessonArrangeDragState(null);
+    setSubjectLessonArrangeMode(false);
+    showAppToast(joinLocalizedText("Lesson order saved", "اسباق کی ترتیب محفوظ ہو گئی", language), "check");
+  }, [clearLessonOrderDraft, grade, language, saveLessonOrderDraft, selectedSubject, showAppToast]);
+  const handleToggleMyChaptersArrangeMode = useCallback(() => {
+    if (!canAdministerLessonLibrary) return;
+    if (myChaptersArrangeMode) {
+      if (myChaptersArrangeSubjectId !== "all" && grade) clearLessonOrderDraft(myChaptersArrangeSubjectId, grade);
+      setLessonArrangeDragState(null);
+      setMyChaptersArrangeMode(false);
+      return;
+    }
+    const nextSubjectId = myChaptersArrangeSubjectId !== "all"
+      ? myChaptersArrangeSubjectId
+      : (selectedSubject?.id || myChapterArrangeSubjectOptions[0]?.id || "all");
+    setMyChaptersArrangeSubjectId(nextSubjectId);
+    if (nextSubjectId !== "all" && grade) startLessonArrangeMode(nextSubjectId, grade);
+    setMyChaptersArrangeMode(true);
+  }, [canAdministerLessonLibrary, clearLessonOrderDraft, grade, myChapterArrangeSubjectOptions, myChaptersArrangeMode, myChaptersArrangeSubjectId, selectedSubject, startLessonArrangeMode]);
+  const handleMyChaptersArrangeSubjectChange = useCallback((subjectId) => {
+    const safeSubjectId = String(subjectId || "all").trim() || "all";
+    setMyChaptersArrangeSubjectId(safeSubjectId);
+    setLessonArrangeDragState(null);
+    if (safeSubjectId !== "all" && grade) startLessonArrangeMode(safeSubjectId, grade);
+  }, [grade, startLessonArrangeMode]);
+  const handleSaveMyChaptersLessonOrder = useCallback(() => {
+    if (myChaptersArrangeSubjectId === "all" || !grade) return;
+    saveLessonOrderDraft(myChaptersArrangeSubjectId, grade);
+    clearLessonOrderDraft(myChaptersArrangeSubjectId, grade);
+    setLessonArrangeDragState(null);
+    setMyChaptersArrangeMode(false);
+    showAppToast(joinLocalizedText("Lesson order saved", "اسباق کی ترتیب محفوظ ہو گئی", language), "check");
+  }, [clearLessonOrderDraft, grade, language, myChaptersArrangeSubjectId, saveLessonOrderDraft, showAppToast]);
+  const handleMoveLessonOrderEntry = useCallback((subjectId, targetGrade, canonicalLessonKey, direction) => {
+    const safeKey = String(canonicalLessonKey || "").trim();
+    if (!safeKey) return;
+    updateLessonOrderDraft(subjectId, targetGrade, (currentDraft, baseGroups) => {
+      const draft = currentDraft.length ? currentDraft : buildLessonOrderDraftFromGroups(baseGroups);
+      const currentIndex = draft.indexOf(safeKey);
+      if (currentIndex < 0) return draft;
+      const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      return moveArrayEntry(draft, currentIndex, nextIndex);
+    });
+  }, [buildLessonOrderDraftFromGroups, updateLessonOrderDraft]);
+  const handleLessonArrangeDragStart = useCallback((event, subjectId, targetGrade, canonicalLessonKey) => {
+    if (!event?.ctrlKey) {
+      event?.preventDefault?.();
+      showAppToast(joinLocalizedText("Hold Ctrl while dragging to reorder lessons.", "اسباق کی ترتیب بدلنے کے لیے گھسیٹتے وقت Ctrl دبائے رکھیں۔", language), "alert");
+      return;
+    }
+    const payload = {
+      subjectId: String(subjectId || "").trim(),
+      grade: Number(targetGrade),
+      canonicalLessonKey: String(canonicalLessonKey || "").trim(),
+    };
+    if (!payload.subjectId || !payload.grade || !payload.canonicalLessonKey) return;
+    setLessonArrangeDragState(payload);
+    if (event?.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", JSON.stringify(payload));
+    }
+  }, [language, showAppToast]);
+  const handleLessonArrangeDrop = useCallback((event, subjectId, targetGrade, targetLessonKey) => {
+    event?.preventDefault?.();
+    const fallbackPayload = lessonArrangeDragState;
+    let payload = fallbackPayload;
+    try {
+      const raw = event?.dataTransfer?.getData?.("text/plain");
+      if (raw) payload = JSON.parse(raw);
+    } catch {}
+    const safeSubjectId = String(subjectId || "").trim();
+    const safeGrade = Number(targetGrade);
+    const safeTargetLessonKey = String(targetLessonKey || "").trim();
+    if (!payload || payload.subjectId !== safeSubjectId || Number(payload.grade) !== safeGrade) return;
+    const draggedLessonKey = String(payload.canonicalLessonKey || "").trim();
+    if (!draggedLessonKey || !safeTargetLessonKey || draggedLessonKey === safeTargetLessonKey) return;
+    updateLessonOrderDraft(safeSubjectId, safeGrade, (currentDraft, baseGroups) => {
+      const draft = currentDraft.length ? currentDraft : buildLessonOrderDraftFromGroups(baseGroups);
+      return moveArrayEntry(draft, draft.indexOf(draggedLessonKey), draft.indexOf(safeTargetLessonKey));
+    });
+    setLessonArrangeDragState(null);
+  }, [buildLessonOrderDraftFromGroups, lessonArrangeDragState, updateLessonOrderDraft]);
+  const handleLessonArrangeDragEnd = useCallback(() => {
+    setLessonArrangeDragState(null);
+  }, []);
   const handleToggleSelectedChapterKey = useCallback((canonicalLessonKey) => {
     const safeKey = String(canonicalLessonKey || "").trim();
     if (!safeKey) return;
@@ -17631,10 +17893,11 @@ const headerHideTimerRef = useRef(null);
     try {
       const client = ensureSupabaseClientRef.current();
       const nowIso = new Date().toISOString();
-      const archiveId = `lesson_archive_${simpleHash(`${activeInstitutionSchoolIdResolved || "global"}::${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}::builtin`)}`;
+      const archiveSchoolId = String(activeInstitutionSchoolId || activeInstitutionSchoolIdResolved || "").trim();
+      const archiveId = `lesson_archive_${simpleHash(`${archiveSchoolId || "global"}::${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}::builtin`)}`;
       const row = {
         archive_id: archiveId,
-        school_id: activeInstitutionSchoolIdResolved || null,
+        school_id: archiveSchoolId || null,
         subject: group.subjectId,
         grade: Number(group.grade),
         lesson_key: group.canonicalLessonKey,
@@ -17656,7 +17919,7 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
   const handleRestoreLessonArchive = useCallback(async (archive) => {
     const normalized = normalizeLessonArchiveRecord(archive);
     if (!canAdministerLessonLibrary) {
@@ -17687,6 +17950,16 @@ const headerHideTimerRef = useRef(null);
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);
   }, [grade, selectedSubject?.id]);
+  useEffect(() => {
+    setSubjectLessonArrangeMode(false);
+    setLessonArrangeDragState(null);
+  }, [grade, selectedSubject?.id]);
+  useEffect(() => {
+    if (!myChaptersArrangeMode) return;
+    if (myChaptersArrangeSubjectId === "all") return;
+    if (myChapterArrangeSubjectOptions.some((subject) => subject.id === myChaptersArrangeSubjectId)) return;
+    setMyChaptersArrangeSubjectId(selectedSubject?.id || myChapterArrangeSubjectOptions[0]?.id || "all");
+  }, [myChapterArrangeSubjectOptions, myChaptersArrangeMode, myChaptersArrangeSubjectId, selectedSubject?.id]);
   useEffect(() => {
     if (!selectedLesson || !selectedSubject || !selectedLessonChapterGroup?.activeLesson) return;
     const currentIdentity = getLessonVariantIdentity(selectedLesson);
@@ -18606,9 +18879,10 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     if (Array.isArray(storedNotificationHistory)) setNotificationHistory(storedNotificationHistory.slice(0, 40));
     if (storedGamification && typeof storedGamification === "object") setGamificationState(normalizeGamificationState(storedGamification));
     if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || "").trim());
-    if (storedContentPreferences && typeof storedContentPreferences === "object") {
-      setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
-    }
+      if (storedContentPreferences && typeof storedContentPreferences === "object") {
+        setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
+        setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
+      }
     if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
       setSupabaseRolePreference(storedAccountPreferences.rolePreference);
       if (typeof storedAccountPreferences.username !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(storedAccountPreferences.username));
@@ -21567,6 +21841,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
           }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("contentPreferences", {
             chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
+            lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {}),
           }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("supabaseDictionarySync", buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}));
           await window.HomeSchoolDB.saveCustomization("studentProfile", {
@@ -21637,6 +21912,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
             },
             contentPreferences: {
               chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
+              lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {}),
             },
             supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}),
             studentProfile: {
@@ -21708,6 +21984,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
           },
           contentPreferences: {
             chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
+            lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {}),
           },
           supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}),
           studentProfile: {
@@ -21896,9 +22173,10 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
             setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || ""));
           }
         }
-        if (storedContentPreferences && typeof storedContentPreferences === "object") {
-          setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
-        }
+      if (storedContentPreferences && typeof storedContentPreferences === "object") {
+        setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
+        setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
+      }
         if (storedSupabaseDictionarySync && typeof storedSupabaseDictionarySync === "object") {
           setSupabaseDictionarySync(sanitizeSupabaseDictionarySyncSettings(storedSupabaseDictionarySync));
         }
@@ -22398,6 +22676,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       dictionarySyncConflicts,
       dictionaryImportUrl,
       chapterSourcePreferences,
+      lessonOrderPreferences,
       contentRoleTestMode,
       supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync),
       studentProfiles,
@@ -22412,10 +22691,10 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       aiProviderConfigs,
       selectedAiProvider,
     });
-}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
-  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
+  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -28398,8 +28677,28 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <h3>{renderLocalizedTextNode(joinLocalizedText("My Chapters", "میرے ابواب", language), language)}</h3>
                 <p>{renderLocalizedTextNode(joinLocalizedText("Choose which copy of a chapter should stay active, manage your local drafts, and keep published updates under your control.", "منتخب کریں کہ کسی باب کی کون سی کاپی فعال رہے، اپنے مقامی ڈرافٹس منظم کریں، اور شائع شدہ تازہ کاریوں کو اپنے قابو میں رکھیں۔", language), language)}</p>
               </div>
-              <span className="goal-progress-badge">{formatNumberLabel(myChapterGroups.length)}</span>
+              <div className="result-actions" style={{ marginTop: 0 }}>
+                <span className="goal-progress-badge">{formatNumberLabel(myChapterGroups.length)}</span>
+                {canAdministerLessonLibrary && !myChaptersArrangeMode ? <button type="button" className="ghost-cta" onClick={handleToggleMyChaptersArrangeMode} disabled={!grade || !myChapterArrangeSubjectOptions.length}>{renderLocalizedTextNode(joinLocalizedText("Arrange Lessons", "اسباق ترتیب دیں", language), language)}</button> : null}
+                {canAdministerLessonLibrary && myChaptersArrangeMode ? <button type="button" className="ghost-cta" onClick={handleSaveMyChaptersLessonOrder} disabled={!grade || myChaptersArrangeSubjectId === "all"}>{renderLocalizedTextNode(joinLocalizedText("Save Order", "ترتیب محفوظ کریں", language), language)}</button> : null}
+                {canAdministerLessonLibrary && myChaptersArrangeMode ? <button type="button" className="ghost-cta" onClick={handleToggleMyChaptersArrangeMode}>{renderLocalizedTextNode(joinLocalizedText("Cancel Arrange", "ترتیب منسوخ", language), language)}</button> : null}
+              </div>
             </div>
+            {canAdministerLessonLibrary && myChaptersArrangeMode ? (
+              <div className="chapter-browser-filter-row" style={{ marginTop: 14 }}>
+                <select className="dictionary-select" value={myChaptersArrangeSubjectId} onChange={(event) => handleMyChaptersArrangeSubjectChange(event.target.value)}>
+                  <option value="all">{renderLocalizedTextNode(joinLocalizedText("Choose subject to arrange", "ترتیب کے لیے مضمون منتخب کریں", language), language)}</option>
+                  {myChapterArrangeSubjectOptions.map((subject) => (
+                    <option key={`arrange_my_chapters_${subject.id}`} value={subject.id}>
+                      {renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)}
+                    </option>
+                  ))}
+                </select>
+                <div className="goal-progress-meta">
+                  {renderLocalizedTextNode(joinLocalizedText("Use move controls or hold Ctrl while dragging a chapter card. Save when the order feels right.", "بابی کارڈ کو ترتیب دینے کے لیے بٹن استعمال کریں یا Ctrl دبا کر گھسیٹیں۔ جب ترتیب درست لگے تو محفوظ کریں۔", language), language)}
+                </div>
+              </div>
+            ) : null}
             <div className="stat-grid">
               <div className="stat-card"><div className="stat-icon">🗂️</div><div className="stat-value">{formatNumberLabel(myChapterGroups.length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Managed chapters", "منظم ابواب", language), language)}</div></div>
               <div className="stat-card"><div className="stat-icon">💾</div><div className="stat-value">{formatNumberLabel(myChapterGroups.filter((group) => group.variants.some((variant) => variant.sourceType === "custom")).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Local copies", "مقامی کاپیاں", language), language)}</div></div>
@@ -28407,12 +28706,24 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <div className="stat-card"><div className="stat-icon">🌿</div><div className="stat-value">{formatNumberLabel(myChapterGroups.filter((group) => group.variants.some((variant) => String(variant.forkedFromContentId || "").trim())).length)}</div><div className="stat-label">{renderLocalizedTextNode(joinLocalizedText("Forks", "فورکس", language), language)}</div></div>
             </div>
           </div>
-          {myChapterGroups.length ? myChapterGroups.map((group) => {
+          {myChapterVisibleGroups.length ? myChapterVisibleGroups.map((group) => {
             const groupSubject = group.subject || subjectLookup[group.subjectId] || null;
             const localVariant = group.variants.find((variant) => variant.sourceType === "custom") || null;
             const ownedPublishedVariant = group.variants.find((variant) => variant.sourceType === "published" && variant.ownedByCurrentUser) || null;
+            const arrangeDraft = getLessonOrderDraft(group.subjectId, group.grade, myChapterVisibleGroups.filter((entry) => entry.subjectId === group.subjectId && Number(entry.grade) === Number(group.grade)));
+            const arrangeIndex = arrangeDraft.indexOf(group.canonicalLessonKey);
+            const arrangeEnabled = myChaptersArrangeMode && myChaptersArrangeSubjectId === group.subjectId && Number(group.grade) === Number(grade);
             return (
-              <div key={`chapter_manage_${group.subjectId}_${group.canonicalLessonKey}`} className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div
+                key={`chapter_manage_${group.subjectId}_${group.canonicalLessonKey}`}
+                className={`review-panel chapter-card-panel${arrangeEnabled ? " arrange-mode" : ""}${lessonArrangeDragState?.canonicalLessonKey === group.canonicalLessonKey ? " dragging" : ""}`}
+                data-ui-language={language}
+                draggable={arrangeEnabled}
+                onDragStart={arrangeEnabled ? (event) => handleLessonArrangeDragStart(event, group.subjectId, group.grade, group.canonicalLessonKey) : undefined}
+                onDragOver={arrangeEnabled ? (event) => event.preventDefault() : undefined}
+                onDragEnd={arrangeEnabled ? handleLessonArrangeDragEnd : undefined}
+                onDrop={arrangeEnabled ? (event) => handleLessonArrangeDrop(event, group.subjectId, group.grade, group.canonicalLessonKey) : undefined}
+              >
                 <div className="review-panel-head">
                   <div>
                     <h3>{groupSubject?.icon || "📘"} {renderLocalizedTextNode(group.activeLesson?.title || group.title || group.canonicalLessonKey, language)}</h3>
@@ -28460,12 +28771,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   {canExportContent ? <button type="button" className="ghost-cta" onClick={() => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Export", "برآمد کریں", language), language)}</button> : null}
                   {localVariant && canAdministerLessonLibrary ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(group)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}</button> : null}
                   {ownedPublishedVariant && canUnpublishContent ? <button type="button" className="ghost-cta" onClick={() => handleUnpublishChapterVariant(group, ownedPublishedVariant)}>{renderLocalizedTextNode(joinLocalizedText("Unpublish", "غیر شائع کریں", language), language)}</button> : null}
+                  {arrangeEnabled ? <button type="button" className="ghost-cta" onClick={() => handleMoveLessonOrderEntry(group.subjectId, group.grade, group.canonicalLessonKey, "up")} disabled={arrangeIndex <= 0}>{renderLocalizedTextNode(joinLocalizedText("Move Up", "اوپر کریں", language), language)}</button> : null}
+                  {arrangeEnabled ? <button type="button" className="ghost-cta" onClick={() => handleMoveLessonOrderEntry(group.subjectId, group.grade, group.canonicalLessonKey, "down")} disabled={arrangeIndex < 0 || arrangeIndex >= arrangeDraft.length - 1}>{renderLocalizedTextNode(joinLocalizedText("Move Down", "نیچے کریں", language), language)}</button> : null}
                 </div>
               </div>
             );
           }) : (
             <div className="review-panel">
-              <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No local or owned published chapters yet. Import one from a subject first.", "ابھی کوئی مقامی یا آپ کی شائع شدہ باب موجود نہیں۔ پہلے کسی مضمون سے ایک باب درآمد کریں۔", language), language)}</p>
+              <p className="empty-state">{renderLocalizedTextNode(myChaptersArrangeMode && myChaptersArrangeSubjectId !== "all" ? joinLocalizedText("No chapter copies are available for this subject in My Chapters yet.", "اس مضمون کے لیے ابھی میری ابواب میں کوئی بابی کاپی دستیاب نہیں۔", language) : joinLocalizedText("No local or owned published chapters yet. Import one from a subject first.", "ابھی کوئی مقامی یا آپ کی شائع شدہ باب موجود نہیں۔ پہلے کسی مضمون سے ایک باب درآمد کریں۔", language), language)}</p>
             </div>
           )}
           {canAdministerLessonLibrary && visibleBuiltinLessonArchives.length ? (
@@ -28821,11 +29134,28 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               {renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "پورا مضمون برآمد کریں", language), language)}
             </button>
           ) : null}
+          {canAdministerLessonLibrary && !subjectLessonArrangeMode ? (
+            <button type="button" className="ghost-cta" onClick={handleOpenSubjectLessonArrangeMode} disabled={!selectedSubjectChapterGroups.length}>
+              {renderLocalizedTextNode(joinLocalizedText("Arrange Lessons", "اسباق ترتیب دیں", language), language)}
+            </button>
+          ) : null}
+          {canAdministerLessonLibrary && subjectLessonArrangeMode ? (
+            <>
+              <button type="button" className="ghost-cta" onClick={handleSaveSubjectLessonOrder} disabled={!selectedSubjectChapterGroups.length}>
+                {renderLocalizedTextNode(joinLocalizedText("Save Order", "ترتیب محفوظ کریں", language), language)}
+              </button>
+              <button type="button" className="ghost-cta" onClick={handleCancelSubjectLessonArrangeMode}>
+                {renderLocalizedTextNode(joinLocalizedText("Cancel Arrange", "ترتیب منسوخ", language), language)}
+              </button>
+            </>
+          ) : null}
           <div className="subject-chapter-actions-copy">
             {renderLocalizedTextNode(
-              canImportChapters || canImportSubjects || canExportContent
+              canImportChapters || canImportSubjects || canExportContent || canAdministerLessonLibrary
                 ? (chapterSelectionMode && canExportContent
                 ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} اسباق برآمد کے لیے منتخب ہیں۔`, language)
+                : subjectLessonArrangeMode
+                ? joinLocalizedText("Hold Ctrl and drag a lesson card to reorder it, or use the move buttons, then save the order for this subject.", "سبق کو دوبارہ ترتیب دینے کے لیے Ctrl دبا کر کارڈ گھسیٹیں یا اوپر نیچے کے بٹن استعمال کریں، پھر اس مضمون کی ترتیب محفوظ کریں۔", language)
                 : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، باب پیک درآمد کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language))
                 : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "مواد درآمد اور اشاعت کے اوزار ایڈمن سنبھالتے ہیں۔ آپ کے موجودہ کردار کے لیے یہ مضمون صرف دیکھنے کے قابل ہے۔", language),
               language,
@@ -28833,7 +29163,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </div>
         </div>
         <div className="lesson-list" style={(selectedSubject?.id === "urdu" || isUrduUi(language)) ? { direction: "rtl" } : {}}>
-          {selectedSubjectChapterGroups.map((group, index) => {
+          {selectedSubjectArrangementGroups.map((group, index) => {
             const lesson = group.activeLesson;
             if (!lesson) return null;
             const completed = completedQuizzes[lesson.id];
@@ -28850,12 +29180,22 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             const sourceIsUrdu = containsUrduText(sourceCopy);
             const sourceBadges = getChapterVariantBadges(lesson, supabaseAuthState.userId, language);
             const isSelected = selectedChapterKeys.includes(group.canonicalLessonKey);
+            const draftOrder = getLessonOrderDraft(selectedSubject?.id, grade, selectedSubjectChapterGroups);
+            const lessonOrderIndex = draftOrder.indexOf(group.canonicalLessonKey);
+            const canMoveUp = subjectLessonArrangeMode && lessonOrderIndex > 0;
+            const canMoveDown = subjectLessonArrangeMode && lessonOrderIndex >= 0 && lessonOrderIndex < draftOrder.length - 1;
             return (
               <button
                 key={lesson.id}
-                className={`lesson-card${chapterSelectionMode && isSelected ? " selected" : ""}`}
+                className={`lesson-card${chapterSelectionMode && isSelected ? " selected" : ""}${subjectLessonArrangeMode ? " arrange-mode" : ""}${lessonArrangeDragState?.canonicalLessonKey === group.canonicalLessonKey ? " dragging" : ""}`}
                 data-ui-language={language}
+                draggable={subjectLessonArrangeMode}
+                onDragStart={(event) => handleLessonArrangeDragStart(event, selectedSubject?.id, grade, group.canonicalLessonKey)}
+                onDragOver={subjectLessonArrangeMode ? (event) => event.preventDefault() : undefined}
+                onDragEnd={subjectLessonArrangeMode ? handleLessonArrangeDragEnd : undefined}
+                onDrop={subjectLessonArrangeMode ? (event) => handleLessonArrangeDrop(event, selectedSubject?.id, grade, group.canonicalLessonKey) : undefined}
                 onClick={() => {
+                  if (subjectLessonArrangeMode) return;
                   if (chapterSelectionMode) {
                     handleToggleSelectedChapterKey(group.canonicalLessonKey);
                     return;
@@ -28879,7 +29219,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <span aria-hidden="true">{chapterSelectionMode ? (isSelected ? "☑" : "☐") : completed ? "✅" : "○"}</span>
                   <span className={`lesson-status-copy${rtlUi ? " urdu-copy" : ""}`}>
                     {renderLocalizedTextNode(
-                      chapterSelectionMode
+                      subjectLessonArrangeMode
+                        ? joinLocalizedText("Drag with Ctrl or use the move buttons", "Ctrl دبا کر گھسیٹیں یا بٹن استعمال کریں", language)
+                        : chapterSelectionMode
                         ? isSelected
                           ? joinLocalizedText("Selected for export", "برآمد کے لیے منتخب", language)
                           : joinLocalizedText("Tap to select", "منتخب کرنے کے لیے دبائیں", language)
@@ -28888,6 +29230,16 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     )}
                   </span>
                 </div>
+                {subjectLessonArrangeMode ? (
+                  <div className="result-actions chapter-card-actions" style={{ marginTop: 10 }}>
+                    <button type="button" className="ghost-cta" onClick={(event) => { event.stopPropagation(); handleMoveLessonOrderEntry(selectedSubject?.id, grade, group.canonicalLessonKey, "up"); }} disabled={!canMoveUp}>
+                      {renderLocalizedTextNode(joinLocalizedText("Move Up", "اوپر کریں", language), language)}
+                    </button>
+                    <button type="button" className="ghost-cta" onClick={(event) => { event.stopPropagation(); handleMoveLessonOrderEntry(selectedSubject?.id, grade, group.canonicalLessonKey, "down"); }} disabled={!canMoveDown}>
+                      {renderLocalizedTextNode(joinLocalizedText("Move Down", "نیچے کریں", language), language)}
+                    </button>
+                  </div>
+                ) : null}
               </button>
             );
           })}

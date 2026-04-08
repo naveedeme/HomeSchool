@@ -445,13 +445,51 @@
       return acc;
     }, {});
   }
+  function normalizeLessonOrderPreferences(rawPreferences = {}) {
+    const source = rawPreferences && typeof rawPreferences === "object" ? rawPreferences : {};
+    return Object.entries(source).reduce((acc, [rawKey, rawValue]) => {
+      const key = String(rawKey || "").trim();
+      if (!key) return acc;
+      const entries = Array.isArray(rawValue) ? rawValue : Array.isArray(rawValue == null ? void 0 : rawValue.lessonKeys) ? rawValue.lessonKeys : [];
+      const lessonKeys = Array.from(new Set(entries.map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry })).filter(Boolean)));
+      if (!lessonKeys.length) return acc;
+      acc[key] = lessonKeys;
+      return acc;
+    }, {});
+  }
   function buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey) {
     return `${String(subject || "").trim()}::${Number(grade)}::${resolveCustomChapterLessonKey({ lessonKey: canonicalLessonKey })}`;
+  }
+  function buildLessonOrderPreferenceKey(subject, grade) {
+    return `${String(subject || "").trim()}::${Number(grade)}`;
   }
   function buildLessonArchiveKey(subject, grade, canonicalLessonKey, sourceType = "builtin", contentId = "") {
     const safeSourceType = ["builtin", "custom", "published"].includes(String(sourceType || "").trim()) ? String(sourceType || "").trim() : "builtin";
     const safeContentId = safeSourceType === "published" ? String(contentId || "").trim() : "";
     return `${buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey)}::${safeSourceType}::${safeContentId}`;
+  }
+  function applySavedLessonOrder(groups = [], lessonOrderPreferences = {}, subjectId = "", grade = 0) {
+    const safeGroups = Array.isArray(groups) ? groups : [];
+    if (!safeGroups.length) return [];
+    const preferenceKey = buildLessonOrderPreferenceKey(subjectId, grade);
+    const savedOrder = Array.isArray(lessonOrderPreferences == null ? void 0 : lessonOrderPreferences[preferenceKey]) ? lessonOrderPreferences[preferenceKey] : [];
+    if (!savedOrder.length) return [...safeGroups];
+    const orderLookup = new Map(savedOrder.map((lessonKey, index) => [String(lessonKey || "").trim(), index]));
+    return [...safeGroups].sort((left, right) => {
+      const leftIndex = orderLookup.has(left == null ? void 0 : left.canonicalLessonKey) ? orderLookup.get(left.canonicalLessonKey) : Number.MAX_SAFE_INTEGER;
+      const rightIndex = orderLookup.has(right == null ? void 0 : right.canonicalLessonKey) ? orderLookup.get(right.canonicalLessonKey) : Number.MAX_SAFE_INTEGER;
+      if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+      return ((left == null ? void 0 : left.orderHint) || 0) - ((right == null ? void 0 : right.orderHint) || 0) || String((left == null ? void 0 : left.title) || "").localeCompare(String((right == null ? void 0 : right.title) || ""));
+    });
+  }
+  function moveArrayEntry(entries = [], fromIndex = -1, toIndex = -1) {
+    const safeEntries = Array.isArray(entries) ? [...entries] : [];
+    if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex) || fromIndex < 0 || toIndex < 0 || fromIndex >= safeEntries.length || toIndex >= safeEntries.length || fromIndex === toIndex) {
+      return safeEntries;
+    }
+    const [moved] = safeEntries.splice(fromIndex, 1);
+    safeEntries.splice(toIndex, 0, moved);
+    return safeEntries;
   }
   function toIsoDateString(value = Date.now()) {
     const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
@@ -11913,11 +11951,17 @@ ${marker} `);
     const [contentRelationshipState, setContentRelationshipState] = useState(createEmptyContentRelationshipState());
     const [activeInstitutionSchoolId, setActiveInstitutionSchoolId] = useState(String((stored == null ? void 0 : stored.activeInstitutionSchoolId) || "").trim());
     const [chapterSourcePreferences, setChapterSourcePreferences] = useState(normalizeChapterSourcePreferences((stored == null ? void 0 : stored.chapterSourcePreferences) || {}));
+    const [lessonOrderPreferences, setLessonOrderPreferences] = useState(normalizeLessonOrderPreferences((stored == null ? void 0 : stored.lessonOrderPreferences) || {}));
     const [chapterImportBusy, setChapterImportBusy] = useState(false);
     const [chapterPublishBusy, setChapterPublishBusy] = useState(false);
     const [contentRelationshipBusy, setContentRelationshipBusy] = useState(false);
     const [chapterSelectionMode, setChapterSelectionMode] = useState(false);
     const [selectedChapterKeys, setSelectedChapterKeys] = useState([]);
+    const [subjectLessonArrangeMode, setSubjectLessonArrangeMode] = useState(false);
+    const [myChaptersArrangeMode, setMyChaptersArrangeMode] = useState(false);
+    const [myChaptersArrangeSubjectId, setMyChaptersArrangeSubjectId] = useState("all");
+    const [lessonOrderDrafts, setLessonOrderDrafts] = useState({});
+    const [lessonArrangeDragState, setLessonArrangeDragState] = useState(null);
     const [teacherStudentDraftEmail, setTeacherStudentDraftEmail] = useState("");
     const [teacherStudentDraftGrade, setTeacherStudentDraftGrade] = useState((initialActiveStudentProfile == null ? void 0 : initialActiveStudentProfile.grade) || (stored == null ? void 0 : stored.grade) || 5);
     const [teacherStudentDraftTeacherEmail, setTeacherStudentDraftTeacherEmail] = useState("");
@@ -12758,7 +12802,7 @@ ${marker} `);
       const baseLessons = getLessons(subjectId, targetGrade) || [];
       const customLessons = ((_a2 = customContentState.lessonsBySubjectGrade) == null ? void 0 : _a2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
       const publishedLessons = ((_b2 = publishedContentState.lessonsBySubjectGrade) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
-      return buildChapterVariantGroups({
+      const mergedGroups = buildChapterVariantGroups({
         subjectId,
         targetGrade,
         baseLessons,
@@ -12769,7 +12813,8 @@ ${marker} `);
         currentUserId: supabaseAuthState.userId,
         archivedVariantKeys: archivedLessonVariantKeys
       });
-    }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
+      return applySavedLessonOrder(mergedGroups, lessonOrderPreferences, subjectId, targetGrade);
+    }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, supabaseAuthState.userId]);
     const getMergedLessons = useCallback((subjectId, targetGrade) => getMergedLessonGroups(subjectId, targetGrade).map((group) => group.activeLesson).filter(Boolean), [getMergedLessonGroups]);
     const getMergedQuiz = useCallback((subjectId, targetGrade, lessonKey) => {
       var _a2, _b2;
@@ -14411,6 +14456,88 @@ ${marker} `);
       );
     }, [allSubjects, dbLoaded, getLessons, grade]);
     const visibleBuiltinLessonArchives = useMemo(() => visibleLessonArchives.filter((entry) => entry.sourceType === "builtin").filter((entry) => !grade || Number(entry.grade) === Number(grade)), [grade, visibleLessonArchives]);
+    const buildLessonOrderDraftFromGroups = useCallback((groups = []) => Array.from(new Set((Array.isArray(groups) ? groups : []).map((group) => String((group == null ? void 0 : group.canonicalLessonKey) || "").trim()).filter(Boolean))), []);
+    const getLessonOrderDraft = useCallback((subjectId, targetGrade, fallbackGroups = []) => {
+      const preferenceKey = buildLessonOrderPreferenceKey(subjectId, targetGrade);
+      const draft = Array.isArray(lessonOrderDrafts == null ? void 0 : lessonOrderDrafts[preferenceKey]) ? lessonOrderDrafts[preferenceKey] : [];
+      if (draft.length) return draft;
+      return buildLessonOrderDraftFromGroups(fallbackGroups);
+    }, [buildLessonOrderDraftFromGroups, lessonOrderDrafts]);
+    const reorderGroupsFromDraft = useCallback((groups = [], draft = []) => {
+      const safeGroups = Array.isArray(groups) ? groups : [];
+      const safeDraft = Array.isArray(draft) ? draft : [];
+      const orderLookup = new Map(safeDraft.map((entry, index) => [String(entry || "").trim(), index]));
+      return [...safeGroups].sort((left, right) => {
+        const leftIndex = orderLookup.has(left == null ? void 0 : left.canonicalLessonKey) ? orderLookup.get(left.canonicalLessonKey) : Number.MAX_SAFE_INTEGER;
+        const rightIndex = orderLookup.has(right == null ? void 0 : right.canonicalLessonKey) ? orderLookup.get(right.canonicalLessonKey) : Number.MAX_SAFE_INTEGER;
+        if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+        return ((left == null ? void 0 : left.orderHint) || 0) - ((right == null ? void 0 : right.orderHint) || 0) || String((left == null ? void 0 : left.title) || "").localeCompare(String((right == null ? void 0 : right.title) || ""));
+      });
+    }, []);
+    const updateLessonOrderDraft = useCallback((subjectId, targetGrade, updater) => {
+      const safeSubjectId = String(subjectId || "").trim();
+      const safeGrade = Number(targetGrade);
+      if (!safeSubjectId || !safeGrade) return;
+      const preferenceKey = buildLessonOrderPreferenceKey(safeSubjectId, safeGrade);
+      setLessonOrderDrafts((current) => {
+        const baseGroups = getMergedLessonGroups(safeSubjectId, safeGrade);
+        const currentDraft = Array.isArray(current == null ? void 0 : current[preferenceKey]) && current[preferenceKey].length ? current[preferenceKey] : buildLessonOrderDraftFromGroups(baseGroups);
+        const nextDraftRaw = typeof updater === "function" ? updater(currentDraft, baseGroups) : updater;
+        const nextDraft = Array.from(new Set((Array.isArray(nextDraftRaw) ? nextDraftRaw : []).map((entry) => String(entry || "").trim()).filter(Boolean)));
+        return {
+          ...current || {},
+          [preferenceKey]: nextDraft.length ? nextDraft : buildLessonOrderDraftFromGroups(baseGroups)
+        };
+      });
+    }, [buildLessonOrderDraftFromGroups, getMergedLessonGroups]);
+    const startLessonArrangeMode = useCallback((subjectId, targetGrade) => {
+      const safeSubjectId = String(subjectId || "").trim();
+      const safeGrade = Number(targetGrade);
+      if (!safeSubjectId || !safeGrade) return;
+      updateLessonOrderDraft(safeSubjectId, safeGrade, (currentDraft, baseGroups) => currentDraft.length ? currentDraft : buildLessonOrderDraftFromGroups(baseGroups));
+    }, [buildLessonOrderDraftFromGroups, updateLessonOrderDraft]);
+    const saveLessonOrderDraft = useCallback((subjectId, targetGrade) => {
+      const safeSubjectId = String(subjectId || "").trim();
+      const safeGrade = Number(targetGrade);
+      if (!safeSubjectId || !safeGrade) return;
+      const preferenceKey = buildLessonOrderPreferenceKey(safeSubjectId, safeGrade);
+      const fallbackGroups = getMergedLessonGroups(safeSubjectId, safeGrade);
+      const nextOrder = getLessonOrderDraft(safeSubjectId, safeGrade, fallbackGroups);
+      setLessonOrderPreferences((current) => {
+        const next = { ...normalizeLessonOrderPreferences(current) };
+        if (nextOrder.length) next[preferenceKey] = nextOrder;
+        else delete next[preferenceKey];
+        return next;
+      });
+    }, [getLessonOrderDraft, getMergedLessonGroups]);
+    const clearLessonOrderDraft = useCallback((subjectId, targetGrade) => {
+      const preferenceKey = buildLessonOrderPreferenceKey(subjectId, targetGrade);
+      setLessonOrderDrafts((current) => {
+        if (!current || !current[preferenceKey]) return current;
+        const next = { ...current };
+        delete next[preferenceKey];
+        return next;
+      });
+    }, []);
+    const selectedSubjectArrangementGroups = useMemo(() => {
+      if (!subjectLessonArrangeMode || !selectedSubject || !grade) return selectedSubjectChapterGroups;
+      return reorderGroupsFromDraft(
+        selectedSubjectChapterGroups,
+        getLessonOrderDraft(selectedSubject.id, grade, selectedSubjectChapterGroups)
+      );
+    }, [getLessonOrderDraft, grade, reorderGroupsFromDraft, selectedSubject, selectedSubjectChapterGroups, subjectLessonArrangeMode]);
+    const myChapterArrangeSubjectOptions = useMemo(() => {
+      const subjectIds = Array.from(new Set(myChapterGroups.map((group) => String(group.subjectId || "").trim()).filter(Boolean)));
+      return allSubjects.filter((subject) => subjectIds.includes(subject.id));
+    }, [allSubjects, myChapterGroups]);
+    const myChapterVisibleGroups = useMemo(() => {
+      if (!myChaptersArrangeMode || myChaptersArrangeSubjectId === "all" || !grade) return myChapterGroups;
+      const scopedGroups = myChapterGroups.filter((group) => group.subjectId === myChaptersArrangeSubjectId && Number(group.grade) === Number(grade));
+      return reorderGroupsFromDraft(
+        scopedGroups,
+        getLessonOrderDraft(myChaptersArrangeSubjectId, grade, scopedGroups)
+      );
+    }, [getLessonOrderDraft, grade, myChapterGroups, myChaptersArrangeMode, myChaptersArrangeSubjectId, reorderGroupsFromDraft]);
     const publishedChapterBrowserItems = useMemo(() => {
       const normalizedAuthorFilter = String(chapterBrowserAuthorFilter || "").trim().toLowerCase();
       return allChapterGroups.flatMap((group) => group.variants.filter((variant) => variant.sourceType === "published").map((variant) => ({
@@ -14739,6 +14866,113 @@ ${marker} `);
         return !current;
       });
     }, []);
+    const handleOpenSubjectLessonArrangeMode = useCallback(() => {
+      if (!canAdministerLessonLibrary || !selectedSubject || !grade) return;
+      setChapterSelectionMode(false);
+      setSelectedChapterKeys([]);
+      startLessonArrangeMode(selectedSubject.id, grade);
+      setSubjectLessonArrangeMode(true);
+    }, [canAdministerLessonLibrary, grade, selectedSubject, startLessonArrangeMode]);
+    const handleCancelSubjectLessonArrangeMode = useCallback(() => {
+      if (!selectedSubject || !grade) {
+        setSubjectLessonArrangeMode(false);
+        return;
+      }
+      clearLessonOrderDraft(selectedSubject.id, grade);
+      setLessonArrangeDragState(null);
+      setSubjectLessonArrangeMode(false);
+    }, [clearLessonOrderDraft, grade, selectedSubject]);
+    const handleSaveSubjectLessonOrder = useCallback(() => {
+      if (!selectedSubject || !grade) return;
+      saveLessonOrderDraft(selectedSubject.id, grade);
+      clearLessonOrderDraft(selectedSubject.id, grade);
+      setLessonArrangeDragState(null);
+      setSubjectLessonArrangeMode(false);
+      showAppToast(joinLocalizedText("Lesson order saved", "\u0627\u0633\u0628\u0627\u0642 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC", language), "check");
+    }, [clearLessonOrderDraft, grade, language, saveLessonOrderDraft, selectedSubject, showAppToast]);
+    const handleToggleMyChaptersArrangeMode = useCallback(() => {
+      var _a2;
+      if (!canAdministerLessonLibrary) return;
+      if (myChaptersArrangeMode) {
+        if (myChaptersArrangeSubjectId !== "all" && grade) clearLessonOrderDraft(myChaptersArrangeSubjectId, grade);
+        setLessonArrangeDragState(null);
+        setMyChaptersArrangeMode(false);
+        return;
+      }
+      const nextSubjectId = myChaptersArrangeSubjectId !== "all" ? myChaptersArrangeSubjectId : (selectedSubject == null ? void 0 : selectedSubject.id) || ((_a2 = myChapterArrangeSubjectOptions[0]) == null ? void 0 : _a2.id) || "all";
+      setMyChaptersArrangeSubjectId(nextSubjectId);
+      if (nextSubjectId !== "all" && grade) startLessonArrangeMode(nextSubjectId, grade);
+      setMyChaptersArrangeMode(true);
+    }, [canAdministerLessonLibrary, clearLessonOrderDraft, grade, myChapterArrangeSubjectOptions, myChaptersArrangeMode, myChaptersArrangeSubjectId, selectedSubject, startLessonArrangeMode]);
+    const handleMyChaptersArrangeSubjectChange = useCallback((subjectId) => {
+      const safeSubjectId = String(subjectId || "all").trim() || "all";
+      setMyChaptersArrangeSubjectId(safeSubjectId);
+      setLessonArrangeDragState(null);
+      if (safeSubjectId !== "all" && grade) startLessonArrangeMode(safeSubjectId, grade);
+    }, [grade, startLessonArrangeMode]);
+    const handleSaveMyChaptersLessonOrder = useCallback(() => {
+      if (myChaptersArrangeSubjectId === "all" || !grade) return;
+      saveLessonOrderDraft(myChaptersArrangeSubjectId, grade);
+      clearLessonOrderDraft(myChaptersArrangeSubjectId, grade);
+      setLessonArrangeDragState(null);
+      setMyChaptersArrangeMode(false);
+      showAppToast(joinLocalizedText("Lesson order saved", "\u0627\u0633\u0628\u0627\u0642 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC", language), "check");
+    }, [clearLessonOrderDraft, grade, language, myChaptersArrangeSubjectId, saveLessonOrderDraft, showAppToast]);
+    const handleMoveLessonOrderEntry = useCallback((subjectId, targetGrade, canonicalLessonKey, direction) => {
+      const safeKey = String(canonicalLessonKey || "").trim();
+      if (!safeKey) return;
+      updateLessonOrderDraft(subjectId, targetGrade, (currentDraft, baseGroups) => {
+        const draft = currentDraft.length ? currentDraft : buildLessonOrderDraftFromGroups(baseGroups);
+        const currentIndex = draft.indexOf(safeKey);
+        if (currentIndex < 0) return draft;
+        const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+        return moveArrayEntry(draft, currentIndex, nextIndex);
+      });
+    }, [buildLessonOrderDraftFromGroups, updateLessonOrderDraft]);
+    const handleLessonArrangeDragStart = useCallback((event, subjectId, targetGrade, canonicalLessonKey) => {
+      var _a2;
+      if (!(event == null ? void 0 : event.ctrlKey)) {
+        (_a2 = event == null ? void 0 : event.preventDefault) == null ? void 0 : _a2.call(event);
+        showAppToast(joinLocalizedText("Hold Ctrl while dragging to reorder lessons.", "\u0627\u0633\u0628\u0627\u0642 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0628\u062F\u0644\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06AF\u06BE\u0633\u06CC\u0679\u062A\u06D2 \u0648\u0642\u062A Ctrl \u062F\u0628\u0627\u0626\u06D2 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const payload = {
+        subjectId: String(subjectId || "").trim(),
+        grade: Number(targetGrade),
+        canonicalLessonKey: String(canonicalLessonKey || "").trim()
+      };
+      if (!payload.subjectId || !payload.grade || !payload.canonicalLessonKey) return;
+      setLessonArrangeDragState(payload);
+      if (event == null ? void 0 : event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", JSON.stringify(payload));
+      }
+    }, [language, showAppToast]);
+    const handleLessonArrangeDrop = useCallback((event, subjectId, targetGrade, targetLessonKey) => {
+      var _a2, _b2, _c2;
+      (_a2 = event == null ? void 0 : event.preventDefault) == null ? void 0 : _a2.call(event);
+      const fallbackPayload = lessonArrangeDragState;
+      let payload = fallbackPayload;
+      try {
+        const raw = (_c2 = (_b2 = event == null ? void 0 : event.dataTransfer) == null ? void 0 : _b2.getData) == null ? void 0 : _c2.call(_b2, "text/plain");
+        if (raw) payload = JSON.parse(raw);
+      } catch (e) {
+      }
+      const safeSubjectId = String(subjectId || "").trim();
+      const safeGrade = Number(targetGrade);
+      const safeTargetLessonKey = String(targetLessonKey || "").trim();
+      if (!payload || payload.subjectId !== safeSubjectId || Number(payload.grade) !== safeGrade) return;
+      const draggedLessonKey = String(payload.canonicalLessonKey || "").trim();
+      if (!draggedLessonKey || !safeTargetLessonKey || draggedLessonKey === safeTargetLessonKey) return;
+      updateLessonOrderDraft(safeSubjectId, safeGrade, (currentDraft, baseGroups) => {
+        const draft = currentDraft.length ? currentDraft : buildLessonOrderDraftFromGroups(baseGroups);
+        return moveArrayEntry(draft, draft.indexOf(draggedLessonKey), draft.indexOf(safeTargetLessonKey));
+      });
+      setLessonArrangeDragState(null);
+    }, [buildLessonOrderDraftFromGroups, lessonArrangeDragState, updateLessonOrderDraft]);
+    const handleLessonArrangeDragEnd = useCallback(() => {
+      setLessonArrangeDragState(null);
+    }, []);
     const handleToggleSelectedChapterKey = useCallback((canonicalLessonKey) => {
       const safeKey = String(canonicalLessonKey || "").trim();
       if (!safeKey) return;
@@ -15021,10 +15255,11 @@ ${marker} `);
       try {
         const client = ensureSupabaseClientRef.current();
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const archiveId = `lesson_archive_${simpleHash(`${activeInstitutionSchoolIdResolved || "global"}::${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}::builtin`)}`;
+        const archiveSchoolId = String(activeInstitutionSchoolId || activeInstitutionSchoolIdResolved || "").trim();
+        const archiveId = `lesson_archive_${simpleHash(`${archiveSchoolId || "global"}::${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}::builtin`)}`;
         const row = {
           archive_id: archiveId,
-          school_id: activeInstitutionSchoolIdResolved || null,
+          school_id: archiveSchoolId || null,
           subject: group.subjectId,
           grade: Number(group.grade),
           lesson_key: group.canonicalLessonKey,
@@ -15046,7 +15281,7 @@ ${marker} `);
           "alert"
         );
       }
-    }, [activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
     const handleRestoreLessonArchive = useCallback(async (archive) => {
       const normalized = normalizeLessonArchiveRecord(archive);
       if (!canAdministerLessonLibrary) {
@@ -15077,6 +15312,17 @@ ${marker} `);
       setChapterSelectionMode(false);
       setSelectedChapterKeys([]);
     }, [grade, selectedSubject == null ? void 0 : selectedSubject.id]);
+    useEffect(() => {
+      setSubjectLessonArrangeMode(false);
+      setLessonArrangeDragState(null);
+    }, [grade, selectedSubject == null ? void 0 : selectedSubject.id]);
+    useEffect(() => {
+      var _a2;
+      if (!myChaptersArrangeMode) return;
+      if (myChaptersArrangeSubjectId === "all") return;
+      if (myChapterArrangeSubjectOptions.some((subject) => subject.id === myChaptersArrangeSubjectId)) return;
+      setMyChaptersArrangeSubjectId((selectedSubject == null ? void 0 : selectedSubject.id) || ((_a2 = myChapterArrangeSubjectOptions[0]) == null ? void 0 : _a2.id) || "all");
+    }, [myChapterArrangeSubjectOptions, myChaptersArrangeMode, myChaptersArrangeSubjectId, selectedSubject == null ? void 0 : selectedSubject.id]);
     useEffect(() => {
       if (!selectedLesson || !selectedSubject || !(selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.activeLesson)) return;
       const currentIdentity = getLessonVariantIdentity(selectedLesson);
@@ -15963,6 +16209,7 @@ ${marker} `);
       if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || "").trim());
       if (storedContentPreferences && typeof storedContentPreferences === "object") {
         setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
+        setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
       }
       if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
         setSupabaseRolePreference(storedAccountPreferences.rolePreference);
@@ -18620,7 +18867,8 @@ ${marker} `);
               importUrl: String(nextPayload.dictionaryImportUrl || "").trim()
             }, saveCustomizationOptions);
             await window.HomeSchoolDB.saveCustomization("contentPreferences", {
-              chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {})
+              chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
+              lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {})
             }, saveCustomizationOptions);
             await window.HomeSchoolDB.saveCustomization("supabaseDictionarySync", buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}));
             await window.HomeSchoolDB.saveCustomization("studentProfile", {
@@ -18690,7 +18938,8 @@ ${marker} `);
                 importUrl: String(nextPayload.dictionaryImportUrl || "").trim()
               },
               contentPreferences: {
-                chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {})
+                chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
+                lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {})
               },
               supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}),
               studentProfile: {
@@ -18761,7 +19010,8 @@ ${marker} `);
               importUrl: String(nextPayload.dictionaryImportUrl || "").trim()
             },
             contentPreferences: {
-              chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {})
+              chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
+              lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {})
             },
             supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}),
             studentProfile: {
@@ -18951,6 +19201,7 @@ ${marker} `);
           }
           if (storedContentPreferences && typeof storedContentPreferences === "object") {
             setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
+            setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
           }
           if (storedSupabaseDictionarySync && typeof storedSupabaseDictionarySync === "object") {
             setSupabaseDictionarySync(sanitizeSupabaseDictionarySyncSettings(storedSupabaseDictionarySync));
@@ -19429,6 +19680,7 @@ ${marker} `);
         dictionarySyncConflicts,
         dictionaryImportUrl,
         chapterSourcePreferences,
+        lessonOrderPreferences,
         contentRoleTestMode,
         supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync),
         studentProfiles,
@@ -19443,10 +19695,10 @@ ${marker} `);
         aiProviderConfigs,
         selectedAiProvider
       });
-    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+    }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
-      if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-    }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
+      if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+    }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
     useEffect(() => {
       setNavHidden(Boolean(navAutoHide));
     }, [navPosition, navAutoHide]);
@@ -23919,28 +24171,48 @@ ${error.message || error}`);
         const targetLabel = assignment.targetType === "student" ? joinLocalizedText(`Student \u2022 ${assignment.targetStudentEmail}`, `\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u2022 ${assignment.targetStudentEmail}`, language) : joinLocalizedText(`Grade ${assignment.targetGrade}`, `\u062C\u0645\u0627\u0639\u062A ${assignment.targetGrade}`, language);
         return /* @__PURE__ */ React.createElement("div", { key: `chapter_assignment_${assignment.assignmentId}`, className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(((_b2 = assignmentGroup == null ? void 0 : assignmentGroup.activeLesson) == null ? void 0 : _b2.title) || (assignmentGroup == null ? void 0 : assignmentGroup.title) || assignment.lessonKey, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${assignmentSubject ? getSubjectDisplayName(assignmentSubject, "en") : assignment.subject} \u2022 ${targetLabel}`, `${assignmentSubject ? getSubjectDisplayName(assignmentSubject, "ur") : assignment.subject} \u2022 ${targetLabel}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(assignmentVariant ? getChapterVariantDisplayLabel(assignmentVariant) : joinLocalizedText("Published copy", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC", language), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row" }, /* @__PURE__ */ React.createElement("span", { className: "chapter-badge active" }, renderLocalizedTextNode(targetLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral" }, renderLocalizedTextNode(joinLocalizedText(`Assigned by ${assignment.assignedByEmail}`, `${assignment.assignedByEmail} \u0646\u06D2 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u06CC\u0627`, language), language))), assignment.note ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 10, marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText(`Note: ${assignment.note}`, `\u0646\u0648\u0679: ${assignment.note}`, language), language)) : null, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText(`Updated ${formatRelativeTimeLabel(assignment.updatedAt, language)}`, `${formatRelativeTimeLabel(assignment.updatedAt, language)} \u0645\u06CC\u06BA \u062A\u0627\u0632\u06C1`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, (assignmentGroup == null ? void 0 : assignmentGroup.activeLesson) ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenChapterVariant(assignment.subject, (assignmentVariant == null ? void 0 : assignmentVariant.lesson) || assignmentGroup.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Open lesson", "\u0633\u0628\u0642 \u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)) : null, canManageContentAccess || assignment.assignedByEmail === contentIdentityEmail ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteChapterAssignment(assignment), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove assignment", "\u062A\u0641\u0648\u06CC\u0636 \u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
       }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No chapter assignments yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0628\u0627\u0628 \u062A\u0641\u0648\u06CC\u0636 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : null,
-      profilesSectionTab === "chapters" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("My Chapters", "\u0645\u06CC\u0631\u06D2 \u0627\u0628\u0648\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose which copy of a chapter should stay active, manage your local drafts, and keep published updates under your control.", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u06A9\u0633\u06CC \u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0648\u0646 \u0633\u06CC \u06A9\u0627\u067E\u06CC \u0641\u0639\u0627\u0644 \u0631\u06C1\u06D2\u060C \u0627\u067E\u0646\u06D2 \u0645\u0642\u0627\u0645\u06CC \u0688\u0631\u0627\u0641\u0679\u0633 \u0645\u0646\u0638\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u062A\u0627\u0632\u06C1 \u06A9\u0627\u0631\u06CC\u0648\u06BA \u06A9\u0648 \u0627\u067E\u0646\u06D2 \u0642\u0627\u0628\u0648 \u0645\u06CC\u06BA \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(myChapterGroups.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(myChapterGroups.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Managed chapters", "\u0645\u0646\u0638\u0645 \u0627\u0628\u0648\u0627\u0628", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4BE}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(myChapterGroups.filter((group) => group.variants.some((variant) => variant.sourceType === "custom")).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Local copies", "\u0645\u0642\u0627\u0645\u06CC \u06A9\u0627\u067E\u06CC\u0627\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2601\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(myChapterGroups.filter((group) => group.variants.some((variant) => variant.sourceType === "published" && variant.ownedByCurrentUser)).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("My published", "\u0645\u06CC\u0631\u0627 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F33F}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(myChapterGroups.filter((group) => group.variants.some((variant) => String(variant.forkedFromContentId || "").trim())).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Forks", "\u0641\u0648\u0631\u06A9\u0633", language), language))))), myChapterGroups.length ? myChapterGroups.map((group) => {
+      profilesSectionTab === "chapters" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("My Chapters", "\u0645\u06CC\u0631\u06D2 \u0627\u0628\u0648\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose which copy of a chapter should stay active, manage your local drafts, and keep published updates under your control.", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u06A9\u0633\u06CC \u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0648\u0646 \u0633\u06CC \u06A9\u0627\u067E\u06CC \u0641\u0639\u0627\u0644 \u0631\u06C1\u06D2\u060C \u0627\u067E\u0646\u06D2 \u0645\u0642\u0627\u0645\u06CC \u0688\u0631\u0627\u0641\u0679\u0633 \u0645\u0646\u0638\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u062A\u0627\u0632\u06C1 \u06A9\u0627\u0631\u06CC\u0648\u06BA \u06A9\u0648 \u0627\u067E\u0646\u06D2 \u0642\u0627\u0628\u0648 \u0645\u06CC\u06BA \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 0 } }, /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(myChapterGroups.length)), canAdministerLessonLibrary && !myChaptersArrangeMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleToggleMyChaptersArrangeMode, disabled: !grade || !myChapterArrangeSubjectOptions.length }, renderLocalizedTextNode(joinLocalizedText("Arrange Lessons", "\u0627\u0633\u0628\u0627\u0642 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && myChaptersArrangeMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSaveMyChaptersLessonOrder, disabled: !grade || myChaptersArrangeSubjectId === "all" }, renderLocalizedTextNode(joinLocalizedText("Save Order", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && myChaptersArrangeMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleToggleMyChaptersArrangeMode }, renderLocalizedTextNode(joinLocalizedText("Cancel Arrange", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u0646\u0633\u0648\u062E", language), language)) : null)), canAdministerLessonLibrary && myChaptersArrangeMode ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("select", { className: "dictionary-select", value: myChaptersArrangeSubjectId, onChange: (event) => handleMyChaptersArrangeSubjectChange(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("Choose subject to arrange", "\u062A\u0631\u062A\u06CC\u0628 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0636\u0645\u0648\u0646 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), myChapterArrangeSubjectOptions.map((subject) => /* @__PURE__ */ React.createElement("option", { key: `arrange_my_chapters_${subject.id}`, value: subject.id }, renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText("Use move controls or hold Ctrl while dragging a chapter card. Save when the order feels right.", "\u0628\u0627\u0628\u06CC \u06A9\u0627\u0631\u0688 \u06A9\u0648 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0628\u0679\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA \u06CC\u0627 Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u06AF\u06BE\u0633\u06CC\u0679\u06CC\u06BA\u06D4 \u062C\u0628 \u062A\u0631\u062A\u06CC\u0628 \u062F\u0631\u0633\u062A \u0644\u06AF\u06D2 \u062A\u0648 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(myChapterGroups.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Managed chapters", "\u0645\u0646\u0638\u0645 \u0627\u0628\u0648\u0627\u0628", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4BE}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(myChapterGroups.filter((group) => group.variants.some((variant) => variant.sourceType === "custom")).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Local copies", "\u0645\u0642\u0627\u0645\u06CC \u06A9\u0627\u067E\u06CC\u0627\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2601\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(myChapterGroups.filter((group) => group.variants.some((variant) => variant.sourceType === "published" && variant.ownedByCurrentUser)).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("My published", "\u0645\u06CC\u0631\u0627 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F33F}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(myChapterGroups.filter((group) => group.variants.some((variant) => String(variant.forkedFromContentId || "").trim())).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Forks", "\u0641\u0648\u0631\u06A9\u0633", language), language))))), myChapterVisibleGroups.length ? myChapterVisibleGroups.map((group) => {
         var _a2;
         const groupSubject = group.subject || subjectLookup[group.subjectId] || null;
         const localVariant = group.variants.find((variant) => variant.sourceType === "custom") || null;
         const ownedPublishedVariant = group.variants.find((variant) => variant.sourceType === "published" && variant.ownedByCurrentUser) || null;
-        return /* @__PURE__ */ React.createElement("div", { key: `chapter_manage_${group.subjectId}_${group.canonicalLessonKey}`, className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, (groupSubject == null ? void 0 : groupSubject.icon) || "\u{1F4D8}", " ", renderLocalizedTextNode(((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.title || group.canonicalLessonKey, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${groupSubject ? getSubjectDisplayName(groupSubject, "en") : group.subjectId} \u2022 ${group.variants.length} copies available`, `${groupSubject ? getSubjectDisplayName(groupSubject, "ur") : group.subjectId} \u2022 ${group.variants.length} \u06A9\u0627\u067E\u06CC\u0627\u06BA \u062F\u0633\u062A\u06CC\u0627\u0628`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(group.activeVariant), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row" }, getChapterVariantBadges(group.activeLesson, supabaseAuthState.userId, language).map((badge) => /* @__PURE__ */ React.createElement("span", { key: `${group.preferenceKey}_${badge.tone}_${badge.label}`, className: `chapter-badge ${badge.tone}` }, renderLocalizedTextNode(badge.label, language))), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge active" }, renderLocalizedTextNode(joinLocalizedText("Active", "\u0641\u0639\u0627\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-choice-row" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-source-choice${!chapterSourcePreferences[group.preferenceKey] ? " active" : ""}`, onClick: () => updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null), disabled: !canChooseContentSource }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), group.variants.map((variant) => {
-          var _a3, _b2, _c2;
-          const selectionValue = variant.sourceType === "published" ? { mode: "published", contentId: variant.contentId } : { mode: variant.sourceType };
-          const isActiveSelection = variant.sourceType === "published" ? ((_a3 = chapterSourcePreferences[group.preferenceKey]) == null ? void 0 : _a3.mode) === "published" && String(((_b2 = chapterSourcePreferences[group.preferenceKey]) == null ? void 0 : _b2.contentId) || "").trim() === String(variant.contentId || "").trim() : ((_c2 = chapterSourcePreferences[group.preferenceKey]) == null ? void 0 : _c2.mode) === variant.sourceType;
-          return /* @__PURE__ */ React.createElement(
-            "button",
-            {
-              key: `${group.preferenceKey}_${variant.sourceKey}`,
-              type: "button",
-              className: `chapter-source-choice${isActiveSelection ? " active" : ""}`,
-              disabled: !canChooseContentSource,
-              onClick: () => updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, selectionValue)
-            },
-            renderLocalizedTextNode(getChapterVariantDisplayLabel(variant), language)
-          );
-        })), !canChooseContentSource ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText("Teachers and above can choose which chapter copy stays active.", "\u06A9\u0648\u0646 \u0633\u06CC \u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0627\u067E\u06CC \u0641\u0639\u0627\u0644 \u0631\u06C1\u06D2 \u06AF\u06CC\u060C \u06CC\u06C1 \u0627\u0633\u062A\u0627\u062F \u0627\u0648\u0631 \u0627\u0633 \u0633\u06D2 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenChapterVariant(group.subjectId, group.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Open", "\u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)), canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Export", "\u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, localVariant && canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteLocalChapter(group) }, renderLocalizedTextNode(joinLocalizedText("Delete local", "\u0645\u0642\u0627\u0645\u06CC \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, ownedPublishedVariant && canUnpublishContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleUnpublishChapterVariant(group, ownedPublishedVariant) }, renderLocalizedTextNode(joinLocalizedText("Unpublish", "\u063A\u06CC\u0631 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language), language)) : null));
-      }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No local or owned published chapters yet. Import one from a subject first.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0645\u0642\u0627\u0645\u06CC \u06CC\u0627 \u0622\u067E \u06A9\u06CC \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0628\u0627\u0628 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4 \u067E\u06C1\u0644\u06D2 \u06A9\u0633\u06CC \u0645\u0636\u0645\u0648\u0646 \u0633\u06D2 \u0627\u06CC\u06A9 \u0628\u0627\u0628 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), canAdministerLessonLibrary && visibleBuiltinLessonArchives.length ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Removed Default Lessons", "\u06C1\u0679\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0627\u0633\u0628\u0627\u0642", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Restore any built-in lesson slot that was soft-removed by an admin.", "\u06A9\u0633\u06CC \u0628\u06BE\u06CC \u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0628\u0642 \u062E\u0627\u0646\u06D2 \u06A9\u0648 \u0628\u062D\u0627\u0644 \u06A9\u0631\u06CC\u06BA \u062C\u0633\u06D2 \u0627\u06CC\u0688\u0645\u0646 \u0646\u06D2 \u0646\u0631\u0645 \u0637\u0631\u06CC\u0642\u06D2 \u0633\u06D2 \u06C1\u0679\u0627\u06CC\u0627 \u062A\u06BE\u0627\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(visibleBuiltinLessonArchives.length))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, visibleBuiltinLessonArchives.map((entry) => {
+        const arrangeDraft = getLessonOrderDraft(group.subjectId, group.grade, myChapterVisibleGroups.filter((entry) => entry.subjectId === group.subjectId && Number(entry.grade) === Number(group.grade)));
+        const arrangeIndex = arrangeDraft.indexOf(group.canonicalLessonKey);
+        const arrangeEnabled = myChaptersArrangeMode && myChaptersArrangeSubjectId === group.subjectId && Number(group.grade) === Number(grade);
+        return /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: `chapter_manage_${group.subjectId}_${group.canonicalLessonKey}`,
+            className: `review-panel chapter-card-panel${arrangeEnabled ? " arrange-mode" : ""}${(lessonArrangeDragState == null ? void 0 : lessonArrangeDragState.canonicalLessonKey) === group.canonicalLessonKey ? " dragging" : ""}`,
+            "data-ui-language": language,
+            draggable: arrangeEnabled,
+            onDragStart: arrangeEnabled ? (event) => handleLessonArrangeDragStart(event, group.subjectId, group.grade, group.canonicalLessonKey) : void 0,
+            onDragOver: arrangeEnabled ? (event) => event.preventDefault() : void 0,
+            onDragEnd: arrangeEnabled ? handleLessonArrangeDragEnd : void 0,
+            onDrop: arrangeEnabled ? (event) => handleLessonArrangeDrop(event, group.subjectId, group.grade, group.canonicalLessonKey) : void 0
+          },
+          /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, (groupSubject == null ? void 0 : groupSubject.icon) || "\u{1F4D8}", " ", renderLocalizedTextNode(((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.title || group.canonicalLessonKey, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${groupSubject ? getSubjectDisplayName(groupSubject, "en") : group.subjectId} \u2022 ${group.variants.length} copies available`, `${groupSubject ? getSubjectDisplayName(groupSubject, "ur") : group.subjectId} \u2022 ${group.variants.length} \u06A9\u0627\u067E\u06CC\u0627\u06BA \u062F\u0633\u062A\u06CC\u0627\u0628`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(group.activeVariant), language))),
+          /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row" }, getChapterVariantBadges(group.activeLesson, supabaseAuthState.userId, language).map((badge) => /* @__PURE__ */ React.createElement("span", { key: `${group.preferenceKey}_${badge.tone}_${badge.label}`, className: `chapter-badge ${badge.tone}` }, renderLocalizedTextNode(badge.label, language))), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge active" }, renderLocalizedTextNode(joinLocalizedText("Active", "\u0641\u0639\u0627\u0644", language), language))),
+          /* @__PURE__ */ React.createElement("div", { className: "chapter-choice-row" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-source-choice${!chapterSourcePreferences[group.preferenceKey] ? " active" : ""}`, onClick: () => updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null), disabled: !canChooseContentSource }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), group.variants.map((variant) => {
+            var _a3, _b2, _c2;
+            const selectionValue = variant.sourceType === "published" ? { mode: "published", contentId: variant.contentId } : { mode: variant.sourceType };
+            const isActiveSelection = variant.sourceType === "published" ? ((_a3 = chapterSourcePreferences[group.preferenceKey]) == null ? void 0 : _a3.mode) === "published" && String(((_b2 = chapterSourcePreferences[group.preferenceKey]) == null ? void 0 : _b2.contentId) || "").trim() === String(variant.contentId || "").trim() : ((_c2 = chapterSourcePreferences[group.preferenceKey]) == null ? void 0 : _c2.mode) === variant.sourceType;
+            return /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                key: `${group.preferenceKey}_${variant.sourceKey}`,
+                type: "button",
+                className: `chapter-source-choice${isActiveSelection ? " active" : ""}`,
+                disabled: !canChooseContentSource,
+                onClick: () => updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, selectionValue)
+              },
+              renderLocalizedTextNode(getChapterVariantDisplayLabel(variant), language)
+            );
+          })),
+          !canChooseContentSource ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginBottom: 12 } }, renderLocalizedTextNode(joinLocalizedText("Teachers and above can choose which chapter copy stays active.", "\u06A9\u0648\u0646 \u0633\u06CC \u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0627\u067E\u06CC \u0641\u0639\u0627\u0644 \u0631\u06C1\u06D2 \u06AF\u06CC\u060C \u06CC\u06C1 \u0627\u0633\u062A\u0627\u062F \u0627\u0648\u0631 \u0627\u0633 \u0633\u06D2 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)) : null,
+          /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenChapterVariant(group.subjectId, group.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Open", "\u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)), canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson) }, renderLocalizedTextNode(joinLocalizedText("Export", "\u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, localVariant && canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteLocalChapter(group) }, renderLocalizedTextNode(joinLocalizedText("Delete local", "\u0645\u0642\u0627\u0645\u06CC \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, ownedPublishedVariant && canUnpublishContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleUnpublishChapterVariant(group, ownedPublishedVariant) }, renderLocalizedTextNode(joinLocalizedText("Unpublish", "\u063A\u06CC\u0631 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language), language)) : null, arrangeEnabled ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleMoveLessonOrderEntry(group.subjectId, group.grade, group.canonicalLessonKey, "up"), disabled: arrangeIndex <= 0 }, renderLocalizedTextNode(joinLocalizedText("Move Up", "\u0627\u0648\u067E\u0631 \u06A9\u0631\u06CC\u06BA", language), language)) : null, arrangeEnabled ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleMoveLessonOrderEntry(group.subjectId, group.grade, group.canonicalLessonKey, "down"), disabled: arrangeIndex < 0 || arrangeIndex >= arrangeDraft.length - 1 }, renderLocalizedTextNode(joinLocalizedText("Move Down", "\u0646\u06CC\u0686\u06D2 \u06A9\u0631\u06CC\u06BA", language), language)) : null)
+        );
+      }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(myChaptersArrangeMode && myChaptersArrangeSubjectId !== "all" ? joinLocalizedText("No chapter copies are available for this subject in My Chapters yet.", "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0628\u06BE\u06CC \u0645\u06CC\u0631\u06CC \u0627\u0628\u0648\u0627\u0628 \u0645\u06CC\u06BA \u06A9\u0648\u0626\u06CC \u0628\u0627\u0628\u06CC \u06A9\u0627\u067E\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language) : joinLocalizedText("No local or owned published chapters yet. Import one from a subject first.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0645\u0642\u0627\u0645\u06CC \u06CC\u0627 \u0622\u067E \u06A9\u06CC \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0628\u0627\u0628 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4 \u067E\u06C1\u0644\u06D2 \u06A9\u0633\u06CC \u0645\u0636\u0645\u0648\u0646 \u0633\u06D2 \u0627\u06CC\u06A9 \u0628\u0627\u0628 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), canAdministerLessonLibrary && visibleBuiltinLessonArchives.length ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Removed Default Lessons", "\u06C1\u0679\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0627\u0633\u0628\u0627\u0642", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Restore any built-in lesson slot that was soft-removed by an admin.", "\u06A9\u0633\u06CC \u0628\u06BE\u06CC \u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0628\u0642 \u062E\u0627\u0646\u06D2 \u06A9\u0648 \u0628\u062D\u0627\u0644 \u06A9\u0631\u06CC\u06BA \u062C\u0633\u06D2 \u0627\u06CC\u0688\u0645\u0646 \u0646\u06D2 \u0646\u0631\u0645 \u0637\u0631\u06CC\u0642\u06D2 \u0633\u06D2 \u06C1\u0679\u0627\u06CC\u0627 \u062A\u06BE\u0627\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(visibleBuiltinLessonArchives.length))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, visibleBuiltinLessonArchives.map((entry) => {
         var _a2;
         const lessonInfo = builtinLessonLookup[`${entry.subject}::${Number(entry.grade)}::${entry.lessonKey}`] || null;
         return /* @__PURE__ */ React.createElement("div", { key: `lesson_archive_${entry.archiveId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(((_a2 = lessonInfo == null ? void 0 : lessonInfo.lesson) == null ? void 0 : _a2.title) || entry.title || entry.lessonKey, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Grade ${entry.grade}`, `\u062C\u0645\u0627\u0639\u062A ${entry.grade}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${(lessonInfo == null ? void 0 : lessonInfo.subject) ? getSubjectDisplayName(lessonInfo.subject, "en") : entry.subject} \u2022 removed by ${entry.archivedByEmail || "admin"}`, `${(lessonInfo == null ? void 0 : lessonInfo.subject) ? getSubjectDisplayName(lessonInfo.subject, "ur") : entry.subject} \u2022 ${entry.archivedByEmail || "\u0627\u06CC\u0688\u0645\u0646"} \u0646\u06D2 \u06C1\u0679\u0627\u06CC\u0627`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleRestoreLessonArchive(entry) }, renderLocalizedTextNode(joinLocalizedText("Restore lesson", "\u0633\u0628\u0642 \u0628\u062D\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
@@ -23996,10 +24268,10 @@ ${error.message || error}`);
     )) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${chapterSelectionMode ? " active" : ""}`, onClick: handleToggleChapterSelectionMode }, renderLocalizedTextNode(
       chapterSelectionMode ? joinLocalizedText("Done Selecting", "\u0627\u0646\u062A\u062E\u0627\u0628 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Select Lessons", "\u0627\u0633\u0628\u0627\u0642 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language),
       language
-    )) : null, chapterSelectionMode && canExportContent ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSelectAllSubjectChapters, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Select All", "\u0633\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClearSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Export Selected", "\u0645\u0646\u062A\u062E\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportAllSubjectLessons, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportWholeSubject, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "\u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
-      canImportChapters || canImportSubjects || canExportContent ? chapterSelectionMode && canExportContent ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06C1\u06CC\u06BA\u06D4`, language) : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "\u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u0628\u0627\u0628 \u067E\u06CC\u06A9 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0627\u06CC\u06A9 \u067E\u06CC\u06A9 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language) : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u0627\u0648\u0631 \u0627\u0634\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0648\u0632\u0627\u0631 \u0627\u06CC\u0688\u0645\u0646 \u0633\u0646\u0628\u06BE\u0627\u0644\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0622\u067E \u06A9\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06CC\u06C1 \u0645\u0636\u0645\u0648\u0646 \u0635\u0631\u0641 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0642\u0627\u0628\u0644 \u06C1\u06D2\u06D4", language),
+    )) : null, chapterSelectionMode && canExportContent ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSelectAllSubjectChapters, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Select All", "\u0633\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClearSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Export Selected", "\u0645\u0646\u062A\u062E\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportAllSubjectLessons, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportWholeSubject, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "\u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && !subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenSubjectLessonArrangeMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Arrange Lessons", "\u0627\u0633\u0628\u0627\u0642 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSaveSubjectLessonOrder, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Save Order", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleCancelSubjectLessonArrangeMode }, renderLocalizedTextNode(joinLocalizedText("Cancel Arrange", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u0646\u0633\u0648\u062E", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
+      canImportChapters || canImportSubjects || canExportContent || canAdministerLessonLibrary ? chapterSelectionMode && canExportContent ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06C1\u06CC\u06BA\u06D4`, language) : subjectLessonArrangeMode ? joinLocalizedText("Hold Ctrl and drag a lesson card to reorder it, or use the move buttons, then save the order for this subject.", "\u0633\u0628\u0642 \u06A9\u0648 \u062F\u0648\u0628\u0627\u0631\u06C1 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u06A9\u0627\u0631\u0688 \u06AF\u06BE\u0633\u06CC\u0679\u06CC\u06BA \u06CC\u0627 \u0627\u0648\u067E\u0631 \u0646\u06CC\u0686\u06D2 \u06A9\u06D2 \u0628\u0679\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA\u06D4", language) : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "\u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u0628\u0627\u0628 \u067E\u06CC\u06A9 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0627\u06CC\u06A9 \u067E\u06CC\u06A9 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language) : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u0627\u0648\u0631 \u0627\u0634\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0648\u0632\u0627\u0631 \u0627\u06CC\u0688\u0645\u0646 \u0633\u0646\u0628\u06BE\u0627\u0644\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0622\u067E \u06A9\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06CC\u06C1 \u0645\u0636\u0645\u0648\u0646 \u0635\u0631\u0641 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0642\u0627\u0628\u0644 \u06C1\u06D2\u06D4", language),
       language
-    ))), /* @__PURE__ */ React.createElement("div", { className: "lesson-list", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, selectedSubjectChapterGroups.map((group, index) => {
+    ))), /* @__PURE__ */ React.createElement("div", { className: "lesson-list", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, selectedSubjectArrangementGroups.map((group, index) => {
       const lesson = group.activeLesson;
       if (!lesson) return null;
       const completed = completedQuizzes[lesson.id];
@@ -24014,13 +24286,23 @@ ${error.message || error}`);
       const sourceIsUrdu = containsUrduText(sourceCopy);
       const sourceBadges = getChapterVariantBadges(lesson, supabaseAuthState.userId, language);
       const isSelected = selectedChapterKeys.includes(group.canonicalLessonKey);
+      const draftOrder = getLessonOrderDraft(selectedSubject == null ? void 0 : selectedSubject.id, grade, selectedSubjectChapterGroups);
+      const lessonOrderIndex = draftOrder.indexOf(group.canonicalLessonKey);
+      const canMoveUp = subjectLessonArrangeMode && lessonOrderIndex > 0;
+      const canMoveDown = subjectLessonArrangeMode && lessonOrderIndex >= 0 && lessonOrderIndex < draftOrder.length - 1;
       return /* @__PURE__ */ React.createElement(
         "button",
         {
           key: lesson.id,
-          className: `lesson-card${chapterSelectionMode && isSelected ? " selected" : ""}`,
+          className: `lesson-card${chapterSelectionMode && isSelected ? " selected" : ""}${subjectLessonArrangeMode ? " arrange-mode" : ""}${(lessonArrangeDragState == null ? void 0 : lessonArrangeDragState.canonicalLessonKey) === group.canonicalLessonKey ? " dragging" : ""}`,
           "data-ui-language": language,
+          draggable: subjectLessonArrangeMode,
+          onDragStart: (event) => handleLessonArrangeDragStart(event, selectedSubject == null ? void 0 : selectedSubject.id, grade, group.canonicalLessonKey),
+          onDragOver: subjectLessonArrangeMode ? (event) => event.preventDefault() : void 0,
+          onDragEnd: subjectLessonArrangeMode ? handleLessonArrangeDragEnd : void 0,
+          onDrop: subjectLessonArrangeMode ? (event) => handleLessonArrangeDrop(event, selectedSubject == null ? void 0 : selectedSubject.id, grade, group.canonicalLessonKey) : void 0,
           onClick: () => {
+            if (subjectLessonArrangeMode) return;
             if (chapterSelectionMode) {
               handleToggleSelectedChapterKey(group.canonicalLessonKey);
               return;
@@ -24035,9 +24317,16 @@ ${error.message || error}`);
         sourceBadges.length ? /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row lesson-source-badges" }, sourceBadges.map((badge) => /* @__PURE__ */ React.createElement("span", { key: `${lesson.id}_${badge.tone}_${badge.label}`, className: `chapter-badge ${badge.tone}` }, renderLocalizedTextNode(badge.label, language)))) : null,
         /* @__PURE__ */ React.createElement("p", { className: previewIsUrdu ? "urdu-copy" : "" }, previewText),
         /* @__PURE__ */ React.createElement("div", { className: "lesson-status", style: { color: completed ? "var(--success)" : "var(--text-muted)" } }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, chapterSelectionMode ? isSelected ? "\u2611" : "\u2610" : completed ? "\u2705" : "\u25CB"), /* @__PURE__ */ React.createElement("span", { className: `lesson-status-copy${rtlUi ? " urdu-copy" : ""}` }, renderLocalizedTextNode(
-          chapterSelectionMode ? isSelected ? joinLocalizedText("Selected for export", "\u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628", language) : joinLocalizedText("Tap to select", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062F\u0628\u0627\u0626\u06CC\u06BA", language) : statusCopy,
+          subjectLessonArrangeMode ? joinLocalizedText("Drag with Ctrl or use the move buttons", "Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u06AF\u06BE\u0633\u06CC\u0679\u06CC\u06BA \u06CC\u0627 \u0628\u0679\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language) : chapterSelectionMode ? isSelected ? joinLocalizedText("Selected for export", "\u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628", language) : joinLocalizedText("Tap to select", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062F\u0628\u0627\u0626\u06CC\u06BA", language) : statusCopy,
           language
-        )))
+        ))),
+        subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: (event) => {
+          event.stopPropagation();
+          handleMoveLessonOrderEntry(selectedSubject == null ? void 0 : selectedSubject.id, grade, group.canonicalLessonKey, "up");
+        }, disabled: !canMoveUp }, renderLocalizedTextNode(joinLocalizedText("Move Up", "\u0627\u0648\u067E\u0631 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: (event) => {
+          event.stopPropagation();
+          handleMoveLessonOrderEntry(selectedSubject == null ? void 0 : selectedSubject.id, grade, group.canonicalLessonKey, "down");
+        }, disabled: !canMoveDown }, renderLocalizedTextNode(joinLocalizedText("Move Down", "\u0646\u06CC\u0686\u06D2 \u06A9\u0631\u06CC\u06BA", language), language))) : null
       );
     }))), tab === "home" && selectedLesson && !quizActive && !quizDone && /* @__PURE__ */ React.createElement(LessonEditContext.Provider, { value: lessonEditContextValue }, /* @__PURE__ */ React.createElement(React.Fragment, null, activeDiaryTask ? /* @__PURE__ */ React.createElement("div", { className: "review-panel diary-task-nav-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Diary Task", "\u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Open this lesson from the diary, then move back to the diary or continue straight to the next task.", "\u06CC\u06C1 \u0633\u0628\u0642 \u0688\u0627\u0626\u0631\u06CC \u0633\u06D2 \u06A9\u06BE\u0644\u0627 \u06C1\u06D2\u06D4 \u06CC\u06C1\u0627\u06BA \u0633\u06D2 \u0648\u0627\u067E\u0633 \u0688\u0627\u0626\u0631\u06CC \u067E\u0631 \u062C\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u0633\u06CC\u062F\u06BE\u0627 \u0627\u06AF\u0644\u06D2 \u06A9\u0627\u0645 \u067E\u0631 \u0628\u0691\u06BE\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(Math.max(1, activeDiaryTaskIndex + 1)), "/", formatNumberLabel(Math.max(1, orderedVisibleDiaryTasks.length)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(
       joinLocalizedText(

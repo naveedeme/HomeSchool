@@ -267,6 +267,9 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .2s;text-align:left;font-family:var(--font);color:var(--text-primary)}
 .lesson-card:hover{border-color:var(--accent);transform:translateY(-1px)}
 .lesson-card.selected{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--bg-card));box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 28%,transparent)}
+.lesson-card.arrange-mode{cursor:grab;border-style:dashed}
+.lesson-card.arrange-mode:active{cursor:grabbing}
+.lesson-card.dragging{opacity:.72;transform:scale(.99)}
 .lesson-card .lesson-num{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px}
 .lesson-card h3{font-size:16px;font-weight:700;margin:4px 0}.lesson-card p{font-size:13px;color:var(--text-secondary);line-height:1.5}
 .lesson-card .lesson-source-copy{font-size:11px;color:var(--accent);font-weight:700;line-height:1.45;margin-bottom:6px}
@@ -308,6 +311,8 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .chapter-badge.active{background:rgba(34,197,94,.14);border-color:rgba(34,197,94,.26);color:#15803D}
 .lesson-source-badges{margin-top:0;margin-bottom:10px}
 .chapter-card-actions{justify-content:flex-start;flex-wrap:wrap}
+.chapter-card-panel.arrange-mode{border-style:dashed}
+.chapter-card-panel.dragging{opacity:.74;transform:scale(.995)}
 .lesson-detail .start-quiz-btn{margin-top:20px;width:100%;padding:14px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--accent),#0EA5E9);color:#0F172A;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;transition:all .2s}
 .quiz-container{animation:fadeSlide .3s ease}@keyframes fadeSlide{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .quiz-progress{display:flex;gap:4px;margin-bottom:20px}.quiz-progress .qp-dot{flex:1;height:4px;background:var(--bg-elevated);border-radius:2px;transition:background .3s}.quiz-progress .qp-dot.done{background:var(--success)}.quiz-progress .qp-dot.current{background:var(--accent)}
