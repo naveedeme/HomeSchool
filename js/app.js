@@ -28482,7 +28482,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
               </button>
             ) : null}
-            {canAdministerLessonLibrary && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "custom") ? (
+            {canAdministerLessonLibrary && selectedLessonChapterGroup?.activeVariant?.sourceType === "custom" ? (
               <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(selectedLessonChapterGroup)}>
                 {renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}
               </button>
