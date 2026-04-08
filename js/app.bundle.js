@@ -2012,6 +2012,23 @@
       updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || (raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || Date.now()).getTime()) || Date.now()
     };
   }
+  function upsertLessonArchiveEntry(entries = [], nextEntry = null) {
+    const normalizedNext = normalizeLessonArchiveRecord(nextEntry);
+    const safeEntries = Array.isArray(entries) ? entries : [];
+    if (!normalizedNext) return safeEntries;
+    const nextMap = /* @__PURE__ */ new Map();
+    safeEntries.forEach((entry) => {
+      const normalized = normalizeLessonArchiveRecord(entry);
+      if (normalized == null ? void 0 : normalized.archiveId) nextMap.set(normalized.archiveId, normalized);
+    });
+    nextMap.set(normalizedNext.archiveId, normalizedNext);
+    return Array.from(nextMap.values());
+  }
+  function removeLessonArchiveEntry(entries = [], archiveId = "") {
+    const safeArchiveId = String(archiveId || "").trim();
+    if (!safeArchiveId) return Array.isArray(entries) ? entries : [];
+    return (Array.isArray(entries) ? entries : []).map((entry) => normalizeLessonArchiveRecord(entry)).filter((entry) => entry && entry.archiveId !== safeArchiveId);
+  }
   function normalizeSchoolRecord(raw) {
     const schoolId = String((raw == null ? void 0 : raw.school_id) || (raw == null ? void 0 : raw.schoolId) || "").trim();
     if (!schoolId) return null;
@@ -15286,6 +15303,11 @@ ${marker} `);
         };
         const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).upsert(row, { onConflict: "archive_id" });
         if (error) throw error;
+        setContentRelationshipState((current) => ({
+          ...current,
+          lessonArchives: upsertLessonArchiveEntry(current == null ? void 0 : current.lessonArchives, row),
+          lastUpdatedAt: Date.now()
+        }));
         updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
         await refreshContentRelationshipStateRef.current();
         showAppToast(joinLocalizedText("Default lesson removed", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0628\u0642 \u06C1\u0679\u0627 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
@@ -15330,6 +15352,11 @@ ${marker} `);
         };
         const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).upsert(row, { onConflict: "archive_id" });
         if (error) throw error;
+        setContentRelationshipState((current) => ({
+          ...current,
+          lessonArchives: upsertLessonArchiveEntry(current == null ? void 0 : current.lessonArchives, row),
+          lastUpdatedAt: Date.now()
+        }));
         updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
         await refreshContentRelationshipStateRef.current();
         showAppToast(joinLocalizedText("Lesson slot removed", "\u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u06C1\u0679\u0627 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
@@ -15364,6 +15391,11 @@ ${marker} `);
         const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
         if (error) throw error;
+        setContentRelationshipState((current) => ({
+          ...current,
+          lessonArchives: removeLessonArchiveEntry(current == null ? void 0 : current.lessonArchives, normalized.archiveId),
+          lastUpdatedAt: Date.now()
+        }));
         await refreshContentRelationshipStateRef.current();
         showAppToast(joinLocalizedText("Lesson restored", "\u0633\u0628\u0642 \u0628\u062D\u0627\u0644 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
       } catch (error) {

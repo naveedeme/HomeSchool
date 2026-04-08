@@ -2286,6 +2286,27 @@ function normalizeLessonArchiveRecord(raw) {
   };
 }
 
+function upsertLessonArchiveEntry(entries = [], nextEntry = null) {
+  const normalizedNext = normalizeLessonArchiveRecord(nextEntry);
+  const safeEntries = Array.isArray(entries) ? entries : [];
+  if (!normalizedNext) return safeEntries;
+  const nextMap = new Map();
+  safeEntries.forEach((entry) => {
+    const normalized = normalizeLessonArchiveRecord(entry);
+    if (normalized?.archiveId) nextMap.set(normalized.archiveId, normalized);
+  });
+  nextMap.set(normalizedNext.archiveId, normalizedNext);
+  return Array.from(nextMap.values());
+}
+
+function removeLessonArchiveEntry(entries = [], archiveId = "") {
+  const safeArchiveId = String(archiveId || "").trim();
+  if (!safeArchiveId) return Array.isArray(entries) ? entries : [];
+  return (Array.isArray(entries) ? entries : [])
+    .map((entry) => normalizeLessonArchiveRecord(entry))
+    .filter((entry) => entry && entry.archiveId !== safeArchiveId);
+}
+
 function normalizeSchoolRecord(raw) {
   const schoolId = String(raw?.school_id || raw?.schoolId || "").trim();
   if (!schoolId) return null;
@@ -17924,6 +17945,11 @@ const headerHideTimerRef = useRef(null);
       };
       const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).upsert(row, { onConflict: "archive_id" });
       if (error) throw error;
+      setContentRelationshipState((current) => ({
+        ...current,
+        lessonArchives: upsertLessonArchiveEntry(current?.lessonArchives, row),
+        lastUpdatedAt: Date.now(),
+      }));
       updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
       await refreshContentRelationshipStateRef.current();
       showAppToast(joinLocalizedText("Default lesson removed", "بنیادی سبق ہٹا دیا گیا", language), "check");
@@ -17967,6 +17993,11 @@ const headerHideTimerRef = useRef(null);
       };
       const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).upsert(row, { onConflict: "archive_id" });
       if (error) throw error;
+      setContentRelationshipState((current) => ({
+        ...current,
+        lessonArchives: upsertLessonArchiveEntry(current?.lessonArchives, row),
+        lastUpdatedAt: Date.now(),
+      }));
       updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
       await refreshContentRelationshipStateRef.current();
       showAppToast(joinLocalizedText("Lesson slot removed", "سبق خانہ ہٹا دیا گیا", language), "check");
@@ -18001,6 +18032,11 @@ const headerHideTimerRef = useRef(null);
       const client = ensureSupabaseClientRef.current();
       const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
       if (error) throw error;
+      setContentRelationshipState((current) => ({
+        ...current,
+        lessonArchives: removeLessonArchiveEntry(current?.lessonArchives, normalized.archiveId),
+        lastUpdatedAt: Date.now(),
+      }));
       await refreshContentRelationshipStateRef.current();
       showAppToast(joinLocalizedText("Lesson restored", "سبق بحال کر دیا گیا", language), "check");
     } catch (error) {
