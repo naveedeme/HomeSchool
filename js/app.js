@@ -15718,20 +15718,43 @@ const headerHideTimerRef = useRef(null);
       .filter((entry) => entry.status === "active")
       .filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
   }, [activeInstitutionSchoolIdResolved, contentRelationshipState.autoDiaryOverrides]);
-  const rawAutoDiaryTasks = useMemo(() => buildAutoDiaryWeekPlan({
-    subjects: allSubjects,
-    grade,
-    weekDates: currentDiaryWeekDates,
-    yearStartDate: activeSchoolYearStartDate,
-    autoDiarySettings: activeAutoDiarySettings,
-    schoolId: activeInstitutionSchoolIdResolved,
-    getLessonGroups: getMergedLessonGroups,
-    getQuiz: getMergedQuiz,
-    completedQuizzes,
-    practiceLessonProgress,
-    diaryCompletions: contentRelationshipState.diaryCompletions,
-    studentEmail: diaryViewerStudentEmailSeed,
-  }), [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+  const rawAutoDiaryTasks = useMemo(() => {
+    const buildTasks = (settings) => buildAutoDiaryWeekPlan({
+      subjects: allSubjects,
+      grade,
+      weekDates: currentDiaryWeekDates,
+      yearStartDate: activeSchoolYearStartDate,
+      autoDiarySettings: settings,
+      schoolId: activeInstitutionSchoolIdResolved,
+      getLessonGroups: getMergedLessonGroups,
+      getQuiz: getMergedQuiz,
+      completedQuizzes,
+      practiceLessonProgress,
+      diaryCompletions: contentRelationshipState.diaryCompletions,
+      studentEmail: diaryViewerStudentEmailSeed,
+    });
+    const primaryTasks = buildTasks(activeAutoDiarySettings);
+    if (Array.isArray(primaryTasks) && primaryTasks.length) return primaryTasks;
+    const fallbackSettings = normalizeAutoDiarySettings({
+      ...activeAutoDiarySettings,
+      calendar: {
+        ...(activeAutoDiarySettings?.calendar || {}),
+        startDate: String(activeAutoDiarySettings?.calendar?.startDate || currentDiaryWeekDates[0] || "").trim() > String(currentDiaryWeekDates[6] || "").trim()
+          ? String(currentDiaryWeekDates[0] || "").trim()
+          : String(activeAutoDiarySettings?.calendar?.startDate || "").trim(),
+      },
+      subjects: {
+        ...(activeAutoDiarySettings?.subjects || {}),
+        mode: "all",
+        selectedSubjectIds: [],
+      },
+      progression: {
+        ...(activeAutoDiarySettings?.progression || {}),
+        autoMoveByDate: true,
+      },
+    }, { yearStartDate: activeSchoolYearStartDate });
+    return buildTasks(fallbackSettings);
+  }, [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
   const autoDiaryTasks = useMemo(() => applyAutoDiaryOverrides({
     autoTasks: rawAutoDiaryTasks,
     overrides: visibleAutoDiaryOverrides,
