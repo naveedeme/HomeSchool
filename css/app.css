@@ -269,7 +269,11 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-card.selected{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--bg-card));box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 28%,transparent)}
 .lesson-card.arrange-mode{cursor:grab;border-style:dashed}
 .lesson-card.arrange-mode:active{cursor:grabbing}
+.lesson-card.remove-mode{position:relative;border-color:color-mix(in srgb,#ef4444 18%,var(--border))}
 .lesson-card.dragging{opacity:.72;transform:scale(.99)}
+.lesson-card-remove-trigger{position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:999px;border:1px solid color-mix(in srgb,#ef4444 24%,var(--border));background:color-mix(in srgb,#ef4444 8%,var(--bg-elevated));color:#dc2626;font-family:var(--font);font-size:18px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:transform .16s ease,background .16s ease,border-color .16s ease,color .16s ease;z-index:2}
+.lesson-card-remove-trigger:hover{transform:translateY(-1px);background:color-mix(in srgb,#ef4444 14%,var(--bg-elevated));border-color:color-mix(in srgb,#ef4444 38%,var(--border))}
+.lesson-card[data-ui-language="ur"] .lesson-card-remove-trigger{right:auto;left:12px}
 .lesson-card .lesson-num{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px}
 .lesson-card h3{font-size:16px;font-weight:700;margin:4px 0}.lesson-card p{font-size:13px;color:var(--text-secondary);line-height:1.5}
 .lesson-card .lesson-source-copy{font-size:11px;color:var(--accent);font-weight:700;line-height:1.45;margin-bottom:6px}
