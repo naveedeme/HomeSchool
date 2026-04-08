@@ -15872,8 +15872,8 @@ const headerHideTimerRef = useRef(null);
     return safeAnchorIso > safeTodayIso ? safeAnchorIso : safeTodayIso;
   }, [diaryTodayIso, effectiveDiaryAnchorDate]);
   const visibleDiaryDayGroups = useMemo(() => {
-    const safeGroups = weeklyDiaryTaskGroups
-      .filter((group) => group?.targetDate && group.targetDate >= activeDiaryStartIso)
+    const hydratedGroups = weeklyDiaryTaskGroups
+      .filter((group) => group?.targetDate)
       .map((group) => {
         const subjectGroups = [];
         const subjectMap = new Map();
@@ -15899,7 +15899,8 @@ const headerHideTimerRef = useRef(null);
         };
       })
       .filter((group) => Array.isArray(group.tasks) && group.tasks.length > 0 && Array.isArray(group.subjectGroups) && group.subjectGroups.length > 0);
-    return safeGroups;
+    const forwardGroups = hydratedGroups.filter((group) => group.targetDate >= activeDiaryStartIso);
+    return forwardGroups.length ? forwardGroups : hydratedGroups;
   }, [activeDiaryStartIso, language, subjectLookup, weeklyDiaryTaskGroups]);
   const todayDiaryGroup = useMemo(
     () => visibleDiaryDayGroups.find((group) => group?.targetDate === activeDiaryStartIso) || visibleDiaryDayGroups[0] || null,
