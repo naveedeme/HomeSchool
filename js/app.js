@@ -28728,7 +28728,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                         <ExercisePromptContent
                           text={normalizeDiaryOutlineLeafLabel(exampleEntry)}
                           studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
-                          buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                          buttonStyle={{ marginBottom: 0 }}
                         />
                       </div>
                       <InlineStudyActionBar studyItem={{ prompt: normalizeDiaryOutlineLeafLabel(exampleEntry), subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />
@@ -28810,7 +28810,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <ExercisePromptContent
                   text={ex}
                   studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
-                  buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                  buttonStyle={{ marginBottom: 0 }}
                 />
               </div>
               <InlineStudyActionBar studyItem={{ prompt: ex, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />
@@ -28822,7 +28822,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <ExercisePromptContent
                   text={normalizeDiaryOutlineLeafLabel(ex)}
                   studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
-                  buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                  buttonStyle={{ marginBottom: 0 }}
                 />
               </div>
               <InlineStudyActionBar studyItem={{ prompt: normalizeDiaryOutlineLeafLabel(ex), subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />
@@ -28890,7 +28890,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                           <ExercisePromptContent
                             text={displayP}
                             studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
-                            buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                            buttonStyle={{ marginBottom: 0 }}
                           />
                         </div>
                         {revealedEx[rk] && ex.ans && ex.ans[pi] && (
@@ -28901,7 +28901,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               fullWidth={false}
                               studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Answers` }}
                               showStudyToolbar={false}
-                              buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, height: "100%", display: "flex", alignItems: "center", maxWidth: "100%" }}
+                              buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, maxWidth: "100%" }}
                               textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))}
                             />
                           </div>
@@ -28933,7 +28933,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                             lang={isUrduText(a)?"ur":"en"}
                             studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Answers` }}
                             showStudyToolbar={false}
-                            buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                            buttonStyle={{ marginBottom: 0 }}
                           />
                         </div>
                         {revealedEx[rk] && ex.parts && ex.parts[originalIndex] && (
@@ -28944,7 +28944,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               fullWidth={false}
                               studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Prompts` }}
                               showStudyToolbar={false}
-                              buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, height: "100%", display: "flex", alignItems: "center", maxWidth: "100%" }}
+                              buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, maxWidth: "100%" }}
                               textStyle={getRevealedAnswerTextStyle(isUrduText(ex.parts[originalIndex]))}
                             />
                           </div>
@@ -28974,7 +28974,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       <ExercisePromptContent
                         text={displayP}
                         studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
-                        buttonStyle={{ marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }}
+                        buttonStyle={{ marginBottom: 0 }}
                       />
                     </div>
                   </div>
@@ -28986,7 +28986,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                         fullWidth={false}
                         studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Answers` }}
                         showStudyToolbar={false}
-                        buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, height: "100%", display: "flex", alignItems: "center", maxWidth: "100%" }}
+                        buttonStyle={{ ...revealedAnswerButtonStyle, marginBottom: 0, maxWidth: "100%" }}
                         textStyle={getRevealedAnswerTextStyle(isUrduText(ex.ans[pi]))}
                       />
                     </div>
@@ -29418,7 +29418,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const taskOutline = buildDiaryTaskOutline(task);
                               const taskRouteKey = getDiaryTaskRouteKey(task);
                               const detailedTaskOutline = mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline);
-                              const taskOutlineChildren = taskOutline[0]?.children || [];
+                              const taskOutlineChildren = detailedTaskOutline[0]?.children || taskOutline[0]?.children || [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
@@ -29484,7 +29484,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                               const taskOutline = buildDiaryTaskOutline(task);
                               const taskRouteKey = getDiaryTaskRouteKey(task);
                               const detailedTaskOutline = mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline);
-                              const taskOutlineChildren = taskOutline[0]?.children || [];
+                              const taskOutlineChildren = detailedTaskOutline[0]?.children || taskOutline[0]?.children || [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
