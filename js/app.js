@@ -6692,9 +6692,17 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.user_content_permission('assignContent')
+  select
+    (
+      public.user_content_permission('assignContent')
+      or public.user_content_permission('manageContentAccess')
+      or public.is_content_admin()
+      or public.jwt_content_role() = 'admin'
+    )
     and (
       public.user_content_permission('manageContentAccess')
+      or public.is_content_admin()
+      or public.jwt_content_role() = 'admin'
       or lower(coalesce(target_assigned_by_email, '')) = public.current_auth_email()
     )
 $$;
@@ -20816,7 +20824,20 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         "check",
       );
     } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to save chapter assignment: ${error?.message || error}`, `باب کی تفویض محفوظ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
+      const assignmentErrorMessage = String(error?.message || error || "").trim();
+      const rlsBlocked = /row level security|violates row-level security|violates row level security/i.test(assignmentErrorMessage);
+      showAppToast(
+        joinLocalizedText(
+          rlsBlocked
+            ? "Unable to save chapter assignment: your Supabase assignment policy still does not recognize this admin role. Run the updated setup SQL once, then try again."
+            : `Unable to save chapter assignment: ${assignmentErrorMessage}`,
+          rlsBlocked
+            ? "باب کی تفویض محفوظ نہیں ہو سکی: آپ کی Supabase assignment پالیسی ابھی اس ایڈمن کردار کو نہیں پہچانتی۔ ایک بار تازہ setup SQL چلائیں، پھر دوبارہ کوشش کریں۔"
+            : `باب کی تفویض محفوظ نہیں ہو سکی: ${assignmentErrorMessage}`,
+          language,
+        ),
+        "alert",
+      );
     } finally {
       setContentRelationshipBusy(false);
     }

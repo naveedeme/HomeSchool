@@ -6154,9 +6154,17 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.user_content_permission('assignContent')
+  select
+    (
+      public.user_content_permission('assignContent')
+      or public.user_content_permission('manageContentAccess')
+      or public.is_content_admin()
+      or public.jwt_content_role() = 'admin'
+    )
     and (
       public.user_content_permission('manageContentAccess')
+      or public.is_content_admin()
+      or public.jwt_content_role() = 'admin'
       or lower(coalesce(target_assigned_by_email, '')) = public.current_auth_email()
     )
 $$;
@@ -17931,7 +17939,16 @@ ${marker} `);
           "check"
         );
       } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to save chapter assignment: ${(error == null ? void 0 : error.message) || error}`, `\u0628\u0627\u0628 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0645\u062D\u0641\u0648\u0638 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+        const assignmentErrorMessage = String((error == null ? void 0 : error.message) || error || "").trim();
+        const rlsBlocked = /row level security|violates row-level security|violates row level security/i.test(assignmentErrorMessage);
+        showAppToast(
+          joinLocalizedText(
+            rlsBlocked ? "Unable to save chapter assignment: your Supabase assignment policy still does not recognize this admin role. Run the updated setup SQL once, then try again." : `Unable to save chapter assignment: ${assignmentErrorMessage}`,
+            rlsBlocked ? "\u0628\u0627\u0628 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0645\u062D\u0641\u0648\u0638 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: \u0622\u067E \u06A9\u06CC Supabase assignment \u067E\u0627\u0644\u06CC\u0633\u06CC \u0627\u0628\u06BE\u06CC \u0627\u0633 \u0627\u06CC\u0688\u0645\u0646 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0646\u06C1\u06CC\u06BA \u067E\u06C1\u0686\u0627\u0646\u062A\u06CC\u06D4 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062A\u0627\u0632\u06C1 setup SQL \u0686\u0644\u0627\u0626\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4" : `\u0628\u0627\u0628 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0645\u062D\u0641\u0648\u0638 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${assignmentErrorMessage}`,
+            language
+          ),
+          "alert"
+        );
       } finally {
         setContentRelationshipBusy(false);
       }
