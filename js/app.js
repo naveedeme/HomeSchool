@@ -17425,15 +17425,25 @@ const headerHideTimerRef = useRef(null);
       if (selectedLesson?.publication) {
         nextLessonData.publication = cloneSerializableValue(selectedLesson.publication);
       }
-        await window.HomeSchoolDB.saveCustomChapter({
-          subject: selectedSubject.id,
-          grade,
-          lessonKey: canonicalLessonKey,
-          data: nextLessonData,
-          questions: getMergedQuiz(selectedSubject.id, grade, canonicalLessonKey),
-        });
+      const savedCustomChapter = await window.HomeSchoolDB.saveCustomChapter({
+        subject: selectedSubject.id,
+        grade,
+        lessonKey: canonicalLessonKey,
+        data: nextLessonData,
+        questions: getMergedQuiz(selectedSubject.id, grade, canonicalLessonKey),
+      });
       updateChapterSourceSelection(selectedSubject.id, grade, canonicalLessonKey, { mode: "custom" }, { silent: true, force: true });
       await refreshCustomContentState();
+      const savedLessonData = cloneSerializableValue(savedCustomChapter?.lesson?.data || nextLessonData) || {};
+      savedLessonData.key = canonicalLessonKey;
+      savedLessonData.id = `${selectedSubject.id}_${grade}_${canonicalLessonKey}`;
+      if (selectedLesson?.publication && !savedLessonData.publication) {
+        savedLessonData.publication = cloneSerializableValue(selectedLesson.publication);
+      }
+      setSelectedLesson({
+        ...savedLessonData,
+        __custom: true,
+      });
       setLessonEditMode(false);
       setLessonEditDraft(null);
       showAppToast(joinLocalizedText("Lesson changes saved to local copy", "سبق کی تبدیلیاں مقامی کاپی میں محفوظ ہو گئیں", language), "check");
@@ -17544,7 +17554,7 @@ const headerHideTimerRef = useRef(null);
     if (!selectedLesson || !selectedSubject || !selectedLessonChapterGroup?.activeLesson) return;
     const currentIdentity = getLessonVariantIdentity(selectedLesson);
     const nextIdentity = getLessonVariantIdentity(selectedLessonChapterGroup.activeLesson);
-    if (currentIdentity === nextIdentity) return;
+    if (currentIdentity === nextIdentity && selectedLesson === selectedLessonChapterGroup.activeLesson) return;
     setSelectedLesson(selectedLessonChapterGroup.activeLesson);
   }, [selectedLesson, selectedLessonChapterGroup, selectedSubject]);
   useEffect(() => {

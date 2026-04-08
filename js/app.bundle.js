@@ -14808,7 +14808,7 @@ ${marker} `);
       setLessonEditBusy(false);
     }, []);
     const handleSaveLessonEdits = useCallback(async () => {
-      var _a2;
+      var _a2, _b2;
       if (!canAdministerLessonLibrary) {
         showAppToast(joinLocalizedText("Only admins can edit lessons.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0627\u0633\u0628\u0627\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -14827,7 +14827,7 @@ ${marker} `);
         if (selectedLesson == null ? void 0 : selectedLesson.publication) {
           nextLessonData.publication = cloneSerializableValue(selectedLesson.publication);
         }
-        await window.HomeSchoolDB.saveCustomChapter({
+        const savedCustomChapter = await window.HomeSchoolDB.saveCustomChapter({
           subject: selectedSubject.id,
           grade,
           lessonKey: canonicalLessonKey,
@@ -14836,6 +14836,16 @@ ${marker} `);
         });
         updateChapterSourceSelection(selectedSubject.id, grade, canonicalLessonKey, { mode: "custom" }, { silent: true, force: true });
         await refreshCustomContentState();
+        const savedLessonData = cloneSerializableValue(((_b2 = savedCustomChapter == null ? void 0 : savedCustomChapter.lesson) == null ? void 0 : _b2.data) || nextLessonData) || {};
+        savedLessonData.key = canonicalLessonKey;
+        savedLessonData.id = `${selectedSubject.id}_${grade}_${canonicalLessonKey}`;
+        if ((selectedLesson == null ? void 0 : selectedLesson.publication) && !savedLessonData.publication) {
+          savedLessonData.publication = cloneSerializableValue(selectedLesson.publication);
+        }
+        setSelectedLesson({
+          ...savedLessonData,
+          __custom: true
+        });
         setLessonEditMode(false);
         setLessonEditDraft(null);
         showAppToast(joinLocalizedText("Lesson changes saved to local copy", "\u0633\u0628\u0642 \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u0642\u0627\u0645\u06CC \u06A9\u0627\u067E\u06CC \u0645\u06CC\u06BA \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC\u06BA", language), "check");
@@ -14948,7 +14958,7 @@ ${marker} `);
       if (!selectedLesson || !selectedSubject || !(selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.activeLesson)) return;
       const currentIdentity = getLessonVariantIdentity(selectedLesson);
       const nextIdentity = getLessonVariantIdentity(selectedLessonChapterGroup.activeLesson);
-      if (currentIdentity === nextIdentity) return;
+      if (currentIdentity === nextIdentity && selectedLesson === selectedLessonChapterGroup.activeLesson) return;
       setSelectedLesson(selectedLessonChapterGroup.activeLesson);
     }, [selectedLesson, selectedLessonChapterGroup, selectedSubject]);
     useEffect(() => {
