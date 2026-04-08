@@ -1047,27 +1047,6 @@ function getConfiguredStudyDates(weekDates = [], autoDiarySettings = null) {
     .filter((date) => !holidayDates.has(date));
 }
 
-function countConfiguredStudyDaysBetween(startDate = "", endDate = "", autoDiarySettings = null) {
-  const parsedStart = parseIsoDateValue(startDate);
-  const parsedEnd = parseIsoDateValue(endDate);
-  if (!parsedStart || !parsedEnd) return 0;
-  const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
-  const holidayDates = new Set(normalizeTextArray(settings.calendar.holidayDates));
-  const allowedDays = new Set(normalizeAutoDiaryIsoDayList(settings.calendar.studyDays));
-  if (!allowedDays.size) return 0;
-  const cursor = new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate());
-  const last = new Date(parsedEnd.getFullYear(), parsedEnd.getMonth(), parsedEnd.getDate());
-  if (cursor.getTime() > last.getTime()) return 0;
-  let total = 0;
-  while (cursor.getTime() <= last.getTime()) {
-    const iso = toIsoDateString(cursor);
-    const isoDay = getIsoWeekday(cursor);
-    if (allowedDays.has(isoDay) && !holidayDates.has(iso)) total += 1;
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return total;
-}
-
 function getConfiguredTestDate(weekDates = [], autoDiarySettings = null) {
   const safeWeekDates = Array.isArray(weekDates) ? weekDates : [];
   const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
@@ -2267,9 +2246,7 @@ function shouldIncludeAutoDiarySubject(subject, autoDiarySettings = null) {
   if (!safeSubjectId) return false;
   const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
   if (settings.subjects.mode !== "selected") return true;
-  const normalizedIds = normalizeTextArray(settings.subjects.selectedSubjectIds);
-  if (!normalizedIds.length) return true;
-  const allowedIds = new Set(normalizedIds);
+  const allowedIds = new Set(normalizeTextArray(settings.subjects.selectedSubjectIds));
   return allowedIds.has(safeSubjectId);
 }
 
@@ -2919,7 +2896,6 @@ function buildAutoDiaryWeekPlan({
       if (!lessonPlans.length) return [];
       const carryForwardEnabled = settings.progression.advanceMode !== "weekly_lesson";
       const autoMoveByDate = Boolean(settings.progression.autoMoveByDate);
-      const progressionStartDate = String(safeAutoDiaryStartDate || yearStartDate || studyDates[0] || weekDates[0] || "").trim();
       const weeklyLessonIndex = (() => {
         if (settings.progression.chapterSelectionMode === "curriculum_order") {
           return Math.min(lessonPlans.length - 1, Math.max(0, academicWeekNumber - 1));
@@ -2955,20 +2931,12 @@ function buildAutoDiaryWeekPlan({
           selectedPlan = lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
           bucketIndex = dayIndex % safeStudyDays;
         } else {
-          if (autoMoveByDate && progressionStartDate) {
-            const elapsedStudyDays = Math.max(1, countConfiguredStudyDaysBetween(progressionStartDate, targetDate, settings));
-            const absoluteSlotIndex = Math.max(0, elapsedStudyDays - 1);
-            const timedLessonIndex = Math.min(lessonPlans.length - 1, Math.floor(absoluteSlotIndex / safeStudyDays));
-            selectedPlan = lessonPlans[timedLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
-            bucketIndex = absoluteSlotIndex % safeStudyDays;
-          } else {
-            while (currentLessonIndex < lessonPlans.length && (lessonPlans[currentLessonIndex]?.completedSlots || 0) >= safeStudyDays) {
-              currentLessonIndex += 1;
-              currentSlotIndex = Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1);
-            }
-            selectedPlan = lessonPlans[currentLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
-            bucketIndex = Math.min(currentSlotIndex, safeStudyDays - 1);
+          while (currentLessonIndex < lessonPlans.length && (lessonPlans[currentLessonIndex]?.completedSlots || 0) >= safeStudyDays) {
+            currentLessonIndex += 1;
+            currentSlotIndex = Math.min(lessonPlans[currentLessonIndex]?.completedSlots || 0, safeStudyDays - 1);
           }
+          selectedPlan = lessonPlans[currentLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
+          bucketIndex = autoMoveByDate ? (dayIndex % safeStudyDays) : Math.min(currentSlotIndex, safeStudyDays - 1);
         }
         const selectedGroup = selectedPlan?.chapterGroup || null;
         const lesson = selectedPlan?.lesson || null;
@@ -15718,43 +15686,20 @@ const headerHideTimerRef = useRef(null);
       .filter((entry) => entry.status === "active")
       .filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
   }, [activeInstitutionSchoolIdResolved, contentRelationshipState.autoDiaryOverrides]);
-  const rawAutoDiaryTasks = useMemo(() => {
-    const buildTasks = (settings) => buildAutoDiaryWeekPlan({
-      subjects: allSubjects,
-      grade,
-      weekDates: currentDiaryWeekDates,
-      yearStartDate: activeSchoolYearStartDate,
-      autoDiarySettings: settings,
-      schoolId: activeInstitutionSchoolIdResolved,
-      getLessonGroups: getMergedLessonGroups,
-      getQuiz: getMergedQuiz,
-      completedQuizzes,
-      practiceLessonProgress,
-      diaryCompletions: contentRelationshipState.diaryCompletions,
-      studentEmail: diaryViewerStudentEmailSeed,
-    });
-    const primaryTasks = buildTasks(activeAutoDiarySettings);
-    if (Array.isArray(primaryTasks) && primaryTasks.length) return primaryTasks;
-    const fallbackSettings = normalizeAutoDiarySettings({
-      ...activeAutoDiarySettings,
-      calendar: {
-        ...(activeAutoDiarySettings?.calendar || {}),
-        startDate: String(activeAutoDiarySettings?.calendar?.startDate || currentDiaryWeekDates[0] || "").trim() > String(currentDiaryWeekDates[6] || "").trim()
-          ? String(currentDiaryWeekDates[0] || "").trim()
-          : String(activeAutoDiarySettings?.calendar?.startDate || "").trim(),
-      },
-      subjects: {
-        ...(activeAutoDiarySettings?.subjects || {}),
-        mode: "all",
-        selectedSubjectIds: [],
-      },
-      progression: {
-        ...(activeAutoDiarySettings?.progression || {}),
-        autoMoveByDate: true,
-      },
-    }, { yearStartDate: activeSchoolYearStartDate });
-    return buildTasks(fallbackSettings);
-  }, [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+  const rawAutoDiaryTasks = useMemo(() => buildAutoDiaryWeekPlan({
+    subjects: allSubjects,
+    grade,
+    weekDates: currentDiaryWeekDates,
+    yearStartDate: activeSchoolYearStartDate,
+    autoDiarySettings: activeAutoDiarySettings,
+    schoolId: activeInstitutionSchoolIdResolved,
+    getLessonGroups: getMergedLessonGroups,
+    getQuiz: getMergedQuiz,
+    completedQuizzes,
+    practiceLessonProgress,
+    diaryCompletions: contentRelationshipState.diaryCompletions,
+    studentEmail: diaryViewerStudentEmailSeed,
+  }), [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
   const autoDiaryTasks = useMemo(() => applyAutoDiaryOverrides({
     autoTasks: rawAutoDiaryTasks,
     overrides: visibleAutoDiaryOverrides,
@@ -15872,6 +15817,7 @@ const headerHideTimerRef = useRef(null);
   }, {}), [visibleDiaryCompletions]);
   const diaryVisibleWeekDates = useMemo(() => {
     const dates = new Set([
+      ...currentStudyWeekDates,
       ...currentWeekDiaryEntries.map((entry) => entry.targetDate),
       ...autoDiaryTasks.map((entry) => entry.targetDate),
     ].filter(Boolean));
@@ -15879,8 +15825,8 @@ const headerHideTimerRef = useRef(null);
       dates.add(currentWeeklyTestDate);
     }
     const ordered = currentDiaryWeekDates.filter((date) => dates.has(date));
-    return ordered;
-  }, [activeAutoDiarySettings?.saturdayTest?.enabled, autoDiaryTasks, currentDiaryWeekDates, currentWeekDiaryEntries, currentWeeklyTestDate]);
+    return ordered.length ? ordered : currentStudyWeekDates;
+  }, [activeAutoDiarySettings?.saturdayTest?.enabled, autoDiaryTasks, currentDiaryWeekDates, currentStudyWeekDates, currentWeekDiaryEntries, currentWeeklyTestDate]);
   const weeklyDiaryTaskGroups = useMemo(() => diaryVisibleWeekDates.map((targetDate, index) => ({
     targetDate,
     dayIndex: index + 1,
@@ -15895,8 +15841,8 @@ const headerHideTimerRef = useRef(null);
     return safeAnchorIso > safeTodayIso ? safeAnchorIso : safeTodayIso;
   }, [diaryTodayIso, effectiveDiaryAnchorDate]);
   const visibleDiaryDayGroups = useMemo(() => {
-    const hydratedGroups = weeklyDiaryTaskGroups
-      .filter((group) => group?.targetDate)
+    const safeGroups = weeklyDiaryTaskGroups
+      .filter((group) => group?.targetDate && group.targetDate >= activeDiaryStartIso)
       .map((group) => {
         const subjectGroups = [];
         const subjectMap = new Map();
@@ -15920,20 +15866,16 @@ const headerHideTimerRef = useRef(null);
           ...group,
           subjectGroups,
         };
-      })
-      .filter((group) => Array.isArray(group.tasks) && group.tasks.length > 0 && Array.isArray(group.subjectGroups) && group.subjectGroups.length > 0);
-    const forwardGroups = hydratedGroups.filter((group) => group.targetDate >= activeDiaryStartIso);
-    return forwardGroups.length ? forwardGroups : hydratedGroups;
+      });
+    return safeGroups;
   }, [activeDiaryStartIso, language, subjectLookup, weeklyDiaryTaskGroups]);
   const todayDiaryGroup = useMemo(
-    () => visibleDiaryDayGroups.find((group) => group?.targetDate === activeDiaryStartIso) || visibleDiaryDayGroups[0] || null,
+    () => visibleDiaryDayGroups.find((group) => group?.targetDate === activeDiaryStartIso) || null,
     [activeDiaryStartIso, visibleDiaryDayGroups],
   );
   const weeklyDiaryListGroups = useMemo(
-    () => [...visibleDiaryDayGroups]
-      .filter((group) => group?.targetDate !== String(todayDiaryGroup?.targetDate || "").trim())
-      .sort((left, right) => String(right?.targetDate || "").localeCompare(String(left?.targetDate || ""))),
-    [todayDiaryGroup, visibleDiaryDayGroups],
+    () => [...visibleDiaryDayGroups].filter((group) => group?.targetDate !== activeDiaryStartIso).reverse(),
+    [activeDiaryStartIso, visibleDiaryDayGroups],
   );
   const orderedVisibleDiaryTasks = useMemo(
     () => visibleDiaryDayGroups.flatMap((group) => group.subjectGroups.flatMap((subjectGroup) => subjectGroup.tasks)),
