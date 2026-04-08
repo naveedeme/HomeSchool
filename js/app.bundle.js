@@ -307,15 +307,11 @@
   function getWeekDates(value = Date.now()) {
     const weekStart = getWeekStartDate(value);
     if (!weekStart) return [];
-    return Array.from({ length: 6 }, (_, index) => {
+    return Array.from({ length: 7 }, (_, index) => {
       const date = new Date(weekStart.getTime());
       date.setDate(weekStart.getDate() + index);
       return toIsoDateString(date);
     });
-  }
-  function getSaturdayDate(value = Date.now()) {
-    const weekDates = getWeekDates(value);
-    return weekDates[5] || null;
   }
   function getAcademicWeekNumber(value = Date.now(), yearStartDate = null) {
     const currentWeekStart = getWeekStartDate(value);
@@ -335,6 +331,442 @@
       cursor = (cursor + 1) % safeGroups;
     });
     return buckets;
+  }
+  function normalizeTextArray(raw) {
+    if (Array.isArray(raw)) {
+      return raw.map((value) => String(value || "").trim()).filter(Boolean).filter((value, index, list) => list.indexOf(value) === index);
+    }
+    const text = String(raw || "").trim();
+    if (!text) return [];
+    return text.split(/[,\n]+/).map((value) => String(value || "").trim()).filter(Boolean).filter((value, index, list) => list.indexOf(value) === index);
+  }
+  const AUTO_DIARY_ISO_DAY_OPTIONS = [
+    { value: 1, en: "Monday", ur: "\u067E\u06CC\u0631" },
+    { value: 2, en: "Tuesday", ur: "\u0645\u0646\u06AF\u0644" },
+    { value: 3, en: "Wednesday", ur: "\u0628\u062F\u06BE" },
+    { value: 4, en: "Thursday", ur: "\u062C\u0645\u0639\u0631\u0627\u062A" },
+    { value: 5, en: "Friday", ur: "\u062C\u0645\u0639\u06C1" },
+    { value: 6, en: "Saturday", ur: "\u06C1\u0641\u062A\u06C1" },
+    { value: 7, en: "Sunday", ur: "\u0627\u062A\u0648\u0627\u0631" }
+  ];
+  function normalizeAutoDiaryIsoDayList(raw, fallback = [1, 2, 3, 4, 5]) {
+    const source = Array.isArray(raw) ? raw : normalizeTextArray(raw);
+    const values = source.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value >= 1 && value <= 7).filter((value, index, list) => list.indexOf(value) === index).sort((left, right) => left - right);
+    const safeFallback = Array.isArray(fallback) ? fallback.filter((value) => Number.isFinite(Number(value))) : [1, 2, 3, 4, 5];
+    return values.length ? values : safeFallback;
+  }
+  function createDefaultAutoDiarySettings(fallbackStartDate = "") {
+    const safeStartDate = String(fallbackStartDate || "").trim();
+    return {
+      calendar: {
+        startDate: safeStartDate,
+        studyDays: [1, 2, 3, 4, 5],
+        testDay: 6,
+        holidayDates: []
+      },
+      subjects: {
+        mode: "all",
+        selectedSubjectIds: [],
+        priorityOrder: [],
+        weightsBySubject: {}
+      },
+      dailyLayout: {
+        mode: "all_subjects_daily",
+        hybridCoreSubjectIds: [],
+        minSubjectsPerDay: 1,
+        maxSubjectsPerDay: 5
+      },
+      progression: {
+        chapterSelectionMode: "progress_first",
+        advanceMode: "carry_forward",
+        skipCompletedLessons: true,
+        preferAssignedContent: true,
+        preferPublishedContent: true,
+        minimumUnitsPerDay: 1,
+        reviewWhenShort: true,
+        completionMode: "any",
+        countMarkedDone: true,
+        countQuizComplete: true,
+        countLessonProgress: true,
+        lessonProgressThreshold: 100
+      },
+      saturdayTest: {
+        enabled: true,
+        accumulationMode: "rolling",
+        accumulationValue: 8,
+        currentWeekWeight: 50,
+        priorWeeksWeight: 50,
+        difficulty: "standard",
+        questionTypeWeights: {
+          mcq: 35,
+          truefalse: 20,
+          fillblank: 25,
+          matching: 20
+        }
+      }
+    };
+  }
+  function normalizeAutoDiarySettings(raw = {}, legacy = {}) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q, _R, _S, _T, _U, _V, _W, _X, _Y, _Z, __, _$, _aa, _ba, _ca, _da, _ea, _fa, _ga, _ha, _ia, _ja, _ka, _la, _ma;
+    const safeRaw = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const defaults = createDefaultAutoDiarySettings(
+      ((_a = safeRaw == null ? void 0 : safeRaw.calendar) == null ? void 0 : _a.startDate) || (safeRaw == null ? void 0 : safeRaw.startDate) || (legacy == null ? void 0 : legacy.autoDiaryStartDate) || (legacy == null ? void 0 : legacy.yearStartDate) || ""
+    );
+    const safeSubjectIds = normalizeTextArray(
+      ((_b = safeRaw == null ? void 0 : safeRaw.subjects) == null ? void 0 : _b.selectedSubjectIds) || (safeRaw == null ? void 0 : safeRaw.selectedSubjectIds) || (legacy == null ? void 0 : legacy.autoDiarySubjectIds)
+    );
+    const safePriorityOrder = normalizeTextArray(
+      ((_c = safeRaw == null ? void 0 : safeRaw.subjects) == null ? void 0 : _c.priorityOrder) || (safeRaw == null ? void 0 : safeRaw.priorityOrder) || safeSubjectIds
+    );
+    return {
+      calendar: {
+        startDate: String(
+          ((_d = safeRaw == null ? void 0 : safeRaw.calendar) == null ? void 0 : _d.startDate) || (safeRaw == null ? void 0 : safeRaw.startDate) || (legacy == null ? void 0 : legacy.autoDiaryStartDate) || (legacy == null ? void 0 : legacy.yearStartDate) || defaults.calendar.startDate
+        ).trim(),
+        studyDays: normalizeAutoDiaryIsoDayList(
+          ((_e = safeRaw == null ? void 0 : safeRaw.calendar) == null ? void 0 : _e.studyDays) || (safeRaw == null ? void 0 : safeRaw.studyDays),
+          defaults.calendar.studyDays
+        ),
+        testDay: (() => {
+          var _a2, _b2;
+          const numericValue = Number((_b2 = (_a2 = safeRaw == null ? void 0 : safeRaw.calendar) == null ? void 0 : _a2.testDay) != null ? _b2 : safeRaw == null ? void 0 : safeRaw.testDay);
+          return Number.isFinite(numericValue) && numericValue >= 1 && numericValue <= 7 ? numericValue : defaults.calendar.testDay;
+        })(),
+        holidayDates: normalizeTextArray(((_f = safeRaw == null ? void 0 : safeRaw.calendar) == null ? void 0 : _f.holidayDates) || (safeRaw == null ? void 0 : safeRaw.holidayDates)).filter((value) => Boolean(parseIsoDateValue(value)))
+      },
+      subjects: {
+        mode: String(
+          ((_g = safeRaw == null ? void 0 : safeRaw.subjects) == null ? void 0 : _g.mode) || (safeRaw == null ? void 0 : safeRaw.mode) || (legacy == null ? void 0 : legacy.autoDiarySubjectMode) || defaults.subjects.mode
+        ).trim().toLowerCase() === "selected" ? "selected" : "all",
+        selectedSubjectIds: safeSubjectIds,
+        priorityOrder: safePriorityOrder.length ? safePriorityOrder : safeSubjectIds,
+        weightsBySubject: ((_h = safeRaw == null ? void 0 : safeRaw.subjects) == null ? void 0 : _h.weightsBySubject) && typeof safeRaw.subjects.weightsBySubject === "object" ? { ...safeRaw.subjects.weightsBySubject } : (safeRaw == null ? void 0 : safeRaw.weightsBySubject) && typeof safeRaw.weightsBySubject === "object" ? { ...safeRaw.weightsBySubject } : {}
+      },
+      dailyLayout: {
+        mode: (() => {
+          var _a2;
+          const safeMode = String(((_a2 = safeRaw == null ? void 0 : safeRaw.dailyLayout) == null ? void 0 : _a2.mode) || (safeRaw == null ? void 0 : safeRaw.layoutMode) || (safeRaw == null ? void 0 : safeRaw.mode) || (legacy == null ? void 0 : legacy.autoDiaryPlanMode) || defaults.dailyLayout.mode).trim().toLowerCase();
+          if (safeMode === "subject_rotation") return "subject_rotation";
+          if (safeMode === "hybrid") return "hybrid";
+          return "all_subjects_daily";
+        })(),
+        hybridCoreSubjectIds: normalizeTextArray(((_i = safeRaw == null ? void 0 : safeRaw.dailyLayout) == null ? void 0 : _i.hybridCoreSubjectIds) || (safeRaw == null ? void 0 : safeRaw.hybridCoreSubjectIds)),
+        minSubjectsPerDay: Math.max(1, Math.min(8, Number((_k = (_j = safeRaw == null ? void 0 : safeRaw.dailyLayout) == null ? void 0 : _j.minSubjectsPerDay) != null ? _k : safeRaw == null ? void 0 : safeRaw.minSubjectsPerDay) || defaults.dailyLayout.minSubjectsPerDay)),
+        maxSubjectsPerDay: Math.max(1, Math.min(8, Number((_m = (_l = safeRaw == null ? void 0 : safeRaw.dailyLayout) == null ? void 0 : _l.maxSubjectsPerDay) != null ? _m : safeRaw == null ? void 0 : safeRaw.maxSubjectsPerDay) || defaults.dailyLayout.maxSubjectsPerDay))
+      },
+      progression: {
+        chapterSelectionMode: (() => {
+          var _a2;
+          const safeMode = String(((_a2 = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _a2.chapterSelectionMode) || (safeRaw == null ? void 0 : safeRaw.chapterSelectionMode) || defaults.progression.chapterSelectionMode).trim().toLowerCase();
+          return safeMode === "curriculum_order" ? "curriculum_order" : "progress_first";
+        })(),
+        advanceMode: (() => {
+          var _a2;
+          const safeMode = String(((_a2 = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _a2.advanceMode) || (safeRaw == null ? void 0 : safeRaw.advanceMode) || (legacy == null ? void 0 : legacy.autoDiaryAdvanceMode) || defaults.progression.advanceMode).trim().toLowerCase();
+          return safeMode === "weekly_lesson" ? "weekly_lesson" : "carry_forward";
+        })(),
+        skipCompletedLessons: Boolean((_p = (_o = (_n = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _n.skipCompletedLessons) != null ? _o : safeRaw == null ? void 0 : safeRaw.skipCompletedLessons) != null ? _p : defaults.progression.skipCompletedLessons),
+        preferAssignedContent: Boolean((_s = (_r = (_q = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _q.preferAssignedContent) != null ? _r : safeRaw == null ? void 0 : safeRaw.preferAssignedContent) != null ? _s : defaults.progression.preferAssignedContent),
+        preferPublishedContent: Boolean((_v = (_u = (_t = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _t.preferPublishedContent) != null ? _u : safeRaw == null ? void 0 : safeRaw.preferPublishedContent) != null ? _v : defaults.progression.preferPublishedContent),
+        minimumUnitsPerDay: Math.max(1, Math.min(6, Number((_x = (_w = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _w.minimumUnitsPerDay) != null ? _x : safeRaw == null ? void 0 : safeRaw.minimumUnitsPerDay) || defaults.progression.minimumUnitsPerDay)),
+        reviewWhenShort: Boolean((_A = (_z = (_y = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _y.reviewWhenShort) != null ? _z : safeRaw == null ? void 0 : safeRaw.reviewWhenShort) != null ? _A : defaults.progression.reviewWhenShort),
+        completionMode: String(((_B = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _B.completionMode) || (safeRaw == null ? void 0 : safeRaw.completionMode) || defaults.progression.completionMode).trim().toLowerCase() === "all" ? "all" : "any",
+        countMarkedDone: Boolean((_E = (_D = (_C = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _C.countMarkedDone) != null ? _D : safeRaw == null ? void 0 : safeRaw.countMarkedDone) != null ? _E : defaults.progression.countMarkedDone),
+        countQuizComplete: Boolean((_H = (_G = (_F = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _F.countQuizComplete) != null ? _G : safeRaw == null ? void 0 : safeRaw.countQuizComplete) != null ? _H : defaults.progression.countQuizComplete),
+        countLessonProgress: Boolean((_K = (_J = (_I = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _I.countLessonProgress) != null ? _J : safeRaw == null ? void 0 : safeRaw.countLessonProgress) != null ? _K : defaults.progression.countLessonProgress),
+        lessonProgressThreshold: Math.max(1, Math.min(100, Number((_M = (_L = safeRaw == null ? void 0 : safeRaw.progression) == null ? void 0 : _L.lessonProgressThreshold) != null ? _M : safeRaw == null ? void 0 : safeRaw.lessonProgressThreshold) || defaults.progression.lessonProgressThreshold))
+      },
+      saturdayTest: {
+        enabled: Boolean((_P = (_O = (_N = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _N.enabled) != null ? _O : safeRaw == null ? void 0 : safeRaw.weeklyTestEnabled) != null ? _P : defaults.saturdayTest.enabled),
+        accumulationMode: String(
+          ((_Q = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _Q.accumulationMode) || (safeRaw == null ? void 0 : safeRaw.accumulationMode) || (legacy == null ? void 0 : legacy.weekAccumulationMode) || defaults.saturdayTest.accumulationMode
+        ).trim().toLowerCase() || defaults.saturdayTest.accumulationMode,
+        accumulationValue: Math.max(1, Math.min(52, Number(
+          (_U = (_T = (_S = (_R = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _R.accumulationValue) != null ? _S : safeRaw == null ? void 0 : safeRaw.accumulationValue) != null ? _T : legacy == null ? void 0 : legacy.weekAccumulationValue) != null ? _U : defaults.saturdayTest.accumulationValue
+        ) || defaults.saturdayTest.accumulationValue)),
+        currentWeekWeight: Math.max(0, Math.min(100, Number((_W = (_V = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _V.currentWeekWeight) != null ? _W : safeRaw == null ? void 0 : safeRaw.currentWeekWeight) || defaults.saturdayTest.currentWeekWeight)),
+        priorWeeksWeight: Math.max(0, Math.min(100, Number((_Y = (_X = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _X.priorWeeksWeight) != null ? _Y : safeRaw == null ? void 0 : safeRaw.priorWeeksWeight) || defaults.saturdayTest.priorWeeksWeight)),
+        difficulty: (() => {
+          var _a2;
+          const safeValue = String(((_a2 = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _a2.difficulty) || (safeRaw == null ? void 0 : safeRaw.difficulty) || defaults.saturdayTest.difficulty).trim().toLowerCase();
+          if (["light", "standard", "rigorous"].includes(safeValue)) return safeValue;
+          return defaults.saturdayTest.difficulty;
+        })(),
+        questionTypeWeights: {
+          mcq: Math.max(0, Math.min(100, Number((_aa = (__ = (_Z = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _Z.questionTypeWeights) == null ? void 0 : __.mcq) != null ? _aa : (_$ = safeRaw == null ? void 0 : safeRaw.questionTypeWeights) == null ? void 0 : _$.mcq) || defaults.saturdayTest.questionTypeWeights.mcq)),
+          truefalse: Math.max(0, Math.min(100, Number((_ea = (_ca = (_ba = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _ba.questionTypeWeights) == null ? void 0 : _ca.truefalse) != null ? _ea : (_da = safeRaw == null ? void 0 : safeRaw.questionTypeWeights) == null ? void 0 : _da.truefalse) || defaults.saturdayTest.questionTypeWeights.truefalse)),
+          fillblank: Math.max(0, Math.min(100, Number((_ia = (_ga = (_fa = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _fa.questionTypeWeights) == null ? void 0 : _ga.fillblank) != null ? _ia : (_ha = safeRaw == null ? void 0 : safeRaw.questionTypeWeights) == null ? void 0 : _ha.fillblank) || defaults.saturdayTest.questionTypeWeights.fillblank)),
+          matching: Math.max(0, Math.min(100, Number((_ma = (_ka = (_ja = safeRaw == null ? void 0 : safeRaw.saturdayTest) == null ? void 0 : _ja.questionTypeWeights) == null ? void 0 : _ka.matching) != null ? _ma : (_la = safeRaw == null ? void 0 : safeRaw.questionTypeWeights) == null ? void 0 : _la.matching) || defaults.saturdayTest.questionTypeWeights.matching))
+        }
+      }
+    };
+  }
+  function buildAutoDiaryLegacyFields(autoDiarySettings = null, fallbackYearStartDate = "") {
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {}, { yearStartDate: fallbackYearStartDate });
+    return {
+      auto_diary_settings: settings,
+      auto_diary_start_date: String(settings.calendar.startDate || fallbackYearStartDate || "").trim() || null,
+      auto_diary_subject_mode: settings.subjects.mode === "selected" ? "selected" : "all",
+      auto_diary_subject_ids: normalizeTextArray(settings.subjects.selectedSubjectIds),
+      auto_diary_plan_mode: String(settings.dailyLayout.mode || "all_subjects_daily").trim(),
+      auto_diary_advance_mode: String(settings.progression.advanceMode || "carry_forward").trim(),
+      week_accumulation_mode: String(settings.saturdayTest.accumulationMode || "rolling").trim().toLowerCase(),
+      week_accumulation_value: Math.max(1, Number(settings.saturdayTest.accumulationValue) || 8)
+    };
+  }
+  function getAutoDiaryProgressionPresetSettings(preset = "balanced") {
+    const safePreset = String(preset || "balanced").trim().toLowerCase();
+    if (safePreset === "structured") {
+      return {
+        chapterSelectionMode: "curriculum_order",
+        advanceMode: "weekly_lesson",
+        skipCompletedLessons: true,
+        preferAssignedContent: true,
+        preferPublishedContent: true,
+        minimumUnitsPerDay: 1,
+        reviewWhenShort: false,
+        completionMode: "any",
+        countMarkedDone: false,
+        countQuizComplete: true,
+        countLessonProgress: true,
+        lessonProgressThreshold: 100
+      };
+    }
+    if (safePreset === "mastery") {
+      return {
+        chapterSelectionMode: "progress_first",
+        advanceMode: "carry_forward",
+        skipCompletedLessons: true,
+        preferAssignedContent: true,
+        preferPublishedContent: true,
+        minimumUnitsPerDay: 2,
+        reviewWhenShort: false,
+        completionMode: "all",
+        countMarkedDone: false,
+        countQuizComplete: true,
+        countLessonProgress: true,
+        lessonProgressThreshold: 100
+      };
+    }
+    return {
+      chapterSelectionMode: "progress_first",
+      advanceMode: "carry_forward",
+      skipCompletedLessons: true,
+      preferAssignedContent: true,
+      preferPublishedContent: true,
+      minimumUnitsPerDay: 1,
+      reviewWhenShort: true,
+      completionMode: "any",
+      countMarkedDone: true,
+      countQuizComplete: true,
+      countLessonProgress: true,
+      lessonProgressThreshold: 100
+    };
+  }
+  function applyAutoDiaryProgressionPreset(settings = null, preset = "balanced") {
+    const normalized = normalizeAutoDiarySettings(settings || {});
+    return normalizeAutoDiarySettings({
+      ...normalized,
+      progression: {
+        ...normalized.progression,
+        ...getAutoDiaryProgressionPresetSettings(preset)
+      }
+    }, { yearStartDate: normalized.calendar.startDate });
+  }
+  function detectAutoDiaryProgressionPreset(settings = null) {
+    const normalized = normalizeAutoDiarySettings(settings || {});
+    const keys = [
+      "chapterSelectionMode",
+      "advanceMode",
+      "skipCompletedLessons",
+      "preferAssignedContent",
+      "preferPublishedContent",
+      "minimumUnitsPerDay",
+      "reviewWhenShort",
+      "completionMode",
+      "countMarkedDone",
+      "countQuizComplete",
+      "countLessonProgress",
+      "lessonProgressThreshold"
+    ];
+    const presets = ["balanced", "structured", "mastery"];
+    const matchedPreset = presets.find((preset) => {
+      const presetSettings = getAutoDiaryProgressionPresetSettings(preset);
+      return keys.every((key) => {
+        var _a;
+        return String((_a = normalized.progression) == null ? void 0 : _a[key]) === String(presetSettings[key]);
+      });
+    });
+    return matchedPreset || "custom";
+  }
+  function getAutoDiaryWeeklyTestPresetSettings(preset = "standard") {
+    const safePreset = String(preset || "standard").trim().toLowerCase();
+    if (safePreset === "disabled") {
+      return {
+        enabled: false,
+        accumulationMode: "rolling",
+        accumulationValue: 8,
+        currentWeekWeight: 50,
+        priorWeeksWeight: 50,
+        difficulty: "standard",
+        questionTypeWeights: { mcq: 35, truefalse: 20, fillblank: 25, matching: 20 }
+      };
+    }
+    if (safePreset === "current_focus") {
+      return {
+        enabled: true,
+        accumulationMode: "rolling",
+        accumulationValue: 4,
+        currentWeekWeight: 70,
+        priorWeeksWeight: 30,
+        difficulty: "standard",
+        questionTypeWeights: { mcq: 40, truefalse: 20, fillblank: 25, matching: 15 }
+      };
+    }
+    if (safePreset === "revision_heavy") {
+      return {
+        enabled: true,
+        accumulationMode: "academic_year",
+        accumulationValue: 12,
+        currentWeekWeight: 30,
+        priorWeeksWeight: 70,
+        difficulty: "rigorous",
+        questionTypeWeights: { mcq: 30, truefalse: 20, fillblank: 30, matching: 20 }
+      };
+    }
+    return {
+      enabled: true,
+      accumulationMode: "rolling",
+      accumulationValue: 8,
+      currentWeekWeight: 50,
+      priorWeeksWeight: 50,
+      difficulty: "standard",
+      questionTypeWeights: { mcq: 35, truefalse: 20, fillblank: 25, matching: 20 }
+    };
+  }
+  function applyAutoDiaryWeeklyTestPreset(settings = null, preset = "standard") {
+    const normalized = normalizeAutoDiarySettings(settings || {});
+    return normalizeAutoDiarySettings({
+      ...normalized,
+      saturdayTest: {
+        ...normalized.saturdayTest,
+        ...getAutoDiaryWeeklyTestPresetSettings(preset)
+      }
+    }, { yearStartDate: normalized.calendar.startDate });
+  }
+  function detectAutoDiaryWeeklyTestPreset(settings = null) {
+    const normalized = normalizeAutoDiarySettings(settings || {});
+    const keys = ["enabled", "accumulationMode", "accumulationValue", "currentWeekWeight", "priorWeeksWeight", "difficulty"];
+    const questionTypeKeys = ["mcq", "truefalse", "fillblank", "matching"];
+    const presets = ["disabled", "standard", "current_focus", "revision_heavy"];
+    const matchedPreset = presets.find((preset) => {
+      const presetSettings = getAutoDiaryWeeklyTestPresetSettings(preset);
+      const scalarMatch = keys.every((key) => {
+        var _a;
+        return String((_a = normalized.saturdayTest) == null ? void 0 : _a[key]) === String(presetSettings[key]);
+      });
+      return scalarMatch && questionTypeKeys.every((key) => {
+        var _a, _b;
+        return String((_b = (_a = normalized.saturdayTest) == null ? void 0 : _a.questionTypeWeights) == null ? void 0 : _b[key]) === String(presetSettings.questionTypeWeights[key]);
+      });
+    });
+    return matchedPreset || "custom";
+  }
+  function moveAutoDiarySubjectPriority(priorityOrder = [], subjectId = "", direction = 0) {
+    const safeSubjectId = String(subjectId || "").trim();
+    if (!safeSubjectId || !Array.isArray(priorityOrder) || !priorityOrder.length || !direction) return Array.isArray(priorityOrder) ? priorityOrder : [];
+    const next = [...priorityOrder];
+    const currentIndex = next.findIndex((entry2) => String(entry2 || "").trim() === safeSubjectId);
+    if (currentIndex < 0) return next;
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= next.length) return next;
+    const [entry] = next.splice(currentIndex, 1);
+    next.splice(targetIndex, 0, entry);
+    return next;
+  }
+  function getAutoDiaryWeekdayLabel(isoDay, language = "en") {
+    const match = AUTO_DIARY_ISO_DAY_OPTIONS.find((entry) => entry.value === Number(isoDay));
+    if (!match) return String(isoDay || "");
+    return language === "ur" ? match.ur : match.en;
+  }
+  function getConfiguredStudyDates(weekDates = [], autoDiarySettings = null) {
+    const safeWeekDates = Array.isArray(weekDates) ? weekDates : [];
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+    const holidayDates = new Set(normalizeTextArray(settings.calendar.holidayDates));
+    return settings.calendar.studyDays.map((isoDay) => safeWeekDates[isoDay - 1]).filter(Boolean).filter((date) => !holidayDates.has(date));
+  }
+  function getConfiguredTestDate(weekDates = [], autoDiarySettings = null) {
+    const safeWeekDates = Array.isArray(weekDates) ? weekDates : [];
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+    const candidate = safeWeekDates[Math.max(0, settings.calendar.testDay - 1)] || "";
+    return normalizeTextArray(settings.calendar.holidayDates).includes(candidate) ? "" : candidate;
+  }
+  function orderAutoDiarySubjects(subjects = [], autoDiarySettings = null) {
+    const safeSubjects = Array.isArray(subjects) ? subjects.filter(Boolean) : [];
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+    const priorityOrder = settings.subjects.priorityOrder;
+    const priorityMap = priorityOrder.reduce((acc, subjectId, index) => {
+      acc[String(subjectId || "").trim()] = index;
+      return acc;
+    }, {});
+    const weightMap = settings.subjects.weightsBySubject || {};
+    return [...safeSubjects].sort((left, right) => {
+      const leftId = String((left == null ? void 0 : left.id) || "").trim();
+      const rightId = String((right == null ? void 0 : right.id) || "").trim();
+      const leftPriority = Object.prototype.hasOwnProperty.call(priorityMap, leftId) ? priorityMap[leftId] : Number.MAX_SAFE_INTEGER;
+      const rightPriority = Object.prototype.hasOwnProperty.call(priorityMap, rightId) ? priorityMap[rightId] : Number.MAX_SAFE_INTEGER;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      const leftWeight = Number(weightMap[leftId]) || 1;
+      const rightWeight = Number(weightMap[rightId]) || 1;
+      if (leftWeight !== rightWeight) return rightWeight - leftWeight;
+      return String((left == null ? void 0 : left.name) || leftId).localeCompare(String((right == null ? void 0 : right.name) || rightId));
+    });
+  }
+  function buildAutoDiaryDailySubjectPlanLookup(subjects = [], studyDates = [], autoDiarySettings = null) {
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+    const sortedSubjects = orderAutoDiarySubjects(subjects, settings);
+    const subjectIds = sortedSubjects.map((subject) => String((subject == null ? void 0 : subject.id) || "").trim()).filter(Boolean);
+    const result = {};
+    const safeStudyDates = Array.isArray(studyDates) ? studyDates.filter(Boolean) : [];
+    if (!subjectIds.length || !safeStudyDates.length) return result;
+    const minSubjects = Math.max(1, Math.min(subjectIds.length, Number(settings.dailyLayout.minSubjectsPerDay) || 1));
+    const maxSubjects = Math.max(minSubjects, Math.min(subjectIds.length, Number(settings.dailyLayout.maxSubjectsPerDay) || subjectIds.length));
+    const dailyCount = Math.max(minSubjects, Math.min(maxSubjects, subjectIds.length));
+    if (settings.dailyLayout.mode === "all_subjects_daily") {
+      safeStudyDates.forEach((date) => {
+        result[date] = subjectIds.slice(0, dailyCount);
+      });
+      return result;
+    }
+    if (settings.dailyLayout.mode === "hybrid") {
+      const coreIds = subjectIds.filter((subjectId) => settings.dailyLayout.hybridCoreSubjectIds.includes(subjectId)).slice(0, maxSubjects);
+      const rotatingIds = subjectIds.filter((subjectId) => !coreIds.includes(subjectId));
+      const rotationPerDay = rotatingIds.length ? Math.max(0, Math.min(maxSubjects - coreIds.length, Math.max(minSubjects - coreIds.length, Math.ceil(rotatingIds.length / Math.max(1, safeStudyDates.length))))) : 0;
+      let cursor2 = 0;
+      safeStudyDates.forEach((date) => {
+        const todaysSubjects = [...coreIds];
+        for (let index = 0; index < rotationPerDay; index += 1) {
+          if (!rotatingIds.length) break;
+          const nextSubjectId = rotatingIds[(cursor2 + index) % rotatingIds.length];
+          if (nextSubjectId && !todaysSubjects.includes(nextSubjectId)) todaysSubjects.push(nextSubjectId);
+        }
+        cursor2 += rotationPerDay || 1;
+        result[date] = todaysSubjects.slice(0, maxSubjects);
+      });
+      return result;
+    }
+    let cursor = 0;
+    safeStudyDates.forEach((date) => {
+      const todaysSubjects = [];
+      for (let index = 0; index < dailyCount; index += 1) {
+        if (!subjectIds.length) break;
+        const nextSubjectId = subjectIds[(cursor + index) % subjectIds.length];
+        if (nextSubjectId && !todaysSubjects.includes(nextSubjectId)) todaysSubjects.push(nextSubjectId);
+      }
+      cursor += dailyCount;
+      result[date] = todaysSubjects;
+    });
+    return result;
   }
   function normalizeLessonWorkUnit(raw, lesson = {}, index = 0) {
     if (raw == null) return null;
@@ -364,13 +796,143 @@
       }
     };
   }
+  function createStructuredLessonWorkUnit(lesson = {}, index = 0, title = "", detail = "", options = {}) {
+    const safeTitle = String(title || "").replace(/\s+/g, " ").trim();
+    const safeDetail = String(detail || safeTitle).replace(/\s+/g, " ").trim();
+    if (!safeTitle && !safeDetail) return null;
+    const sourceMeta = (options == null ? void 0 : options.sourceMeta) && typeof options.sourceMeta === "object" ? options.sourceMeta : {};
+    return {
+      key: String((options == null ? void 0 : options.key) || `${getLessonKeyValue(lesson) || lesson.id || "lesson"}_unit_${index}`).trim(),
+      title: safeTitle || safeDetail,
+      detail: safeDetail || safeTitle,
+      kind: String((options == null ? void 0 : options.kind) || "study").trim() || "study",
+      sourceMeta: {
+        key: String((sourceMeta == null ? void 0 : sourceMeta.key) || "").trim(),
+        title: String((sourceMeta == null ? void 0 : sourceMeta.title) || "").trim(),
+        heading: String((sourceMeta == null ? void 0 : sourceMeta.heading) || "").trim(),
+        day: Number.isFinite(Number(sourceMeta == null ? void 0 : sourceMeta.day)) ? Number(sourceMeta.day) : null
+      }
+    };
+  }
+  function buildSectionStructuredWorkUnits(section = {}, lesson = {}, unitIndexRef = { current: 0 }) {
+    if (!section || typeof section !== "object") return [];
+    const subsectionTitle = String((section == null ? void 0 : section.t) || (section == null ? void 0 : section.title) || (section == null ? void 0 : section.heading) || (section == null ? void 0 : section.name) || (section == null ? void 0 : section.label) || "").trim();
+    const subsectionKey = String((section == null ? void 0 : section.key) || (section == null ? void 0 : section.id) || sanitizeDiaryTargetSegment(subsectionTitle, `subsection_${unitIndexRef.current + 1}`)).trim();
+    const isUrdu = containsUrduText(subsectionTitle) || containsUrduText(section == null ? void 0 : section.intro) || containsUrduText(section == null ? void 0 : section.summary) || containsUrduText(section == null ? void 0 : section.q);
+    const nextIndex = () => {
+      const current = unitIndexRef.current;
+      unitIndexRef.current += 1;
+      return current;
+    };
+    const createUnit = (partKey, title, detail, kind = "study") => createStructuredLessonWorkUnit(
+      lesson,
+      nextIndex(),
+      title,
+      detail,
+      {
+        key: `${subsectionKey}_${partKey}`,
+        kind,
+        sourceMeta: {
+          key: subsectionKey,
+          title: subsectionTitle,
+          heading: subsectionTitle,
+          day: Number.isFinite(Number(section == null ? void 0 : section.day)) ? Number(section.day) : null
+        }
+      }
+    );
+    const units = [];
+    const pushUnit = (unit) => {
+      if (unit) units.push(unit);
+    };
+    const examples = [
+      ...Array.isArray(section == null ? void 0 : section.examples) ? section.examples : [],
+      ...Array.isArray(section == null ? void 0 : section.exampleParagraphs) ? section.exampleParagraphs : [],
+      ...Array.isArray(section == null ? void 0 : section.paragraphs) ? section.paragraphs : []
+    ].map((entry) => normalizeDiaryOutlineLeafLabel(entry)).filter(Boolean);
+    if (examples.length) {
+      pushUnit(createUnit(
+        "examples",
+        isUrdu ? "\u0645\u062B\u0627\u0644\u06CC\u06BA" : "Examples",
+        examples.slice(0, 2).join(" \u2022 "),
+        "practice"
+      ));
+    }
+    const sentencePairs = Array.isArray(section == null ? void 0 : section.sentencePairs) ? section.sentencePairs : [];
+    if (sentencePairs.length) {
+      const sentencePreview = normalizeDiaryOutlineLeafLabel(sentencePairs[0], isUrdu ? "\u062C\u0645\u0644\u06D2" : "Sentence practice");
+      pushUnit(createUnit(
+        "sentence_pairs",
+        isUrdu ? "\u062C\u0645\u0644\u0648\u06BA \u06A9\u06CC \u0645\u0634\u0642" : "Sentence Practice",
+        sentencePreview,
+        "practice"
+      ));
+    }
+    const words = Array.isArray(section == null ? void 0 : section.words) ? section.words : [];
+    if (words.length) {
+      const wordPreview = normalizeDiaryOutlineLeafLabel(words[0], isUrdu ? "\u0627\u0644\u0641\u0627\u0638" : "Words");
+      pushUnit(createUnit(
+        "words",
+        isUrdu ? "\u0627\u0644\u0641\u0627\u0638" : "Vocabulary",
+        wordPreview,
+        "practice"
+      ));
+    }
+    const exercises = Array.isArray(section == null ? void 0 : section.exercises) ? section.exercises : [];
+    if (exercises.length) {
+      exercises.forEach((exercise, exerciseIndex) => {
+        const kind = getExerciseKind(exercise == null ? void 0 : exercise.q);
+        const label = normalizeDiaryOutlineLabel(exercise == null ? void 0 : exercise.q, buildDiaryOutlineKindLabel(kind, isUrdu));
+        const firstPart = Array.isArray(exercise == null ? void 0 : exercise.parts) ? normalizeDiaryOutlineLeafLabel(exercise.parts[0]) : "";
+        const firstAnswer = Array.isArray(exercise == null ? void 0 : exercise.ans) ? normalizeDiaryOutlineLeafLabel(exercise.ans[0]) : "";
+        pushUnit(createUnit(
+          `exercise_${exerciseIndex + 1}`,
+          label,
+          firstPart || firstAnswer || label,
+          "practice"
+        ));
+      });
+    }
+    const wordProblems = Array.isArray(section == null ? void 0 : section.wordProblems) ? section.wordProblems : [];
+    if (wordProblems.length) {
+      const firstProblem = normalizeDiaryOutlineLeafLabel(wordProblems[0], isUrdu ? "\u0644\u0641\u0638\u06CC \u0633\u0648\u0627\u0644" : "Word problem");
+      pushUnit(createUnit(
+        "word_problems",
+        isUrdu ? "\u0644\u0641\u0638\u06CC \u0633\u0648\u0627\u0644" : "Word Problems",
+        firstProblem,
+        "practice"
+      ));
+    }
+    const quizEntries = Array.isArray(section == null ? void 0 : section.quiz) ? section.quiz : [];
+    if (quizEntries.length) {
+      const firstQuestion = normalizeDiaryOutlineLeafLabel(quizEntries[0], isUrdu ? "\u06A9\u0648\u0626\u0632" : "Quiz");
+      pushUnit(createUnit(
+        "quiz",
+        isUrdu ? "\u06A9\u0648\u0626\u0632" : "Quiz",
+        firstQuestion,
+        "practice"
+      ));
+    }
+    if (!units.length) {
+      pushUnit(normalizeLessonWorkUnit(section, lesson, nextIndex()));
+    }
+    return units;
+  }
   function extractLessonWorkUnits(lesson = {}, quizQuestions = []) {
     const units = [];
+    const unitIndexRef = { current: 0 };
     const pushCollection = (collection) => {
       if (!Array.isArray(collection)) return;
       collection.forEach((entry, index) => {
-        const normalized = normalizeLessonWorkUnit(entry, lesson, units.length + index);
-        if (normalized) units.push(normalized);
+        const structuredUnits = buildSectionStructuredWorkUnits(entry, lesson, unitIndexRef);
+        if (structuredUnits.length) {
+          structuredUnits.forEach((unit) => units.push(unit));
+          return;
+        }
+        const normalized = normalizeLessonWorkUnit(entry, lesson, unitIndexRef.current + index);
+        if (normalized) {
+          units.push(normalized);
+          unitIndexRef.current += 1;
+        }
       });
     };
     [
@@ -390,7 +952,7 @@
     if (!units.length && typeof lesson.content === "string" && lesson.content.trim()) {
       const paragraphs = lesson.content.split(/\n+/).map((entry) => entry.trim()).filter(Boolean);
       (paragraphs.length ? paragraphs : [lesson.content]).forEach((entry, index) => {
-        const normalized = normalizeLessonWorkUnit(entry, lesson, index);
+        const normalized = normalizeLessonWorkUnit(entry, lesson, unitIndexRef.current + index);
         if (normalized) units.push(normalized);
       });
     }
@@ -444,6 +1006,15 @@
     if (!safeBaseId) return "";
     return `${safeBaseId}_${sanitizeDiaryTargetSegment(sectionKey, "section")}`;
   }
+  function buildDiaryLeafIndexLabel(index = 0) {
+    let value = Math.max(0, Number(index) || 0);
+    let label = "";
+    do {
+      label = String.fromCharCode(97 + value % 26) + label;
+      value = Math.floor(value / 26) - 1;
+    } while (value >= 0);
+    return `${label}.`;
+  }
   function buildDiaryExerciseTargetId(targetBaseId = "", exercise = {}, index = 0, groupLabel = "") {
     const safeBaseId = String(targetBaseId || "").trim();
     if (!safeBaseId) return "";
@@ -453,21 +1024,200 @@
     const safeExerciseKey = sanitizeDiaryTargetSegment(explicitKey || explicitPrompt, `item_${index + 1}`);
     return safeGroup ? `${safeBaseId}_exercise_${safeGroup}_${safeExerciseKey}` : `${safeBaseId}_exercise_${safeExerciseKey}`;
   }
-  function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
+  function buildDiaryExampleTargetId(targetBaseId = "", entry = null, index = 0, groupLabel = "", entryScope = "example") {
+    const safeBaseId = String(targetBaseId || "").trim();
+    if (!safeBaseId) return "";
+    const safeGroup = sanitizeDiaryTargetSegment(groupLabel, "");
+    const safeScope = sanitizeDiaryTargetSegment(entryScope, "example");
+    const label = normalizeDiaryOutlineLeafLabel(entry, `item_${index + 1}`);
+    const explicitKey = (entry == null ? void 0 : entry.id) || (entry == null ? void 0 : entry.key) || (entry == null ? void 0 : entry.targetId) || "";
+    const safeEntryKey = sanitizeDiaryTargetSegment(explicitKey || label, `item_${index + 1}`);
+    return safeGroup ? `${safeBaseId}_${safeScope}_${safeGroup}_${safeEntryKey}` : `${safeBaseId}_${safeScope}_${safeEntryKey}`;
+  }
+  function buildDiaryQuizQuestionTargetId(targetBaseId = "", question = {}, index = 0, groupLabel = "") {
+    const safeBaseId = String(targetBaseId || "").trim();
+    if (!safeBaseId) return "";
+    const safeGroup = sanitizeDiaryTargetSegment(groupLabel, "");
+    const explicitKey = (question == null ? void 0 : question.id) || (question == null ? void 0 : question.key) || (question == null ? void 0 : question.targetId) || "";
+    const explicitPrompt = (question == null ? void 0 : question.q) || (question == null ? void 0 : question.prompt) || (question == null ? void 0 : question.question) || (question == null ? void 0 : question.label) || "";
+    const safeQuestionKey = sanitizeDiaryTargetSegment(explicitKey || explicitPrompt, `question_${index + 1}`);
+    return safeGroup ? `${safeBaseId}_quiz_${safeGroup}_${safeQuestionKey}` : `${safeBaseId}_quiz_${safeQuestionKey}`;
+  }
+  function normalizeDiaryOutlineLeafLabel(entry, fallbackLabel = "") {
+    if (typeof entry === "string" || typeof entry === "number") {
+      return String(entry || "").replace(/\s+/g, " ").trim() || String(fallbackLabel || "").trim();
+    }
+    if (!entry || typeof entry !== "object") {
+      return String(fallbackLabel || "").trim();
+    }
+    const pairLeft = String((entry == null ? void 0 : entry.en) || (entry == null ? void 0 : entry.english) || (entry == null ? void 0 : entry.left) || "").trim();
+    const pairRight = String((entry == null ? void 0 : entry.ur) || (entry == null ? void 0 : entry.urdu) || (entry == null ? void 0 : entry.right) || "").trim();
+    if (pairLeft && pairRight) return `${pairLeft} \u2014 ${pairRight}`;
+    return String(
+      (entry == null ? void 0 : entry.q) || (entry == null ? void 0 : entry.prompt) || (entry == null ? void 0 : entry.question) || (entry == null ? void 0 : entry.label) || (entry == null ? void 0 : entry.title) || (entry == null ? void 0 : entry.name) || (entry == null ? void 0 : entry.heading) || (entry == null ? void 0 : entry.text) || (entry == null ? void 0 : entry.content) || (entry == null ? void 0 : entry.c) || pairLeft || pairRight || fallbackLabel || ""
+    ).replace(/\s+/g, " ").trim();
+  }
+  function collectDiaryExampleOutlineNodes(exampleEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
     const nodes = [];
     const seen = /* @__PURE__ */ new Set();
-    (Array.isArray(exerciseEntries) ? exerciseEntries : []).forEach((exercise, index) => {
-      const kind = getExerciseKind((exercise == null ? void 0 : exercise.q) || "");
-      const fallbackLabel = buildDiaryOutlineKindLabel(kind, isUrdu);
-      const label = normalizeDiaryOutlineLabel(exercise == null ? void 0 : exercise.q, fallbackLabel);
-      const groupLabel = String((exercise == null ? void 0 : exercise.__groupLabel) || (routeMeta == null ? void 0 : routeMeta.groupLabel) || "").trim();
-      const targetId = buildDiaryExerciseTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, exercise, index, groupLabel);
-      const dedupeKey = String(targetId || `${groupLabel}_${kind || label || index}`).trim().toLowerCase();
-      if (!dedupeKey || seen.has(dedupeKey)) return;
+    (Array.isArray(exampleEntries) ? exampleEntries : []).forEach((entry, index) => {
+      const label = normalizeDiaryOutlineLeafLabel(entry, isUrdu ? `\u0645\u062B\u0627\u0644 ${index + 1}` : `Example ${index + 1}`);
+      const dedupeKey = String(label || `${baseKey}_${index}`).trim().toLowerCase();
+      if (!label || seen.has(dedupeKey)) return;
       seen.add(dedupeKey);
       nodes.push({
-        key: `${baseKey}_exercise_${index}`,
+        key: `${baseKey}_example_${index}`,
         label,
+        routeMeta: {
+          ...routeMeta,
+          subTab: "examples",
+          targetId: buildDiaryExampleTargetId(
+            routeMeta == null ? void 0 : routeMeta.targetBaseId,
+            entry,
+            index,
+            String((routeMeta == null ? void 0 : routeMeta.groupLabel) || "").trim(),
+            String((routeMeta == null ? void 0 : routeMeta.exampleScope) || "example").trim()
+          ) || String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "examples") || "").trim()
+        },
+        children: []
+      });
+    });
+    return nodes;
+  }
+  function collectDiaryQuizOutlineNodes(quizEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
+    const nodes = [];
+    const seen = /* @__PURE__ */ new Set();
+    (Array.isArray(quizEntries) ? quizEntries : []).forEach((question, index) => {
+      const label = normalizeDiaryOutlineLeafLabel(question, isUrdu ? `\u0633\u0648\u0627\u0644 ${index + 1}` : `Question ${index + 1}`);
+      const dedupeKey = String(label || `${baseKey}_${index}`).trim().toLowerCase();
+      if (!label || seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+      const groupLabel = String((routeMeta == null ? void 0 : routeMeta.groupLabel) || "").trim();
+      nodes.push({
+        key: `${baseKey}_quiz_${index}`,
+        label,
+        routeMeta: {
+          ...routeMeta,
+          subTab: "quiz",
+          groupLabel,
+          questionIndex: index,
+          targetId: buildDiaryQuizQuestionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, question, index, groupLabel) || String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "quiz") || "").trim()
+        },
+        children: []
+      });
+    });
+    return nodes;
+  }
+  function collectDiaryExercisePartOutlineNodes(exercise = {}, baseKey = "", routeMeta = {}, isUrdu = false) {
+    const nodes = [];
+    const parts = Array.isArray(exercise == null ? void 0 : exercise.parts) ? exercise.parts : [];
+    parts.forEach((part, index) => {
+      const label = normalizeDiaryOutlineLeafLabel(part, isUrdu ? `\u062D\u0635\u06C1 ${index + 1}` : `Part ${index + 1}`);
+      if (!label) return;
+      nodes.push({
+        key: `${baseKey}_part_${index}`,
+        label,
+        routeMeta: {
+          ...routeMeta,
+          subTab: "exercises",
+          targetId: String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "exercises") || "").trim()
+        },
+        children: []
+      });
+    });
+    return nodes;
+  }
+  function attachDiaryRouteMeta(nodes = [], extraRouteMeta = {}) {
+    return (Array.isArray(nodes) ? nodes : []).map((node) => ({
+      ...node,
+      routeMeta: {
+        ...(node == null ? void 0 : node.routeMeta) || {},
+        ...extraRouteMeta || {}
+      },
+      children: attachDiaryRouteMeta((node == null ? void 0 : node.children) || [], extraRouteMeta)
+    }));
+  }
+  function filterDiaryOutlineNodesBySelection(nodes = [], selectedNodeKeys = []) {
+    const selectedSet = new Set((Array.isArray(selectedNodeKeys) ? selectedNodeKeys : []).map((entry) => String(entry || "").trim()).filter(Boolean));
+    if (!selectedSet.size) return Array.isArray(nodes) ? nodes : [];
+    const walk = (node, ancestorSelected = false) => {
+      if (!node) return null;
+      const ownSelected = selectedSet.has(String(node.key || "").trim());
+      if (ancestorSelected || ownSelected) {
+        return {
+          ...node,
+          children: Array.isArray(node.children) ? node.children.map((child) => walk(child, true)).filter(Boolean) : []
+        };
+      }
+      const filteredChildren = Array.isArray(node.children) ? node.children.map((child) => walk(child, false)).filter(Boolean) : [];
+      if (filteredChildren.length) {
+        return {
+          ...node,
+          children: filteredChildren
+        };
+      }
+      return null;
+    };
+    return (Array.isArray(nodes) ? nodes : []).map((node) => walk(node, false)).filter(Boolean);
+  }
+  function collectDiaryOutlineNodeKeys(node, keys = []) {
+    if (!node) return keys;
+    const ownKey = String((node == null ? void 0 : node.key) || "").trim();
+    if (ownKey) keys.push(ownKey);
+    (Array.isArray(node == null ? void 0 : node.children) ? node.children : []).forEach((child) => collectDiaryOutlineNodeKeys(child, keys));
+    return keys;
+  }
+  function getAutoDiaryUnitSubsectionTitle(unit = {}, fallbackTitle = "") {
+    var _a, _b;
+    return String(
+      ((_a = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _a.title) || ((_b = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _b.heading) || (unit == null ? void 0 : unit.title) || fallbackTitle || ""
+    ).trim();
+  }
+  function getAutoDiaryUnitSubsectionKey(unit = {}, index = 0, fallbackTitle = "") {
+    var _a;
+    const explicitKey = String(((_a = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _a.key) || (unit == null ? void 0 : unit.key) || "").trim();
+    if (explicitKey) return explicitKey;
+    const title = getAutoDiaryUnitSubsectionTitle(unit, fallbackTitle);
+    return sanitizeDiaryTargetSegment(title, `subsection_${index + 1}`);
+  }
+  function groupAutoDiaryUnitsBySubsection(units = [], fallbackLessonTitle = "") {
+    const safeUnits = Array.isArray(units) ? units.filter(Boolean) : [];
+    const groups = [];
+    const lookup = /* @__PURE__ */ new Map();
+    safeUnits.forEach((unit, index) => {
+      const title = getAutoDiaryUnitSubsectionTitle(unit, fallbackLessonTitle) || joinLocalizedText("Lesson section", "\u0633\u0628\u0642 \u06A9\u0627 \u062D\u0635\u06C1", "en");
+      const key = getAutoDiaryUnitSubsectionKey(unit, index, fallbackLessonTitle);
+      if (!lookup.has(key)) {
+        const group = {
+          key,
+          title,
+          units: []
+        };
+        lookup.set(key, group);
+        groups.push(group);
+      }
+      lookup.get(key).units.push(unit);
+    });
+    return groups;
+  }
+  function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
+    const nodes = [];
+    const safeEntries = Array.isArray(exerciseEntries) ? exerciseEntries : [];
+    safeEntries.forEach((exercise, index) => {
+      const kind = getExerciseKind((exercise == null ? void 0 : exercise.q) || "");
+      const fallbackLabel = buildDiaryOutlineKindLabel(kind, isUrdu);
+      const groupLabel = String((exercise == null ? void 0 : exercise.__groupLabel) || (routeMeta == null ? void 0 : routeMeta.groupLabel) || "").trim();
+      const targetId = buildDiaryExerciseTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, exercise, index, groupLabel);
+      const questionLabel = normalizeDiaryOutlineLabel(exercise == null ? void 0 : exercise.q, fallbackLabel);
+      const partChildren = collectDiaryExercisePartOutlineNodes(exercise, `${baseKey}_exercise_${index}`, {
+        ...routeMeta,
+        exerciseKind: kind || "",
+        groupLabel,
+        targetId
+      }, isUrdu);
+      nodes.push({
+        key: `${baseKey}_exercise_${index}`,
+        label: questionLabel,
         routeMeta: {
           ...routeMeta,
           subTab: "exercises",
@@ -475,7 +1225,7 @@
           groupLabel,
           targetId
         },
-        children: []
+        children: partChildren
       });
     });
     return nodes;
@@ -524,6 +1274,215 @@
       return candidateTitles.some((candidate) => subTitles.some((subTitle) => subTitle === candidate || subTitle.includes(candidate) || candidate.includes(subTitle)));
     });
   }
+  function buildDiarySelectionOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}) {
+    const safeSubTitle = String((sub == null ? void 0 : sub.t) || (sub == null ? void 0 : sub.title) || (sub == null ? void 0 : sub.heading) || (sub == null ? void 0 : sub.name) || "").trim();
+    const safeSubKey = String((sub == null ? void 0 : sub.key) || (sub == null ? void 0 : sub.id) || safeSubTitle || "").trim();
+    const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText(safeSubTitle) || isUrduText((sub == null ? void 0 : sub.c) || "");
+    const baseKey = String((sub == null ? void 0 : sub.key) || (sub == null ? void 0 : sub.id) || safeSubTitle || "sub").trim() || "sub";
+    const targetBaseId = String((routeMeta == null ? void 0 : routeMeta.targetBaseId) || "").trim();
+    const safeRouteMeta = {
+      ...routeMeta,
+      subKey: safeSubKey,
+      subTitle: safeSubTitle,
+      targetBaseId,
+      targetId: buildDiarySectionTargetId(targetBaseId, "heading")
+    };
+    const children = [];
+    const hasExamples = Boolean(
+      Array.isArray(sub == null ? void 0 : sub.examples) && sub.examples.length || Array.isArray(sub == null ? void 0 : sub.sentencePairs) && sub.sentencePairs.length || Array.isArray(sub == null ? void 0 : sub.dayLessons) && sub.dayLessons.length || Array.isArray(sub == null ? void 0 : sub.examplesData) && sub.examplesData.length || typeof (sub == null ? void 0 : sub.c) === "string" && sub.c.trim()
+    );
+    if (hasExamples) {
+      const exampleChildren = [];
+      exampleChildren.push(...collectDiaryExampleOutlineNodes(sub == null ? void 0 : sub.examples, `${baseKey}_examples`, { ...safeRouteMeta, exampleScope: "examples" }, isUrdu));
+      exampleChildren.push(...collectDiaryExampleOutlineNodes(sub == null ? void 0 : sub.sentencePairs, `${baseKey}_examples_pairs`, { ...safeRouteMeta, exampleScope: "pairs" }, isUrdu));
+      exampleChildren.push(...collectDiaryExampleOutlineNodes(sub == null ? void 0 : sub.examplesData, `${baseKey}_examples_data`, { ...safeRouteMeta, exampleScope: "examples" }, isUrdu));
+      if (Array.isArray(sub == null ? void 0 : sub.dayLessons)) {
+        sub.dayLessons.forEach((dayEntry, index) => {
+          const dayLabel = normalizeDiaryOutlineLeafLabel(
+            dayEntry,
+            isUrdu ? `\u0633\u0628\u0642 \u062D\u0635\u06C1 ${index + 1}` : `Lesson part ${index + 1}`
+          );
+          const dayGroupLabel = `day_${(dayEntry == null ? void 0 : dayEntry.day) || index + 1}`;
+          const dayChildren = [
+            ...collectDiaryExampleOutlineNodes(dayEntry == null ? void 0 : dayEntry.paragraphs, `${baseKey}_day_${index}_paragraphs`, { ...safeRouteMeta, groupLabel: dayGroupLabel, exampleScope: "paragraphs" }, isUrdu),
+            ...collectDiaryExampleOutlineNodes(dayEntry == null ? void 0 : dayEntry.examples, `${baseKey}_day_${index}_examples`, { ...safeRouteMeta, groupLabel: dayGroupLabel, exampleScope: "examples" }, isUrdu),
+            ...collectDiaryExampleOutlineNodes(dayEntry == null ? void 0 : dayEntry.sentencePairs, `${baseKey}_day_${index}_pairs`, { ...safeRouteMeta, groupLabel: dayGroupLabel, exampleScope: "pairs" }, isUrdu)
+          ];
+          exampleChildren.push({
+            key: `${baseKey}_examples_day_${index}`,
+            label: dayLabel,
+            routeMeta: {
+              ...safeRouteMeta,
+              subTab: "examples",
+              groupLabel: dayGroupLabel,
+              targetId: buildDiarySectionTargetId(targetBaseId, "examples")
+            },
+            children: dayChildren
+          });
+        });
+      }
+      if (!exampleChildren.length && typeof (sub == null ? void 0 : sub.c) === "string" && sub.c.trim()) {
+        exampleChildren.push(...collectDiaryExampleOutlineNodes(
+          sub.c.split(/\n+/).map((entry) => entry.trim()).filter(Boolean),
+          `${baseKey}_examples_content`,
+          { ...safeRouteMeta, exampleScope: "content" },
+          isUrdu
+        ));
+      }
+      children.push({
+        key: `${baseKey}_examples`,
+        label: normalizeDiaryOutlineLabel(sub == null ? void 0 : sub.examplesLabel, isUrdu ? "\u0645\u062B\u0627\u0644\u06CC\u06BA" : "Examples"),
+        routeMeta: {
+          ...safeRouteMeta,
+          subTab: "examples",
+          targetScope: "section",
+          targetId: buildDiarySectionTargetId(targetBaseId, "examples")
+        },
+        children: exampleChildren
+      });
+    }
+    const exerciseEntries = [];
+    if (Array.isArray(sub == null ? void 0 : sub.exercises)) {
+      exerciseEntries.push(...sub.exercises);
+    } else if (Array.isArray(sub == null ? void 0 : sub.exerciseGroups)) {
+      sub.exerciseGroups.forEach((group) => {
+        (Array.isArray(group == null ? void 0 : group.exercises) ? group.exercises : []).forEach((exercise) => {
+          exerciseEntries.push({
+            ...exercise,
+            __groupLabel: String((group == null ? void 0 : group.label) || "").trim()
+          });
+        });
+      });
+    }
+    if (exerciseEntries.length) {
+      children.push({
+        key: `${baseKey}_exercises`,
+        label: isUrdu ? "\u0645\u0634\u0642\u06CC\u06BA" : "Exercises",
+        routeMeta: {
+          ...safeRouteMeta,
+          subTab: "exercises",
+          targetScope: "section",
+          targetId: buildDiarySectionTargetId(targetBaseId, "exercises")
+        },
+        children: collectDiaryExerciseOutlineNodes(
+          exerciseEntries,
+          `${baseKey}_exercises`,
+          safeRouteMeta,
+          isUrdu
+        )
+      });
+    }
+    const hasQuiz = Boolean(
+      Array.isArray(sub == null ? void 0 : sub.quiz) && sub.quiz.length || Array.isArray(sub == null ? void 0 : sub.quizGroups) && sub.quizGroups.length
+    );
+    if (hasQuiz) {
+      const quizChildren = Array.isArray(sub == null ? void 0 : sub.quizGroups) && sub.quizGroups.length ? sub.quizGroups.map((group, groupIndex) => ({
+        key: `${baseKey}_quiz_group_${groupIndex}`,
+        label: normalizeDiaryOutlineLeafLabel(group, isUrdu ? `\u06A9\u0648\u0626\u0632 \u06AF\u0631\u0648\u067E ${groupIndex + 1}` : `Quiz Group ${groupIndex + 1}`),
+        routeMeta: {
+          ...safeRouteMeta,
+          subTab: "quiz",
+          groupLabel: String((group == null ? void 0 : group.label) || (group == null ? void 0 : group.title) || "").trim(),
+          targetId: buildDiarySectionTargetId(targetBaseId, "quiz")
+        },
+        children: collectDiaryQuizOutlineNodes(group == null ? void 0 : group.questions, `${baseKey}_quiz_group_${groupIndex}`, {
+          ...safeRouteMeta,
+          groupLabel: String((group == null ? void 0 : group.label) || (group == null ? void 0 : group.title) || "").trim(),
+          targetId: buildDiarySectionTargetId(targetBaseId, "quiz")
+        }, isUrdu)
+      })) : collectDiaryQuizOutlineNodes(sub == null ? void 0 : sub.quiz, `${baseKey}_quiz`, {
+        ...safeRouteMeta,
+        targetId: buildDiarySectionTargetId(targetBaseId, "quiz")
+      }, isUrdu);
+      children.push({
+        key: `${baseKey}_quiz`,
+        label: isUrdu ? "\u06A9\u0648\u0626\u0632" : "Quiz",
+        routeMeta: {
+          ...safeRouteMeta,
+          subTab: "quiz",
+          targetScope: "section",
+          targetId: buildDiarySectionTargetId(targetBaseId, "quiz")
+        },
+        children: quizChildren
+      });
+    }
+    return {
+      key: `${baseKey}_heading`,
+      label: safeSubTitle || (isUrdu ? "\u0633\u0628\u0642" : "Lesson"),
+      routeMeta: safeRouteMeta,
+      children
+    };
+  }
+  function buildDiarySelectionOutlineFromLesson(lesson = {}, subjectId = "", routeMeta = {}) {
+    const isUrdu = String(subjectId || "").trim().toLowerCase() === "urdu" || isUrduText((lesson == null ? void 0 : lesson.title) || "") || isUrduText((lesson == null ? void 0 : lesson.content) || "");
+    const baseKey = String(getLessonKeyValue(lesson) || (lesson == null ? void 0 : lesson.id) || (lesson == null ? void 0 : lesson.title) || "lesson").trim() || "lesson";
+    const children = [];
+    const hasExamples = Boolean(
+      Array.isArray(lesson == null ? void 0 : lesson.examples) && lesson.examples.length || Array.isArray(lesson == null ? void 0 : lesson.sections) && lesson.sections.length || Array.isArray(lesson == null ? void 0 : lesson.subsections) && lesson.subsections.length || typeof (lesson == null ? void 0 : lesson.content) === "string" && lesson.content.trim()
+    );
+    if (hasExamples) {
+      const exampleChildren = [
+        ...collectDiaryExampleOutlineNodes(lesson == null ? void 0 : lesson.examples, `${baseKey}_examples`, { ...routeMeta, exampleScope: "examples" }, isUrdu),
+        ...collectDiaryExampleOutlineNodes(
+          typeof (lesson == null ? void 0 : lesson.content) === "string" && lesson.content.trim() ? lesson.content.split(/\n+/).map((entry) => entry.trim()).filter(Boolean) : [],
+          `${baseKey}_examples_content`,
+          { ...routeMeta, exampleScope: "content" },
+          isUrdu
+        )
+      ];
+      children.push({
+        key: `${baseKey}_examples`,
+        label: isUrdu ? "\u0645\u062B\u0627\u0644\u06CC\u06BA" : "Examples",
+        routeMeta: { ...routeMeta, subTab: "examples", targetScope: "section" },
+        children: exampleChildren
+      });
+    }
+    const exerciseEntries = [];
+    if (Array.isArray(lesson == null ? void 0 : lesson.exercises)) exerciseEntries.push(...lesson.exercises);
+    if (exerciseEntries.length) {
+      children.push({
+        key: `${baseKey}_exercises`,
+        label: isUrdu ? "\u0645\u0634\u0642\u06CC\u06BA" : "Exercises",
+        routeMeta: { ...routeMeta, subTab: "exercises", targetScope: "section" },
+        children: collectDiaryExerciseOutlineNodes(
+          exerciseEntries,
+          `${baseKey}_exercises`,
+          routeMeta,
+          isUrdu
+        )
+      });
+    }
+    const hasQuiz = Boolean(
+      Array.isArray(lesson == null ? void 0 : lesson.quiz) && lesson.quiz.length || Array.isArray(lesson == null ? void 0 : lesson.quizGroups) && lesson.quizGroups.length
+    );
+    if (hasQuiz) {
+      children.push({
+        key: `${baseKey}_quiz`,
+        label: isUrdu ? "\u06A9\u0648\u0626\u0632" : "Quiz",
+        routeMeta: { ...routeMeta, subTab: "quiz", targetScope: "section" },
+        children: Array.isArray(lesson == null ? void 0 : lesson.quizGroups) && lesson.quizGroups.length ? lesson.quizGroups.map((group, groupIndex) => ({
+          key: `${baseKey}_quiz_group_${groupIndex}`,
+          label: normalizeDiaryOutlineLeafLabel(group, isUrdu ? `\u06A9\u0648\u0626\u0632 \u06AF\u0631\u0648\u067E ${groupIndex + 1}` : `Quiz Group ${groupIndex + 1}`),
+          routeMeta: {
+            ...routeMeta,
+            subTab: "quiz",
+            groupLabel: String((group == null ? void 0 : group.label) || (group == null ? void 0 : group.title) || "").trim()
+          },
+          children: collectDiaryQuizOutlineNodes(group == null ? void 0 : group.questions, `${baseKey}_quiz_group_${groupIndex}`, {
+            ...routeMeta,
+            subTab: "quiz",
+            groupLabel: String((group == null ? void 0 : group.label) || (group == null ? void 0 : group.title) || "").trim()
+          }, isUrdu)
+        })) : collectDiaryQuizOutlineNodes(lesson == null ? void 0 : lesson.quiz, `${baseKey}_quiz`, routeMeta, isUrdu)
+      });
+    }
+    return {
+      key: `${baseKey}_heading`,
+      label: String((lesson == null ? void 0 : lesson.title) || (lesson == null ? void 0 : lesson.key) || (isUrdu ? "\u0633\u0628\u0642" : "Lesson")).trim() || (isUrdu ? "\u0633\u0628\u0642" : "Lesson"),
+      routeMeta: routeMeta || {},
+      children
+    };
+  }
   function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}) {
     const safeSubTitle = String((sub == null ? void 0 : sub.t) || (sub == null ? void 0 : sub.title) || (sub == null ? void 0 : sub.heading) || (sub == null ? void 0 : sub.name) || "").trim();
     const safeSubKey = String((sub == null ? void 0 : sub.key) || (sub == null ? void 0 : sub.id) || safeSubTitle || "").trim();
@@ -568,6 +1527,31 @@
       });
     }
     if (exerciseEntries.length) {
+      const exerciseChildren = Array.isArray(sub == null ? void 0 : sub.exerciseGroups) && sub.exerciseGroups.length ? sub.exerciseGroups.map((group, groupIndex) => ({
+        key: `${baseKey}_exercise_group_${groupIndex}`,
+        label: normalizeDiaryOutlineLeafLabel(group, isUrdu ? `\u0645\u0634\u0642 \u06AF\u0631\u0648\u067E ${groupIndex + 1}` : `Exercise Group ${groupIndex + 1}`),
+        routeMeta: {
+          ...safeRouteMeta,
+          subTab: "exercises",
+          groupLabel: String((group == null ? void 0 : group.label) || "").trim(),
+          targetId: buildDiarySectionTargetId(targetBaseId, "exercises")
+        },
+        children: collectDiaryExerciseOutlineNodes(
+          Array.isArray(group == null ? void 0 : group.exercises) ? group.exercises : [],
+          `${baseKey}_exercise_group_${groupIndex}`,
+          {
+            ...safeRouteMeta,
+            groupLabel: String((group == null ? void 0 : group.label) || "").trim(),
+            targetId: buildDiarySectionTargetId(targetBaseId, "exercises")
+          },
+          isUrdu
+        )
+      })) : collectDiaryExerciseOutlineNodes(
+        exerciseEntries,
+        `${baseKey}_exercises`,
+        safeRouteMeta,
+        isUrdu
+      );
       children.push({
         key: `${baseKey}_exercises`,
         label: isUrdu ? "\u0645\u0634\u0642\u06CC\u06BA" : "Exercises",
@@ -577,12 +1561,7 @@
           targetScope: "section",
           targetId: buildDiarySectionTargetId(targetBaseId, "exercises")
         },
-        children: collectDiaryExerciseOutlineNodes(
-          exerciseEntries,
-          `${baseKey}_exercises`,
-          safeRouteMeta,
-          isUrdu
-        )
+        children: exerciseChildren
       });
     }
     const hasQuiz = Boolean(
@@ -638,7 +1617,9 @@
         )
       });
     }
-    const hasQuiz = Boolean(Array.isArray(lesson == null ? void 0 : lesson.quiz) && lesson.quiz.length);
+    const hasQuiz = Boolean(
+      Array.isArray(lesson == null ? void 0 : lesson.quiz) && lesson.quiz.length || Array.isArray(lesson == null ? void 0 : lesson.quizGroups) && lesson.quizGroups.length
+    );
     if (hasQuiz) {
       children.push({
         key: `${baseKey}_quiz`,
@@ -676,20 +1657,31 @@
     ].map((value) => String(value || "").trim()).filter(Boolean);
     return sampleTexts.some((text) => isUrduText(text)) ? "ur" : uiLanguage === "ur" ? "ur" : "en";
   }
-  function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5) {
+  function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5, options = {}) {
     const safeStudyDays = Math.max(1, Number(studyDays) || 5);
     const safeUnits = Array.isArray(units) ? units.filter(Boolean) : [];
+    const minimumUnitsPerDay = Math.max(1, Math.min(6, Number(options == null ? void 0 : options.minimumUnitsPerDay) || 1));
+    const reviewWhenShort = (options == null ? void 0 : options.reviewWhenShort) !== false;
     if (!safeUnits.length) return Array.from({ length: safeStudyDays }, () => []);
     const buckets = Array.from({ length: safeStudyDays }, () => []);
     if (safeUnits.length >= safeStudyDays) {
-      const baseCount = Math.floor(safeUnits.length / safeStudyDays);
-      let remainder = safeUnits.length % safeStudyDays;
       let cursor = 0;
       for (let dayIndex = 0; dayIndex < safeStudyDays; dayIndex += 1) {
-        const sliceSize = baseCount + (remainder > 0 ? 1 : 0);
-        if (remainder > 0) remainder -= 1;
+        const daysRemaining = safeStudyDays - dayIndex;
+        const unitsRemaining = safeUnits.length - cursor;
+        const minimumRequiredForFutureDays = Math.max(0, (daysRemaining - 1) * minimumUnitsPerDay);
+        const todaysBaseCount = Math.max(
+          minimumUnitsPerDay,
+          Math.ceil(Math.max(0, unitsRemaining - minimumRequiredForFutureDays) / Math.max(1, daysRemaining))
+        );
+        const sliceSize = Math.min(unitsRemaining, Math.max(minimumUnitsPerDay, todaysBaseCount));
         buckets[dayIndex] = safeUnits.slice(cursor, cursor + sliceSize);
         cursor += sliceSize;
+      }
+      while (cursor < safeUnits.length) {
+        const targetBucketIndex = buckets.reduce((bestIndex, bucket, bucketIndex, bucketList) => bucket.length < bucketList[bestIndex].length ? bucketIndex : bestIndex, 0);
+        buckets[targetBucketIndex].push(safeUnits[cursor]);
+        cursor += 1;
       }
       return buckets;
     }
@@ -697,7 +1689,7 @@
       buckets[index].push(unit);
     });
     const remainingDayCount = safeStudyDays - safeUnits.length;
-    if (!remainingDayCount) return buckets;
+    if (!remainingDayCount || !reviewWhenShort) return buckets;
     const reviewChunks = splitBalanced(safeUnits, remainingDayCount);
     reviewChunks.forEach((chunk, index) => {
       const safeChunk = Array.isArray(chunk) && chunk.length ? chunk : [safeUnits[index % safeUnits.length]];
@@ -709,6 +1701,66 @@
     });
     return buckets;
   }
+  function buildAutoDiaryLessonCoverageLookup({
+    diaryCompletions = [],
+    studentEmail = "",
+    schoolId = "",
+    currentWeekStartDate = "",
+    studyDays = 5
+  }) {
+    const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
+    const safeSchoolId = String(schoolId || "").trim();
+    const safeWeekStart = String(currentWeekStartDate || "").trim();
+    const safeStudyDays = Math.max(1, Number(studyDays) || 5);
+    const lessonCoverage = /* @__PURE__ */ new Map();
+    if (!safeStudentEmail) return lessonCoverage;
+    (Array.isArray(diaryCompletions) ? diaryCompletions : []).map((entry) => normalizeDiaryCompletionRecord(entry)).filter(Boolean).filter((entry) => entry.taskKind === "auto" && entry.studentEmail === safeStudentEmail && (!safeSchoolId || String(entry.schoolId || "").trim() === safeSchoolId) && entry.subject && entry.lessonKey && (!safeWeekStart || entry.targetDate < safeWeekStart)).sort((left, right) => String(left.targetDate || "").localeCompare(String(right.targetDate || "")) || Number(left.completedAt || 0) - Number(right.completedAt || 0)).forEach((entry) => {
+      const coverageKey = [
+        String(entry.subject || "").trim(),
+        resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
+        String(entry.contentId || "").trim() || "__default__"
+      ].join("::");
+      if (!coverageKey) return;
+      const current = lessonCoverage.get(coverageKey) || { taskKeys: /* @__PURE__ */ new Set(), count: 0 };
+      if (current.taskKeys.has(entry.taskKey)) return;
+      current.taskKeys.add(entry.taskKey);
+      current.count = Math.min(safeStudyDays, current.taskKeys.size);
+      lessonCoverage.set(coverageKey, current);
+    });
+    return lessonCoverage;
+  }
+  function getAutoDiaryLessonCoverageSlots({
+    subjectId = "",
+    chapterGroup = null,
+    completedQuizzes = {},
+    practiceLessonProgress = {},
+    lessonCoverageLookup = /* @__PURE__ */ new Map(),
+    studyDays = 5,
+    autoDiarySettings = null
+  }) {
+    var _a, _b;
+    const lesson = (chapterGroup == null ? void 0 : chapterGroup.activeLesson) || null;
+    if (!lesson || !chapterGroup) return 0;
+    if (isLessonProgressComplete(lesson, completedQuizzes, practiceLessonProgress, autoDiarySettings)) {
+      return Math.max(1, Number(studyDays) || 5);
+    }
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+    if (!settings.progression.countMarkedDone) return 0;
+    const coverageKey = [
+      String(subjectId || "").trim(),
+      resolveCustomChapterLessonKey({ lessonKey: chapterGroup.canonicalLessonKey || "" }),
+      String(((_a = chapterGroup == null ? void 0 : chapterGroup.activeVariant) == null ? void 0 : _a.contentId) || "").trim() || "__default__"
+    ].join("::");
+    return Math.min(Math.max(0, Number(((_b = lessonCoverageLookup.get(coverageKey)) == null ? void 0 : _b.count) || 0)), Math.max(1, Number(studyDays) || 5));
+  }
+  function shouldIncludeAutoDiarySubject(subject, autoDiarySettings = null) {
+    const safeSubjectId = String((subject == null ? void 0 : subject.id) || "").trim();
+    if (!safeSubjectId) return false;
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+    if (settings.subjects.mode !== "selected") return true;
+    const allowedIds = new Set(normalizeTextArray(settings.subjects.selectedSubjectIds));
+    return allowedIds.has(safeSubjectId);
+  }
   function createEmptyContentRelationshipState() {
     return {
       loaded: false,
@@ -719,6 +1771,7 @@
       assignments: [],
       diaryEntries: [],
       diaryCompletions: [],
+      autoDiaryOverrides: [],
       testTemplates: [],
       weeklyTestAssignments: [],
       weeklyTestResults: [],
@@ -728,12 +1781,29 @@
   function normalizeSchoolRecord(raw) {
     const schoolId = String((raw == null ? void 0 : raw.school_id) || (raw == null ? void 0 : raw.schoolId) || "").trim();
     if (!schoolId) return null;
+    const rawAutoDiarySettings = (raw == null ? void 0 : raw.auto_diary_settings) || (raw == null ? void 0 : raw.autoDiarySettings) || {};
+    const normalizedAutoDiarySettings = normalizeAutoDiarySettings(rawAutoDiarySettings, {
+      autoDiaryStartDate: (raw == null ? void 0 : raw.auto_diary_start_date) || (raw == null ? void 0 : raw.autoDiaryStartDate) || "",
+      autoDiarySubjectMode: (raw == null ? void 0 : raw.auto_diary_subject_mode) || (raw == null ? void 0 : raw.autoDiarySubjectMode) || "all",
+      autoDiarySubjectIds: (raw == null ? void 0 : raw.auto_diary_subject_ids) || (raw == null ? void 0 : raw.autoDiarySubjectIds) || [],
+      autoDiaryPlanMode: (raw == null ? void 0 : raw.auto_diary_plan_mode) || (raw == null ? void 0 : raw.autoDiaryPlanMode) || "all_subjects_daily",
+      autoDiaryAdvanceMode: (raw == null ? void 0 : raw.auto_diary_advance_mode) || (raw == null ? void 0 : raw.autoDiaryAdvanceMode) || "carry_forward",
+      yearStartDate: (raw == null ? void 0 : raw.year_start_date) || (raw == null ? void 0 : raw.yearStartDate) || "",
+      weekAccumulationMode: (raw == null ? void 0 : raw.week_accumulation_mode) || (raw == null ? void 0 : raw.weekAccumulationMode) || "rolling",
+      weekAccumulationValue: (raw == null ? void 0 : raw.week_accumulation_value) || (raw == null ? void 0 : raw.weekAccumulationValue) || 8
+    });
     return {
       schoolId,
       schoolName: String((raw == null ? void 0 : raw.school_name) || (raw == null ? void 0 : raw.schoolName) || "").trim() || schoolId,
       ownerEmail: String((raw == null ? void 0 : raw.owner_email) || (raw == null ? void 0 : raw.ownerEmail) || "").trim().toLowerCase(),
       principalEmail: String((raw == null ? void 0 : raw.principal_email) || (raw == null ? void 0 : raw.principalEmail) || "").trim().toLowerCase(),
       yearStartDate: String((raw == null ? void 0 : raw.year_start_date) || (raw == null ? void 0 : raw.yearStartDate) || "").trim(),
+      autoDiarySettings: normalizedAutoDiarySettings,
+      autoDiaryStartDate: normalizedAutoDiarySettings.calendar.startDate,
+      autoDiarySubjectMode: normalizedAutoDiarySettings.subjects.mode,
+      autoDiarySubjectIds: normalizedAutoDiarySettings.subjects.selectedSubjectIds,
+      autoDiaryPlanMode: normalizedAutoDiarySettings.dailyLayout.mode,
+      autoDiaryAdvanceMode: normalizedAutoDiarySettings.progression.advanceMode,
       weekAccumulationMode: String((raw == null ? void 0 : raw.week_accumulation_mode) || (raw == null ? void 0 : raw.weekAccumulationMode) || "rolling").trim().toLowerCase() || "rolling",
       weekAccumulationValue: Math.max(1, Number((raw == null ? void 0 : raw.week_accumulation_value) || (raw == null ? void 0 : raw.weekAccumulationValue)) || 8),
       status: String((raw == null ? void 0 : raw.status) || "active").trim().toLowerCase() || "active",
@@ -874,6 +1944,86 @@
       completionPayload: cloneSerializableValue((raw == null ? void 0 : raw.completion_payload) || (raw == null ? void 0 : raw.completionPayload) || {}) || {},
       completedAt: Number(new Date((raw == null ? void 0 : raw.completed_at) || (raw == null ? void 0 : raw.completedAt) || (raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now(),
       updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || (raw == null ? void 0 : raw.completed_at) || (raw == null ? void 0 : raw.completedAt) || Date.now()).getTime()) || Date.now()
+    };
+  }
+  function normalizeAutoDiaryOverrideRecord(raw) {
+    const overrideId = String((raw == null ? void 0 : raw.override_id) || (raw == null ? void 0 : raw.overrideId) || "").trim();
+    const weekStartRaw = String((raw == null ? void 0 : raw.week_start_date) || (raw == null ? void 0 : raw.weekStartDate) || "").trim();
+    const targetDateRaw = String((raw == null ? void 0 : raw.target_date) || (raw == null ? void 0 : raw.targetDate) || "").trim();
+    const parsedWeekStart = parseIsoDateValue(weekStartRaw);
+    const parsedTargetDate = parseIsoDateValue(targetDateRaw);
+    const weekStartDate = parsedWeekStart ? toIsoDateString(parsedWeekStart) : "";
+    const targetDate = parsedTargetDate ? toIsoDateString(parsedTargetDate) : "";
+    if (!overrideId || !weekStartDate || !targetDate) return null;
+    const action = String((raw == null ? void 0 : raw.action) || "").trim().toLowerCase();
+    if (!["skip", "replace", "add"].includes(action)) return null;
+    const legacyOverrideSubject = String((raw == null ? void 0 : raw.override_subject) || (raw == null ? void 0 : raw.overrideSubject) || "").trim();
+    const legacyOverrideLessonKey = resolveCustomChapterLessonKey({ lessonKey: (raw == null ? void 0 : raw.override_lesson_key) || (raw == null ? void 0 : raw.overrideLessonKey) || "" });
+    const legacyOverrideContentId = String((raw == null ? void 0 : raw.override_content_id) || (raw == null ? void 0 : raw.overrideContentId) || "").trim();
+    const legacyOverrideSubsectionKey = String((raw == null ? void 0 : raw.override_subsection_key) || (raw == null ? void 0 : raw.overrideSubsectionKey) || "").trim();
+    const legacyOverrideSubsectionTitle = String((raw == null ? void 0 : raw.override_subsection_title) || (raw == null ? void 0 : raw.overrideSubsectionTitle) || "").trim();
+    const legacyOverrideUnitKeys = (() => {
+      const directKeys = normalizeTextArray((raw == null ? void 0 : raw.override_unit_keys) || (raw == null ? void 0 : raw.overrideUnitKeys));
+      if (directKeys.length) return directKeys;
+      const fallbackKey = String((raw == null ? void 0 : raw.override_unit_key) || (raw == null ? void 0 : raw.overrideUnitKey) || "").trim();
+      return fallbackKey ? [fallbackKey] : [];
+    })();
+    const rawPayload = cloneSerializableValue((raw == null ? void 0 : raw.override_payload) || (raw == null ? void 0 : raw.overridePayload) || {}) || {};
+    const normalizedPayloadSources = Array.isArray(rawPayload == null ? void 0 : rawPayload.sources) ? rawPayload.sources.map((source, index) => {
+      const subject = String((source == null ? void 0 : source.subject) || (source == null ? void 0 : source.subjectId) || "").trim();
+      const lessonKey = resolveCustomChapterLessonKey({ lessonKey: (source == null ? void 0 : source.lessonKey) || (source == null ? void 0 : source.overrideLessonKey) || "" });
+      if (!subject || !lessonKey) return null;
+      return {
+        sourceId: String((source == null ? void 0 : source.sourceId) || (source == null ? void 0 : source.id) || `source_${index + 1}`).trim() || `source_${index + 1}`,
+        subject,
+        lessonKey,
+        contentId: String((source == null ? void 0 : source.contentId) || (source == null ? void 0 : source.overrideContentId) || "").trim(),
+        selectedNodeKeys: normalizeTextArray(source == null ? void 0 : source.selectedNodeKeys),
+        expandedNodeKeys: normalizeTextArray(source == null ? void 0 : source.expandedNodeKeys),
+        legacySubsectionKey: String((source == null ? void 0 : source.subsectionKey) || (source == null ? void 0 : source.overrideSubsectionKey) || "").trim(),
+        legacySubsectionTitle: String((source == null ? void 0 : source.subsectionTitle) || (source == null ? void 0 : source.overrideSubsectionTitle) || "").trim(),
+        legacyUnitKeys: normalizeTextArray((source == null ? void 0 : source.selectedUnitKeys) || (source == null ? void 0 : source.overrideUnitKeys))
+      };
+    }).filter(Boolean) : [];
+    const normalizedOverridePayload = {
+      ...rawPayload,
+      sources: normalizedPayloadSources.length ? normalizedPayloadSources : legacyOverrideSubject && legacyOverrideLessonKey ? [{
+        sourceId: "legacy_source_1",
+        subject: legacyOverrideSubject,
+        lessonKey: legacyOverrideLessonKey,
+        contentId: legacyOverrideContentId,
+        selectedNodeKeys: [],
+        expandedNodeKeys: [],
+        legacySubsectionKey: legacyOverrideSubsectionKey,
+        legacySubsectionTitle: legacyOverrideSubsectionTitle,
+        legacyUnitKeys: legacyOverrideUnitKeys
+      }] : []
+    };
+    return {
+      overrideId,
+      schoolId: String((raw == null ? void 0 : raw.school_id) || (raw == null ? void 0 : raw.schoolId) || "").trim(),
+      createdByEmail: String((raw == null ? void 0 : raw.created_by_email) || (raw == null ? void 0 : raw.createdByEmail) || "").trim().toLowerCase(),
+      targetType: String((raw == null ? void 0 : raw.target_type) || (raw == null ? void 0 : raw.targetType) || "grade").trim().toLowerCase() === "student" ? "student" : "grade",
+      targetGrade: Number((raw == null ? void 0 : raw.target_grade) || (raw == null ? void 0 : raw.targetGrade)) || null,
+      targetStudentEmail: String((raw == null ? void 0 : raw.target_student_email) || (raw == null ? void 0 : raw.targetStudentEmail) || "").trim().toLowerCase(),
+      weekStartDate,
+      targetDate,
+      subject: String((raw == null ? void 0 : raw.subject) || "").trim(),
+      baseTaskKey: String((raw == null ? void 0 : raw.base_task_key) || (raw == null ? void 0 : raw.baseTaskKey) || "").trim(),
+      action,
+      overrideSubject: legacyOverrideSubject,
+      overrideLessonKey: legacyOverrideLessonKey,
+      overrideContentId: legacyOverrideContentId,
+      overrideSubsectionKey: legacyOverrideSubsectionKey,
+      overrideSubsectionTitle: legacyOverrideSubsectionTitle,
+      overrideUnitKeys: legacyOverrideUnitKeys,
+      overrideUnitKey: String((raw == null ? void 0 : raw.override_unit_key) || (raw == null ? void 0 : raw.overrideUnitKey) || "").trim(),
+      overridePayload: normalizedOverridePayload,
+      note: String((raw == null ? void 0 : raw.note) || "").trim(),
+      displayOrder: Number((raw == null ? void 0 : raw.display_order) || (raw == null ? void 0 : raw.displayOrder)) || 0,
+      status: String((raw == null ? void 0 : raw.status) || "active").trim().toLowerCase() || "active",
+      createdAt: Number(new Date((raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || (raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now(),
+      updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || (raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || Date.now()).getTime()) || Date.now()
     };
   }
   function normalizeTestTemplateRecord(raw) {
@@ -1065,47 +2215,135 @@
     if (!task || typeof task !== "object") return "";
     return `${String(task.taskKind || "").trim().toLowerCase()}::${String(task.taskKey || "").trim()}`;
   }
-  function isLessonProgressComplete(lesson, completedQuizzes = {}, practiceLessonProgress = {}) {
+  function isLessonProgressComplete(lesson, completedQuizzes = {}, practiceLessonProgress = {}, autoDiarySettings = null) {
     if (!lesson) return false;
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
     const lessonId = String(lesson.id || "").trim();
     const lessonKey = String(getLessonKeyValue(lesson) || lesson.key || "").trim();
-    if (lessonId && (completedQuizzes == null ? void 0 : completedQuizzes[lessonId])) return true;
+    const checks = [];
+    if (settings.progression.countQuizComplete && lessonId) {
+      checks.push(Boolean(completedQuizzes == null ? void 0 : completedQuizzes[lessonId]));
+    }
     if (lessonKey) {
       const progress = practiceLessonProgress == null ? void 0 : practiceLessonProgress[lessonKey];
-      if (progress == null ? void 0 : progress.completed) return true;
-      if (Number(progress == null ? void 0 : progress.percentComplete) >= 100) return true;
+      if (settings.progression.countLessonProgress) {
+        checks.push(Boolean(progress == null ? void 0 : progress.completed) || Number(progress == null ? void 0 : progress.percentComplete) >= Number(settings.progression.lessonProgressThreshold || 100));
+      }
     }
-    return false;
+    if (!checks.length) {
+      if (lessonId && (completedQuizzes == null ? void 0 : completedQuizzes[lessonId])) return true;
+      if (lessonKey) {
+        const progress = practiceLessonProgress == null ? void 0 : practiceLessonProgress[lessonKey];
+        if (progress == null ? void 0 : progress.completed) return true;
+        if (Number(progress == null ? void 0 : progress.percentComplete) >= 100) return true;
+      }
+      return false;
+    }
+    return settings.progression.completionMode === "all" ? checks.every(Boolean) : checks.some(Boolean);
   }
   function buildAutoDiaryWeekPlan({
     subjects = [],
     grade = null,
     weekDates = [],
     yearStartDate = "",
+    autoDiarySettings = null,
+    schoolId = "",
     getLessonGroups,
     getQuiz: getQuiz2,
     completedQuizzes = {},
-    practiceLessonProgress = {}
+    practiceLessonProgress = {},
+    diaryCompletions = [],
+    studentEmail = ""
   }) {
-    if (!Number.isFinite(Number(grade)) || !Array.isArray(weekDates) || weekDates.length < 5 || typeof getLessonGroups !== "function" || typeof getQuiz2 !== "function") {
+    if (!Number.isFinite(Number(grade)) || !Array.isArray(weekDates) || weekDates.length < 7 || typeof getLessonGroups !== "function" || typeof getQuiz2 !== "function") {
       return [];
     }
-    const academicWeekNumber = getAcademicWeekNumber(weekDates[0] || Date.now(), yearStartDate);
-    return (Array.isArray(subjects) ? subjects : []).flatMap((subject, subjectIndex) => {
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {}, { yearStartDate });
+    const studyDates = getConfiguredStudyDates(weekDates, settings);
+    const academicWeekNumber = getAcademicWeekNumber(studyDates[0] || weekDates[0] || Date.now(), yearStartDate);
+    const safeStudyDays = studyDates.length || settings.calendar.studyDays.length || 5;
+    const safeSubjects = orderAutoDiarySubjects(
+      (Array.isArray(subjects) ? subjects : []).filter((subject) => shouldIncludeAutoDiarySubject(subject, settings)),
+      settings
+    );
+    const safeAutoDiaryStartDate = String(settings.calendar.startDate || "").trim();
+    const lessonCoverageLookup = buildAutoDiaryLessonCoverageLookup({
+      diaryCompletions,
+      studentEmail,
+      schoolId,
+      currentWeekStartDate: studyDates[0] || weekDates[0] || "",
+      studyDays: safeStudyDays
+    });
+    const dailySubjectPlanLookup = buildAutoDiaryDailySubjectPlanLookup(safeSubjects, studyDates, settings);
+    return safeSubjects.flatMap((subject, subjectIndex) => {
+      var _a;
       try {
         const lessonGroups = (getLessonGroups(subject.id, grade) || []).filter((group) => group == null ? void 0 : group.activeLesson);
         if (!lessonGroups.length) return [];
-        const unfinishedIndex = lessonGroups.findIndex((group) => !isLessonProgressComplete(group.activeLesson, completedQuizzes, practiceLessonProgress));
-        const selectedGroupIndex = unfinishedIndex >= 0 ? unfinishedIndex : Math.min(lessonGroups.length - 1, Math.max(0, academicWeekNumber - 1));
-        const selectedGroup = lessonGroups[selectedGroupIndex] || lessonGroups[0];
-        const lesson = selectedGroup == null ? void 0 : selectedGroup.activeLesson;
-        if (!lesson) return [];
-        const quizRows = getQuiz2(subject.id, grade, lesson.key);
-        const units = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
-        const buckets = distributeWorkUnitsAcrossStudyDays(units, 5);
-        return weekDates.slice(0, 5).map((targetDate, dayIndex) => {
-          var _a, _b, _c;
-          const bucketUnits = Array.isArray(buckets[dayIndex]) ? buckets[dayIndex] : [];
+        const lessonPlans = lessonGroups.map((group) => {
+          const lesson = group == null ? void 0 : group.activeLesson;
+          const canonicalLessonKey = resolveCustomChapterLessonKey({ lessonKey: (group == null ? void 0 : group.canonicalLessonKey) || (lesson == null ? void 0 : lesson.key) || (lesson == null ? void 0 : lesson.id) || "" });
+          const quizRows = getQuiz2(subject.id, grade, canonicalLessonKey);
+          const units = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
+          return {
+            chapterGroup: group,
+            lesson,
+            canonicalLessonKey,
+            units,
+            buckets: distributeWorkUnitsAcrossStudyDays(units, safeStudyDays, {
+              minimumUnitsPerDay: settings.progression.minimumUnitsPerDay,
+              reviewWhenShort: settings.progression.reviewWhenShort
+            }),
+            completedSlots: getAutoDiaryLessonCoverageSlots({
+              subjectId: subject.id,
+              chapterGroup: group,
+              completedQuizzes,
+              practiceLessonProgress,
+              lessonCoverageLookup,
+              studyDays: safeStudyDays,
+              autoDiarySettings: settings
+            })
+          };
+        }).filter((entry) => entry.lesson && entry.canonicalLessonKey);
+        if (!lessonPlans.length) return [];
+        const carryForwardEnabled = settings.progression.advanceMode !== "weekly_lesson";
+        const weeklyLessonIndex = (() => {
+          if (settings.progression.chapterSelectionMode === "curriculum_order") {
+            return Math.min(lessonPlans.length - 1, Math.max(0, academicWeekNumber - 1));
+          }
+          const unfinishedIndex = lessonPlans.findIndex((entry) => settings.progression.skipCompletedLessons ? entry.completedSlots < safeStudyDays : true);
+          return unfinishedIndex >= 0 ? unfinishedIndex : Math.min(lessonPlans.length - 1, Math.max(0, academicWeekNumber - 1));
+        })();
+        let currentLessonIndex = carryForwardEnabled ? lessonPlans.findIndex((entry) => settings.progression.skipCompletedLessons ? entry.completedSlots < safeStudyDays : true) : weeklyLessonIndex;
+        if (currentLessonIndex < 0) currentLessonIndex = lessonPlans.length - 1;
+        let currentSlotIndex = carryForwardEnabled ? Math.min(((_a = lessonPlans[currentLessonIndex]) == null ? void 0 : _a.completedSlots) || 0, safeStudyDays - 1) : 0;
+        const allLessonsCompleted = carryForwardEnabled && lessonPlans.every((entry) => entry.completedSlots >= safeStudyDays);
+        return studyDates.flatMap((targetDate, dayIndex) => {
+          var _a2, _b, _c, _d, _e, _f, _g;
+          if (safeAutoDiaryStartDate && targetDate < safeAutoDiaryStartDate) return [];
+          if (!Array.isArray(dailySubjectPlanLookup[targetDate]) || !dailySubjectPlanLookup[targetDate].includes(subject.id)) {
+            return [];
+          }
+          let selectedPlan = null;
+          let bucketIndex = 0;
+          if (!carryForwardEnabled) {
+            selectedPlan = lessonPlans[weeklyLessonIndex] || lessonPlans[0];
+            bucketIndex = dayIndex % safeStudyDays;
+          } else if (allLessonsCompleted) {
+            selectedPlan = lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
+            bucketIndex = dayIndex % safeStudyDays;
+          } else {
+            while (currentLessonIndex < lessonPlans.length && (((_a2 = lessonPlans[currentLessonIndex]) == null ? void 0 : _a2.completedSlots) || 0) >= safeStudyDays) {
+              currentLessonIndex += 1;
+              currentSlotIndex = Math.min(((_b = lessonPlans[currentLessonIndex]) == null ? void 0 : _b.completedSlots) || 0, safeStudyDays - 1);
+            }
+            selectedPlan = lessonPlans[currentLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
+            bucketIndex = Math.min(currentSlotIndex, safeStudyDays - 1);
+          }
+          const selectedGroup = (selectedPlan == null ? void 0 : selectedPlan.chapterGroup) || null;
+          const lesson = (selectedPlan == null ? void 0 : selectedPlan.lesson) || null;
+          if (!selectedGroup || !lesson) return [];
+          const bucketUnits = Array.isArray((_c = selectedPlan == null ? void 0 : selectedPlan.buckets) == null ? void 0 : _c[bucketIndex]) ? selectedPlan.buckets[bucketIndex] : [];
           const fallbackUnit = {
             key: `${subject.id}_${selectedGroup.canonicalLessonKey}_overview_${dayIndex + 1}`,
             title: lesson.title || `${subject.name || subject.id} lesson`,
@@ -1113,16 +2351,18 @@
             kind: "overview"
           };
           const leadUnit = bucketUnits[0] || fallbackUnit;
-          const derivedTaskTitle = String(((_a = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _a.title) || (leadUnit == null ? void 0 : leadUnit.title) || lesson.title || `${subject.name || subject.id} lesson`).trim() || String(lesson.title || `${subject.name || subject.id} lesson`).trim();
-          return {
+          const derivedTaskTitle = String(((_d = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _d.title) || (leadUnit == null ? void 0 : leadUnit.title) || lesson.title || `${subject.name || subject.id} lesson`).trim() || String(lesson.title || `${subject.name || subject.id} lesson`).trim();
+          const subsectionTitle = getAutoDiaryUnitSubsectionTitle(leadUnit, lesson.title || `${subject.name || subject.id} lesson`);
+          const subsectionKey = getAutoDiaryUnitSubsectionKey(leadUnit, bucketIndex, subsectionTitle);
+          const task = {
             taskKind: "auto",
             taskKey: buildDiaryTaskKey("auto", {
               subject: subject.id,
               lessonKey: selectedGroup.canonicalLessonKey,
               dayIndex: dayIndex + 1,
-              unitKey: ((_b = bucketUnits[0]) == null ? void 0 : _b.key) || fallbackUnit.key
+              unitKey: ((_e = bucketUnits[0]) == null ? void 0 : _e.key) || fallbackUnit.key
             }),
-            schoolId: "",
+            schoolId: schoolId || "",
             targetDate,
             weekStartDate: weekDates[0],
             dayIndex: dayIndex + 1,
@@ -1131,8 +2371,10 @@
             subjectLabel: subject.name || subject.id,
             subjectLabelUr: subject.nameUr || subject.name || subject.id,
             lessonKey: selectedGroup.canonicalLessonKey,
-            contentId: String(((_c = selectedGroup.activeVariant) == null ? void 0 : _c.contentId) || "").trim(),
+            contentId: String(((_f = selectedGroup.activeVariant) == null ? void 0 : _f.contentId) || "").trim(),
             title: derivedTaskTitle,
+            subsectionKey,
+            subsectionTitle,
             note: "",
             source: "auto",
             taskUnits: bucketUnits.length ? bucketUnits : [fallbackUnit],
@@ -1140,11 +2382,194 @@
             lesson,
             subjectIndex
           };
+          if (carryForwardEnabled && !allLessonsCompleted) {
+            currentSlotIndex += 1;
+            if (currentSlotIndex >= safeStudyDays) {
+              currentLessonIndex += 1;
+              currentSlotIndex = Math.min(((_g = lessonPlans[currentLessonIndex]) == null ? void 0 : _g.completedSlots) || 0, safeStudyDays - 1);
+            }
+          }
+          return [task];
         });
       } catch (error) {
         console.log("Unable to build auto diary task for subject:", subject == null ? void 0 : subject.id, error);
         return [];
       }
+    });
+  }
+  function getAutoDiaryOverrideSpecificity(entry, studentEmail = "") {
+    const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
+    if (String((entry == null ? void 0 : entry.targetType) || "").trim().toLowerCase() === "student" && safeStudentEmail && String((entry == null ? void 0 : entry.targetStudentEmail) || "").trim().toLowerCase() === safeStudentEmail) {
+      return 2;
+    }
+    return 1;
+  }
+  function compareAutoDiaryOverrides(left, right, studentEmail = "") {
+    const specificityDelta = getAutoDiaryOverrideSpecificity(right, studentEmail) - getAutoDiaryOverrideSpecificity(left, studentEmail);
+    if (specificityDelta) return specificityDelta;
+    const updatedDelta = Number((right == null ? void 0 : right.updatedAt) || 0) - Number((left == null ? void 0 : left.updatedAt) || 0);
+    if (updatedDelta) return updatedDelta;
+    return Number((right == null ? void 0 : right.createdAt) || 0) - Number((left == null ? void 0 : left.createdAt) || 0);
+  }
+  function buildAutoDiaryOverrideTask({
+    overrideRecord,
+    baseTask,
+    subjects = [],
+    grade = null,
+    getLessonGroups,
+    getQuiz: getQuiz2,
+    yearStartDate = ""
+  }) {
+    var _a, _b, _c;
+    try {
+      const override = normalizeAutoDiaryOverrideRecord(overrideRecord);
+      if (!override || !baseTask || !Number.isFinite(Number(grade)) || typeof getLessonGroups !== "function" || typeof getQuiz2 !== "function") return null;
+      const subjectId = String(override.overrideSubject || baseTask.subject || "").trim();
+      const lessonKey = resolveCustomChapterLessonKey({ lessonKey: override.overrideLessonKey || baseTask.lessonKey || "" });
+      if (!subjectId || !lessonKey) return null;
+      const lessonGroups = (getLessonGroups(subjectId, grade) || []).filter((group) => group == null ? void 0 : group.activeLesson);
+      const chapterGroup = lessonGroups.find((group) => (group == null ? void 0 : group.canonicalLessonKey) === lessonKey) || null;
+      if (!chapterGroup) return null;
+      const desiredContentId = String(override.overrideContentId || "").trim();
+      const matchedVariant = desiredContentId ? (chapterGroup.variants || []).find((variant) => String((variant == null ? void 0 : variant.contentId) || "").trim() === desiredContentId) : null;
+      const lesson = (matchedVariant == null ? void 0 : matchedVariant.lesson) || chapterGroup.activeLesson || null;
+      if (!lesson) return null;
+      const quizRows = getQuiz2(subjectId, grade, lessonKey);
+      const units = extractLessonWorkUnits(lesson, Array.isArray(quizRows) ? quizRows : []);
+      const fallbackUnit = {
+        key: `${subjectId}_${lessonKey}_override_overview`,
+        title: String(lesson.title || baseTask.title || "").trim() || `${subjectId} lesson`,
+        detail: joinLocalizedText("Study the selected lesson content.", "\u0645\u0646\u062A\u062E\u0628 \u0633\u0628\u0642 \u06A9\u06D2 \u0645\u0648\u0627\u062F \u06A9\u0627 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0631\u06CC\u06BA\u06D4", "en"),
+        kind: "overview"
+      };
+      const subsectionGroups = groupAutoDiaryUnitsBySubsection(units, lesson.title || baseTask.title || `${subjectId} lesson`);
+      const selectedSubsectionKey = String(override.overrideSubsectionKey || "").trim();
+      const selectedSubsection = subsectionGroups.find((group) => group.key === selectedSubsectionKey) || subsectionGroups.find((group) => group.title === String(override.overrideSubsectionTitle || "").trim()) || subsectionGroups[0] || null;
+      const candidateUnits = ((_a = selectedSubsection == null ? void 0 : selectedSubsection.units) == null ? void 0 : _a.length) ? selectedSubsection.units : units;
+      const preferredUnitKeys = new Set(
+        (Array.isArray(override.overrideUnitKeys) && override.overrideUnitKeys.length ? override.overrideUnitKeys : [String(override.overrideUnitKey || "").trim()]).filter(Boolean)
+      );
+      const selectedUnits = candidateUnits.filter((unit) => preferredUnitKeys.has(String((unit == null ? void 0 : unit.key) || "").trim()));
+      const resolvedUnits = selectedUnits.length ? selectedUnits : candidateUnits.length ? candidateUnits : [units[0] || fallbackUnit];
+      const leadUnit = resolvedUnits[0] || units[0] || fallbackUnit;
+      const subjectEntry = (Array.isArray(subjects) ? subjects : []).find((subject) => String((subject == null ? void 0 : subject.id) || "").trim() === subjectId) || null;
+      const subsectionTitle = String(
+        override.overrideSubsectionTitle || (selectedSubsection == null ? void 0 : selectedSubsection.title) || getAutoDiaryUnitSubsectionTitle(leadUnit, lesson.title || baseTask.title || `${subjectId} lesson`) || ""
+      ).trim();
+      const title = String(subsectionTitle || ((_b = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _b.title) || (leadUnit == null ? void 0 : leadUnit.title) || lesson.title || baseTask.title || "").trim() || String(lesson.title || baseTask.title || `${subjectId} lesson`).trim();
+      return {
+        ...baseTask,
+        taskKind: "auto",
+        taskKey: `override::${override.overrideId}`,
+        baseTaskKey: String(baseTask.baseTaskKey || baseTask.taskKey || "").trim() || String(baseTask.taskKey || "").trim(),
+        overrideId: override.overrideId,
+        overrideAction: override.action,
+        overrideRecord: override,
+        source: override.action === "add" ? "auto_added" : "auto_override",
+        subject: subjectId,
+        subjectLabel: (subjectEntry == null ? void 0 : subjectEntry.name) || subjectId,
+        subjectLabelUr: (subjectEntry == null ? void 0 : subjectEntry.nameUr) || (subjectEntry == null ? void 0 : subjectEntry.name) || subjectId,
+        lessonKey,
+        contentId: desiredContentId || String(((_c = chapterGroup.activeVariant) == null ? void 0 : _c.contentId) || "").trim(),
+        title,
+        subsectionKey: (selectedSubsection == null ? void 0 : selectedSubsection.key) || getAutoDiaryUnitSubsectionKey(leadUnit, 0, subsectionTitle),
+        subsectionTitle,
+        note: String(override.note || baseTask.note || "").trim(),
+        taskUnits: resolvedUnits,
+        chapterGroup,
+        lesson,
+        academicWeekNumber: getAcademicWeekNumber(baseTask.targetDate || override.targetDate, yearStartDate),
+        subjectIndex: Number.isFinite(baseTask == null ? void 0 : baseTask.subjectIndex) ? baseTask.subjectIndex : Math.max(0, (Array.isArray(subjects) ? subjects : []).findIndex((subject) => String((subject == null ? void 0 : subject.id) || "").trim() === subjectId)),
+        displayOrder: Number((baseTask == null ? void 0 : baseTask.displayOrder) || 0) + (override.action === "add" ? 0.1 + Math.max(0, Number(override.displayOrder) || 0) / 1e3 : 0)
+      };
+    } catch (error) {
+      console.log("Unable to build auto diary override task:", error);
+      return null;
+    }
+  }
+  function applyAutoDiaryOverrides({
+    autoTasks = [],
+    overrides = [],
+    schoolId = "",
+    weekStartDate = "",
+    grade = null,
+    studentEmail = "",
+    subjects = [],
+    getLessonGroups,
+    getQuiz: getQuiz2,
+    yearStartDate = "",
+    includeSkippedTasks = false
+  }) {
+    const safeTasks = Array.isArray(autoTasks) ? autoTasks.filter(Boolean) : [];
+    const safeSchoolId = String(schoolId || "").trim();
+    const safeWeekStartDate = String(weekStartDate || "").trim();
+    const safeStudentEmail = String(studentEmail || "").trim().toLowerCase();
+    const safeOverrides = (Array.isArray(overrides) ? overrides : []).map((entry) => normalizeAutoDiaryOverrideRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => !safeSchoolId || entry.schoolId === safeSchoolId).filter((entry) => !safeWeekStartDate || entry.weekStartDate === safeWeekStartDate).filter((entry) => String(entry.targetType || "").trim().toLowerCase() === "student" ? safeStudentEmail && entry.targetStudentEmail === safeStudentEmail : Number(entry.targetGrade) === Number(grade));
+    if (!safeOverrides.length) return safeTasks;
+    const overridesByAnchor = /* @__PURE__ */ new Map();
+    safeOverrides.forEach((entry) => {
+      const key = `${entry.targetDate}::${entry.baseTaskKey}`;
+      if (!overridesByAnchor.has(key)) overridesByAnchor.set(key, []);
+      overridesByAnchor.get(key).push(entry);
+    });
+    const resolvedTasks = [];
+    safeTasks.forEach((task) => {
+      const baseTaskKey = String((task == null ? void 0 : task.baseTaskKey) || (task == null ? void 0 : task.taskKey) || "").trim();
+      const anchorKey = `${String((task == null ? void 0 : task.targetDate) || "").trim()}::${baseTaskKey}`;
+      const anchoredOverrides = overridesByAnchor.get(anchorKey) || [];
+      const directOverride = anchoredOverrides.filter((entry) => entry.action !== "add").sort((left, right) => compareAutoDiaryOverrides(left, right, safeStudentEmail))[0] || null;
+      const addOverrides = anchoredOverrides.filter((entry) => entry.action === "add").sort((left, right) => compareAutoDiaryOverrides(left, right, safeStudentEmail) || Number(left.displayOrder || 0) - Number(right.displayOrder || 0));
+      let renderedBaseTask = task;
+      if ((directOverride == null ? void 0 : directOverride.action) === "skip") {
+        if (includeSkippedTasks) {
+          renderedBaseTask = {
+            ...task,
+            baseTaskKey,
+            overrideId: directOverride.overrideId,
+            overrideAction: "skip",
+            overrideRecord: directOverride,
+            source: "auto_skipped",
+            isSkipped: true
+          };
+          resolvedTasks.push(renderedBaseTask);
+        }
+      } else {
+        if ((directOverride == null ? void 0 : directOverride.action) === "replace") {
+          renderedBaseTask = buildAutoDiaryOverrideTask({
+            overrideRecord: directOverride,
+            baseTask: { ...task, baseTaskKey },
+            subjects,
+            grade,
+            getLessonGroups,
+            getQuiz: getQuiz2,
+            yearStartDate
+          }) || task;
+        } else {
+          renderedBaseTask = { ...task, baseTaskKey };
+        }
+        resolvedTasks.push(renderedBaseTask);
+        addOverrides.forEach((entry) => {
+          const addedTask = buildAutoDiaryOverrideTask({
+            overrideRecord: entry,
+            baseTask: { ...task, baseTaskKey },
+            subjects,
+            grade,
+            getLessonGroups,
+            getQuiz: getQuiz2,
+            yearStartDate
+          });
+          if (addedTask) resolvedTasks.push(addedTask);
+        });
+      }
+    });
+    return resolvedTasks.sort((left, right) => {
+      if (String(left.targetDate || "").localeCompare(String(right.targetDate || "")) !== 0) {
+        return String(left.targetDate || "").localeCompare(String(right.targetDate || ""));
+      }
+      if (Number(left.dayIndex || 0) !== Number(right.dayIndex || 0)) return Number(left.dayIndex || 0) - Number(right.dayIndex || 0);
+      if (Number(left.subjectIndex || 0) !== Number(right.subjectIndex || 0)) return Number(left.subjectIndex || 0) - Number(right.subjectIndex || 0);
+      if (Number(left.displayOrder || 0) !== Number(right.displayOrder || 0)) return Number(left.displayOrder || 0) - Number(right.displayOrder || 0);
+      return String(left.subject || "").localeCompare(String(right.subject || ""));
     });
   }
   function buildLegacyPriorWeeksCoveredTasks({
@@ -1264,7 +2689,7 @@
         schoolId: String(historyRecord.schoolId || "").trim(),
         targetDate: toIsoDateString(coveredAtDate),
         weekStartDate: toIsoDateString(getWeekStartDate(coveredAtDate)),
-        dayIndex: Math.max(1, Math.min(5, Number(historyRecord.dayIndex) || 1)),
+        dayIndex: Math.max(1, Math.min(7, Number(historyRecord.dayIndex) || 1)),
         academicWeekNumber: getAcademicWeekNumber(coveredAtDate, yearStartDate),
         subject: safeSubject,
         subjectLabel: (subjectEntry == null ? void 0 : subjectEntry.name) || safeSubject,
@@ -1386,7 +2811,8 @@
     autoTasks = [],
     diaryEntries = [],
     subjectsById = {},
-    chapterGroupLookup = {}
+    chapterGroupLookup = {},
+    yearStartDate = ""
   }) {
     const normalizedEntries = Array.isArray(diaryEntries) ? diaryEntries : [];
     const assignedTasks = normalizedEntries.filter((entry) => String((entry == null ? void 0 : entry.entryType) || "").trim().toLowerCase() !== "assignment").map((entry) => {
@@ -1402,8 +2828,8 @@
         schoolId: entry.schoolId,
         targetDate: entry.targetDate,
         weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
-        dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
-        academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
+        dayIndex: Math.max(1, Math.min(7, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
+        academicWeekNumber: getAcademicWeekNumber(entry.targetDate, yearStartDate),
         subject: entry.subject,
         subjectLabel: (subject == null ? void 0 : subject.name) || entry.subject,
         subjectLabelUr: (subject == null ? void 0 : subject.nameUr) || (subject == null ? void 0 : subject.name) || entry.subject,
@@ -1434,8 +2860,8 @@
         schoolId: entry.schoolId,
         targetDate: entry.targetDate,
         weekStartDate: toIsoDateString(getWeekStartDate(parsedTargetDate)),
-        dayIndex: Math.max(1, Math.min(6, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
-        academicWeekNumber: getAcademicWeekNumber(entry.targetDate),
+        dayIndex: Math.max(1, Math.min(7, Math.round((parsedTargetDate.getDay() + 6) % 7) + 1)),
+        academicWeekNumber: getAcademicWeekNumber(entry.targetDate, yearStartDate),
         subject: hasLinkedLesson ? linkedSubjectId : "__assignment__",
         subjectLabel: hasLinkedLesson ? (subject == null ? void 0 : subject.name) || linkedSubjectId : joinLocalizedText("Assignments & Projects", "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0627\u0648\u0631 \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679\u0633", "en"),
         subjectLabelUr: hasLinkedLesson ? (subject == null ? void 0 : subject.nameUr) || (subject == null ? void 0 : subject.name) || linkedSubjectId : "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0627\u0648\u0631 \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679\u0633",
@@ -1480,10 +2906,13 @@
     priorWeekTasks = [],
     getQuiz: getQuiz2,
     subjectsById = {},
-    accumulationMode = "rolling",
-    accumulationValue = 8
+    saturdayTestSettings = null
   }) {
     if (!weekStartDate || !Number.isFinite(Number(grade)) || typeof getQuiz2 !== "function") return null;
+    const settings = normalizeAutoDiarySettings({ saturdayTest: saturdayTestSettings || {} }).saturdayTest;
+    if (settings.enabled === false) return null;
+    const accumulationMode = settings.accumulationMode || "rolling";
+    const accumulationValue = settings.accumulationValue || 8;
     const hasPriorPool = Array.isArray(priorWeekTasks) && priorWeekTasks.length > 0;
     const truncateWeeklyTestText = (value, maxLength = 110) => {
       const safeValue = String(value || "").replace(/\s+/g, " ").trim();
@@ -1617,23 +3046,57 @@
         questions.push(item);
       });
     };
-    if (hasPriorPool) {
-      takeQuestions(currentBucket.mcq.slice(0, 2), 10);
-      takeQuestions(priorBucket.mcq.slice(0, 2), 10);
-      takeQuestions(currentBucket.tf.slice(0, 1), 10);
-      takeQuestions(priorBucket.tf.slice(0, 1), 10);
-      takeQuestions(currentBucket.fill.slice(0, 1), 10);
-      takeQuestions(priorBucket.fill.slice(0, 1), 10);
-    } else {
-      takeQuestions(currentBucket.mcq.slice(0, 4), 8);
-      takeQuestions(currentBucket.tf.slice(0, 2), 8);
-      takeQuestions(currentBucket.fill.slice(0, 2), 8);
-    }
+    const difficultyQuestionCounts = {
+      light: 8,
+      standard: 10,
+      rigorous: 12
+    };
+    const targetQuestionCount = difficultyQuestionCounts[settings.difficulty] || difficultyQuestionCounts.standard;
+    const desiredTypeCounts = (() => {
+      const weightMap = settings.questionTypeWeights || {};
+      const normalizedWeights = {
+        mcq: Math.max(0, Number(weightMap.mcq) || 0),
+        truefalse: Math.max(0, Number(weightMap.truefalse) || 0),
+        fillblank: Math.max(0, Number(weightMap.fillblank) || 0),
+        matching: Math.max(0, Number(weightMap.matching) || 0)
+      };
+      const totalWeight = Object.values(normalizedWeights).reduce((sum, value) => sum + value, 0) || 1;
+      const counts = {};
+      let usedCount = 0;
+      ["mcq", "truefalse", "fillblank", "matching"].forEach((type, index, list) => {
+        if (index === list.length - 1) {
+          counts[type] = Math.max(0, targetQuestionCount - usedCount);
+        } else {
+          counts[type] = Math.max(0, Math.round(normalizedWeights[type] / totalWeight * targetQuestionCount));
+          usedCount += counts[type];
+        }
+      });
+      return counts;
+    })();
+    const currentWeight = Math.max(0, Number(settings.currentWeekWeight) || 0);
+    const priorWeight = Math.max(0, Number(settings.priorWeeksWeight) || 0);
+    const totalWeekWeight = currentWeight + priorWeight || 1;
+    const getPoolTakeCount = (desiredCount, source) => {
+      if (!hasPriorPool || desiredCount <= 0) return source === "current" ? desiredCount : 0;
+      if (source === "current") return Math.max(0, Math.round(currentWeight / totalWeekWeight * desiredCount));
+      return Math.max(0, desiredCount - Math.round(currentWeight / totalWeekWeight * desiredCount));
+    };
+    const addWeightedType = (type, currentItems, priorItems) => {
+      const desiredCount = desiredTypeCounts[type] || 0;
+      if (desiredCount <= 0) return;
+      takeQuestions((Array.isArray(currentItems) ? currentItems : []).slice(0, getPoolTakeCount(desiredCount, "current")), targetQuestionCount);
+      takeQuestions((Array.isArray(priorItems) ? priorItems : []).slice(0, getPoolTakeCount(desiredCount, "prior")), targetQuestionCount);
+    };
+    addWeightedType("mcq", currentBucket.mcq, priorBucket.mcq);
+    addWeightedType("truefalse", currentBucket.tf, priorBucket.tf);
+    addWeightedType("fillblank", currentBucket.fill, priorBucket.fill);
+    const desiredMatchingCount = desiredTypeCounts.matching || 0;
     const combinedPairs = [
-      ...currentBucket.pairs.slice(0, hasPriorPool ? 2 : 4),
-      ...priorBucket.pairs.slice(0, 2)
-    ].slice(0, 5);
-    if (combinedPairs.length >= 3) {
+      ...currentBucket.pairs.slice(0, Math.max(2, getPoolTakeCount(desiredMatchingCount, "current") * 2)),
+      ...priorBucket.pairs.slice(0, Math.max(0, getPoolTakeCount(desiredMatchingCount, "prior") * 2))
+    ].slice(0, Math.max(3, desiredMatchingCount * 2));
+    if (desiredMatchingCount > 0 && combinedPairs.length >= 3) {
+      usedQuestionIds.add(`matching_${weekStartDate}`);
       questions.push({
         id: `matching_${weekStartDate}`,
         type: "matching",
@@ -1645,18 +3108,17 @@
       });
     }
     const overflowPools = hasPriorPool ? [
-      currentBucket.mcq.slice(2),
-      priorBucket.mcq.slice(2),
-      currentBucket.tf.slice(1),
-      priorBucket.tf.slice(1),
-      currentBucket.fill.slice(1),
-      priorBucket.fill.slice(1)
+      currentBucket.mcq,
+      priorBucket.mcq,
+      currentBucket.tf,
+      priorBucket.tf,
+      currentBucket.fill,
+      priorBucket.fill
     ] : [
-      currentBucket.mcq.slice(4),
-      currentBucket.tf.slice(2),
-      currentBucket.fill.slice(2)
+      currentBucket.mcq,
+      currentBucket.tf,
+      currentBucket.fill
     ];
-    const targetQuestionCount = hasPriorPool ? 10 : 8;
     let overflowCursor = 0;
     while (questions.length < targetQuestionCount && overflowPools.some((pool) => Array.isArray(pool) && pool.length)) {
       const pool = overflowPools[overflowCursor % overflowPools.length];
@@ -1669,18 +3131,18 @@
     }
     if (!questions.length) return null;
     const accumulationScopeLabel = accumulationMode === "academic_year" ? "academic-year" : accumulationMode === "since_start" ? "since-app-start" : `rolling ${Math.max(1, Number(accumulationValue) || 8)}-week`;
-    const instructions = hasPriorPool ? `Saturday test: 50% from this week's chapters and 50% from prior weeks (${accumulationScopeLabel} scope). Pool: ${currentBucket.lessonCount} current + ${priorBucket.lessonCount} prior lessons.` : `Saturday test from this week's chapters (${accumulationScopeLabel} scope - no prior weeks covered yet).`;
+    const instructions = hasPriorPool ? `Weekly test: ${currentWeight}% from this week's chapters and ${priorWeight}% from prior weeks (${accumulationScopeLabel} scope). Pool: ${currentBucket.lessonCount} current + ${priorBucket.lessonCount} prior lessons.` : `Weekly test from this week's chapters (${accumulationScopeLabel} scope - no prior weeks covered yet).`;
     const subjectScope = Array.from(new Set([
       ...Array.isArray(coveredTasks) ? coveredTasks : [],
       ...Array.isArray(priorWeekTasks) ? priorWeekTasks : []
     ].map((task) => task == null ? void 0 : task.subject).filter(Boolean)));
     return normalizeLocalTestTemplateRecord({
       templateId: `generated_${weekStartDate}_${grade}`,
-      title: `Saturday Test - Grade ${grade}`,
+      title: `Weekly Test - Grade ${grade}`,
       grade,
       subjectScope,
       payload: {
-        title: `Saturday Test - Grade ${grade}`,
+        title: `Weekly Test - Grade ${grade}`,
         instructions,
         questions
       },
@@ -3639,6 +5101,7 @@
   const SUPABASE_PARENT_STUDENT_LINKS_TABLE = "parent_student_links";
   const SUPABASE_DIARY_ENTRIES_TABLE = "diary_entries";
   const SUPABASE_DIARY_COMPLETIONS_TABLE = "diary_task_completions";
+  const SUPABASE_AUTO_DIARY_OVERRIDES_TABLE = "auto_diary_overrides";
   const SUPABASE_TEST_TEMPLATES_TABLE = "test_templates";
   const SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE = "weekly_test_assignments";
   const SUPABASE_WEEKLY_TEST_RESULTS_TABLE = "weekly_test_results";
@@ -3895,12 +5358,36 @@ create table if not exists public.schools (
   owner_email text not null,
   principal_email text null,
   year_start_date date null,
+  auto_diary_settings jsonb not null default '{}'::jsonb,
+  auto_diary_start_date date null,
+  auto_diary_subject_mode text not null default 'all',
+  auto_diary_subject_ids jsonb not null default '[]'::jsonb,
+  auto_diary_plan_mode text not null default 'all_subjects_daily',
+  auto_diary_advance_mode text not null default 'carry_forward',
   week_accumulation_mode text not null default 'rolling',
   week_accumulation_value integer not null default 8,
   status text not null default 'active',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.schools
+  add column if not exists auto_diary_settings jsonb not null default '{}'::jsonb;
+
+alter table if exists public.schools
+  add column if not exists auto_diary_start_date date null;
+
+alter table if exists public.schools
+  add column if not exists auto_diary_subject_mode text not null default 'all';
+
+alter table if exists public.schools
+  add column if not exists auto_diary_subject_ids jsonb not null default '[]'::jsonb;
+
+alter table if exists public.schools
+  add column if not exists auto_diary_plan_mode text not null default 'all_subjects_daily';
+
+alter table if exists public.schools
+  add column if not exists auto_diary_advance_mode text not null default 'carry_forward';
 
 create table if not exists public.school_memberships (
   membership_id text primary key,
@@ -3972,6 +5459,45 @@ create table if not exists public.diary_task_completions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.auto_diary_overrides (
+  override_id text primary key,
+  school_id text null,
+  created_by_email text not null,
+  target_type text not null,
+  target_grade integer null,
+  target_student_email text null,
+  week_start_date date not null,
+  target_date date not null,
+  subject text not null,
+  base_task_key text not null,
+  action text not null,
+  override_subject text null,
+  override_lesson_key text null,
+  override_content_id text null,
+  override_payload jsonb not null default '{}'::jsonb,
+  override_subsection_key text null,
+  override_subsection_title text null,
+  override_unit_keys jsonb not null default '[]'::jsonb,
+  override_unit_key text null,
+  note text null,
+  display_order integer not null default 0,
+  status text not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table if exists public.auto_diary_overrides
+  add column if not exists override_payload jsonb not null default '{}'::jsonb;
+
+alter table if exists public.auto_diary_overrides
+  add column if not exists override_subsection_key text null;
+
+alter table if exists public.auto_diary_overrides
+  add column if not exists override_subsection_title text null;
+
+alter table if exists public.auto_diary_overrides
+  add column if not exists override_unit_keys jsonb not null default '[]'::jsonb;
+
 create table if not exists public.test_templates (
   template_id text primary key,
   school_id text null,
@@ -4022,6 +5548,7 @@ alter table public.school_memberships enable row level security;
 alter table public.parent_student_links enable row level security;
 alter table public.diary_entries enable row level security;
 alter table public.diary_task_completions enable row level security;
+alter table public.auto_diary_overrides enable row level security;
 alter table public.test_templates enable row level security;
 alter table public.weekly_test_assignments enable row level security;
 alter table public.weekly_test_results enable row level security;
@@ -4619,6 +6146,47 @@ as $$
     or public.can_manage_diary_entry(target_school_id, null)
 $$;
 
+create or replace function public.can_manage_auto_diary_override(target_school_id text, target_created_by_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.user_content_permission('manageDiary')
+    and (
+      public.user_content_permission('manageContentAccess')
+      or public.can_manage_school(target_school_id)
+      or lower(coalesce(target_created_by_email, '')) = public.current_auth_email()
+    )
+$$;
+
+create or replace function public.can_read_auto_diary_override(
+  target_school_id text,
+  target_created_by_email text,
+  target_type text,
+  target_grade integer,
+  target_student_email text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    public.can_manage_auto_diary_override(target_school_id, target_created_by_email)
+    or (
+      lower(coalesce(target_type, '')) = 'student'
+      and public.current_user_can_access_student(target_school_id, target_student_email, target_grade)
+    )
+    or (
+      lower(coalesce(target_type, '')) = 'grade'
+      and public.current_user_can_access_grade(target_school_id, target_grade)
+    )
+$$;
+
 create or replace function public.can_manage_test_template(target_school_id text, target_author_email text)
 returns boolean
 language sql
@@ -4748,6 +6316,10 @@ drop policy if exists "Users can read diary completions" on public.diary_task_co
 drop policy if exists "Users can insert diary completions" on public.diary_task_completions;
 drop policy if exists "Users can update diary completions" on public.diary_task_completions;
 drop policy if exists "Users can delete diary completions" on public.diary_task_completions;
+drop policy if exists "Users can read auto diary overrides" on public.auto_diary_overrides;
+drop policy if exists "Users can insert auto diary overrides" on public.auto_diary_overrides;
+drop policy if exists "Users can update auto diary overrides" on public.auto_diary_overrides;
+drop policy if exists "Users can delete auto diary overrides" on public.auto_diary_overrides;
 drop policy if exists "Users can read test templates" on public.test_templates;
 drop policy if exists "Users can insert test templates" on public.test_templates;
 drop policy if exists "Users can update test templates" on public.test_templates;
@@ -5020,6 +6592,31 @@ on public.diary_task_completions
 for delete
 to authenticated
 using (public.can_manage_diary_completion(school_id, student_email));
+
+create policy "Users can read auto diary overrides"
+on public.auto_diary_overrides
+for select
+to authenticated
+using (public.can_read_auto_diary_override(school_id, created_by_email, target_type, target_grade, target_student_email));
+
+create policy "Users can insert auto diary overrides"
+on public.auto_diary_overrides
+for insert
+to authenticated
+with check (public.can_manage_auto_diary_override(school_id, created_by_email));
+
+create policy "Users can update auto diary overrides"
+on public.auto_diary_overrides
+for update
+to authenticated
+using (public.can_manage_auto_diary_override(school_id, created_by_email))
+with check (public.can_manage_auto_diary_override(school_id, created_by_email));
+
+create policy "Users can delete auto diary overrides"
+on public.auto_diary_overrides
+for delete
+to authenticated
+using (public.can_manage_auto_diary_override(school_id, created_by_email));
 
 create policy "Users can read test templates"
 on public.test_templates
@@ -6875,7 +8472,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
     ];
     return /* @__PURE__ */ React.createElement("div", { className: "math-visual-stack" }, cards.map((card, idx) => /* @__PURE__ */ React.createElement("div", { key: idx, className: "math-visual-panel" }, /* @__PURE__ */ React.createElement("div", { className: "math-visual-label" }, card.label), card.content)));
   }
-  function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2e3 }) {
+  function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2e3, initialQuestionIndex = 0, targetBaseId = "", groupLabel = "" }) {
     const QUESTION_TIME_LIMIT_SECONDS = Math.max(5, Math.min(90, Number(questionTimeLimitSeconds) || 15));
     const REFLECTION_DELAY_MS = Math.max(500, Math.min(1e4, Number(reflectionDelayMs) || 2e3));
     const [mqIdx, setMqIdx] = useState(0);
@@ -6918,6 +8515,17 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
       setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
       setMqElapsedMs([]);
     }, [QUESTION_TIME_LIMIT_SECONDS, clearAdvanceTimeout]);
+    useEffect(() => {
+      const nextIndex = Math.max(0, Math.min((Array.isArray(questions) ? questions.length : 1) - 1, Number(initialQuestionIndex) || 0));
+      clearAdvanceTimeout();
+      questionStartedAtRef.current = Date.now();
+      setMqIdx(nextIndex);
+      setMqAns([]);
+      setMqRev(false);
+      setMqDone(false);
+      setMqTimerRemaining(QUESTION_TIME_LIMIT_SECONDS);
+      setMqElapsedMs([]);
+    }, [QUESTION_TIME_LIMIT_SECONDS, clearAdvanceTimeout, initialQuestionIndex, questions]);
     const speakText = useCallback((txt, e) => {
       if (e) e.stopPropagation();
       if (!isTtsEnabled()) return;
@@ -7021,7 +8629,17 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
       }, REFLECTION_DELAY_MS);
     }, [REFLECTION_DELAY_MS, clearAdvanceTimeout, moveToNextQuestion, mq, mqAns, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
     if (mqDone) return /* @__PURE__ */ React.createElement("div", { className: "quiz-result" }, /* @__PURE__ */ React.createElement("div", { className: "result-emoji" }, mqScore >= mq.length - 1 ? "\u{1F3C6}" : mqScore >= mq.length / 2 ? "\u{1F31F}" : "\u{1F4AA}"), /* @__PURE__ */ React.createElement("h2", null, mqScore, "/", mq.length, " Correct!"), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", marginBottom: 16, fontFamily: isUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit", direction: isUrdu ? "rtl" : "ltr" } }, mqScore >= mq.length - 1 ? isUrdu ? "\u0634\u0627\u0628\u0627\u0634! \u0622\u067E \u0646\u06D2 \u06CC\u06C1 \u0645\u0648\u0636\u0648\u0639 \u0633\u06CC\u06A9\u06BE \u0644\u06CC\u0627!" : "Excellent! You mastered this topic!" : mqScore >= mq.length / 2 ? isUrdu ? "\u0627\u0686\u06BE\u0627! \u063A\u0644\u0637 \u062C\u0648\u0627\u0628\u0627\u062A \u062F\u0648\u0628\u0627\u0631\u06C1 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4" : "Good job! Review the ones you missed." : isUrdu ? "\u0645\u0634\u0642 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA!" : "Keep practicing! You'll get better."), /* @__PURE__ */ React.createElement("div", { className: "quiz-time-summary", style: { direction: isUrdu ? "rtl" : "ltr", fontFamily: isUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, isUrdu ? "\u0644\u06CC\u0627 \u06AF\u06CC\u0627 \u0648\u0642\u062A" : "Time taken"), " ", /* @__PURE__ */ React.createElement("span", null, formatDuration(recordedTotalMs), " / ", formatDuration(totalAllowedMs))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, isUrdu ? "\u0641\u06CC \u0633\u0648\u0627\u0644 \u0627\u0648\u0633\u0637" : "Average per question"), " ", /* @__PURE__ */ React.createElement("span", null, formatDuration(averageQuestionMs)))), /* @__PURE__ */ React.createElement("button", { className: "start-quiz-btn", style: isUrdu ? { fontFamily: "'Noto Nastaliq Urdu',serif" } : {}, onClick: reset }, isUrdu ? "\u{1F504} \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634" : "\u{1F504} Retry Quiz"));
-    return /* @__PURE__ */ React.createElement("div", { className: "quiz-container", style: questionIsUrdu ? { direction: "rtl" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "quiz-progress" }, mq.map((_, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "qp-dot" + (i < mqIdx ? " done" : i === mqIdx ? " current" : "") }))), /* @__PURE__ */ React.createElement("div", { className: "quiz-question", onClick: () => speakText(currentQ.q), style: { cursor: "pointer", direction: questionIsUrdu ? "rtl" : "ltr", fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit", textAlign: questionIsUrdu ? "right" : "left" } }, /* @__PURE__ */ React.createElement("div", { className: "quiz-meta-row" }, /* @__PURE__ */ React.createElement("div", { className: "q-num", style: { textAlign: questionIsUrdu ? "right" : "left", marginBottom: 0, fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, questionIsUrdu ? "\u0633\u0648\u0627\u0644 " + (mqIdx + 1) + " \u0627\u0632 " + mq.length : "Q " + (mqIdx + 1) + " of " + mq.length, " ", /* @__PURE__ */ React.createElement("span", { style: { fontSize: 14, opacity: 0.5, marginLeft: 6 } }, "\u{1F508}")), /* @__PURE__ */ React.createElement("div", { className: `quiz-timer-pill${mqTimerRemaining <= 5 ? " danger" : ""}` }, isUrdu ? `${mqTimerRemaining} \u0633\u06CC\u06A9\u0646\u0688` : `${mqTimerRemaining}s`)), /* @__PURE__ */ React.createElement("h3", { style: { marginTop: 4, fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, currentQ.q)), /* @__PURE__ */ React.createElement("div", { className: "quiz-options", style: questionIsUrdu ? { direction: "rtl" } : {} }, (currentQ.a || []).map((opt, oi) => {
+    return /* @__PURE__ */ React.createElement("div", { className: "quiz-container", style: questionIsUrdu ? { direction: "rtl" } : {} }, /* @__PURE__ */ React.createElement("div", { className: "quiz-progress" }, mq.map((_, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "qp-dot" + (i < mqIdx ? " done" : i === mqIdx ? " current" : "") }))), /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "quiz-question",
+        "data-study-id": buildDiaryQuizQuestionTargetId(targetBaseId, currentQ, mqIdx, groupLabel) || void 0,
+        onClick: () => speakText(currentQ.q),
+        style: { cursor: "pointer", direction: questionIsUrdu ? "rtl" : "ltr", fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit", textAlign: questionIsUrdu ? "right" : "left" }
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "quiz-meta-row" }, /* @__PURE__ */ React.createElement("div", { className: "q-num", style: { textAlign: questionIsUrdu ? "right" : "left", marginBottom: 0, fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, questionIsUrdu ? "\u0633\u0648\u0627\u0644 " + (mqIdx + 1) + " \u0627\u0632 " + mq.length : "Q " + (mqIdx + 1) + " of " + mq.length, " ", /* @__PURE__ */ React.createElement("span", { style: { fontSize: 14, opacity: 0.5, marginLeft: 6 } }, "\u{1F508}")), /* @__PURE__ */ React.createElement("div", { className: `quiz-timer-pill${mqTimerRemaining <= 5 ? " danger" : ""}` }, isUrdu ? `${mqTimerRemaining} \u0633\u06CC\u06A9\u0646\u0688` : `${mqTimerRemaining}s`)),
+      /* @__PURE__ */ React.createElement("h3", { style: { marginTop: 4, fontFamily: questionIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, currentQ.q)
+    ), /* @__PURE__ */ React.createElement("div", { className: "quiz-options", style: questionIsUrdu ? { direction: "rtl" } : {} }, (currentQ.a || []).map((opt, oi) => {
       const optionIsUrdu = isUrdu || isUrduText(opt);
       const sel = mqAns[mqIdx] === oi, cor = oi === mq[mqIdx].c;
       let cls = "quiz-option";
@@ -8957,6 +10575,12 @@ ${marker} `);
     if (Number.isNaN(date.getTime())) return joinLocalizedText("Not enough data yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0627\u0641\u06CC \u0688\u06CC\u0679\u0627 \u0646\u06C1\u06CC\u06BA", language);
     return date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
   }
+  function formatReadableDateLabel(value, language = "en") {
+    const parsedDate = parseIsoDateValue(value);
+    if (!parsedDate) return joinLocalizedText("Not set", "\u0645\u062A\u0639\u06CC\u0646 \u0646\u06C1\u06CC\u06BA", language);
+    const locale = language === "ur" ? "ur-PK" : void 0;
+    return parsedDate.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
+  }
   function getForgettingCurveLabel(bucketId, language = "en") {
     const labels = {
       same_day: joinLocalizedText("Same day", "\u0627\u0633\u06CC \u062F\u0646", language),
@@ -9814,7 +11438,7 @@ ${marker} `);
     return /* @__PURE__ */ React.createElement("div", { ...focusProps, style: { cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } }, /* @__PURE__ */ React.createElement("span", { onClick: speakEn, style: { cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 } }, en, " \u2192 ", v2, " \u2192 ", v3, " ", sEn ? "\u{1F50A}" : "\u{1F508}"), /* @__PURE__ */ React.createElement("span", { onClick: speakUr, style: { cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 } }, sUr ? "\u{1F50A}" : "\u{1F508}", " ", ur), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" } })));
   }
   function HomeschoolApp() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M, _N, _O, _P, _Q;
     const stored = loadState();
     const storedAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
     const storedSupabaseSyncSettings = sanitizeSupabaseDictionarySyncSettings(
@@ -9911,6 +11535,7 @@ ${marker} `);
     const [mathSubTab, setMathSubTab] = useState("examples");
     const [subExerciseGroupIdx, setSubExerciseGroupIdx] = useState(null);
     const [subQuizGroupIdx, setSubQuizGroupIdx] = useState(null);
+    const [subQuizQuestionIdx, setSubQuizQuestionIdx] = useState(0);
     const [revealedEx, setRevealedEx] = useState({});
     const [completedQuizzes, setCompletedQuizzes] = useState((stored == null ? void 0 : stored.completedQuizzes) || {});
     const [totalScore, setTotalScore] = useState((stored == null ? void 0 : stored.totalScore) || 0);
@@ -9953,19 +11578,29 @@ ${marker} `);
     const [schoolDraftOwnerEmail, setSchoolDraftOwnerEmail] = useState("");
     const [schoolDraftPrincipalEmail, setSchoolDraftPrincipalEmail] = useState("");
     const [schoolDraftYearStartDate, setSchoolDraftYearStartDate] = useState(toIsoDateString(new Date((/* @__PURE__ */ new Date()).getFullYear(), 0, 1)));
-    const [schoolDraftAccumulationMode, setSchoolDraftAccumulationMode] = useState("rolling");
-    const [schoolDraftAccumulationValue, setSchoolDraftAccumulationValue] = useState(8);
+    const [schoolDraftAutoDiarySettings, setSchoolDraftAutoDiarySettings] = useState(() => createDefaultAutoDiarySettings(toIsoDateString(new Date((/* @__PURE__ */ new Date()).getFullYear(), 0, 1))));
     const [schoolMemberDraftEmail, setSchoolMemberDraftEmail] = useState("");
     const [schoolMemberDraftRole, setSchoolMemberDraftRole] = useState("student");
     const [schoolMemberDraftGradeScope, setSchoolMemberDraftGradeScope] = useState("");
+    const [schoolDraftHolidayDateInput, setSchoolDraftHolidayDateInput] = useState(toIsoDateString(Date.now()));
+    const [autoDiaryOverrideScope, setAutoDiaryOverrideScope] = useState("grade");
+    const [autoDiaryOverrideStudentEmail, setAutoDiaryOverrideStudentEmail] = useState("");
+    const [autoDiaryOverrideWeekStartDate, setAutoDiaryOverrideWeekStartDate] = useState(toIsoDateString(getWeekStartDate(Date.now())));
+    const [autoDiaryOverrideEditingAnchorKey, setAutoDiaryOverrideEditingAnchorKey] = useState("");
+    const [autoDiaryOverrideEditingMode, setAutoDiaryOverrideEditingMode] = useState("replace");
+    const [autoDiaryOverrideDraftSources, setAutoDiaryOverrideDraftSources] = useState([]);
+    const [autoDiaryOverrideNote, setAutoDiaryOverrideNote] = useState("");
     const [parentLinkDraftParentEmail, setParentLinkDraftParentEmail] = useState("");
     const [parentLinkDraftStudentEmail, setParentLinkDraftStudentEmail] = useState("");
     const [parentLinkDraftRelationshipLabel, setParentLinkDraftRelationshipLabel] = useState("");
     const [parentLinkDraftFamilyIdentifier, setParentLinkDraftFamilyIdentifier] = useState("");
     const [todayIso, setTodayIso] = useState(() => toIsoDateString(Date.now()));
     const previousTodayIsoRef = useRef(todayIso);
+    const buildDiaryOverrideSourceSegmentRef = useRef(() => null);
     const [diaryWeekAnchorDate, setDiaryWeekAnchorDate] = useState(toIsoDateString(Date.now()));
     const [diaryWeekAnchorFollowsToday, setDiaryWeekAnchorFollowsToday] = useState(true);
+    const [showDetailedDiary, setShowDetailedDiary] = useState(false);
+    const [expandedDiaryOutlineNodes, setExpandedDiaryOutlineNodes] = useState({});
     const [diaryDraftScope, setDiaryDraftScope] = useState("grade");
     const [diaryDraftStudentEmail, setDiaryDraftStudentEmail] = useState("");
     const [diaryDraftRangeMode, setDiaryDraftRangeMode] = useState("single");
@@ -10150,6 +11785,10 @@ ${marker} `);
     const canManageContentAccess = Boolean(contentRoleCapabilities.manageContentAccess);
     const canSeeLearnerManagement = canManageStudentLinks || canManageContentAccess;
     const contentIdentityEmail = String(supabaseAuthState.email || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
+    const schoolDraftNormalizedAutoDiarySettings = useMemo(
+      () => normalizeAutoDiarySettings(schoolDraftAutoDiarySettings, { yearStartDate: schoolDraftYearStartDate }),
+      [schoolDraftAutoDiarySettings, schoolDraftYearStartDate]
+    );
     useEffect(() => {
       const refreshTodayIso = () => {
         const nextTodayIso = toIsoDateString(Date.now());
@@ -10157,7 +11796,17 @@ ${marker} `);
       };
       refreshTodayIso();
       const intervalId = window.setInterval(refreshTodayIso, 6e4);
-      return () => window.clearInterval(intervalId);
+      const handleWindowFocus = () => refreshTodayIso();
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "visible") refreshTodayIso();
+      };
+      window.addEventListener("focus", handleWindowFocus);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      return () => {
+        window.clearInterval(intervalId);
+        window.removeEventListener("focus", handleWindowFocus);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
     }, []);
     useEffect(() => {
       const previousTodayIso = previousTodayIsoRef.current;
@@ -10169,12 +11818,108 @@ ${marker} `);
       }
       previousTodayIsoRef.current = todayIso;
     }, [diaryWeekAnchorDate, diaryWeekAnchorFollowsToday, todayIso]);
+    useEffect(() => {
+      const safeTodayIso = String(todayIso || "").trim();
+      if (!safeTodayIso) return;
+      if (!diaryWeekAnchorFollowsToday) return;
+      if (String(diaryWeekAnchorDate || "").trim() === safeTodayIso) return;
+      setDiaryWeekAnchorDate(safeTodayIso);
+    }, [diaryWeekAnchorDate, diaryWeekAnchorFollowsToday, todayIso]);
+    useEffect(() => {
+      const safeTodayIso = String(todayIso || "").trim();
+      const safeAnchorIso = String(diaryWeekAnchorDate || "").trim();
+      if (!safeTodayIso || !safeAnchorIso) return;
+      if (safeAnchorIso >= safeTodayIso) return;
+      setDiaryWeekAnchorDate(safeTodayIso);
+      setDiaryWeekAnchorFollowsToday(true);
+    }, [diaryWeekAnchorDate, todayIso]);
     const handleDiaryWeekAnchorDateChange = useCallback((nextValue) => {
       const fallbackTodayIso = String(todayIso || toIsoDateString(Date.now())).trim();
       const nextAnchorDate = String(nextValue || fallbackTodayIso).trim() || fallbackTodayIso;
       setDiaryWeekAnchorDate(nextAnchorDate);
       setDiaryWeekAnchorFollowsToday(nextAnchorDate === fallbackTodayIso);
     }, [todayIso]);
+    const updateSchoolDraftAutoDiarySettings = useCallback((updater) => {
+      setSchoolDraftAutoDiarySettings((current) => {
+        const base = normalizeAutoDiarySettings(current, { yearStartDate: schoolDraftYearStartDate });
+        const nextValue = typeof updater === "function" ? updater(base) : updater;
+        return normalizeAutoDiarySettings(nextValue, { yearStartDate: schoolDraftYearStartDate });
+      });
+    }, [schoolDraftYearStartDate]);
+    const handleToggleSchoolDraftStudyDay = useCallback((isoDay) => {
+      updateSchoolDraftAutoDiarySettings((current) => {
+        const safeDay = Number(isoDay);
+        const currentDays = normalizeAutoDiaryIsoDayList(current.calendar.studyDays);
+        const nextDays = currentDays.includes(safeDay) ? currentDays.filter((value) => value !== safeDay) : [...currentDays, safeDay];
+        return {
+          ...current,
+          calendar: {
+            ...current.calendar,
+            studyDays: normalizeAutoDiaryIsoDayList(nextDays, currentDays)
+          }
+        };
+      });
+    }, [updateSchoolDraftAutoDiarySettings]);
+    const handleToggleSchoolDraftSubjectSelection = useCallback((subjectId) => {
+      const safeSubjectId = String(subjectId || "").trim();
+      if (!safeSubjectId) return;
+      updateSchoolDraftAutoDiarySettings((current) => {
+        const currentSelected = normalizeTextArray(current.subjects.selectedSubjectIds);
+        const nextSelected = currentSelected.includes(safeSubjectId) ? currentSelected.filter((value) => value !== safeSubjectId) : [...currentSelected, safeSubjectId];
+        const currentPriority = normalizeTextArray(current.subjects.priorityOrder).filter((value) => value !== safeSubjectId);
+        if (!currentSelected.includes(safeSubjectId) && nextSelected.includes(safeSubjectId)) currentPriority.push(safeSubjectId);
+        return {
+          ...current,
+          subjects: {
+            ...current.subjects,
+            selectedSubjectIds: nextSelected,
+            priorityOrder: current.subjects.mode === "selected" ? currentPriority.filter((value) => nextSelected.includes(value)) : current.subjects.priorityOrder
+          }
+        };
+      });
+    }, [updateSchoolDraftAutoDiarySettings]);
+    const handleMoveSchoolDraftSubjectPriority = useCallback((subjectId, direction) => {
+      updateSchoolDraftAutoDiarySettings((current) => {
+        const availableSubjects = mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {}));
+        const visibleSubjectIds = current.subjects.mode === "selected" ? normalizeTextArray(current.subjects.selectedSubjectIds) : Array.isArray(availableSubjects) ? availableSubjects.map((subject) => String((subject == null ? void 0 : subject.id) || "").trim()).filter(Boolean) : [];
+        const seededPriorityOrder = [
+          ...normalizeTextArray(current.subjects.priorityOrder).filter((value) => visibleSubjectIds.includes(value)),
+          ...visibleSubjectIds.filter((value) => !normalizeTextArray(current.subjects.priorityOrder).includes(value))
+        ];
+        return {
+          ...current,
+          subjects: {
+            ...current.subjects,
+            priorityOrder: moveAutoDiarySubjectPriority(seededPriorityOrder, subjectId, direction)
+          }
+        };
+      });
+    }, [customContentState.subjectsById, updateSchoolDraftAutoDiarySettings]);
+    const handleAddSchoolDraftHolidayDate = useCallback(() => {
+      const todayValue = String(schoolDraftHolidayDateInput || todayIso || toIsoDateString(Date.now())).trim();
+      updateSchoolDraftAutoDiarySettings((current) => ({
+        ...current,
+        calendar: {
+          ...current.calendar,
+          holidayDates: normalizeTextArray([...current.calendar.holidayDates || [], todayValue])
+        }
+      }));
+    }, [schoolDraftHolidayDateInput, todayIso, updateSchoolDraftAutoDiarySettings]);
+    const handleRemoveSchoolDraftHolidayDate = useCallback((holidayDate) => {
+      updateSchoolDraftAutoDiarySettings((current) => ({
+        ...current,
+        calendar: {
+          ...current.calendar,
+          holidayDates: normalizeTextArray(current.calendar.holidayDates).filter((value) => value !== holidayDate)
+        }
+      }));
+    }, [updateSchoolDraftAutoDiarySettings]);
+    const handleApplySchoolDraftProgressionPreset = useCallback((preset) => {
+      updateSchoolDraftAutoDiarySettings((current) => applyAutoDiaryProgressionPreset(current, preset));
+    }, [updateSchoolDraftAutoDiarySettings]);
+    const handleApplySchoolDraftWeeklyTestPreset = useCallback((preset) => {
+      updateSchoolDraftAutoDiarySettings((current) => applyAutoDiaryWeeklyTestPreset(current, preset));
+    }, [updateSchoolDraftAutoDiarySettings]);
     const [dictionarySyncConflicts, setDictionarySyncConflicts] = useState(storedDictionarySyncConflicts);
     const [cloudSyncConflicts, setCloudSyncConflicts] = useState(Array.isArray(stored == null ? void 0 : stored.cloudSyncConflicts) ? stored.cloudSyncConflicts : []);
     const [supabaseRolePreference, setSupabaseRolePreference] = useState(["student", "parent", "teacher"].includes(stored == null ? void 0 : stored.supabaseRolePreference) ? stored.supabaseRolePreference : "student");
@@ -10684,6 +12429,19 @@ ${marker} `);
       () => mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {})),
       [customContentState.subjectsById]
     );
+    const schoolDraftAutoDiaryVisibleSubjects = useMemo(() => {
+      const normalized = schoolDraftNormalizedAutoDiarySettings;
+      const visibleSubjects = normalized.subjects.mode === "selected" ? allSubjects.filter((subject) => normalized.subjects.selectedSubjectIds.includes(String((subject == null ? void 0 : subject.id) || "").trim())) : allSubjects;
+      return orderAutoDiarySubjects(visibleSubjects, normalized);
+    }, [allSubjects, schoolDraftNormalizedAutoDiarySettings]);
+    const schoolDraftAutoDiaryProgressionPreset = useMemo(
+      () => detectAutoDiaryProgressionPreset(schoolDraftNormalizedAutoDiarySettings),
+      [schoolDraftNormalizedAutoDiarySettings]
+    );
+    const schoolDraftAutoDiaryWeeklyTestPreset = useMemo(
+      () => detectAutoDiaryWeeklyTestPreset(schoolDraftNormalizedAutoDiarySettings),
+      [schoolDraftNormalizedAutoDiarySettings]
+    );
     const subjectLookup = useMemo(
       () => Object.fromEntries(allSubjects.map((subject) => [subject.id, subject])),
       [allSubjects]
@@ -10734,6 +12492,24 @@ ${marker} `);
       if (!accessibleSchools.length) return null;
       return accessibleSchools.find((entry) => entry.schoolId === activeInstitutionSchoolId) || accessibleSchools[0];
     }, [accessibleSchools, activeInstitutionSchoolId]);
+    useEffect(() => {
+      if (!activeInstitutionSchool) return;
+      setSchoolDraftName(String(activeInstitutionSchool.schoolName || "").trim());
+      setSchoolDraftOwnerEmail(String(activeInstitutionSchool.ownerEmail || "").trim());
+      setSchoolDraftPrincipalEmail(String(activeInstitutionSchool.principalEmail || "").trim());
+      setSchoolDraftYearStartDate(String(activeInstitutionSchool.yearStartDate || toIsoDateString(new Date((/* @__PURE__ */ new Date()).getFullYear(), 0, 1))).trim());
+      setSchoolDraftAutoDiarySettings(normalizeAutoDiarySettings(activeInstitutionSchool.autoDiarySettings || {}, {
+        autoDiaryStartDate: activeInstitutionSchool.autoDiaryStartDate,
+        autoDiarySubjectMode: activeInstitutionSchool.autoDiarySubjectMode,
+        autoDiarySubjectIds: activeInstitutionSchool.autoDiarySubjectIds,
+        autoDiaryPlanMode: activeInstitutionSchool.autoDiaryPlanMode,
+        autoDiaryAdvanceMode: activeInstitutionSchool.autoDiaryAdvanceMode,
+        yearStartDate: activeInstitutionSchool.yearStartDate,
+        weekAccumulationMode: activeInstitutionSchool.weekAccumulationMode,
+        weekAccumulationValue: activeInstitutionSchool.weekAccumulationValue
+      }));
+      setSchoolDraftHolidayDateInput(String(activeInstitutionSchool.autoDiaryStartDate || activeInstitutionSchool.yearStartDate || todayIso || toIsoDateString(Date.now())).trim());
+    }, [activeInstitutionSchool, todayIso]);
     const activeInstitutionSchoolIdResolved = String((activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.schoolId) || "").trim();
     const currentUserInstitutionRole = useMemo(() => {
       if (!currentUserSchoolMemberships.length || !activeInstitutionSchoolIdResolved) return "";
@@ -10869,19 +12645,105 @@ ${marker} `);
         return String(left.email || "").localeCompare(String(right.email || ""));
       });
     }, [contentIdentityEmail, contentManagerRole, grade, visibleParentStudentLinks, visibleTeacherStudentLinks]);
-    const currentDiaryWeekDates = useMemo(() => getWeekDates(diaryWeekAnchorDate), [diaryWeekAnchorDate]);
+    const effectiveDiaryAnchorDate = useMemo(() => {
+      const safeTodayIso = String(todayIso || "").trim();
+      const safeAnchorIso = String(diaryWeekAnchorDate || "").trim();
+      if (diaryWeekAnchorFollowsToday && safeTodayIso) return safeTodayIso;
+      return safeAnchorIso || safeTodayIso || toIsoDateString(Date.now());
+    }, [diaryWeekAnchorDate, diaryWeekAnchorFollowsToday, todayIso]);
+    const currentDiaryWeekDates = useMemo(() => getWeekDates(effectiveDiaryAnchorDate), [effectiveDiaryAnchorDate]);
     const currentDiaryWeekStartDate = currentDiaryWeekDates[0] || toIsoDateString(getWeekStartDate(Date.now()));
     const activeSchoolYearStartDate = String((activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.yearStartDate) || "").trim();
-    const autoDiaryTasks = useMemo(() => buildAutoDiaryWeekPlan({
+    const activeAutoDiarySettings = useMemo(() => normalizeAutoDiarySettings((activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.autoDiarySettings) || {}, {
+      autoDiaryStartDate: activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.autoDiaryStartDate,
+      autoDiarySubjectMode: activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.autoDiarySubjectMode,
+      autoDiarySubjectIds: activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.autoDiarySubjectIds,
+      autoDiaryPlanMode: activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.autoDiaryPlanMode,
+      autoDiaryAdvanceMode: activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.autoDiaryAdvanceMode,
+      yearStartDate: activeSchoolYearStartDate,
+      weekAccumulationMode: activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode,
+      weekAccumulationValue: activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue
+    }), [activeInstitutionSchool, activeSchoolYearStartDate]);
+    const currentStudyWeekDates = useMemo(
+      () => getConfiguredStudyDates(currentDiaryWeekDates, activeAutoDiarySettings),
+      [activeAutoDiarySettings, currentDiaryWeekDates]
+    );
+    const currentWeeklyTestDate = useMemo(
+      () => getConfiguredTestDate(currentDiaryWeekDates, activeAutoDiarySettings),
+      [activeAutoDiarySettings, currentDiaryWeekDates]
+    );
+    const currentWeeklyTestDayLabel = useMemo(
+      () => {
+        var _a2;
+        return getAutoDiaryWeekdayLabel((_a2 = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.calendar) == null ? void 0 : _a2.testDay, language);
+      },
+      [activeAutoDiarySettings, language]
+    );
+    const diaryViewerStudentEmailSeed = useMemo(() => {
+      var _a2, _b2;
+      if (performanceStudentEmail && accessibleStudentOptions.some((entry) => entry.email === performanceStudentEmail)) return performanceStudentEmail;
+      if (contentManagerRole === "student" && contentIdentityEmail) return contentIdentityEmail;
+      if (contentManagerRole === "parent" && ((_a2 = linkedChildOptions[0]) == null ? void 0 : _a2.email)) return linkedChildOptions[0].email;
+      return ((_b2 = accessibleStudentOptions[0]) == null ? void 0 : _b2.email) || contentIdentityEmail || "";
+    }, [accessibleStudentOptions, contentIdentityEmail, contentManagerRole, linkedChildOptions, performanceStudentEmail]);
+    const visibleAutoDiaryOverrides = useMemo(() => {
+      const safeOverrides = Array.isArray(contentRelationshipState.autoDiaryOverrides) ? contentRelationshipState.autoDiaryOverrides : [];
+      return safeOverrides.map((entry) => normalizeAutoDiaryOverrideRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
+    }, [activeInstitutionSchoolIdResolved, contentRelationshipState.autoDiaryOverrides]);
+    const rawAutoDiaryTasks = useMemo(() => buildAutoDiaryWeekPlan({
       subjects: allSubjects,
       grade,
-      weekDates: currentDiaryWeekDates.slice(0, 5),
+      weekDates: currentDiaryWeekDates,
       yearStartDate: activeSchoolYearStartDate,
+      autoDiarySettings: activeAutoDiarySettings,
+      schoolId: activeInstitutionSchoolIdResolved,
       getLessonGroups: getMergedLessonGroups,
       getQuiz: getMergedQuiz,
       completedQuizzes,
-      practiceLessonProgress
-    }), [activeSchoolYearStartDate, allSubjects, completedQuizzes, currentDiaryWeekDates, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+      practiceLessonProgress,
+      diaryCompletions: contentRelationshipState.diaryCompletions,
+      studentEmail: diaryViewerStudentEmailSeed
+    }), [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+    const autoDiaryTasks = useMemo(() => applyAutoDiaryOverrides({
+      autoTasks: rawAutoDiaryTasks,
+      overrides: visibleAutoDiaryOverrides,
+      schoolId: activeInstitutionSchoolIdResolved,
+      weekStartDate: currentDiaryWeekStartDate,
+      grade,
+      studentEmail: diaryViewerStudentEmailSeed,
+      subjects: allSubjects,
+      getLessonGroups: getMergedLessonGroups,
+      getQuiz: getMergedQuiz,
+      yearStartDate: activeSchoolYearStartDate
+    }), [activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, rawAutoDiaryTasks, visibleAutoDiaryOverrides]);
+    const hydrateAutoDiaryOverrideTasks = useCallback(
+      (tasks = []) => (Array.isArray(tasks) ? tasks : []).map((task) => {
+        var _a2, _b2;
+        const overrideRecord = normalizeAutoDiaryOverrideRecord((task == null ? void 0 : task.overrideRecord) || task);
+        const overrideSources = Array.isArray((_a2 = overrideRecord == null ? void 0 : overrideRecord.overridePayload) == null ? void 0 : _a2.sources) ? overrideRecord.overridePayload.sources : [];
+        if (!overrideSources.length) return task;
+        const taskSegments = overrideSources.map((source) => buildDiaryOverrideSourceSegmentRef.current(source, task)).filter(Boolean);
+        if (!taskSegments.length) return task;
+        const primarySegment = taskSegments[0];
+        return {
+          ...task,
+          subject: primarySegment.subjectId,
+          subjectLabel: primarySegment.subjectLabel,
+          lessonKey: primarySegment.lessonKey,
+          contentId: primarySegment.contentId,
+          chapterGroup: primarySegment.chapterGroup,
+          lesson: primarySegment.lesson,
+          title: primarySegment.subsectionTitle || primarySegment.chapterTitle || task.title,
+          taskUnits: ((_b2 = primarySegment.taskUnits) == null ? void 0 : _b2.length) ? primarySegment.taskUnits : task.taskUnits,
+          taskSegments
+        };
+      }),
+      []
+    );
+    const renderedAutoDiaryTasks = useMemo(
+      () => hydrateAutoDiaryOverrideTasks(autoDiaryTasks),
+      [autoDiaryTasks, hydrateAutoDiaryOverrideTasks]
+    );
     const visibleDiaryEntries = useMemo(() => {
       const safeEntries = (Array.isArray(contentRelationshipState.diaryEntries) ? contentRelationshipState.diaryEntries : []).map((entry) => normalizeDiaryEntryRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active");
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeEntries.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeEntries;
@@ -10895,7 +12757,7 @@ ${marker} `);
       });
     }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.diaryEntries, grade, isGradeInScope, linkedChildOptions, schoolEffectivePermission]);
     const currentWeekDiaryEntries = useMemo(
-      () => visibleDiaryEntries.filter((entry) => entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[4]).filter((entry) => {
+      () => visibleDiaryEntries.filter((entry) => entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[6]).filter((entry) => {
         var _a2;
         const diaryViewerFilterEmail = String(performanceStudentEmail || contentIdentityEmail || ((_a2 = linkedChildOptions[0]) == null ? void 0 : _a2.email) || "").trim().toLowerCase();
         if (entry.targetType === "student") {
@@ -10916,16 +12778,17 @@ ${marker} `);
     const weeklyDiaryTasks = useMemo(() => {
       try {
         return buildDiaryTasksForWeek({
-          autoTasks: autoDiaryTasks,
+          autoTasks: renderedAutoDiaryTasks,
           diaryEntries: currentWeekDiaryEntries,
           subjectsById: subjectLookup,
-          chapterGroupLookup
+          chapterGroupLookup,
+          yearStartDate: activeSchoolYearStartDate
         });
       } catch (error) {
         console.log("Unable to build weekly diary tasks:", error);
         return [];
       }
-    }, [autoDiaryTasks, chapterGroupLookup, currentWeekDiaryEntries, subjectLookup]);
+    }, [activeSchoolYearStartDate, chapterGroupLookup, currentWeekDiaryEntries, renderedAutoDiaryTasks, subjectLookup]);
     const visibleDiaryCompletions = useMemo(() => {
       const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : []).map((entry) => normalizeDiaryCompletionRecord(entry)).filter(Boolean);
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeRows.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeRows;
@@ -10945,14 +12808,34 @@ ${marker} `);
       acc[`${entry.taskKind}::${entry.taskKey}`] = entry;
       return acc;
     }, {}), [visibleDiaryCompletions]);
-    const weeklyDiaryTaskGroups = useMemo(() => currentDiaryWeekDates.slice(0, 5).map((targetDate, index) => ({
+    const diaryVisibleWeekDates = useMemo(() => {
+      var _a2;
+      const dates = new Set([
+        ...currentStudyWeekDates,
+        ...currentWeekDiaryEntries.map((entry) => entry.targetDate),
+        ...autoDiaryTasks.map((entry) => entry.targetDate)
+      ].filter(Boolean));
+      if (currentWeeklyTestDate && ((_a2 = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest) == null ? void 0 : _a2.enabled) !== false) {
+        dates.add(currentWeeklyTestDate);
+      }
+      const ordered = currentDiaryWeekDates.filter((date) => dates.has(date));
+      return ordered.length ? ordered : currentStudyWeekDates;
+    }, [(_l = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest) == null ? void 0 : _l.enabled, autoDiaryTasks, currentDiaryWeekDates, currentStudyWeekDates, currentWeekDiaryEntries, currentWeeklyTestDate]);
+    const weeklyDiaryTaskGroups = useMemo(() => diaryVisibleWeekDates.map((targetDate, index) => ({
       targetDate,
       dayIndex: index + 1,
       tasks: weeklyDiaryTasks.filter((task) => task.targetDate === targetDate)
-    })), [currentDiaryWeekDates, weeklyDiaryTasks]);
+    })), [diaryVisibleWeekDates, weeklyDiaryTasks]);
     const diaryTodayIso = todayIso;
+    const activeDiaryStartIso = useMemo(() => {
+      const safeTodayIso = String(diaryTodayIso || "").trim();
+      const safeAnchorIso = String(effectiveDiaryAnchorDate || "").trim();
+      if (!safeTodayIso) return safeAnchorIso;
+      if (!safeAnchorIso) return safeTodayIso;
+      return safeAnchorIso > safeTodayIso ? safeAnchorIso : safeTodayIso;
+    }, [diaryTodayIso, effectiveDiaryAnchorDate]);
     const visibleDiaryDayGroups = useMemo(() => {
-      const safeGroups = weeklyDiaryTaskGroups.filter((group) => (group == null ? void 0 : group.targetDate) && group.targetDate >= diaryTodayIso).map((group) => {
+      const safeGroups = weeklyDiaryTaskGroups.filter((group) => (group == null ? void 0 : group.targetDate) && group.targetDate >= activeDiaryStartIso).map((group) => {
         const subjectGroups = [];
         const subjectMap = /* @__PURE__ */ new Map();
         (Array.isArray(group.tasks) ? group.tasks : []).forEach((task) => {
@@ -10974,36 +12857,15 @@ ${marker} `);
           subjectGroups
         };
       });
-      return safeGroups.length ? safeGroups : weeklyDiaryTaskGroups.map((group) => {
-        const subjectGroups = [];
-        const subjectMap = /* @__PURE__ */ new Map();
-        (Array.isArray(group.tasks) ? group.tasks : []).forEach((task) => {
-          const subjectId = String((task == null ? void 0 : task.subject) || "").trim() || "general";
-          if (!subjectMap.has(subjectId)) {
-            const labelSource = (subjectLookup == null ? void 0 : subjectLookup[subjectId]) ? getSubjectDisplayName(subjectLookup[subjectId], language) : (task == null ? void 0 : task.subjectLabel) || subjectId;
-            const nextGroup = {
-              subjectId,
-              subjectLabel: labelSource,
-              tasks: []
-            };
-            subjectMap.set(subjectId, nextGroup);
-            subjectGroups.push(nextGroup);
-          }
-          subjectMap.get(subjectId).tasks.push(task);
-        });
-        return {
-          ...group,
-          subjectGroups
-        };
-      });
-    }, [diaryTodayIso, language, subjectLookup, weeklyDiaryTaskGroups]);
+      return safeGroups;
+    }, [activeDiaryStartIso, language, subjectLookup, weeklyDiaryTaskGroups]);
     const todayDiaryGroup = useMemo(
-      () => visibleDiaryDayGroups.find((group) => (group == null ? void 0 : group.targetDate) === diaryTodayIso) || null,
-      [diaryTodayIso, visibleDiaryDayGroups]
+      () => visibleDiaryDayGroups.find((group) => (group == null ? void 0 : group.targetDate) === activeDiaryStartIso) || null,
+      [activeDiaryStartIso, visibleDiaryDayGroups]
     );
     const weeklyDiaryListGroups = useMemo(
-      () => [...visibleDiaryDayGroups].filter((group) => (group == null ? void 0 : group.targetDate) !== diaryTodayIso).reverse(),
-      [diaryTodayIso, visibleDiaryDayGroups]
+      () => [...visibleDiaryDayGroups].filter((group) => (group == null ? void 0 : group.targetDate) !== activeDiaryStartIso).reverse(),
+      [activeDiaryStartIso, visibleDiaryDayGroups]
     );
     const orderedVisibleDiaryTasks = useMemo(
       () => visibleDiaryDayGroups.flatMap((group) => group.subjectGroups.flatMap((subjectGroup) => subjectGroup.tasks)),
@@ -11058,20 +12920,14 @@ ${marker} `);
       });
       return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
     }, [localTestTemplateLibrary, visibleTestTemplates]);
-    const diaryViewerStudentEmailSeed = useMemo(() => {
-      var _a2, _b2;
-      if (performanceStudentEmail && accessibleStudentOptions.some((entry) => entry.email === performanceStudentEmail)) return performanceStudentEmail;
-      if (contentManagerRole === "student" && contentIdentityEmail) return contentIdentityEmail;
-      if (contentManagerRole === "parent" && ((_a2 = linkedChildOptions[0]) == null ? void 0 : _a2.email)) return linkedChildOptions[0].email;
-      return ((_b2 = accessibleStudentOptions[0]) == null ? void 0 : _b2.email) || contentIdentityEmail || "";
-    }, [accessibleStudentOptions, contentIdentityEmail, contentManagerRole, linkedChildOptions, performanceStudentEmail]);
     const priorWeekAccumulatedTasks = useMemo(() => {
+      var _a2, _b2;
       try {
         const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : []).filter((task) => (task == null ? void 0 : task.subject) && (task == null ? void 0 : task.lessonKey)).map((task) => `${task.subject}::${task.lessonKey}`));
         return buildPriorWeeksCoveredTasks({
           currentWeekStartDate: currentDiaryWeekStartDate,
-          accumulationMode: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode) || "rolling",
-          accumulationValue: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue) || 8,
+          accumulationMode: ((_a2 = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest) == null ? void 0 : _a2.accumulationMode) || "rolling",
+          accumulationValue: ((_b2 = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest) == null ? void 0 : _b2.accumulationValue) || 8,
           yearStartDate: activeSchoolYearStartDate,
           subjects: allSubjects,
           grade,
@@ -11086,7 +12942,7 @@ ${marker} `);
         console.log("Unable to calculate prior-week accumulated diary tasks:", error);
         return [];
       }
-    }, [activeInstitutionSchool, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
+    }, [activeAutoDiarySettings, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
     const generatedWeeklyTestTemplate = useMemo(() => {
       try {
         return buildGeneratedWeeklyTestTemplate({
@@ -11096,14 +12952,13 @@ ${marker} `);
           priorWeekTasks: priorWeekAccumulatedTasks,
           getQuiz: getMergedQuiz,
           subjectsById: subjectLookup,
-          accumulationMode: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationMode) || "rolling",
-          accumulationValue: (activeInstitutionSchool == null ? void 0 : activeInstitutionSchool.weekAccumulationValue) || 8
+          saturdayTestSettings: activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest
         });
       } catch (error) {
         console.log("Unable to build generated weekly test template:", error);
         return null;
       }
-    }, [activeInstitutionSchool, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
+    }, [activeAutoDiarySettings, currentDiaryWeekStartDate, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
     const visibleWeeklyTestAssignments = useMemo(() => {
       const safeAssignments = (Array.isArray(contentRelationshipState.weeklyTestAssignments) ? contentRelationshipState.weeklyTestAssignments : []).map((entry) => normalizeWeeklyTestAssignmentRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => entry.weekStartDate === currentDiaryWeekStartDate);
       const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
@@ -11158,6 +13013,75 @@ ${marker} `);
       if (contentManagerRole === "parent" && ((_a2 = linkedChildOptions[0]) == null ? void 0 : _a2.email)) return linkedChildOptions[0].email;
       return ((_b2 = diaryViewerStudentOptions[0]) == null ? void 0 : _b2.email) || "";
     }, [contentIdentityEmail, contentManagerRole, diaryViewerStudentOptions, linkedChildOptions, performanceStudentEmail]);
+    const canManageAutoDiaryOverrides = useMemo(
+      () => Boolean(canManageContentAccess || canManageInstitution || schoolEffectivePermission("manageDiary")),
+      [canManageContentAccess, canManageInstitution, schoolEffectivePermission]
+    );
+    const autoDiaryOverridePreviewStudentOptions = useMemo(
+      () => diaryViewerStudentOptions.filter((entry) => !grade || Number(entry.grade) === Number(grade)),
+      [diaryViewerStudentOptions, grade]
+    );
+    const autoDiaryOverrideResolvedStudentEmail = useMemo(() => {
+      var _a2;
+      if (autoDiaryOverrideScope !== "student") return "";
+      if (autoDiaryOverrideStudentEmail && autoDiaryOverridePreviewStudentOptions.some((entry) => entry.email === autoDiaryOverrideStudentEmail)) return autoDiaryOverrideStudentEmail;
+      return ((_a2 = autoDiaryOverridePreviewStudentOptions[0]) == null ? void 0 : _a2.email) || "";
+    }, [autoDiaryOverridePreviewStudentOptions, autoDiaryOverrideScope, autoDiaryOverrideStudentEmail]);
+    const autoDiaryOverridePreviewWeekDates = useMemo(
+      () => getWeekDates(autoDiaryOverrideWeekStartDate || currentDiaryWeekStartDate),
+      [autoDiaryOverrideWeekStartDate, currentDiaryWeekStartDate]
+    );
+    const autoDiaryOverridePreviewWeekStartDate = autoDiaryOverridePreviewWeekDates[0] || currentDiaryWeekStartDate;
+    const autoDiaryOverridePreviewVisibleDates = useMemo(
+      () => getConfiguredStudyDates(autoDiaryOverridePreviewWeekDates, activeAutoDiarySettings).filter((date) => date >= String(todayIso || "").trim()),
+      [activeAutoDiarySettings, autoDiaryOverridePreviewWeekDates, todayIso]
+    );
+    const autoDiaryOverrideBaseTasks = useMemo(() => buildAutoDiaryWeekPlan({
+      subjects: allSubjects,
+      grade,
+      weekDates: autoDiaryOverridePreviewWeekDates,
+      yearStartDate: activeSchoolYearStartDate,
+      autoDiarySettings: activeAutoDiarySettings,
+      schoolId: activeInstitutionSchoolIdResolved,
+      getLessonGroups: getMergedLessonGroups,
+      getQuiz: getMergedQuiz,
+      completedQuizzes,
+      practiceLessonProgress,
+      diaryCompletions: contentRelationshipState.diaryCompletions,
+      studentEmail: autoDiaryOverrideResolvedStudentEmail
+    }), [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, autoDiaryOverridePreviewWeekDates, autoDiaryOverrideResolvedStudentEmail, completedQuizzes, contentRelationshipState.diaryCompletions, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+    const autoDiaryOverridePreviewTasks = useMemo(() => applyAutoDiaryOverrides({
+      autoTasks: autoDiaryOverrideBaseTasks,
+      overrides: visibleAutoDiaryOverrides,
+      schoolId: activeInstitutionSchoolIdResolved,
+      weekStartDate: autoDiaryOverridePreviewWeekStartDate,
+      grade,
+      studentEmail: autoDiaryOverrideResolvedStudentEmail,
+      subjects: allSubjects,
+      getLessonGroups: getMergedLessonGroups,
+      getQuiz: getMergedQuiz,
+      yearStartDate: activeSchoolYearStartDate,
+      includeSkippedTasks: true
+    }), [activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, autoDiaryOverrideBaseTasks, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, getMergedLessonGroups, getMergedQuiz, grade, visibleAutoDiaryOverrides]);
+    const renderedAutoDiaryOverridePreviewTasks = useMemo(
+      () => hydrateAutoDiaryOverrideTasks(autoDiaryOverridePreviewTasks),
+      [autoDiaryOverridePreviewTasks, hydrateAutoDiaryOverrideTasks]
+    );
+    const autoDiaryOverridePreviewDayGroups = useMemo(
+      () => autoDiaryOverridePreviewVisibleDates.map((date) => ({
+        date,
+        tasks: renderedAutoDiaryOverridePreviewTasks.filter((task) => task.targetDate === date)
+      })),
+      [autoDiaryOverridePreviewVisibleDates, renderedAutoDiaryOverridePreviewTasks]
+    );
+    const autoDiaryOverrideAnchorTaskLookup = useMemo(
+      () => new Map(autoDiaryOverrideBaseTasks.map((task) => [String(task.taskKey || "").trim(), task])),
+      [autoDiaryOverrideBaseTasks]
+    );
+    const autoDiaryOverrideEditingAnchorTask = useMemo(
+      () => autoDiaryOverrideAnchorTaskLookup.get(String(autoDiaryOverrideEditingAnchorKey || "").trim()) || null,
+      [autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideEditingAnchorKey]
+    );
     const currentWeeklyStudentTestResult = useMemo(
       () => visibleWeeklyTestResults.filter((entry) => entry.studentEmail === activeDiaryViewerStudentEmail && entry.weekStartDate === currentDiaryWeekStartDate).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0] || null,
       [activeDiaryViewerStudentEmail, currentDiaryWeekStartDate, visibleWeeklyTestResults]
@@ -11167,7 +13091,7 @@ ${marker} `);
       diaryViewerStudentOptions.forEach((entry) => {
         const email = entry.email;
         const relevantCompletions = visibleDiaryCompletions.filter((row) => row.studentEmail === email);
-        const weeklyCompletions = relevantCompletions.filter((row) => row.targetDate >= currentDiaryWeekDates[0] && row.targetDate <= currentDiaryWeekDates[4]);
+        const weeklyCompletions = relevantCompletions.filter((row) => row.targetDate >= currentDiaryWeekDates[0] && row.targetDate <= currentDiaryWeekDates[6]);
         const weeklyResults = visibleWeeklyTestResults.filter((row) => row.studentEmail === email);
         diaryTasksByStudent[email] = {
           weeklyCompleted: weeklyCompletions.length,
@@ -11193,6 +13117,12 @@ ${marker} `);
       if (activeDiaryViewerStudentEmail && diaryViewerStudentOptions.some((entry) => entry.email === activeDiaryViewerStudentEmail)) return;
       setPerformanceStudentEmail(diaryViewerStudentOptions[0].email);
     }, [activeDiaryViewerStudentEmail, diaryViewerStudentOptions]);
+    useEffect(() => {
+      if (autoDiaryOverrideScope !== "student") return;
+      if (!autoDiaryOverridePreviewStudentOptions.length) return;
+      if (autoDiaryOverrideStudentEmail && autoDiaryOverridePreviewStudentOptions.some((entry) => entry.email === autoDiaryOverrideStudentEmail)) return;
+      setAutoDiaryOverrideStudentEmail(autoDiaryOverridePreviewStudentOptions[0].email);
+    }, [autoDiaryOverridePreviewStudentOptions, autoDiaryOverrideScope, autoDiaryOverrideStudentEmail]);
     const selectedLessonCanonicalKey = useMemo(
       () => getCanonicalLessonKeyForLesson(selectedLesson),
       [selectedLesson]
@@ -11254,14 +13184,14 @@ ${marker} `);
         const principalEmail = String(schoolDraftPrincipalEmail || ownerEmail).trim().toLowerCase();
         const client = ensureSupabaseClientRef.current();
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const nextAutoDiarySettings = normalizeAutoDiarySettings(schoolDraftNormalizedAutoDiarySettings, { yearStartDate: schoolDraftYearStartDate });
         const baseRow = {
           school_id: schoolId,
           school_name: schoolName,
           owner_email: ownerEmail,
           principal_email: principalEmail,
           year_start_date: String(schoolDraftYearStartDate || toIsoDateString(getWeekStartDate(Date.now()))).trim(),
-          week_accumulation_mode: String(schoolDraftAccumulationMode || "rolling").trim().toLowerCase(),
-          week_accumulation_value: Math.max(1, Number(schoolDraftAccumulationValue) || 8),
+          ...buildAutoDiaryLegacyFields(nextAutoDiarySettings, schoolDraftYearStartDate),
           status: "active",
           updated_at: nowIso
         };
@@ -11274,7 +13204,17 @@ ${marker} `);
         } catch (lookupFailure) {
           console.log("Unable to look up existing school before upsert:", lookupFailure);
         }
-        const { error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(baseRow, { onConflict: "school_id" });
+        let { error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(baseRow, { onConflict: "school_id" });
+        if (error && /auto_diary_/.test(String(error.message || "").toLowerCase())) {
+          const fallbackRow = { ...baseRow };
+          delete fallbackRow.auto_diary_settings;
+          delete fallbackRow.auto_diary_start_date;
+          delete fallbackRow.auto_diary_subject_mode;
+          delete fallbackRow.auto_diary_subject_ids;
+          delete fallbackRow.auto_diary_plan_mode;
+          delete fallbackRow.auto_diary_advance_mode;
+          ({ error } = await client.from(SUPABASE_SCHOOLS_TABLE).upsert(fallbackRow, { onConflict: "school_id" }));
+        }
         if (error) throw error;
         const priorOwnerEmail = String((existingSchoolRow == null ? void 0 : existingSchoolRow.owner_email) || "").trim().toLowerCase();
         const priorPrincipalEmail = String((existingSchoolRow == null ? void 0 : existingSchoolRow.principal_email) || "").trim().toLowerCase();
@@ -11345,7 +13285,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftAccumulationMode, schoolDraftAccumulationValue, schoolDraftName, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
+    }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftName, schoolDraftNormalizedAutoDiarySettings, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
     const handleSaveSchoolMembership = useCallback(async () => {
       if (!canManageInstitution) {
         showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -11516,7 +13456,8 @@ ${marker} `);
         return;
       }
       const subjectId = String(diaryDraftSubjectId || (selectedSubject == null ? void 0 : selectedSubject.id) || "").trim();
-      const targetDates = diaryDraftRangeMode === "week" ? currentDiaryWeekDates.slice(0, 5) : getWeekDates(diaryDraftStartDate || diaryWeekAnchorDate).slice(0, 5).filter((date) => date >= String(diaryDraftStartDate || "").trim() && date <= String(diaryDraftEndDate || diaryDraftStartDate || "").trim());
+      const configuredWeekDates = currentStudyWeekDates.length ? currentStudyWeekDates : currentDiaryWeekDates.filter(Boolean);
+      const targetDates = diaryDraftRangeMode === "week" ? configuredWeekDates : getConfiguredStudyDates(getWeekDates(diaryDraftStartDate || diaryWeekAnchorDate), activeAutoDiarySettings).filter((date) => date >= String(diaryDraftStartDate || "").trim() && date <= String(diaryDraftEndDate || diaryDraftStartDate || "").trim());
       if (!subjectId || !diaryDraftContentId || !targetDates.length) {
         showAppToast(joinLocalizedText("Choose the diary dates, subject, and chapter first.", "\u067E\u06C1\u0644\u06D2 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06CC \u062A\u0627\u0631\u06CC\u062E\u06CC\u06BA\u060C \u0645\u0636\u0645\u0648\u0646\u060C \u0627\u0648\u0631 \u0628\u0627\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -11555,7 +13496,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeInstitutionSchoolIdResolved, canManageDiary, chapterGroupLookup, contentIdentityEmail, currentDiaryWeekDates, diaryDraftContentId, diaryDraftEndDate, diaryDraftNote, diaryDraftRangeMode, diaryDraftScope, diaryDraftStartDate, diaryDraftStudentEmail, diaryDraftSubjectId, diaryWeekAnchorDate, grade, language, selectedSubject == null ? void 0 : selectedSubject.id, showAppToast]);
+    }, [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, canManageDiary, chapterGroupLookup, contentIdentityEmail, currentDiaryWeekDates, currentStudyWeekDates, diaryDraftContentId, diaryDraftEndDate, diaryDraftNote, diaryDraftRangeMode, diaryDraftScope, diaryDraftStartDate, diaryDraftStudentEmail, diaryDraftSubjectId, diaryWeekAnchorDate, grade, language, selectedSubject == null ? void 0 : selectedSubject.id, showAppToast]);
     const handleDeleteDiaryEntry = useCallback(async (entry) => {
       const normalized = normalizeDiaryEntryRecord(entry);
       if (!(normalized == null ? void 0 : normalized.diaryId)) return;
@@ -11572,6 +13513,179 @@ ${marker} `);
         setContentRelationshipBusy(false);
       }
     }, [language, showAppToast]);
+    const createAutoDiaryOverrideDraftSource = useCallback((seed = {}) => ({
+      sourceId: String((seed == null ? void 0 : seed.sourceId) || (seed == null ? void 0 : seed.id) || `source_${simpleHash(`${Date.now()}_${Math.random()}`)}`).trim(),
+      subject: String((seed == null ? void 0 : seed.subject) || (seed == null ? void 0 : seed.subjectId) || "").trim(),
+      lessonKey: resolveCustomChapterLessonKey({ lessonKey: (seed == null ? void 0 : seed.lessonKey) || (seed == null ? void 0 : seed.overrideLessonKey) || "" }),
+      contentId: String((seed == null ? void 0 : seed.contentId) || (seed == null ? void 0 : seed.overrideContentId) || "").trim(),
+      selectedNodeKeys: normalizeTextArray(seed == null ? void 0 : seed.selectedNodeKeys),
+      expandedNodeKeys: normalizeTextArray(seed == null ? void 0 : seed.expandedNodeKeys),
+      legacySubsectionKey: String((seed == null ? void 0 : seed.legacySubsectionKey) || (seed == null ? void 0 : seed.subsectionKey) || "").trim(),
+      legacySubsectionTitle: String((seed == null ? void 0 : seed.legacySubsectionTitle) || (seed == null ? void 0 : seed.subsectionTitle) || "").trim(),
+      legacyUnitKeys: normalizeTextArray((seed == null ? void 0 : seed.legacyUnitKeys) || (seed == null ? void 0 : seed.selectedUnitKeys))
+    }), []);
+    const handleUpdateAutoDiaryOverrideDraftSource = useCallback((sourceId, updater) => {
+      setAutoDiaryOverrideDraftSources((current) => current.map((source) => {
+        if (String((source == null ? void 0 : source.sourceId) || "") !== String(sourceId || "")) return source;
+        const nextValue = typeof updater === "function" ? updater(source) : { ...source, ...updater || {} };
+        return {
+          ...source,
+          ...nextValue || {}
+        };
+      }));
+    }, []);
+    const handleAddAutoDiaryOverrideDraftSource = useCallback(() => {
+      setAutoDiaryOverrideDraftSources((current) => {
+        const firstSource = Array.isArray(current) && current.length ? current[0] : null;
+        return [
+          ...Array.isArray(current) ? current : [],
+          createAutoDiaryOverrideDraftSource({
+            subject: (firstSource == null ? void 0 : firstSource.subject) || (autoDiaryOverrideEditingAnchorTask == null ? void 0 : autoDiaryOverrideEditingAnchorTask.subject) || "",
+            lessonKey: (firstSource == null ? void 0 : firstSource.lessonKey) || (autoDiaryOverrideEditingAnchorTask == null ? void 0 : autoDiaryOverrideEditingAnchorTask.lessonKey) || "",
+            contentId: (firstSource == null ? void 0 : firstSource.contentId) || (autoDiaryOverrideEditingAnchorTask == null ? void 0 : autoDiaryOverrideEditingAnchorTask.contentId) || ""
+          })
+        ];
+      });
+    }, [autoDiaryOverrideEditingAnchorTask, createAutoDiaryOverrideDraftSource]);
+    const handleRemoveAutoDiaryOverrideDraftSource = useCallback((sourceId) => {
+      setAutoDiaryOverrideDraftSources((current) => {
+        const nextSources = (Array.isArray(current) ? current : []).filter((source) => String((source == null ? void 0 : source.sourceId) || "") !== String(sourceId || ""));
+        return nextSources.length ? nextSources : current;
+      });
+    }, []);
+    const handleOpenAutoDiaryOverrideEditor = useCallback((task, mode = "replace") => {
+      var _a2, _b2, _c2, _d2;
+      const sourceTask = ((_a2 = task == null ? void 0 : task.overrideRecord) == null ? void 0 : _a2.baseTaskKey) ? autoDiaryOverrideAnchorTaskLookup.get(String(task.overrideRecord.baseTaskKey || "").trim()) || task : autoDiaryOverrideAnchorTaskLookup.get(String((task == null ? void 0 : task.baseTaskKey) || (task == null ? void 0 : task.taskKey) || "").trim()) || task;
+      if (!(sourceTask == null ? void 0 : sourceTask.taskKey)) return;
+      const normalizedMode = mode === "add" ? "add" : "replace";
+      const existingOverride = (task == null ? void 0 : task.overrideRecord) || null;
+      const overridePayloadSources = Array.isArray((_b2 = existingOverride == null ? void 0 : existingOverride.overridePayload) == null ? void 0 : _b2.sources) ? existingOverride.overridePayload.sources : [];
+      const fallbackSelectedKey = String(
+        (task == null ? void 0 : task.subsectionKey) || (sourceTask == null ? void 0 : sourceTask.subsectionKey) || getAutoDiaryUnitSubsectionKey(((_c2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _c2[0]) || ((_d2 = sourceTask == null ? void 0 : sourceTask.taskUnits) == null ? void 0 : _d2[0]) || {}, 0, (task == null ? void 0 : task.subsectionTitle) || (sourceTask == null ? void 0 : sourceTask.subsectionTitle) || "") || ""
+      ).trim();
+      const draftSources = overridePayloadSources.length ? overridePayloadSources.map((source) => createAutoDiaryOverrideDraftSource(source)) : [createAutoDiaryOverrideDraftSource({
+        subject: String((existingOverride == null ? void 0 : existingOverride.overrideSubject) || (task == null ? void 0 : task.subject) || sourceTask.subject || "").trim(),
+        lessonKey: (existingOverride == null ? void 0 : existingOverride.overrideLessonKey) || (task == null ? void 0 : task.lessonKey) || sourceTask.lessonKey || "",
+        contentId: String((existingOverride == null ? void 0 : existingOverride.overrideContentId) || (task == null ? void 0 : task.contentId) || sourceTask.contentId || "").trim(),
+        selectedNodeKeys: fallbackSelectedKey ? [fallbackSelectedKey] : [],
+        legacySubsectionKey: (existingOverride == null ? void 0 : existingOverride.overrideSubsectionKey) || fallbackSelectedKey,
+        legacySubsectionTitle: (existingOverride == null ? void 0 : existingOverride.overrideSubsectionTitle) || (task == null ? void 0 : task.subsectionTitle) || (sourceTask == null ? void 0 : sourceTask.subsectionTitle) || "",
+        legacyUnitKeys: Array.isArray(existingOverride == null ? void 0 : existingOverride.overrideUnitKeys) && existingOverride.overrideUnitKeys.length ? existingOverride.overrideUnitKeys : (Array.isArray(task == null ? void 0 : task.taskUnits) ? task.taskUnits : Array.isArray(sourceTask == null ? void 0 : sourceTask.taskUnits) ? sourceTask.taskUnits : []).map((entry) => String((entry == null ? void 0 : entry.key) || "").trim()).filter(Boolean)
+      })];
+      setAutoDiaryOverrideEditingAnchorKey(String(sourceTask.taskKey || "").trim());
+      setAutoDiaryOverrideEditingMode(normalizedMode);
+      setAutoDiaryOverrideDraftSources(draftSources);
+      setAutoDiaryOverrideNote(String((existingOverride == null ? void 0 : existingOverride.note) || "").trim());
+    }, [autoDiaryOverrideAnchorTaskLookup, createAutoDiaryOverrideDraftSource]);
+    const handleCancelAutoDiaryOverrideEditor = useCallback(() => {
+      setAutoDiaryOverrideEditingAnchorKey("");
+      setAutoDiaryOverrideEditingMode("replace");
+      setAutoDiaryOverrideDraftSources([]);
+      setAutoDiaryOverrideNote("");
+    }, []);
+    const handleSaveAutoDiaryOverride = useCallback(async (task, action = "replace") => {
+      if (!canManageAutoDiaryOverrides) {
+        showAppToast(joinLocalizedText("You cannot edit the auto diary here.", "\u0622\u067E \u06CC\u06C1\u0627\u06BA \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06CC\u06BA \u062A\u0628\u062F\u06CC\u0644\u06CC \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u06D2\u06D4", language), "alert");
+        return;
+      }
+      if (!contentIdentityEmail) {
+        showAppToast(joinLocalizedText("Sign in first to manage auto diary overrides.", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0633\u0646\u0628\u06BE\u0627\u0644\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const normalizedAction = action === "skip" ? "skip" : action === "add" ? "add" : "replace";
+      const anchorTask = autoDiaryOverrideAnchorTaskLookup.get(String((task == null ? void 0 : task.baseTaskKey) || (task == null ? void 0 : task.taskKey) || "").trim()) || autoDiaryOverrideEditingAnchorTask || task;
+      if (!(anchorTask == null ? void 0 : anchorTask.taskKey) || !(anchorTask == null ? void 0 : anchorTask.targetDate)) {
+        showAppToast(joinLocalizedText("Pick an auto diary task first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const targetType = autoDiaryOverrideScope === "student" ? "student" : "grade";
+      const targetStudentEmail = targetType === "student" ? String(autoDiaryOverrideResolvedStudentEmail || "").trim().toLowerCase() : "";
+      if (targetType === "student" && !targetStudentEmail) {
+        showAppToast(joinLocalizedText("Choose a student first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const normalizedDraftSources = normalizedAction === "skip" ? [] : (Array.isArray(autoDiaryOverrideDraftSources) ? autoDiaryOverrideDraftSources : []).map((source) => createAutoDiaryOverrideDraftSource(source)).map((source) => buildDiaryOverrideSourceSegmentRef.current(source, anchorTask)).filter(Boolean).map((segment, index) => {
+        var _a2, _b2;
+        return {
+          sourceId: String(((_a2 = autoDiaryOverrideDraftSources[index]) == null ? void 0 : _a2.sourceId) || segment.sourceId || `source_${index + 1}`).trim(),
+          subject: segment.subjectId,
+          lessonKey: segment.lessonKey,
+          contentId: segment.contentId,
+          selectedNodeKeys: normalizeTextArray((_b2 = autoDiaryOverrideDraftSources[index]) == null ? void 0 : _b2.selectedNodeKeys)
+        };
+      }).filter((source) => source.subject && source.lessonKey && source.selectedNodeKeys.length);
+      if (normalizedAction !== "skip" && !normalizedDraftSources.length) {
+        showAppToast(joinLocalizedText("Choose at least one chapter subsection tree first.", "\u067E\u06C1\u0644\u06D2 \u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0627\u06CC\u06A9 \u0628\u0627\u0628 \u06A9\u0627 \u0630\u06CC\u0644\u06CC \u062F\u0631\u062E\u062A \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const primarySource = normalizedDraftSources[0] || null;
+      const overrideSubject = normalizedAction === "skip" ? "" : String((primarySource == null ? void 0 : primarySource.subject) || "").trim();
+      const overrideLessonKey = normalizedAction === "skip" ? "" : resolveCustomChapterLessonKey({ lessonKey: (primarySource == null ? void 0 : primarySource.lessonKey) || "" });
+      const overrideContentId = normalizedAction === "skip" ? "" : String((primarySource == null ? void 0 : primarySource.contentId) || "").trim();
+      const overrideId = `auto_override_${simpleHash(`${activeInstitutionSchoolIdResolved || "global"}::${targetType}::${Number(grade) || 0}::${targetStudentEmail}::${autoDiaryOverridePreviewWeekStartDate}::${anchorTask.targetDate}::${anchorTask.taskKey}::${normalizedAction}`)}`;
+      setContentRelationshipBusy(true);
+      try {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const row = {
+          override_id: overrideId,
+          school_id: activeInstitutionSchoolIdResolved || null,
+          created_by_email: contentIdentityEmail,
+          target_type: targetType,
+          target_grade: Number(grade) || null,
+          target_student_email: targetType === "student" ? targetStudentEmail : null,
+          week_start_date: autoDiaryOverridePreviewWeekStartDate,
+          target_date: anchorTask.targetDate,
+          subject: anchorTask.subject,
+          base_task_key: anchorTask.taskKey,
+          action: normalizedAction,
+          override_subject: normalizedAction === "skip" ? null : overrideSubject,
+          override_lesson_key: normalizedAction === "skip" ? null : overrideLessonKey,
+          override_content_id: normalizedAction === "skip" ? null : overrideContentId || null,
+          override_subsection_key: null,
+          override_subsection_title: null,
+          override_unit_keys: [],
+          override_unit_key: null,
+          override_payload: normalizedAction === "skip" ? { sources: [] } : { sources: normalizedDraftSources },
+          note: String(autoDiaryOverrideNote || "").trim() || null,
+          display_order: normalizedAction === "add" ? 1 : 0,
+          status: "active",
+          updated_at: nowIso
+        };
+        const { error } = await client.from(SUPABASE_AUTO_DIARY_OVERRIDES_TABLE).upsert(row, { onConflict: "override_id" });
+        if (error) throw error;
+        await refreshContentRelationshipStateRef.current();
+        handleCancelAutoDiaryOverrideEditor();
+        showAppToast(
+          normalizedAction === "skip" ? joinLocalizedText("Auto diary task skipped", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627 \u06A9\u0627\u0645 \u0686\u06BE\u0648\u0691 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language) : normalizedAction === "add" ? joinLocalizedText("Extra diary task added", "\u0627\u0636\u0627\u0641\u06CC \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645 \u0634\u0627\u0645\u0644 \u06C1\u0648 \u06AF\u06CC\u0627", language) : joinLocalizedText("Auto diary task replaced", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627 \u06A9\u0627\u0645 \u0628\u062F\u0644 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language),
+          "check"
+        );
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to save auto diary override: ${(error == null ? void 0 : error.message) || error}`, `\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC \u0645\u062D\u0641\u0648\u0638 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentRelationshipBusy(false);
+      }
+    }, [activeInstitutionSchoolIdResolved, autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideDraftSources, autoDiaryOverrideEditingAnchorTask, autoDiaryOverrideNote, autoDiaryOverridePreviewWeekStartDate, autoDiaryOverrideResolvedStudentEmail, autoDiaryOverrideScope, canManageAutoDiaryOverrides, contentIdentityEmail, createAutoDiaryOverrideDraftSource, ensureSupabaseClientRef, grade, handleCancelAutoDiaryOverrideEditor, language, showAppToast]);
+    const handleDeleteAutoDiaryOverride = useCallback(async (overrideEntry) => {
+      var _a2;
+      const normalized = normalizeAutoDiaryOverrideRecord(overrideEntry);
+      if (!(normalized == null ? void 0 : normalized.overrideId)) return;
+      setContentRelationshipBusy(true);
+      try {
+        const client = ensureSupabaseClientRef.current();
+        const { error } = await client.from(SUPABASE_AUTO_DIARY_OVERRIDES_TABLE).delete().eq("override_id", normalized.overrideId);
+        if (error) throw error;
+        await refreshContentRelationshipStateRef.current();
+        if ((autoDiaryOverrideEditingAnchorTask == null ? void 0 : autoDiaryOverrideEditingAnchorTask.overrideId) === normalized.overrideId || ((_a2 = autoDiaryOverrideEditingAnchorTask == null ? void 0 : autoDiaryOverrideEditingAnchorTask.overrideRecord) == null ? void 0 : _a2.overrideId) === normalized.overrideId) {
+          handleCancelAutoDiaryOverrideEditor();
+        }
+        showAppToast(joinLocalizedText("Auto diary override removed", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC \u06C1\u0679\u0627 \u062F\u06CC \u06AF\u0626\u06CC", language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to remove auto diary override: ${(error == null ? void 0 : error.message) || error}`, `\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC \u06C1\u0679\u0627\u0626\u06CC \u0646\u06C1\u06CC\u06BA \u062C\u0627 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentRelationshipBusy(false);
+      }
+    }, [autoDiaryOverrideEditingAnchorTask, handleCancelAutoDiaryOverrideEditor, language, showAppToast]);
     const handleSaveAssignment = useCallback(async () => {
       if (!canManageDiary) {
         showAppToast(joinLocalizedText("Your content role cannot create assignments.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u062A\u0641\u0648\u06CC\u0636 \u0628\u0646\u0627\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -12839,7 +14953,7 @@ ${marker} `);
     const timeTrackingStatusLabel = classScheduleSettings.enabled ? (todayTimeEntry == null ? void 0 : todayTimeEntry.status) === "on-time" ? ui.classStatusOnTime : (todayTimeEntry == null ? void 0 : todayTimeEntry.status) === "late" ? ui.classStatusLate : ui.classStatusNotStarted : ui.classStatusOff;
     const recentTimeHistory = useMemo(() => (timeTrackingData.history || []).slice(0, 7), [timeTrackingData]);
     const todayKey = getLocalDayKey();
-    const todayGamificationEntry = ((_l = gamificationState.activityByDay) == null ? void 0 : _l[todayKey]) || createDefaultDailyActivityEntry();
+    const todayGamificationEntry = ((_m = gamificationState.activityByDay) == null ? void 0 : _m[todayKey]) || createDefaultDailyActivityEntry();
     const dailyReviewChallengeTarget = Math.max(6, Math.min(15, Math.round((studyGoals.dailyReviews || 20) * 0.4)));
     const dailyPracticeChallengeTarget = 4;
     const dailyFocusChallengeTarget = Math.max(15, Math.min(30, Number(focusTimerSettings.durationMinutes) || 20));
@@ -14500,6 +16614,17 @@ ${marker} `);
             const fallbackSelectClause = String(selectClause || "").replace(/,\s*permissions_override/g, "").replace(/permissions_override,\s*/g, "");
             result = await runQuery(fallbackSelectClause);
           }
+          if (result.error && table === SUPABASE_SCHOOLS_TABLE && (String(selectClause || "").includes("auto_diary_") || String(selectClause || "").includes("auto_diary_settings"))) {
+            const fallbackSelectClause = String(selectClause || "").replace(/,\s*auto_diary_settings/g, "").replace(/auto_diary_settings,\s*/g, "").replace(/,\s*auto_diary_start_date/g, "").replace(/auto_diary_start_date,\s*/g, "").replace(/,\s*auto_diary_subject_mode/g, "").replace(/auto_diary_subject_mode,\s*/g, "").replace(/,\s*auto_diary_subject_ids/g, "").replace(/auto_diary_subject_ids,\s*/g, "").replace(/,\s*auto_diary_plan_mode/g, "").replace(/auto_diary_plan_mode,\s*/g, "").replace(/,\s*auto_diary_advance_mode/g, "").replace(/auto_diary_advance_mode,\s*/g, "");
+            result = await runQuery(fallbackSelectClause);
+          }
+          if (result.error && table === SUPABASE_AUTO_DIARY_OVERRIDES_TABLE && (String(result.error.message || "").toLowerCase().includes("override_payload") || String(result.error.message || "").toLowerCase().includes("overridepayload") || String(result.error.message || "").toLowerCase().includes("override_subsection_key") || String(result.error.message || "").toLowerCase().includes("override_subsection_title") || String(result.error.message || "").toLowerCase().includes("override_unit_keys"))) {
+            const fallbackSelectClause = String(selectClause || "").replace(/,\s*override_payload/g, "").replace(/override_payload,\s*/g, "").replace(/,\s*override_subsection_key/g, "").replace(/override_subsection_key,\s*/g, "").replace(/,\s*override_subsection_title/g, "").replace(/override_subsection_title,\s*/g, "").replace(/,\s*override_unit_keys/g, "").replace(/override_unit_keys,\s*/g, "");
+            result = await runQuery(fallbackSelectClause);
+          }
+          if (result.error && table === SUPABASE_AUTO_DIARY_OVERRIDES_TABLE && (String(result.error.code || "").trim() === "42P01" || /does not exist|could not find the table|relation .*auto_diary_overrides/i.test(String(result.error.message || "")))) {
+            return [];
+          }
           if (result.error) throw result.error;
           return Array.isArray(result.data) ? result.data.map((row) => normalizeFn(row)).filter(Boolean) : [];
         };
@@ -14511,6 +16636,7 @@ ${marker} `);
           assignments: /* @__PURE__ */ new Map(),
           diaryEntries: /* @__PURE__ */ new Map(),
           diaryCompletions: /* @__PURE__ */ new Map(),
+          autoDiaryOverrides: /* @__PURE__ */ new Map(),
           testTemplates: /* @__PURE__ */ new Map(),
           weeklyTestAssignments: /* @__PURE__ */ new Map(),
           weeklyTestResults: /* @__PURE__ */ new Map()
@@ -14562,7 +16688,7 @@ ${marker} `);
         };
         await collectSchoolScoped(
           SUPABASE_SCHOOLS_TABLE,
-          "school_id, school_name, owner_email, principal_email, year_start_date, week_accumulation_mode, week_accumulation_value, status, created_at, updated_at",
+          "school_id, school_name, owner_email, principal_email, year_start_date, auto_diary_settings, auto_diary_start_date, auto_diary_subject_mode, auto_diary_subject_ids, auto_diary_plan_mode, auto_diary_advance_mode, week_accumulation_mode, week_accumulation_value, status, created_at, updated_at",
           normalizeSchoolRecord,
           "schools",
           "schoolId"
@@ -14610,6 +16736,13 @@ ${marker} `);
           "completionId"
         );
         await collectSchoolScoped(
+          SUPABASE_AUTO_DIARY_OVERRIDES_TABLE,
+          "override_id, school_id, created_by_email, target_type, target_grade, target_student_email, week_start_date, target_date, subject, base_task_key, action, override_subject, override_lesson_key, override_content_id, override_payload, override_subsection_key, override_subsection_title, override_unit_keys, override_unit_key, note, display_order, status, created_at, updated_at",
+          normalizeAutoDiaryOverrideRecord,
+          "autoDiaryOverrides",
+          "overrideId"
+        );
+        await collectSchoolScoped(
           SUPABASE_TEST_TEMPLATES_TABLE,
           "template_id, school_id, author_user_id, author_email, title, grade, subject_scope, payload, is_published, published_at, updated_at, deleted_at",
           normalizeTestTemplateRecord,
@@ -14648,6 +16781,7 @@ ${marker} `);
           assignments: Array.from(rowMaps.assignments.values()),
           diaryEntries: Array.from(rowMaps.diaryEntries.values()),
           diaryCompletions: Array.from(rowMaps.diaryCompletions.values()),
+          autoDiaryOverrides: Array.from(rowMaps.autoDiaryOverrides.values()),
           testTemplates: Array.from(rowMaps.testTemplates.values()).filter((entry) => !entry.deletedAt),
           weeklyTestAssignments: Array.from(rowMaps.weeklyTestAssignments.values()),
           weeklyTestResults: Array.from(rowMaps.weeklyTestResults.values()),
@@ -15380,6 +17514,15 @@ ${marker} `);
         }).on("postgres_changes", {
           event: "*",
           schema: "public",
+          table: SUPABASE_AUTO_DIARY_OVERRIDES_TABLE
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh auto diary overrides from realtime:", error);
+          });
+        }).on("postgres_changes", {
+          event: "*",
+          schema: "public",
           table: SUPABASE_TEST_TEMPLATES_TABLE
         }, () => {
           if (!active) return;
@@ -15540,14 +17683,23 @@ ${marker} `);
     useEffect(() => {
       const availableTabs = ["profiles", "reports", "chapters", "library", "cloud", "notifications"];
       if (canSeeLearnerManagement) availableTabs.splice(2, 0, "learners");
-      if (canAssignContent || canManageContentAccess || visibleChapterAssignments.length > 0) {
+      if (canManageInstitution || accessibleSchools.length > 0) {
         const insertionIndex = canSeeLearnerManagement ? 3 : 2;
+        availableTabs.splice(insertionIndex, 0, "institution");
+      }
+      if (canManageParentLinks || linkedChildOptions.length > 0 || visibleParentStudentLinks.length > 0) {
+        const institutionIndex = availableTabs.includes("institution") ? availableTabs.indexOf("institution") + 1 : canSeeLearnerManagement ? 3 : 2;
+        availableTabs.splice(institutionIndex, 0, "family");
+      }
+      if (canAssignContent || canManageContentAccess || visibleChapterAssignments.length > 0) {
+        const familyIndex = availableTabs.includes("family") ? availableTabs.indexOf("family") + 1 : availableTabs.includes("institution") ? availableTabs.indexOf("institution") + 1 : canSeeLearnerManagement ? 3 : 2;
+        const insertionIndex = Math.max(0, familyIndex);
         availableTabs.splice(insertionIndex, 0, "assignments");
       }
       if (!availableTabs.includes(profilesSectionTab)) {
         setProfilesSectionTab(availableTabs[0]);
       }
-    }, [canAssignContent, canManageContentAccess, canSeeLearnerManagement, profilesSectionTab, visibleChapterAssignments.length]);
+    }, [accessibleSchools.length, canAssignContent, canManageContentAccess, canManageInstitution, canManageParentLinks, canSeeLearnerManagement, linkedChildOptions.length, profilesSectionTab, visibleChapterAssignments.length, visibleParentStudentLinks.length]);
     useEffect(() => {
       if (!activePracticeSubjectId || !practiceSubjectLessons.length) return;
       setPracticeFiltersBySubject((current) => {
@@ -19093,8 +21245,144 @@ ${error.message || error}`);
         return buildDerivedDayBasedSub(sub, settingKey, ((_a2 = daySectionSettings[settingKey]) == null ? void 0 : _a2.itemsPerDay) || 5, subjectId);
       });
     }, [daySectionSettings]);
+    const buildDiaryChapterOutlineTree = useCallback((lesson, subjectId, lessonKeyOverride = "", contentIdOverride = "") => {
+      var _a2;
+      const safeSubjectId = String(subjectId || "").trim();
+      if (!lesson || !safeSubjectId) return [];
+      const lessonRouteKey = String(lessonKeyOverride || getLessonKeyValue(lesson) || (lesson == null ? void 0 : lesson.id) || "lesson").trim() || "lesson";
+      const extraRouteMeta = {
+        subjectId: safeSubjectId,
+        lessonKey: lessonRouteKey,
+        contentId: String(contentIdOverride || "").trim()
+      };
+      if (lesson == null ? void 0 : lesson.hasMathSub) {
+        const derivedSubs = getDerivedLessonDiarySubs(lesson, safeSubjectId);
+        return derivedSubs.map((sub, index) => attachDiaryRouteMeta([
+          buildDiarySelectionOutlineFromSub(sub, safeSubjectId, {
+            targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey, index)
+          })
+        ], extraRouteMeta)[0]).filter(Boolean);
+      }
+      const subsectionCollections = [
+        lesson == null ? void 0 : lesson.subsections,
+        lesson == null ? void 0 : lesson.subs,
+        lesson == null ? void 0 : lesson.sections,
+        lesson == null ? void 0 : lesson.subLessons,
+        lesson == null ? void 0 : lesson.days,
+        lesson == null ? void 0 : lesson.mathSubs,
+        lesson == null ? void 0 : lesson.topics
+      ];
+      const subsectionObjects = ((_a2 = subsectionCollections.find((collection) => Array.isArray(collection) && collection.some((entry) => entry && typeof entry === "object"))) == null ? void 0 : _a2.filter((entry) => entry && typeof entry === "object")) || [];
+      if (subsectionObjects.length) {
+        return subsectionObjects.map((sub, index) => attachDiaryRouteMeta([
+          buildDiarySelectionOutlineFromSub(sub, safeSubjectId, {
+            targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey, index)
+          })
+        ], extraRouteMeta)[0]).filter(Boolean);
+      }
+      return attachDiaryRouteMeta([
+        buildDiarySelectionOutlineFromLesson(lesson, safeSubjectId, {
+          targetBaseId: buildDiaryLessonTargetBaseId(safeSubjectId, lessonRouteKey)
+        })
+      ], extraRouteMeta);
+    }, [getDerivedLessonDiarySubs]);
+    const buildDiaryOverrideSourceSegment = useCallback((source, fallbackTask = null) => {
+      var _a2, _b2, _c2, _d2;
+      const subjectId = String((source == null ? void 0 : source.subject) || (source == null ? void 0 : source.subjectId) || "").trim();
+      const lessonKey = resolveCustomChapterLessonKey({ lessonKey: (source == null ? void 0 : source.lessonKey) || (source == null ? void 0 : source.overrideLessonKey) || "" });
+      if (!subjectId || !lessonKey || !Number.isFinite(Number(grade))) return null;
+      const chapterGroups = getMergedLessonGroups(subjectId, grade) || [];
+      const chapterGroup = chapterGroups.find((group) => (group == null ? void 0 : group.canonicalLessonKey) === lessonKey) || null;
+      if (!chapterGroup) return null;
+      const desiredContentId = String((source == null ? void 0 : source.contentId) || (source == null ? void 0 : source.overrideContentId) || "").trim();
+      const matchedVariant = desiredContentId ? (chapterGroup.variants || []).find((variant) => String((variant == null ? void 0 : variant.contentId) || "").trim() === desiredContentId) : null;
+      const lesson = (matchedVariant == null ? void 0 : matchedVariant.lesson) || chapterGroup.activeLesson || null;
+      if (!lesson) return null;
+      const fullOutlineNodes = buildDiaryChapterOutlineTree(lesson, subjectId, lessonKey, desiredContentId || String(((_a2 = chapterGroup.activeVariant) == null ? void 0 : _a2.contentId) || "").trim());
+      let selectedNodeKeys = normalizeTextArray(source == null ? void 0 : source.selectedNodeKeys);
+      if (!selectedNodeKeys.length) {
+        const legacySubsectionKey = String((source == null ? void 0 : source.legacySubsectionKey) || "").trim();
+        const legacySubsectionTitle = String((source == null ? void 0 : source.legacySubsectionTitle) || "").trim();
+        if (legacySubsectionKey || legacySubsectionTitle) {
+          const matchedNode = fullOutlineNodes.find((node) => {
+            var _a3;
+            return String(((_a3 = node == null ? void 0 : node.routeMeta) == null ? void 0 : _a3.subKey) || "").trim() === legacySubsectionKey || String((node == null ? void 0 : node.label) || "").trim() === legacySubsectionTitle;
+          });
+          if (matchedNode == null ? void 0 : matchedNode.key) selectedNodeKeys = [matchedNode.key];
+        }
+      }
+      const outlineNodes = selectedNodeKeys.length ? filterDiaryOutlineNodesBySelection(fullOutlineNodes, selectedNodeKeys) : fullOutlineNodes;
+      const subjectEntry = allSubjects.find((entry) => String((entry == null ? void 0 : entry.id) || "").trim() === subjectId) || (subjectLookup == null ? void 0 : subjectLookup[subjectId]) || null;
+      return {
+        sourceId: String((source == null ? void 0 : source.sourceId) || (source == null ? void 0 : source.id) || "").trim() || `source_${simpleHash(`${subjectId}_${lessonKey}_${desiredContentId}`)}`,
+        subjectId,
+        subjectLabel: subjectEntry ? getSubjectDisplayName(subjectEntry, language) : subjectId,
+        lessonKey,
+        contentId: desiredContentId || String(((_b2 = chapterGroup.activeVariant) == null ? void 0 : _b2.contentId) || "").trim(),
+        chapterGroup,
+        lesson,
+        chapterTitle: String((lesson == null ? void 0 : lesson.title) || ((_c2 = chapterGroup == null ? void 0 : chapterGroup.activeLesson) == null ? void 0 : _c2.title) || (fallbackTask == null ? void 0 : fallbackTask.title) || lessonKey).trim() || lessonKey,
+        subsectionTitle: String(((_d2 = outlineNodes == null ? void 0 : outlineNodes[0]) == null ? void 0 : _d2.label) || "").trim(),
+        fullOutlineNodes,
+        outlineNodes,
+        selectedNodeKeys,
+        taskUnits: Array.isArray(fallbackTask == null ? void 0 : fallbackTask.taskUnits) ? fallbackTask.taskUnits : []
+      };
+    }, [allSubjects, buildDiaryChapterOutlineTree, getMergedLessonGroups, grade, language, subjectLookup]);
+    buildDiaryOverrideSourceSegmentRef.current = buildDiaryOverrideSourceSegment;
+    const collectDiaryTaskSelectedOutlineKeys = useCallback((nodes = [], task = null) => {
+      const unitKeyCandidates = /* @__PURE__ */ new Set();
+      const unitTextCandidates = /* @__PURE__ */ new Set();
+      const fallbackKeyCandidates = /* @__PURE__ */ new Set();
+      const fallbackTextCandidates = /* @__PURE__ */ new Set();
+      (Array.isArray(task == null ? void 0 : task.taskUnits) ? task.taskUnits : []).forEach((unit) => {
+        var _a2, _b2;
+        [unit == null ? void 0 : unit.key].map((value) => String(value || "").trim()).filter(Boolean).forEach((value) => unitKeyCandidates.add(value));
+        [unit == null ? void 0 : unit.title, unit == null ? void 0 : unit.detail].map(normalizeDiaryMatchText).filter(Boolean).forEach((value) => unitTextCandidates.add(value));
+        [(_a2 = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _a2.key].map((value) => String(value || "").trim()).filter(Boolean).forEach((value) => fallbackKeyCandidates.add(value));
+        [(_b2 = unit == null ? void 0 : unit.sourceMeta) == null ? void 0 : _b2.title].map(normalizeDiaryMatchText).filter(Boolean).forEach((value) => fallbackTextCandidates.add(value));
+      });
+      [task == null ? void 0 : task.subsectionKey].map((value) => String(value || "").trim()).filter(Boolean).forEach((value) => fallbackKeyCandidates.add(value));
+      [task == null ? void 0 : task.subsectionTitle, task == null ? void 0 : task.title].map(normalizeDiaryMatchText).filter(Boolean).forEach((value) => fallbackTextCandidates.add(value));
+      const collectMatches = (candidateKeys, candidateTexts) => {
+        if (!candidateKeys.size && !candidateTexts.size) return [];
+        const matchedKeys = /* @__PURE__ */ new Set();
+        const normalizedCandidates = Array.from(candidateTexts);
+        const walk = (node) => {
+          if (!node) return;
+          const nodeKey = String((node == null ? void 0 : node.key) || "").trim();
+          const routeMeta = (node == null ? void 0 : node.routeMeta) || {};
+          const nodeKeys = [nodeKey, String((routeMeta == null ? void 0 : routeMeta.subKey) || "").trim(), String((routeMeta == null ? void 0 : routeMeta.targetId) || "").trim()].filter(Boolean);
+          const nodeTexts = [node == null ? void 0 : node.label, routeMeta == null ? void 0 : routeMeta.subTitle].map(normalizeDiaryMatchText).filter(Boolean);
+          const keyMatched = nodeKeys.some((value) => candidateKeys.has(value));
+          const textMatched = nodeTexts.some((nodeText) => normalizedCandidates.some((candidate) => nodeText === candidate || nodeText.includes(candidate) || candidate.includes(nodeText)));
+          if ((keyMatched || textMatched) && nodeKey) matchedKeys.add(nodeKey);
+          (Array.isArray(node == null ? void 0 : node.children) ? node.children : []).forEach(walk);
+        };
+        (Array.isArray(nodes) ? nodes : []).forEach(walk);
+        return Array.from(matchedKeys);
+      };
+      const unitMatches = collectMatches(unitKeyCandidates, unitTextCandidates);
+      if (unitMatches.length) return unitMatches;
+      return collectMatches(fallbackKeyCandidates, fallbackTextCandidates);
+    }, []);
     const buildDiaryTaskOutline = useCallback((task) => {
       var _a2, _b2, _c2, _d2;
+      if (Array.isArray(task == null ? void 0 : task.taskSegments) && task.taskSegments.length) {
+        return task.taskSegments.map((segment, index) => {
+          var _a3;
+          return {
+            key: `override_segment_${segment.sourceId || index}`,
+            label: String((segment == null ? void 0 : segment.chapterTitle) || ((_a3 = segment == null ? void 0 : segment.lesson) == null ? void 0 : _a3.title) || `Chapter ${index + 1}`).trim() || `Chapter ${index + 1}`,
+            routeMeta: {
+              subjectId: String((segment == null ? void 0 : segment.subjectId) || "").trim(),
+              lessonKey: String((segment == null ? void 0 : segment.lessonKey) || "").trim(),
+              contentId: String((segment == null ? void 0 : segment.contentId) || "").trim()
+            },
+            children: Array.isArray(segment == null ? void 0 : segment.outlineNodes) ? segment.outlineNodes : []
+          };
+        });
+      }
       const lesson = (task == null ? void 0 : task.lesson) || ((_a2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _a2.activeLesson) || null;
       const subjectId = String((task == null ? void 0 : task.subject) || "").trim();
       if (!lesson || !subjectId) return [];
@@ -19111,12 +21399,98 @@ ${error.message || error}`);
         const effectiveSubIndex = matchedSubIndex >= 0 ? matchedSubIndex : 0;
         const matchedSub = (effectiveSubIndex >= 0 ? derivedSubs[effectiveSubIndex] : null) || null;
         if (matchedSub) {
-          return [buildDiaryLessonOutlineFromSub(matchedSub, subjectId, {
+          const fullOutline2 = [buildDiaryLessonOutlineFromSub(matchedSub, subjectId, {
             targetBaseId: buildDiaryLessonTargetBaseId(subjectId, lessonRouteKey, effectiveSubIndex)
           })];
+          const selectedOutlineKeys2 = collectDiaryTaskSelectedOutlineKeys(fullOutline2, task);
+          return selectedOutlineKeys2.length ? filterDiaryOutlineNodesBySelection(fullOutline2, selectedOutlineKeys2) : fullOutline2;
         }
       }
-      return [buildDiaryLessonOutlineFromLesson(lesson, subjectId)];
+      const fullOutline = attachDiaryRouteMeta([buildDiaryLessonOutlineFromLesson(lesson, subjectId)], {
+        subjectId,
+        lessonKey: lessonRouteKey,
+        contentId: String((task == null ? void 0 : task.contentId) || "").trim()
+      });
+      const selectedOutlineKeys = collectDiaryTaskSelectedOutlineKeys(fullOutline, task);
+      return selectedOutlineKeys.length ? filterDiaryOutlineNodesBySelection(fullOutline, selectedOutlineKeys) : fullOutline;
+    }, [collectDiaryTaskSelectedOutlineKeys, getDerivedLessonDiarySubs]);
+    const buildDetailedDiaryTaskOutline = useCallback((task) => {
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2;
+      if (Array.isArray(task == null ? void 0 : task.taskSegments) && task.taskSegments.length) {
+        return task.taskSegments.map((segment, index) => {
+          var _a3;
+          return {
+            key: `detailed_override_segment_${segment.sourceId || index}`,
+            label: String((segment == null ? void 0 : segment.chapterTitle) || ((_a3 = segment == null ? void 0 : segment.lesson) == null ? void 0 : _a3.title) || `Chapter ${index + 1}`).trim() || `Chapter ${index + 1}`,
+            routeMeta: {
+              subjectId: String((segment == null ? void 0 : segment.subjectId) || "").trim(),
+              lessonKey: String((segment == null ? void 0 : segment.lessonKey) || "").trim(),
+              contentId: String((segment == null ? void 0 : segment.contentId) || "").trim()
+            },
+            children: Array.isArray(segment == null ? void 0 : segment.outlineNodes) ? segment.outlineNodes : []
+          };
+        });
+      }
+      const lesson = (task == null ? void 0 : task.lesson) || ((_a2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _a2.activeLesson) || null;
+      const subjectId = String((task == null ? void 0 : task.subject) || "").trim();
+      if (!lesson || !subjectId) return [];
+      const lessonRouteKey = String(getLessonKeyValue(lesson) || (lesson == null ? void 0 : lesson.id) || "lesson").trim() || "lesson";
+      const leadUnit = ((_b2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _b2[0]) || null;
+      const buildWrappedSelectionNode = (sub, subIndex = 0) => attachDiaryRouteMeta([
+        buildDiarySelectionOutlineFromSub(sub, subjectId, {
+          targetBaseId: buildDiaryLessonTargetBaseId(subjectId, lessonRouteKey, subIndex)
+        })
+      ], {
+        subjectId,
+        lessonKey: lessonRouteKey,
+        contentId: String((task == null ? void 0 : task.contentId) || "").trim()
+      });
+      if (lesson == null ? void 0 : lesson.hasMathSub) {
+        const derivedSubs = getDerivedLessonDiarySubs(lesson, subjectId);
+        const matchedSubIndex = findDiarySubIndex(derivedSubs, {
+          explicitSubKey: task == null ? void 0 : task.subsectionKey,
+          explicitSubTitle: task == null ? void 0 : task.subsectionTitle,
+          unitSourceKey: (_c2 = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _c2.key,
+          unitSourceTitle: (_d2 = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _d2.title,
+          taskTitle: task == null ? void 0 : task.title,
+          unitTitle: leadUnit == null ? void 0 : leadUnit.title
+        });
+        const effectiveSubIndex = matchedSubIndex >= 0 ? matchedSubIndex : 0;
+        const matchedSub = (effectiveSubIndex >= 0 ? derivedSubs[effectiveSubIndex] : null) || null;
+        if (matchedSub) return buildWrappedSelectionNode(matchedSub, effectiveSubIndex);
+      }
+      const subsectionCollections = [
+        lesson == null ? void 0 : lesson.subsections,
+        lesson == null ? void 0 : lesson.subs,
+        lesson == null ? void 0 : lesson.sections,
+        lesson == null ? void 0 : lesson.subLessons,
+        lesson == null ? void 0 : lesson.days,
+        lesson == null ? void 0 : lesson.mathSubs,
+        lesson == null ? void 0 : lesson.topics
+      ];
+      const subsectionObjects = ((_e2 = subsectionCollections.find((collection) => Array.isArray(collection) && collection.some((entry) => entry && typeof entry === "object"))) == null ? void 0 : _e2.filter((entry) => entry && typeof entry === "object")) || [];
+      if (subsectionObjects.length) {
+        const matchedSubIndex = findDiarySubIndex(subsectionObjects, {
+          explicitSubKey: task == null ? void 0 : task.subsectionKey,
+          explicitSubTitle: task == null ? void 0 : task.subsectionTitle,
+          unitSourceKey: (_f2 = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _f2.key,
+          unitSourceTitle: (_g2 = leadUnit == null ? void 0 : leadUnit.sourceMeta) == null ? void 0 : _g2.title,
+          taskTitle: task == null ? void 0 : task.title,
+          unitTitle: leadUnit == null ? void 0 : leadUnit.title
+        });
+        const effectiveSubIndex = matchedSubIndex >= 0 ? matchedSubIndex : 0;
+        const matchedSub = subsectionObjects[effectiveSubIndex] || subsectionObjects[0] || null;
+        if (matchedSub) return buildWrappedSelectionNode(matchedSub, effectiveSubIndex);
+      }
+      return attachDiaryRouteMeta([
+        buildDiarySelectionOutlineFromLesson(lesson, subjectId, {
+          targetBaseId: buildDiaryLessonTargetBaseId(subjectId, lessonRouteKey)
+        })
+      ], {
+        subjectId,
+        lessonKey: lessonRouteKey,
+        contentId: String((task == null ? void 0 : task.contentId) || "").trim()
+      });
     }, [getDerivedLessonDiarySubs]);
     const buildDiaryTaskAudioLines = useCallback((task, outlineNodes = []) => {
       var _a2, _b2, _c2, _d2, _e2, _f2;
@@ -19202,23 +21576,35 @@ ${error.message || error}`);
         orderedTaskKeys: orderedKeys,
         activeTaskKey: getDiaryTaskRouteKey(task),
         returnSection: diarySectionTab,
-        returnAnchorDate: diaryWeekAnchorDate,
+        returnAnchorDate: effectiveDiaryAnchorDate,
         returnScrollTop: scroller ? scroller.scrollTop : 0,
         returnViewportOffset,
         returnTargetDate: String((task == null ? void 0 : task.targetDate) || "").trim(),
         returnTaskKey: getDiaryTaskRouteKey(task),
         returnStudentEmail: activeDiaryViewerStudentEmail
       });
-      const safeSubjectId = String((task == null ? void 0 : task.subject) || "").trim();
-      const safeLessonKey = String((task == null ? void 0 : task.lessonKey) || "").trim();
+      const explicitRouteMeta = routeMetaOverride && typeof routeMetaOverride === "object" ? routeMetaOverride : null;
+      const explicitSubKey = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subKey) || "").trim();
+      const explicitSubTitle = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subTitle) || "").trim();
+      const explicitSubTab = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subTab) || "").trim();
+      const explicitGroupLabel = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.groupLabel) || "").trim();
+      const explicitExerciseKind = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.exerciseKind) || "").trim();
+      const explicitTargetScope = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.targetScope) || "").trim();
+      const explicitTargetId = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.targetId) || "").trim();
+      const explicitSubjectId = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subjectId) || "").trim();
+      const explicitLessonKey = resolveCustomChapterLessonKey({ lessonKey: (explicitRouteMeta == null ? void 0 : explicitRouteMeta.lessonKey) || "" });
+      const explicitContentId = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.contentId) || "").trim();
+      const safeSubjectId = explicitSubjectId || String((task == null ? void 0 : task.subject) || "").trim();
+      const safeLessonKey = explicitLessonKey || String((task == null ? void 0 : task.lessonKey) || "").trim();
       const canOpenLesson = safeSubjectId && safeSubjectId !== "__assignment__" && safeLessonKey;
       if (!canOpenLesson) {
         setTab("diary");
         return;
       }
       const subject = allSubjects.find((entry) => entry.id === safeSubjectId) || (subjectLookup == null ? void 0 : subjectLookup[safeSubjectId]) || null;
-      const chapterGroup = task.chapterGroup || getMergedLessonGroups(safeSubjectId, grade).find((group) => (group == null ? void 0 : group.canonicalLessonKey) === safeLessonKey) || null;
-      const lesson = (chapterGroup == null ? void 0 : chapterGroup.activeLesson) || task.lesson || null;
+      const chapterGroup = getMergedLessonGroups(safeSubjectId, grade).find((group) => (group == null ? void 0 : group.canonicalLessonKey) === safeLessonKey) || task.chapterGroup || null;
+      const matchedVariant = explicitContentId ? ((chapterGroup == null ? void 0 : chapterGroup.variants) || []).find((variant) => String((variant == null ? void 0 : variant.contentId) || "").trim() === explicitContentId) : null;
+      const lesson = (matchedVariant == null ? void 0 : matchedVariant.lesson) || (chapterGroup == null ? void 0 : chapterGroup.activeLesson) || task.lesson || null;
       if (!subject || !lesson) {
         showAppToast(joinLocalizedText("This diary task could not find its lesson.", "\u0627\u0633 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u062A\u0639\u0644\u0642\u06C1 \u0633\u0628\u0642 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4", language), "alert");
         return;
@@ -19228,14 +21614,6 @@ ${error.message || error}`);
       setSelectedSubject(subject);
       clearLessonSelections();
       setSelectedLesson(lesson);
-      const explicitRouteMeta = routeMetaOverride && typeof routeMetaOverride === "object" ? routeMetaOverride : null;
-      const explicitSubKey = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subKey) || "").trim();
-      const explicitSubTitle = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subTitle) || "").trim();
-      const explicitSubTab = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.subTab) || "").trim();
-      const explicitGroupLabel = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.groupLabel) || "").trim();
-      const explicitExerciseKind = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.exerciseKind) || "").trim();
-      const explicitTargetScope = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.targetScope) || "").trim();
-      const explicitTargetId = String((explicitRouteMeta == null ? void 0 : explicitRouteMeta.targetId) || "").trim();
       if (lesson == null ? void 0 : lesson.hasMathSub) {
         const derivedSubs = getDerivedLessonDiarySubs(lesson, subject.id);
         const targetUnit = ((_c2 = task.taskUnits) == null ? void 0 : _c2[0]) || null;
@@ -19255,6 +21633,7 @@ ${error.message || error}`);
           setMathSubTab(explicitSubTab || "examples");
           setSubExerciseGroupIdx(null);
           setSubQuizGroupIdx(null);
+          setSubQuizQuestionIdx(0);
           if ((explicitSubTab === "exercises" || explicitExerciseKind) && Array.isArray((_f2 = derivedSubs[matchedSubIndex]) == null ? void 0 : _f2.exerciseGroups)) {
             let exerciseIndex = -1;
             const preferredGroupLabel = explicitGroupLabel || (Number(task == null ? void 0 : task.dayIndex) > 0 ? [joinLocalizedText(`Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`, language), `Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`].find((label) => derivedSubs[matchedSubIndex].exerciseGroups.some((group) => String((group == null ? void 0 : group.label) || "").trim() === String(label || "").trim())) : "");
@@ -19277,8 +21656,10 @@ ${error.message || error}`);
             const preferredQuizGroupLabel = explicitGroupLabel || (Number(task == null ? void 0 : task.dayIndex) > 0 ? [joinLocalizedText(`Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`, language), `Day ${task.dayIndex}`, `\u062F\u0646 ${task.dayIndex}`].find((label) => derivedSubs[matchedSubIndex].quizGroups.some((group) => String((group == null ? void 0 : group.label) || "").trim() === String(label || "").trim())) : "");
             const quizIndex = preferredQuizGroupLabel ? derivedSubs[matchedSubIndex].quizGroups.findIndex((group) => String((group == null ? void 0 : group.label) || "").trim() === preferredQuizGroupLabel) : -1;
             if (quizIndex >= 0) setSubQuizGroupIdx(quizIndex);
+            if (Number.isFinite(Number(explicitRouteMeta == null ? void 0 : explicitRouteMeta.questionIndex))) setSubQuizQuestionIdx(Math.max(0, Number(explicitRouteMeta.questionIndex)));
             nextViewTargetId = explicitTargetId || (explicitTargetScope === "tab" ? buildDiarySectionTargetId(targetBaseId, "tab_quiz") : buildDiarySectionTargetId(targetBaseId, "quiz"));
           } else if (explicitSubTab === "quiz") {
+            if (Number.isFinite(Number(explicitRouteMeta == null ? void 0 : explicitRouteMeta.questionIndex))) setSubQuizQuestionIdx(Math.max(0, Number(explicitRouteMeta.questionIndex)));
             nextViewTargetId = explicitTargetId || (explicitTargetScope === "tab" ? buildDiarySectionTargetId(targetBaseId, "tab_quiz") : buildDiarySectionTargetId(targetBaseId, "quiz"));
           } else if (explicitSubTab === "examples") {
             nextViewTargetId = explicitTargetId || (explicitTargetScope === "tab" ? buildDiarySectionTargetId(targetBaseId, "tab_examples") : buildDiarySectionTargetId(targetBaseId, "examples"));
@@ -19312,67 +21693,177 @@ ${error.message || error}`);
       }
       setPageFlashActive(true);
       setTimeout(() => setPageFlashActive(false), 850);
-    }, [TENSES, activeDiaryViewerStudentEmail, allSubjects, clearLessonSelections, diarySectionTab, diaryWeekAnchorDate, getDerivedLessonDiarySubs, getMergedLessonGroups, grade, language, pacedPos, pacedVocab, posTab, resetReviewSession, showAppToast, subjectLookup, tenseMain, tenseSub]);
+    }, [TENSES, activeDiaryViewerStudentEmail, allSubjects, clearLessonSelections, diarySectionTab, effectiveDiaryAnchorDate, getDerivedLessonDiarySubs, getMergedLessonGroups, grade, language, pacedPos, pacedVocab, posTab, resetReviewSession, showAppToast, subjectLookup, tenseMain, tenseSub]);
     const handleOpenNextDiaryTask = useCallback(() => {
       if (activeDiaryTaskIndex < 0) return;
       const nextTask = orderedVisibleDiaryTasks[activeDiaryTaskIndex + 1] || null;
       if (!nextTask) return;
       handleOpenDiaryTask(nextTask, orderedVisibleDiaryTasks);
     }, [activeDiaryTaskIndex, handleOpenDiaryTask, orderedVisibleDiaryTasks]);
+    const handleToggleAutoDiaryOverrideSourceNode = useCallback((sourceId, node, checked) => {
+      const nodeKey = String((node == null ? void 0 : node.key) || "").trim();
+      if (!nodeKey) return;
+      const descendantKeys = collectDiaryOutlineNodeKeys(node, []).filter((key) => key !== nodeKey);
+      handleUpdateAutoDiaryOverrideDraftSource(sourceId, (source) => {
+        const currentKeys = new Set(normalizeTextArray(source == null ? void 0 : source.selectedNodeKeys));
+        if (checked) {
+          descendantKeys.forEach((key) => currentKeys.delete(key));
+          currentKeys.add(nodeKey);
+        } else {
+          currentKeys.delete(nodeKey);
+        }
+        return {
+          ...source,
+          selectedNodeKeys: Array.from(currentKeys)
+        };
+      });
+    }, [handleUpdateAutoDiaryOverrideDraftSource]);
+    const handleToggleAutoDiaryOverrideSourceExpand = useCallback((sourceId, nodeKey) => {
+      const safeNodeKey = String(nodeKey || "").trim();
+      if (!safeNodeKey) return;
+      handleUpdateAutoDiaryOverrideDraftSource(sourceId, (source) => {
+        const expanded = new Set(normalizeTextArray(source == null ? void 0 : source.expandedNodeKeys));
+        if (expanded.has(safeNodeKey)) expanded.delete(safeNodeKey);
+        else expanded.add(safeNodeKey);
+        return {
+          ...source,
+          expandedNodeKeys: Array.from(expanded)
+        };
+      });
+    }, [handleUpdateAutoDiaryOverrideDraftSource]);
+    const renderAutoDiaryOverrideSelectionNodes = (source, nodes = [], ancestorSelected = false, depth = 0) => {
+      if (!Array.isArray(nodes) || !nodes.length) return null;
+      const selectedSet = new Set(normalizeTextArray(source == null ? void 0 : source.selectedNodeKeys));
+      const expandedSet = new Set(normalizeTextArray(source == null ? void 0 : source.expandedNodeKeys));
+      return /* @__PURE__ */ React.createElement("div", { className: `diary-outline depth-${depth}`, style: { display: "grid", gap: 8, marginTop: depth === 0 ? 8 : 6, paddingInlineStart: depth > 0 ? 14 : 0 } }, nodes.map((node) => {
+        const nodeKey = String((node == null ? void 0 : node.key) || "").trim();
+        const hasChildren = Array.isArray(node == null ? void 0 : node.children) && node.children.length > 0;
+        const ownSelected = selectedSet.has(nodeKey);
+        const isSelected = ancestorSelected || ownSelected;
+        const isExpanded = hasChildren && (expandedSet.has(nodeKey) || depth === 0);
+        const label = String((node == null ? void 0 : node.label) || "").trim();
+        if (!label) return null;
+        const nodeLanguage = isUrduText(label) ? "ur" : language === "ur" ? "ur" : "en";
+        return /* @__PURE__ */ React.createElement("div", { key: `override_pick_${(source == null ? void 0 : source.sourceId) || "source"}_${nodeKey || label}`, className: "profile-report-item", "data-task-language": nodeLanguage }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { alignItems: "center", gap: 10 } }, hasChildren ? /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "ghost-cta",
+            onClick: () => handleToggleAutoDiaryOverrideSourceExpand(source.sourceId, nodeKey),
+            style: { minWidth: 34, paddingInline: 10 }
+          },
+          isExpanded ? language === "ur" ? "\u2212" : "\u2212" : language === "ur" ? "+" : "+"
+        ) : /* @__PURE__ */ React.createElement("span", { style: { width: 34, opacity: 0.35, textAlign: "center" } }, "\u2022"), /* @__PURE__ */ React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: ancestorSelected ? "default" : "pointer", direction: nodeLanguage === "ur" ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement(
+          "input",
+          {
+            type: "checkbox",
+            checked: isSelected,
+            disabled: ancestorSelected,
+            onChange: (event) => handleToggleAutoDiaryOverrideSourceNode(source.sourceId, node, Boolean(event.target.checked))
+          }
+        ), /* @__PURE__ */ React.createElement("span", { style: { fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)", textAlign: nodeLanguage === "ur" ? "right" : "left", color: "var(--text)" } }, renderLocalizedTextNode(label, language)))), hasChildren && isExpanded ? renderAutoDiaryOverrideSelectionNodes(source, node.children, isSelected, depth + 1) : null);
+      }));
+    };
     const renderDiaryOutlineNodes = (task, nodes = [], depth = 0) => {
       if (!Array.isArray(nodes) || !nodes.length) return null;
-      return /* @__PURE__ */ React.createElement("div", { className: `diary-outline depth-${depth}`, style: { display: "grid", gap: 6, marginTop: depth === 0 ? 8 : 6, paddingInlineStart: depth > 0 ? 12 : 0 } }, nodes.map((node) => {
+      return /* @__PURE__ */ React.createElement("div", { className: `diary-outline depth-${depth}`, style: { display: "grid", gap: 6, marginTop: depth === 0 ? 8 : 6, paddingInlineStart: depth > 0 ? 12 : 0 } }, nodes.map((node, nodeIndex) => {
         const hasChildren = Array.isArray(node == null ? void 0 : node.children) && node.children.length > 0;
         const label = String((node == null ? void 0 : node.label) || "").trim();
         const nodeLanguage = isUrduText(label) ? "ur" : language === "ur" ? "ur" : "en";
+        const nodeExpansionKey = `${(task == null ? void 0 : task.taskKey) || "task"}::${(node == null ? void 0 : node.key) || label}::${depth}`;
+        const nodeExpanded = Boolean(expandedDiaryOutlineNodes == null ? void 0 : expandedDiaryOutlineNodes[nodeExpansionKey]);
+        const showNodeChildren = hasChildren && (showDetailedDiary || nodeExpanded);
+        const leafOrdinal = !hasChildren ? nodes.slice(0, nodeIndex + 1).filter((entry) => {
+          const entryHasChildren = Array.isArray(entry == null ? void 0 : entry.children) && entry.children.length > 0;
+          return !entryHasChildren && String((entry == null ? void 0 : entry.label) || "").trim();
+        }).length - 1 : -1;
         if (!label) return null;
-        return /* @__PURE__ */ React.createElement("div", { key: `diary_outline_${(task == null ? void 0 : task.taskKey) || "task"}_${node.key || label}_${depth}`, className: "diary-outline-node", "data-task-language": nodeLanguage }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 } }, depth === 0 ? /* @__PURE__ */ React.createElement(
-          "button",
+        return /* @__PURE__ */ React.createElement("div", { key: `diary_outline_${(task == null ? void 0 : task.taskKey) || "task"}_${node.key || label}_${depth}`, className: "diary-outline-node", "data-task-language": nodeLanguage }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 } }, /* @__PURE__ */ React.createElement(
+          "span",
           {
-            type: "button",
-            className: "diary-outline-heading-btn",
-            onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget),
-            style: {
-              display: "block",
-              width: "100%",
-              textAlign: nodeLanguage === "ur" ? "right" : "left",
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              color: "var(--text)",
-              fontWeight: 700,
-              fontSize: 13,
-              cursor: "pointer",
-              direction: nodeLanguage === "ur" ? "rtl" : "ltr",
-              fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)"
-            }
-          },
-          renderLocalizedTextNode(label, language)
-        ) : /* @__PURE__ */ React.createElement(
-          "button",
-          {
-            type: "button",
-            className: "diary-outline-link-btn",
-            onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget),
+            className: "diary-outline-inline-row",
             style: {
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
-              textAlign: nodeLanguage === "ur" ? "right" : "left",
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              color: "var(--text-muted)",
-              fontSize: 12,
-              cursor: "pointer",
+              gap: 6,
               flex: 1,
-              direction: nodeLanguage === "ur" ? "rtl" : "ltr",
-              fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)"
+              minWidth: 0,
+              direction: nodeLanguage === "ur" ? "rtl" : "ltr"
             }
           },
-          /* @__PURE__ */ React.createElement("span", { style: { opacity: 0.7 } }, nodeLanguage === "ur" ? "\u2022" : "\u2022"),
-          /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(label, language))
-        ), /* @__PURE__ */ React.createElement(
+          !showDetailedDiary && hasChildren ? /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              type: "button",
+              className: `diary-inline-detail-toggle inline${nodeExpanded ? " active" : ""}`,
+              onClick: (event) => {
+                event.stopPropagation();
+                setExpandedDiaryOutlineNodes((current) => ({
+                  ...current,
+                  [nodeExpansionKey]: !(current == null ? void 0 : current[nodeExpansionKey])
+                }));
+              },
+              "aria-expanded": nodeExpanded,
+              title: renderLocalizedTextNode(nodeExpanded ? joinLocalizedText("Collapse", "\u0633\u0645\u06CC\u0679\u06CC\u06BA", language) : joinLocalizedText("Expand", "\u067E\u06BE\u06CC\u0644\u0627\u0626\u06CC\u06BA", language), language)
+            },
+            /* @__PURE__ */ React.createElement("span", { className: "diary-inline-detail-chevron" }, "\u203A")
+          ) : null,
+          !hasChildren ? /* @__PURE__ */ React.createElement("span", { className: "diary-outline-leaf-bullet", "aria-hidden": "true" }, buildDiaryLeafIndexLabel(leafOrdinal)) : null,
+          depth === 0 ? /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "diary-outline-heading-btn",
+              onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget),
+              style: {
+                display: "block",
+                flex: 1,
+                minWidth: 0,
+                textAlign: nodeLanguage === "ur" ? "right" : "left",
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                color: "var(--text)",
+                fontWeight: 700,
+                fontSize: 13,
+                lineHeight: 1.5,
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
+                cursor: "pointer",
+                direction: nodeLanguage === "ur" ? "rtl" : "ltr",
+                fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)"
+              }
+            },
+            /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(label, language))
+          ) : /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              type: "button",
+              className: "diary-outline-link-btn",
+              onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget),
+              style: {
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                textAlign: nodeLanguage === "ur" ? "right" : "left",
+                border: "none",
+                background: "transparent",
+                padding: 0,
+                color: "var(--text-muted)",
+                fontSize: 12,
+                cursor: "pointer",
+                flex: 1,
+                minWidth: 0,
+                lineHeight: 1.5,
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
+                direction: nodeLanguage === "ur" ? "rtl" : "ltr",
+                fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)"
+              }
+            },
+            /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(label, language))
+          )
+        ), /* @__PURE__ */ React.createElement("span", { className: "diary-inline-heading-controls" }, /* @__PURE__ */ React.createElement(
           "button",
           {
             type: "button",
@@ -19382,13 +21873,36 @@ ${error.message || error}`);
               const routeLabel = String(((_a2 = node == null ? void 0 : node.routeMeta) == null ? void 0 : _a2.subTitle) || "").trim();
               speakInlineText(routeLabel ? `${routeLabel}. ${label}` : label);
             },
-            title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language),
-            style: { border: "none", background: "transparent", color: "var(--accent)", cursor: "pointer", fontSize: 15, padding: 0, flex: "0 0 auto" }
+            title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language)
           },
           "\u{1F508}"
-        )), hasChildren ? renderDiaryOutlineNodes(task, node.children, depth + 1) : null);
+        ))), showNodeChildren ? renderDiaryOutlineNodes(task, node.children, depth + 1) : null);
       }));
     };
+    const mergeDetailedDiaryRouteMeta = useCallback((detailedNodes = [], standardNodes = []) => {
+      const safeDetailed = Array.isArray(detailedNodes) ? detailedNodes : [];
+      const safeStandard = Array.isArray(standardNodes) ? standardNodes : [];
+      const standardLookup = /* @__PURE__ */ new Map();
+      safeStandard.forEach((node) => {
+        const key = String((node == null ? void 0 : node.key) || "").trim();
+        const label = normalizeDiaryMatchText((node == null ? void 0 : node.label) || "");
+        if (key) standardLookup.set(`key:${key}`, node);
+        if (label) standardLookup.set(`label:${label}`, node);
+      });
+      return safeDetailed.map((node) => {
+        const nodeKey = String((node == null ? void 0 : node.key) || "").trim();
+        const nodeLabel = normalizeDiaryMatchText((node == null ? void 0 : node.label) || "");
+        const matchedStandard = standardLookup.get(`key:${nodeKey}`) || standardLookup.get(`label:${nodeLabel}`) || null;
+        return {
+          ...node,
+          routeMeta: {
+            ...(node == null ? void 0 : node.routeMeta) || {},
+            ...(matchedStandard == null ? void 0 : matchedStandard.routeMeta) || {}
+          },
+          children: mergeDetailedDiaryRouteMeta((node == null ? void 0 : node.children) || [], (matchedStandard == null ? void 0 : matchedStandard.children) || [])
+        };
+      });
+    }, []);
     const handleToggleFavorite = useCallback(async (cardId) => {
       if (!window.HomeSchoolDB || !cardId) return null;
       const nextMeta = await window.HomeSchoolDB.toggleWordFavorite(cardId);
@@ -20540,7 +23054,7 @@ ${error.message || error}`);
         language
       ))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, todayGamificationEntry.perfectDayAwarded ? "+120 XP" : `${completedDailyChallenges}/${dailyChallenges.length}`))), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Study Goals", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u06C1\u062F\u0627\u0641", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track your daily review target and weekly vocabulary momentum.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648 \u06C1\u062F\u0641 \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0631\u0641\u062A\u0627\u0631 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Daily reviews", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewStats.reviewedToday || 0} of ${studyGoals.dailyReviews}`, `${reviewStats.reviewedToday || 0} \u0627\u0632 ${studyGoals.dailyReviews}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, dailyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${dailyGoalProgress}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly words", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${reviewAnalytics.totals.uniqueReviewedLast7 || 0} of ${studyGoals.weeklyWords}`, `${reviewAnalytics.totals.uniqueReviewedLast7 || 0} \u0627\u0632 ${studyGoals.weeklyWords}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, weeklyGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${weeklyGoalProgress}%` } })))), streak > 0 && /* @__PURE__ */ React.createElement("div", { className: "streak-banner" }, /* @__PURE__ */ React.createElement("span", { className: "streak-fire" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "streak-info" }, /* @__PURE__ */ React.createElement("h4", null, renderLocalizedTextNode(joinLocalizedText(`${streak} Day Streak!`, `${streak} \u062F\u0646 \u06A9\u0627 \u062A\u0633\u0644\u0633\u0644!`, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Keep going, you're doing great!", "\u0627\u0633\u06CC \u0637\u0631\u062D \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u0622\u067E \u0628\u06C1\u062A \u0627\u0686\u06BE\u0627 \u06A9\u0631 \u0631\u06C1\u06D2 \u06C1\u06CC\u06BA!", language), language))))),
       homeSectionTab === "focus" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.timeManagement, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.timeTrackingHelp, language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(todaySpentMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.timeSpentToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F6B6}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, classScheduleSettings.enabled ? formatMinutesLabel(todayLatenessMinutes, language) : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.latenessToday, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F558}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.punctualityStreak || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.punctualityStreak, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3C1}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(timeTrackingData.classSessionsMet || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.classSessionsMet, language)))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`${ui.classStartTime}: ${classScheduleSettings.startTime}`, `${ui.classStartTime}: ${classScheduleSettings.startTime}`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${ui.classEndTime}: ${classScheduleSettings.endTime}`, `${ui.classEndTime}: ${classScheduleSettings.endTime}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(timeTrackingStatusLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.classDuration, language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${formatMinutesLabel(scheduleDurationMinutes, "en")} scheduled \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "en")} this week`, `${formatMinutesLabel(scheduleDurationMinutes, "ur")} \u0645\u0642\u0631\u0631 \u2022 ${formatMinutesLabel(weeklyStudyMinutes, "ur")} \u0627\u0633 \u06C1\u0641\u062A\u06D2`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, timeGoalProgress, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar accent-alt" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${timeGoalProgress}%` } })), !classScheduleSettings.enabled ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(ui.classTrackingDisabled, language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Focus Timer & Reminders", "\u0641\u0648\u06A9\u0633 \u0679\u0627\u0626\u0645\u0631 \u0627\u0648\u0631 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Start a quiet study sprint and keep your reminder schedule visible.", "\u0627\u06CC\u06A9 \u0645\u062E\u062A\u0635\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0633\u06CC\u0634\u0646 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u067E\u0646\u06CC \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u06A9\u06CC \u062D\u0627\u0644\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "timer-card" }, /* @__PURE__ */ React.createElement("div", { className: "timer-clock" }, formatClockTime(focusTimerState.remainingSeconds)), /* @__PURE__ */ React.createElement("div", { className: "timer-meta" }, renderLocalizedTextNode(joinLocalizedText(`${focusTimerSettings.durationMinutes} min focus block`, `${focusTimerSettings.durationMinutes} \u0645\u0646\u0679 \u0641\u0648\u06A9\u0633 \u0648\u0642\u062A`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("button", { className: "retry-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: !current.active || (current.remainingSeconds || 0) === 0, remainingSeconds: (current.remainingSeconds || 0) === 0 ? (focusTimerSettings.durationMinutes || 20) * 60 : current.remainingSeconds, startedAt: Date.now() })) }, renderLocalizedTextNode(focusTimerState.active ? joinLocalizedText("Pause", "\u0631\u0648\u06A9\u06CC\u06BA", language) : joinLocalizedText("Start", "\u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: () => setFocusTimerState((current) => ({ ...current, active: false, remainingSeconds: (focusTimerSettings.durationMinutes || 20) * 60 })) }, renderLocalizedTextNode(joinLocalizedText("Reset", "\u062F\u0648\u0628\u0627\u0631\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "timer-reminder-status" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Reminder", "\u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC", language), language)), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(currentReminderLabel, language))), reminderDueNow ? /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Your study reminder is due now.", "\u0622\u067E \u06A9\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u06CC\u0627\u062F \u062F\u06C1\u0627\u0646\u06CC \u0627\u0628\u06BE\u06CC \u06A9\u06CC \u06C1\u06D2\u06D4", language), language)) : null))),
-      homeSectionTab === "discovery" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.contentDiscovery, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Search your current grade lessons by subject, type, and difficulty, and keep a daily word in view.", "\u0627\u067E\u0646\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0636\u0645\u0648\u0646\u060C \u0642\u0633\u0645\u060C \u0627\u0648\u0631 \u062F\u0631\u062C\u06C1 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06CC\u06A9 \u0644\u0641\u0638 \u0633\u0627\u0645\u0646\u06D2 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), wordOfDayCard ? /* @__PURE__ */ React.createElement("div", { className: "discovery-word-card" }, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-label" }, renderLocalizedTextNode(ui.wordOfDay, language)), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-prompt" }, wordOfDayCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-answer", style: containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null }, wordOfDayCard.answer || wordOfDayCard.meaning), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-meta" }, renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", ((_m = subjectLookup[wordOfDayCard.subject || ""]) == null ? void 0 : _m.nameUr) || "\u0645\u0636\u0645\u0648\u0646", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-shell" }, /* @__PURE__ */ React.createElement("input", { className: "review-list-input", value: contentSearch, onChange: (event) => setContentSearch(event.target.value), placeholder: ui.contentSearch, style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null }), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row" }, /* @__PURE__ */ React.createElement("button", { className: `practice-subject-chip${discoverySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter("all"), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.discoveryAllSubjects, language)))), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("button", { key: subject.id, className: `practice-subject-chip${discoverySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter(subject.id), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-icon" }, subject.icon), /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))))), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact" }, [
+      homeSectionTab === "discovery" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.contentDiscovery, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Search your current grade lessons by subject, type, and difficulty, and keep a daily word in view.", "\u0627\u067E\u0646\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0636\u0645\u0648\u0646\u060C \u0642\u0633\u0645\u060C \u0627\u0648\u0631 \u062F\u0631\u062C\u06C1 \u06A9\u06D2 \u0645\u0637\u0627\u0628\u0642 \u062A\u0644\u0627\u0634 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06CC\u06A9 \u0644\u0641\u0638 \u0633\u0627\u0645\u0646\u06D2 \u0631\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), wordOfDayCard ? /* @__PURE__ */ React.createElement("div", { className: "discovery-word-card" }, /* @__PURE__ */ React.createElement("div", { className: "discovery-word-label" }, renderLocalizedTextNode(ui.wordOfDay, language)), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-prompt" }, wordOfDayCard.prompt), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-answer", style: containsUrduText(wordOfDayCard.answer || wordOfDayCard.meaning) ? { fontFamily: "var(--font-ur)", direction: "rtl", textAlign: "right" } : null }, wordOfDayCard.answer || wordOfDayCard.meaning), /* @__PURE__ */ React.createElement("div", { className: "discovery-word-meta" }, renderLocalizedTextNode(joinLocalizedText(wordOfDayCard.subject || "Subject", ((_n = subjectLookup[wordOfDayCard.subject || ""]) == null ? void 0 : _n.nameUr) || "\u0645\u0636\u0645\u0648\u0646", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-shell" }, /* @__PURE__ */ React.createElement("input", { className: "review-list-input", value: contentSearch, onChange: (event) => setContentSearch(event.target.value), placeholder: ui.contentSearch, style: isUrduUi(language) ? { direction: "rtl", textAlign: "right", fontFamily: "var(--font-ur)" } : null }), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row" }, /* @__PURE__ */ React.createElement("button", { className: `practice-subject-chip${discoverySubjectFilter === "all" ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter("all"), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(ui.discoveryAllSubjects, language)))), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("button", { key: subject.id, className: `practice-subject-chip${discoverySubjectFilter === subject.id ? " active" : ""}`, onClick: () => setDiscoverySubjectFilter(subject.id), type: "button" }, /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-icon" }, subject.icon), /* @__PURE__ */ React.createElement("span", { className: "practice-subject-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(subject.name, subject.nameUr, language), language)))))), /* @__PURE__ */ React.createElement("div", { className: "discovery-filter-row compact" }, [
         { id: "all", label: ui.discoveryAllTypes },
         { id: "lesson", label: ui.discoveryTypeLesson },
         { id: "interactive", label: ui.discoveryTypeInteractive },
@@ -20715,7 +23229,122 @@ ${error.message || error}`);
         setChapterAssignmentDraftStudentEmail(link.studentEmail);
         setProfilesSectionTab("assignments");
       } }, renderLocalizedTextNode(joinLocalizedText("Assign Chapters", "\u0627\u0628\u0648\u0627\u0628 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteTeacherStudentLink(link), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove Link", "\u0631\u0628\u0637 \u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No learner links yet. Link a learner first, then use chapter assignments.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0631\u0628\u0637 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4 \u067E\u06C1\u0644\u06D2 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0628\u0627\u0628 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))) : null,
-      profilesSectionTab === "institution" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "\u0627\u0633\u06A9\u0648\u0644 \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "\u0627\u062F\u0627\u0631\u062A\u06CC \u0688\u06BE\u0627\u0646\u0686\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0628\u0646\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0633\u0627\u062A\u0630\u06C1 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06A9\u0627\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0628\u0686\u0648\u06BA \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(accessibleSchools.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(accessibleSchools.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Schools", "\u0627\u0633\u06A9\u0648\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F454}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Your institution role", "\u0622\u067E \u06A9\u0627 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Members in scope", "\u062F\u0627\u0626\u0631\u06C1 \u06A9\u06D2 \u0645\u0645\u0628\u0631\u0632", language), language)))), accessibleSchools.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 14 } }, accessibleSchools.map((school) => /* @__PURE__ */ React.createElement("button", { key: school.schoolId, type: "button", className: `profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`, onClick: () => setActiveInstitutionSchoolId(school.schoolId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-avatar", "aria-hidden": "true" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(school.schoolName, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "\u2014"}`, `\u067E\u0631\u0646\u0633\u067E\u0644 ${school.principalEmail || "\u2014"}`, language), language)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0633\u0644\u06A9 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create or Update School", "\u0627\u0633\u06A9\u0648\u0644 \u0628\u0646\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use one school record per institution, then link principals, teachers, students, and parents beneath it.", "\u06C1\u0631 \u0627\u062F\u0627\u0631\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u06A9\u06D2 \u0646\u06CC\u0686\u06D2 \u067E\u0631\u0646\u0633\u067E\u0644\u060C \u0627\u0633\u0627\u062A\u0630\u06C1\u060C \u0637\u0644\u0628\u06C1\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolDraftName, onChange: (event) => setSchoolDraftName(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0646\u0627\u0645" : "School name" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftOwnerEmail, onChange: (event) => setSchoolDraftOwnerEmail(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0627\u0644\u06A9 \u0627\u06CC \u0645\u06CC\u0644" : "School owner email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftPrincipalEmail, onChange: (event) => setSchoolDraftPrincipalEmail(event.target.value), placeholder: language === "ur" ? "\u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u06CC \u0645\u06CC\u0644" : "Principal email" }), /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftYearStartDate, onChange: setSchoolDraftYearStartDate, language })), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftAccumulationMode, onChange: (event) => setSchoolDraftAccumulationMode(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "rolling" }, renderLocalizedTextNode(joinLocalizedText("Rolling last N weeks", "\u067E\u0686\u06BE\u0644\u06D2 N \u06C1\u0641\u062A\u06D2", language), language)), /* @__PURE__ */ React.createElement("option", { value: "academic_year" }, renderLocalizedTextNode(joinLocalizedText("Current academic year", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u0644", language), language)), /* @__PURE__ */ React.createElement("option", { value: "since_start" }, renderLocalizedTextNode(joinLocalizedText("Since app start", "\u0627\u06CC\u067E \u06A9\u06D2 \u0622\u063A\u0627\u0632 \u0633\u06D2", language), language))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "1", max: "52", value: schoolDraftAccumulationValue, onChange: (event) => setSchoolDraftAccumulationValue(event.target.value), placeholder: language === "ur" ? "\u06C1\u0641\u062A\u06D2" : "Weeks", style: { maxWidth: 140 } }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveSchool, disabled: contentRelationshipBusy }, renderLocalizedTextNode(contentRelationshipBusy ? joinLocalizedText("Saving...", "\u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Save School", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeInstitutionSchool ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Memberships", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E\u0633", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Membership decides who belongs to this school. Teacher-student links and family links then make the relationship graph precise.", "\u0645\u0645\u0628\u0631\u0634\u067E \u0637\u06D2 \u06A9\u0631\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u06A9\u0648\u0646 \u0627\u0633 \u0627\u0633\u06A9\u0648\u0644 \u0633\u06D2 \u062A\u0639\u0644\u0642 \u0631\u06A9\u06BE\u062A\u0627 \u06C1\u06D2\u06D4 \u0627\u0633 \u06A9\u06D2 \u0628\u0639\u062F \u0627\u0633\u062A\u0627\u062F-\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0627\u0648\u0631 \u062E\u0627\u0646\u062F\u0627\u0646\u06CC \u0631\u0648\u0627\u0628\u0637 \u0631\u0634\u062A\u0648\u06BA \u06A9\u0648 \u062F\u0631\u0633\u062A \u0628\u0646\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolMemberDraftEmail, onChange: (event) => setSchoolMemberDraftEmail(event.target.value), placeholder: language === "ur" ? "\u0645\u0645\u0628\u0631 \u0627\u06CC \u0645\u06CC\u0644" : "Member email" }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolMemberDraftRole, onChange: (event) => setSchoolMemberDraftRole(event.target.value) }, CONTENT_MANAGER_ROLES.map((role) => /* @__PURE__ */ React.createElement("option", { key: `membership_role_${role}`, value: role }, renderLocalizedTextNode(getContentManagerRoleLabel(role, language), language)))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolMemberDraftGradeScope, onChange: (event) => setSchoolMemberDraftGradeScope(event.target.value), placeholder: language === "ur" ? "\u062C\u0645\u0627\u0639\u062A\u06CC\u06BA\u060C \u0645\u062B\u0644\u0627\u064B 5,6" : "Grades, e.g. 5,6" }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveSchoolMembership, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Save Member", "\u0645\u0645\u0628\u0631 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, safeSchoolMemberships.filter((entry) => entry.status === "active" && entry.schoolId === activeInstitutionSchool.schoolId).map((entry) => /* @__PURE__ */ React.createElement("div", { key: `school_membership_${entry.membershipId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(entry.memberEmail, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(getContentManagerRoleLabel(entry.role, language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(entry.gradeScope.length ? joinLocalizedText(`Grades ${entry.gradeScope.join(", ")}`, `\u062C\u0645\u0627\u0639\u062A\u06CC\u06BA ${entry.gradeScope.join("\u060C ")}`, language) : joinLocalizedText("All grades in school scope", "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u062A\u0645\u0627\u0645 \u062F\u0631\u062C\u06D2", language), language)), (canManageInstitution || canManageContentAccess) && getInstitutionRoleRank(currentUserInstitutionRole || contentManagerRole) > getInstitutionRoleRank(entry.role) ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 } }, CONTENT_PERMISSION_KEYS.filter((key) => key !== "manageContentAccess").map((permKey) => {
+      profilesSectionTab === "institution" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "\u0627\u0633\u06A9\u0648\u0644 \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "\u0627\u062F\u0627\u0631\u062A\u06CC \u0688\u06BE\u0627\u0646\u0686\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0628\u0646\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0633\u0627\u062A\u0630\u06C1 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06A9\u0627\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0628\u0686\u0648\u06BA \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(accessibleSchools.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(accessibleSchools.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Schools", "\u0627\u0633\u06A9\u0648\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F454}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Your institution role", "\u0622\u067E \u06A9\u0627 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Members in scope", "\u062F\u0627\u0626\u0631\u06C1 \u06A9\u06D2 \u0645\u0645\u0628\u0631\u0632", language), language)))), accessibleSchools.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 14 } }, accessibleSchools.map((school) => /* @__PURE__ */ React.createElement("button", { key: school.schoolId, type: "button", className: `profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`, onClick: () => setActiveInstitutionSchoolId(school.schoolId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-avatar", "aria-hidden": "true" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(school.schoolName, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "\u2014"}`, `\u067E\u0631\u0646\u0633\u067E\u0644 ${school.principalEmail || "\u2014"}`, language), language)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0633\u0644\u06A9 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create or Update School", "\u0627\u0633\u06A9\u0648\u0644 \u0628\u0646\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use one school record per institution, then link principals, teachers, students, and parents beneath it.", "\u06C1\u0631 \u0627\u062F\u0627\u0631\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u06A9\u06D2 \u0646\u06CC\u0686\u06D2 \u067E\u0631\u0646\u0633\u067E\u0644\u060C \u0627\u0633\u0627\u062A\u0630\u06C1\u060C \u0637\u0644\u0628\u06C1\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolDraftName, onChange: (event) => setSchoolDraftName(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0646\u0627\u0645" : "School name" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftOwnerEmail, onChange: (event) => setSchoolDraftOwnerEmail(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0627\u0644\u06A9 \u0627\u06CC \u0645\u06CC\u0644" : "School owner email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftPrincipalEmail, onChange: (event) => setSchoolDraftPrincipalEmail(event.target.value), placeholder: language === "ur" ? "\u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u06CC \u0645\u06CC\u0644" : "Principal email" }), /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftYearStartDate, onChange: setSchoolDraftYearStartDate, language })), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Auto Diary Control Center", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0646\u0679\u0631\u0648\u0644 \u0633\u06CC\u0646\u0679\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Simple controls first. Open Advanced only when you really need to tune the engine.", "\u067E\u06C1\u0644\u06D2 \u0633\u0627\u062F\u06C1 \u06A9\u0646\u0679\u0631\u0648\u0644\u0632\u06D4 \u062C\u062F\u06CC\u062F \u0633\u06CC\u0679\u0646\u06AF\u0632 \u0635\u0631\u0641 \u0627\u0633\u06CC \u0648\u0642\u062A \u06A9\u06BE\u0648\u0644\u06CC\u06BA \u062C\u0628 \u0648\u0627\u0642\u0639\u06CC \u0628\u0627\u0631\u06CC\u06A9 \u0627\u06CC\u0688\u062C\u0633\u0679\u0645\u0646\u0679 \u0686\u0627\u06C1\u06CC\u06D2 \u06C1\u0648\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Calendar", "\u06A9\u06CC\u0644\u0646\u0688\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${formatReadableDateLabel(schoolDraftNormalizedAutoDiarySettings.calendar.startDate, language)} start \u2022 ${schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.length} study days`, `${formatReadableDateLabel(schoolDraftNormalizedAutoDiarySettings.calendar.startDate, language)} \u0622\u063A\u0627\u0632 \u2022 ${schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.length} \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0646`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftNormalizedAutoDiarySettings.subjects.mode === "all" ? joinLocalizedText("All current and future subjects are included.", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0627\u0648\u0631 \u0622\u0626\u0646\u062F\u06C1 \u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0634\u0627\u0645\u0644 \u06C1\u06CC\u06BA\u06D4", language) : joinLocalizedText(`${schoolDraftAutoDiaryVisibleSubjects.length} selected subjects`, `${schoolDraftAutoDiaryVisibleSubjects.length} \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Progression", "\u067E\u06CC\u0634 \u0631\u0641\u062A", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftAutoDiaryProgressionPreset === "structured" ? joinLocalizedText("Steady curriculum", "\u0646\u0635\u0627\u0628\u06CC \u0631\u0641\u062A\u0627\u0631", language) : schoolDraftAutoDiaryProgressionPreset === "mastery" ? joinLocalizedText("Mastery first", "\u067E\u06C1\u0644\u06D2 \u0645\u06C1\u0627\u0631\u062A", language) : schoolDraftAutoDiaryProgressionPreset === "balanced" ? joinLocalizedText("Balanced carry-forward", "\u0645\u062A\u0648\u0627\u0632\u0646 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0627\u0624", language) : joinLocalizedText("Custom progression", "\u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftAutoDiaryWeeklyTestPreset === "disabled" ? joinLocalizedText("Disabled", "\u063A\u06CC\u0631 \u0641\u0639\u0627\u0644", language) : schoolDraftAutoDiaryWeeklyTestPreset === "current_focus" ? joinLocalizedText("Current week focused", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u06C1\u0641\u062A\u06D2 \u067E\u0631 \u062A\u0648\u062C\u06C1", language) : schoolDraftAutoDiaryWeeklyTestPreset === "revision_heavy" ? joinLocalizedText("Revision heavy", "\u0632\u06CC\u0627\u062F\u06C1 \u062F\u06C1\u0631\u0627\u0626\u06CC", language) : schoolDraftAutoDiaryWeeklyTestPreset === "standard" ? joinLocalizedText("Standard balance", "\u0645\u0639\u06CC\u0627\u0631\u06CC \u062A\u0648\u0627\u0632\u0646", language) : joinLocalizedText("Custom weekly test", "\u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u0627 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-control-grid", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item auto-diary-simple-block" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Calendar", "\u06A9\u06CC\u0644\u0646\u0688\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("When the diary starts and which days it runs.", "\u0688\u0627\u0626\u0631\u06CC \u06A9\u0628 \u0634\u0631\u0648\u0639 \u06C1\u0648 \u0627\u0648\u0631 \u06A9\u0646 \u062F\u0646\u0648\u06BA \u0645\u06CC\u06BA \u0686\u0644\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-field-stack" }, /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftNormalizedAutoDiarySettings.calendar.startDate, onChange: (value) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, startDate: value } })), language }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.calendar.testDay, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, testDay: Number(event.target.value) || 6 } })) }, AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `auto_test_day_quick_${entry.value}`, value: entry.value }, renderLocalizedTextNode(joinLocalizedText(`Test day: ${entry.en}`, `\u0679\u06CC\u0633\u0679 \u06A9\u0627 \u062F\u0646: ${entry.ur}`, language), language))))), /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 10 } }, AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => {
+        const selected = schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.includes(entry.value);
+        return /* @__PURE__ */ React.createElement("button", { key: `study_day_quick_${entry.value}`, type: "button", className: `profile-switcher-chip${selected ? " active" : ""}`, onClick: () => handleToggleSchoolDraftStudyDay(entry.value) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(language === "ur" ? entry.ur : entry.en, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(selected ? joinLocalizedText("Included in study week", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u06C1\u0641\u062A\u06D2 \u0645\u06CC\u06BA \u0634\u0627\u0645\u0644", language) : joinLocalizedText("Not used for auto diary", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06CC\u06BA \u0634\u0627\u0645\u0644 \u0646\u06C1\u06CC\u06BA", language), language))));
+      }))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item auto-diary-simple-block" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Choose whether every subject joins automatically or only the ones you pick.", "\u0637\u06D2 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u06C1\u0631 \u0645\u0636\u0645\u0648\u0646 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0634\u0627\u0645\u0644 \u06C1\u0648 \u06CC\u0627 \u0635\u0631\u0641 \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-field-stack" }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.subjects.mode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, subjects: { ...current.subjects, mode: event.target.value === "selected" ? "selected" : "all" } })) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("Include all subjects", "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("option", { value: "selected" }, renderLocalizedTextNode(joinLocalizedText("Use only selected subjects", "\u0635\u0631\u0641 \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language), language)))), schoolDraftNormalizedAutoDiarySettings.subjects.mode === "selected" ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 10 } }, allSubjects.map((subject) => {
+        const subjectId = String(subject.id || "").trim();
+        const selected = schoolDraftNormalizedAutoDiarySettings.subjects.selectedSubjectIds.includes(subjectId);
+        return /* @__PURE__ */ React.createElement("button", { key: `auto_subject_pick_quick_${subjectId}`, type: "button", className: `profile-switcher-chip${selected ? " active" : ""}`, onClick: () => handleToggleSchoolDraftSubjectSelection(subjectId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(selected ? joinLocalizedText("Included", "\u0634\u0627\u0645\u0644", language) : joinLocalizedText("Tap to include", "\u0634\u0627\u0645\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language))));
+      })) : /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Any new subject added later will join the auto diary automatically.", "\u0628\u0639\u062F \u0645\u06CC\u06BA \u0634\u0627\u0645\u0644 \u06C1\u0648\u0646\u06D2 \u0648\u0627\u0644\u0627 \u06C1\u0631 \u0646\u06CC\u0627 \u0645\u0636\u0645\u0648\u0646 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06CC\u06BA \u062E\u0648\u062F \u0634\u0627\u0645\u0644 \u06C1\u0648 \u062C\u0627\u0626\u06D2 \u06AF\u0627\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item auto-diary-simple-block" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Daily Plan", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u067E\u0644\u0627\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("How subjects show up each day and how chapters move forward.", "\u06C1\u0631 \u062F\u0646 \u0645\u0636\u0627\u0645\u06CC\u0646 \u06A9\u06CC\u0633\u06D2 \u0622\u0626\u06CC\u06BA \u0627\u0648\u0631 \u0627\u0628\u0648\u0627\u0628 \u06A9\u06CC\u0633\u06D2 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-field-stack" }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.dailyLayout.mode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, mode: event.target.value } })) }, /* @__PURE__ */ React.createElement("option", { value: "all_subjects_daily" }, renderLocalizedTextNode(joinLocalizedText("All selected subjects every study day", "\u06C1\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0648\u0627\u0644\u06D2 \u062F\u0646 \u062A\u0645\u0627\u0645 \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("option", { value: "subject_rotation" }, renderLocalizedTextNode(joinLocalizedText("Rotate subjects across the week", "\u06C1\u0641\u062A\u06D2 \u0645\u06CC\u06BA \u0645\u0636\u0627\u0645\u06CC\u0646 \u0628\u0627\u0631\u06CC \u0628\u0627\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("option", { value: "hybrid" }, renderLocalizedTextNode(joinLocalizedText("Core subjects daily, others rotate", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0645\u0636\u0627\u0645\u06CC\u0646 \u0631\u0648\u0632\u0627\u0646\u06C1\u060C \u0628\u0627\u0642\u06CC \u0628\u0627\u0631\u06CC \u0628\u0627\u0631\u06CC", language), language))), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftAutoDiaryProgressionPreset, onChange: (event) => {
+        const nextValue = String(event.target.value || "balanced");
+        if (nextValue === "custom") return;
+        handleApplySchoolDraftProgressionPreset(nextValue);
+      } }, /* @__PURE__ */ React.createElement("option", { value: "balanced" }, renderLocalizedTextNode(joinLocalizedText("Balanced carry-forward", "\u0645\u062A\u0648\u0627\u0632\u0646 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0627\u0624", language), language)), /* @__PURE__ */ React.createElement("option", { value: "structured" }, renderLocalizedTextNode(joinLocalizedText("Steady curriculum", "\u0646\u0635\u0627\u0628\u06CC \u0631\u0641\u062A\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "mastery" }, renderLocalizedTextNode(joinLocalizedText("Mastery first", "\u067E\u06C1\u0644\u06D2 \u0645\u06C1\u0627\u0631\u062A", language), language)), /* @__PURE__ */ React.createElement("option", { value: "custom" }, renderLocalizedTextNode(joinLocalizedText("Custom (from advanced settings)", "\u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u0627 (\u062C\u062F\u06CC\u062F \u0633\u06CC\u0679\u0646\u06AF\u0632 \u0633\u06D2)", language), language)))), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta auto-diary-helper-copy" }, renderLocalizedTextNode(schoolDraftAutoDiaryProgressionPreset === "structured" ? joinLocalizedText("Follows the curriculum in a steadier order and changes chapters weekly.", "\u06CC\u06C1 \u0646\u0635\u0627\u0628 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u06A9\u0648 \u0632\u06CC\u0627\u062F\u06C1 \u0633\u06CC\u062F\u06BE\u06D2 \u0627\u0646\u062F\u0627\u0632 \u0645\u06CC\u06BA \u0641\u0627\u0644\u0648 \u06A9\u0631\u062A\u0627 \u06C1\u06D2 \u0627\u0648\u0631 \u0627\u0628\u0648\u0627\u0628 \u06A9\u0648 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0628\u062F\u0644\u062A\u0627 \u06C1\u06D2\u06D4", language) : schoolDraftAutoDiaryProgressionPreset === "mastery" ? joinLocalizedText("Stays longer on weaker lessons and demands stronger completion signals.", "\u06CC\u06C1 \u06A9\u0645\u0632\u0648\u0631 \u0627\u0633\u0628\u0627\u0642 \u067E\u0631 \u0632\u06CC\u0627\u062F\u06C1 \u062F\u06CC\u0631 \u0631\u06A9\u062A\u0627 \u06C1\u06D2 \u0627\u0648\u0631 \u0645\u0636\u0628\u0648\u0637 \u062A\u06A9\u0645\u06CC\u0644 \u06A9\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0645\u0627\u0646\u06AF\u062A\u0627 \u06C1\u06D2\u06D4", language) : schoolDraftAutoDiaryProgressionPreset === "balanced" ? joinLocalizedText("Moves with learner progress while still carrying unfinished slices forward.", "\u06CC\u06C1 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u0686\u0644\u062A\u0627 \u06C1\u06D2 \u0627\u0648\u0631 \u0646\u0627\u0645\u06A9\u0645\u0644 \u062D\u0635\u06D2 \u0627\u06AF\u0644\u06D2 \u062F\u0646\u0648\u06BA \u0645\u06CC\u06BA \u0644\u06D2 \u062C\u0627\u062A\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText("This school is using a custom progression mix from the Advanced panel.", "\u06CC\u06C1 \u0627\u0633\u06A9\u0648\u0644 Advanced \u067E\u06CC\u0646\u0644 \u0633\u06D2 \u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item auto-diary-simple-block" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Choose the overall weekly-test behavior without tuning every percentage manually.", "\u06C1\u0631 \u0641\u06CC\u0635\u062F \u06A9\u0648 \u0627\u0644\u06AF \u0686\u06BE\u06CC\u0691\u06D2 \u0628\u063A\u06CC\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u06A9\u0627 \u0645\u062C\u0645\u0648\u0639\u06CC \u0627\u0646\u062F\u0627\u0632 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-field-stack" }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftAutoDiaryWeeklyTestPreset, onChange: (event) => {
+        const nextValue = String(event.target.value || "standard");
+        if (nextValue === "custom") return;
+        handleApplySchoolDraftWeeklyTestPreset(nextValue);
+      } }, /* @__PURE__ */ React.createElement("option", { value: "standard" }, renderLocalizedTextNode(joinLocalizedText("Standard balance", "\u0645\u0639\u06CC\u0627\u0631\u06CC \u062A\u0648\u0627\u0632\u0646", language), language)), /* @__PURE__ */ React.createElement("option", { value: "current_focus" }, renderLocalizedTextNode(joinLocalizedText("Current week focused", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u06C1\u0641\u062A\u06D2 \u067E\u0631 \u062A\u0648\u062C\u06C1", language), language)), /* @__PURE__ */ React.createElement("option", { value: "revision_heavy" }, renderLocalizedTextNode(joinLocalizedText("Revision heavy", "\u0632\u06CC\u0627\u062F\u06C1 \u062F\u06C1\u0631\u0627\u0626\u06CC", language), language)), /* @__PURE__ */ React.createElement("option", { value: "disabled" }, renderLocalizedTextNode(joinLocalizedText("Disable weekly test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("option", { value: "custom" }, renderLocalizedTextNode(joinLocalizedText("Custom (from advanced settings)", "\u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u0627 (\u062C\u062F\u06CC\u062F \u0633\u06CC\u0679\u0646\u06AF\u0632 \u0633\u06D2)", language), language)))), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta auto-diary-helper-copy" }, renderLocalizedTextNode(schoolDraftAutoDiaryWeeklyTestPreset === "current_focus" ? joinLocalizedText("Mostly tests the current week, with a smaller memory check from previous work.", "\u06CC\u06C1 \u0632\u06CC\u0627\u062F\u06C1 \u062A\u0631 \u0645\u0648\u062C\u0648\u062F\u06C1 \u06C1\u0641\u062A\u06D2 \u06A9\u0648 \u062C\u0627\u0646\u0686\u062A\u0627 \u06C1\u06D2 \u0627\u0648\u0631 \u067E\u0686\u06BE\u0644\u06D2 \u06A9\u0627\u0645 \u0633\u06D2 \u062A\u06BE\u0648\u0691\u06CC \u062F\u06C1\u0631\u0627\u0626\u06CC \u0628\u06BE\u06CC \u0631\u06A9\u06BE\u062A\u0627 \u06C1\u06D2\u06D4", language) : schoolDraftAutoDiaryWeeklyTestPreset === "revision_heavy" ? joinLocalizedText("Builds a stronger revision paper from older covered work.", "\u06CC\u06C1 \u067E\u06C1\u0644\u06D2 \u067E\u0691\u06BE\u06D2 \u06AF\u0626\u06D2 \u0645\u0648\u0627\u062F \u0633\u06D2 \u0632\u06CC\u0627\u062F\u06C1 \u0645\u0636\u0628\u0648\u0637 \u062F\u06C1\u0631\u0627\u0626\u06CC \u0648\u0627\u0644\u0627 \u067E\u0631\u0686\u06C1 \u0628\u0646\u0627\u062A\u0627 \u06C1\u06D2\u06D4", language) : schoolDraftAutoDiaryWeeklyTestPreset === "disabled" ? joinLocalizedText("No weekly test will be generated until you enable it again.", "\u062C\u0628 \u062A\u06A9 \u0622\u067E \u0627\u0633\u06D2 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0641\u0639\u0627\u0644 \u0646\u06C1 \u06A9\u0631\u06CC\u06BA \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0646\u06C1\u06CC\u06BA \u0628\u0646\u06D2 \u06AF\u0627\u06D4", language) : schoolDraftAutoDiaryWeeklyTestPreset === "standard" ? joinLocalizedText("Keeps a balanced paper between this week and prior covered work.", "\u06CC\u06C1 \u0645\u0648\u062C\u0648\u062F\u06C1 \u06C1\u0641\u062A\u06D2 \u0627\u0648\u0631 \u067E\u06C1\u0644\u06D2 \u067E\u0691\u06BE\u06D2 \u06AF\u0626\u06D2 \u0645\u0648\u0627\u062F \u06A9\u06D2 \u062F\u0631\u0645\u06CC\u0627\u0646 \u0645\u062A\u0648\u0627\u0632\u0646 \u067E\u0631\u0686\u06C1 \u0631\u06A9\u06BE\u062A\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText("This school is using a custom weekly-test setup from the Advanced panel.", "\u06CC\u06C1 \u0627\u0633\u06A9\u0648\u0644 Advanced \u067E\u06CC\u0646\u0644 \u0633\u06D2 \u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u06CC \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0633\u06CC\u0679\u0646\u06AF \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4", language), language)))), /* @__PURE__ */ React.createElement("details", { className: "profile-report-item auto-diary-advanced-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("summary", { className: "auto-diary-advanced-summary" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Advanced controls", "\u062C\u062F\u06CC\u062F \u06A9\u0646\u0679\u0631\u0648\u0644\u0632", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Priorities, holidays, thresholds, hybrid core, and detailed weekly-test weights", "\u062A\u0631\u062C\u06CC\u062D\u0627\u062A\u060C \u062A\u0639\u0637\u06CC\u0644\u0627\u062A\u060C \u062D\u062F\u06CC\u06BA\u060C \u0628\u0646\u06CC\u0627\u062F\u06CC \u0645\u0636\u0627\u0645\u06CC\u0646\u060C \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u06A9\u06D2 \u062A\u0641\u0635\u06CC\u0644\u06CC \u0648\u0632\u0646", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Calendar", "\u06A9\u06CC\u0644\u0646\u0688\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Start date, study days, holidays, test day", "\u0622\u063A\u0627\u0632\u060C \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0646\u060C \u062A\u0639\u0637\u06CC\u0644\u0627\u062A\u060C \u0679\u06CC\u0633\u0679 \u0688\u06D2", language), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 8 } }, /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftNormalizedAutoDiarySettings.calendar.startDate, onChange: (value) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, startDate: value } })), language }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.calendar.testDay, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, testDay: Number(event.target.value) || 6 } })) }, AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `auto_test_day_${entry.value}`, value: entry.value }, renderLocalizedTextNode(language === "ur" ? entry.ur : entry.en, language)))), /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftHolidayDateInput, onChange: setSchoolDraftHolidayDateInput, language }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleAddSchoolDraftHolidayDate }, renderLocalizedTextNode(joinLocalizedText("Add holiday", "\u062A\u0639\u0637\u06CC\u0644 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 8 } }, AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => {
+        const selected = schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.includes(entry.value);
+        return /* @__PURE__ */ React.createElement("button", { key: `study_day_${entry.value}`, type: "button", className: `profile-switcher-chip${selected ? " active" : ""}`, onClick: () => handleToggleSchoolDraftStudyDay(entry.value) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(language === "ur" ? entry.ur : entry.en, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(selected ? joinLocalizedText("Study day", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627 \u062F\u0646", language) : joinLocalizedText("Off day", "\u0686\u06BE\u0679\u06CC", language), language))));
+      })), schoolDraftNormalizedAutoDiarySettings.calendar.holidayDates.length ? /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row", style: { marginTop: 8 } }, schoolDraftNormalizedAutoDiarySettings.calendar.holidayDates.map((holidayDate) => /* @__PURE__ */ React.createElement("button", { key: `holiday_${holidayDate}`, type: "button", className: "chapter-badge neutral", onClick: () => handleRemoveSchoolDraftHolidayDate(holidayDate) }, renderLocalizedTextNode(holidayDate, language)))) : null), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Subjects & Layout", "\u0645\u0636\u0627\u0645\u06CC\u0646 \u0627\u0648\u0631 \u062A\u0631\u062A\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Inclusion, priority, weights, and day layout", "\u0634\u0645\u0648\u0644\u06CC\u062A\u060C \u062A\u0631\u062C\u06CC\u062D\u060C \u0648\u0632\u0646\u060C \u0627\u0648\u0631 \u0631\u0648\u0632\u0627\u0646\u06C1 \u062A\u0631\u062A\u06CC\u0628", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-grid", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Subject inclusion", "\u0645\u0636\u0627\u0645\u06CC\u0646 \u06A9\u06CC \u0634\u0645\u0648\u0644\u06CC\u062A", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.subjects.mode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, subjects: { ...current.subjects, mode: event.target.value === "selected" ? "selected" : "all" } })) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("All subjects", "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("option", { value: "selected" }, renderLocalizedTextNode(joinLocalizedText("Selected subjects only", "\u0635\u0631\u0641 \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Daily layout", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u062A\u0631\u062A\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.dailyLayout.mode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, mode: event.target.value } })) }, /* @__PURE__ */ React.createElement("option", { value: "all_subjects_daily" }, renderLocalizedTextNode(joinLocalizedText("All subjects daily", "\u06C1\u0631 \u0631\u0648\u0632 \u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("option", { value: "subject_rotation" }, renderLocalizedTextNode(joinLocalizedText("Rotate through the week", "\u06C1\u0641\u062A\u06D2 \u0645\u06CC\u06BA \u0628\u0627\u0631\u06CC \u0628\u0627\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("option", { value: "hybrid" }, renderLocalizedTextNode(joinLocalizedText("Hybrid core + rotation", "\u06C1\u0627\u0626\u0628\u0631\u0688 \u0628\u0646\u06CC\u0627\u062F\u06CC + \u06AF\u0631\u062F\u0634", language), language)))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Minimum subjects per day", "\u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0641\u06CC \u062F\u0646", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "1", max: "8", value: schoolDraftNormalizedAutoDiarySettings.dailyLayout.minSubjectsPerDay, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, minSubjectsPerDay: Math.max(1, Math.min(8, Number(event.target.value) || 1)) } })) })), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Maximum subjects per day", "\u0632\u06CC\u0627\u062F\u06C1 \u0633\u06D2 \u0632\u06CC\u0627\u062F\u06C1 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0641\u06CC \u062F\u0646", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "1", max: "8", value: schoolDraftNormalizedAutoDiarySettings.dailyLayout.maxSubjectsPerDay, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, maxSubjectsPerDay: Math.max(1, Math.min(8, Number(event.target.value) || 1)) } })) }))), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta auto-diary-helper-copy", style: { marginTop: 8 } }, renderLocalizedTextNode(
+        schoolDraftNormalizedAutoDiarySettings.subjects.mode === "all" ? joinLocalizedText("All current and future subjects are included automatically. Subject chips below are read-only in this mode.", "\u0627\u0633 \u0645\u0648\u0688 \u0645\u06CC\u06BA \u0645\u0648\u062C\u0648\u062F\u06C1 \u0627\u0648\u0631 \u0622\u0626\u0646\u062F\u06C1 \u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0634\u0627\u0645\u0644 \u06C1\u06CC\u06BA\u06D4 \u0646\u06CC\u0686\u06D2 \u0645\u0648\u062C\u0648\u062F \u0645\u0636\u0645\u0648\u0646 \u0686\u067E\u0633 \u0635\u0631\u0641 \u0645\u0639\u0644\u0648\u0645\u0627\u062A \u06A9\u06D2 \u0644\u06CC\u06D2 \u06C1\u06CC\u06BA\u06D4", language) : joinLocalizedText("Choose exactly which subjects should appear in the auto diary. Included subjects can then be prioritized below.", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0622\u0626\u06CC\u06BA \u06AF\u06D2\u06D4 \u0634\u0627\u0645\u0644 \u0645\u0636\u0627\u0645\u06CC\u0646 \u06A9\u0648 \u067E\u06BE\u0631 \u0646\u06CC\u0686\u06D2 \u062A\u0631\u062C\u06CC\u062D \u062F\u06CC \u062C\u0627 \u0633\u06A9\u062A\u06CC \u06C1\u06D2\u06D4", language),
+        language
+      )), /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 8 } }, allSubjects.map((subject) => {
+        const subjectId = String(subject.id || "").trim();
+        const selected = schoolDraftNormalizedAutoDiarySettings.subjects.mode === "all" || schoolDraftNormalizedAutoDiarySettings.subjects.selectedSubjectIds.includes(subjectId);
+        const readOnly = schoolDraftNormalizedAutoDiarySettings.subjects.mode === "all";
+        return /* @__PURE__ */ React.createElement("button", { key: `auto_subject_pick_${subjectId}`, type: "button", className: `profile-switcher-chip${selected ? " active" : ""}${readOnly ? " readonly" : ""}`, onClick: () => {
+          if (readOnly) return;
+          handleToggleSchoolDraftSubjectSelection(subjectId);
+        } }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(readOnly ? joinLocalizedText("Included automatically", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0634\u0627\u0645\u0644", language) : selected ? joinLocalizedText("Included", "\u0634\u0627\u0645\u0644", language) : joinLocalizedText("Tap to include", "\u0634\u0627\u0645\u0644 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language))));
+      })), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 8 } }, orderAutoDiarySubjects(schoolDraftNormalizedAutoDiarySettings.subjects.mode === "selected" ? allSubjects.filter((subject) => schoolDraftNormalizedAutoDiarySettings.subjects.selectedSubjectIds.includes(subject.id)) : allSubjects, schoolDraftNormalizedAutoDiarySettings).map((subject) => {
+        var _a2;
+        const subjectId = String(subject.id || "").trim();
+        const weightValue = Number((_a2 = schoolDraftNormalizedAutoDiarySettings.subjects.weightsBySubject) == null ? void 0 : _a2[subjectId]) || 1;
+        const subjectOrderIndex = normalizeTextArray(schoolDraftNormalizedAutoDiarySettings.subjects.priorityOrder).findIndex((entry) => entry === subjectId);
+        const hybridCoreSelected = schoolDraftNormalizedAutoDiarySettings.dailyLayout.hybridCoreSubjectIds.includes(subjectId);
+        return /* @__PURE__ */ React.createElement("div", { key: `auto_subject_priority_${subjectId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getSubjectDisplayName(subject, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Priority ${subjectOrderIndex >= 0 ? subjectOrderIndex + 1 : "\u2014"}`, `\u062A\u0631\u062C\u06CC\u062D ${subjectOrderIndex >= 0 ? subjectOrderIndex + 1 : "\u2014"}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-grid auto-diary-labeled-grid--compact", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Subject weight", "\u0645\u0636\u0645\u0648\u0646 \u06A9\u0627 \u0648\u0632\u0646", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "0", max: "10", value: weightValue, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, subjects: { ...current.subjects, weightsBySubject: { ...current.subjects.weightsBySubject || {}, [subjectId]: Math.max(0, Math.min(10, Number(event.target.value) || 0)) } } })) })), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Priority order", "\u062A\u0631\u062C\u06CC\u062D\u06CC \u062A\u0631\u062A\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 0 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleMoveSchoolDraftSubjectPriority(subjectId, -1) }, renderLocalizedTextNode(joinLocalizedText("Up", "\u0627\u0648\u067E\u0631", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleMoveSchoolDraftSubjectPriority(subjectId, 1) }, renderLocalizedTextNode(joinLocalizedText("Down", "\u0646\u06CC\u0686\u06D2", language), language)))), schoolDraftNormalizedAutoDiarySettings.dailyLayout.mode === "hybrid" ? /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Hybrid core subject", "\u06C1\u0627\u0626\u0628\u0631\u0688 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0645\u0636\u0645\u0648\u0646", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-badge ${hybridCoreSelected ? "active" : "neutral"}`, onClick: () => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, dailyLayout: { ...current.dailyLayout, hybridCoreSubjectIds: hybridCoreSelected ? normalizeTextArray(current.dailyLayout.hybridCoreSubjectIds).filter((value) => value !== subjectId) : [...normalizeTextArray(current.dailyLayout.hybridCoreSubjectIds), subjectId] } })) }, renderLocalizedTextNode(hybridCoreSelected ? joinLocalizedText("Core", "\u0628\u0646\u06CC\u0627\u062F\u06CC", language) : joinLocalizedText("Make core", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language))) : null));
+      }))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Progression & Weekly Test", "\u067E\u06CC\u0634 \u0631\u0641\u062A \u0627\u0648\u0631 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Completion rules, carry-forward, difficulty, and question mix", "\u062A\u06A9\u0645\u06CC\u0644 \u06A9\u06D2 \u0642\u0648\u0627\u0639\u062F\u060C \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0627\u0624\u060C \u0645\u0634\u06A9\u0644\u060C \u0627\u0648\u0631 \u0633\u0648\u0627\u0644\u0627\u062A \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-grid", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Chapter selection", "\u0628\u0627\u0628 \u06A9\u06D2 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0627 \u0637\u0631\u06CC\u0642\u06C1", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.progression.chapterSelectionMode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, chapterSelectionMode: event.target.value === "curriculum_order" ? "curriculum_order" : "progress_first" } })) }, /* @__PURE__ */ React.createElement("option", { value: "progress_first" }, renderLocalizedTextNode(joinLocalizedText("Next unfinished chapter", "\u0627\u06AF\u0644\u0627 \u0646\u0627\u0645\u06A9\u0645\u0644 \u0628\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("option", { value: "curriculum_order" }, renderLocalizedTextNode(joinLocalizedText("Curriculum order", "\u0646\u0635\u0627\u0628\u06CC \u062A\u0631\u062A\u06CC\u0628", language), language)))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Advance rule", "\u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u06D2 \u06A9\u0627 \u0627\u0635\u0648\u0644", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.progression.advanceMode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, advanceMode: event.target.value === "weekly_lesson" ? "weekly_lesson" : "carry_forward" } })) }, /* @__PURE__ */ React.createElement("option", { value: "carry_forward" }, renderLocalizedTextNode(joinLocalizedText("Carry forward", "\u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("option", { value: "weekly_lesson" }, renderLocalizedTextNode(joinLocalizedText("Weekly focus", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u062A\u0648\u062C\u06C1", language), language)))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Completion rule", "\u062A\u06A9\u0645\u06CC\u0644 \u06A9\u0627 \u0627\u0635\u0648\u0644", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.progression.completionMode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, completionMode: event.target.value === "all" ? "all" : "any" } })) }, /* @__PURE__ */ React.createElement("option", { value: "any" }, renderLocalizedTextNode(joinLocalizedText("Any enabled signal", "\u06A9\u0648\u0626\u06CC \u0628\u06BE\u06CC \u0641\u0639\u0627\u0644 \u0627\u0634\u0627\u0631\u06C1", language), language)), /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("All enabled signals", "\u062A\u0645\u0627\u0645 \u0641\u0639\u0627\u0644 \u0627\u0634\u0627\u0631\u06D2", language), language)))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Minimum units per day", "\u06A9\u0645 \u0627\u0632 \u06A9\u0645 \u06CC\u0648\u0646\u0679\u0633 \u0641\u06CC \u062F\u0646", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "1", max: "6", value: schoolDraftNormalizedAutoDiarySettings.progression.minimumUnitsPerDay, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, minimumUnitsPerDay: Math.max(1, Math.min(6, Number(event.target.value) || 1)) } })) })), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Lesson completion threshold %", "\u0633\u0628\u0642 \u06A9\u06CC \u062A\u06A9\u0645\u06CC\u0644 \u06A9\u06CC \u062D\u062F %", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "1", max: "100", value: schoolDraftNormalizedAutoDiarySettings.progression.lessonProgressThreshold, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, lessonProgressThreshold: Math.max(1, Math.min(100, Number(event.target.value) || 1)) } })) }))), /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row", style: { marginTop: 8 } }, ["skipCompletedLessons", "reviewWhenShort", "countMarkedDone", "countQuizComplete", "countLessonProgress"].map((key) => /* @__PURE__ */ React.createElement("button", { key: `progression_toggle_${key}`, type: "button", className: `chapter-badge ${schoolDraftNormalizedAutoDiarySettings.progression[key] ? "active" : "neutral"}`, onClick: () => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, progression: { ...current.progression, [key]: !current.progression[key] } })) }, renderLocalizedTextNode(key === "skipCompletedLessons" ? joinLocalizedText("Skip completed", "\u0645\u06A9\u0645\u0644 \u0686\u06BE\u0648\u0691\u06CC\u06BA", language) : key === "reviewWhenShort" ? joinLocalizedText("Review short lessons", "\u0645\u062E\u062A\u0635\u0631 \u0633\u0628\u0642 \u062F\u06C1\u0631\u0627\u0626\u06CC\u06BA", language) : key === "countMarkedDone" ? joinLocalizedText("Manual done counts", "\u062F\u0633\u062A\u06CC \u0645\u06A9\u0645\u0644 \u0634\u0645\u0627\u0631 \u06C1\u0648", language) : key === "countQuizComplete" ? joinLocalizedText("Quiz counts", "\u06A9\u0648\u0626\u0632 \u0634\u0645\u0627\u0631 \u06C1\u0648", language) : joinLocalizedText("Lesson progress counts", "\u0633\u0628\u0642 \u067E\u06CC\u0634 \u0631\u0641\u062A \u0634\u0645\u0627\u0631 \u06C1\u0648", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-grid", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Accumulation scope", "\u062C\u0645\u0639 \u0634\u062F\u06C1 \u062F\u0627\u0626\u0631\u06C1", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.saturdayTest.accumulationMode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, accumulationMode: event.target.value } })) }, /* @__PURE__ */ React.createElement("option", { value: "rolling" }, renderLocalizedTextNode(joinLocalizedText("Rolling last N weeks", "\u067E\u0686\u06BE\u0644\u06D2 N \u06C1\u0641\u062A\u06D2", language), language)), /* @__PURE__ */ React.createElement("option", { value: "academic_year" }, renderLocalizedTextNode(joinLocalizedText("Academic year", "\u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u0644", language), language)), /* @__PURE__ */ React.createElement("option", { value: "since_start" }, renderLocalizedTextNode(joinLocalizedText("Since app start", "\u0627\u06CC\u067E \u06A9\u06D2 \u0622\u063A\u0627\u0632 \u0633\u06D2", language), language)))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Rolling weeks", "\u0631\u0648\u0644\u0646\u06AF \u06C1\u0641\u062A\u06D2", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "1", max: "52", value: schoolDraftNormalizedAutoDiarySettings.saturdayTest.accumulationValue, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, accumulationValue: Math.max(1, Math.min(52, Number(event.target.value) || 1)) } })) })), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Test difficulty", "\u0679\u06CC\u0633\u0679 \u06A9\u06CC \u0645\u0634\u06A9\u0644", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.saturdayTest.difficulty, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, difficulty: event.target.value } })) }, /* @__PURE__ */ React.createElement("option", { value: "light" }, renderLocalizedTextNode(joinLocalizedText("Light", "\u06C1\u0644\u06A9\u0627", language), language)), /* @__PURE__ */ React.createElement("option", { value: "standard" }, renderLocalizedTextNode(joinLocalizedText("Standard", "\u0645\u0639\u06CC\u0627\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("option", { value: "rigorous" }, renderLocalizedTextNode(joinLocalizedText("Rigorous", "\u0633\u062E\u062A", language), language)))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Current week share %", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u062D\u0635\u06C1 %", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "0", max: "100", value: schoolDraftNormalizedAutoDiarySettings.saturdayTest.currentWeekWeight, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, currentWeekWeight: Math.max(0, Math.min(100, Number(event.target.value) || 0)) } })) })), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Prior weeks share %", "\u067E\u0686\u06BE\u0644\u06D2 \u06C1\u0641\u062A\u0648\u06BA \u06A9\u0627 \u062D\u0635\u06C1 %", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "0", max: "100", value: schoolDraftNormalizedAutoDiarySettings.saturdayTest.priorWeeksWeight, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, priorWeeksWeight: Math.max(0, Math.min(100, Number(event.target.value) || 0)) } })) }))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-grid auto-diary-labeled-grid--compact", style: { marginTop: 8 } }, ["mcq", "truefalse", "fillblank", "matching"].map((type) => /* @__PURE__ */ React.createElement("label", { key: `test_weight_${type}`, className: "auto-diary-labeled-field auto-diary-labeled-field--compact" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(type === "mcq" ? joinLocalizedText("MCQ weight %", "MCQ \u0648\u0632\u0646 %", language) : type === "truefalse" ? joinLocalizedText("True/False weight %", "\u0635\u062D\u06CC\u062D/\u063A\u0644\u0637 \u0648\u0632\u0646 %", language) : type === "fillblank" ? joinLocalizedText("Fill blanks weight %", "\u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u0648\u0632\u0646 %", language) : joinLocalizedText("Matching weight %", "\u0645\u0644\u0627\u0646\u06D2 \u06A9\u0627 \u0648\u0632\u0646 %", language), language)), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "number", min: "0", max: "100", value: schoolDraftNormalizedAutoDiarySettings.saturdayTest.questionTypeWeights[type], onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, questionTypeWeights: { ...current.saturdayTest.questionTypeWeights, [type]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) } } })) }))), /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-badge ${schoolDraftNormalizedAutoDiarySettings.saturdayTest.enabled ? "active" : "neutral"}`, onClick: () => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, saturdayTest: { ...current.saturdayTest, enabled: !current.saturdayTest.enabled } })) }, renderLocalizedTextNode(schoolDraftNormalizedAutoDiarySettings.saturdayTest.enabled ? joinLocalizedText("Weekly test enabled", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0641\u0639\u0627\u0644", language) : joinLocalizedText("Weekly test disabled", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u063A\u06CC\u0631 \u0641\u0639\u0627\u0644", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Auto Diary Overrides", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06CC\u06BA \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Adjust the generated weekly diary without breaking the base schedule.", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0634\u06CC\u0688\u0648\u0644 \u06A9\u0648 \u062E\u0631\u0627\u0628 \u06A9\u06CC\u06D2 \u0628\u063A\u06CC\u0631 \u062A\u06CC\u0627\u0631 \u0634\u062F\u06C1 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0648 \u0627\u06CC\u0688\u062C\u0633\u0679 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), canManageAutoDiaryOverrides ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-grid", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Override scope", "\u062A\u0628\u062F\u06CC\u0644\u06CC \u06A9\u0627 \u062F\u0627\u0626\u0631\u06C1", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: autoDiaryOverrideScope, onChange: (event) => setAutoDiaryOverrideScope(event.target.value === "student" ? "student" : "grade") }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Specific student", "\u0645\u062E\u0635\u0648\u0635 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language)))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Week to edit", "\u062A\u0631\u0645\u06CC\u0645 \u0648\u0627\u0644\u0627 \u06C1\u0641\u062A\u06C1", language), language)), /* @__PURE__ */ React.createElement(CalendarDateField, { value: autoDiaryOverrideWeekStartDate, onChange: (value) => setAutoDiaryOverrideWeekStartDate(toIsoDateString(getWeekStartDate(value || Date.now()))), language })), autoDiaryOverrideScope === "student" ? /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Student", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: autoDiaryOverrideResolvedStudentEmail, onChange: (event) => setAutoDiaryOverrideStudentEmail(event.target.value), disabled: !autoDiaryOverridePreviewStudentOptions.length }, autoDiaryOverridePreviewStudentOptions.length ? autoDiaryOverridePreviewStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `override_student_${entry.email}`, value: entry.email }, entry.label)) : /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("No learners available", "\u06A9\u0648\u0626\u06CC \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA", language), language)))) : null), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta auto-diary-helper-copy", style: { marginTop: 8 } }, renderLocalizedTextNode(autoDiaryOverrideScope === "student" ? joinLocalizedText("Student overrides sit above grade rules for this learner only.", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0635\u0631\u0641 \u0627\u0633\u06CC \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062C\u0645\u0627\u0639\u062A\u06CC \u0642\u0648\u0627\u0639\u062F \u0633\u06D2 \u0627\u0648\u067E\u0631 \u0631\u06C1\u062A\u06CC \u06C1\u06CC\u06BA\u06D4", language) : joinLocalizedText("Grade-wide overrides change the generated diary for the whole selected grade.", "\u062C\u0645\u0627\u0639\u062A\u06CC \u0633\u0637\u062D \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u0646\u062A\u062E\u0628 \u062C\u0645\u0627\u0639\u062A \u06A9\u06CC \u062A\u06CC\u0627\u0631 \u0634\u062F\u06C1 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0648 \u0628\u062F\u0644\u062A\u06CC \u06C1\u06CC\u06BA\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 12 } }, !autoDiaryOverridePreviewVisibleDates.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("No upcoming study days in this week", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u0645\u06CC\u06BA \u0622\u06AF\u06D2 \u06A9\u0648\u0626\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u062F\u0646 \u0646\u06C1\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Passed days are hidden automatically. Pick this week or a future week to edit active diary work.", "\u06AF\u0632\u0631\u06D2 \u06C1\u0648\u0626\u06D2 \u062F\u0646 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0686\u06BE\u067E\u0627\u0626\u06D2 \u062C\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0641\u0639\u0627\u0644 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645 \u0645\u06CC\u06BA \u062A\u0628\u062F\u06CC\u0644\u06CC \u06A9\u06D2 \u0644\u06CC\u06D2 \u06CC\u06C1\u06CC \u06C1\u0641\u062A\u06C1 \u06CC\u0627 \u0622\u0626\u0646\u062F\u06C1 \u06C1\u0641\u062A\u06C1 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))) : autoDiaryOverridePreviewDayGroups.map((group) => {
+        const tasks = Array.isArray(group.tasks) ? group.tasks : [];
+        if (!tasks.length) {
+          return /* @__PURE__ */ React.createElement("div", { key: `override_day_${group.date}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(formatReadableDateLabel(group.date, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("No study tasks", "\u06A9\u0648\u0626\u06CC \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627\u0645 \u0646\u06C1\u06CC\u06BA", language), language))));
+        }
+        const subjectIds = Array.from(new Set(tasks.map((task) => String(task.subject || "").trim()).filter(Boolean)));
+        return /* @__PURE__ */ React.createElement("div", { key: `override_day_${group.date}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(formatReadableDateLabel(group.date, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${tasks.length} tasks`, `${tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 10 } }, subjectIds.map((subjectId) => {
+          const subjectTasks = tasks.filter((task) => String(task.subject || "").trim() === subjectId);
+          const subject = (subjectLookup == null ? void 0 : subjectLookup[subjectId]) || null;
+          return /* @__PURE__ */ React.createElement("div", { key: `override_subject_${group.date}_${subjectId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(subject ? getSubjectDisplayName(subject, language) : subjectId, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${subjectTasks.length} items`, `${subjectTasks.length} \u0622\u0626\u0679\u0645\u0632`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 8 } }, subjectTasks.map((task) => {
+            var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2;
+            const anchorKey = String(((_a2 = task.overrideRecord) == null ? void 0 : _a2.baseTaskKey) || task.baseTaskKey || task.taskKey || "").trim();
+            const isEditingHere = autoDiaryOverrideEditingAnchorKey === anchorKey && !task.isSkipped;
+            const statusLabel = task.source === "auto_skipped" ? joinLocalizedText("Skipped", "\u0686\u06BE\u0648\u0691\u0627 \u06AF\u06CC\u0627", language) : task.source === "auto_added" ? joinLocalizedText("Added", "\u0634\u0627\u0645\u0644 \u06A9\u06CC\u0627 \u06AF\u06CC\u0627", language) : task.source === "auto_override" ? joinLocalizedText("Replaced", "\u0628\u062F\u0644\u0627 \u06AF\u06CC\u0627", language) : joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language);
+            const chapterTitle = String(((_c2 = (_b2 = task.chapterGroup) == null ? void 0 : _b2.activeLesson) == null ? void 0 : _c2.title) || ((_d2 = task.lesson) == null ? void 0 : _d2.title) || "").trim();
+            const unitTitle = String(((_g2 = (_f2 = (_e2 = task.taskUnits) == null ? void 0 : _e2[0]) == null ? void 0 : _f2.sourceMeta) == null ? void 0 : _g2.title) || ((_i2 = (_h2 = task.taskUnits) == null ? void 0 : _h2[0]) == null ? void 0 : _i2.title) || task.title || "").trim();
+            const taskSegmentTitles = Array.isArray(task.taskSegments) ? task.taskSegments.map((segment) => String((segment == null ? void 0 : segment.chapterTitle) || "").trim()).filter(Boolean) : [];
+            return /* @__PURE__ */ React.createElement("div", { key: `override_task_${group.date}_${task.taskKey}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle || unitTitle, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(statusLabel, language))), unitTitle && unitTitle !== chapterTitle ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(unitTitle, language)) : null, taskSegmentTitles.length > 1 ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 4 } }, renderLocalizedTextNode(taskSegmentTitles.join(" \u2022 "), language)) : null, task.note ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 4 } }, renderLocalizedTextNode(task.note, language)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 8 } }, task.source === "auto" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenAutoDiaryOverrideEditor(task, "replace") }, renderLocalizedTextNode(joinLocalizedText("Replace", "\u0628\u062F\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenAutoDiaryOverrideEditor(task, "add") }, renderLocalizedTextNode(joinLocalizedText("Add below", "\u0646\u06CC\u0686\u06D2 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleSaveAutoDiaryOverride(task, "skip"), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Skip", "\u0686\u06BE\u0648\u0691\u06CC\u06BA", language), language))) : null, task.source === "auto_override" || task.source === "auto_added" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenAutoDiaryOverrideEditor(task, task.source === "auto_added" ? "add" : "replace") }, renderLocalizedTextNode(joinLocalizedText("Edit override", "\u062A\u0628\u062F\u06CC\u0644\u06CC \u062A\u0631\u0645\u06CC\u0645 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteAutoDiaryOverride(task.overrideRecord || task), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Restore default", "\u0627\u0635\u0644 \u0628\u062D\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language), language))) : null, task.source === "auto_skipped" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleOpenAutoDiaryOverrideEditor(task, "replace") }, renderLocalizedTextNode(joinLocalizedText("Replace instead", "\u0627\u0633 \u06A9\u06D2 \u0628\u062F\u0644\u06D2 \u0646\u06CC\u0627 \u062F\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteAutoDiaryOverride(task.overrideRecord || task), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Restore default", "\u0627\u0635\u0644 \u0628\u062D\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language), language))) : null), isEditingHere ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(autoDiaryOverrideEditingMode === "add" ? joinLocalizedText("Add an extra task", "\u0627\u06CC\u06A9 \u0627\u0636\u0627\u0641\u06CC \u06A9\u0627\u0645 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Replace this task", "\u0627\u0633 \u06A9\u0627\u0645 \u06A9\u0648 \u0628\u062F\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText("Build the exact live diary structure here. Add one or more chapter sources, then choose the exact subsection tree and internal items/questions to show.", "\u06CC\u06C1\u0627\u06BA \u0648\u06C1\u06CC \u062D\u0642\u06CC\u0642\u06CC \u0688\u0627\u0626\u0631\u06CC \u0633\u0627\u062E\u062A \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4 \u0627\u06CC\u06A9 \u06CC\u0627 \u0632\u06CC\u0627\u062F\u06C1 \u0628\u0627\u0628\u06CC \u0630\u0631\u0627\u0626\u0639 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062F\u0631\u0633\u062A \u0630\u06CC\u0644\u06CC \u062D\u0635\u06C1\u060C \u0627\u0646\u062F\u0631\u0648\u0646\u06CC \u0686\u06CC\u0632\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0633\u0648\u0627\u0644\u0627\u062A \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleAddAutoDiaryOverrideDraftSource }, renderLocalizedTextNode(joinLocalizedText("Add chapter source", "\u0628\u0627\u0628\u06CC \u0630\u0631\u06CC\u0639\u06C1 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 10 } }, (autoDiaryOverrideDraftSources.length ? autoDiaryOverrideDraftSources : [createAutoDiaryOverrideDraftSource({
+              subject: task.subject,
+              lessonKey: task.lessonKey,
+              contentId: task.contentId
+            })]).map((sourceDraft, sourceIndex) => {
+              var _a3, _b3;
+              const sourceSubjectId = String((sourceDraft == null ? void 0 : sourceDraft.subject) || task.subject || "").trim();
+              const sourceSubject = allSubjects.find((subjectOption) => String((subjectOption == null ? void 0 : subjectOption.id) || "").trim() === sourceSubjectId) || (subjectLookup == null ? void 0 : subjectLookup[sourceSubjectId]) || null;
+              const localizedSourceSubjectTitle = sourceSubject ? getSubjectDisplayName(sourceSubject, language) : sourceSubjectId || joinLocalizedText("Choose a subject", "\u0627\u06CC\u06A9 \u0645\u0636\u0645\u0648\u0646 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language);
+              const sourceChapterGroups = sourceSubjectId && grade ? getMergedLessonGroups(sourceSubjectId, grade) : [];
+              const sourceChapterGroup = sourceChapterGroups.find((groupOption) => groupOption.canonicalLessonKey === resolveCustomChapterLessonKey({ lessonKey: (sourceDraft == null ? void 0 : sourceDraft.lessonKey) || "" })) || sourceChapterGroups[0] || null;
+              const sourceContentOptions = ((sourceChapterGroup == null ? void 0 : sourceChapterGroup.variants) || []).map((entry) => ({
+                contentId: String((entry == null ? void 0 : entry.contentId) || "").trim(),
+                label: (entry == null ? void 0 : entry.sourceType) === "builtin" ? joinLocalizedText("Built-in copy", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u06A9\u0627\u067E\u06CC", language) : (entry == null ? void 0 : entry.sourceType) === "custom" ? joinLocalizedText("Local custom copy", "\u0645\u0642\u0627\u0645\u06CC \u0630\u0627\u062A\u06CC \u06A9\u0627\u067E\u06CC", language) : String((entry == null ? void 0 : entry.authorUsername) || "").trim() ? joinLocalizedText(`Published by ${entry.authorUsername}`, `${entry.authorUsername} \u06A9\u06CC \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC`, language) : joinLocalizedText("Published copy", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC", language)
+              }));
+              const resolvedContentId = sourceContentOptions.some((entry) => entry.contentId === String((sourceDraft == null ? void 0 : sourceDraft.contentId) || "").trim()) ? String((sourceDraft == null ? void 0 : sourceDraft.contentId) || "").trim() : ((_a3 = sourceContentOptions[0]) == null ? void 0 : _a3.contentId) || "";
+              const sourceContext = buildDiaryOverrideSourceSegment({
+                ...sourceDraft,
+                lessonKey: (sourceChapterGroup == null ? void 0 : sourceChapterGroup.canonicalLessonKey) || (sourceDraft == null ? void 0 : sourceDraft.lessonKey) || "",
+                contentId: resolvedContentId
+              }, task);
+              const chapterOutlineNodes = Array.isArray(sourceContext == null ? void 0 : sourceContext.fullOutlineNodes) ? sourceContext.fullOutlineNodes : [];
+              const selectedCount = normalizeTextArray(sourceDraft == null ? void 0 : sourceDraft.selectedNodeKeys).length;
+              return /* @__PURE__ */ React.createElement("details", { key: `override_source_block_${sourceDraft.sourceId || sourceIndex}`, className: "profile-report-item", open: sourceIndex === 0 }, /* @__PURE__ */ React.createElement("summary", { className: "profile-report-item-head", style: { cursor: "pointer", listStyle: "none" } }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`Chapter Source ${sourceIndex + 1}`, `\u0628\u0627\u0628\u06CC \u0630\u0631\u06CC\u0639\u06C1 ${sourceIndex + 1}`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${selectedCount} picked`, `${selectedCount} \u0645\u0646\u062A\u062E\u0628`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("span", { className: "goal-progress-meta" }, renderLocalizedTextNode(
+                ((_b3 = sourceChapterGroup == null ? void 0 : sourceChapterGroup.activeLesson) == null ? void 0 : _b3.title) ? joinLocalizedText(
+                  `${localizedSourceSubjectTitle} \u2022 ${sourceChapterGroup.activeLesson.title}`,
+                  `${localizedSourceSubjectTitle} \u2022 ${sourceChapterGroup.activeLesson.title}`,
+                  language
+                ) : localizedSourceSubjectTitle,
+                language
+              )), autoDiaryOverrideDraftSources.length > 1 ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleRemoveAutoDiaryOverrideDraftSource(sourceDraft.sourceId) }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : /* @__PURE__ */ React.createElement("span", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText("Primary source", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0630\u0631\u06CC\u0639\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-labeled-grid", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Subject", "\u0645\u0636\u0645\u0648\u0646", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: sourceSubjectId, onChange: (event) => {
+                var _a4, _b4, _c3;
+                const nextSubjectId = String(event.target.value || "").trim();
+                const nextChapterGroups = nextSubjectId && grade ? getMergedLessonGroups(nextSubjectId, grade) : [];
+                handleUpdateAutoDiaryOverrideDraftSource(sourceDraft.sourceId, {
+                  subject: nextSubjectId,
+                  lessonKey: ((_a4 = nextChapterGroups[0]) == null ? void 0 : _a4.canonicalLessonKey) || "",
+                  contentId: String(((_c3 = (_b4 = nextChapterGroups[0]) == null ? void 0 : _b4.activeVariant) == null ? void 0 : _c3.contentId) || "").trim(),
+                  selectedNodeKeys: [],
+                  expandedNodeKeys: []
+                });
+              } }, allSubjects.map((subjectOption) => /* @__PURE__ */ React.createElement("option", { key: `override_subject_pick_${sourceDraft.sourceId}_${subjectOption.id}`, value: subjectOption.id }, renderLocalizedTextNode(getSubjectDisplayName(subjectOption, language), language))))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Chapter", "\u0628\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: (sourceChapterGroup == null ? void 0 : sourceChapterGroup.canonicalLessonKey) || "", onChange: (event) => {
+                var _a4;
+                const nextLessonKey = String(event.target.value || "").trim();
+                const nextGroup = sourceChapterGroups.find((groupOption) => groupOption.canonicalLessonKey === nextLessonKey) || null;
+                handleUpdateAutoDiaryOverrideDraftSource(sourceDraft.sourceId, {
+                  lessonKey: nextLessonKey,
+                  contentId: String(((_a4 = nextGroup == null ? void 0 : nextGroup.activeVariant) == null ? void 0 : _a4.contentId) || "").trim(),
+                  selectedNodeKeys: [],
+                  expandedNodeKeys: []
+                });
+              } }, sourceChapterGroups.map((groupOption) => {
+                var _a4;
+                return /* @__PURE__ */ React.createElement("option", { key: `override_chapter_${sourceDraft.sourceId}_${groupOption.canonicalLessonKey}`, value: groupOption.canonicalLessonKey }, renderLocalizedTextNode(((_a4 = groupOption.activeLesson) == null ? void 0 : _a4.title) || groupOption.canonicalLessonKey, language));
+              }))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field" }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Chapter copy", "\u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0627\u067E\u06CC", language), language)), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: resolvedContentId, onChange: (event) => handleUpdateAutoDiaryOverrideDraftSource(sourceDraft.sourceId, {
+                contentId: event.target.value,
+                selectedNodeKeys: [],
+                expandedNodeKeys: []
+              }) }, sourceContentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `override_content_${sourceDraft.sourceId}_${entry.contentId || "default"}`, value: entry.contentId }, renderLocalizedTextNode(entry.label, language)))))), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Live chapter structure", "\u0628\u0627\u0628 \u06A9\u06CC \u062D\u0642\u06CC\u0642\u06CC \u0633\u0627\u062E\u062A", language), language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginBottom: 8 } }, renderLocalizedTextNode(joinLocalizedText("Select whole subsections or expand them and pick exact internal items and questions. This mirrors the live diary structure.", "\u067E\u0648\u0631\u06D2 \u0630\u06CC\u0644\u06CC \u062D\u0635\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06CC\u0627 \u0627\u0646\u06C1\u06CC\u06BA \u06A9\u06BE\u0648\u0644 \u06A9\u0631 \u062F\u0631\u0633\u062A \u0627\u0646\u062F\u0631\u0648\u0646\u06CC \u0686\u06CC\u0632\u06CC\u06BA \u0627\u0648\u0631 \u0633\u0648\u0627\u0644\u0627\u062A \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4 \u06CC\u06C1\u06CC \u062D\u0642\u06CC\u0642\u06CC \u0688\u0627\u0626\u0631\u06CC \u0633\u0627\u062E\u062A \u06C1\u06D2\u06D4", language), language)), chapterOutlineNodes.length ? renderAutoDiaryOverrideSelectionNodes(sourceDraft, chapterOutlineNodes, false, 0) : /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("No chapter structure available", "\u0628\u0627\u0628 \u06A9\u06CC \u0633\u0627\u062E\u062A \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Choose another chapter or chapter copy to continue.", "\u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062F\u0648\u0633\u0631\u0627 \u0628\u0627\u0628 \u06CC\u0627 \u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0627\u067E\u06CC \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))))));
+            })), /* @__PURE__ */ React.createElement("label", { className: "auto-diary-labeled-field", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("span", { className: "auto-diary-labeled-label" }, renderLocalizedTextNode(joinLocalizedText("Teacher note", "\u0627\u0633\u062A\u0627\u062F \u06A9\u0627 \u0646\u0648\u0679", language), language)), /* @__PURE__ */ React.createElement("textarea", { className: "settings-text-input", value: autoDiaryOverrideNote, onChange: (event) => setAutoDiaryOverrideNote(event.target.value), rows: 3 })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: () => handleSaveAutoDiaryOverride(task, autoDiaryOverrideEditingMode), disabled: contentRelationshipBusy }, renderLocalizedTextNode(contentRelationshipBusy ? joinLocalizedText("Saving...", "\u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : autoDiaryOverrideEditingMode === "add" ? joinLocalizedText("Save extra task", "\u0627\u0636\u0627\u0641\u06CC \u06A9\u0627\u0645 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Save replacement", "\u0645\u062A\u0628\u0627\u062F\u0644 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleCancelAutoDiaryOverrideEditor }, renderLocalizedTextNode(joinLocalizedText("Cancel", "\u0645\u0646\u0633\u0648\u062E", language), language)))) : null);
+          })));
+        })));
+      }))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Your current institution role cannot override the auto diary.", "\u0622\u067E \u06A9\u0627 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06CC\u06BA \u062A\u0628\u062F\u06CC\u0644\u06CC \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u0627\u06D4", language), language)))))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveSchool, disabled: contentRelationshipBusy }, renderLocalizedTextNode(contentRelationshipBusy ? joinLocalizedText("Saving...", "\u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Save School", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeInstitutionSchool ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Memberships", "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E\u0633", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Membership decides who belongs to this school. Teacher-student links and family links then make the relationship graph precise.", "\u0645\u0645\u0628\u0631\u0634\u067E \u0637\u06D2 \u06A9\u0631\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u06A9\u0648\u0646 \u0627\u0633 \u0627\u0633\u06A9\u0648\u0644 \u0633\u06D2 \u062A\u0639\u0644\u0642 \u0631\u06A9\u06BE\u062A\u0627 \u06C1\u06D2\u06D4 \u0627\u0633 \u06A9\u06D2 \u0628\u0639\u062F \u0627\u0633\u062A\u0627\u062F-\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0627\u0648\u0631 \u062E\u0627\u0646\u062F\u0627\u0646\u06CC \u0631\u0648\u0627\u0628\u0637 \u0631\u0634\u062A\u0648\u06BA \u06A9\u0648 \u062F\u0631\u0633\u062A \u0628\u0646\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolMemberDraftEmail, onChange: (event) => setSchoolMemberDraftEmail(event.target.value), placeholder: language === "ur" ? "\u0645\u0645\u0628\u0631 \u0627\u06CC \u0645\u06CC\u0644" : "Member email" }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolMemberDraftRole, onChange: (event) => setSchoolMemberDraftRole(event.target.value) }, CONTENT_MANAGER_ROLES.map((role) => /* @__PURE__ */ React.createElement("option", { key: `membership_role_${role}`, value: role }, renderLocalizedTextNode(getContentManagerRoleLabel(role, language), language)))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolMemberDraftGradeScope, onChange: (event) => setSchoolMemberDraftGradeScope(event.target.value), placeholder: language === "ur" ? "\u062C\u0645\u0627\u0639\u062A\u06CC\u06BA\u060C \u0645\u062B\u0644\u0627\u064B 5,6" : "Grades, e.g. 5,6" }), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveSchoolMembership, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Save Member", "\u0645\u0645\u0628\u0631 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, safeSchoolMemberships.filter((entry) => entry.status === "active" && entry.schoolId === activeInstitutionSchool.schoolId).map((entry) => /* @__PURE__ */ React.createElement("div", { key: `school_membership_${entry.membershipId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(entry.memberEmail, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(getContentManagerRoleLabel(entry.role, language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(entry.gradeScope.length ? joinLocalizedText(`Grades ${entry.gradeScope.join(", ")}`, `\u062C\u0645\u0627\u0639\u062A\u06CC\u06BA ${entry.gradeScope.join("\u060C ")}`, language) : joinLocalizedText("All grades in school scope", "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u062A\u0645\u0627\u0645 \u062F\u0631\u062C\u06D2", language), language)), (canManageInstitution || canManageContentAccess) && getInstitutionRoleRank(currentUserInstitutionRole || contentManagerRole) > getInstitutionRoleRank(entry.role) ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 } }, CONTENT_PERMISSION_KEYS.filter((key) => key !== "manageContentAccess").map((permKey) => {
         var _a2;
         const matrix = normalizeContentPermissionMatrix(contentAccessState.rolePermissions);
         const baseValue = Boolean((_a2 = matrix[entry.role]) == null ? void 0 : _a2[permKey]);
@@ -20799,7 +23428,7 @@ ${error.message || error}`);
       )))) : /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText("No pending rows right now.", "\u0627\u0633 \u0648\u0642\u062A \u06A9\u0648\u0626\u06CC \u0645\u0646\u062A\u0638\u0631 \u0642\u0637\u0627\u0631 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : null, supabaseSyncActivity.lastErrorMessage ? /* @__PURE__ */ React.createElement("div", { className: "practice-feedback-panel", style: { marginTop: 12 } }, renderLocalizedTextNode(joinLocalizedText(`Last sync issue: ${supabaseSyncActivity.lastErrorMessage}`, `\u0622\u062E\u0631\u06CC \u0633\u0646\u06A9 \u0645\u0633\u0626\u0644\u06C1: ${supabaseSyncActivity.lastErrorMessage}`, language), language)) : null) : null,
       profilesSectionTab === "notifications" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.notificationHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.notificationHistoryHint, language)))), recentNotificationHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentNotificationHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(formatNotificationTime(entry.createdAt, language), language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noNotificationsYet, language))) : null,
       profilesSectionTab === "reports" && activeProfileRole === "parent" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel role-overview-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Parent View", "\u0648\u0627\u0644\u062F\u06CC\u0646 \u0645\u0646\u0638\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("A calm, read-only summary of this learner's current progress so you can guide without disturbing their study setup.", "\u0627\u0633 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u0645\u0648\u062C\u0648\u062F\u06C1 \u067E\u06CC\u0634 \u0631\u0641\u062A \u06A9\u0627 \u067E\u064F\u0631\u0633\u06A9\u0648\u0646\u060C \u0635\u0631\u0641 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0648\u0627\u0644\u0627 \u062E\u0644\u0627\u0635\u06C1 \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0645\u062F\u062F \u06A9\u0631 \u0633\u06A9\u06CC\u06BA \u0645\u06AF\u0631 \u0627\u0646 \u06A9\u06CC \u0633\u06CC\u0679\u0646\u06AF \u0646\u06C1 \u0628\u06AF\u0691\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText("Read only", "\u0635\u0631\u0641 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-card" }, /* @__PURE__ */ React.createElement("div", { className: "goal-progress-row" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(activeStudentProfileLabel, language)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`Best next support: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "Keep reviewing"}`, `\u0627\u06AF\u0644\u06CC \u0628\u06C1\u062A\u0631\u06CC\u0646 \u0645\u062F\u062F: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "\u0631\u06CC\u0648\u06CC\u0648 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA"}`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`${completedDailyChallenges}/${dailyChallenges.length} daily goals`, `${completedDailyChallenges}/${dailyChallenges.length} \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u06C1\u062F\u0627\u0641`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u23F1\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatMinutesLabel(weeklyStudyMinutes, language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Weekly study", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0645\u0637\u0627\u0644\u0639\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4CB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewStats.due || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Review due", "\u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u0642\u06CC", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, profileLessonCompletion, "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Lesson completion", "\u0633\u0628\u0642 \u062A\u06A9\u0645\u06CC\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F525}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(streak || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Current streak", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u062A\u0633\u0644\u0633\u0644", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Strongest subject", "\u0633\u0628 \u0633\u06D2 \u0645\u0636\u0628\u0648\u0637 \u0645\u0636\u0645\u0648\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((profileStrongestSubject == null ? void 0 : profileStrongestSubject.label) || joinLocalizedText("Still emerging", "\u0627\u0628\u06BE\u06CC \u0633\u0627\u0645\u0646\u06D2 \u0622 \u0631\u06C1\u0627 \u06C1\u06D2", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Support next", "\u0627\u06AF\u0644\u06CC \u0645\u062F\u062F", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((profileSupportSubject == null ? void 0 : profileSupportSubject.label) || joinLocalizedText("Keep reviewing", "\u0631\u06CC\u0648\u06CC\u0648 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA", language), language))))) : null,
-      profilesSectionTab === "reports" && activeProfileRole === "teacher" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel role-overview-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Teacher Ready", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This learner already has profile-scoped cloud data, progress, and dictionary growth ready for future classroom dashboards.", "\u0627\u0633 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u0631\u0648\u0641\u0627\u0626\u0644-\u0627\u0633\u06A9\u0648\u067E\u0688 \u06A9\u0644\u0627\u0624\u0688 \u0688\u06CC\u0679\u0627\u060C \u067E\u06CC\u0634 \u0631\u0641\u062A\u060C \u0627\u0648\u0631 \u0644\u063A\u062A \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC \u0622\u0626\u0646\u062F\u06C1 \u06A9\u0644\u0627\u0633 \u0631\u0648\u0645 \u0688\u06CC\u0634 \u0628\u0648\u0631\u0688\u0632 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u062A\u06CC\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText("Groundwork ready", "\u0628\u0646\u06CC\u0627\u062F \u062A\u06CC\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(studentProfiles.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Profiles on device", "\u0688\u06CC\u0648\u0627\u0626\u0633 \u067E\u0631 \u067E\u0631\u0648\u0641\u0627\u0626\u0644\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2601\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(supabaseDictionarySync.enabled ? joinLocalizedText("On", "\u0622\u0646", language) : joinLocalizedText("Off", "\u0628\u0646\u062F", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Cloud sync", "\u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9FE}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(cloudSyncConflicts.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Pending sync reviews", "\u0632\u06CC\u0631\u0650 \u062C\u0627\u0626\u0632\u06C1 \u0633\u0646\u06A9", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_n = reviewAnalytics.customLists) == null ? void 0 : _n.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Custom lists", "\u0627\u067E\u0646\u06CC \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Current learner focus", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u062A\u0648\u062C\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("No active profile", "\u06A9\u0648\u0626\u06CC \u0641\u0639\u0627\u0644 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0646\u06C1\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`Support subject: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "Keep reviewing"}`, `\u0645\u062F\u062F \u0648\u0627\u0644\u0627 \u0645\u0636\u0645\u0648\u0646: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "\u0631\u06CC\u0648\u06CC\u0648 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA"}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Cloud readiness", "\u06A9\u0644\u0627\u0624\u0688 \u062A\u06CC\u0627\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(syncPendingTotal ? joinLocalizedText("Needs push", "\u0627\u067E \u0644\u0648\u0688 \u062F\u0631\u06A9\u0627\u0631", language) : joinLocalizedText("Current", "\u062A\u0627\u0632\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${syncPendingTotal} pending changes \u2022 ${supabaseSyncActivity.dictionaryEntries || 0} dictionary rows`, `${syncPendingTotal} \u0645\u0646\u062A\u0638\u0631 \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u2022 ${supabaseSyncActivity.dictionaryEntries || 0} \u0644\u063A\u062A \u0642\u0637\u0627\u0631`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Classroom-ready summary", "\u06A9\u0644\u0627\u0633 \u0631\u0648\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062E\u0644\u0627\u0635\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Groundwork", "\u0628\u0646\u06CC\u0627\u062F", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText("Profiles, review, dictionary, and cloud merge rules are now prepared for future class and assignment views.", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644\u0632\u060C \u0631\u06CC\u0648\u06CC\u0648\u060C \u0644\u063A\u062A\u060C \u0627\u0648\u0631 \u06A9\u0644\u0627\u0624\u0688 \u0636\u0645 \u0642\u0648\u0627\u0646\u06CC\u0646 \u0627\u0628 \u0622\u0626\u0646\u062F\u06C1 \u06A9\u0644\u0627\u0633 \u0627\u0648\u0631 \u0627\u0633\u0627\u0626\u0646\u0645\u0646\u0679 \u0645\u0646\u0627\u0638\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u06D4", language), language))))) : null
+      profilesSectionTab === "reports" && activeProfileRole === "teacher" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel home-support-panel role-overview-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Teacher Ready", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This learner already has profile-scoped cloud data, progress, and dictionary growth ready for future classroom dashboards.", "\u0627\u0633 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u0631\u0648\u0641\u0627\u0626\u0644-\u0627\u0633\u06A9\u0648\u067E\u0688 \u06A9\u0644\u0627\u0624\u0688 \u0688\u06CC\u0679\u0627\u060C \u067E\u06CC\u0634 \u0631\u0641\u062A\u060C \u0627\u0648\u0631 \u0644\u063A\u062A \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC \u0622\u0626\u0646\u062F\u06C1 \u06A9\u0644\u0627\u0633 \u0631\u0648\u0645 \u0688\u06CC\u0634 \u0628\u0648\u0631\u0688\u0632 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u062A\u06CC\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText("Groundwork ready", "\u0628\u0646\u06CC\u0627\u062F \u062A\u06CC\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(studentProfiles.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Profiles on device", "\u0688\u06CC\u0648\u0627\u0626\u0633 \u067E\u0631 \u067E\u0631\u0648\u0641\u0627\u0626\u0644\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2601\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(supabaseDictionarySync.enabled ? joinLocalizedText("On", "\u0622\u0646", language) : joinLocalizedText("Off", "\u0628\u0646\u062F", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Cloud sync", "\u06A9\u0644\u0627\u0624\u0688 \u0633\u0646\u06A9", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9FE}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(cloudSyncConflicts.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Pending sync reviews", "\u0632\u06CC\u0631\u0650 \u062C\u0627\u0626\u0632\u06C1 \u0633\u0646\u06A9", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_o = reviewAnalytics.customLists) == null ? void 0 : _o.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Custom lists", "\u0627\u067E\u0646\u06CC \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Current learner focus", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u062A\u0648\u062C\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(activeStudentProfileLabel || joinLocalizedText("No active profile", "\u06A9\u0648\u0626\u06CC \u0641\u0639\u0627\u0644 \u067E\u0631\u0648\u0641\u0627\u0626\u0644 \u0646\u06C1\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`Support subject: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "Keep reviewing"}`, `\u0645\u062F\u062F \u0648\u0627\u0644\u0627 \u0645\u0636\u0645\u0648\u0646: ${(profileSupportSubject == null ? void 0 : profileSupportSubject.label) || "\u0631\u06CC\u0648\u06CC\u0648 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA"}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Cloud readiness", "\u06A9\u0644\u0627\u0624\u0688 \u062A\u06CC\u0627\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(syncPendingTotal ? joinLocalizedText("Needs push", "\u0627\u067E \u0644\u0648\u0688 \u062F\u0631\u06A9\u0627\u0631", language) : joinLocalizedText("Current", "\u062A\u0627\u0632\u06C1", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${syncPendingTotal} pending changes \u2022 ${supabaseSyncActivity.dictionaryEntries || 0} dictionary rows`, `${syncPendingTotal} \u0645\u0646\u062A\u0638\u0631 \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u2022 ${supabaseSyncActivity.dictionaryEntries || 0} \u0644\u063A\u062A \u0642\u0637\u0627\u0631`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Classroom-ready summary", "\u06A9\u0644\u0627\u0633 \u0631\u0648\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062E\u0644\u0627\u0635\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Groundwork", "\u0628\u0646\u06CC\u0627\u062F", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText("Profiles, review, dictionary, and cloud merge rules are now prepared for future class and assignment views.", "\u067E\u0631\u0648\u0641\u0627\u0626\u0644\u0632\u060C \u0631\u06CC\u0648\u06CC\u0648\u060C \u0644\u063A\u062A\u060C \u0627\u0648\u0631 \u06A9\u0644\u0627\u0624\u0688 \u0636\u0645 \u0642\u0648\u0627\u0646\u06CC\u0646 \u0627\u0628 \u0622\u0626\u0646\u062F\u06C1 \u06A9\u0644\u0627\u0633 \u0627\u0648\u0631 \u0627\u0633\u0627\u0626\u0646\u0645\u0646\u0679 \u0645\u0646\u0627\u0638\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u06D4", language), language))))) : null
     )), tab === "home" && selectedSubject && !selectedLesson && !quizActive && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 20, direction: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 36 } }, selectedSubject.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, fontFamily: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "var(--font-ur)" : "inherit" } }, renderLocalizedTextNode(getSubjectDisplayName(selectedSubject, language), language)), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", fontFamily: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? "var(--font-ur)" : "inherit" } }, renderLocalizedTextNode(`${ui.grade} ${grade} \u2022 ${selectedSubjectLessons.length} ${ui.lessons}`, language)))), /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, canImportChapters || canImportSubjects ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenChapterImport, disabled: chapterImportBusy }, renderLocalizedTextNode(
       chapterImportBusy ? joinLocalizedText("Importing content...", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import Lessons", "\u0627\u0633\u0628\u0627\u0642 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language),
       language
@@ -20857,9 +23486,9 @@ ${error.message || error}`);
       ),
       language
     )), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: restoreDiaryTaskNavigator }, renderLocalizedTextNode(joinLocalizedText("Back to Diary", "\u0688\u0627\u0626\u0631\u06CC \u067E\u0631 \u0648\u0627\u067E\u0633", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleToggleDiaryCompletion(activeDiaryTask, true), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Mark Done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenNextDiaryTask, disabled: activeDiaryTaskIndex < 0 || activeDiaryTaskIndex >= orderedVisibleDiaryTasks.length - 1 }, renderLocalizedTextNode(joinLocalizedText("Next Task", "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0645", language), language)))) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-toolbar", style: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu" || isUrduUi(language) ? { direction: "rtl" } : {} }, canImportChapters || canImportSubjects ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenChapterImport, disabled: chapterImportBusy }, renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import Content", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canPublishContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handlePublishSelectedChapter, disabled: chapterPublishBusy }, renderLocalizedTextNode(
-      chapterPublishBusy ? joinLocalizedText("Publishing...", "\u0634\u0627\u0626\u0639 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : String(((_o = selectedLesson == null ? void 0 : selectedLesson.publication) == null ? void 0 : _o.authorUserId) || "").trim() === String(supabaseAuthState.userId || "").trim() ? joinLocalizedText("Update Published Chapter", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0633\u0628\u0642 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language) : ((_p = selectedLesson == null ? void 0 : selectedLesson.publication) == null ? void 0 : _p.contentId) ? joinLocalizedText("Publish Copy", "\u0646\u0642\u0644 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Publish Chapter", "\u0633\u0628\u0642 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language),
+      chapterPublishBusy ? joinLocalizedText("Publishing...", "\u0634\u0627\u0626\u0639 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : String(((_p = selectedLesson == null ? void 0 : selectedLesson.publication) == null ? void 0 : _p.authorUserId) || "").trim() === String(supabaseAuthState.userId || "").trim() ? joinLocalizedText("Update Published Chapter", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0633\u0628\u0642 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language) : ((_q = selectedLesson == null ? void 0 : selectedLesson.publication) == null ? void 0 : _q.contentId) ? joinLocalizedText("Publish Copy", "\u0646\u0642\u0644 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Publish Chapter", "\u0633\u0628\u0642 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language),
       language
-    )) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapter }, renderLocalizedTextNode(joinLocalizedText("Export Chapter", "\u0633\u0628\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null), ((_q = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _q.length) > 1 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-source-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Chapter Source", "\u0633\u0628\u0642 \u0645\u0627\u062E\u0630", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose which copy of this chapter should appear in your subject list and open by default.", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0627\u0633 \u0633\u0628\u0642 \u06A9\u06CC \u06A9\u0648\u0646 \u0633\u06CC \u06A9\u0627\u067E\u06CC \u0622\u067E \u06A9\u06CC \u0645\u0636\u0645\u0648\u0646 \u0641\u06C1\u0631\u0633\u062A \u0645\u06CC\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u0627\u0648\u0631 \u0628\u0637\u0648\u0631\u0650 \u0637\u06D2 \u0634\u062F\u06C1 \u06A9\u06BE\u0644\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-choice-row" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`, onClick: () => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null), disabled: !canChooseContentSource }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), selectedLessonChapterGroup.variants.map((variant) => {
+    )) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapter }, renderLocalizedTextNode(joinLocalizedText("Export Chapter", "\u0633\u0628\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null), ((_r = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _r.length) > 1 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-source-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Chapter Source", "\u0633\u0628\u0642 \u0645\u0627\u062E\u0630", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose which copy of this chapter should appear in your subject list and open by default.", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0627\u0633 \u0633\u0628\u0642 \u06A9\u06CC \u06A9\u0648\u0646 \u0633\u06CC \u06A9\u0627\u067E\u06CC \u0622\u067E \u06A9\u06CC \u0645\u0636\u0645\u0648\u0646 \u0641\u06C1\u0631\u0633\u062A \u0645\u06CC\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u0627\u0648\u0631 \u0628\u0637\u0648\u0631\u0650 \u0637\u06D2 \u0634\u062F\u06C1 \u06A9\u06BE\u0644\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-choice-row" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`, onClick: () => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null), disabled: !canChooseContentSource }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), selectedLessonChapterGroup.variants.map((variant) => {
       var _a2, _b2, _c2;
       const selectionValue = variant.sourceType === "published" ? { mode: "published", contentId: variant.contentId } : { mode: variant.sourceType };
       const isActiveSelection = variant.sourceType === "published" ? ((_a2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _a2.mode) === "published" && String(((_b2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _b2.contentId) || "").trim() === String(variant.contentId || "").trim() : ((_c2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _c2.mode) === variant.sourceType;
@@ -20874,7 +23503,7 @@ ${error.message || error}`);
         },
         renderLocalizedTextNode(getChapterVariantDisplayLabel(variant), language)
       );
-    })), !canChooseContentSource ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("This lesson is read-only for students. Teachers and above can choose the active chapter copy.", "\u06CC\u06C1 \u0633\u0628\u0642 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0635\u0631\u0641 \u067E\u0691\u06BE\u0646\u06D2 \u06A9\u06D2 \u0642\u0627\u0628\u0644 \u06C1\u06D2\u06D4 \u0641\u0639\u0627\u0644 \u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0627\u067E\u06CC \u0627\u0633\u062A\u0627\u062F \u0627\u0648\u0631 \u0627\u0633 \u0633\u06D2 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)) : null) : null, selectedLessonPublishedVariants.length > 0 || selectedLessonVisibleAssignments.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-source-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assignments", "\u062A\u0641\u0648\u06CC\u0636", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use published copies to set a grade-wide default or a student-specific assignment. Students then receive that chapter automatically without changing source settings themselves.", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC\u0627\u06BA \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631 \u06A9\u06D2 \u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0644\u06CC\u06D2 \u0637\u06D2 \u0634\u062F\u06C1 \u0628\u0627\u0628 \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u062E\u0635\u0648\u0635 \u062A\u0641\u0648\u06CC\u0636 \u0645\u0642\u0631\u0631 \u06A9\u0631\u06CC\u06BA\u06D4 \u067E\u06BE\u0631 \u0637\u0644\u0628\u06C1 \u062E\u0648\u062F \u0645\u0627\u062E\u0630 \u062A\u0628\u062F\u06CC\u0644 \u06A9\u06CC\u06D2 \u0628\u063A\u06CC\u0631 \u0648\u06C1 \u0628\u0627\u0628 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u067E\u0627\u0626\u06CC\u06BA \u06AF\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(selectedLessonVisibleAssignments.length))), ((_r = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.assignmentSelection) == null ? void 0 : _r.assignment) ? /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row", style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("span", { className: "chapter-badge active" }, renderLocalizedTextNode(
+    })), !canChooseContentSource ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("This lesson is read-only for students. Teachers and above can choose the active chapter copy.", "\u06CC\u06C1 \u0633\u0628\u0642 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0635\u0631\u0641 \u067E\u0691\u06BE\u0646\u06D2 \u06A9\u06D2 \u0642\u0627\u0628\u0644 \u06C1\u06D2\u06D4 \u0641\u0639\u0627\u0644 \u0628\u0627\u0628 \u06A9\u06CC \u06A9\u0627\u067E\u06CC \u0627\u0633\u062A\u0627\u062F \u0627\u0648\u0631 \u0627\u0633 \u0633\u06D2 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)) : null) : null, selectedLessonPublishedVariants.length > 0 || selectedLessonVisibleAssignments.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-source-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assignments", "\u062A\u0641\u0648\u06CC\u0636", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use published copies to set a grade-wide default or a student-specific assignment. Students then receive that chapter automatically without changing source settings themselves.", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC\u0627\u06BA \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631 \u06A9\u06D2 \u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0644\u06CC\u06D2 \u0637\u06D2 \u0634\u062F\u06C1 \u0628\u0627\u0628 \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u062E\u0635\u0648\u0635 \u062A\u0641\u0648\u06CC\u0636 \u0645\u0642\u0631\u0631 \u06A9\u0631\u06CC\u06BA\u06D4 \u067E\u06BE\u0631 \u0637\u0644\u0628\u06C1 \u062E\u0648\u062F \u0645\u0627\u062E\u0630 \u062A\u0628\u062F\u06CC\u0644 \u06A9\u06CC\u06D2 \u0628\u063A\u06CC\u0631 \u0648\u06C1 \u0628\u0627\u0628 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u067E\u0627\u0626\u06CC\u06BA \u06AF\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(selectedLessonVisibleAssignments.length))), ((_s = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.assignmentSelection) == null ? void 0 : _s.assignment) ? /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row", style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("span", { className: "chapter-badge active" }, renderLocalizedTextNode(
       selectedLessonChapterGroup.assignmentSelection.assignment.targetType === "student" ? joinLocalizedText("Student assignment active", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u062A\u0641\u0648\u06CC\u0636 \u0641\u0639\u0627\u0644", language) : joinLocalizedText("Grade assignment active", "\u062C\u0645\u0627\u0639\u062A \u062A\u0641\u0648\u06CC\u0636 \u0641\u0639\u0627\u0644", language),
       language
     )), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral" }, renderLocalizedTextNode(
@@ -21007,12 +23636,29 @@ ${error.message || error}`);
         const isNeg = n < 0;
         const col = isZero ? "#F59E0B" : isNeg ? "#EF4444" : "#22C55E";
         return /* @__PURE__ */ React.createElement("g", { key: i, onClick: () => handleBoxClick(s.label), style: { cursor: "pointer" } }, /* @__PURE__ */ React.createElement("line", { x1: x, y1: "44", x2: x, y2: "60", stroke: col, strokeWidth: isZero ? 4 : 2 }), /* @__PURE__ */ React.createElement("text", { x, y: "80", textAnchor: "middle", fill: col, fontSize: isZero ? "18" : "15", fontWeight: isZero ? "900" : "700", fontFamily: "'Baloo 2'" }, n), isZero && /* @__PURE__ */ React.createElement("circle", { cx: x, cy: "52", r: "6", fill: "#F59E0B" }));
-      }), /* @__PURE__ */ React.createElement("text", { x: "80", y: "38", textAnchor: "middle", fill: "#EF4444", fontSize: "12", fontWeight: "700", fontFamily: "'Baloo 2'" }, "\u2190 Negative"), /* @__PURE__ */ React.createElement("text", { x: "540", y: "38", textAnchor: "middle", fill: "#22C55E", fontSize: "12", fontWeight: "700", fontFamily: "'Baloo 2'" }, "Positive \u2192"))))), sub.c.split(/(?<=[.!?۔؟])\s+/).filter(Boolean).map((s2, i) => /* @__PURE__ */ React.createElement(SpeakableSentence, { key: i, text: s2, lang: isUr ? "ur" : "en", studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: sub.t } })), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: isUr ? { fontFamily: "'Noto Nastaliq Urdu',serif", direction: "rtl" } : {}, onClick: () => playAll(sub.c) }, isUr ? "\u25B6\uFE0F \u0633\u0646\u06CC\u06BA" : "\u25B6\uFE0F Play Explanation")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 14, direction: isUr ? "rtl" : "ltr" } }, [{ id: "examples", label: isUr ? "\u{1F4A1} \u0645\u062B\u0627\u0644\u06CC\u06BA" : "\u{1F4A1} Examples", c: "#38BDF8" }, { id: "exercises", label: isUr ? "\u270F\uFE0F \u0645\u0634\u0642\u06CC\u06BA" : "\u270F\uFE0F Exercises", c: "#22C55E" }, { id: "quiz", label: isUr ? "\u{1F3AF} \u0627\u0645\u062A\u062D\u0627\u0646" : "\u{1F3AF} Quiz", c: "#F59E0B" }].map((t) => /* @__PURE__ */ React.createElement("button", { key: t.id, "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, `tab_${t.id}`), onClick: () => {
+      }), /* @__PURE__ */ React.createElement("text", { x: "80", y: "38", textAnchor: "middle", fill: "#EF4444", fontSize: "12", fontWeight: "700", fontFamily: "'Baloo 2'" }, "\u2190 Negative"), /* @__PURE__ */ React.createElement("text", { x: "540", y: "38", textAnchor: "middle", fill: "#22C55E", fontSize: "12", fontWeight: "700", fontFamily: "'Baloo 2'" }, "Positive \u2192"))))), sub.c.split(/(?<=[.!?۔؟])\s+/).filter(Boolean).map((s2, i) => /* @__PURE__ */ React.createElement("div", { key: i, "data-study-id": buildDiaryExampleTargetId(diaryRouteBaseId, s2, i, "", "content") }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: s2, lang: isUr ? "ur" : "en", studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: sub.t } }))), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: isUr ? { fontFamily: "'Noto Nastaliq Urdu',serif", direction: "rtl" } : {}, onClick: () => playAll(sub.c) }, isUr ? "\u25B6\uFE0F \u0633\u0646\u06CC\u06BA" : "\u25B6\uFE0F Play Explanation")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 14, direction: isUr ? "rtl" : "ltr" } }, [{ id: "examples", label: isUr ? "\u{1F4A1} \u0645\u062B\u0627\u0644\u06CC\u06BA" : "\u{1F4A1} Examples", c: "#38BDF8" }, { id: "exercises", label: isUr ? "\u270F\uFE0F \u0645\u0634\u0642\u06CC\u06BA" : "\u270F\uFE0F Exercises", c: "#22C55E" }, { id: "quiz", label: isUr ? "\u{1F3AF} \u0627\u0645\u062A\u062D\u0627\u0646" : "\u{1F3AF} Quiz", c: "#F59E0B" }].map((t) => /* @__PURE__ */ React.createElement("button", { key: t.id, "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, `tab_${t.id}`), onClick: () => {
         setMathSubTab(t.id);
         setSubExerciseGroupIdx(null);
         setSubQuizGroupIdx(null);
         setRevealedEx({});
-      }, style: { flex: 1, padding: "10px 6px", borderRadius: 10, border: mathSubTab === t.id ? "2px solid " + t.c : "1px solid var(--border)", background: mathSubTab === t.id ? t.c + "22" : "var(--bg-elevated)", color: mathSubTab === t.id ? t.c : "var(--text-muted)", fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", fontSize: isUr ? 14 : 13, fontWeight: 700, cursor: "pointer" } }, t.label))), mathSubTab === "examples" && adjustedDayLessons && /* @__PURE__ */ React.createElement("div", { style: urS, "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "examples") }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#38BDF8", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, sub.lessonLabel || (isUr ? "\u{1F4C5} \u0627\u0633\u0628\u0627\u0642 \u06A9\u06D2 \u062F\u0646" : "\u{1F4C5} Lesson Days")), adjustedDayLessons.map((lessonDay, dayIdx) => /* @__PURE__ */ React.createElement("div", { key: lessonDay.day || dayIdx, className: "adverb-detail-section", style: urS }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 12, ...urS } }, isUr ? `\u{1F4C5} \u062F\u0646 ${lessonDay.day}` : `\u{1F4C5} Day ${lessonDay.day}`), lessonDay.title && /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginBottom: 10, ...urS } }, lessonDay.title), lessonDay.words && lessonDay.words.map((w, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { marginBottom: 10 } }, "opposite" in w || "oppositeUr" in w ? /* @__PURE__ */ React.createElement(OppositeWordRow, { en: w.en, ur: w.ur, opposite: w.opposite, oppositeUr: w.oppositeUr }) : "comp" in w || "super" in w ? /* @__PURE__ */ React.createElement(AdjWordRow, { en: w.en, ur: w.ur, comp: w.comp, sup: w.super }) : "v2" in w || "v3" in w ? /* @__PURE__ */ React.createElement(VerbWordRow, { en: w.en, ur: w.ur, v2: w.v2, v3: w.v3 }) : /* @__PURE__ */ React.createElement(WordRow, { en: w.en, ur: w.ur }), !sub.showWordSentences && w.meaning && /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" } }, "\u2192 ", w.meaning), sub.showWordSentences && (w.sentence || w.meaning) && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, paddingLeft: 14, paddingRight: 14 } }, /* @__PURE__ */ React.createElement(
+      }, style: { flex: 1, padding: "10px 6px", borderRadius: 10, border: mathSubTab === t.id ? "2px solid " + t.c : "1px solid var(--border)", background: mathSubTab === t.id ? t.c + "22" : "var(--bg-elevated)", color: mathSubTab === t.id ? t.c : "var(--text-muted)", fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", fontSize: isUr ? 14 : 13, fontWeight: 700, cursor: "pointer" } }, t.label))), mathSubTab === "examples" && adjustedDayLessons && /* @__PURE__ */ React.createElement("div", { style: urS, "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "examples") }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#38BDF8", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, sub.lessonLabel || (isUr ? "\u{1F4C5} \u0627\u0633\u0628\u0627\u0642 \u06A9\u06D2 \u062F\u0646" : "\u{1F4C5} Lesson Days")), adjustedDayLessons.map((lessonDay, dayIdx) => /* @__PURE__ */ React.createElement("div", { key: lessonDay.day || dayIdx, className: "adverb-detail-section", style: urS }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 12, ...urS } }, isUr ? `\u{1F4C5} \u062F\u0646 ${lessonDay.day}` : `\u{1F4C5} Day ${lessonDay.day}`), lessonDay.title && /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginBottom: 10, ...urS } }, lessonDay.title), lessonDay.examples && lessonDay.examples.length ? /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12 } }, lessonDay.examples.map((exampleEntry, exampleIndex) => /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          key: `lesson_day_example_${lessonDay.day || dayIdx}_${exampleIndex}`,
+          "data-study-id": buildDiaryExampleTargetId(diaryRouteBaseId, exampleEntry, exampleIndex, `day_${lessonDay.day || dayIdx + 1}`, "examples"),
+          className: "inline-study-row",
+          style: { direction: isUr ? "rtl" : "ltr" }
+        },
+        /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex" } }, /* @__PURE__ */ React.createElement(
+          ExercisePromptContent,
+          {
+            text: normalizeDiaryOutlineLeafLabel(exampleEntry),
+            studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` },
+            buttonStyle: { marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }
+          }
+        )),
+        /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: normalizeDiaryOutlineLeafLabel(exampleEntry), subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` } })
+      ))) : null, lessonDay.words && lessonDay.words.map((w, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { marginBottom: 10 } }, "opposite" in w || "oppositeUr" in w ? /* @__PURE__ */ React.createElement(OppositeWordRow, { en: w.en, ur: w.ur, opposite: w.opposite, oppositeUr: w.oppositeUr }) : "comp" in w || "super" in w ? /* @__PURE__ */ React.createElement(AdjWordRow, { en: w.en, ur: w.ur, comp: w.comp, sup: w.super }) : "v2" in w || "v3" in w ? /* @__PURE__ */ React.createElement(VerbWordRow, { en: w.en, ur: w.ur, v2: w.v2, v3: w.v3 }) : /* @__PURE__ */ React.createElement(WordRow, { en: w.en, ur: w.ur }), !sub.showWordSentences && w.meaning && /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" } }, "\u2192 ", w.meaning), sub.showWordSentences && (w.sentence || w.meaning) && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, paddingLeft: 14, paddingRight: 14 } }, /* @__PURE__ */ React.createElement(
         SpeakableSentence,
         {
           text: w.sentence || w.meaning,
@@ -21020,20 +23666,27 @@ ${error.message || error}`);
           studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: sub.t, answer: w.en },
           buttonStyle: { background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLightTheme ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0, justifyContent: "flex-start", width: "100%" }
         }
-      )))), lessonDay.pairs && lessonDay.pairs.map((pair, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "word-row", style: { cursor: "default", gap: 10, flexDirection: "column", alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "stretch", gap: 10, width: "100%" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: pair.left, lang: "en", showStudyToolbar: false, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right } })), /* @__PURE__ */ React.createElement("span", { style: { color: "var(--accent)", fontWeight: 800 } }, "\u2194"), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: pair.right, lang: "en", showStudyToolbar: false, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.left } })), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: pair.left, answer: pair.right, subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Pairs` } })))), lessonDay.paragraph && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: "#22C55E", marginTop: 12, marginBottom: 8, fontFamily: "'Baloo 2',sans-serif" } }, isUr ? "\u{1F4D6} \u067E\u06CC\u0631\u0627\u06AF\u0631\u0627\u0641" : "\u{1F4D6} Practice Paragraph"), lessonDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s2, i) => {
+      )))), lessonDay.pairs && lessonDay.pairs.map((pair, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "word-row", "data-study-id": buildDiaryExampleTargetId(diaryRouteBaseId, pair, i, `day_${lessonDay.day || dayIdx + 1}`, "pairs"), style: { cursor: "default", gap: 10, flexDirection: "column", alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "stretch", gap: 10, width: "100%" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: pair.left, lang: "en", showStudyToolbar: false, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right } })), /* @__PURE__ */ React.createElement("span", { style: { color: "var(--accent)", fontWeight: 800 } }, "\u2194"), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: pair.right, lang: "en", showStudyToolbar: false, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.left } })), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: pair.left, answer: pair.right, subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Pairs` } })))), lessonDay.paragraph && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: "#22C55E", marginTop: 12, marginBottom: 8, fontFamily: "'Baloo 2',sans-serif" } }, isUr ? "\u{1F4D6} \u067E\u06CC\u0631\u0627\u06AF\u0631\u0627\u0641" : "\u{1F4D6} Practice Paragraph"), lessonDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s2, i) => {
         const found = (lessonDay.words || []).find((w) => s2.toLowerCase().includes((w.en || "").toLowerCase().split(" ")[0].replace("(", "")));
         const hasOpposites = (lessonDay.words || []).some((w) => "opposite" in w || "oppositeUr" in w);
         const sentenceHighlights = (lessonDay.words || []).map((w) => w.en).filter(Boolean).filter((word) => s2.toLowerCase().includes(normalizeHighlightTerm(word)));
         const paragraphSentence = hasOpposites ? stripInlineUrduForKnownWords(s2, lessonDay.words || []) : s2;
-        return hasOpposites ? /* @__PURE__ */ React.createElement(MixedUrduParagraphSentence, { key: i, text: paragraphSentence, highlight: sentenceHighlights, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` } }) : /* @__PURE__ */ React.createElement(SpeakableSentence, { key: i, text: s2, lang: "en", highlight: sentenceHighlights, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` } });
-      }), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", onClick: () => playAll(lessonDay.paragraph) }, "\u25B6\uFE0F Play Entire Paragraph")), lessonDay.difficult && lessonDay.difficult.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: "#F59E0B", marginTop: 12, marginBottom: 8, fontFamily: "'Baloo 2',sans-serif" } }, isUr ? "\u{1F4DA} \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638" : "\u{1F4DA} Difficult Words"), lessonDay.difficult.map((w, i) => /* @__PURE__ */ React.createElement(WordRow, { key: i, en: w.en, ur: w.ur })))))), mathSubTab === "examples" && sub.sentencePairs && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "examples") }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 10 } }, sub.examplesLabel || "\u{1F5E3}\uFE0F Sentences"), regroupSentencePairs(sub.sentencePairs, daySectionSettings.sentences.itemsPerDay).map((group) => /* @__PURE__ */ React.createElement("div", { key: group.day, style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 12, fontWeight: 800, marginBottom: 8 } }, language === "ur" ? `\u0633\u06CC\u0679 ${group.day}` : `Set ${group.day}`), group.sentencePairs.map((pair, i) => /* @__PURE__ */ React.createElement(SentencePairRow, { key: `${group.day}_${i}`, en: pair.en, ur: pair.ur })))), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", onClick: () => playAll(sub.sentencePairs.map((pair) => pair.en).join(" ")) }, "\u25B6\uFE0F Play All English Sentences")), mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "examples"), style: urS }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 10, ...urS } }, sub.examplesLabel || (isUr ? "\u{1F4A1} \u0645\u062B\u0627\u0644\u06CC\u06BA" : "\u{1F4A1} Examples")), sub.examples.map((ex, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "inline-study-row", style: { direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex" } }, /* @__PURE__ */ React.createElement(
+        return /* @__PURE__ */ React.createElement("div", { key: i, "data-study-id": buildDiaryExampleTargetId(diaryRouteBaseId, s2, i, `day_${lessonDay.day || dayIdx + 1}`, "paragraphs") }, hasOpposites ? /* @__PURE__ */ React.createElement(MixedUrduParagraphSentence, { text: paragraphSentence, highlight: sentenceHighlights, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` } }) : /* @__PURE__ */ React.createElement(SpeakableSentence, { text: s2, lang: "en", highlight: sentenceHighlights, studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` } }));
+      }), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", onClick: () => playAll(lessonDay.paragraph) }, "\u25B6\uFE0F Play Entire Paragraph")), lessonDay.difficult && lessonDay.difficult.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, fontWeight: 800, color: "#F59E0B", marginTop: 12, marginBottom: 8, fontFamily: "'Baloo 2',sans-serif" } }, isUr ? "\u{1F4DA} \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638" : "\u{1F4DA} Difficult Words"), lessonDay.difficult.map((w, i) => /* @__PURE__ */ React.createElement(WordRow, { key: i, en: w.en, ur: w.ur })))))), mathSubTab === "examples" && sub.sentencePairs && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "examples") }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 10 } }, sub.examplesLabel || "\u{1F5E3}\uFE0F Sentences"), regroupSentencePairs(sub.sentencePairs, daySectionSettings.sentences.itemsPerDay).map((group) => /* @__PURE__ */ React.createElement("div", { key: group.day, style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: "var(--text-muted)", fontSize: 12, fontWeight: 800, marginBottom: 8 } }, language === "ur" ? `\u0633\u06CC\u0679 ${group.day}` : `Set ${group.day}`), group.sentencePairs.map((pair, i) => /* @__PURE__ */ React.createElement("div", { key: `${group.day}_${i}`, "data-study-id": buildDiaryExampleTargetId(diaryRouteBaseId, pair, i, "", "pairs") }, /* @__PURE__ */ React.createElement(SentencePairRow, { en: pair.en, ur: pair.ur }))))), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", onClick: () => playAll(sub.sentencePairs.map((pair) => pair.en).join(" ")) }, "\u25B6\uFE0F Play All English Sentences")), mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "examples"), style: urS }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#38BDF8", marginBottom: 10, ...urS } }, sub.examplesLabel || (isUr ? "\u{1F4A1} \u0645\u062B\u0627\u0644\u06CC\u06BA" : "\u{1F4A1} Examples")), sub.examples.map((ex, i) => /* @__PURE__ */ React.createElement("div", { key: i, className: "inline-study-row", "data-study-id": buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples"), style: { direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex" } }, /* @__PURE__ */ React.createElement(
         ExercisePromptContent,
         {
           text: ex,
           studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` },
           buttonStyle: { marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }
         }
-      )), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: ex, subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` } }))), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: isUr ? { fontFamily: "'Noto Nastaliq Urdu',serif", direction: "rtl" } : {}, onClick: () => playAll(sub.examples.join(". ")) }, isUr ? "\u25B6\uFE0F \u0633\u0628 \u0633\u0646\u06CC\u06BA" : "\u25B6\uFE0F Play All Examples")), mathSubTab === "exercises" && (sub.exerciseGroups || sub.exercises) && /* @__PURE__ */ React.createElement("div", { style: urS, "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "exercises") }, sub.exerciseGroups && subExerciseGroupIdx === null ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#22C55E", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, isUr ? "\u270F\uFE0F \u0645\u0634\u0642 \u06A9\u06D2 \u062F\u0646" : "\u270F\uFE0F Exercise Days"), sub.exerciseGroups.map((group, gi) => /* @__PURE__ */ React.createElement("div", { key: group.label, className: "adverb-day-card", onClick: () => {
+      )), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: ex, subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` } }))), sub.examplesData && sub.examplesData.map((ex, i) => /* @__PURE__ */ React.createElement("div", { key: `examples_data_${i}`, className: "inline-study-row", "data-study-id": buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples"), style: { direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0, display: "flex" } }, /* @__PURE__ */ React.createElement(
+        ExercisePromptContent,
+        {
+          text: normalizeDiaryOutlineLeafLabel(ex),
+          studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` },
+          buttonStyle: { marginBottom: 0, height: "100%", display: "flex", alignItems: "center" }
+        }
+      )), /* @__PURE__ */ React.createElement(InlineStudyActionBar, { studyItem: { prompt: normalizeDiaryOutlineLeafLabel(ex), subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Examples` } }))), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: isUr ? { fontFamily: "'Noto Nastaliq Urdu',serif", direction: "rtl" } : {}, onClick: () => playAll(sub.examples.join(". ")) }, isUr ? "\u25B6\uFE0F \u0633\u0628 \u0633\u0646\u06CC\u06BA" : "\u25B6\uFE0F Play All Examples")), mathSubTab === "exercises" && (sub.exerciseGroups || sub.exercises) && /* @__PURE__ */ React.createElement("div", { style: urS, "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "exercises") }, sub.exerciseGroups && subExerciseGroupIdx === null ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#22C55E", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, isUr ? "\u270F\uFE0F \u0645\u0634\u0642 \u06A9\u06D2 \u062F\u0646" : "\u270F\uFE0F Exercise Days"), sub.exerciseGroups.map((group, gi) => /* @__PURE__ */ React.createElement("div", { key: group.label, className: "adverb-day-card", onClick: () => {
         setSubExerciseGroupIdx(gi);
         setRevealedEx({});
       }, style: { display: "flex", alignItems: "center", gap: 14, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 40, height: 40, borderRadius: 12, background: "#22C55E22", border: "2px solid #22C55E", color: "#22C55E", fontSize: 16, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, gi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, textAlign: isUr ? "right" : "left" } }, /* @__PURE__ */ React.createElement("h3", { style: { fontSize: 16, fontWeight: 700, margin: 0, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, group.label), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, isUr ? "\u0627\u0646 \u062F\u0646\u0648\u06BA \u06A9\u06CC \u062A\u0645\u0627\u0645 \u0645\u0634\u0642\u06CC\u06BA" : "All exercises for these days"))))) : /* @__PURE__ */ React.createElement(React.Fragment, null, activeExerciseGroup && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 14, ...urS } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#22C55E", margin: 0, ...urS } }, activeExerciseGroup.label), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: dayGroupBackButtonStyle, onClick: () => {
@@ -21158,7 +23811,13 @@ ${error.message || error}`);
         const qText = isObj ? wp.q : wp;
         const aText = isObj ? wp.a : null;
         return /* @__PURE__ */ React.createElement("div", { key: wi, style: { marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", direction: isUr ? "rtl" : "ltr", alignItems: "flex-start", gap: 10 } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 32, height: 32, borderRadius: 10, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 12, fontWeight: 800, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "'Baloo 2',sans-serif", flexShrink: 0 } }, isUr ? "\u0645" + (wi + 1) : "W" + (wi + 1)), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement(SpeakableSentence, { text: qText, lang: isUr ? "ur" : "en", studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Word Problems` } }))), aText && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, marginLeft: isUr ? 0 : 42, marginRight: isUr ? 42 : 0, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: wordProblemAnswerPanelStyle }, /* @__PURE__ */ React.createElement("div", { style: wordProblemAnswerLabelStyle(isUr) }, isUr ? "\u2705 \u062C\u0648\u0627\u0628" : "\u2705 Answer"), /* @__PURE__ */ React.createElement(SpeakableSentence, { text: formatListedAnswer(aText), lang: isUr ? "ur" : "en", studyItem: { subject: (selectedSubject == null ? void 0 : selectedSubject.id) || "general", section: sub.t, sectionLabel: `${sub.t} Word Problem Answers` }, buttonStyle: { ...revealedAnswerButtonStyle, marginBottom: 0 }, textStyle: { ...getRevealedAnswerTextStyle(isUr), lineHeight: 1.55 } }))));
-      })))), mathSubTab === "quiz" && (sub.quizGroups || sub.quiz) && /* @__PURE__ */ React.createElement("div", { "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "quiz") }, sub.quizGroups ? subQuizGroupIdx === null ? /* @__PURE__ */ React.createElement("div", { style: urS }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#F59E0B", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, isUr ? "\u{1F3AF} \u06A9\u0648\u0626\u0632 \u06A9\u06D2 \u062F\u0646" : "\u{1F3AF} Quiz Days"), sub.quizGroups.map((group, gi) => /* @__PURE__ */ React.createElement("div", { key: group.label, className: "adverb-day-card", onClick: () => setSubQuizGroupIdx(gi), style: { display: "flex", alignItems: "center", gap: 14, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 40, height: 40, borderRadius: 12, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 16, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, gi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, textAlign: isUr ? "right" : "left" } }, /* @__PURE__ */ React.createElement("h3", { style: { fontSize: 16, fontWeight: 700, margin: 0, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, group.label), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, isUr ? "\u0627\u0646 \u062F\u0646\u0648\u06BA \u06A9\u06D2 \u0633\u0648\u0627\u0644\u0627\u062A" : "Quiz questions for these days"))))) : /* @__PURE__ */ React.createElement("div", { style: urS }, activeQuizGroup && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 14, ...urS } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#F59E0B", margin: 0, ...urS } }, activeQuizGroup.label), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: dayGroupBackButtonStyle, onClick: () => setSubQuizGroupIdx(null) }, isUr ? "\u2190 \u062F\u0646\u0648\u06BA \u06A9\u06CC \u0641\u06C1\u0631\u0633\u062A" : "\u2190 Back to Day Groups"))), quizToRender && /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx + "_" + subQuizGroupIdx, questions: quizToRender, isUrdu: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu", questionTimeLimitSeconds: activeSubjectQuizTimeLimit, reflectionDelayMs: activeSubjectQuizReflectionDelayMs })) : /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx, questions: sub.quiz, isUrdu: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu", questionTimeLimitSeconds: activeSubjectQuizTimeLimit, reflectionDelayMs: activeSubjectQuizReflectionDelayMs })));
+      })))), mathSubTab === "quiz" && (sub.quizGroups || sub.quiz) && /* @__PURE__ */ React.createElement("div", { "data-study-id": buildDiarySectionTargetId(diaryRouteBaseId, "quiz") }, sub.quizGroups ? subQuizGroupIdx === null ? /* @__PURE__ */ React.createElement("div", { style: urS }, /* @__PURE__ */ React.createElement("h3", { className: "section-title", style: { color: "#F59E0B", marginBottom: 12, direction: isUr ? "rtl" : "ltr", textAlign: isUr ? "right" : "left" } }, isUr ? "\u{1F3AF} \u06A9\u0648\u0626\u0632 \u06A9\u06D2 \u062F\u0646" : "\u{1F3AF} Quiz Days"), sub.quizGroups.map((group, gi) => /* @__PURE__ */ React.createElement("div", { key: group.label, className: "adverb-day-card", onClick: () => {
+        setSubQuizGroupIdx(gi);
+        setSubQuizQuestionIdx(0);
+      }, style: { display: "flex", alignItems: "center", gap: 14, direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 40, height: 40, borderRadius: 12, background: "#F59E0B22", border: "2px solid #F59E0B", color: "#F59E0B", fontSize: 16, fontWeight: 800, fontFamily: "'Baloo 2',sans-serif", flexShrink: 0 } }, gi + 1), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, textAlign: isUr ? "right" : "left" } }, /* @__PURE__ */ React.createElement("h3", { style: { fontSize: 16, fontWeight: 700, margin: 0, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, group.label), /* @__PURE__ */ React.createElement("p", { style: { fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily: isUr ? "'Noto Nastaliq Urdu',serif" : "inherit" } }, isUr ? "\u0627\u0646 \u062F\u0646\u0648\u06BA \u06A9\u06D2 \u0633\u0648\u0627\u0644\u0627\u062A" : "Quiz questions for these days"))))) : /* @__PURE__ */ React.createElement("div", { style: urS }, activeQuizGroup && /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section", style: { marginBottom: 14, ...urS } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", direction: isUr ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("h3", { style: { color: "#F59E0B", margin: 0, ...urS } }, activeQuizGroup.label), /* @__PURE__ */ React.createElement("button", { className: "play-all-btn", style: dayGroupBackButtonStyle, onClick: () => {
+        setSubQuizGroupIdx(null);
+        setSubQuizQuestionIdx(0);
+      } }, isUr ? "\u2190 \u062F\u0646\u0648\u06BA \u06A9\u06CC \u0641\u06C1\u0631\u0633\u062A" : "\u2190 Back to Day Groups"))), quizToRender && /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx + "_" + subQuizGroupIdx + "_" + subQuizQuestionIdx, questions: quizToRender, isUrdu: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu", questionTimeLimitSeconds: activeSubjectQuizTimeLimit, reflectionDelayMs: activeSubjectQuizReflectionDelayMs, initialQuestionIndex: subQuizQuestionIdx, targetBaseId: diaryRouteBaseId, groupLabel: (activeQuizGroup == null ? void 0 : activeQuizGroup.label) || "" })) : /* @__PURE__ */ React.createElement(MathSubQuiz, { key: "mq_" + mathSubIdx + "_" + subQuizQuestionIdx, questions: sub.quiz, isUrdu: (selectedSubject == null ? void 0 : selectedSubject.id) === "urdu", questionTimeLimitSeconds: activeSubjectQuizTimeLimit, reflectionDelayMs: activeSubjectQuizReflectionDelayMs, initialQuestionIndex: subQuizQuestionIdx, targetBaseId: diaryRouteBaseId, groupLabel: "" })));
     })(), tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && !selectedVocabDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "lesson-detail" }, /* @__PURE__ */ React.createElement("h2", null, selectedLesson.title), /* @__PURE__ */ React.createElement("p", null, selectedLesson.content), /* @__PURE__ */ React.createElement(StudyItemInlineToolbar, { studyItem: { prompt: selectedLesson.content, subject: "english", section: "vocabulary", sectionLabel: selectedLesson.title } })), /* @__PURE__ */ React.createElement("div", { className: "tts-hint" }, "\u{1F50A} Tap English \u2192 English voice | Tap Urdu \u2192 Urdu voice | 55 Days of Vocabulary"), pacedVocab.map((day) => /* @__PURE__ */ React.createElement("div", { key: day.day, className: "adverb-day-card", onClick: () => setSelectedVocabDay(day) }, /* @__PURE__ */ React.createElement("span", { className: "day-num" }, getDayDisplayLabel(day.day, language)), /* @__PURE__ */ React.createElement("h3", null, day.words.map((w) => w.en).join(" \u2022 ")), /* @__PURE__ */ React.createElement("div", { className: "word-preview" }, day.words.map((w, i) => /* @__PURE__ */ React.createElement("span", { key: i, className: "word-chip" }, w.ur)))))), tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && selectedVocabDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "tts-hint" }, "\u{1F50A} Tap English word \u2192 English voice | Tap Urdu \u2192 Urdu voice | Tap sentence \u2192 hear it!"), /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section" }, /* @__PURE__ */ React.createElement("h3", null, "\u{1F4DD} Day ", selectedVocabDay.day, " \u2014 Words"), selectedVocabDay.words.map((w, i) => /* @__PURE__ */ React.createElement("div", { key: i, style: { marginBottom: 10 } }, /* @__PURE__ */ React.createElement(WordRow, { en: w.en, ur: w.ur }), /* @__PURE__ */ React.createElement("div", { style: { padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" } }, "\u2192 ", w.meaning)))), /* @__PURE__ */ React.createElement("div", { className: "adverb-detail-section" }, /* @__PURE__ */ React.createElement("h3", null, "\u{1F4D6} Practice Paragraph"), selectedVocabDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s2, i) => {
       const sentenceHighlights = selectedVocabDay.words.map((w) => w.en).filter(Boolean).filter((word) => s2.toLowerCase().includes(normalizeHighlightTerm(word)));
       return /* @__PURE__ */ React.createElement(SpeakableSentence, { key: i, text: s2, lang: "en", highlight: sentenceHighlights, studyItem: { subject: "english", section: "vocabularyParagraphs", sectionLabel: "Vocabulary Paragraphs" } });
@@ -21209,10 +23868,10 @@ ${error.message || error}`);
       progressSectionTab === "favorites" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 0, marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.favoriteWords, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your starred items live here in subject-wise groups for quick revisits.", "\u0622\u067E \u06A9\u06D2 \u0633\u062A\u0627\u0631\u06C1 \u0644\u06AF\u0627\u0626\u06D2 \u06AF\u0626\u06D2 \u0622\u0626\u0679\u0645\u0632 \u06CC\u06C1\u0627\u06BA \u0645\u0636\u0645\u0648\u0646 \u0648\u0627\u0631 \u062A\u0631\u062A\u06CC\u0628 \u0633\u06D2 \u0631\u06A9\u06BE\u06D2 \u06AF\u0626\u06D2 \u06C1\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u0641\u0648\u0631\u0627\u064B \u0648\u0627\u067E\u0633 \u062C\u0627 \u0633\u06A9\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2B50"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(reviewAnalytics.favoriteWords.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(ui.favoriteWords, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4D8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(favoriteSubjectGroups.length || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language))))), favoriteSubjectGroups.length > 0 ? favoriteSubjectGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: group.subjectId, className: "review-panel", style: { marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(group.subject ? getSubjectDisplayName(group.subject, language) : joinLocalizedText("General", "\u0639\u0645\u0648\u0645\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${group.cards.length} saved favorites`, `${group.cards.length} \u0645\u062D\u0641\u0648\u0638 \u067E\u0633\u0646\u062F\u06CC\u062F\u06C1 \u0622\u0626\u0679\u0645\u0632`, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, group.cards.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card, showStats: false, allowView: true }))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noFavorites, language)))),
       progressSectionTab === "badges" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 0, marginBottom: 18 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Milestones & Momentum", "\u0633\u0646\u06AF\u0650 \u0645\u06CC\u0644 \u0627\u0648\u0631 \u0631\u0641\u062A\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Track challenge wins, perfect days, and the next target worth chasing.", "\u0627\u067E\u0646\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0686\u06CC\u0644\u0646\u062C\u060C \u067E\u0631\u0641\u06CC\u06A9\u0679 \u0688\u06CC\u0632\u060C \u0627\u0648\u0631 \u0627\u06AF\u0644\u06D2 \u0627\u06C1\u0645 \u06C1\u062F\u0641 \u06A9\u0648 \u06CC\u06C1\u0627\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F31F}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(perfectDayCount)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Perfect Days", "\u067E\u0631\u0641\u06CC\u06A9\u0679 \u0688\u06CC\u0632", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F389}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel((gamificationState.celebrationHistory || []).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Celebrations", "\u062E\u0648\u0634\u06CC\u0648\u06BA \u06A9\u06D2 \u0644\u0645\u062D\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2728"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, nextXpMilestone ? formatNumberLabel(nextXpMilestone) : renderLocalizedTextNode(joinLocalizedText("Max", "\u0645\u06A9\u0645\u0644", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Next XP Target", "\u0627\u06AF\u0644\u0627 \u0627\u06CC\u06A9\u0633 \u067E\u06CC \u06C1\u062F\u0641", language), language)))), (gamificationState.celebrationHistory || []).length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "milestone-history-list" }, (gamificationState.celebrationHistory || []).slice(0, 4).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.key, className: "milestone-history-item" }, /* @__PURE__ */ React.createElement("span", { className: "milestone-history-icon", "aria-hidden": "true" }, entry.icon), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(entry.titleEn, entry.titleUr, language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(entry.bodyEn, entry.bodyUr, language), language)))))) : null), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("p", { style: { fontSize: 14, color: "var(--text-secondary)" } }, earnedBadges.length, " of ", BADGES.length, " badges earned")), /* @__PURE__ */ React.createElement("div", { className: "badge-grid" }, BADGES.map((b) => /* @__PURE__ */ React.createElement("div", { key: b.id, className: "badge-card " + (earnedBadges.includes(b.id) ? "earned" : "locked") }, /* @__PURE__ */ React.createElement("div", { className: "badge-big-icon" }, b.icon), /* @__PURE__ */ React.createElement("h4", null, b.name), /* @__PURE__ */ React.createElement("p", null, b.desc))))),
       progressSectionTab === "timetracking" && /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 0 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.recentTimeHistory, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See your latest class-time records, usage, and lateness at a glance.", "\u0627\u067E\u0646\u06D2 \u062D\u0627\u0644\u06CC\u06C1 \u06A9\u0644\u0627\u0633 \u0627\u0648\u0642\u0627\u062A\u060C \u0645\u0637\u0627\u0644\u0639\u06C1 \u0648\u0642\u062A\u060C \u0627\u0648\u0631 \u062A\u0627\u062E\u06CC\u0631 \u06A9\u0648 \u0627\u06CC\u06A9 \u0646\u0638\u0631 \u0645\u06CC\u06BA \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), recentTimeHistory.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "notification-history-list" }, recentTimeHistory.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: "notification-history-item" }, /* @__PURE__ */ React.createElement("div", { className: "notification-history-top" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(entry.dayKey, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(entry.status === "on-time" ? ui.classStatusOnTime : entry.status === "late" ? ui.classStatusLate : ui.classStatusNotStarted, language))), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Spent ${formatMinutesLabel(Math.round((entry.msSpent || 0) / 6e4), "en")} \u2022 Late by ${formatMinutesLabel(entry.latenessMinutes || 0, "en")}`, `${formatMinutesLabel(Math.round((entry.msSpent || 0) / 6e4), "ur")} \u0645\u0637\u0627\u0644\u0639\u06C1 \u2022 ${formatMinutesLabel(entry.latenessMinutes || 0, "ur")} \u062A\u0627\u062E\u06CC\u0631`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.classTrackingDisabled, language)))
-    )), tab === "diary" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-section-tabs", role: "tablist", "aria-label": language === "ur" ? "\u0688\u0627\u0626\u0631\u06CC \u062D\u0635\u06D2" : "Diary sections" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "daily" ? " active" : ""}`, onClick: () => setDiarySectionTab("daily") }, renderLocalizedTextNode(joinLocalizedText("Daily Diary", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "teacher" ? " active" : ""}`, onClick: () => setDiarySectionTab("teacher") }, renderLocalizedTextNode(joinLocalizedText("Teacher's Diary", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "assignments" ? " active" : ""}`, onClick: () => setDiarySectionTab("assignments") }, renderLocalizedTextNode(joinLocalizedText("Assignments", "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "saturday" ? " active" : ""}`, onClick: () => setDiarySectionTab("saturday") }, renderLocalizedTextNode(joinLocalizedText("Saturday Test", "\u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679", language), language)), canManageTests || availableTestTemplates.length > 0 ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "templates" ? " active" : ""}`, onClick: () => setDiarySectionTab("templates") }, renderLocalizedTextNode(joinLocalizedText("Templates", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679\u0633", language), language)) : null, canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "dashboard" ? " active" : ""}`, onClick: () => setDiarySectionTab("dashboard") }, renderLocalizedTextNode(joinLocalizedText("Performance", "\u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)) : null), /* @__PURE__ */ React.createElement("div", { key: `${transitionMode}:diary:${diarySectionTab}`, className: `review-section-transition${!reducedMotion && transitionMode !== "none" ? " transition-enabled" : ""}`, "data-transition-mode": transitionMode }, activeStandaloneDiaryTask && ["daily", "assignments", "teacher"].includes(String(diarySectionTab || "").trim()) ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language, style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(activeStandaloneDiaryTask.title || joinLocalizedText("Diary task", "\u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Due ${activeStandaloneDiaryTask.targetDate || diaryTodayIso}`, `${activeStandaloneDiaryTask.targetDate || diaryTodayIso} \u06A9\u06CC \u062A\u0627\u0631\u06CC\u062E`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
+    )), tab === "diary" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-section-tabs", role: "tablist", "aria-label": language === "ur" ? "\u0688\u0627\u0626\u0631\u06CC \u062D\u0635\u06D2" : "Diary sections" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "daily" ? " active" : ""}`, onClick: () => setDiarySectionTab("daily") }, renderLocalizedTextNode(joinLocalizedText("Daily Diary", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "teacher" ? " active" : ""}`, onClick: () => setDiarySectionTab("teacher") }, renderLocalizedTextNode(joinLocalizedText("Teacher's Diary", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "assignments" ? " active" : ""}`, onClick: () => setDiarySectionTab("assignments") }, renderLocalizedTextNode(joinLocalizedText("Assignments", "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "saturday" ? " active" : ""}`, onClick: () => setDiarySectionTab("saturday") }, renderLocalizedTextNode(joinLocalizedText("Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)), canManageTests || availableTestTemplates.length > 0 ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "templates" ? " active" : ""}`, onClick: () => setDiarySectionTab("templates") }, renderLocalizedTextNode(joinLocalizedText("Templates", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679\u0633", language), language)) : null, canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${diarySectionTab === "dashboard" ? " active" : ""}`, onClick: () => setDiarySectionTab("dashboard") }, renderLocalizedTextNode(joinLocalizedText("Performance", "\u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)) : null), /* @__PURE__ */ React.createElement("div", { key: `${transitionMode}:diary:${diarySectionTab}`, className: `review-section-transition${!reducedMotion && transitionMode !== "none" ? " transition-enabled" : ""}`, "data-transition-mode": transitionMode }, activeStandaloneDiaryTask && ["daily", "assignments", "teacher"].includes(String(diarySectionTab || "").trim()) ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language, style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(activeStandaloneDiaryTask.title || joinLocalizedText("Diary task", "\u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Due ${activeStandaloneDiaryTask.targetDate || diaryTodayIso}`, `${activeStandaloneDiaryTask.targetDate || diaryTodayIso} \u06A9\u06CC \u062A\u0627\u0631\u06CC\u062E`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
       activeStandaloneDiaryTask.taskKind === "assignment" ? joinLocalizedText("Assignment / Project", "\u062A\u0641\u0648\u06CC\u0636 / \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679", language) : joinLocalizedText("Teacher diary", "\u0627\u0633\u062A\u0627\u062F \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language),
       language
-    ))), activeStandaloneDiaryTask.note ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { whiteSpace: "pre-wrap", lineHeight: 1.7, paddingTop: 8 } }, renderLocalizedTextNode(activeStandaloneDiaryTask.note, language)) : null, ((_s = activeStandaloneDiaryTask.taskUnits) == null ? void 0 : _s.length) ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 12 } }, activeStandaloneDiaryTask.taskUnits.map((unit, index) => /* @__PURE__ */ React.createElement("div", { key: `standalone_diary_unit_${unit.key || index}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(unit.title || activeStandaloneDiaryTask.title, language))), unit.detail ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(unit.detail, language)) : null))) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement(
+    ))), activeStandaloneDiaryTask.note ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { whiteSpace: "pre-wrap", lineHeight: 1.7, paddingTop: 8 } }, renderLocalizedTextNode(activeStandaloneDiaryTask.note, language)) : null, ((_t = activeStandaloneDiaryTask.taskUnits) == null ? void 0 : _t.length) ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 12 } }, activeStandaloneDiaryTask.taskUnits.map((unit, index) => /* @__PURE__ */ React.createElement("div", { key: `standalone_diary_unit_${unit.key || index}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(unit.title || activeStandaloneDiaryTask.title, language))), unit.detail ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(unit.detail, language)) : null))) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -21233,38 +23892,52 @@ ${error.message || error}`);
         disabled: activeDiaryTaskIndex < 0 || activeDiaryTaskIndex >= orderedVisibleDiaryTasks.length - 1
       },
       renderLocalizedTextNode(joinLocalizedText("Next Task", "\u0627\u06AF\u0644\u0627 \u06A9\u0627\u0645", language), language)
-    ))) : null, diarySectionTab === "daily" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Daily Diary", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your daily study plan, auto-generated from your grade curriculum. Each subject has its tasks for the day. Click any task to start studying.", "\u0622\u067E \u06A9\u0627 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627 \u0645\u0646\u0635\u0648\u0628\u06C1\u060C \u0622\u067E \u06A9\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0646\u0635\u0627\u0628 \u0633\u06D2 \u062E\u0648\u062F\u06A9\u0627\u0631\u06D4 \u06C1\u0631 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u062F\u0646 \u06A9\u06D2 \u06A9\u0627\u0645\u06D4 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0633\u06CC \u0628\u06BE\u06CC \u06A9\u0627\u0645 \u067E\u0631 \u06A9\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `\u06C1\u0641\u062A\u06C1 ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement(CalendarDateField, { value: diaryWeekAnchorDate, onChange: handleDiaryWeekAnchorDateChange, language }), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `diary_viewer_${entry.email}`, value: entry.email }, entry.label))) : null)), todayDiaryGroup ? /* @__PURE__ */ React.createElement("div", { key: `today_diary_${todayDiaryGroup.targetDate}`, className: "review-panel diary-day-card", "data-ui-language": language, "data-diary-date": todayDiaryGroup.targetDate, style: { marginTop: 16, borderLeft: "4px solid var(--accent)", boxShadow: "0 12px 32px rgba(0,0,0,0.08)" } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(joinLocalizedText("TODAY", "\u0622\u062C", language), language)), renderLocalizedTextNode(joinLocalizedText("Today's Diary", "\u0622\u062C \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${todayDiaryGroup.tasks.length} tasks across ${todayDiaryGroup.subjectGroups.length} subjects`, `${todayDiaryGroup.tasks.length} \u06A9\u0627\u0645 ${todayDiaryGroup.subjectGroups.length} \u0645\u0636\u0627\u0645\u06CC\u0646 \u0645\u06CC\u06BA`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(todayDiaryGroup.targetDate, language))), todayDiaryGroup.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, todayDiaryGroup.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `today_sg_${todayDiaryGroup.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral", style: { fontSize: 11 } }, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
+    ))) : null, diarySectionTab === "daily" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Daily Diary", "\u0631\u0648\u0632\u0627\u0646\u06C1 \u0688\u0627\u0626\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Your daily study plan, auto-generated from your grade curriculum. Each subject has its tasks for the day. Click any task to start studying.", "\u0622\u067E \u06A9\u0627 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627 \u0645\u0646\u0635\u0648\u0628\u06C1\u060C \u0622\u067E \u06A9\u06CC \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0646\u0635\u0627\u0628 \u0633\u06D2 \u062E\u0648\u062F\u06A9\u0627\u0631\u06D4 \u06C1\u0631 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u062F\u0646 \u06A9\u06D2 \u06A9\u0627\u0645\u06D4 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0634\u0631\u0648\u0639 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0633\u06CC \u0628\u06BE\u06CC \u06A9\u0627\u0645 \u067E\u0631 \u06A9\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`Week ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, `\u06C1\u0641\u062A\u06C1 ${getAcademicWeekNumber(currentDiaryWeekStartDate, activeSchoolYearStartDate)}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-daily-toolbar" }, /* @__PURE__ */ React.createElement(CalendarDateField, { value: diaryWeekAnchorDate, onChange: handleDiaryWeekAnchorDateChange, language }), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("select", { className: "settings-select diary-viewer-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `diary_viewer_${entry.email}`, value: entry.email }, entry.label))) : null, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        className: `diary-detail-toggle${showDetailedDiary ? " active" : ""}`,
+        "aria-pressed": showDetailedDiary,
+        onClick: () => setShowDetailedDiary((current) => !current)
+      },
+      /* @__PURE__ */ React.createElement("span", { className: "diary-detail-toggle-label" }, renderLocalizedTextNode(joinLocalizedText("Detailed diary", "\u062A\u0641\u0635\u06CC\u0644\u06CC \u0688\u0627\u0626\u0631\u06CC", language), language)),
+      /* @__PURE__ */ React.createElement("span", { className: "diary-detail-toggle-switch", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("span", null))
+    ))), todayDiaryGroup ? /* @__PURE__ */ React.createElement("div", { key: `today_diary_${todayDiaryGroup.targetDate}`, className: "review-panel diary-day-card", "data-ui-language": language, "data-diary-date": todayDiaryGroup.targetDate, style: { marginTop: 16, borderLeft: "4px solid var(--accent)", boxShadow: "0 12px 32px rgba(0,0,0,0.08)" } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("TODAY", "\u0622\u062C", language) : joinLocalizedText("ACTIVE DAY", "\u0641\u0639\u0627\u0644 \u062F\u0646", language), language)), renderLocalizedTextNode(todayDiaryGroup.targetDate === diaryTodayIso ? joinLocalizedText("Today's Diary", "\u0622\u062C \u06A9\u06CC \u0688\u0627\u0626\u0631\u06CC", language) : joinLocalizedText("Active Diary Day", "\u0641\u0639\u0627\u0644 \u0688\u0627\u0626\u0631\u06CC \u062F\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`${todayDiaryGroup.tasks.length} tasks across ${todayDiaryGroup.subjectGroups.length} subjects`, `${todayDiaryGroup.tasks.length} \u06A9\u0627\u0645 ${todayDiaryGroup.subjectGroups.length} \u0645\u0636\u0627\u0645\u06CC\u0646 \u0645\u06CC\u06BA`, language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(todayDiaryGroup.targetDate, language))), todayDiaryGroup.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, todayDiaryGroup.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `today_sg_${todayDiaryGroup.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral", style: { fontSize: 11 } }, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
       var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2;
       const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
       const taskOutline = buildDiaryTaskOutline(task);
-      const taskOutlineChildren = ((_a2 = taskOutline[0]) == null ? void 0 : _a2.children) || [];
-      const chapterTitle = String(((_b2 = task == null ? void 0 : task.lesson) == null ? void 0 : _b2.title) || ((_d2 = (_c2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _c2.activeLesson) == null ? void 0 : _d2.title) || (task == null ? void 0 : task.title) || "").trim();
-      const subsectionTitle = String(((_g2 = (_f2 = (_e2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _e2[0]) == null ? void 0 : _f2.sourceMeta) == null ? void 0 : _g2.title) || ((_h2 = taskOutline[0]) == null ? void 0 : _h2.label) || (task == null ? void 0 : task.title) || "").trim();
+      const taskRouteKey = getDiaryTaskRouteKey(task);
+      const detailedTaskOutline = mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline);
+      const taskOutlineChildren = ((_a2 = detailedTaskOutline[0]) == null ? void 0 : _a2.children) || ((_b2 = taskOutline[0]) == null ? void 0 : _b2.children) || [];
+      const chapterTitle = String(((_c2 = task == null ? void 0 : task.lesson) == null ? void 0 : _c2.title) || ((_e2 = (_d2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _d2.activeLesson) == null ? void 0 : _e2.title) || (task == null ? void 0 : task.title) || "").trim();
+      const subsectionTitle = String(((_h2 = (_g2 = (_f2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _f2[0]) == null ? void 0 : _g2.sourceMeta) == null ? void 0 : _h2.title) || ((_i2 = taskOutline[0]) == null ? void 0 : _i2.label) || (task == null ? void 0 : task.title) || "").trim();
       const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
       const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
-      return /* @__PURE__ */ React.createElement("div", { key: `today_t_${task.taskKey}`, "data-diary-task-key": getDiaryTaskRouteKey(task), "data-task-language": taskLanguage, className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
+      return /* @__PURE__ */ React.createElement("div", { key: `today_t_${task.taskKey}`, "data-diary-task-key": taskRouteKey, "data-task-language": taskLanguage, className: `diary-task-entry${completion ? " completed" : ""}${taskRouteKey === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
         event.stopPropagation();
         speakInlineText(chapterTitle);
       }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")), subsectionTitle && subsectionTitle !== chapterTitle ? /* @__PURE__ */ React.createElement("span", { className: "diary-subtitle-line" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(subsectionTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
         event.stopPropagation();
         speakInlineText(subsectionTitle);
-      }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")) : null, !taskOutlineChildren.length && ((_i2 = task.taskUnits) == null ? void 0 : _i2.length) ? /* @__PURE__ */ React.createElement("span", { className: "diary-task-summary-line" }, task.taskUnits.slice(0, 3).map((u) => u.title).join(" \xB7 ")) : null), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, completion ? "\u2713" : language === "ur" ? "\u2190" : "\u2192")), taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions diary-task-footer-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => playDiaryAudioSequence(allAudioLines), disabled: !allAudioLines.length }, renderLocalizedTextNode(joinLocalizedText("Play all", "\u0633\u0628 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
+      }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")) : null)), taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null, showDetailedDiary && detailedTaskOutline.length ? /* @__PURE__ */ React.createElement("div", { className: "diary-detailed-outline", style: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" } }, renderDiaryOutlineNodes(task, detailedTaskOutline, 0)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions diary-task-footer-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => playDiaryAudioSequence(allAudioLines), disabled: !allAudioLines.length }, renderLocalizedTextNode(joinLocalizedText("Play all", "\u0633\u0628 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
     }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No tasks scheduled for today.", "\u0622\u062C \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u06A9\u0627\u0645 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))) : null, weeklyDiaryListGroups.length ? weeklyDiaryListGroups.map((group) => /* @__PURE__ */ React.createElement("div", { key: `daily_card_${group.targetDate}`, className: "review-panel diary-day-card", "data-ui-language": language, "data-diary-date": group.targetDate, style: { marginTop: 16, borderLeft: group.targetDate === diaryTodayIso ? "4px solid var(--accent)" : void 0 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, group.targetDate === diaryTodayIso ? /* @__PURE__ */ React.createElement("span", { style: { background: "var(--accent)", color: "var(--bg)", borderRadius: 6, padding: "2px 10px", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(joinLocalizedText("TODAY", "\u0622\u062C", language), language)) : null, renderLocalizedTextNode(group.targetDate, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Day ${group.dayIndex} \u2022 ${group.tasks.length} tasks across ${group.subjectGroups.length} subjects`, `\u062F\u0646 ${group.dayIndex} \u2022 ${group.tasks.length} \u06A9\u0627\u0645 ${group.subjectGroups.length} \u0645\u0636\u0627\u0645\u06CC\u0646 \u0645\u06CC\u06BA`, language), language)))), group.subjectGroups.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, group.subjectGroups.map((subjectGroup) => /* @__PURE__ */ React.createElement("div", { key: `daily_sg_${group.targetDate}_${subjectGroup.subjectId}`, className: "profile-report-item", style: { borderBottom: "1px solid var(--border)" } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head", style: { background: "var(--surface-alt)", borderRadius: 8, padding: "8px 12px", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 14 } }, renderLocalizedTextNode(subjectGroup.subjectLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "chapter-badge neutral", style: { fontSize: 11 } }, renderLocalizedTextNode(joinLocalizedText(`${subjectGroup.tasks.length} task${subjectGroup.tasks.length === 1 ? "" : "s"}`, `${subjectGroup.tasks.length} \u06A9\u0627\u0645`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "diary-task-list" }, subjectGroup.tasks.map((task) => {
       var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2;
       const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
       const taskOutline = buildDiaryTaskOutline(task);
-      const taskOutlineChildren = ((_a2 = taskOutline[0]) == null ? void 0 : _a2.children) || [];
-      const chapterTitle = String(((_b2 = task == null ? void 0 : task.lesson) == null ? void 0 : _b2.title) || ((_d2 = (_c2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _c2.activeLesson) == null ? void 0 : _d2.title) || (task == null ? void 0 : task.title) || "").trim();
-      const subsectionTitle = String(((_g2 = (_f2 = (_e2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _e2[0]) == null ? void 0 : _f2.sourceMeta) == null ? void 0 : _g2.title) || ((_h2 = taskOutline[0]) == null ? void 0 : _h2.label) || (task == null ? void 0 : task.title) || "").trim();
+      const taskRouteKey = getDiaryTaskRouteKey(task);
+      const detailedTaskOutline = mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline);
+      const taskOutlineChildren = ((_a2 = detailedTaskOutline[0]) == null ? void 0 : _a2.children) || ((_b2 = taskOutline[0]) == null ? void 0 : _b2.children) || [];
+      const chapterTitle = String(((_c2 = task == null ? void 0 : task.lesson) == null ? void 0 : _c2.title) || ((_e2 = (_d2 = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _d2.activeLesson) == null ? void 0 : _e2.title) || (task == null ? void 0 : task.title) || "").trim();
+      const subsectionTitle = String(((_h2 = (_g2 = (_f2 = task == null ? void 0 : task.taskUnits) == null ? void 0 : _f2[0]) == null ? void 0 : _g2.sourceMeta) == null ? void 0 : _h2.title) || ((_i2 = taskOutline[0]) == null ? void 0 : _i2.label) || (task == null ? void 0 : task.title) || "").trim();
       const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
       const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
-      return /* @__PURE__ */ React.createElement("div", { key: `daily_t_${task.taskKey}`, "data-diary-task-key": getDiaryTaskRouteKey(task), "data-task-language": taskLanguage, className: `diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
+      return /* @__PURE__ */ React.createElement("div", { key: `daily_t_${task.taskKey}`, "data-diary-task-key": taskRouteKey, "data-task-language": taskLanguage, className: `diary-task-entry${completion ? " completed" : ""}${taskRouteKey === String((diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey) || "").trim() ? " active" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-title-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(chapterTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
         event.stopPropagation();
         speakInlineText(chapterTitle);
       }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")), subsectionTitle && subsectionTitle !== chapterTitle ? /* @__PURE__ */ React.createElement("span", { className: "diary-subtitle-line" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(subsectionTitle, language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-inline-audio-btn", onClick: (event) => {
         event.stopPropagation();
         speakInlineText(subsectionTitle);
-      }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")) : null, !taskOutlineChildren.length && ((_i2 = task.taskUnits) == null ? void 0 : _i2.length) ? /* @__PURE__ */ React.createElement("span", { className: "diary-task-summary-line" }, task.taskUnits.slice(0, 3).map((u) => u.title).join(" \xB7 ")) : null), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, completion ? "\u2713" : language === "ur" ? "\u2190" : "\u2192")), taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions diary-task-footer-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => playDiaryAudioSequence(allAudioLines), disabled: !allAudioLines.length }, renderLocalizedTextNode(joinLocalizedText("Play all", "\u0633\u0628 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
+      }, title: joinLocalizedText("Listen", "\u0633\u0646\u06CC\u06BA", language) }, "\u{1F508}")) : null)), taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null, showDetailedDiary && detailedTaskOutline.length ? /* @__PURE__ */ React.createElement("div", { className: "diary-detailed-outline", style: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" } }, renderDiaryOutlineNodes(task, detailedTaskOutline, 0)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions diary-task-footer-actions", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => playDiaryAudioSequence(allAudioLines), disabled: !allAudioLines.length }, renderLocalizedTextNode(joinLocalizedText("Play all", "\u0633\u0628 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(task), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language))));
     }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No tasks scheduled for this day.", "\u0627\u0633 \u062F\u0646 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u06A9\u0627\u0645 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : !todayDiaryGroup ? /* @__PURE__ */ React.createElement("div", { className: "review-panel diary-day-card", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No diary tasks are scheduled for this week yet.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0688\u0627\u0626\u0631\u06CC \u06A9\u0627\u0645 \u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))) : null) : null, diarySectionTab === "teacher" ? /* @__PURE__ */ React.createElement(React.Fragment, null, canManageDiary || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create Teacher's Diary Entry", "\u0627\u0633\u062A\u0627\u062F \u06A9\u0627 \u0688\u0627\u0626\u0631\u06CC \u0627\u0646\u062F\u0631\u0627\u062C \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Select a subject and chapter, then optionally add a section cue or note. Students will see these alongside their auto diary.", "\u0645\u0636\u0645\u0648\u0646 \u0627\u0648\u0631 \u0628\u0627\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0686\u0627\u06C1\u06CC\u06BA \u062A\u0648 \u062D\u0635\u06D2 \u06A9\u06CC \u0646\u0634\u0627\u0646\u06CC \u06CC\u0627 \u0646\u0648\u0679 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4 \u0637\u0644\u0628\u06C1 \u06CC\u06C1 \u0627\u067E\u0646\u06CC \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06AF\u06D2\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row diary-authoring-grid", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftScope, onChange: (event) => setDiaryDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), diaryDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftStudentEmail, onChange: (event) => setDiaryDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `tdiary_s_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement(CalendarDateField, { value: diaryDraftStartDate, onChange: setDiaryDraftStartDate, language }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftRangeMode, onChange: (event) => setDiaryDraftRangeMode(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "single" }, renderLocalizedTextNode(joinLocalizedText("Single date", "\u0627\u06CC\u06A9 \u062A\u0627\u0631\u06CC\u062E", language), language)), /* @__PURE__ */ React.createElement("option", { value: "week" }, renderLocalizedTextNode(joinLocalizedText("Full week", "\u067E\u0648\u0631\u0627 \u06C1\u0641\u062A\u06C1", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row diary-authoring-grid", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: diaryDraftSubjectId, onChange: (event) => {
       setDiaryDraftSubjectId(event.target.value);
       setDiaryDraftContentId("");
@@ -21310,7 +23983,7 @@ ${error.message || error}`);
           const lesson = chapterGroup == null ? void 0 : chapterGroup.activeLesson;
           const taskForNav = { taskKind: "assigned", taskKey: buildDiaryTaskKey("assigned", entry), subject: entry.subject, lessonKey: entry.lessonKey, title: (lesson == null ? void 0 : lesson.title) || entry.lessonKey, source: "assigned", chapterGroup, lesson };
           const completion = diaryCompletionLookup[`assigned::${buildDiaryTaskKey("assigned", entry)}`] || null;
-          return /* @__PURE__ */ React.createElement("div", { key: `tdiary_e_${entry.diaryId}`, className: `diary-task-entry${completion ? " completed" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(taskForNav, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode((lesson == null ? void 0 : lesson.title) || entry.lessonKey || joinLocalizedText("Free-text task", "\u0622\u0632\u0627\u062F \u0645\u062A\u0646 \u06A9\u0627\u0645", language), language)), entry.note ? /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, color: "var(--text-muted)" } }, renderLocalizedTextNode(entry.note, language)) : null), /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-arrow" }, completion ? "\u2713" : language === "ur" ? "\u2190" : "\u2192")), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 4 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(taskForNav), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canManageDiary || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
+          return /* @__PURE__ */ React.createElement("div", { key: `tdiary_e_${entry.diaryId}`, className: `diary-task-entry${completion ? " completed" : ""}` }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "diary-task-open-btn", onClick: (event) => handleOpenDiaryTask(taskForNav, orderedVisibleDiaryTasks, null, event.currentTarget) }, /* @__PURE__ */ React.createElement("span", { className: "diary-task-open-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode((lesson == null ? void 0 : lesson.title) || entry.lessonKey || joinLocalizedText("Free-text task", "\u0622\u0632\u0627\u062F \u0645\u062A\u0646 \u06A9\u0627\u0645", language), language)), entry.note ? /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, color: "var(--text-muted)" } }, renderLocalizedTextNode(entry.note, language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 4 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(taskForNav), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(completion ? joinLocalizedText("Done", "\u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Mark done", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canManageDiary || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy, style: { fontSize: 12 } }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
         })))));
       });
     })() : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No teacher diary entries yet. Teachers can create daily entries using the form above.", "\u0627\u0628\u06BE\u06CC \u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u06A9\u0648\u0626\u06CC \u0688\u0627\u0626\u0631\u06CC \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0646\u06C1\u06CC\u06BA\u06D4 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0641\u0627\u0631\u0645 \u0633\u06D2 \u0631\u0648\u0632\u0627\u0646\u06C1 \u0627\u0646\u062F\u0631\u0627\u062C\u0627\u062A \u0628\u0646\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "assignments" ? /* @__PURE__ */ React.createElement(React.Fragment, null, canManageDiary || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create Assignment / Project", "\u062A\u0641\u0648\u06CC\u0636 / \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Write a practical task for students. These assignments stay separate from auto diary, but now flow through the same weekly task and completion system.", "\u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0639\u0645\u0644\u06CC \u06A9\u0627\u0645 \u0644\u06A9\u06BE\u06CC\u06BA\u06D4 \u06CC\u06C1 \u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0633\u06D2 \u0627\u0644\u06AF \u0631\u06C1\u062A\u06CC \u06C1\u06CC\u06BA\u060C \u0645\u06AF\u0631 \u0627\u0628 \u0627\u0633\u06CC \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u06A9\u0627\u0645 \u0627\u0648\u0631 \u062A\u06A9\u0645\u06CC\u0644 \u0646\u0638\u0627\u0645 \u0645\u06CC\u06BA \u0634\u0627\u0645\u0644 \u06C1\u0648\u062A\u06CC \u06C1\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", style: { flex: "1 1 280px" }, value: assignmentDraftTitle, onChange: (event) => setAssignmentDraftTitle(event.target.value), placeholder: language === "ur" ? "\u062A\u0641\u0648\u06CC\u0636 \u06A9\u0627 \u0639\u0646\u0648\u0627\u0646" : "Assignment title" }), /* @__PURE__ */ React.createElement(CalendarDateField, { value: assignmentDraftDueDate, onChange: setAssignmentDraftDueDate, language })), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch", marginTop: 10 } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: assignmentDraftScope, onChange: (event) => setAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), assignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: assignmentDraftStudentEmail, onChange: (event) => setAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `assgn_s_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("textarea", { className: "settings-text-input", rows: 4, style: { width: "100%", resize: "vertical", minHeight: 80 }, value: assignmentDraftDescription, onChange: (event) => setAssignmentDraftDescription(event.target.value), placeholder: language === "ur" ? "\u062A\u0641\u0635\u06CC\u0644\u06CC \u06C1\u062F\u0627\u06CC\u0627\u062A \u0644\u06A9\u06BE\u06CC\u06BA..." : "Write detailed instructions..." })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSaveAssignment, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Create Assignment", "\u062A\u0641\u0648\u06CC\u0636 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)))) : null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assignments & Projects", "\u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0627\u0648\u0631 \u067E\u0631\u0648\u062C\u06CC\u06A9\u0679\u0633", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Practical tasks assigned by your teacher. Complete them and mark as done.", "\u0622\u067E \u06A9\u06D2 \u0627\u0633\u062A\u0627\u062F \u06A9\u06D2 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u062F\u06C1 \u0639\u0645\u0644\u06CC \u06A9\u0627\u0645\u06D4 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0645\u06A9\u0645\u0644 \u0646\u0634\u0627\u0646 \u0644\u06AF\u0627\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(visibleAssignmentEntries.length)))), visibleAssignmentEntries.length ? visibleAssignmentEntries.map((entry) => {
@@ -21340,7 +24013,7 @@ ${error.message || error}`);
       const completion = diaryCompletionLookup[`assignment::${buildDiaryTaskKey("assignment", entry)}`] || null;
       const isOverdue = !completion && entry.targetDate < diaryTodayIso;
       return /* @__PURE__ */ React.createElement("div", { key: `assignment_${entry.diaryId}`, className: `review-panel diary-day-card${completion ? " completed" : ""}`, "data-ui-language": language, style: { marginTop: 12, borderLeft: isOverdue ? "4px solid var(--danger, #e74c3c)" : completion ? "4px solid var(--success, #2ecc71)" : "4px solid var(--accent)" } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { style: { display: "flex", alignItems: "center", gap: 8 } }, completion ? /* @__PURE__ */ React.createElement("span", { style: { color: "var(--success, #2ecc71)", fontSize: 18 } }, "\u2713") : isOverdue ? /* @__PURE__ */ React.createElement("span", { style: { color: "var(--danger, #e74c3c)", fontSize: 12, fontWeight: 700 } }, renderLocalizedTextNode(joinLocalizedText("OVERDUE", "\u0645\u062F\u062A \u06AF\u0632\u0631 \u06AF\u0626\u06CC", language), language)) : null, renderLocalizedTextNode(entry.assignmentTitle || joinLocalizedText("Assignment", "\u062A\u0641\u0648\u06CC\u0636", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText(`Due: ${entry.targetDate}`, `\u0622\u062E\u0631\u06CC \u062A\u0627\u0631\u06CC\u062E: ${entry.targetDate}`, language), language), " \u2022 ", renderLocalizedTextNode(joinLocalizedText(`By ${entry.teacherEmail}`, `\u0627\u0632 ${entry.teacherEmail}`, language), language)))), entry.note ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "10px 0" } }, renderLocalizedTextNode(entry.note, language)) : null, /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: (event) => handleOpenDiaryTask(taskForCompletion, orderedVisibleDiaryTasks, null, event.currentTarget) }, renderLocalizedTextNode(joinLocalizedText("Open", "\u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${completion ? " active" : ""}`, onClick: () => handleToggleDiaryCompletion(taskForCompletion), disabled: contentRelationshipBusy }, renderLocalizedTextNode(completion ? joinLocalizedText("Completed", "\u0645\u06A9\u0645\u0644 \u0634\u062F\u06C1", language) : joinLocalizedText("Mark complete", "\u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), canManageDiary || canManageContentAccess ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteDiaryEntry(entry), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove", "\u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null));
-    }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No assignments yet. Teachers can create assignments using the form above.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0646\u06C1\u06CC\u06BA\u06D4 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0641\u0627\u0631\u0645 \u0633\u06D2 \u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0628\u0646\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "saturday" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Saturday Test Day", "\u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u0688\u06D2", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Teachers can assign a Saturday test; otherwise the app generates one from the week.", "\u0627\u0633\u0627\u062A\u0630\u06C1 \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u060C \u0648\u0631\u0646\u06C1 \u0627\u06CC\u067E \u06C1\u0641\u062A\u06D2 \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0633\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0633\u0679 \u0628\u0646\u0627\u062A\u06CC \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getSaturdayDate(diaryWeekAnchorDate), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9EA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_u = (_t = currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.payload) == null ? void 0 : _t.questions) == null ? void 0 : _u.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Questions", "\u0633\u0648\u0627\u0644\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("Assigned", "\u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1", language) : joinLocalizedText("Generated", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Source", "\u0645\u0627\u062E\u0630", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, currentWeeklyStudentTestResult ? `${Math.round((currentWeeklyStudentTestResult.score || 0) / Math.max(1, currentWeeklyStudentTestResult.total || 1) * 100)}%` : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Latest", "\u062A\u0627\u0632\u06C1", language), language))))), canManageTests || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assign Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose a template for the full grade or one linked learner.", "\u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftScope, onChange: (event) => setTestAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), testAssignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftStudentEmail, onChange: (event) => setTestAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `weekly_test_student_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftTemplateId, onChange: (event) => setTestAssignmentDraftTemplateId(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose template", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0686\u0646\u06CC\u06BA", language), language)), availableTestTemplates.map((template) => /* @__PURE__ */ React.createElement("option", { key: `available_template_${template.templateId}`, value: template.templateId }, String(template.title || template.templateId || "").trim()))), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleAssignWeeklyTestTemplate, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Assign Test", "\u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeWeeklyTestSession ? /* @__PURE__ */ React.createElement("div", { className: "review-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(activeWeeklyTestSession.title, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Complete all question types, then submit once at the end.", "\u062A\u0645\u0627\u0645 \u0633\u0648\u0627\u0644\u06CC \u0627\u0642\u0633\u0627\u0645 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0622\u062E\u0631 \u0645\u06CC\u06BA \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, (activeWeeklyTestSession.questions || []).map((question, index) => {
+    }) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No assignments yet. Teachers can create assignments using the form above.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0646\u06C1\u06CC\u06BA\u06D4 \u0627\u0633\u0627\u062A\u0630\u06C1 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u06D2 \u0641\u0627\u0631\u0645 \u0633\u06D2 \u062A\u0641\u0648\u06CC\u0636\u0627\u062A \u0628\u0646\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "saturday" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Weekly Test Day", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0688\u06D2", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Teachers can assign a weekly test; otherwise the app generates one from the configured study scope.", "\u0627\u0633\u0627\u062A\u0630\u06C1 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u060C \u0648\u0631\u0646\u06C1 \u0627\u06CC\u067E \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u06D2 \u06AF\u0626\u06D2 \u0645\u0637\u0627\u0644\u0639\u0627\u062A\u06CC \u062F\u0627\u0626\u0631\u06D2 \u0633\u06D2 \u0679\u06CC\u0633\u0679 \u0628\u0646\u0627\u062A\u06CC \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(currentWeeklyTestDate || currentWeeklyTestDayLabel, language))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9EA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_v = (_u = currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.payload) == null ? void 0 : _u.questions) == null ? void 0 : _v.length) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Questions", "\u0633\u0648\u0627\u0644\u0627\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F5C2}\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("Assigned", "\u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1", language) : joinLocalizedText("Generated", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Source", "\u0645\u0627\u062E\u0630", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, currentWeeklyStudentTestResult ? `${Math.round((currentWeeklyStudentTestResult.score || 0) / Math.max(1, currentWeeklyStudentTestResult.total || 1) * 100)}%` : "\u2014"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Latest", "\u062A\u0627\u0632\u06C1", language), language))))), canManageTests || canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Assign Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose a template for the full grade or one linked learner.", "\u067E\u0648\u0631\u06CC \u062C\u0645\u0627\u0639\u062A \u06CC\u0627 \u06A9\u0633\u06CC \u0627\u06CC\u06A9 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftScope, onChange: (event) => setTestAssignmentDraftScope(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "grade" }, renderLocalizedTextNode(joinLocalizedText("Grade-wide", "\u062C\u0645\u0627\u0639\u062A \u0648\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("option", { value: "student" }, renderLocalizedTextNode(joinLocalizedText("Student-specific", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0648\u0627\u0631", language), language))), testAssignmentDraftScope === "student" ? /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftStudentEmail, onChange: (event) => setTestAssignmentDraftStudentEmail(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose learner", "\u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0686\u0646\u06CC\u06BA", language), language)), visibleTeacherStudentLinks.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `weekly_test_student_${entry.linkId}`, value: entry.studentEmail }, entry.studentLabel || entry.studentEmail))) : null, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testAssignmentDraftTemplateId, onChange: (event) => setTestAssignmentDraftTemplateId(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose template", "\u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0686\u0646\u06CC\u06BA", language), language)), availableTestTemplates.map((template) => /* @__PURE__ */ React.createElement("option", { key: `available_template_${template.templateId}`, value: template.templateId }, String(template.title || template.templateId || "").trim()))), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleAssignWeeklyTestTemplate, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Assign Test", "\u0679\u06CC\u0633\u0679 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)))) : null, activeWeeklyTestSession ? /* @__PURE__ */ React.createElement("div", { className: "review-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(activeWeeklyTestSession.title, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Complete all question types, then submit once at the end.", "\u062A\u0645\u0627\u0645 \u0633\u0648\u0627\u0644\u06CC \u0627\u0642\u0633\u0627\u0645 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0622\u062E\u0631 \u0645\u06CC\u06BA \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list" }, (activeWeeklyTestSession.questions || []).map((question, index) => {
       var _a2;
       return /* @__PURE__ */ React.createElement("div", { key: `weekly_test_q_${question.id}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText(`Q${index + 1}. ${question.prompt}`, `\u0633${index + 1}. ${question.prompt}`, language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(question.type, language))), question.type === "mcq" ? /* @__PURE__ */ React.createElement("div", { className: "quiz-options" }, (question.options || []).map((option, optionIndex) => {
         var _a3;
@@ -21352,14 +24025,14 @@ ${error.message || error}`);
         var _a3, _b2;
         return /* @__PURE__ */ React.createElement("div", { key: `match_pair_${question.id}_${pair.id}`, className: "profile-report-item", style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(pair.left, language))), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: ((_b2 = (_a3 = activeWeeklyTestSession.answers) == null ? void 0 : _a3[question.id]) == null ? void 0 : _b2[pair.id]) || "", onChange: (event) => handleWeeklyTestAnswerChange(question.id, event.target.value, pair.id) }, /* @__PURE__ */ React.createElement("option", { value: "" }, renderLocalizedTextNode(joinLocalizedText("Choose match", "\u0645\u0645\u0627\u062B\u0644 \u0686\u0646\u06CC\u06BA", language), language)), (question.pairs || []).map((option) => /* @__PURE__ */ React.createElement("option", { key: `match_option_${question.id}_${option.id}`, value: option.right }, option.right))));
       })) : null);
-    })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => setActiveWeeklyTestSession(null) }, renderLocalizedTextNode(joinLocalizedText("Cancel", "\u0645\u0646\u0633\u0648\u062E", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSubmitWeeklyTest, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Submit Test", "\u0679\u06CC\u0633\u0679 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA", language), language)))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode((currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.title) || joinLocalizedText("No Saturday test yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u0646\u06C1\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("This week's test came from an assigned template.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0627\u06CC\u06A9 \u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0633\u06D2 \u0622\u06CC\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText("This week's test is being generated from the covered lessons.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0632\u06CC\u0631\u0650 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u0633\u0628\u0627\u0642 \u0633\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4", language), language)))), currentWeeklyTestTemplate ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: () => handleStartWeeklyTestSession(currentWeeklyTestTemplate) }, renderLocalizedTextNode(joinLocalizedText("Start Test", "\u0679\u06CC\u0633\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), currentWeeklyStudentTestResult ? /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} latest`, `${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} \u062A\u0627\u0632\u06C1`, language), language)) : null) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No Saturday test is ready yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u062A\u06CC\u0627\u0631 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "templates" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Test Template Library", "\u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0644\u0627\u0626\u0628\u0631\u06CC\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Import, export, publish, and reuse Saturday test templates.", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679\u0633 \u062F\u0631\u0622\u0645\u062F\u060C \u0628\u0631\u0622\u0645\u062F\u060C \u0634\u0627\u0626\u0639\u060C \u0627\u0648\u0631 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 0 } }, canManageTests ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenTestTemplateImport, disabled: testTemplateImportBusy }, renderLocalizedTextNode(testTemplateImportBusy ? joinLocalizedText("Importing...", "\u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import JSON", "JSON \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, availableTestTemplates.length ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => downloadJson(`test-template-pack-grade-${grade}.json`, buildTestTemplatePackExportPayload(availableTestTemplates, `Grade ${grade} templates`)) }, renderLocalizedTextNode(joinLocalizedText("Export All", "\u0633\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testTemplateDraftSubjectFilter, onChange: (event) => setTestTemplateDraftSubjectFilter(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("All subjects", "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("option", { key: `template_subject_${subject.id}`, value: subject.id }, subject.name))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: testTemplateDraftAuthorFilter, onChange: (event) => setTestTemplateDraftAuthorFilter(event.target.value), placeholder: language === "ur" ? "\u0639\u0646\u0648\u0627\u0646 \u06CC\u0627 \u0645\u0635\u0646\u0641 \u0641\u0644\u0679\u0631" : "Filter by title or author" })), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, availableTestTemplates.filter((template) => {
+    })), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => setActiveWeeklyTestSession(null) }, renderLocalizedTextNode(joinLocalizedText("Cancel", "\u0645\u0646\u0633\u0648\u062E", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: handleSubmitWeeklyTest, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Submit Test", "\u0679\u06CC\u0633\u0679 \u062C\u0645\u0639 \u06A9\u0631\u06CC\u06BA", language), language)))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel", style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode((currentWeeklyTestTemplate == null ? void 0 : currentWeeklyTestTemplate.title) || joinLocalizedText("No weekly test yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0646\u06C1\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(currentWeeklyAssignedTemplate ? joinLocalizedText("This week's test came from an assigned template.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0627\u06CC\u06A9 \u062A\u0641\u0648\u06CC\u0636 \u0634\u062F\u06C1 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0633\u06D2 \u0622\u06CC\u0627 \u06C1\u06D2\u06D4", language) : joinLocalizedText("This week's test is being generated from the covered lessons.", "\u0627\u0633 \u06C1\u0641\u062A\u06D2 \u06A9\u0627 \u0679\u06CC\u0633\u0679 \u0632\u06CC\u0631\u0650 \u0645\u0637\u0627\u0644\u0639\u06C1 \u0627\u0633\u0628\u0627\u0642 \u0633\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2\u06D4", language), language)))), currentWeeklyTestTemplate ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "study-tool-btn", onClick: () => handleStartWeeklyTestSession(currentWeeklyTestTemplate) }, renderLocalizedTextNode(joinLocalizedText("Start Test", "\u0679\u06CC\u0633\u0679 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), currentWeeklyStudentTestResult ? /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(joinLocalizedText(`${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} latest`, `${currentWeeklyStudentTestResult.score}/${currentWeeklyStudentTestResult.total} \u062A\u0627\u0632\u06C1`, language), language)) : null) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No weekly test is ready yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u062A\u06CC\u0627\u0631 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)))) : null, diarySectionTab === "templates" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Test Template Library", "\u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679 \u0644\u0627\u0626\u0628\u0631\u06CC\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Import, export, publish, and reuse Saturday test templates.", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679 \u0679\u06CC\u0645\u067E\u0644\u06CC\u0679\u0633 \u062F\u0631\u0622\u0645\u062F\u060C \u0628\u0631\u0622\u0645\u062F\u060C \u0634\u0627\u0626\u0639\u060C \u0627\u0648\u0631 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "result-actions", style: { marginTop: 0 } }, canManageTests ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenTestTemplateImport, disabled: testTemplateImportBusy }, renderLocalizedTextNode(testTemplateImportBusy ? joinLocalizedText("Importing...", "\u062F\u0631\u0622\u0645\u062F \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Import JSON", "JSON \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, availableTestTemplates.length ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => downloadJson(`test-template-pack-grade-${grade}.json`, buildTestTemplatePackExportPayload(availableTestTemplates, `Grade ${grade} templates`)) }, renderLocalizedTextNode(joinLocalizedText("Export All", "\u0633\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null)), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: testTemplateDraftSubjectFilter, onChange: (event) => setTestTemplateDraftSubjectFilter(event.target.value) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("All subjects", "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), allSubjects.map((subject) => /* @__PURE__ */ React.createElement("option", { key: `template_subject_${subject.id}`, value: subject.id }, subject.name))), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: testTemplateDraftAuthorFilter, onChange: (event) => setTestTemplateDraftAuthorFilter(event.target.value), placeholder: language === "ur" ? "\u0639\u0646\u0648\u0627\u0646 \u06CC\u0627 \u0645\u0635\u0646\u0641 \u0641\u0644\u0679\u0631" : "Filter by title or author" })), /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, availableTestTemplates.filter((template) => {
       if (testTemplateDraftSubjectFilter !== "all" && !(template.subjectScope || []).includes(testTemplateDraftSubjectFilter)) return false;
       const filterText = String(testTemplateDraftAuthorFilter || "").trim().toLowerCase();
       return !filterText || `${template.title} ${template.authorEmail || ""}`.toLowerCase().includes(filterText);
     }).map((template) => {
       var _a2, _b2, _c2, _d2;
       return /* @__PURE__ */ React.createElement("div", { key: `template_${template.templateId}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(template.title, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(template.source === "published" ? joinLocalizedText("Published", "\u0634\u0627\u0626\u0639 \u0634\u062F\u06C1", language) : template.source === "generated" ? joinLocalizedText("Generated", "\u062E\u0648\u062F\u06A9\u0627\u0631", language) : joinLocalizedText("Local", "\u0645\u0642\u0627\u0645\u06CC", language), language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${((_b2 = (_a2 = template.payload) == null ? void 0 : _a2.questions) == null ? void 0 : _b2.length) || 0} questions`, `${((_d2 = (_c2 = template.payload) == null ? void 0 : _c2.questions) == null ? void 0 : _d2.length) || 0} \u0633\u0648\u0627\u0644\u0627\u062A`, language), language)), /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleExportTestTemplate(template) }, renderLocalizedTextNode(joinLocalizedText("Export", "\u0628\u0631\u0622\u0645\u062F", language), language)), canManageTests ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handlePublishTestTemplate(template), disabled: testTemplatePublishBusy }, renderLocalizedTextNode(joinLocalizedText("Publish", "\u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA", language), language)) : null, template.source === "published" && (canManageTests || canManageInstitution || canManageContentAccess) ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleUnpublishTestTemplate(template), disabled: testTemplatePublishBusy }, renderLocalizedTextNode(joinLocalizedText("Unpublish", "\u063A\u06CC\u0631 \u0634\u0627\u0626\u0639", language), language)) : null, template.source !== "published" ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteLocalTestTemplate(template.templateId) }, renderLocalizedTextNode(joinLocalizedText("Delete local", "\u0645\u0642\u0627\u0645\u06CC \u062D\u0630\u0641", language), language)) : null));
-    }))) : null, diarySectionTab === "dashboard" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance Dashboard", "\u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u0688\u06CC\u0634 \u0628\u0648\u0631\u0688", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See diary completion, Saturday scores, and weak topics for the selected learner.", "\u0645\u0646\u062A\u062E\u0628 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0688\u0627\u0626\u0631\u06CC \u062A\u06A9\u0645\u06CC\u0644\u060C \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u06A9\u06D2 \u0646\u062A\u0627\u0626\u062C\u060C \u0627\u0648\u0631 \u06A9\u0645\u0632\u0648\u0631 \u0645\u0648\u0636\u0648\u0639\u0627\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `perf_student_${entry.email}`, value: entry.email }, entry.label)))) : null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2705"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_v = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _v.weeklyCompleted) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Weekly diary done", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06A9\u0645\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9EA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_x = (_w = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _w.latestTest) == null ? void 0 : _x.score) || 0), "/", formatNumberLabel(((_z = (_y = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _y.latestTest) == null ? void 0 : _z.total) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Latest Saturday test", "\u062A\u0627\u0632\u06C1 \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_A = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _A.recentTestAverage) || 0), "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Trend average", "\u0627\u0648\u0633\u0637 \u0631\u062C\u062D\u0627\u0646", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u26A0\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel((((_B = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _B.weakTopics) || []).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Weak topics", "\u06A9\u0645\u0632\u0648\u0631 \u0645\u0648\u0636\u0648\u0639\u0627\u062A", language), language)))), (((_C = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _C.weakTopics) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, (((_D = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _D.weakTopics) || []).map((topic, index) => /* @__PURE__ */ React.createElement("div", { key: `weak_topic_${index}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode((subjectLookup == null ? void 0 : subjectLookup[topic.subject]) ? getSubjectDisplayName(subjectLookup[topic.subject], language) : topic.subject, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(topic.lessonKey || "", language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(topic.prompt || joinLocalizedText("Repeatedly incorrect", "\u0628\u0627\u0631 \u0628\u0627\u0631 \u063A\u0644\u0637", language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 14 } }, renderLocalizedTextNode(joinLocalizedText("No weak topics recorded yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06A9\u0645\u0632\u0648\u0631 \u0645\u0648\u0636\u0648\u0639 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0646\u06C1\u06CC\u06BA \u06C1\u0648\u0627\u06D4", language), language))) : null)), tab === "review" && /* @__PURE__ */ React.createElement(React.Fragment, null, !activeReviewCard && !reviewSessionDone && !practiceMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-section-tabs", role: "tablist", "aria-label": language === "ur" ? "\u0631\u06CC\u0648\u06CC\u0648 \u062D\u0635\u06D2" : "Review sections" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "queue" ? " active" : ""}`, onClick: () => setReviewSectionTab("queue") }, renderLocalizedTextNode(joinLocalizedText("Review Queue", "\u0631\u06CC\u0648\u06CC\u0648 \u0642\u0637\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "practice" ? " active" : ""}`, onClick: () => setReviewSectionTab("practice") }, renderLocalizedTextNode(joinLocalizedText("Practice Lab", "\u067E\u0631\u06CC\u06A9\u0679\u0633 \u0644\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "weakwords" ? " active" : ""}`, onClick: () => setReviewSectionTab("weakwords") }, renderLocalizedTextNode(joinLocalizedText("Weak Words", "\u06A9\u0645\u0632\u0648\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "insights" ? " active" : ""}`, onClick: () => setReviewSectionTab("insights") }, renderLocalizedTextNode(joinLocalizedText("Insights", "\u062A\u062C\u0632\u06CC\u06C1", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "lists" ? " active" : ""}`, onClick: () => setReviewSectionTab("lists") }, renderLocalizedTextNode(joinLocalizedText("Lists & Notes", "\u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0627\u0648\u0631 \u0646\u0648\u0679\u0633", language), language))), /* @__PURE__ */ React.createElement(
+    }))) : null, diarySectionTab === "dashboard" ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance Dashboard", "\u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u0688\u06CC\u0634 \u0628\u0648\u0631\u0688", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See diary completion, Saturday scores, and weak topics for the selected learner.", "\u0645\u0646\u062A\u062E\u0628 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0688\u0627\u0626\u0631\u06CC \u062A\u06A9\u0645\u06CC\u0644\u060C \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679 \u06A9\u06D2 \u0646\u062A\u0627\u0626\u062C\u060C \u0627\u0648\u0631 \u06A9\u0645\u0632\u0648\u0631 \u0645\u0648\u0636\u0648\u0639\u0627\u062A \u062F\u06CC\u06A9\u06BE\u06CC\u06BA\u06D4", language), language)))), diaryViewerStudentOptions.length > 1 ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: activeDiaryViewerStudentEmail, onChange: (event) => setPerformanceStudentEmail(event.target.value) }, diaryViewerStudentOptions.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `perf_student_${entry.email}`, value: entry.email }, entry.label)))) : null, /* @__PURE__ */ React.createElement("div", { className: "stat-grid", style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u2705"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_w = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _w.weeklyCompleted) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Weekly diary done", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06A9\u0645\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F9EA}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_y = (_x = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _x.latestTest) == null ? void 0 : _y.score) || 0), "/", formatNumberLabel(((_A = (_z = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _z.latestTest) == null ? void 0 : _A.total) || 0)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Latest Saturday test", "\u062A\u0627\u0632\u06C1 \u06C1\u0641\u062A\u06C1 \u0679\u06CC\u0633\u0679", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F4C8}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(((_B = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _B.recentTestAverage) || 0), "%"), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Trend average", "\u0627\u0648\u0633\u0637 \u0631\u062C\u062D\u0627\u0646", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u26A0\uFE0F"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel((((_C = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _C.weakTopics) || []).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Weak topics", "\u06A9\u0645\u0632\u0648\u0631 \u0645\u0648\u0636\u0648\u0639\u0627\u062A", language), language)))), (((_D = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _D.weakTopics) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "profile-report-list", style: { marginTop: 14 } }, (((_E = performanceSummaryByStudent[activeDiaryViewerStudentEmail]) == null ? void 0 : _E.weakTopics) || []).map((topic, index) => /* @__PURE__ */ React.createElement("div", { key: `weak_topic_${index}`, className: "profile-report-item" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode((subjectLookup == null ? void 0 : subjectLookup[topic.subject]) ? getSubjectDisplayName(subjectLookup[topic.subject], language) : topic.subject, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(topic.lessonKey || "", language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(topic.prompt || joinLocalizedText("Repeatedly incorrect", "\u0628\u0627\u0631 \u0628\u0627\u0631 \u063A\u0644\u0637", language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 14 } }, renderLocalizedTextNode(joinLocalizedText("No weak topics recorded yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u06A9\u0645\u0632\u0648\u0631 \u0645\u0648\u0636\u0648\u0639 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0646\u06C1\u06CC\u06BA \u06C1\u0648\u0627\u06D4", language), language))) : null)), tab === "review" && /* @__PURE__ */ React.createElement(React.Fragment, null, !activeReviewCard && !reviewSessionDone && !practiceMode && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-section-tabs", role: "tablist", "aria-label": language === "ur" ? "\u0631\u06CC\u0648\u06CC\u0648 \u062D\u0635\u06D2" : "Review sections" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "queue" ? " active" : ""}`, onClick: () => setReviewSectionTab("queue") }, renderLocalizedTextNode(joinLocalizedText("Review Queue", "\u0631\u06CC\u0648\u06CC\u0648 \u0642\u0637\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "practice" ? " active" : ""}`, onClick: () => setReviewSectionTab("practice") }, renderLocalizedTextNode(joinLocalizedText("Practice Lab", "\u067E\u0631\u06CC\u06A9\u0679\u0633 \u0644\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "weakwords" ? " active" : ""}`, onClick: () => setReviewSectionTab("weakwords") }, renderLocalizedTextNode(joinLocalizedText("Weak Words", "\u06A9\u0645\u0632\u0648\u0631 \u0627\u0644\u0641\u0627\u0638", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "insights" ? " active" : ""}`, onClick: () => setReviewSectionTab("insights") }, renderLocalizedTextNode(joinLocalizedText("Insights", "\u062A\u062C\u0632\u06CC\u06C1", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `review-section-tab${reviewSectionTab === "lists" ? " active" : ""}`, onClick: () => setReviewSectionTab("lists") }, renderLocalizedTextNode(joinLocalizedText("Lists & Notes", "\u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0627\u0648\u0631 \u0646\u0648\u0679\u0633", language), language))), /* @__PURE__ */ React.createElement(
       "div",
       {
         key: `${transitionMode}:${reviewSectionTab}`,
@@ -21480,9 +24153,9 @@ ${error.message || error}`);
         const isMasteredBox = Number(entry.box) >= Number(reviewSrsSettings.masteryThreshold || 5);
         return /* @__PURE__ */ React.createElement("div", { key: `leitner_${entry.box}`, className: "leitner-box-row" }, /* @__PURE__ */ React.createElement("div", { className: "leitner-box-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(isMasteredBox ? joinLocalizedText("Mastered", "\u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644", language) : joinLocalizedText(`Box ${entry.box}`, `\u0628\u0627\u06A9\u0633 ${entry.box}`, language), language)), /* @__PURE__ */ React.createElement("span", null, formatNumberLabel(entry.count || 0))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar leitner-progress" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, (Number(entry.count) || 0) / reviewLeitnerMax * 100))}%` } })));
       })) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few reviews to fill the Leitner boxes.", "\u06A9\u0686\u06BE \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0644\u0627\u0626\u0679\u0646\u0631 \u0628\u0627\u06A9\u0633 \u0628\u06BE\u0631 \u0633\u06A9\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Predicted Mastery", "\u0645\u062A\u0648\u0642\u0639 \u0645\u06C1\u0627\u0631\u062A", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Estimated finish date if you keep answering \u201CGood\u201D consistently.", "\u0627\u06AF\u0631 \u0622\u067E \u0645\u0633\u0644\u0633\u0644 \u201C\u0627\u0686\u06BE\u0627\u201D \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u062A\u06D2 \u0631\u06C1\u06CC\u06BA \u062A\u0648 \u0627\u0646\u062F\u0627\u0632\u0627\u064B \u06A9\u0628 \u0645\u06C1\u0627\u0631\u062A \u0645\u06A9\u0645\u0644 \u06C1\u0648\u06AF\u06CC\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "mastery-prediction-callout" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Overall deck", "\u0645\u06A9\u0645\u0644 \u0645\u062C\u0645\u0648\u0639\u06C1", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(
-        Number(((_E = reviewAnalytics.predictedMastery) == null ? void 0 : _E.cardsRemaining) || 0) > 0 ? formatProjectedDateLabel((_F = reviewAnalytics.predictedMastery) == null ? void 0 : _F.projectedAt, language) : joinLocalizedText("Already mastered", "\u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u06A9\u0645\u0644", language),
+        Number(((_F = reviewAnalytics.predictedMastery) == null ? void 0 : _F.cardsRemaining) || 0) > 0 ? formatProjectedDateLabel((_G = reviewAnalytics.predictedMastery) == null ? void 0 : _G.projectedAt, language) : joinLocalizedText("Already mastered", "\u067E\u06C1\u0644\u06D2 \u06C1\u06CC \u0645\u06A9\u0645\u0644", language),
         language
-      )), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${((_G = reviewAnalytics.predictedMastery) == null ? void 0 : _G.cardsRemaining) || 0} cards remaining`, `${((_H = reviewAnalytics.predictedMastery) == null ? void 0 : _H.cardsRemaining) || 0} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))), (((_I = reviewAnalytics.predictedMastery) == null ? void 0 : _I.sections) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "mastery-section-list" }, reviewAnalytics.predictedMastery.sections.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "mastery-section-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, formatProjectedDateLabel(entry.projectedAt, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.cardsRemaining} cards left`, `${entry.cardsRemaining} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Predictions will appear after your review boxes start moving.", "\u067E\u06CC\u0634 \u06AF\u0648\u0626\u06CC\u0627\u06BA \u062A\u0628 \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC \u062C\u0628 \u0622\u067E \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u06A9\u0633 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))),
+      )), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${((_H = reviewAnalytics.predictedMastery) == null ? void 0 : _H.cardsRemaining) || 0} cards remaining`, `${((_I = reviewAnalytics.predictedMastery) == null ? void 0 : _I.cardsRemaining) || 0} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))), (((_J = reviewAnalytics.predictedMastery) == null ? void 0 : _J.sections) || []).length ? /* @__PURE__ */ React.createElement("div", { className: "mastery-section-list" }, reviewAnalytics.predictedMastery.sections.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "mastery-section-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, formatProjectedDateLabel(entry.projectedAt, language))), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.cardsRemaining} cards left`, `${entry.cardsRemaining} \u06A9\u0627\u0631\u0688 \u0628\u0627\u0642\u06CC`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Predictions will appear after your review boxes start moving.", "\u067E\u06CC\u0634 \u06AF\u0648\u0626\u06CC\u0627\u06BA \u062A\u0628 \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC \u062C\u0628 \u0622\u067E \u06A9\u06D2 \u0631\u06CC\u0648\u06CC\u0648 \u0628\u0627\u06A9\u0633 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))),
       reviewSectionTab === "insights" && /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Forgetting Curve", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Accuracy by review delay shows how recall changes over longer gaps.", "\u0631\u06CC\u0648\u06CC\u0648 \u06A9\u06D2 \u0648\u0642\u0641\u06D2 \u06A9\u06D2 \u0644\u062D\u0627\u0638 \u0633\u06D2 \u062F\u0631\u0633\u062A\u06AF\u06CC \u062F\u06A9\u06BE\u0627\u062A\u06CC \u06C1\u06D2 \u06A9\u06C1 \u0632\u06CC\u0627\u062F\u06C1 \u0648\u0642\u0641\u0648\u06BA \u067E\u0631 \u06CC\u0627\u062F\u062F\u0627\u0634\u062A \u06A9\u06CC\u0633\u06D2 \u0628\u062F\u0644\u062A\u06CC \u06C1\u06D2\u06D4", language), language)))), (reviewAnalytics.forgettingCurve || []).some((entry) => entry.reviews > 0) ? /* @__PURE__ */ React.createElement("div", { className: "forgetting-curve-list" }, (reviewAnalytics.forgettingCurve || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "forgetting-curve-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(getForgettingCurveLabel(entry.id, language), language)), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(8, Math.min(100, Number(entry.accuracy) || 0))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("More review history is needed to draw the forgetting curve.", "\u0628\u06BE\u0648\u0644\u0646\u06D2 \u06A9\u0627 \u0631\u062C\u062D\u0627\u0646 \u062F\u06A9\u06BE\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u062F\u0631\u06A9\u0627\u0631 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Upcoming Reviews", "\u0622\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u0631\u06CC\u0648\u06CC\u0648\u0632", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See the next two weeks of due reviews before they pile up.", "\u0627\u06AF\u0644\u06D2 \u062F\u0648 \u06C1\u0641\u062A\u0648\u06BA \u06A9\u06D2 \u0628\u0627\u0642\u06CC \u0631\u06CC\u0648\u06CC\u0648\u0632 \u067E\u06C1\u0644\u06D2 \u0633\u06D2 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0648\u062C\u06BE \u062C\u0645\u0639 \u0646\u06C1 \u06C1\u0648\u06D4", language), language)))), (reviewAnalytics.upcomingCalendar || []).length ? /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-grid" }, (reviewAnalytics.upcomingCalendar || []).map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.dayKey, className: `upcoming-calendar-cell${entry.isToday ? " today" : ""}` }, /* @__PURE__ */ React.createElement("strong", null, entry.weekday), /* @__PURE__ */ React.createElement("span", null, entry.label), /* @__PURE__ */ React.createElement("div", { className: "upcoming-calendar-count" }, formatNumberLabel(entry.dueCount || 0)), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar upcoming-calendar-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${Math.max(6, Math.min(100, (Number(entry.dueCount) || 0) / upcomingCalendarMax * 100))}%` } }))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Upcoming review dates will appear once cards are scheduled ahead.", "\u06A9\u0627\u0631\u0688\u0632 \u0622\u06AF\u06D2 \u0634\u06CC\u0688\u0648\u0644 \u06C1\u0648\u0646\u06D2 \u067E\u0631 \u0622\u0646\u06D2 \u0648\u0627\u0644\u06CC \u062A\u0627\u0631\u06CC\u062E\u06CC\u06BA \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06CC\u06BA \u06AF\u06CC\u06D4", language), language)))),
       reviewSectionTab === "insights" && /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.reviewHeatmap, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.reviewHeatmapHint, language))), /* @__PURE__ */ React.createElement("button", { className: "study-tool-btn compact", onClick: () => setHeatmapExpanded((value) => !value) }, renderLocalizedTextNode(heatmapExpanded ? joinLocalizedText("Show Less", "\u06A9\u0645 \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language) : joinLocalizedText("Show Heatmap", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u062F\u06A9\u06BE\u0627\u0626\u06CC\u06BA", language), language))), heatmapExpanded ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-heatmap-grid" }, reviewAnalytics.heatmap.map((cell) => /* @__PURE__ */ React.createElement(
         "div",
@@ -21492,7 +24165,7 @@ ${error.message || error}`);
           title: `${cell.dateLabel}: ${cell.count} reviews`
         }
       ))), /* @__PURE__ */ React.createElement("div", { className: "review-heat-legend" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Less", "\u06A9\u0645", language), language)), [0, 1, 2, 3, 4].map((level) => /* @__PURE__ */ React.createElement("span", { key: level, className: `review-heat-cell level-${level}` })), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("More", "\u0632\u06CC\u0627\u062F\u06C1", language), language)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Heatmap is hidden. Open it when you want a weekly review overview.", "\u06C1\u06CC\u0679 \u0645\u06CC\u067E \u0641\u06CC \u0627\u0644\u062D\u0627\u0644 \u0628\u0646\u062F \u06C1\u06D2\u06D4 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u062C\u0627\u0626\u0632\u06C1 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0633\u06D2 \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))),
-      reviewSectionTab === "insights" && /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Growth", "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Weekly review volume and unique cards over the recent study streak.", "\u062D\u0627\u0644\u06CC\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0648\u0631\u0627\u0646 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0627\u0648\u0631 \u0645\u0646\u0641\u0631\u062F \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F\u06D4", language), language)))), ((_J = reviewAnalytics.wordGrowth) == null ? void 0 : _J.length) ? /* @__PURE__ */ React.createElement("div", { className: "growth-chart" }, reviewAnalytics.wordGrowth.map((bucket) => /* @__PURE__ */ React.createElement("div", { key: bucket.weekKey, className: "growth-bar-col" }, /* @__PURE__ */ React.createElement("div", { className: "growth-bar-stack" }, /* @__PURE__ */ React.createElement("span", { className: "growth-bar reviews", style: { height: `${Math.max(12, Math.min(100, bucket.reviews * 6))}%` } }), /* @__PURE__ */ React.createElement("span", { className: "growth-bar unique", style: { height: `${Math.max(8, Math.min(84, bucket.uniqueCards * 8))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "growth-bar-label" }, bucket.label)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few review sessions to unlock this chart.", "\u06CC\u06C1 \u0686\u0627\u0631\u0679 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0686\u0646\u062F \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance by Category", "\u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See which sections are strongest and which still need attention.", "\u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0633\u06CC\u06A9\u0634\u0646 \u0645\u0636\u0628\u0648\u0637 \u06C1\u06CC\u06BA \u0627\u0648\u0631 \u06A9\u0646\u06C1\u06CC\u06BA \u0645\u0632\u06CC\u062F \u062A\u0648\u062C\u06C1 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), language)))), ((_K = reviewAnalytics.categoryPerformance) == null ? void 0 : _K.length) ? /* @__PURE__ */ React.createElement("div", { className: "category-performance-list" }, reviewAnalytics.categoryPerformance.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "category-performance-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${entry.accuracy}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews \u2022 ${entry.uniqueCards} cards`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632 \u2022 ${entry.uniqueCards} \u06A9\u0627\u0631\u0688\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Category performance will appear after more review history builds up.", "\u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u0628\u0646\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)))),
+      reviewSectionTab === "insights" && /* @__PURE__ */ React.createElement("div", { className: "study-word-columns" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Growth", "\u0627\u0644\u0641\u0627\u0638 \u06A9\u06CC \u0628\u0691\u06BE\u0648\u062A\u0631\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Weekly review volume and unique cards over the recent study streak.", "\u062D\u0627\u0644\u06CC\u06C1 \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0648\u0631\u0627\u0646 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0631\u06CC\u0648\u06CC\u0648\u0632 \u0627\u0648\u0631 \u0645\u0646\u0641\u0631\u062F \u06A9\u0627\u0631\u0688\u0632 \u06A9\u06CC \u062A\u0639\u062F\u0627\u062F\u06D4", language), language)))), ((_K = reviewAnalytics.wordGrowth) == null ? void 0 : _K.length) ? /* @__PURE__ */ React.createElement("div", { className: "growth-chart" }, reviewAnalytics.wordGrowth.map((bucket) => /* @__PURE__ */ React.createElement("div", { key: bucket.weekKey, className: "growth-bar-col" }, /* @__PURE__ */ React.createElement("div", { className: "growth-bar-stack" }, /* @__PURE__ */ React.createElement("span", { className: "growth-bar reviews", style: { height: `${Math.max(12, Math.min(100, bucket.reviews * 6))}%` } }), /* @__PURE__ */ React.createElement("span", { className: "growth-bar unique", style: { height: `${Math.max(8, Math.min(84, bucket.uniqueCards * 8))}%` } })), /* @__PURE__ */ React.createElement("div", { className: "growth-bar-label" }, bucket.label)))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Complete a few review sessions to unlock this chart.", "\u06CC\u06C1 \u0686\u0627\u0631\u0679 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0686\u0646\u062F \u0631\u06CC\u0648\u06CC\u0648 \u0633\u06CC\u0634\u0646 \u0645\u06A9\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Performance by Category", "\u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("See which sections are strongest and which still need attention.", "\u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u0648\u0646 \u0633\u06D2 \u0633\u06CC\u06A9\u0634\u0646 \u0645\u0636\u0628\u0648\u0637 \u06C1\u06CC\u06BA \u0627\u0648\u0631 \u06A9\u0646\u06C1\u06CC\u06BA \u0645\u0632\u06CC\u062F \u062A\u0648\u062C\u06C1 \u0686\u0627\u06C1\u06CC\u06D2\u06D4", language), language)))), ((_L = reviewAnalytics.categoryPerformance) == null ? void 0 : _L.length) ? /* @__PURE__ */ React.createElement("div", { className: "category-performance-list" }, reviewAnalytics.categoryPerformance.map((entry) => /* @__PURE__ */ React.createElement("div", { key: entry.id, className: "category-performance-item" }, /* @__PURE__ */ React.createElement("div", { className: "category-performance-head" }, /* @__PURE__ */ React.createElement("strong", null, entry.sectionLabel), /* @__PURE__ */ React.createElement("span", null, entry.accuracy, "%")), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-bar" }, /* @__PURE__ */ React.createElement("span", { style: { width: `${entry.accuracy}%` } })), /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta" }, renderLocalizedTextNode(joinLocalizedText(`${entry.reviews} reviews \u2022 ${entry.uniqueCards} cards`, `${entry.reviews} \u0631\u06CC\u0648\u06CC\u0648\u0632 \u2022 ${entry.uniqueCards} \u06A9\u0627\u0631\u0688\u0632`, language), language))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("Category performance will appear after more review history builds up.", "\u0645\u0632\u06CC\u062F \u0631\u06CC\u0648\u06CC\u0648 \u062A\u0627\u0631\u06CC\u062E \u0628\u0646\u0646\u06D2 \u06A9\u06D2 \u0628\u0639\u062F \u0642\u0633\u0645 \u0648\u0627\u0631 \u06A9\u0627\u0631\u06A9\u0631\u062F\u06AF\u06CC \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)))),
       reviewSectionTab === "weakwords" && /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.weakWordsReport, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(ui.weakWordsHint, language)))), reviewAnalytics.weakWords.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "study-word-grid" }, reviewAnalytics.weakWords.map((card) => /* @__PURE__ */ React.createElement(StudyWordCard, { key: card.id, card }))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(ui.noWeakWords, language))),
       reviewSectionTab === "lists" && /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(ui.studyCollections, language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Create focused word packs for revision, dictation, or tricky vocabulary.", "\u0631\u06CC\u0648\u06CC\u0698\u0646\u060C \u0627\u0645\u0644\u0627\u060C \u06CC\u0627 \u0645\u0634\u06A9\u0644 \u0627\u0644\u0641\u0627\u0638 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u067E\u0646\u06CC \u0627\u0644\u06AF \u0641\u06C1\u0631\u0633\u062A\u06CC\u06BA \u0628\u0646\u0627\u0626\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "review-list-creator" }, /* @__PURE__ */ React.createElement(
         "input",
@@ -21725,7 +24398,7 @@ ${error.message || error}`);
       const isCorrect = optionIndex === Number(activePracticeCard.quizCorrectIndex);
       const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
       return /* @__PURE__ */ React.createElement("button", { key: `${option}_${optionIndex}`, className: optionClass, disabled: practiceTimerFinished || practiceTimedChoice !== null, onClick: () => handleTimedQuizChoice(optionIndex), style: getPracticeTextStyle(option, {}, activePracticeCard.practiceLang) }, option);
-    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}`, style: getPracticeTextStyle(((_L = activePracticeCard.quizOptions) == null ? void 0 : _L[Number(activePracticeCard.quizCorrectIndex)]) || "", {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", ((_M = activePracticeCard.quizOptions) == null ? void 0 : _M[Number(activePracticeCard.quizCorrectIndex)]) || "") : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Question", "\u0627\u06AF\u0644\u0627 \u0633\u0648\u0627\u0644", language), language)))), practiceMode === "timedtruefalse" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Decide whether the statement is true or false before the timer ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0641\u06CC\u0635\u0644\u06C1 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0633\u0648\u0627\u0644 \u062F\u0631\u0633\u062A \u06C1\u06D2 \u06CC\u0627 \u063A\u0644\u0637\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt" }, /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePracticeCard.trueFalseStatement, fallbackLang: activePracticeCard.practiceLang })), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, [{ key: "true", label: joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language), value: true }, { key: "false", label: joinLocalizedText("False", "\u063A\u0644\u0637", language), value: false }].map((option) => {
+    })), practiceTimedResult ? /* @__PURE__ */ React.createElement("p", { className: `practice-result ${practiceTimedResult}`, style: getPracticeTextStyle(((_M = activePracticeCard.quizOptions) == null ? void 0 : _M[Number(activePracticeCard.quizCorrectIndex)]) || "", {}, activePracticeCard.practiceLang) }, renderLocalizedTextNode(practiceTimedResult === "correct" ? joinLocalizedText("Correct", "\u062F\u0631\u0633\u062A", language) : joinLocalizedText("Correct answer", "\u062F\u0631\u0633\u062A \u062C\u0648\u0627\u0628", language), language), ": ", ((_N = activePracticeCard.quizOptions) == null ? void 0 : _N[Number(activePracticeCard.quizCorrectIndex)]) || "") : null), /* @__PURE__ */ React.createElement("div", { className: "result-actions" }, /* @__PURE__ */ React.createElement("button", { className: "next-btn", onClick: handlePracticeNext }, renderLocalizedTextNode(joinLocalizedText("Next Question", "\u0627\u06AF\u0644\u0627 \u0633\u0648\u0627\u0644", language), language)))), practiceMode === "timedtruefalse" && /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell" }, /* @__PURE__ */ React.createElement("div", { className: "practice-card-face" }, /* @__PURE__ */ React.createElement("div", { className: "timed-challenge-head" }, /* @__PURE__ */ React.createElement("div", { className: "practice-typing-prompt" }, renderLocalizedTextNode(joinLocalizedText("Decide whether the statement is true or false before the timer ends.", "\u0648\u0642\u062A \u062E\u062A\u0645 \u06C1\u0648\u0646\u06D2 \u0633\u06D2 \u067E\u06C1\u0644\u06D2 \u0641\u06CC\u0635\u0644\u06C1 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u0633\u0648\u0627\u0644 \u062F\u0631\u0633\u062A \u06C1\u06D2 \u06CC\u0627 \u063A\u0644\u0637\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `timed-challenge-clock${practiceTimerRemaining <= 10 ? " danger" : ""}` }, formatClockTime(practiceTimerRemaining))), /* @__PURE__ */ React.createElement("div", { className: "study-word-prompt" }, /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePracticeCard.trueFalseStatement, fallbackLang: activePracticeCard.practiceLang })), /* @__PURE__ */ React.createElement("div", { className: "blank-option-grid timed-challenge-options" }, [{ key: "true", label: joinLocalizedText("True", "\u062F\u0631\u0633\u062A", language), value: true }, { key: "false", label: joinLocalizedText("False", "\u063A\u0644\u0637", language), value: false }].map((option) => {
       const isSelected = practiceTimedChoice === option.key;
       const isCorrect = Boolean(activePracticeCard.trueFalseAnswer) === option.value;
       const optionClass = ["blank-option", "timed-option", isSelected ? "selected" : "", practiceReveal && isCorrect ? "correct" : "", practiceReveal && isSelected && !isCorrect ? "wrong" : ""].filter(Boolean).join(" ");
@@ -22012,7 +24685,7 @@ ${error.message || error}`);
         onDeleteContentRoleAssignment: handleDeleteContentRoleAssignment,
         onResolveDictionaryConflict: handleResolveDictionaryConflict,
         onResolveCloudSyncConflict: handleResolveCloudSyncConflict,
-        versionInfo: (_O = (_N = versionManagerRef.current) == null ? void 0 : _N.getVersionInfo) == null ? void 0 : _O.call(_N),
+        versionInfo: (_P = (_O = versionManagerRef.current) == null ? void 0 : _O.getVersionInfo) == null ? void 0 : _P.call(_O),
         onCheckUpdates: handleCheckUpdates,
         onRefreshData: handleRefreshData,
         onExportProgress: handleExportProgress,
@@ -22108,7 +24781,7 @@ ${error.message || error}`);
         aiBrowserBlocked: !aiBrowserCapability.ok,
         labels: ui
       }
-    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, pronunciationLabOpen ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-overlay", onClick: handleClosePronunciationLab }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Pronunciation Lab", "\u062A\u0644\u0641\u0638 \u0644\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Practice speaking the current subject prompts from your selected lesson range and compare what the browser hears.", "\u0627\u067E\u0646\u06D2 \u0645\u0646\u062A\u062E\u0628 \u0633\u0628\u0642 \u0631\u06CC\u0646\u062C \u0633\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0628\u0648\u0644 \u06A9\u0631 \u0645\u0634\u0642 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u06C1 \u0628\u0631\u0627\u0624\u0632\u0631 \u06A9\u06CC\u0627 \u0633\u0646\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClosePronunciationLab }, renderLocalizedTextNode(joinLocalizedText("Close", "\u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stats" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Ready", "\u062A\u06CC\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabDeck.length)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Attempts", "\u06A9\u0648\u0634\u0634\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabAttempts)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Strong Matches", "\u0628\u06C1\u062A\u0631\u06CC\u0646 \u0645\u0637\u0627\u0628\u0642\u062A", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabStrongMatches))), !speechRecognitionSupported ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-alert" }, renderLocalizedTextNode(joinLocalizedText("This browser can play the model voice, but it does not support microphone speech recognition here.", "\u06CC\u06C1 \u0628\u0631\u0627\u0624\u0632\u0631 \u0646\u0645\u0648\u0646\u06C1 \u0622\u0648\u0627\u0632 \u062A\u0648 \u0686\u0644\u0627 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u060C \u0644\u06CC\u06A9\u0646 \u06CC\u06C1\u0627\u06BA \u0645\u0627\u0626\u06CC\u06A9\u0631\u0648\u0641\u0648\u0646 \u06A9\u06CC \u0622\u0648\u0627\u0632 \u067E\u06C1\u0686\u0627\u0646\u0646\u06D2 \u06A9\u06CC \u0633\u06C1\u0648\u0644\u062A \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)) : null, activePronunciationCard ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-body" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-nav" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-side-nav practice-typing-nav-prev", onClick: handlePronunciationPrev, disabled: pronunciationLabIdx <= 0 }, "\xAB")), /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell practice-card-shell-focus pronunciation-lab-shell" }, /* @__PURE__ */ React.createElement("div", { className: "flashcard-count-pill" }, pronunciationLabIdx + 1, " / ", pronunciationLabDeck.length), /* @__PURE__ */ React.createElement("div", { className: `practice-card-face practice-card-face-focus pronunciation-lab-face${(pronunciationLabResult == null ? void 0 : pronunciationLabResult.status) ? ` ${pronunciationLabResult.status === "exact" || pronunciationLabResult.status === "strong" ? "correct" : "review"}` : ""}` }, /* @__PURE__ */ React.createElement("div", { className: `flashcard-card-top${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, renderLocalizedTextNode(joinLocalizedText("Listen and Say", "\u0633\u0646\u06CC\u06BA \u0627\u0648\u0631 \u0628\u0648\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-card-head" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-lesson" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Chapter", "\u0628\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationLessonTitle || (activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "", fallbackLang: activePronunciationCard.pronunciationLang })), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-section" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Subsection", "\u0630\u06CC\u0644\u06CC \u062D\u0635\u06C1", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationSectionTitle || activePronunciationCard.sectionLabel || "", fallbackLang: activePronunciationCard.pronunciationLang }))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-target" }, /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationTarget, fallbackLang: activePronunciationCard.pronunciationLang })), activePronunciationCard.pronunciationSupport ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-support" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Support", "\u0645\u062F\u062F", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationSupport, fallbackLang: getPronunciationLanguage(activePronunciationCard.pronunciationSupport, language === "ur" ? "ur" : "en") })) : null, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-toolbar" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-flip-btn", onClick: handlePlayPronunciationModel, disabled: audioMuted }, renderLocalizedTextNode(joinLocalizedText("Hear Model", "\u0646\u0645\u0648\u0646\u06C1 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `flashcard-flip-btn${pronunciationLabListening ? " active" : ""}`, onClick: handlePronunciationListen, disabled: !speechRecognitionSupported }, renderLocalizedTextNode(pronunciationLabListening ? joinLocalizedText("Stop Listening", "\u0633\u0646\u0646\u0627 \u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Start Speaking", "\u0628\u0648\u0644\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-flip-btn", onClick: handlePronunciationRetry }, renderLocalizedTextNode(joinLocalizedText("Try Again", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634", language), language))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-result-card" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-result-head" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("What we heard", "\u06C1\u0645 \u0646\u06D2 \u06A9\u06CC\u0627 \u0633\u0646\u0627", language), language)), /* @__PURE__ */ React.createElement("strong", null, (_P = pronunciationLabResult == null ? void 0 : pronunciationLabResult.score) != null ? _P : 0, "%")), /* @__PURE__ */ React.createElement("div", { className: `pronunciation-lab-transcript${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, pronunciationLabTranscript ? /* @__PURE__ */ React.createElement(PracticeMixedText, { text: pronunciationLabTranscript, fallbackLang: activePronunciationCard.pronunciationLang }) : renderLocalizedTextNode(joinLocalizedText("Your spoken transcript will appear here.", "\u0622\u067E \u06A9\u06CC \u0628\u0648\u0644\u06CC \u06AF\u0626\u06CC \u0639\u0628\u0627\u0631\u062A \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `pronunciation-lab-feedback${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, renderLocalizedTextNode((pronunciationLabResult == null ? void 0 : pronunciationLabResult.feedback) || joinLocalizedText("Press Hear Model, then Start Speaking to compare your pronunciation.", "\u067E\u06C1\u0644\u06D2 \u0646\u0645\u0648\u0646\u06C1 \u0633\u0646\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0628\u0648\u0644\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u06A9\u06D2 \u062A\u0644\u0641\u0638 \u06A9\u0627 \u0645\u0648\u0627\u0632\u0646\u06C1 \u06C1\u0648 \u0633\u06A9\u06D2\u06D4", language), language))))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-nav" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-side-nav practice-typing-nav-next", onClick: handlePronunciationNext, disabled: pronunciationLabIdx >= pronunciationLabDeck.length - 1 }, "\xBB"))) : null)) : null, typingTutorOpen ? /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-overlay", onClick: () => setTypingTutorOpen(false) }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Typing Tutor", "\u0679\u0627\u0626\u067E\u0646\u06AF \u0679\u06CC\u0648\u0679\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This opens your standalone Typing Tutor build unchanged inside a popup.", "\u06CC\u06C1 \u0622\u067E \u06A9\u06D2 \u0639\u0644\u06CC\u062D\u062F\u06C1 \u0679\u0627\u0626\u067E\u0646\u06AF \u0679\u06CC\u0648\u0679\u0631 \u0628\u0644\u0688 \u06A9\u0648 \u0628\u063A\u06CC\u0631 \u062A\u0628\u062F\u06CC\u0644\u06CC \u06A9\u06D2 \u0627\u06CC\u06A9 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-actions" }, /* @__PURE__ */ React.createElement(
+    ) : null)), navBarAutoHide && navPosition === "right" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-right", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "right" ? renderNavBar("right") : null), navBarAutoHide && navPosition === "bottom" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-bottom", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, navPosition === "bottom" ? renderNavBar("bottom") : null, pronunciationLabOpen ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-overlay", onClick: handleClosePronunciationLab }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Pronunciation Lab", "\u062A\u0644\u0641\u0638 \u0644\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Practice speaking the current subject prompts from your selected lesson range and compare what the browser hears.", "\u0627\u067E\u0646\u06D2 \u0645\u0646\u062A\u062E\u0628 \u0633\u0628\u0642 \u0631\u06CC\u0646\u062C \u0633\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06D2 \u0627\u0634\u0627\u0631\u06D2 \u0628\u0648\u0644 \u06A9\u0631 \u0645\u0634\u0642 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u062F\u06CC\u06A9\u06BE\u06CC\u06BA \u06A9\u06C1 \u0628\u0631\u0627\u0624\u0632\u0631 \u06A9\u06CC\u0627 \u0633\u0646\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClosePronunciationLab }, renderLocalizedTextNode(joinLocalizedText("Close", "\u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stats" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Ready", "\u062A\u06CC\u0627\u0631", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabDeck.length)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Attempts", "\u06A9\u0648\u0634\u0634\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabAttempts)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-stat" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Strong Matches", "\u0628\u06C1\u062A\u0631\u06CC\u0646 \u0645\u0637\u0627\u0628\u0642\u062A", language), language)), /* @__PURE__ */ React.createElement("strong", null, pronunciationLabStrongMatches))), !speechRecognitionSupported ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-alert" }, renderLocalizedTextNode(joinLocalizedText("This browser can play the model voice, but it does not support microphone speech recognition here.", "\u06CC\u06C1 \u0628\u0631\u0627\u0624\u0632\u0631 \u0646\u0645\u0648\u0646\u06C1 \u0622\u0648\u0627\u0632 \u062A\u0648 \u0686\u0644\u0627 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u060C \u0644\u06CC\u06A9\u0646 \u06CC\u06C1\u0627\u06BA \u0645\u0627\u0626\u06CC\u06A9\u0631\u0648\u0641\u0648\u0646 \u06A9\u06CC \u0622\u0648\u0627\u0632 \u067E\u06C1\u0686\u0627\u0646\u0646\u06D2 \u06A9\u06CC \u0633\u06C1\u0648\u0644\u062A \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), language)) : null, activePronunciationCard ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-body" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-nav" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-side-nav practice-typing-nav-prev", onClick: handlePronunciationPrev, disabled: pronunciationLabIdx <= 0 }, "\xAB")), /* @__PURE__ */ React.createElement("div", { className: "practice-card-shell practice-card-shell-focus pronunciation-lab-shell" }, /* @__PURE__ */ React.createElement("div", { className: "flashcard-count-pill" }, pronunciationLabIdx + 1, " / ", pronunciationLabDeck.length), /* @__PURE__ */ React.createElement("div", { className: `practice-card-face practice-card-face-focus pronunciation-lab-face${(pronunciationLabResult == null ? void 0 : pronunciationLabResult.status) ? ` ${pronunciationLabResult.status === "exact" || pronunciationLabResult.status === "strong" ? "correct" : "review"}` : ""}` }, /* @__PURE__ */ React.createElement("div", { className: `flashcard-card-top${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, renderLocalizedTextNode(joinLocalizedText("Listen and Say", "\u0633\u0646\u06CC\u06BA \u0627\u0648\u0631 \u0628\u0648\u0644\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-card-head" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-lesson" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Chapter", "\u0628\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationLessonTitle || (activePracticeSubject == null ? void 0 : activePracticeSubject.name) || "", fallbackLang: activePronunciationCard.pronunciationLang })), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-section" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Subsection", "\u0630\u06CC\u0644\u06CC \u062D\u0635\u06C1", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationSectionTitle || activePronunciationCard.sectionLabel || "", fallbackLang: activePronunciationCard.pronunciationLang }))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-target" }, /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationTarget, fallbackLang: activePronunciationCard.pronunciationLang })), activePronunciationCard.pronunciationSupport ? /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-support" }, /* @__PURE__ */ React.createElement("span", { className: "pronunciation-lab-label" }, renderLocalizedTextNode(joinLocalizedText("Support", "\u0645\u062F\u062F", language), language)), /* @__PURE__ */ React.createElement(PracticeMixedText, { text: activePronunciationCard.pronunciationSupport, fallbackLang: getPronunciationLanguage(activePronunciationCard.pronunciationSupport, language === "ur" ? "ur" : "en") })) : null, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-toolbar" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-flip-btn", onClick: handlePlayPronunciationModel, disabled: audioMuted }, renderLocalizedTextNode(joinLocalizedText("Hear Model", "\u0646\u0645\u0648\u0646\u06C1 \u0633\u0646\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: `flashcard-flip-btn${pronunciationLabListening ? " active" : ""}`, onClick: handlePronunciationListen, disabled: !speechRecognitionSupported }, renderLocalizedTextNode(pronunciationLabListening ? joinLocalizedText("Stop Listening", "\u0633\u0646\u0646\u0627 \u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Start Speaking", "\u0628\u0648\u0644\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-flip-btn", onClick: handlePronunciationRetry }, renderLocalizedTextNode(joinLocalizedText("Try Again", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634", language), language))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-result-card" }, /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-result-head" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("What we heard", "\u06C1\u0645 \u0646\u06D2 \u06A9\u06CC\u0627 \u0633\u0646\u0627", language), language)), /* @__PURE__ */ React.createElement("strong", null, (_Q = pronunciationLabResult == null ? void 0 : pronunciationLabResult.score) != null ? _Q : 0, "%")), /* @__PURE__ */ React.createElement("div", { className: `pronunciation-lab-transcript${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, pronunciationLabTranscript ? /* @__PURE__ */ React.createElement(PracticeMixedText, { text: pronunciationLabTranscript, fallbackLang: activePronunciationCard.pronunciationLang }) : renderLocalizedTextNode(joinLocalizedText("Your spoken transcript will appear here.", "\u0622\u067E \u06A9\u06CC \u0628\u0648\u0644\u06CC \u06AF\u0626\u06CC \u0639\u0628\u0627\u0631\u062A \u06CC\u06C1\u0627\u06BA \u0646\u0638\u0631 \u0622\u0626\u06D2 \u06AF\u06CC\u06D4", language), language)), /* @__PURE__ */ React.createElement("div", { className: `pronunciation-lab-feedback${activePronunciationCard.pronunciationLang === "ur" ? " urdu" : ""}` }, renderLocalizedTextNode((pronunciationLabResult == null ? void 0 : pronunciationLabResult.feedback) || joinLocalizedText("Press Hear Model, then Start Speaking to compare your pronunciation.", "\u067E\u06C1\u0644\u06D2 \u0646\u0645\u0648\u0646\u06C1 \u0633\u0646\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0628\u0648\u0644\u0646\u0627 \u0634\u0631\u0648\u0639 \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0622\u067E \u06A9\u06D2 \u062A\u0644\u0641\u0638 \u06A9\u0627 \u0645\u0648\u0627\u0632\u0646\u06C1 \u06C1\u0648 \u0633\u06A9\u06D2\u06D4", language), language))))), /* @__PURE__ */ React.createElement("div", { className: "pronunciation-lab-nav" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "flashcard-side-nav practice-typing-nav-next", onClick: handlePronunciationNext, disabled: pronunciationLabIdx >= pronunciationLabDeck.length - 1 }, "\xBB"))) : null)) : null, typingTutorOpen ? /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-overlay", onClick: () => setTypingTutorOpen(false) }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Typing Tutor", "\u0679\u0627\u0626\u067E\u0646\u06AF \u0679\u06CC\u0648\u0679\u0631", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This opens your standalone Typing Tutor build unchanged inside a popup.", "\u06CC\u06C1 \u0622\u067E \u06A9\u06D2 \u0639\u0644\u06CC\u062D\u062F\u06C1 \u0679\u0627\u0626\u067E\u0646\u06AF \u0679\u06CC\u0648\u0679\u0631 \u0628\u0644\u0688 \u06A9\u0648 \u0628\u063A\u06CC\u0631 \u062A\u0628\u062F\u06CC\u0644\u06CC \u06A9\u06D2 \u0627\u06CC\u06A9 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-actions" }, /* @__PURE__ */ React.createElement(
       "a",
       {
         className: "ghost-cta",
