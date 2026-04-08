@@ -2109,17 +2109,21 @@ function flattenDiaryOutlineLabels(nodes = [], labels = []) {
 }
 
 function inferDiaryTaskLanguage(task, outlineNodes = [], uiLanguage = "en") {
-  const sampleTexts = [
+  const visibleTexts = [
     task?.lesson?.title,
     task?.chapterGroup?.activeLesson?.title,
     task?.title,
     task?.taskUnits?.[0]?.sourceMeta?.title,
-    ...(Array.isArray(task?.taskUnits) ? task.taskUnits.slice(0, 3).map((unit) => unit?.title) : []),
-    ...flattenDiaryOutlineLabels(outlineNodes, []),
+    task?.subsectionTitle,
+    ...(Array.isArray(task?.taskUnits) ? task.taskUnits.slice(0, 2).map((unit) => unit?.title) : []),
   ]
     .map((value) => String(value || "").trim())
     .filter(Boolean);
-  return sampleTexts.some((text) => isUrduText(text)) ? "ur" : (uiLanguage === "ur" ? "ur" : "en");
+  if (!visibleTexts.length) return uiLanguage === "ur" ? "ur" : "en";
+  const urduScore = visibleTexts.reduce((total, text) => total + (isUrduText(text) ? 1 : 0), 0);
+  const englishScore = visibleTexts.reduce((total, text) => total + (/[A-Za-z]/.test(text) ? 1 : 0), 0);
+  if (englishScore >= urduScore) return "en";
+  return "ur";
 }
 
 function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5, options = {}) {

@@ -1864,15 +1864,19 @@
   }
   function inferDiaryTaskLanguage(task, outlineNodes = [], uiLanguage = "en") {
     var _a, _b, _c, _d, _e, _f;
-    const sampleTexts = [
+    const visibleTexts = [
       (_a = task == null ? void 0 : task.lesson) == null ? void 0 : _a.title,
       (_c = (_b = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _b.activeLesson) == null ? void 0 : _c.title,
       task == null ? void 0 : task.title,
       (_f = (_e = (_d = task == null ? void 0 : task.taskUnits) == null ? void 0 : _d[0]) == null ? void 0 : _e.sourceMeta) == null ? void 0 : _f.title,
-      ...Array.isArray(task == null ? void 0 : task.taskUnits) ? task.taskUnits.slice(0, 3).map((unit) => unit == null ? void 0 : unit.title) : [],
-      ...flattenDiaryOutlineLabels(outlineNodes, [])
+      task == null ? void 0 : task.subsectionTitle,
+      ...Array.isArray(task == null ? void 0 : task.taskUnits) ? task.taskUnits.slice(0, 2).map((unit) => unit == null ? void 0 : unit.title) : []
     ].map((value) => String(value || "").trim()).filter(Boolean);
-    return sampleTexts.some((text) => isUrduText(text)) ? "ur" : uiLanguage === "ur" ? "ur" : "en";
+    if (!visibleTexts.length) return uiLanguage === "ur" ? "ur" : "en";
+    const urduScore = visibleTexts.reduce((total, text) => total + (isUrduText(text) ? 1 : 0), 0);
+    const englishScore = visibleTexts.reduce((total, text) => total + (/[A-Za-z]/.test(text) ? 1 : 0), 0);
+    if (englishScore >= urduScore) return "en";
+    return "ur";
   }
   function distributeWorkUnitsAcrossStudyDays(units = [], studyDays = 5, options = {}) {
     const safeStudyDays = Math.max(1, Number(studyDays) || 5);
