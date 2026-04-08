@@ -20466,6 +20466,14 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         "lessonArchives",
         "archiveId",
       );
+      if (!canManageContentAccess && canAdministerLessonLibrary && activeInstitutionSchoolIdResolved) {
+        collectRows("lessonArchives", await fetchNormalizedRows(
+          SUPABASE_LESSON_ARCHIVES_TABLE,
+          "archive_id, school_id, subject, grade, lesson_key, source_type, content_id, title, archived_by_email, status, created_at, updated_at",
+          normalizeLessonArchiveRecord,
+          (q) => q.eq("school_id", activeInstitutionSchoolIdResolved),
+        ), "archiveId");
+      }
       await collectSchoolScoped(
         SUPABASE_CHAPTER_ASSIGNMENTS_TABLE,
         "assignment_id, school_id, assigned_by_user_id, assigned_by_email, target_type, target_grade, target_student_email, subject, lesson_key, content_id, note, status, created_at, updated_at",
@@ -20541,15 +20549,35 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         weeklyTestResults: Array.from(rowMaps.weeklyTestResults.values()),
         lastUpdatedAt: Date.now(),
       };
-      setContentRelationshipState(nextState);
-      return nextState;
+      let mergedState = nextState;
+      setContentRelationshipState((current) => {
+        const mergedArchives = new Map();
+        (Array.isArray(nextState.lessonArchives) ? nextState.lessonArchives : []).forEach((entry) => {
+          const normalized = normalizeLessonArchiveRecord(entry);
+          if (normalized?.archiveId) mergedArchives.set(normalized.archiveId, normalized);
+        });
+        (Array.isArray(current?.lessonArchives) ? current.lessonArchives : []).forEach((entry) => {
+          const normalized = normalizeLessonArchiveRecord(entry);
+          if (!normalized?.archiveId) return;
+          const existing = mergedArchives.get(normalized.archiveId);
+          const existingUpdatedAt = Number(existing?.updatedAt || existing?.createdAt || 0);
+          const nextUpdatedAt = Number(normalized?.updatedAt || normalized?.createdAt || 0);
+          if (!existing || nextUpdatedAt >= existingUpdatedAt) mergedArchives.set(normalized.archiveId, normalized);
+        });
+        mergedState = {
+          ...nextState,
+          lessonArchives: Array.from(mergedArchives.values()),
+        };
+        return mergedState;
+      });
+      return mergedState;
     } catch (error) {
       console.log("Unable to refresh institutional relationships:", error);
       const nextState = { ...createEmptyContentRelationshipState(), loaded: true };
       setContentRelationshipState(nextState);
       return nextState;
     }
-  }, [canAssignContent, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, ensureSupabaseClient, grade, supabaseDictionarySync]);
+  }, [activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, canAssignContent, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, contentRelationshipState.lessonArchives, ensureSupabaseClient, grade, supabaseDictionarySync]);
   refreshContentRelationshipStateRef.current = refreshContentRelationshipState;
   const handleSaveTeacherStudentLink = useCallback(async () => {
     if (!canManageStudentLinks) {
