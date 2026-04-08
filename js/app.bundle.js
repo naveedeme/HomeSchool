@@ -5843,12 +5843,19 @@ as $$
       nullif(auth.jwt() -> 'user_metadata' ->> 'role', ''),
       ''
     )) as role
+  ),
+  normalized_role as (
+    select case
+      when role in ('administrator', 'app_admin', 'app-admin', 'global_admin', 'global-admin', 'super_admin', 'super-admin', 'superadmin', 'system_admin', 'system-admin') then 'admin'
+      else role
+    end as role
+    from raw_role
   )
   select case
     when role in ('student', 'parent', 'teacher', 'principal', 'school_owner', 'editor', 'admin') then role
     else null
   end
-  from raw_role
+  from normalized_role
 $$;
 
 create or replace function public.content_role_assignment_total()
@@ -6077,7 +6084,11 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.user_content_permission('publishContent')
+  select
+    public.user_content_permission('publishContent')
+    or public.user_content_permission('manageContentAccess')
+    or public.is_content_admin()
+    or public.jwt_content_role() = 'admin'
 $$;
 
 create or replace function public.can_manage_teacher_student_link(target_teacher_email text, target_school_id text default null)
@@ -18031,10 +18042,12 @@ ${marker} `);
           "check"
         );
       } catch (error) {
+        const publishErrorMessage = String((error == null ? void 0 : error.message) || error || "").trim();
+        const rlsBlocked = /row level security|violates row-level security|violates row level security/i.test(publishErrorMessage);
         showAppToast(
           joinLocalizedText(
-            `Unable to publish chapter: ${(error == null ? void 0 : error.message) || error}`,
-            `\u0633\u0628\u0642 \u0634\u0627\u0626\u0639 \u0646\u06C1 \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`,
+            rlsBlocked ? "Unable to publish chapter: your Supabase publish policy still does not recognize this admin role. Run the updated setup SQL once, then try again." : `Unable to publish chapter: ${publishErrorMessage}`,
+            rlsBlocked ? "\u0633\u0628\u0642 \u0634\u0627\u0626\u0639 \u0646\u06C1 \u06C1\u0648 \u0633\u06A9\u0627: \u0622\u067E \u06A9\u06CC Supabase \u067E\u0628\u0644\u0634 \u067E\u0627\u0644\u06CC\u0633\u06CC \u0627\u0628\u06BE\u06CC \u0627\u0633 \u0627\u06CC\u0688\u0645\u0646 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0646\u06C1\u06CC\u06BA \u067E\u06C1\u0686\u0627\u0646\u062A\u06CC\u06D4 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u062A\u0627\u0632\u06C1 setup SQL \u0686\u0644\u0627\u0626\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u062F\u0648\u0628\u0627\u0631\u06C1 \u06A9\u0648\u0634\u0634 \u06A9\u0631\u06CC\u06BA\u06D4" : `\u0633\u0628\u0642 \u0634\u0627\u0626\u0639 \u0646\u06C1 \u06C1\u0648 \u0633\u06A9\u0627: ${publishErrorMessage}`,
             language
           ),
           "alert"

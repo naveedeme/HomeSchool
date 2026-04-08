@@ -6380,12 +6380,19 @@ as $$
       nullif(auth.jwt() -> 'user_metadata' ->> 'role', ''),
       ''
     )) as role
+  ),
+  normalized_role as (
+    select case
+      when role in ('administrator', 'app_admin', 'app-admin', 'global_admin', 'global-admin', 'super_admin', 'super-admin', 'superadmin', 'system_admin', 'system-admin') then 'admin'
+      else role
+    end as role
+    from raw_role
   )
   select case
     when role in ('student', 'parent', 'teacher', 'principal', 'school_owner', 'editor', 'admin') then role
     else null
   end
-  from raw_role
+  from normalized_role
 $$;
 
 create or replace function public.content_role_assignment_total()
@@ -6614,7 +6621,11 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.user_content_permission('publishContent')
+  select
+    public.user_content_permission('publishContent')
+    or public.user_content_permission('manageContentAccess')
+    or public.is_content_admin()
+    or public.jwt_content_role() = 'admin'
 $$;
 
 create or replace function public.can_manage_teacher_student_link(target_teacher_email text, target_school_id text default null)
@@ -20933,10 +20944,16 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         "check",
       );
     } catch (error) {
+      const publishErrorMessage = String(error?.message || error || "").trim();
+      const rlsBlocked = /row level security|violates row-level security|violates row level security/i.test(publishErrorMessage);
       showAppToast(
         joinLocalizedText(
-          `Unable to publish chapter: ${error?.message || error}`,
-          `سبق شائع نہ ہو سکا: ${error?.message || error}`,
+          rlsBlocked
+            ? "Unable to publish chapter: your Supabase publish policy still does not recognize this admin role. Run the updated setup SQL once, then try again."
+            : `Unable to publish chapter: ${publishErrorMessage}`,
+          rlsBlocked
+            ? "سبق شائع نہ ہو سکا: آپ کی Supabase پبلش پالیسی ابھی اس ایڈمن کردار کو نہیں پہچانتی۔ ایک بار تازہ setup SQL چلائیں، پھر دوبارہ کوشش کریں۔"
+            : `سبق شائع نہ ہو سکا: ${publishErrorMessage}`,
           language,
         ),
         "alert",
