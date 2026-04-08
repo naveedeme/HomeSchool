@@ -22,7 +22,111 @@ const {
   verbs: VERBS_DATA,
 } = POS_DATA;
 const AppContext = React.createContext(null);
+const LessonEditContext = React.createContext(null);
 const TYPING_TUTOR_EMBED_PATH = "./typing-tutor/index.html";
+
+function splitEditableSentenceParts(text) {
+  return String(text || "").split(/(?<=[.!?۔؟])\s+/).filter(Boolean);
+}
+
+function resolveDayEntryByDay(collection = [], selectedEntry = null) {
+  if (!selectedEntry) return null;
+  const targetDay = Number(selectedEntry?.day);
+  if (!Number.isFinite(targetDay)) return selectedEntry;
+  return (Array.isArray(collection) ? collection : []).find((entry) => Number(entry?.day) === targetDay) || selectedEntry;
+}
+
+function getEditableValueAtPath(source, path = []) {
+  return (Array.isArray(path) ? path : []).reduce((current, segment) => {
+    if (current === null || typeof current === "undefined") return undefined;
+    return current?.[segment];
+  }, source);
+}
+
+function setEditableValueAtPath(source, path = [], nextValue = "") {
+  if (!Array.isArray(path) || !path.length) return source;
+  const nextRoot = cloneSerializableValue(source) || {};
+  let cursor = nextRoot;
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const segment = path[index];
+    const following = path[index + 1];
+    if (cursor?.[segment] === null || typeof cursor?.[segment] === "undefined") {
+      cursor[segment] = Number.isInteger(following) ? [] : {};
+    }
+    cursor = cursor[segment];
+  }
+  cursor[path[path.length - 1]] = nextValue;
+  return nextRoot;
+}
+
+function updateEditableLessonDraft(source, descriptor, nextValue = "") {
+  if (!source) return source;
+  if (Array.isArray(descriptor)) {
+    return setEditableValueAtPath(source, descriptor, nextValue);
+  }
+  if (descriptor && typeof descriptor === "object" && descriptor.type === "paragraphSentence") {
+    const basePath = Array.isArray(descriptor.path) ? descriptor.path : [];
+    const sentenceIndex = Number(descriptor.index);
+    const originalParagraph = String(getEditableValueAtPath(source, basePath) || "");
+    const sentenceParts = splitEditableSentenceParts(originalParagraph);
+    if (!sentenceParts.length || !Number.isInteger(sentenceIndex) || sentenceIndex < 0 || sentenceIndex >= sentenceParts.length) {
+      return source;
+    }
+    sentenceParts[sentenceIndex] = nextValue;
+    return setEditableValueAtPath(source, basePath, sentenceParts.join(" "));
+  }
+  return source;
+}
+
+function LessonEditableText({
+  value,
+  fieldPath = null,
+  as = "div",
+  className = "",
+  style = null,
+  multiline = false,
+  inputStyle = null,
+  dir = undefined,
+}) {
+  const editContext = useContext(LessonEditContext);
+  const safeValue = String(value ?? "");
+  if (!editContext?.enabled || !fieldPath) {
+    return React.createElement(as, { className, style, dir }, safeValue);
+  }
+  const commonInputStyle = {
+    width: "100%",
+    minWidth: 0,
+    border: "1px solid color-mix(in srgb, var(--accent) 28%, var(--border))",
+    borderRadius: 10,
+    background: "color-mix(in srgb, var(--bg-elevated) 78%, white 22%)",
+    color: "inherit",
+    font: "inherit",
+    lineHeight: "inherit",
+    padding: multiline ? "10px 12px" : "8px 10px",
+    resize: multiline ? "vertical" : "none",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+  const inputElement = multiline ? (
+    <textarea
+      className="lesson-edit-input lesson-edit-input-multiline"
+      value={safeValue}
+      onChange={(event) => editContext.updateField(fieldPath, event.target.value)}
+      dir={dir}
+      rows={Math.max(2, Math.min(8, safeValue.split("\n").length + 1))}
+      style={{ ...commonInputStyle, ...inputStyle }}
+    />
+  ) : (
+    <input
+      className="lesson-edit-input"
+      value={safeValue}
+      onChange={(event) => editContext.updateField(fieldPath, event.target.value)}
+      dir={dir}
+      style={{ ...commonInputStyle, ...inputStyle }}
+    />
+  );
+  return React.createElement(as, { className, style, dir }, inputElement);
+}
 
 function createEmptyCustomContentState() {
   return {
@@ -10423,7 +10527,8 @@ function MathVisualDeck({ sub, lessonTitle }) {
 }
 
 // ─── Math Sub-Quiz Component (proper hooks) ───
-function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2000, initialQuestionIndex = 0, targetBaseId = "", groupLabel = "" }) {
+function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflectionDelayMs = 2000, initialQuestionIndex = 0, targetBaseId = "", groupLabel = "", fieldPathBase = null }) {
+  const lessonEdit = useContext(LessonEditContext);
   const QUESTION_TIME_LIMIT_SECONDS = Math.max(5, Math.min(90, Number(questionTimeLimitSeconds) || 15));
   const REFLECTION_DELAY_MS = Math.max(500, Math.min(10000, Number(reflectionDelayMs) || 2000));
   const [mqIdx, setMqIdx] = useState(0);
@@ -10437,6 +10542,7 @@ function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflect
   const mq = Array.isArray(questions) ? questions : [];
   const currentQ = mq[mqIdx] || {};
   const questionIsUrdu = isUrdu || isUrduText(currentQ.q);
+  const editModeActive = Boolean(lessonEdit?.enabled && Array.isArray(fieldPathBase));
   const mqScore = mqDone ? mqAns.reduce((a,v,i) => a + (v === mq[i]?.c ? 1 : 0), 0) : 0;
   const totalAllowedMs = mq.length * QUESTION_TIME_LIMIT_SECONDS * 1000;
   const recordedTotalMs = mqElapsedMs.reduce((sum, value) => sum + (Number(value) || 0), 0);
@@ -10559,6 +10665,61 @@ function MathSubQuiz({ questions, isUrdu, questionTimeLimitSeconds = 15, reflect
       moveToNextQuestion();
     }, REFLECTION_DELAY_MS);
   }, [REFLECTION_DELAY_MS, clearAdvanceTimeout, moveToNextQuestion, mq, mqAns, mqIdx, mqRev, mqTimerRemaining, playSound, recordElapsedForCurrentQuestion]);
+
+  if (editModeActive) {
+    return (
+      <div className="quiz-container" style={isUrdu ? { direction: "rtl" } : {}}>
+        <div className="quiz-progress">
+          {mq.map((_, index) => <div key={index} className="qp-dot current" />)}
+        </div>
+        <div style={{ display: "grid", gap: 12 }}>
+          {mq.map((question, questionIndex) => {
+            const questionTextIsUrdu = isUrdu || isUrduText(question?.q);
+            return (
+              <div
+                key={`editable_sub_quiz_${questionIndex}`}
+                className="quiz-question"
+                data-study-id={buildDiaryQuizQuestionTargetId(targetBaseId, question, questionIndex, groupLabel) || undefined}
+                style={{ direction: questionTextIsUrdu ? "rtl" : "ltr", textAlign: questionTextIsUrdu ? "right" : "left" }}
+              >
+                <div className="quiz-meta-row">
+                  <div className="q-num" style={{ textAlign: questionTextIsUrdu ? "right" : "left", marginBottom: 0, fontFamily: questionTextIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" }}>
+                    {questionTextIsUrdu ? `سوال ${questionIndex + 1}` : `Q ${questionIndex + 1}`}
+                  </div>
+                </div>
+                <LessonEditableText
+                  as="div"
+                  value={question?.q}
+                  fieldPath={[...fieldPathBase, questionIndex, "q"]}
+                  multiline
+                  style={{ marginTop: 8, fontWeight: 700, fontSize: 18, fontFamily: questionTextIsUrdu ? "'Noto Nastaliq Urdu',serif" : "inherit" }}
+                  dir={questionTextIsUrdu ? "rtl" : "ltr"}
+                />
+                <div className="quiz-options" style={{ direction: questionTextIsUrdu ? "rtl" : "ltr", marginTop: 12 }}>
+                  {(Array.isArray(question?.a) ? question.a : []).map((optionText, optionIndex) => {
+                    const optionIsUrdu = isUrdu || isUrduText(optionText);
+                    return (
+                      <div key={`editable_sub_quiz_option_${questionIndex}_${optionIndex}`} className="quiz-option" style={{ cursor: "default", direction: optionIsUrdu ? "rtl" : "ltr", textAlign: optionIsUrdu ? "right" : "left" }}>
+                        <span className="opt-letter">{"ABCD"[optionIndex] || `${optionIndex + 1}`}</span>
+                        <LessonEditableText
+                          as="div"
+                          value={optionText}
+                          fieldPath={[...fieldPathBase, questionIndex, "a", optionIndex]}
+                          multiline
+                          style={{ flex: 1, minWidth: 0 }}
+                          dir={optionIsUrdu ? "rtl" : "ltr"}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   if (mqDone) return (
     <div className="quiz-result">
@@ -10815,8 +10976,9 @@ function stripInlineUrduForKnownWords(text, words) {
 }
 
 // ─── TTS Clickable Sentence ───
-function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null, studyItem = null, showStudyToolbar = true }) {
+function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null, studyItem = null, showStudyToolbar = true, fieldPath = null, multiline = null }) {
   const app = useContext(AppContext);
+  const lessonEdit = useContext(LessonEditContext);
   const studyCard = studyItem ? resolveStudyCard(app, {
     prompt: text,
     answer: studyItem.answer,
@@ -10898,6 +11060,29 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
   };
   const inlineTools = showStudyToolbar && studyCard;
   const fillHeight = buttonStyle?.height === "100%" || buttonStyle?.minHeight === "100%";
+  const editModeActive = Boolean(lessonEdit?.enabled && fieldPath);
+  if (editModeActive) {
+    return (
+      <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
+        <div style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
+          <div
+            style={{ display: fillHeight ? "flex" : (fullWidth ? "block" : "inline-block"), width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: "1px solid var(--border)", background: isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)", color: "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, direction: lang === "ur" ? "rtl" : "ltr", boxShadow: isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none", position: "relative", ...(fillHeight ? { height: "100%", alignItems: "center" } : {}), ...buttonStyle }}
+          >
+            <LessonEditableText
+              value={text}
+              fieldPath={fieldPath}
+              as="div"
+              multiline={multiline ?? String(text || "").length > 120}
+              dir={lang === "ur" ? "rtl" : "ltr"}
+              style={{ width: "100%" }}
+              inputStyle={{ ...textStyle, textAlign: lang === "ur" ? "right" : "left" }}
+            />
+          </div>
+        </div>
+        {inlineTools ? <InlineStudyActionBar studyItem={studyCard} /> : null}
+      </div>
+    );
+  }
   return (
     <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
       <div style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
@@ -10938,7 +11123,8 @@ function getBilingualExercisePromptParts(text) {
   return null;
 }
 
-function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
+function ExercisePromptContent({ text, studyItem = null, buttonStyle = null, fieldPath = null }) {
+  const lessonEdit = useContext(LessonEditContext);
   const bilingualPair = getBilingualExercisePromptParts(text);
   if (!bilingualPair) {
     return (
@@ -10947,8 +11133,16 @@ function ExercisePromptContent({ text, studyItem = null, buttonStyle = null }) {
         lang={isUrduText(text) ? "ur" : "en"}
         studyItem={studyItem}
         showStudyToolbar={false}
+        fieldPath={fieldPath}
         buttonStyle={buttonStyle}
       />
+    );
+  }
+  if (lessonEdit?.enabled && fieldPath) {
+    return (
+      <div className="exercise-bilingual-field" style={buttonStyle || undefined}>
+        <LessonEditableText value={text} fieldPath={fieldPath} as="div" multiline />
+      </div>
     );
   }
   const app = useContext(AppContext);
@@ -13630,8 +13824,9 @@ function getSimpleMachinePromptVisual(sub, exercise, prompt) {
   return icon ? <span style={{...badgeStyle,fontSize:18}}>{icon}</span> : null;
 }
 
-function WordRow({ en, ur }) {
+function WordRow({ en, ur, fieldPathBase = null }) {
   const app = useContext(AppContext);
+  const lessonEdit = useContext(LessonEditContext);
   const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "englishWords", sectionLabel: "English" });
   const focusProps = getStudyFocusProps(app, studyCard, "word-row");
   const [sEn, setSEn] = useState(false);
@@ -13685,11 +13880,21 @@ function WordRow({ en, ur }) {
     enUtter.onerror = () => { setSEn(false); setSUr(false); setSBoth(false); };
     window.speechSynthesis.speak(enUtter);
   };
+  const editModeActive = Boolean(lessonEdit?.enabled && fieldPathBase);
   return (
-    <div {...focusProps} onClick={speakBoth} style={{ cursor: "pointer", boxShadow: sBoth ? "0 0 0 1px rgba(56,189,248,0.22)" : "none", transition: "box-shadow 0.2s", flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+    <div {...focusProps} onClick={editModeActive ? undefined : speakBoth} style={{ cursor: editModeActive ? "default" : "pointer", boxShadow: sBoth ? "0 0 0 1px rgba(56,189,248,0.22)" : "none", transition: "box-shadow 0.2s", flexDirection: "column", alignItems: "stretch", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <span className={"word-en" + (sEn ? " word-active" : "")} onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : undefined, transition: "color 0.2s", flex: 1 }}>{en} {sEn ? "🔊" : "🔈"}</span>
-        <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+        {editModeActive ? (
+          <>
+            <LessonEditableText value={en} fieldPath={[...fieldPathBase, "en"]} as="div" style={{ flex: 1 }} />
+            <LessonEditableText value={ur} fieldPath={[...fieldPathBase, "ur"]} as="div" dir="rtl" style={{ flex: 1 }} />
+          </>
+        ) : (
+          <>
+            <span className={"word-en" + (sEn ? " word-active" : "")} onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : undefined, transition: "color 0.2s", flex: 1 }}>{en} {sEn ? "🔊" : "🔈"}</span>
+            <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+          </>
+        )}
         <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "englishWords", sectionLabel: "English" }} />
       </div>
       {studyCard?.note ? <div className="word-study-row" onClick={(event) => event.stopPropagation()}><div style={{ width: "100%" }}><span className="word-study-note">{studyCard.note}</span></div></div> : null}
@@ -13698,7 +13903,7 @@ function WordRow({ en, ur }) {
 }
 
 
-function OppositeWordRow({ en, ur, opposite, oppositeUr }) {
+function OppositeWordRow({ en, ur, opposite, oppositeUr, fieldPathBase = null }) {
   const app = useContext(AppContext);
   const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "opposites", sectionLabel: "Opposites" });
   const focusProps = getStudyFocusProps(app, studyCard, "word-row");
@@ -13719,13 +13924,13 @@ function OppositeWordRow({ en, ur, opposite, oppositeUr }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, width: "100%", flex: 1 }}>
         <div style={cardStyle}>
           <span style={labelStyle}>Word</span>
-          <SpeakableSentence text={en} lang="en" fullWidth={false} buttonStyle={{ background: isLight ? "rgba(56,189,248,0.10)" : "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.28)", color: isLight ? "var(--text-primary)" : "#E0F2FE", justifyContent: "flex-start" }} />
-          <SpeakableSentence text={ur} lang="ur" fullWidth={false} buttonStyle={{ background: isLight ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: isLight ? "var(--text-primary)" : "#DCFCE7", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+          <SpeakableSentence text={en} lang="en" fullWidth={false} buttonStyle={{ background: isLight ? "rgba(56,189,248,0.10)" : "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.28)", color: isLight ? "var(--text-primary)" : "#E0F2FE", justifyContent: "flex-start" }} fieldPath={fieldPathBase ? [...fieldPathBase, "en"] : null} />
+          <SpeakableSentence text={ur} lang="ur" fullWidth={false} buttonStyle={{ background: isLight ? "rgba(34,197,94,0.10)" : "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: isLight ? "var(--text-primary)" : "#DCFCE7", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} fieldPath={fieldPathBase ? [...fieldPathBase, "ur"] : null} />
         </div>
         <div style={cardStyle}>
           <span style={labelStyle}>Opposite</span>
-          <SpeakableSentence text={opposite} lang="en" fullWidth={false} buttonStyle={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", color: isLight ? "var(--text-primary)" : "#FEF3C7", justifyContent: "flex-start" }} />
-          <SpeakableSentence text={oppositeUr} lang="ur" fullWidth={false} buttonStyle={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.30)", color: isLight ? "var(--text-primary)" : "#F3E8FF", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+          <SpeakableSentence text={opposite} lang="en" fullWidth={false} buttonStyle={{ background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", color: isLight ? "var(--text-primary)" : "#FEF3C7", justifyContent: "flex-start" }} fieldPath={fieldPathBase ? [...fieldPathBase, "opposite"] : null} />
+          <SpeakableSentence text={oppositeUr} lang="ur" fullWidth={false} buttonStyle={{ background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.30)", color: isLight ? "var(--text-primary)" : "#F3E8FF", justifyContent: "flex-start" }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} fieldPath={fieldPathBase ? [...fieldPathBase, "oppositeUr"] : null} />
         </div>
       </div>
       <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "opposites", sectionLabel: "Opposites" }} />
@@ -13734,7 +13939,7 @@ function OppositeWordRow({ en, ur, opposite, oppositeUr }) {
   );
 }
 
-function SentencePairRow({ en, ur }) {
+function SentencePairRow({ en, ur, fieldPathBase = null }) {
   const app = useContext(AppContext);
   const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "sentences", sectionLabel: "Sentences" });
   const focusProps = getStudyFocusProps(app, studyCard, "word-row");
@@ -13754,9 +13959,9 @@ function SentencePairRow({ en, ur }) {
       <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
         <div style={{ ...cardStyle, flex: 1 }}>
           <span style={labelStyle}>English Sentence</span>
-          <SpeakableSentence text={en} lang="en" showStudyToolbar={false} buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLight ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0 }} />
+          <SpeakableSentence text={en} lang="en" showStudyToolbar={false} buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLight ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0 }} fieldPath={fieldPathBase ? [...fieldPathBase, "en"] : null} />
           <span style={{ ...labelStyle, color: "#22C55E", marginTop: 2 }}>Urdu Translation</span>
-          <SpeakableSentence text={ur} lang="ur" showStudyToolbar={false} buttonStyle={{ background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: isLight ? "var(--text-primary)" : "#DCFCE7", marginBottom: 0 }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} />
+          <SpeakableSentence text={ur} lang="ur" showStudyToolbar={false} buttonStyle={{ background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.26)", color: isLight ? "var(--text-primary)" : "#DCFCE7", marginBottom: 0 }} textStyle={{ fontFamily: "'Noto Nastaliq Urdu', serif", direction: "rtl", textAlign: "right" }} fieldPath={fieldPathBase ? [...fieldPathBase, "ur"] : null} />
         </div>
         <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "sentences", sectionLabel: "Sentences" }} />
       </div>
@@ -13764,8 +13969,9 @@ function SentencePairRow({ en, ur }) {
   );
 }
 
-function AdjWordRow({ en, ur, comp, sup }) {
+function AdjWordRow({ en, ur, comp, sup, fieldPathBase = null }) {
   const app = useContext(AppContext);
+  const lessonEdit = useContext(LessonEditContext);
   const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "adjectives", sectionLabel: "Adjectives" });
   const focusProps = getStudyFocusProps(app, studyCard, "word-row");
   const isLight = isLightUiTheme();
@@ -13795,16 +14001,32 @@ function AdjWordRow({ en, ur, comp, sup }) {
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 }}>{en} → {comp} → {sup} {sEn ? "🔊" : "🔈"}</span>
-        <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+        {fieldPathBase && lessonEdit?.enabled ? (
+          <>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <LessonEditableText value={en} fieldPath={[...fieldPathBase, "en"]} as="div" />
+              <span>→</span>
+              <LessonEditableText value={comp} fieldPath={[...fieldPathBase, "comp"]} as="div" />
+              <span>→</span>
+              <LessonEditableText value={sup} fieldPath={[...fieldPathBase, "super"]} as="div" />
+            </div>
+            <LessonEditableText value={ur} fieldPath={[...fieldPathBase, "ur"]} as="div" dir="rtl" style={{ flex: 1 }} />
+          </>
+        ) : (
+          <>
+            <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 }}>{en} → {comp} → {sup} {sEn ? "🔊" : "🔈"}</span>
+            <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+          </>
+        )}
         <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "adjectives", sectionLabel: "Adjectives" }} />
       </div>
     </div>
   );
 }
 
-function VerbWordRow({ en, ur, v2, v3 }) {
+function VerbWordRow({ en, ur, v2, v3, fieldPathBase = null }) {
   const app = useContext(AppContext);
+  const lessonEdit = useContext(LessonEditContext);
   const studyCard = resolveStudyCard(app, { prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" });
   const focusProps = getStudyFocusProps(app, studyCard, "word-row");
   const isLight = isLightUiTheme();
@@ -13834,8 +14056,23 @@ function VerbWordRow({ en, ur, v2, v3 }) {
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 }}>{en} → {v2} → {v3} {sEn ? "🔊" : "🔈"}</span>
-        <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+        {fieldPathBase && lessonEdit?.enabled ? (
+          <>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <LessonEditableText value={en} fieldPath={[...fieldPathBase, "en"]} as="div" />
+              <span>→</span>
+              <LessonEditableText value={v2} fieldPath={[...fieldPathBase, "v2"]} as="div" />
+              <span>→</span>
+              <LessonEditableText value={v3} fieldPath={[...fieldPathBase, "v3"]} as="div" />
+            </div>
+            <LessonEditableText value={ur} fieldPath={[...fieldPathBase, "ur"]} as="div" dir="rtl" style={{ flex: 1 }} />
+          </>
+        ) : (
+          <>
+            <span onClick={speakEn} style={{ cursor: "pointer", color: sEn ? "#38BDF8" : "var(--text-primary)", fontWeight: 700, fontSize: 15, transition: "color 0.2s", flex: 1 }}>{en} → {v2} → {v3} {sEn ? "🔊" : "🔈"}</span>
+            <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
+          </>
+        )}
         <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" }} />
       </div>
     </div>
@@ -13919,6 +14156,9 @@ function HomeschoolApp() {
   const [diaryTaskNavigator, setDiaryTaskNavigator] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
+  const [lessonEditMode, setLessonEditMode] = useState(false);
+  const [lessonEditDraft, setLessonEditDraft] = useState(null);
+  const [lessonEditBusy, setLessonEditBusy] = useState(false);
   const [quizActive, setQuizActive] = useState(false);
   const [quizIdx, setQuizIdx] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState([]);
@@ -15656,6 +15896,7 @@ const headerHideTimerRef = useRef(null);
     if (autoDiaryOverrideStudentEmail && autoDiaryOverridePreviewStudentOptions.some((entry) => entry.email === autoDiaryOverrideStudentEmail)) return;
     setAutoDiaryOverrideStudentEmail(autoDiaryOverridePreviewStudentOptions[0].email);
   }, [autoDiaryOverridePreviewStudentOptions, autoDiaryOverrideScope, autoDiaryOverrideStudentEmail]);
+  const lessonRenderSource = lessonEditMode && lessonEditDraft ? lessonEditDraft : selectedLesson;
   const selectedLessonCanonicalKey = useMemo(
     () => getCanonicalLessonKeyForLesson(selectedLesson),
     [selectedLesson],
@@ -17143,6 +17384,68 @@ const headerHideTimerRef = useRef(null);
       );
     }
   }, [canSavePublishedLocally, getMergedQuiz, language, refreshCustomContentState, showAppToast]);
+  useEffect(() => {
+    setLessonEditMode(false);
+    setLessonEditDraft(null);
+    setLessonEditBusy(false);
+  }, [selectedLesson]);
+  const handleUpdateLessonEditField = useCallback((fieldPath, nextValue) => {
+    setLessonEditDraft((current) => updateEditableLessonDraft(current, fieldPath, nextValue));
+  }, []);
+  const handleOpenLessonEditMode = useCallback(() => {
+    if (!canAdministerLessonLibrary) {
+      showAppToast(joinLocalizedText("Only admins can edit lessons.", "صرف ایڈمن اسباق میں ترمیم کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!selectedLesson) return;
+    setLessonEditDraft(cloneSerializableValue(stripRuntimeLessonMarkers(selectedLesson)) || {});
+    setLessonEditMode(true);
+  }, [canAdministerLessonLibrary, language, selectedLesson, showAppToast]);
+  const handleCancelLessonEditMode = useCallback(() => {
+    setLessonEditMode(false);
+    setLessonEditDraft(null);
+    setLessonEditBusy(false);
+  }, []);
+  const handleSaveLessonEdits = useCallback(async () => {
+    if (!canAdministerLessonLibrary) {
+      showAppToast(joinLocalizedText("Only admins can edit lessons.", "صرف ایڈمن اسباق میں ترمیم کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!selectedLesson || !selectedSubject || !grade || !lessonEditDraft) return;
+    if (!window.HomeSchoolDB?.saveCustomChapter) {
+      showAppToast(joinLocalizedText("Local chapter storage is not available yet.", "مقامی باب محفوظ کرنے کی سہولت ابھی دستیاب نہیں۔", language), "alert");
+      return;
+    }
+    try {
+      setLessonEditBusy(true);
+      const canonicalLessonKey = selectedLessonChapterGroup?.canonicalLessonKey || getCanonicalLessonKeyForLesson(selectedLesson);
+      const nextLessonData = stripRuntimeLessonMarkers(lessonEditDraft);
+      nextLessonData.key = canonicalLessonKey;
+      nextLessonData.id = `${selectedSubject.id}_${grade}_${canonicalLessonKey}`;
+      if (selectedLesson?.publication) {
+        nextLessonData.publication = cloneSerializableValue(selectedLesson.publication);
+      }
+        await window.HomeSchoolDB.saveCustomChapter({
+          subject: selectedSubject.id,
+          grade,
+          lessonKey: canonicalLessonKey,
+          data: nextLessonData,
+          questions: getMergedQuiz(selectedSubject.id, grade, canonicalLessonKey),
+        });
+      updateChapterSourceSelection(selectedSubject.id, grade, canonicalLessonKey, { mode: "custom" }, { silent: true, force: true });
+      await refreshCustomContentState();
+      setLessonEditMode(false);
+      setLessonEditDraft(null);
+      showAppToast(joinLocalizedText("Lesson changes saved to local copy", "سبق کی تبدیلیاں مقامی کاپی میں محفوظ ہو گئیں", language), "check");
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(`Unable to save lesson changes: ${error?.message || error}`, `سبق کی تبدیلیاں محفوظ نہیں ہو سکیں: ${error?.message || error}`, language),
+        "alert",
+      );
+    } finally {
+      setLessonEditBusy(false);
+    }
+  }, [canAdministerLessonLibrary, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection]);
   const handleDeleteLocalChapter = useCallback(async (group) => {
     if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can delete local chapter copies.", "صرف ایڈمن مقامی ابواب کی کاپیاں حذف کر سکتے ہیں۔", language), "alert");
@@ -17228,6 +17531,11 @@ const headerHideTimerRef = useRef(null);
       );
     }
   }, [canAdministerLessonLibrary, language, showAppToast]);
+  const lessonEditContextValue = useMemo(() => ({
+    enabled: lessonEditMode,
+    draft: lessonEditDraft,
+    updateField: handleUpdateLessonEditField,
+  }), [handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
   useEffect(() => {
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);
@@ -21546,10 +21854,18 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     verbs: regroupDayEntries(POS.verbs, daySectionSettings.verbs.itemsPerDay),
   };
   const pacedVocab = regroupDayEntries(VOCAB, daySectionSettings.vocabulary.itemsPerDay);
-  const activeLessonSubs = selectedLesson?.hasMathSub
-    ? (selectedLesson.key === "sentences"
-      ? buildDerivedSentenceSub(selectedLesson.subs || [], daySectionSettings.sentences.itemsPerDay, selectedSubject?.id)
-      : (selectedLesson.subs || []).map((sub) => {
+  const activeSelectedAdverbDay = useMemo(() => resolveDayEntryByDay(pacedPos.adverbs, selectedAdverbDay), [pacedPos.adverbs, selectedAdverbDay]);
+  const activeSelectedPrepDay = useMemo(() => resolveDayEntryByDay(pacedPos.prepositions, selectedPrepDay), [pacedPos.prepositions, selectedPrepDay]);
+  const activeSelectedAdjDay = useMemo(() => resolveDayEntryByDay(pacedPos.adjectives, selectedAdjDay), [pacedPos.adjectives, selectedAdjDay]);
+  const activeSelectedConjDay = useMemo(() => resolveDayEntryByDay(pacedPos.conjunctions, selectedConjDay), [pacedPos.conjunctions, selectedConjDay]);
+  const activeSelectedPronDay = useMemo(() => resolveDayEntryByDay(pacedPos.pronouns, selectedPronDay), [pacedPos.pronouns, selectedPronDay]);
+  const activeSelectedNounDay = useMemo(() => resolveDayEntryByDay(pacedPos.collectiveNouns, selectedNounDay), [pacedPos.collectiveNouns, selectedNounDay]);
+  const activeSelectedVerbDay = useMemo(() => resolveDayEntryByDay(pacedPos.verbs, selectedVerbDay), [pacedPos.verbs, selectedVerbDay]);
+  const activeSelectedVocabDay = useMemo(() => resolveDayEntryByDay(pacedVocab, selectedVocabDay), [pacedVocab, selectedVocabDay]);
+  const activeLessonSubs = lessonRenderSource?.hasMathSub
+    ? (lessonRenderSource.key === "sentences"
+      ? buildDerivedSentenceSub(lessonRenderSource.subs || [], daySectionSettings.sentences.itemsPerDay, selectedSubject?.id)
+      : (lessonRenderSource.subs || []).map((sub) => {
         const settingKey = getSubsectionSettingKey(sub.t);
         if (!settingKey) return sub;
         return buildDerivedDayBasedSub(sub, settingKey, daySectionSettings[settingKey]?.itemsPerDay || 5, selectedSubject?.id);
@@ -21558,42 +21874,42 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
 
   const buildViewSource = useCallback((overrides = {}) => {
     const currentPosDay = posTab === "adverbs"
-      ? selectedAdverbDay
+      ? activeSelectedAdverbDay
       : posTab === "prepositions"
-        ? selectedPrepDay
+        ? activeSelectedPrepDay
         : posTab === "adjectives"
-          ? selectedAdjDay
+          ? activeSelectedAdjDay
           : posTab === "conjunctions"
-            ? selectedConjDay
+            ? activeSelectedConjDay
             : posTab === "pronouns"
-              ? selectedPronDay
+              ? activeSelectedPronDay
               : posTab === "nouns"
-                ? selectedNounDay
+                ? activeSelectedNounDay
                 : posTab === "verbs"
-                  ? selectedVerbDay
+                  ? activeSelectedVerbDay
                   : null;
     const activeSub = mathSubIdx !== null ? (activeLessonSubs?.[mathSubIdx] || null) : null;
     const activeExerciseGroup = activeSub?.exerciseGroups && subExerciseGroupIdx !== null ? activeSub.exerciseGroups[subExerciseGroupIdx] : null;
     const activeQuizGroup = activeSub?.quizGroups && subQuizGroupIdx !== null ? activeSub.quizGroups[subQuizGroupIdx] : null;
     const derived = {
       subject: selectedSubject?.id || "english",
-      lessonKey: selectedLesson?.key || null,
-      lessonTitle: selectedLesson?.title || null,
+      lessonKey: lessonRenderSource?.key || null,
+      lessonTitle: lessonRenderSource?.title || null,
     };
 
-    if (selectedLesson?.hasAdverbs) {
+    if (lessonRenderSource?.hasAdverbs) {
       derived.lessonMode = "adverbs";
       derived.posTab = posTab;
       derived.day = currentPosDay?.day || null;
-    } else if (selectedLesson?.hasVocab) {
+    } else if (lessonRenderSource?.hasVocab) {
       derived.lessonMode = "vocab";
-      derived.day = selectedVocabDay?.day || null;
-    } else if (selectedLesson?.hasTenses || (selectedLesson?.hasMathSub && activeSub?.isTensesSub)) {
+        derived.day = activeSelectedVocabDay?.day || null;
+    } else if (lessonRenderSource?.hasTenses || (lessonRenderSource?.hasMathSub && activeSub?.isTensesSub)) {
       derived.lessonMode = "tenses";
       derived.tenseMain = tenseMain;
       derived.tenseSub = tenseSub;
       derived.paragraphTitle = selectedTensePara?.title || null;
-    } else if (selectedLesson?.hasMathSub && activeSub) {
+    } else if (lessonRenderSource?.hasMathSub && activeSub) {
       derived.subIndex = mathSubIdx;
       derived.subTitle = activeSub.t;
       derived.subTab = mathSubTab;
@@ -21604,7 +21920,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       ...derived,
       ...overrides,
     };
-  }, [activeLessonSubs, mathSubIdx, mathSubTab, posTab, selectedAdverbDay, selectedAdjDay, selectedConjDay, selectedLesson, selectedNounDay, selectedPrepDay, selectedPronDay, selectedSubject, selectedTensePara, selectedVerbDay, selectedVocabDay, subExerciseGroupIdx, subQuizGroupIdx, tenseMain, tenseSub]);
+  }, [activeLessonSubs, activeSelectedAdverbDay, activeSelectedAdjDay, activeSelectedConjDay, activeSelectedNounDay, activeSelectedPrepDay, activeSelectedPronDay, activeSelectedVerbDay, activeSelectedVocabDay, lessonRenderSource, mathSubIdx, mathSubTab, posTab, selectedSubject, selectedTensePara, subExerciseGroupIdx, subQuizGroupIdx, tenseMain, tenseSub]);
 
   const inferViewSource = useCallback((card) => {
     if (!card) return null;
@@ -25990,8 +26306,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     resetPracticeSession();
   };
   const goBack = () => { window.speechSynthesis.cancel(); clearQuizAdvanceTimeout(); setNavHidden(Boolean(navAutoHide)); setNavBarHidden(Boolean(navBarAutoHide && navPosition !== "top")); if (practiceMode) { setPracticeLabReturnPending(true); resetPracticeSession(); setTab("review"); } else if (tab === "review" && (activeReviewCard || reviewSessionDone)) { restoreReviewReturnSnapshot(); } else if (diaryTaskNavigator?.activeTaskKey && tab === "home" && (selectedSubject || selectedLesson || quizActive || quizDone || selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null))) { restoreDiaryTaskNavigator(); } else if (tab === "diary" && activeWeeklyTestSession) { setActiveWeeklyTestSession(null); } else if (quizDone || quizActive) { setQuizActive(false); setQuizDone(false); setQuizAnswers([]); setQuizElapsedMs([]); setQuizIdx(0); setQuizTimerRemaining(activeSubjectQuizTimeLimit); setNewBadges([]); } else if (selectedAdverbDay) { setSelectedAdverbDay(null); } else if (selectedPrepDay) { setSelectedPrepDay(null); } else if (selectedAdjDay) { setSelectedAdjDay(null); } else if (selectedConjDay) { setSelectedConjDay(null); } else if (selectedPronDay) { setSelectedPronDay(null); } else if (selectedNounDay) { setSelectedNounDay(null); } else if (selectedVerbDay) { setSelectedVerbDay(null); } else if (selectedTensePara) { setSelectedTensePara(null); } else if (selectedVocabDay) { setSelectedVocabDay(null); } else if (subQuizGroupIdx !== null) { setSubQuizGroupIdx(null); } else if (subExerciseGroupIdx !== null) { setSubExerciseGroupIdx(null); } else if (mathSubIdx !== null) { setMathSubIdx(null); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); } else if (selectedLesson) { setSelectedLesson(null); setPosTab("adverbs"); setTenseMain("present"); setTenseSub("simple"); } else if (selectedSubject) setSelectedSubject(null); else if (tab === "review" || tab === "diary") { resetReviewSession(); resetPracticeSession(); setTab("home"); } else setTab("home"); };
-  const selDay = selectedAdverbDay || selectedPrepDay || selectedAdjDay || selectedConjDay || selectedPronDay || selectedNounDay || selectedVerbDay || selectedTensePara || selectedVocabDay || (mathSubIdx !== null);
-  const headerTitle = quizActive || quizDone ? ui.quiz : selectedAdverbDay ? getScopedDayTitle(selectedAdverbDay.day, "Adverbs", "قید", language) : selectedPrepDay ? getScopedDayTitle(selectedPrepDay.day, "Prepositions", "حروف جار", language) : selectedAdjDay ? getScopedDayTitle(selectedAdjDay.day, "Adjectives", "صفات", language) : selectedConjDay ? getScopedDayTitle(selectedConjDay.day, "Conjunctions", "حروف عطف", language) : selectedPronDay ? getScopedDayTitle(selectedPronDay.day, "Pronouns", "ضمائر", language) : selectedNounDay ? getScopedDayTitle(selectedNounDay.day, "Collective Nouns", "اسم جمع", language) : selectedVerbDay ? getScopedDayTitle(selectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : selectedVocabDay ? getScopedDayTitle(selectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : selectedLesson ? selectedLesson.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" || tab === "favorites" || tab === "badges" ? ui.progress : tab === "review" ? ui.review : tab === "diary" ? joinLocalizedText("Diary", "ڈائری", language) : tab === "tutor" ? ui.tutor : ui.settings;
+  const selDay = activeSelectedAdverbDay || activeSelectedPrepDay || activeSelectedAdjDay || activeSelectedConjDay || activeSelectedPronDay || activeSelectedNounDay || activeSelectedVerbDay || selectedTensePara || activeSelectedVocabDay || (mathSubIdx !== null);
+  const headerTitle = quizActive || quizDone ? ui.quiz : activeSelectedAdverbDay ? getScopedDayTitle(activeSelectedAdverbDay.day, "Adverbs", "قید", language) : activeSelectedPrepDay ? getScopedDayTitle(activeSelectedPrepDay.day, "Prepositions", "حروف جار", language) : activeSelectedAdjDay ? getScopedDayTitle(activeSelectedAdjDay.day, "Adjectives", "صفات", language) : activeSelectedConjDay ? getScopedDayTitle(activeSelectedConjDay.day, "Conjunctions", "حروف عطف", language) : activeSelectedPronDay ? getScopedDayTitle(activeSelectedPronDay.day, "Pronouns", "ضمائر", language) : activeSelectedNounDay ? getScopedDayTitle(activeSelectedNounDay.day, "Collective Nouns", "اسم جمع", language) : activeSelectedVerbDay ? getScopedDayTitle(activeSelectedVerbDay.day, "Verbs", "افعال", language) : selectedTensePara ? selectedTensePara.title : activeSelectedVocabDay ? getScopedDayTitle(activeSelectedVocabDay.day, "Vocabulary", "ذخیرہ الفاظ", language) : lessonRenderSource ? lessonRenderSource.title : selectedSubject ? getSubjectDisplayName(selectedSubject, language) : tab === "home" ? "HomeSchool" : tab === "profiles" ? joinLocalizedText("Profiles", "پروفائلز", language) : tab === "dictionary" ? joinLocalizedText("Dictionary", "لغت", language) : tab === "progress" || tab === "favorites" || tab === "badges" ? ui.progress : tab === "review" ? ui.review : tab === "diary" ? joinLocalizedText("Diary", "ڈائری", language) : tab === "tutor" ? ui.tutor : ui.settings;
   const reviewReturnLabel = reviewReturnState?.tab === "review"
     ? ui.review
     : reviewReturnState?.tab === "profiles"
@@ -26209,7 +26525,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     }
     return <span aria-hidden="true">•</span>;
   };
-  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: wordMeaningPopover?.normalizedWord || "" }}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
+  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: wordMeaningPopover?.normalizedWord || "" }}><LessonEditContext.Provider value={lessonEditContextValue}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
     {navAutoHide ? <div className="header-reveal-hotspot" onMouseEnter={revealAutoHideHeader} onMouseMove={revealAutoHideHeader} onPointerDown={revealAutoHideHeader} /> : null}
     <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} data-tab={tab} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
       <div className="header-leading">
@@ -28424,6 +28740,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && (
+        <LessonEditContext.Provider value={lessonEditContextValue}>
         <>
           {activeDiaryTask ? (
             <div className="review-panel diary-task-nav-panel" data-ui-language={language}>
@@ -28477,9 +28794,24 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 )}
               </button>
             ) : null}
-          {canExportContent ? (
+            {canExportContent ? (
               <button type="button" className="ghost-cta" onClick={handleExportSelectedChapter}>
                 {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
+              </button>
+            ) : null}
+            {canAdministerLessonLibrary && !lessonEditMode ? (
+              <button type="button" className="ghost-cta" onClick={handleOpenLessonEditMode}>
+                {renderLocalizedTextNode(joinLocalizedText("Edit Lesson", "سبق میں ترمیم", language), language)}
+              </button>
+            ) : null}
+            {canAdministerLessonLibrary && lessonEditMode ? (
+              <button type="button" className="ghost-cta" onClick={handleSaveLessonEdits} disabled={lessonEditBusy}>
+                {renderLocalizedTextNode(lessonEditBusy ? joinLocalizedText("Saving...", "محفوظ ہو رہا ہے...", language) : joinLocalizedText("Save Edits", "تبدیلیاں محفوظ کریں", language), language)}
+              </button>
+            ) : null}
+            {canAdministerLessonLibrary && lessonEditMode ? (
+              <button type="button" className="ghost-cta" onClick={handleCancelLessonEditMode} disabled={lessonEditBusy}>
+                {renderLocalizedTextNode(joinLocalizedText("Cancel Edit", "ترمیم منسوخ", language), language)}
               </button>
             ) : null}
             {canAdministerLessonLibrary && selectedLessonChapterGroup?.activeVariant?.sourceType === "custom" ? (
@@ -28655,6 +28987,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </div>
         ) : null}
         </>
+        </LessonEditContext.Provider>
       )}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
@@ -28750,11 +29083,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && !selectedLesson.hasAdverbs && !selectedLesson.hasTenses && !selectedLesson.hasVocab && !selectedLesson.hasMathSub && (<div className="lesson-detail"><h2>{selectedLesson.title}</h2><p className={selectedSubject?.id === "urdu" ? "urdu-text" : ""}>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: selectedSubject?.id || "general", section: selectedLesson.key || selectedLesson.title, sectionLabel: selectedLesson.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx === null && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasMathSub && mathSubIdx === null && (<>
         {(() => { const isUr = selectedSubject?.id === "urdu"; return (<>
-        <div className="lesson-detail" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: selectedSubject?.id || "general", section: selectedLesson.key || selectedLesson.title, sectionLabel: selectedLesson.title }} /></div>
+        <div className="lesson-detail" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /></div>
         <h3 className="section-title" style={{ marginTop: 8, direction: isUr?"rtl":"ltr", textAlign: isUr?"right":"left" }}>{isUr ? "📐 موضوعات" : "📐 Topics"}</h3>
         {activeLessonSubs.map((sub, i) => {
           const topicColors = ["#38BDF8","#22C55E","#F59E0B","#A855F7","#EC4899","#14B8A6","#F97316"];
@@ -28763,15 +29096,19 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <div key={i} className="adverb-day-card" onClick={() => { setMathSubIdx(i); setMathSubTab("examples"); setSubExerciseGroupIdx(null); setSubQuizGroupIdx(null); setRevealedEx({}); }} style={{display:"flex",alignItems:"center",gap:14,direction:isUr?"rtl":"ltr"}}>
             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:40,height:40,borderRadius:12,background:tc+"22",border:"2px solid "+tc,color:tc,fontSize:16,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif",flexShrink:0}}>{i+1}</span>
             <div style={{flex:1,textAlign:isUr?"right":"left"}}>
-              <h3 style={{fontSize:16,fontWeight:700,margin:0,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit"}}>{sub.t}</h3>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit" }}>{sub.c.substring(0,80)}...</p>
+              <LessonEditableText as="h3" value={sub.t} fieldPath={["subs", i, "t"]} style={{fontSize:16,fontWeight:700,margin:0,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit"}} />
+              {lessonEditMode ? (
+                <LessonEditableText as="p" value={sub.c} fieldPath={["subs", i, "c"]} multiline style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit" }} />
+              ) : (
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit" }}>{sub.c.substring(0,80)}...</p>
+              )}
             </div>
           </div>);
         })}
         </>); })()}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasMathSub && mathSubIdx !== null && (() => {
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasMathSub && mathSubIdx !== null && (() => {
         const sub = normalizeSubLesson(activeLessonSubs[mathSubIdx], selectedSubject?.id);
         const isTensesSub = !!sub?.isTensesSub;
         const adjustedDayLessons = sub.dayLessons;
@@ -28845,8 +29182,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         }
         return (<>
         <div className="adverb-detail-section" data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "heading")} style={{marginBottom:10,...urS}}>
-          <h3 style={{color:"#FF6B35",...urS}}>{isUr?"📖":"📐"} {sub.t}</h3>
-          {isMath ? <MathVisualDeck sub={sub} lessonTitle={selectedLesson?.title} /> : <>
+          <div style={{color:"#FF6B35",...urS, display:"flex", alignItems:"center", gap:8}}>
+            <span>{isUr?"📖":"📐"}</span>
+            <LessonEditableText as="h3" value={sub.t} fieldPath={["subs", mathSubIdx, "t"]} style={{color:"#FF6B35", margin:0, width:"100%"}} />
+          </div>
+          {isMath ? <MathVisualDeck sub={sub} lessonTitle={lessonRenderSource?.title} /> : <>
           {sub.svgType === "placeValue" && <PlaceValueChart number={sub.svgData.number} />}
           {sub.svgType === "expandedForm" && <ExpandedFormSVG number={sub.svgData.number} parts={sub.svgData.parts} />}
           {sub.svgType === "compare" && <CompareTripleSVG />}
@@ -28924,9 +29264,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </svg></div>
           </>}
           </>}
-          {sub.c.split(/(?<=[.!?۔؟])\s+/).filter(Boolean).map((s,i) => (
+          {splitEditableSentenceParts(sub.c).map((s,i) => (
             <div key={i} data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, s, i, "", "content")}>
-              <SpeakableSentence text={s} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: sub.t }} />
+              <SpeakableSentence text={s} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: sub.t }} fieldPath={{ type: "paragraphSentence", path: ["subs", mathSubIdx, "c"], index: i }} />
             </div>
           ))}
           <button className="play-all-btn" style={isUr?{fontFamily:"'Noto Nastaliq Urdu',serif",direction:"rtl"}:{}} onClick={() => playAll(sub.c)}>{isUr?"▶️ سنیں":"▶️ Play Explanation"}</button>
@@ -28943,7 +29283,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           {adjustedDayLessons.map((lessonDay, dayIdx) => (
             <div key={lessonDay.day || dayIdx} className="adverb-detail-section" style={urS}>
               <h3 style={{color:"#38BDF8",marginBottom:12,...urS}}>{isUr ? `📅 دن ${lessonDay.day}` : `📅 Day ${lessonDay.day}`}</h3>
-              {lessonDay.title && <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 10, ...urS }}>{lessonDay.title}</p>}
+              {lessonDay.title && <LessonEditableText as="p" value={lessonDay.title} fieldPath={["subs", mathSubIdx, "dayLessons", dayIdx, "title"]} style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 10, ...urS }} />}
               {lessonDay.examples && lessonDay.examples.length ? (
                 <div style={{ marginBottom: 12 }}>
                   {lessonDay.examples.map((exampleEntry, exampleIndex) => (
@@ -28954,11 +29294,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       style={{ direction: isUr ? "rtl" : "ltr" }}
                     >
                       <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
-                        <ExercisePromptContent
-                          text={normalizeDiaryOutlineLeafLabel(exampleEntry)}
-                          studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
-                          buttonStyle={{ marginBottom: 0 }}
-                        />
+                <ExercisePromptContent
+                  text={normalizeDiaryOutlineLeafLabel(exampleEntry)}
+                  studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
+                  fieldPath={["subs", mathSubIdx, "dayLessons", dayIdx, "examples", exampleIndex]}
+                  buttonStyle={{ marginBottom: 0 }}
+                />
                       </div>
                       <InlineStudyActionBar studyItem={{ prompt: normalizeDiaryOutlineLeafLabel(exampleEntry), subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }} />
                     </div>
@@ -28967,14 +29308,15 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               ) : null}
               {lessonDay.words && lessonDay.words.map((w, i) => (
                 <div key={i} style={{ marginBottom: 10 }}>
-                  {"opposite" in w || "oppositeUr" in w ? <OppositeWordRow en={w.en} ur={w.ur} opposite={w.opposite} oppositeUr={w.oppositeUr} /> : "comp" in w || "super" in w ? <AdjWordRow en={w.en} ur={w.ur} comp={w.comp} sup={w.super} /> : "v2" in w || "v3" in w ? <VerbWordRow en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} /> : <WordRow en={w.en} ur={w.ur} />}
-                  {!sub.showWordSentences && w.meaning && <div style={{ padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>→ {w.meaning}</div>}
+                  {"opposite" in w || "oppositeUr" in w ? <OppositeWordRow en={w.en} ur={w.ur} opposite={w.opposite} oppositeUr={w.oppositeUr} fieldPathBase={["subs", mathSubIdx, "dayLessons", dayIdx, "words", i]} /> : "comp" in w || "super" in w ? <AdjWordRow en={w.en} ur={w.ur} comp={w.comp} sup={w.super} fieldPathBase={["subs", mathSubIdx, "dayLessons", dayIdx, "words", i]} /> : "v2" in w || "v3" in w ? <VerbWordRow en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} fieldPathBase={["subs", mathSubIdx, "dayLessons", dayIdx, "words", i]} /> : <WordRow en={w.en} ur={w.ur} fieldPathBase={["subs", mathSubIdx, "dayLessons", dayIdx, "words", i]} />}
+                  {!sub.showWordSentences && w.meaning && <div style={{ padding: "4px 14px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>→ <LessonEditableText as="span" value={w.meaning} fieldPath={["subs", mathSubIdx, "dayLessons", dayIdx, "words", i, "meaning"]} /></div>}
                   {sub.showWordSentences && (w.sentence || w.meaning) && (
                     <div style={{ marginTop: 8, paddingLeft: 14, paddingRight: 14 }}>
                       <SpeakableSentence
                         text={w.sentence || w.meaning}
                         lang="en"
                         studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: sub.t, answer: w.en }}
+                        fieldPath={["subs", mathSubIdx, "dayLessons", dayIdx, "words", i, w.sentence ? "sentence" : "meaning"]}
                         buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLightTheme ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0, justifyContent: "flex-start", width: "100%" }}
                       />
                     </div>
@@ -28984,16 +29326,16 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               {lessonDay.pairs && lessonDay.pairs.map((pair, i) => (
                 <div key={i} className="word-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, pair, i, `day_${lessonDay.day || dayIdx + 1}`, "pairs")} style={{cursor:"default",gap:10,flexDirection:"column",alignItems:"stretch"}}>
                   <div style={{display:"flex",alignItems:"stretch",gap:10,width:"100%"}}>
-                  <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right }} /></div>
+                  <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right }} fieldPath={["subs", mathSubIdx, "dayLessons", dayIdx, "pairs", i, "left"]} /></div>
                   <span style={{color:"var(--accent)",fontWeight:800}}>↔</span>
-                  <div style={{flex:1}}><SpeakableSentence text={pair.right} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.left }} /></div>
+                  <div style={{flex:1}}><SpeakableSentence text={pair.right} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.left }} fieldPath={["subs", mathSubIdx, "dayLessons", dayIdx, "pairs", i, "right"]} /></div>
                   <InlineStudyActionBar studyItem={{ prompt: pair.left, answer: pair.right, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs` }} />
                   </div>
                 </div>
               ))}
               {lessonDay.paragraph && (<>
                 <div style={{fontSize:12,fontWeight:800,color:"#22C55E",marginTop:12,marginBottom:8,fontFamily:"'Baloo 2',sans-serif"}}>{isUr?"📖 پیراگراف":"📖 Practice Paragraph"}</div>
-                {lessonDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => {
+                {splitEditableSentenceParts(lessonDay.paragraph).map((s, i) => {
                   const found = (lessonDay.words || []).find(w => s.toLowerCase().includes((w.en || "").toLowerCase().split(" ")[0].replace("(", "")));
                   const hasOpposites = (lessonDay.words || []).some(w => "opposite" in w || "oppositeUr" in w);
                   const sentenceHighlights = (lessonDay.words || []).map(w => w.en).filter(Boolean).filter(word => s.toLowerCase().includes(normalizeHighlightTerm(word)));
@@ -29002,7 +29344,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     <div key={i} data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, s, i, `day_${lessonDay.day || dayIdx + 1}`, "paragraphs")}>
                       {hasOpposites
                         ? <MixedUrduParagraphSentence text={paragraphSentence} highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} />
-                        : <SpeakableSentence text={s} lang="en" highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} />}
+                        : <SpeakableSentence text={s} lang="en" highlight={sentenceHighlights} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Paragraph` }} fieldPath={{ type: "paragraphSentence", path: ["subs", mathSubIdx, "dayLessons", dayIdx, "paragraph"], index: i }} />}
                     </div>
                   );
                 })}
@@ -29010,7 +29352,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </>)}
               {lessonDay.difficult && lessonDay.difficult.length > 0 && (<>
                 <div style={{fontSize:12,fontWeight:800,color:"#F59E0B",marginTop:12,marginBottom:8,fontFamily:"'Baloo 2',sans-serif"}}>{isUr?"📚 مشکل الفاظ":"📚 Difficult Words"}</div>
-                {lessonDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}
+                {lessonDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} fieldPathBase={["subs", mathSubIdx, "dayLessons", dayIdx, "difficult", i]} />)}
               </>)}
             </div>
           ))}
@@ -29023,7 +29365,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <div style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 800, marginBottom: 8 }}>{language === "ur" ? `سیٹ ${group.day}` : `Set ${group.day}`}</div>
               {group.sentencePairs.map((pair, i) => (
                 <div key={`${group.day}_${i}`} data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, pair, i, "", "pairs")}>
-                  <SentencePairRow en={pair.en} ur={pair.ur} />
+                  <SentencePairRow en={pair.en} ur={pair.ur} fieldPathBase={["subs", mathSubIdx, "sentencePairs", ((group.day - 1) * daySectionSettings.sentences.itemsPerDay) + i]} />
                 </div>
               ))}
             </div>
@@ -29032,13 +29374,16 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>)}
 
         {mathSubTab === "examples" && !sub.dayLessons && !sub.sentencePairs && sub.examples && (<div className="adverb-detail-section" data-study-id={buildDiarySectionTargetId(diaryRouteBaseId, "examples")} style={urS}>
-          <h3 style={{color:"#38BDF8",marginBottom:10,...urS}}>{sub.examplesLabel || (isUr?"💡 مثالیں":"💡 Examples")}</h3>
+              <div style={{color:"#38BDF8",marginBottom:10,...urS}}>
+                <LessonEditableText as="h3" value={sub.examplesLabel || (isUr?"💡 مثالیں":"💡 Examples")} fieldPath={["subs", mathSubIdx, "examplesLabel"]} style={{color:"#38BDF8",margin:0}} />
+              </div>
           {sub.examples.map((ex,i) => (
             <div key={i} className="inline-study-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
               <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
                 <ExercisePromptContent
                   text={ex}
                   studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
+                  fieldPath={["subs", mathSubIdx, "examples", i]}
                   buttonStyle={{ marginBottom: 0 }}
                 />
               </div>
@@ -29051,6 +29396,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <ExercisePromptContent
                   text={normalizeDiaryOutlineLeafLabel(ex)}
                   studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
+                  fieldPath={["subs", mathSubIdx, "examplesData", i]}
                   buttonStyle={{ marginBottom: 0 }}
                 />
               </div>
@@ -29068,7 +29414,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <div key={group.label} className="adverb-day-card" onClick={() => { setSubExerciseGroupIdx(gi); setRevealedEx({}); }} style={{display:"flex",alignItems:"center",gap:14,direction:isUr?"rtl":"ltr"}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:40,height:40,borderRadius:12,background:"#22C55E22",border:"2px solid #22C55E",color:"#22C55E",fontSize:16,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{gi + 1}</span>
                   <div style={{flex:1,textAlign:isUr?"right":"left"}}>
-                    <h3 style={{fontSize:16,fontWeight:700,margin:0,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit"}}>{group.label}</h3>
+                    <LessonEditableText as="h3" value={group.label} fieldPath={["subs", mathSubIdx, "exerciseGroups", gi, "label"]} style={{fontSize:16,fontWeight:700,margin:0,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit"}} />
                     <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4, fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"inherit" }}>{isUr?"ان دنوں کی تمام مشقیں":"All exercises for these days"}</p>
                   </div>
                 </div>
@@ -29078,7 +29424,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             <>
               {activeExerciseGroup && <div className="adverb-detail-section" style={{marginBottom:14,...urS}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",direction:isUr?"rtl":"ltr"}}>
-                  <h3 style={{color:"#22C55E",margin:0,...urS}}>{activeExerciseGroup.label}</h3>
+                  <LessonEditableText as="h3" value={activeExerciseGroup.label} fieldPath={["subs", mathSubIdx, "exerciseGroups", subExerciseGroupIdx, "label"]} style={{color:"#22C55E",margin:0,...urS}} />
 <button className="play-all-btn" style={dayGroupBackButtonStyle} onClick={() => { setSubExerciseGroupIdx(null); setRevealedEx({}); }}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
                 </div>
               </div>}
@@ -29100,7 +29446,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             <div key={ei} className="adverb-detail-section" data-study-id={buildDiaryExerciseTargetId(diaryRouteBaseId, ex, ei, activeExerciseGroup?.label)} style={{marginBottom:14,...urS}}>
               <div style={{display:"flex",direction:isUr?"rtl":"ltr",alignItems:"center",gap:10,marginBottom:10}}>
                 <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:36,height:36,borderRadius:10,background:qc+"22",border:"2px solid "+qc,color:qc,fontSize:13,fontWeight:800,fontFamily:isUr?"'Noto Nastaliq Urdu',serif":"'Baloo 2',sans-serif"}}>{isUr?("س"+(ei+1)):("Q"+(ei+1))}</span>
-                <div style={{flex:1}}><SpeakableSentence text={ex.q} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Questions` }} showStudyToolbar={false} /></div>
+                <div style={{flex:1}}><SpeakableSentence text={ex.q} lang={isUr?"ur":"en"} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Questions` }} showStudyToolbar={false} fieldPath={activeExerciseGroup ? ["subs", mathSubIdx, "exerciseGroups", subExerciseGroupIdx, "exercises", ei, "q"] : ["subs", mathSubIdx, "exercises", ei, "q"]} /></div>
               </div>
               {isColumnMatch ? (
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))",gap:14,direction:isUr?"rtl":"ltr"}}>
@@ -29119,6 +29465,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                           <ExercisePromptContent
                             text={displayP}
                             studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
+                            fieldPath={activeExerciseGroup ? ["subs", mathSubIdx, "exerciseGroups", subExerciseGroupIdx, "exercises", ei, "parts", pi] : ["subs", mathSubIdx, "exercises", ei, "parts", pi]}
                             buttonStyle={{ marginBottom: 0 }}
                           />
                         </div>
@@ -29162,6 +29509,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                             lang={isUrduText(a)?"ur":"en"}
                             studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Match Answers` }}
                             showStudyToolbar={false}
+                            fieldPath={activeExerciseGroup ? ["subs", mathSubIdx, "exerciseGroups", subExerciseGroupIdx, "exercises", ei, "ans", originalIndex] : ["subs", mathSubIdx, "exercises", ei, "ans", originalIndex]}
                             buttonStyle={{ marginBottom: 0 }}
                           />
                         </div>
@@ -29203,6 +29551,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       <ExercisePromptContent
                         text={displayP}
                         studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
+                        fieldPath={activeExerciseGroup ? ["subs", mathSubIdx, "exerciseGroups", subExerciseGroupIdx, "exercises", ei, "parts", pi] : ["subs", mathSubIdx, "exercises", ei, "parts", pi]}
                         buttonStyle={{ marginBottom: 0 }}
                       />
                     </div>
@@ -29280,19 +29629,19 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
 <button className="play-all-btn" style={dayGroupBackButtonStyle} onClick={() => { setSubQuizGroupIdx(null); setSubQuizQuestionIdx(0); }}>{isUr?"← دنوں کی فہرست":"← Back to Day Groups"}</button>
                   </div>
                 </div>}
-                {quizToRender && <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizGroupIdx+"_"+subQuizQuestionIdx} questions={quizToRender} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} initialQuestionIndex={subQuizQuestionIdx} targetBaseId={diaryRouteBaseId} groupLabel={activeQuizGroup?.label || ""} />}
+                {quizToRender && <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizGroupIdx+"_"+subQuizQuestionIdx} questions={quizToRender} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} initialQuestionIndex={subQuizQuestionIdx} targetBaseId={diaryRouteBaseId} groupLabel={activeQuizGroup?.label || ""} fieldPathBase={activeQuizGroup ? ["subs", mathSubIdx, "quizGroups", subQuizGroupIdx, "questions"] : ["subs", mathSubIdx, "quiz"]} />}
               </div>
             )
           ) : (
-            <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizQuestionIdx} questions={sub.quiz} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} initialQuestionIndex={subQuizQuestionIdx} targetBaseId={diaryRouteBaseId} groupLabel="" />
+            <MathSubQuiz key={"mq_"+mathSubIdx+"_"+subQuizQuestionIdx} questions={sub.quiz} isUrdu={selectedSubject?.id === "urdu"} questionTimeLimitSeconds={activeSubjectQuizTimeLimit} reflectionDelayMs={activeSubjectQuizReflectionDelayMs} initialQuestionIndex={subQuizQuestionIdx} targetBaseId={diaryRouteBaseId} groupLabel="" fieldPathBase={["subs", mathSubIdx, "quiz"]} />
           )}
           </div>
         )}
         </>);
       })()}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && !selectedVocabDay && (<>
-        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: "vocabulary", sectionLabel: selectedLesson.title }} /></div>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasVocab && !selectedVocabDay && (<>
+        <div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "vocabulary", sectionLabel: lessonRenderSource?.title }} /></div>
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice | 55 Days of Vocabulary</div>
         {pacedVocab.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
@@ -29316,8 +29665,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasTenses && !selectedTensePara && (<>
-        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: "tenses", sectionLabel: selectedLesson.title }} /></div>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasTenses && !selectedTensePara && (<>
+        <div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "tenses", sectionLabel: lessonRenderSource?.title }} /></div>
 
         <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
           {[{id:"present",label:"🕐 Present",c:"#38BDF8"},{id:"past",label:"🕑 Past",c:"#F59E0B"},{id:"future",label:"🕒 Future",c:"#22C55E"}].map(t => (
@@ -32033,7 +32382,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </div>
     ) : null}
-  </div></></AppContext.Provider>);
+  </div></></LessonEditContext.Provider></AppContext.Provider>);
 }
 
 window.HomeSchoolAppModule = { HomeschoolApp };

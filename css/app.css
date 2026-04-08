@@ -566,6 +566,25 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .install-cta{padding:10px 14px;border:none;border-radius:10px;background:linear-gradient(135deg,#6366F1,#8B5CF6);color:#F8FAFC;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer}
 .ghost-cta{padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer}
 .ghost-cta.active{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));background:color-mix(in srgb,var(--accent) 10%,var(--bg-elevated))}
+.lesson-edit-input{display:block;width:100%;min-width:0}
+.lesson-edit-input,
+.lesson-edit-input-multiline{
+  border:1px solid color-mix(in srgb,var(--accent) 20%,var(--border));
+  background:color-mix(in srgb,var(--bg-card) 90%,var(--bg-elevated));
+  color:var(--text-primary);
+  font-family:inherit;
+  font-size:inherit;
+  line-height:inherit;
+  border-radius:10px;
+  box-shadow:inset 0 1px 2px rgba(15,23,42,.04);
+  transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+}
+.lesson-edit-input:focus,
+.lesson-edit-input-multiline:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-glow),inset 0 1px 2px rgba(15,23,42,.04);
+  background:color-mix(in srgb,var(--bg-card) 96%,white 4%);
+}
 .diary-detail-toggle{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;padding:2px 0;border:none;background:transparent;color:var(--text-secondary);font-family:var(--font);text-align:left;cursor:pointer;transition:color .16s ease,opacity .16s ease}
 .diary-detail-toggle:hover{color:var(--text-primary)}
 .diary-detail-toggle-label{font-size:11px;font-weight:700;line-height:1.2;letter-spacing:.01em;color:inherit}
