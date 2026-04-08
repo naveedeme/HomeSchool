@@ -7822,7 +7822,10 @@ function getContentRoleCapabilities(role, matrix = null, override = null) {
     ...(safeMatrix[safeRole] || safeMatrix.student),
     ...normalizeContentPermissionOverride(override),
   };
-  if (safeRole === "admin") merged.manageContentAccess = true;
+  if (safeRole === "admin") {
+    Object.assign(merged, safeMatrix.admin || createDefaultContentRoleCapabilities().admin);
+    merged.manageContentAccess = true;
+  }
   return merged;
 }
 
@@ -14663,6 +14666,13 @@ function HomeschoolApp() {
     ];
     return roleCandidates.some((role) => normalizeContentManagerRole(role) === "admin");
   }, [canManageContentAccess, contentAccessState.currentRole, contentManagerRole, liveContentRole, supabaseAuthState.role]);
+  const effectiveContentRoleCapabilities = useMemo(() => (
+    canAdministerLessonLibrary
+      ? getContentRoleCapabilities("admin", contentAccessState.rolePermissions)
+      : contentRoleCapabilities
+  ), [canAdministerLessonLibrary, contentAccessState.rolePermissions, contentRoleCapabilities]);
+  const effectiveCanPublishContent = Boolean(effectiveContentRoleCapabilities.publishContent);
+  const effectiveCanUnpublishContent = Boolean(effectiveContentRoleCapabilities.unpublishContent);
   const canSeeLearnerManagement = canManageStudentLinks || canManageContentAccess;
   const contentIdentityEmail = String(supabaseAuthState.email || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
   const schoolDraftNormalizedAutoDiarySettings = useMemo(
@@ -20761,7 +20771,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   }, [canAssignContent, ensureSupabaseClient, language, refreshContentRelationshipState, showAppToast]);
 
   const handleUnpublishChapterVariant = useCallback(async (group, variant) => {
-    if (!canUnpublishContent) {
+    if (!effectiveCanUnpublishContent) {
       showAppToast(joinLocalizedText("Your content role does not allow unpublishing chapters.", "آپ کے مواد والے کردار کو ابواب غیر شائع کرنے کی اجازت نہیں۔", language), "alert");
       return;
     }
@@ -20798,10 +20808,10 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         "alert",
       );
     }
-  }, [canUnpublishContent, chapterSourcePreferences, ensureSupabaseClient, language, refreshPublishedContentState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  }, [chapterSourcePreferences, effectiveCanUnpublishContent, ensureSupabaseClient, language, refreshPublishedContentState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
 
   const handlePublishSelectedChapter = useCallback(async () => {
-    if (!canPublishContent) {
+    if (!effectiveCanPublishContent) {
       showAppToast(joinLocalizedText("Only editors or admins can publish chapters.", "صرف ایڈیٹر یا ایڈمن ابواب شائع کر سکتے ہیں۔", language), "alert");
       return;
     }
@@ -20897,7 +20907,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     } finally {
       setChapterPublishBusy(false);
     }
-  }, [activeLessonQuizQuestions, canPublishContent, ensureSupabaseClient, grade, language, refreshCustomContentState, refreshPublishedContentState, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
+  }, [activeLessonQuizQuestions, effectiveCanPublishContent, ensureSupabaseClient, grade, language, refreshCustomContentState, refreshPublishedContentState, selectedLesson, selectedSubject, selectedSubjectLessons, showAppToast, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
 
   useEffect(() => {
     localStorageFallback("hs_dictionary_device_id", dictionaryDeviceIdRef.current);
@@ -28905,7 +28915,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <button type="button" className="ghost-cta" onClick={() => handleOpenChapterVariant(group.subjectId, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Open", "کھولیں", language), language)}</button>
                   {canExportContent ? <button type="button" className="ghost-cta" onClick={() => handleExportChapterVariant(group.subjectId, group.grade, group.activeLesson)}>{renderLocalizedTextNode(joinLocalizedText("Export", "برآمد کریں", language), language)}</button> : null}
                   {localVariant && canAdministerLessonLibrary ? <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(group)}>{renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}</button> : null}
-                  {ownedPublishedVariant && canUnpublishContent ? <button type="button" className="ghost-cta" onClick={() => handleUnpublishChapterVariant(group, ownedPublishedVariant)}>{renderLocalizedTextNode(joinLocalizedText("Unpublish", "غیر شائع کریں", language), language)}</button> : null}
+                  {ownedPublishedVariant && effectiveCanUnpublishContent ? <button type="button" className="ghost-cta" onClick={() => handleUnpublishChapterVariant(group, ownedPublishedVariant)}>{renderLocalizedTextNode(joinLocalizedText("Unpublish", "غیر شائع کریں", language), language)}</button> : null}
                   {arrangeEnabled ? <button type="button" className="ghost-cta" onClick={() => handleMoveLessonOrderEntry(group.subjectId, group.grade, group.canonicalLessonKey, "up")} disabled={arrangeIndex <= 0}>{renderLocalizedTextNode(joinLocalizedText("Move Up", "اوپر کریں", language), language)}</button> : null}
                   {arrangeEnabled ? <button type="button" className="ghost-cta" onClick={() => handleMoveLessonOrderEntry(group.subjectId, group.grade, group.canonicalLessonKey, "down")} disabled={arrangeIndex < 0 || arrangeIndex >= arrangeDraft.length - 1}>{renderLocalizedTextNode(joinLocalizedText("Move Down", "نیچے کریں", language), language)}</button> : null}
                 </div>
@@ -29452,7 +29462,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language) : joinLocalizedText("Import Content", "مواد درآمد کریں", language), language)}
               </button>
             ) : null}
-            {canPublishContent ? (
+            {effectiveCanPublishContent ? (
               <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
                 {renderLocalizedTextNode(
                   chapterPublishBusy
