@@ -912,6 +912,26 @@
     const holidayDates = new Set(normalizeTextArray(settings.calendar.holidayDates));
     return settings.calendar.studyDays.map((isoDay) => safeWeekDates[isoDay - 1]).filter(Boolean).filter((date) => !holidayDates.has(date));
   }
+  function countConfiguredStudyDaysBetween(startDate = "", endDate = "", autoDiarySettings = null) {
+    const parsedStart = parseIsoDateValue(startDate);
+    const parsedEnd = parseIsoDateValue(endDate);
+    if (!parsedStart || !parsedEnd) return 0;
+    const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
+    const holidayDates = new Set(normalizeTextArray(settings.calendar.holidayDates));
+    const allowedDays = new Set(normalizeAutoDiaryIsoDayList(settings.calendar.studyDays));
+    if (!allowedDays.size) return 0;
+    const cursor = new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate());
+    const last = new Date(parsedEnd.getFullYear(), parsedEnd.getMonth(), parsedEnd.getDate());
+    if (cursor.getTime() > last.getTime()) return 0;
+    let total = 0;
+    while (cursor.getTime() <= last.getTime()) {
+      const iso = toIsoDateString(cursor);
+      const isoDay = getIsoWeekday(cursor);
+      if (allowedDays.has(isoDay) && !holidayDates.has(iso)) total += 1;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return total;
+  }
   function getConfiguredTestDate(weekDates = [], autoDiarySettings = null) {
     const safeWeekDates = Array.isArray(weekDates) ? weekDates : [];
     const settings = normalizeAutoDiarySettings(autoDiarySettings || {});
@@ -1867,10 +1887,8 @@
     const visibleTexts = [
       (_a = task == null ? void 0 : task.lesson) == null ? void 0 : _a.title,
       (_c = (_b = task == null ? void 0 : task.chapterGroup) == null ? void 0 : _b.activeLesson) == null ? void 0 : _c.title,
-      task == null ? void 0 : task.title,
       (_f = (_e = (_d = task == null ? void 0 : task.taskUnits) == null ? void 0 : _d[0]) == null ? void 0 : _e.sourceMeta) == null ? void 0 : _f.title,
-      task == null ? void 0 : task.subsectionTitle,
-      ...Array.isArray(task == null ? void 0 : task.taskUnits) ? task.taskUnits.slice(0, 2).map((unit) => unit == null ? void 0 : unit.title) : []
+      task == null ? void 0 : task.subsectionTitle
     ].map((value) => String(value || "").trim()).filter(Boolean);
     if (!visibleTexts.length) return uiLanguage === "ur" ? "ur" : "en";
     const urduScore = visibleTexts.reduce((total, text) => total + (isUrduText(text) ? 1 : 0), 0);
@@ -2569,6 +2587,7 @@
         if (!lessonPlans.length) return [];
         const carryForwardEnabled = settings.progression.advanceMode !== "weekly_lesson";
         const autoMoveByDate = Boolean(settings.progression.autoMoveByDate);
+        const progressionStartDate = String(safeAutoDiaryStartDate || yearStartDate || studyDates[0] || weekDates[0] || "").trim();
         const weeklyLessonIndex = (() => {
           if (settings.progression.chapterSelectionMode === "curriculum_order") {
             return Math.min(lessonPlans.length - 1, Math.max(0, academicWeekNumber - 1));
@@ -2595,12 +2614,20 @@
             selectedPlan = lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
             bucketIndex = dayIndex % safeStudyDays;
           } else {
-            while (currentLessonIndex < lessonPlans.length && (((_a2 = lessonPlans[currentLessonIndex]) == null ? void 0 : _a2.completedSlots) || 0) >= safeStudyDays) {
-              currentLessonIndex += 1;
-              currentSlotIndex = Math.min(((_b = lessonPlans[currentLessonIndex]) == null ? void 0 : _b.completedSlots) || 0, safeStudyDays - 1);
+            if (autoMoveByDate && progressionStartDate) {
+              const elapsedStudyDays = Math.max(1, countConfiguredStudyDaysBetween(progressionStartDate, targetDate, settings));
+              const absoluteSlotIndex = Math.max(0, elapsedStudyDays - 1);
+              const timedLessonIndex = Math.min(lessonPlans.length - 1, Math.floor(absoluteSlotIndex / safeStudyDays));
+              selectedPlan = lessonPlans[timedLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
+              bucketIndex = absoluteSlotIndex % safeStudyDays;
+            } else {
+              while (currentLessonIndex < lessonPlans.length && (((_a2 = lessonPlans[currentLessonIndex]) == null ? void 0 : _a2.completedSlots) || 0) >= safeStudyDays) {
+                currentLessonIndex += 1;
+                currentSlotIndex = Math.min(((_b = lessonPlans[currentLessonIndex]) == null ? void 0 : _b.completedSlots) || 0, safeStudyDays - 1);
+              }
+              selectedPlan = lessonPlans[currentLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
+              bucketIndex = Math.min(currentSlotIndex, safeStudyDays - 1);
             }
-            selectedPlan = lessonPlans[currentLessonIndex] || lessonPlans[lessonPlans.length - 1] || lessonPlans[0];
-            bucketIndex = autoMoveByDate ? dayIndex % safeStudyDays : Math.min(currentSlotIndex, safeStudyDays - 1);
           }
           const selectedGroup = (selectedPlan == null ? void 0 : selectedPlan.chapterGroup) || null;
           const lesson = (selectedPlan == null ? void 0 : selectedPlan.lesson) || null;
