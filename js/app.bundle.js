@@ -13308,7 +13308,6 @@ ${marker} `);
     const diaryVisibleWeekDates = useMemo(() => {
       var _a2;
       const dates = new Set([
-        ...currentStudyWeekDates,
         ...currentWeekDiaryEntries.map((entry) => entry.targetDate),
         ...autoDiaryTasks.map((entry) => entry.targetDate)
       ].filter(Boolean));
@@ -13316,8 +13315,8 @@ ${marker} `);
         dates.add(currentWeeklyTestDate);
       }
       const ordered = currentDiaryWeekDates.filter((date) => dates.has(date));
-      return ordered.length ? ordered : currentStudyWeekDates;
-    }, [(_l = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest) == null ? void 0 : _l.enabled, autoDiaryTasks, currentDiaryWeekDates, currentStudyWeekDates, currentWeekDiaryEntries, currentWeeklyTestDate]);
+      return ordered;
+    }, [(_l = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest) == null ? void 0 : _l.enabled, autoDiaryTasks, currentDiaryWeekDates, currentWeekDiaryEntries, currentWeeklyTestDate]);
     const weeklyDiaryTaskGroups = useMemo(() => diaryVisibleWeekDates.map((targetDate, index) => ({
       targetDate,
       dayIndex: index + 1,
@@ -13353,16 +13352,16 @@ ${marker} `);
           ...group,
           subjectGroups
         };
-      });
+      }).filter((group) => Array.isArray(group.tasks) && group.tasks.length > 0 && Array.isArray(group.subjectGroups) && group.subjectGroups.length > 0);
       return safeGroups;
     }, [activeDiaryStartIso, language, subjectLookup, weeklyDiaryTaskGroups]);
     const todayDiaryGroup = useMemo(
-      () => visibleDiaryDayGroups.find((group) => (group == null ? void 0 : group.targetDate) === activeDiaryStartIso) || null,
+      () => visibleDiaryDayGroups.find((group) => (group == null ? void 0 : group.targetDate) === activeDiaryStartIso) || visibleDiaryDayGroups[0] || null,
       [activeDiaryStartIso, visibleDiaryDayGroups]
     );
     const weeklyDiaryListGroups = useMemo(
-      () => [...visibleDiaryDayGroups].filter((group) => (group == null ? void 0 : group.targetDate) !== activeDiaryStartIso).reverse(),
-      [activeDiaryStartIso, visibleDiaryDayGroups]
+      () => [...visibleDiaryDayGroups].filter((group) => (group == null ? void 0 : group.targetDate) !== String((todayDiaryGroup == null ? void 0 : todayDiaryGroup.targetDate) || "").trim()).sort((left, right) => String((right == null ? void 0 : right.targetDate) || "").localeCompare(String((left == null ? void 0 : left.targetDate) || ""))),
+      [todayDiaryGroup, visibleDiaryDayGroups]
     );
     const orderedVisibleDiaryTasks = useMemo(
       () => visibleDiaryDayGroups.flatMap((group) => group.subjectGroups.flatMap((subjectGroup) => subjectGroup.tasks)),
