@@ -12818,9 +12818,8 @@ ${marker} `);
     }, [canAssignContent, canManageContentAccess, contentIdentityEmail, contentRelationshipState.assignments, grade]);
     const visibleLessonArchives = useMemo(() => {
       const safeArchives = Array.isArray(contentRelationshipState.lessonArchives) ? contentRelationshipState.lessonArchives : [];
-      const scopedSchoolId = String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim();
-      return safeArchives.map((entry) => normalizeLessonArchiveRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => !scopedSchoolId || entry.schoolId === scopedSchoolId).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
-    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, contentRelationshipState.lessonArchives]);
+      return safeArchives.map((entry) => normalizeLessonArchiveRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => !activeInstitutionSchoolId || entry.schoolId === activeInstitutionSchoolId).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+    }, [activeInstitutionSchoolId, contentRelationshipState.lessonArchives]);
     const archivedLessonVariantKeys = useMemo(() => new Set(
       visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId))
     ), [visibleLessonArchives]);
