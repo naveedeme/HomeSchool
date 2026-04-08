@@ -12818,8 +12818,9 @@ ${marker} `);
     }, [canAssignContent, canManageContentAccess, contentIdentityEmail, contentRelationshipState.assignments, grade]);
     const visibleLessonArchives = useMemo(() => {
       const safeArchives = Array.isArray(contentRelationshipState.lessonArchives) ? contentRelationshipState.lessonArchives : [];
-      return safeArchives.map((entry) => normalizeLessonArchiveRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => !activeInstitutionSchoolId || entry.schoolId === activeInstitutionSchoolId).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
-    }, [activeInstitutionSchoolId, contentRelationshipState.lessonArchives]);
+      const scopedSchoolId = String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim();
+      return safeArchives.map((entry) => normalizeLessonArchiveRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => !scopedSchoolId || entry.schoolId === scopedSchoolId).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, contentRelationshipState.lessonArchives]);
     const archivedLessonVariantKeys = useMemo(() => new Set(
       visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId))
     ), [visibleLessonArchives]);
@@ -14178,20 +14179,30 @@ ${marker} `);
       }
     }, [activeInstitutionSchoolIdResolved, assignmentDraftDescription, assignmentDraftDueDate, assignmentDraftScope, assignmentDraftStudentEmail, assignmentDraftTitle, canManageDiary, contentIdentityEmail, grade, language, showAppToast]);
     const handleToggleDiaryCompletion = useCallback(async (task, explicitDone = null) => {
-      if (!task || !activeDiaryViewerStudentEmail) return;
+      if (!task) return;
+      const viewerStudentEmail = String(activeDiaryViewerStudentEmail || diaryViewerStudentEmailSeed || contentIdentityEmail || "").trim().toLowerCase();
+      if (!viewerStudentEmail) {
+        showAppToast(joinLocalizedText("No learner is selected for this diary.", "\u0627\u0633 \u0688\u0627\u0626\u0631\u06CC \u06A9\u06D2 \u0644\u06CC\u06D2 \u06A9\u0648\u0626\u06CC \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u0627 \u0645\u0646\u062A\u062E\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
       const current = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
       const shouldComplete = explicitDone === null ? !current : Boolean(explicitDone);
+      const completionSchoolId = String(activeInstitutionSchoolIdResolved || task.schoolId || "").trim();
       setContentRelationshipBusy(true);
       try {
         const client = ensureSupabaseClientRef.current();
         if (!shouldComplete && (current == null ? void 0 : current.completionId)) {
           const { error } = await client.from(SUPABASE_DIARY_COMPLETIONS_TABLE).delete().eq("completion_id", current.completionId);
           if (error) throw error;
+          setContentRelationshipState((state) => ({
+            ...state,
+            diaryCompletions: (Array.isArray(state == null ? void 0 : state.diaryCompletions) ? state.diaryCompletions : []).map((entry) => normalizeDiaryCompletionRecord(entry)).filter(Boolean).filter((entry) => entry.completionId !== current.completionId)
+          }));
         } else if (shouldComplete) {
           const row = {
-            completion_id: (current == null ? void 0 : current.completionId) || `completion_${simpleHash(`${activeInstitutionSchoolIdResolved}_${activeDiaryViewerStudentEmail}_${task.taskKind}_${task.taskKey}`)}`,
-            school_id: activeInstitutionSchoolIdResolved || null,
-            student_email: activeDiaryViewerStudentEmail,
+            completion_id: (current == null ? void 0 : current.completionId) || `completion_${simpleHash(`${completionSchoolId}_${viewerStudentEmail}_${task.taskKind}_${task.taskKey}`)}`,
+            school_id: completionSchoolId || null,
+            student_email: viewerStudentEmail,
             task_kind: task.taskKind,
             task_key: task.taskKey,
             target_date: task.targetDate,
@@ -14209,6 +14220,19 @@ ${marker} `);
           };
           const { error } = await client.from(SUPABASE_DIARY_COMPLETIONS_TABLE).upsert(row, { onConflict: "completion_id" });
           if (error) throw error;
+          const normalizedCompletion = normalizeDiaryCompletionRecord(row);
+          if (normalizedCompletion) {
+            setContentRelationshipState((state) => ({
+              ...state,
+              diaryCompletions: [
+                ...(Array.isArray(state == null ? void 0 : state.diaryCompletions) ? state.diaryCompletions : []).filter((entry) => {
+                  const normalized = normalizeDiaryCompletionRecord(entry);
+                  return (normalized == null ? void 0 : normalized.completionId) !== normalizedCompletion.completionId;
+                }),
+                normalizedCompletion
+              ]
+            }));
+          }
         }
         await refreshContentRelationshipStateRef.current();
         showAppToast(
@@ -14220,7 +14244,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, diaryCompletionLookup, language, showAppToast]);
+    }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, contentIdentityEmail, diaryCompletionLookup, diaryViewerStudentEmailSeed, language, showAppToast]);
     const handleOpenTestTemplateImport = useCallback(() => {
       var _a2, _b2;
       if (!canManageTests) {

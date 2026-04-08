@@ -15318,13 +15318,14 @@ const headerHideTimerRef = useRef(null);
   }, [canAssignContent, canManageContentAccess, contentIdentityEmail, contentRelationshipState.assignments, grade]);
   const visibleLessonArchives = useMemo(() => {
     const safeArchives = Array.isArray(contentRelationshipState.lessonArchives) ? contentRelationshipState.lessonArchives : [];
+    const scopedSchoolId = String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim();
     return safeArchives
       .map((entry) => normalizeLessonArchiveRecord(entry))
       .filter(Boolean)
       .filter((entry) => entry.status === "active")
-      .filter((entry) => !activeInstitutionSchoolId || entry.schoolId === activeInstitutionSchoolId)
+      .filter((entry) => !scopedSchoolId || entry.schoolId === scopedSchoolId)
       .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
-  }, [activeInstitutionSchoolId, contentRelationshipState.lessonArchives]);
+  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, contentRelationshipState.lessonArchives]);
   const archivedLessonVariantKeys = useMemo(() => new Set(
     visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId)),
   ), [visibleLessonArchives]);
@@ -16789,20 +16790,33 @@ const headerHideTimerRef = useRef(null);
     }
   }, [activeInstitutionSchoolIdResolved, assignmentDraftDescription, assignmentDraftDueDate, assignmentDraftScope, assignmentDraftStudentEmail, assignmentDraftTitle, canManageDiary, contentIdentityEmail, grade, language, showAppToast]);
   const handleToggleDiaryCompletion = useCallback(async (task, explicitDone = null) => {
-    if (!task || !activeDiaryViewerStudentEmail) return;
+    if (!task) return;
+    const viewerStudentEmail = String(activeDiaryViewerStudentEmail || diaryViewerStudentEmailSeed || contentIdentityEmail || "").trim().toLowerCase();
+    if (!viewerStudentEmail) {
+      showAppToast(joinLocalizedText("No learner is selected for this diary.", "اس ڈائری کے لیے کوئی سیکھنے والا منتخب نہیں۔", language), "alert");
+      return;
+    }
     const current = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
     const shouldComplete = explicitDone === null ? !current : Boolean(explicitDone);
+    const completionSchoolId = String(activeInstitutionSchoolIdResolved || task.schoolId || "").trim();
     setContentRelationshipBusy(true);
     try {
       const client = ensureSupabaseClientRef.current();
       if (!shouldComplete && current?.completionId) {
         const { error } = await client.from(SUPABASE_DIARY_COMPLETIONS_TABLE).delete().eq("completion_id", current.completionId);
         if (error) throw error;
+        setContentRelationshipState((state) => ({
+          ...state,
+          diaryCompletions: (Array.isArray(state?.diaryCompletions) ? state.diaryCompletions : [])
+            .map((entry) => normalizeDiaryCompletionRecord(entry))
+            .filter(Boolean)
+            .filter((entry) => entry.completionId !== current.completionId),
+        }));
       } else if (shouldComplete) {
         const row = {
-          completion_id: current?.completionId || `completion_${simpleHash(`${activeInstitutionSchoolIdResolved}_${activeDiaryViewerStudentEmail}_${task.taskKind}_${task.taskKey}`)}`,
-          school_id: activeInstitutionSchoolIdResolved || null,
-          student_email: activeDiaryViewerStudentEmail,
+          completion_id: current?.completionId || `completion_${simpleHash(`${completionSchoolId}_${viewerStudentEmail}_${task.taskKind}_${task.taskKey}`)}`,
+          school_id: completionSchoolId || null,
+          student_email: viewerStudentEmail,
           task_kind: task.taskKind,
           task_key: task.taskKey,
           target_date: task.targetDate,
@@ -16820,6 +16834,19 @@ const headerHideTimerRef = useRef(null);
         };
         const { error } = await client.from(SUPABASE_DIARY_COMPLETIONS_TABLE).upsert(row, { onConflict: "completion_id" });
         if (error) throw error;
+        const normalizedCompletion = normalizeDiaryCompletionRecord(row);
+        if (normalizedCompletion) {
+          setContentRelationshipState((state) => ({
+            ...state,
+            diaryCompletions: [
+              ...(Array.isArray(state?.diaryCompletions) ? state.diaryCompletions : []).filter((entry) => {
+                const normalized = normalizeDiaryCompletionRecord(entry);
+                return normalized?.completionId !== normalizedCompletion.completionId;
+              }),
+              normalizedCompletion,
+            ],
+          }));
+        }
       }
       await refreshContentRelationshipStateRef.current();
       showAppToast(
@@ -16833,7 +16860,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, diaryCompletionLookup, language, showAppToast]);
+  }, [activeDiaryViewerStudentEmail, activeInstitutionSchoolIdResolved, contentIdentityEmail, diaryCompletionLookup, diaryViewerStudentEmailSeed, language, showAppToast]);
   const handleOpenTestTemplateImport = useCallback(() => {
     if (!canManageTests) {
       showAppToast(joinLocalizedText("Your content role cannot import Saturday tests.", "آپ کے مواد والے کردار کو ہفتہ وار ٹیسٹ درآمد کرنے کی اجازت نہیں۔", language), "alert");
