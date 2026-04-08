@@ -29705,13 +29705,18 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       </select>
                     ) : null}
                   </div>
-                  <textarea
-                    className={`chat-input${isUrduUi(language) ? " urdu" : ""}`}
-                    value={chapterAssignmentDraftNote}
-                    onChange={(event) => setChapterAssignmentDraftNote(event.target.value)}
-                    placeholder={renderLocalizedTextNode(joinLocalizedText("Optional note for this assignment", "اس تفویض کے لیے اختیاری نوٹ", language), language)}
-                    style={{ minHeight: 94, marginTop: 10 }}
-                  />
+                  <div className="chapter-assignment-note-shell" data-ui-language={language}>
+                    <div className="chapter-assignment-note-head">
+                      <strong>{renderLocalizedTextNode(joinLocalizedText("Optional Note", "اختیاری نوٹ", language), language)}</strong>
+                      <span>{renderLocalizedTextNode(joinLocalizedText("Add a short instruction or context for this published assignment.", "اس شائع شدہ تفویض کے لیے مختصر ہدایت یا پس منظر شامل کریں۔", language), language)}</span>
+                    </div>
+                    <textarea
+                      className={`chapter-assignment-note-input ${isUrduUi(language) ? "urdu" : "english"}`}
+                      value={chapterAssignmentDraftNote}
+                      onChange={(event) => setChapterAssignmentDraftNote(event.target.value)}
+                      placeholder={renderLocalizedTextNode(joinLocalizedText("Write a clear note for learners, if needed.", "اگر ضرورت ہو تو طلبہ کے لیے واضح نوٹ لکھیں۔", language), language)}
+                    />
+                  </div>
                   <div className="result-actions chapter-card-actions">
                     <button
                       type="button"

@@ -304,6 +304,16 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .diary-authoring-note-input.urdu{font-family:var(--font-ur);direction:rtl;text-align:right;line-height:2}
 .chapter-card-panel[data-ui-language="ur"] .diary-authoring-note-shell{text-align:right}
 .chapter-card-panel[data-ui-language="ur"] .diary-authoring-note-help{font-family:var(--font-ur)}
+.chapter-assignment-note-shell{margin-top:12px;padding:14px 16px;border-radius:18px;border:1px solid color-mix(in srgb,var(--border) 88%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 98%,white),color-mix(in srgb,var(--bg-elevated) 95%,var(--bg-card)));box-shadow:0 10px 24px rgba(15,23,42,.05)}
+.chapter-assignment-note-head{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.chapter-assignment-note-head strong{font-size:13px;font-weight:800;color:var(--text-primary)}
+.chapter-assignment-note-head span{font-size:12px;line-height:1.6;color:var(--text-secondary)}
+.chapter-assignment-note-input{width:100%;min-height:108px;padding:14px 16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--border) 88%,transparent);background:color-mix(in srgb,var(--bg-primary) 92%,var(--bg-card));color:var(--text-primary);font-size:14px;line-height:1.75;resize:vertical;outline:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.chapter-assignment-note-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow),0 14px 28px rgba(15,23,42,.06)}
+.chapter-assignment-note-input.english{font-family:var(--font);direction:ltr;text-align:left}
+.chapter-assignment-note-input.urdu{font-family:var(--font-ur);direction:rtl;text-align:right;line-height:2}
+.chapter-card-panel[data-ui-language="ur"] .chapter-assignment-note-shell{text-align:right}
+.chapter-card-panel[data-ui-language="ur"] .chapter-assignment-note-head strong,.chapter-card-panel[data-ui-language="ur"] .chapter-assignment-note-head span{font-family:var(--font-ur)}
 .chapter-badge-row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px}
 .chapter-badge{display:inline-flex;align-items:center;justify-content:center;padding:5px 10px;border-radius:999px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-secondary);font-size:11px;font-weight:800;line-height:1.2}
 .chapter-badge.verified{background:rgba(14,165,233,.1);border-color:rgba(14,165,233,.24);color:var(--accent)}
