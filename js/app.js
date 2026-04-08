@@ -1134,6 +1134,16 @@ function buildDiarySectionTargetId(targetBaseId = "", sectionKey = "") {
   return `${safeBaseId}_${sanitizeDiaryTargetSegment(sectionKey, "section")}`;
 }
 
+function buildDiaryLeafIndexLabel(index = 0) {
+  let value = Math.max(0, Number(index) || 0);
+  let label = "";
+  do {
+    label = String.fromCharCode(97 + (value % 26)) + label;
+    value = Math.floor(value / 26) - 1;
+  } while (value >= 0);
+  return `${label}.`;
+}
+
 function buildDiaryExerciseTargetId(targetBaseId = "", exercise = {}, index = 0, groupLabel = "") {
   const safeBaseId = String(targetBaseId || "").trim();
   if (!safeBaseId) return "";
@@ -1253,6 +1263,26 @@ function collectDiaryQuizOutlineNodes(quizEntries = [], baseKey = "", routeMeta 
   return nodes;
 }
 
+function collectDiaryExercisePartOutlineNodes(exercise = {}, baseKey = "", routeMeta = {}, isUrdu = false) {
+  const nodes = [];
+  const parts = Array.isArray(exercise?.parts) ? exercise.parts : [];
+  parts.forEach((part, index) => {
+    const label = normalizeDiaryOutlineLeafLabel(part, isUrdu ? `حصہ ${index + 1}` : `Part ${index + 1}`);
+    if (!label) return;
+    nodes.push({
+      key: `${baseKey}_part_${index}`,
+      label,
+      routeMeta: {
+        ...routeMeta,
+        subTab: "exercises",
+        targetId: String(routeMeta?.targetId || buildDiarySectionTargetId(routeMeta?.targetBaseId, "exercises") || "").trim(),
+      },
+      children: [],
+    });
+  });
+  return nodes;
+}
+
 function attachDiaryRouteMeta(nodes = [], extraRouteMeta = {}) {
   return (Array.isArray(nodes) ? nodes : []).map((node) => ({
     ...node,
@@ -1338,19 +1368,22 @@ function groupAutoDiaryUnitsBySubsection(units = [], fallbackLessonTitle = "") {
 
 function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
   const nodes = [];
-  const seen = new Set();
-  (Array.isArray(exerciseEntries) ? exerciseEntries : []).forEach((exercise, index) => {
+  const safeEntries = Array.isArray(exerciseEntries) ? exerciseEntries : [];
+  safeEntries.forEach((exercise, index) => {
     const kind = getExerciseKind(exercise?.q || "");
     const fallbackLabel = buildDiaryOutlineKindLabel(kind, isUrdu);
-    const label = normalizeDiaryOutlineLabel(exercise?.q, fallbackLabel);
     const groupLabel = String(exercise?.__groupLabel || routeMeta?.groupLabel || "").trim();
     const targetId = buildDiaryExerciseTargetId(routeMeta?.targetBaseId, exercise, index, groupLabel);
-    const dedupeKey = String(targetId || `${groupLabel}_${kind || label || index}`).trim().toLowerCase();
-    if (!dedupeKey || seen.has(dedupeKey)) return;
-    seen.add(dedupeKey);
+    const questionLabel = normalizeDiaryOutlineLabel(exercise?.q, fallbackLabel);
+    const partChildren = collectDiaryExercisePartOutlineNodes(exercise, `${baseKey}_exercise_${index}`, {
+      ...routeMeta,
+      exerciseKind: kind || "",
+      groupLabel,
+      targetId,
+    }, isUrdu);
     nodes.push({
       key: `${baseKey}_exercise_${index}`,
-      label,
+      label: questionLabel,
       routeMeta: {
         ...routeMeta,
         subTab: "exercises",
@@ -1358,7 +1391,7 @@ function collectDiaryExerciseOutlineNodes(exerciseEntries = [], baseKey = "", ro
         groupLabel,
         targetId,
       },
-      children: [],
+      children: partChildren,
     });
   });
   return nodes;
@@ -1702,6 +1735,33 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
     });
   }
   if (exerciseEntries.length) {
+    const exerciseChildren = Array.isArray(sub?.exerciseGroups) && sub.exerciseGroups.length
+      ? sub.exerciseGroups.map((group, groupIndex) => ({
+          key: `${baseKey}_exercise_group_${groupIndex}`,
+          label: normalizeDiaryOutlineLeafLabel(group, isUrdu ? `مشق گروپ ${groupIndex + 1}` : `Exercise Group ${groupIndex + 1}`),
+          routeMeta: {
+            ...safeRouteMeta,
+            subTab: "exercises",
+            groupLabel: String(group?.label || "").trim(),
+            targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
+          },
+          children: collectDiaryExerciseOutlineNodes(
+            Array.isArray(group?.exercises) ? group.exercises : [],
+            `${baseKey}_exercise_group_${groupIndex}`,
+            {
+              ...safeRouteMeta,
+              groupLabel: String(group?.label || "").trim(),
+              targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
+            },
+            isUrdu,
+          ),
+        }))
+      : collectDiaryExerciseOutlineNodes(
+          exerciseEntries,
+          `${baseKey}_exercises`,
+          safeRouteMeta,
+          isUrdu,
+        );
     children.push({
       key: `${baseKey}_exercises`,
       label: isUrdu ? "مشقیں" : "Exercises",
@@ -1711,12 +1771,7 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
         targetScope: "section",
         targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
       },
-      children: collectDiaryExerciseOutlineNodes(
-        exerciseEntries,
-        `${baseKey}_exercises`,
-        safeRouteMeta,
-        isUrdu,
-      ),
+      children: exerciseChildren,
     });
   }
   const hasQuiz = Boolean(
@@ -13897,6 +13952,7 @@ function HomeschoolApp() {
   const [diaryWeekAnchorDate, setDiaryWeekAnchorDate] = useState(toIsoDateString(Date.now()));
   const [diaryWeekAnchorFollowsToday, setDiaryWeekAnchorFollowsToday] = useState(true);
   const [showDetailedDiary, setShowDetailedDiary] = useState(false);
+  const [expandedDiaryOutlineNodes, setExpandedDiaryOutlineNodes] = useState({});
   const [diaryDraftScope, setDiaryDraftScope] = useState("grade");
   const [diaryDraftStudentEmail, setDiaryDraftStudentEmail] = useState("");
   const [diaryDraftRangeMode, setDiaryDraftRangeMode] = useState("single");
@@ -24784,81 +24840,124 @@ const lessons = getMergedLessons(subjectId, grade);
     if (!Array.isArray(nodes) || !nodes.length) return null;
     return (
       <div className={`diary-outline depth-${depth}`} style={{ display: "grid", gap: 6, marginTop: depth === 0 ? 8 : 6, paddingInlineStart: depth > 0 ? 12 : 0 }}>
-        {nodes.map((node) => {
+        {nodes.map((node, nodeIndex) => {
           const hasChildren = Array.isArray(node?.children) && node.children.length > 0;
           const label = String(node?.label || "").trim();
           const nodeLanguage = isUrduText(label) ? "ur" : (language === "ur" ? "ur" : "en");
+          const nodeExpansionKey = `${task?.taskKey || "task"}::${node?.key || label}::${depth}`;
+          const nodeExpanded = Boolean(expandedDiaryOutlineNodes?.[nodeExpansionKey]);
+          const showNodeChildren = hasChildren && (showDetailedDiary || nodeExpanded);
+          const leafOrdinal = !hasChildren
+            ? nodes
+              .slice(0, nodeIndex + 1)
+              .filter((entry) => {
+                const entryHasChildren = Array.isArray(entry?.children) && entry.children.length > 0;
+                return !entryHasChildren && String(entry?.label || "").trim();
+              }).length - 1
+            : -1;
           if (!label) return null;
           return (
             <div key={`diary_outline_${task?.taskKey || "task"}_${node.key || label}_${depth}`} className="diary-outline-node" data-task-language={nodeLanguage}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                {depth === 0 ? (
-                  <button
-                    type="button"
-                    className="diary-outline-heading-btn"
-                    onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget)}
-                    style={{
-                      display: "block",
-                      flex: 1,
-                      minWidth: 0,
-                      textAlign: nodeLanguage === "ur" ? "right" : "left",
-                      border: "none",
-                      background: "transparent",
-                      padding: 0,
-                      color: "var(--text)",
-                      fontWeight: 700,
-                      fontSize: 13,
-                      lineHeight: 1.5,
-                      whiteSpace: "normal",
-                      overflowWrap: "anywhere",
-                      cursor: "pointer",
-                      direction: nodeLanguage === "ur" ? "rtl" : "ltr",
-                      fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)",
-                    }}
-                  >
-                    {renderLocalizedTextNode(label, language)}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="diary-outline-link-btn"
-                    onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                      textAlign: nodeLanguage === "ur" ? "right" : "left",
-                      border: "none",
-                      background: "transparent",
-                      padding: 0,
-                      color: "var(--text-muted)",
-                      fontSize: 12,
-                      cursor: "pointer",
-                      flex: 1,
-                      minWidth: 0,
-                      lineHeight: 1.5,
-                      whiteSpace: "normal",
-                      overflowWrap: "anywhere",
-                      direction: nodeLanguage === "ur" ? "rtl" : "ltr",
-                      fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)",
-                    }}
-                  >
-                    <span>{renderLocalizedTextNode(label, language)}</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="diary-inline-audio-btn"
-                  onClick={() => {
-                    const routeLabel = String(node?.routeMeta?.subTitle || "").trim();
-                    speakInlineText(routeLabel ? `${routeLabel}. ${label}` : label);
+                <span
+                  className="diary-outline-inline-row"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    flex: 1,
+                    minWidth: 0,
+                    direction: nodeLanguage === "ur" ? "rtl" : "ltr",
                   }}
-                  title={joinLocalizedText("Listen", "سنیں", language)}
                 >
-                  🔈
-                </button>
+                  {!showDetailedDiary && hasChildren ? (
+                    <button
+                      type="button"
+                      className={`diary-inline-detail-toggle inline${nodeExpanded ? " active" : ""}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setExpandedDiaryOutlineNodes((current) => ({
+                          ...current,
+                          [nodeExpansionKey]: !current?.[nodeExpansionKey],
+                        }));
+                      }}
+                      aria-expanded={nodeExpanded}
+                      title={renderLocalizedTextNode(nodeExpanded ? joinLocalizedText("Collapse", "سمیٹیں", language) : joinLocalizedText("Expand", "پھیلائیں", language), language)}
+                    >
+                      <span className="diary-inline-detail-chevron">›</span>
+                    </button>
+                  ) : null}
+                  {!hasChildren ? <span className="diary-outline-leaf-bullet" aria-hidden="true">{buildDiaryLeafIndexLabel(leafOrdinal)}</span> : null}
+                  {depth === 0 ? (
+                    <button
+                      type="button"
+                      className="diary-outline-heading-btn"
+                      onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget)}
+                      style={{
+                        display: "block",
+                        flex: 1,
+                        minWidth: 0,
+                        textAlign: nodeLanguage === "ur" ? "right" : "left",
+                        border: "none",
+                        background: "transparent",
+                        padding: 0,
+                        color: "var(--text)",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        whiteSpace: "normal",
+                        overflowWrap: "anywhere",
+                        cursor: "pointer",
+                        direction: nodeLanguage === "ur" ? "rtl" : "ltr",
+                        fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)",
+                      }}
+                    >
+                      <span>{renderLocalizedTextNode(label, language)}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="diary-outline-link-btn"
+                      onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, node.routeMeta || null, event.currentTarget)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        textAlign: nodeLanguage === "ur" ? "right" : "left",
+                        border: "none",
+                        background: "transparent",
+                        padding: 0,
+                        color: "var(--text-muted)",
+                        fontSize: 12,
+                        cursor: "pointer",
+                        flex: 1,
+                        minWidth: 0,
+                        lineHeight: 1.5,
+                        whiteSpace: "normal",
+                        overflowWrap: "anywhere",
+                        direction: nodeLanguage === "ur" ? "rtl" : "ltr",
+                        fontFamily: nodeLanguage === "ur" ? "var(--font-ur)" : "var(--font)",
+                      }}
+                    >
+                      <span>{renderLocalizedTextNode(label, language)}</span>
+                    </button>
+                  )}
+                </span>
+                <span className="diary-inline-heading-controls">
+                  <button
+                    type="button"
+                    className="diary-inline-audio-btn"
+                    onClick={() => {
+                      const routeLabel = String(node?.routeMeta?.subTitle || "").trim();
+                      speakInlineText(routeLabel ? `${routeLabel}. ${label}` : label);
+                    }}
+                    title={joinLocalizedText("Listen", "سنیں", language)}
+                  >
+                    🔈
+                  </button>
+                </span>
               </div>
-              {hasChildren ? renderDiaryOutlineNodes(task, node.children, depth + 1) : null}
+              {showNodeChildren ? renderDiaryOutlineNodes(task, node.children, depth + 1) : null}
             </div>
           );
         })}
@@ -29317,28 +29416,27 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                             {subjectGroup.tasks.map((task) => {
                               const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
                               const taskOutline = buildDiaryTaskOutline(task);
-                              const taskOutlineChildren = taskOutline[0]?.children || [];
-                              const detailedTaskOutline = showDetailedDiary ? mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline) : [];
+                              const taskRouteKey = getDiaryTaskRouteKey(task);
+                              const detailedTaskOutline = mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline);
+                              const taskOutlineChildren = detailedTaskOutline[0]?.children || taskOutline[0]?.children || [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
-                              const focusSummary = (Array.isArray(task?.taskUnits) ? task.taskUnits : [])
-                                .map((unit) => String(unit?.title || unit?.detail || "").trim())
-                                .filter(Boolean)
-                                .filter((value, index, list) => list.indexOf(value) === index)
-                                .slice(0, 4)
-                                .join(" · ");
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
                               return (
-                                <div key={`today_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} data-task-language={taskLanguage} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
+                                <div key={`today_t_${task.taskKey}`} data-diary-task-key={taskRouteKey} data-task-language={taskLanguage} className={`diary-task-entry${completion ? " completed" : ""}${taskRouteKey === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
                                   <button type="button" className="diary-task-open-btn" onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget)}>
                                     <span className="diary-task-open-copy">
                                       <span className="diary-task-title-row">
                                         <strong>{renderLocalizedTextNode(chapterTitle, language)}</strong>
                                         <button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(chapterTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button>
                                       </span>
-                                      {subsectionTitle && subsectionTitle !== chapterTitle ? <span className="diary-subtitle-line"><span>{renderLocalizedTextNode(subsectionTitle, language)}</span><button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(subsectionTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button></span> : null}
-                                      {focusSummary && focusSummary !== subsectionTitle && focusSummary !== chapterTitle ? <span className="diary-task-summary-line">{renderLocalizedTextNode(focusSummary, language)}</span> : null}
+                                      {subsectionTitle && subsectionTitle !== chapterTitle ? (
+                                        <span className="diary-subtitle-line">
+                                          <span>{renderLocalizedTextNode(subsectionTitle, language)}</span>
+                                          <button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(subsectionTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button>
+                                        </span>
+                                      ) : null}
                                     </span>
                                   </button>
                                   {taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null}
@@ -29384,28 +29482,27 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                             {subjectGroup.tasks.map((task) => {
                               const completion = diaryCompletionLookup[`${task.taskKind}::${task.taskKey}`] || null;
                               const taskOutline = buildDiaryTaskOutline(task);
-                              const taskOutlineChildren = taskOutline[0]?.children || [];
-                              const detailedTaskOutline = showDetailedDiary ? mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline) : [];
+                              const taskRouteKey = getDiaryTaskRouteKey(task);
+                              const detailedTaskOutline = mergeDetailedDiaryRouteMeta(buildDetailedDiaryTaskOutline(task), taskOutline);
+                              const taskOutlineChildren = detailedTaskOutline[0]?.children || taskOutline[0]?.children || [];
                               const chapterTitle = String(task?.lesson?.title || task?.chapterGroup?.activeLesson?.title || task?.title || "").trim();
                               const subsectionTitle = String(task?.taskUnits?.[0]?.sourceMeta?.title || taskOutline[0]?.label || task?.title || "").trim();
-                              const focusSummary = (Array.isArray(task?.taskUnits) ? task.taskUnits : [])
-                                .map((unit) => String(unit?.title || unit?.detail || "").trim())
-                                .filter(Boolean)
-                                .filter((value, index, list) => list.indexOf(value) === index)
-                                .slice(0, 4)
-                                .join(" · ");
                               const allAudioLines = buildDiaryTaskAudioLines(task, taskOutline);
                               const taskLanguage = inferDiaryTaskLanguage(task, taskOutline, language);
                               return (
-                                <div key={`daily_t_${task.taskKey}`} data-diary-task-key={getDiaryTaskRouteKey(task)} data-task-language={taskLanguage} className={`diary-task-entry${completion ? " completed" : ""}${getDiaryTaskRouteKey(task) === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
+                                <div key={`daily_t_${task.taskKey}`} data-diary-task-key={taskRouteKey} data-task-language={taskLanguage} className={`diary-task-entry${completion ? " completed" : ""}${taskRouteKey === String(diaryTaskNavigator?.activeTaskKey || "").trim() ? " active" : ""}`}>
                                   <button type="button" className="diary-task-open-btn" onClick={(event) => handleOpenDiaryTask(task, orderedVisibleDiaryTasks, null, event.currentTarget)}>
                                     <span className="diary-task-open-copy">
                                       <span className="diary-task-title-row">
                                         <strong>{renderLocalizedTextNode(chapterTitle, language)}</strong>
                                         <button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(chapterTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button>
                                       </span>
-                                      {subsectionTitle && subsectionTitle !== chapterTitle ? <span className="diary-subtitle-line"><span>{renderLocalizedTextNode(subsectionTitle, language)}</span><button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(subsectionTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button></span> : null}
-                                      {focusSummary && focusSummary !== subsectionTitle && focusSummary !== chapterTitle ? <span className="diary-task-summary-line">{renderLocalizedTextNode(focusSummary, language)}</span> : null}
+                                      {subsectionTitle && subsectionTitle !== chapterTitle ? (
+                                        <span className="diary-subtitle-line">
+                                          <span>{renderLocalizedTextNode(subsectionTitle, language)}</span>
+                                          <button type="button" className="diary-inline-audio-btn" onClick={(event) => { event.stopPropagation(); speakInlineText(subsectionTitle); }} title={joinLocalizedText("Listen", "سنیں", language)}>🔈</button>
+                                        </span>
+                                      ) : null}
                                     </span>
                                   </button>
                                   {taskOutlineChildren.length ? renderDiaryOutlineNodes(task, taskOutlineChildren, 1) : null}

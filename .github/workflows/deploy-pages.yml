@@ -3,7 +3,7 @@ name: Deploy Pages
 on:
   push:
     branches:
-      - codex/diary-finalization
+      - main
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout diary branch
+      - name: Checkout main branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -61,6 +61,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Deploy site from codex/diary-finalization" || exit 0
+          git commit -m "Deploy site from main" || exit 0
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
           git push --force origin gh-pages
