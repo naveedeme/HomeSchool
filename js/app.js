@@ -59,6 +59,31 @@ function setEditableValueAtPath(source, path = [], nextValue = "") {
   return nextRoot;
 }
 
+function removeEditableValueAtPath(source, path = []) {
+  if (!source || !Array.isArray(path) || !path.length) return source;
+  const nextRoot = cloneSerializableValue(source);
+  if (!nextRoot || typeof nextRoot !== "object") return source;
+  let cursor = nextRoot;
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const segment = path[index];
+    if (cursor?.[segment] === null || typeof cursor?.[segment] === "undefined") {
+      return source;
+    }
+    cursor = cursor[segment];
+  }
+  const finalSegment = path[path.length - 1];
+  if (Array.isArray(cursor) && Number.isInteger(finalSegment)) {
+    if (finalSegment < 0 || finalSegment >= cursor.length) return source;
+    cursor.splice(finalSegment, 1);
+    return nextRoot;
+  }
+  if (cursor && typeof cursor === "object" && Object.prototype.hasOwnProperty.call(cursor, finalSegment)) {
+    delete cursor[finalSegment];
+    return nextRoot;
+  }
+  return source;
+}
+
 function updateEditableLessonDraft(source, descriptor, nextValue = "") {
   if (!source) return source;
   if (Array.isArray(descriptor)) {
@@ -73,6 +98,28 @@ function updateEditableLessonDraft(source, descriptor, nextValue = "") {
       return source;
     }
     sentenceParts[sentenceIndex] = nextValue;
+    return setEditableValueAtPath(source, basePath, sentenceParts.join(" "));
+  }
+  return source;
+}
+
+function removeEditableLessonField(source, descriptor) {
+  if (!source) return source;
+  if (Array.isArray(descriptor)) {
+    return removeEditableValueAtPath(source, descriptor);
+  }
+  if (descriptor && typeof descriptor === "object" && descriptor.type === "paragraphSentence") {
+    const basePath = Array.isArray(descriptor.path) ? descriptor.path : [];
+    const sentenceIndex = Number(descriptor.index);
+    const originalParagraph = String(getEditableValueAtPath(source, basePath) || "");
+    const sentenceParts = splitEditableSentenceParts(originalParagraph);
+    if (!sentenceParts.length || !Number.isInteger(sentenceIndex) || sentenceIndex < 0 || sentenceIndex >= sentenceParts.length) {
+      return source;
+    }
+    sentenceParts.splice(sentenceIndex, 1);
+    if (!sentenceParts.length) {
+      return removeEditableValueAtPath(source, basePath);
+    }
     return setEditableValueAtPath(source, basePath, sentenceParts.join(" "));
   }
   return source;
@@ -125,7 +172,25 @@ function LessonEditableText({
       style={{ ...commonInputStyle, ...inputStyle }}
     />
   );
-  return React.createElement(as, { className, style, dir }, inputElement);
+  const removeLabel = dir === "rtl" ? "یہ حصہ حذف کریں" : "Remove this field";
+  return React.createElement(
+    as,
+    { className, style, dir },
+    <span className={`lesson-edit-field-shell${multiline ? " multiline" : ""}`}>
+      <span className="lesson-edit-field-main">
+        {inputElement}
+      </span>
+      <button
+        type="button"
+        className="lesson-edit-remove-btn"
+        onClick={() => editContext.removeField?.(fieldPath)}
+        title={removeLabel}
+        aria-label={removeLabel}
+      >
+        ×
+      </button>
+    </span>,
+  );
 }
 
 function createEmptyCustomContentState() {
@@ -17392,6 +17457,9 @@ const headerHideTimerRef = useRef(null);
   const handleUpdateLessonEditField = useCallback((fieldPath, nextValue) => {
     setLessonEditDraft((current) => updateEditableLessonDraft(current, fieldPath, nextValue));
   }, []);
+  const handleRemoveLessonEditField = useCallback((fieldPath) => {
+    setLessonEditDraft((current) => removeEditableLessonField(current, fieldPath));
+  }, []);
   const handleOpenLessonEditMode = useCallback(() => {
     if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can edit lessons.", "صرف ایڈمن اسباق میں ترمیم کر سکتے ہیں۔", language), "alert");
@@ -17545,7 +17613,8 @@ const headerHideTimerRef = useRef(null);
     enabled: lessonEditMode,
     draft: lessonEditDraft,
     updateField: handleUpdateLessonEditField,
-  }), [handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
+    removeField: handleRemoveLessonEditField,
+  }), [handleRemoveLessonEditField, handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
   useEffect(() => {
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);

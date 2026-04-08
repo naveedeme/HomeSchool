@@ -54,6 +54,30 @@
     cursor[path[path.length - 1]] = nextValue;
     return nextRoot;
   }
+  function removeEditableValueAtPath(source, path = []) {
+    if (!source || !Array.isArray(path) || !path.length) return source;
+    const nextRoot = cloneSerializableValue(source);
+    if (!nextRoot || typeof nextRoot !== "object") return source;
+    let cursor = nextRoot;
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const segment = path[index];
+      if ((cursor == null ? void 0 : cursor[segment]) === null || typeof (cursor == null ? void 0 : cursor[segment]) === "undefined") {
+        return source;
+      }
+      cursor = cursor[segment];
+    }
+    const finalSegment = path[path.length - 1];
+    if (Array.isArray(cursor) && Number.isInteger(finalSegment)) {
+      if (finalSegment < 0 || finalSegment >= cursor.length) return source;
+      cursor.splice(finalSegment, 1);
+      return nextRoot;
+    }
+    if (cursor && typeof cursor === "object" && Object.prototype.hasOwnProperty.call(cursor, finalSegment)) {
+      delete cursor[finalSegment];
+      return nextRoot;
+    }
+    return source;
+  }
   function updateEditableLessonDraft(source, descriptor, nextValue = "") {
     if (!source) return source;
     if (Array.isArray(descriptor)) {
@@ -68,6 +92,27 @@
         return source;
       }
       sentenceParts[sentenceIndex] = nextValue;
+      return setEditableValueAtPath(source, basePath, sentenceParts.join(" "));
+    }
+    return source;
+  }
+  function removeEditableLessonField(source, descriptor) {
+    if (!source) return source;
+    if (Array.isArray(descriptor)) {
+      return removeEditableValueAtPath(source, descriptor);
+    }
+    if (descriptor && typeof descriptor === "object" && descriptor.type === "paragraphSentence") {
+      const basePath = Array.isArray(descriptor.path) ? descriptor.path : [];
+      const sentenceIndex = Number(descriptor.index);
+      const originalParagraph = String(getEditableValueAtPath(source, basePath) || "");
+      const sentenceParts = splitEditableSentenceParts(originalParagraph);
+      if (!sentenceParts.length || !Number.isInteger(sentenceIndex) || sentenceIndex < 0 || sentenceIndex >= sentenceParts.length) {
+        return source;
+      }
+      sentenceParts.splice(sentenceIndex, 1);
+      if (!sentenceParts.length) {
+        return removeEditableValueAtPath(source, basePath);
+      }
       return setEditableValueAtPath(source, basePath, sentenceParts.join(" "));
     }
     return source;
@@ -121,7 +166,25 @@
         style: { ...commonInputStyle, ...inputStyle }
       }
     );
-    return React.createElement(as, { className, style, dir }, inputElement);
+    const removeLabel = dir === "rtl" ? "\u06CC\u06C1 \u062D\u0635\u06C1 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA" : "Remove this field";
+    return React.createElement(
+      as,
+      { className, style, dir },
+      /* @__PURE__ */ React.createElement("span", { className: `lesson-edit-field-shell${multiline ? " multiline" : ""}` }, /* @__PURE__ */ React.createElement("span", { className: "lesson-edit-field-main" }, inputElement), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "lesson-edit-remove-btn",
+          onClick: () => {
+            var _a;
+            return (_a = editContext.removeField) == null ? void 0 : _a.call(editContext, fieldPath);
+          },
+          title: removeLabel,
+          "aria-label": removeLabel
+        },
+        "\xD7"
+      ))
+    );
   }
   function createEmptyCustomContentState() {
     return {
@@ -14793,6 +14856,9 @@ ${marker} `);
     const handleUpdateLessonEditField = useCallback((fieldPath, nextValue) => {
       setLessonEditDraft((current) => updateEditableLessonDraft(current, fieldPath, nextValue));
     }, []);
+    const handleRemoveLessonEditField = useCallback((fieldPath) => {
+      setLessonEditDraft((current) => removeEditableLessonField(current, fieldPath));
+    }, []);
     const handleOpenLessonEditMode = useCallback(() => {
       if (!canAdministerLessonLibrary) {
         showAppToast(joinLocalizedText("Only admins can edit lessons.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0627\u0633\u0628\u0627\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -14948,8 +15014,9 @@ ${marker} `);
     const lessonEditContextValue = useMemo(() => ({
       enabled: lessonEditMode,
       draft: lessonEditDraft,
-      updateField: handleUpdateLessonEditField
-    }), [handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
+      updateField: handleUpdateLessonEditField,
+      removeField: handleRemoveLessonEditField
+    }), [handleRemoveLessonEditField, handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
     useEffect(() => {
       setChapterSelectionMode(false);
       setSelectedChapterKeys([]);
