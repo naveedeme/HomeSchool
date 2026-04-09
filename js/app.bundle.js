@@ -13043,18 +13043,18 @@ ${marker} `);
     const getEffectiveSubjectActivation = useCallback((subjectId, targetGrade) => resolveScopedActivation(visibleContentActivations, {
       activationType: "subject",
       subject: subjectId,
-      schoolId: activeInstitutionSchoolIdResolved,
+      schoolId: String(activeInstitutionSchoolId || "").trim(),
       targetGrade,
       targetStudentEmail: scopedContentActivationViewerEmail
-    }), [activeInstitutionSchoolIdResolved, scopedContentActivationViewerEmail, visibleContentActivations]);
+    }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
     const getEffectiveLessonActivation = useCallback((subjectId, targetGrade, lessonKey) => resolveScopedActivation(visibleContentActivations, {
       activationType: "lesson",
       subject: subjectId,
       lessonKey,
-      schoolId: activeInstitutionSchoolIdResolved,
+      schoolId: String(activeInstitutionSchoolId || "").trim(),
       targetGrade,
       targetStudentEmail: scopedContentActivationViewerEmail
-    }), [activeInstitutionSchoolIdResolved, scopedContentActivationViewerEmail, visibleContentActivations]);
+    }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
     const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
       var _a2, _b2;
       const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
@@ -13187,7 +13187,7 @@ ${marker} `);
     );
     const activationStudentOptions = useMemo(() => {
       const map = new Map((Array.isArray(linkedStudentOptions) ? linkedStudentOptions : []).map((entry) => [entry.studentEmail, entry]));
-      safeSchoolMemberships.filter((entry) => entry.status === "active").filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).filter((entry) => String(entry.role || "").trim().toLowerCase() === "student").forEach((entry) => {
+      safeSchoolMemberships.filter((entry) => entry.status === "active").filter((entry) => !activeInstitutionSchoolId || entry.schoolId === activeInstitutionSchoolId).filter((entry) => String(entry.role || "").trim().toLowerCase() === "student").forEach((entry) => {
         const studentEmail = String(entry.memberEmail || "").trim().toLowerCase();
         if (!studentEmail) return;
         const firstScopedGrade = Array.isArray(entry.gradeScope) ? Number(entry.gradeScope[0]) : null;
@@ -13203,7 +13203,7 @@ ${marker} `);
         if ((left.studentGrade || 999) !== (right.studentGrade || 999)) return (left.studentGrade || 999) - (right.studentGrade || 999);
         return String(left.studentEmail || "").localeCompare(String(right.studentEmail || ""));
       });
-    }, [activeInstitutionSchoolIdResolved, linkedStudentOptions, safeSchoolMemberships]);
+    }, [activeInstitutionSchoolId, linkedStudentOptions, safeSchoolMemberships]);
     useEffect(() => {
       if (contentActivationDraftScope !== "student") return;
       if (!activationStudentOptions.length) return;
