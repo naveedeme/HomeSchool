@@ -13627,8 +13627,8 @@ ${marker} `);
       const activeSubjectSource = (subjectActivation == null ? void 0 : subjectActivation.sourceKind) === "published_subject" ? publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null : null;
       const sourceChapters = useCurriculumPack ? curriculumPackContext.entries : activeSubjectSource ? materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade) : [];
       const baseLessons = useCurriculumPack ? sourceChapters.map((entry) => entry.lesson).filter(Boolean) : activeSubjectSource ? sourceChapters.map((entry) => entry.lesson).filter(Boolean) : getLessons(subjectId, targetGrade) || [];
-      const customLessons = useCurriculumPack ? [] : activeSubjectSource ? [] : ((_b2 = customContentState.lessonsBySubjectGrade) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
-      const publishedLessons = useCurriculumPack ? [] : activeSubjectSource ? [] : ((_c2 = publishedContentState.lessonsBySubjectGrade) == null ? void 0 : _c2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
+      const customLessons = ((_b2 = customContentState.lessonsBySubjectGrade) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
+      const publishedLessons = ((_c2 = publishedContentState.lessonsBySubjectGrade) == null ? void 0 : _c2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
       const mergedGroups = buildChapterVariantGroups({
         subjectId,
         targetGrade,
@@ -13640,7 +13640,11 @@ ${marker} `);
         currentUserId: supabaseAuthState.userId,
         archivedVariantKeys: archivedLessonVariantKeys
       });
-      const activationAdjustedGroups = useCurriculumPack ? mergedGroups : mergedGroups.map((group) => {
+      const scopedSourceAdjustedGroups = useCurriculumPack || activeSubjectSource ? mergedGroups.map((group) => {
+        const scopedBaseVariant = group.variants.find((variant) => variant.sourceType === "builtin") || null;
+        return scopedBaseVariant ? { ...group, activeVariant: scopedBaseVariant, activeLesson: scopedBaseVariant.lesson } : group;
+      }) : mergedGroups;
+      const activationAdjustedGroups = useCurriculumPack ? scopedSourceAdjustedGroups : scopedSourceAdjustedGroups.map((group) => {
         var _a3, _b3, _c3, _d2, _e2, _f2, _g2;
         const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, group.canonicalLessonKey);
         if (!lessonActivation) return group;

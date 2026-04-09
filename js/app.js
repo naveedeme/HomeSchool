@@ -16242,12 +16242,8 @@ const headerHideTimerRef = useRef(null);
       : (activeSubjectSource
         ? sourceChapters.map((entry) => entry.lesson).filter(Boolean)
         : (getLessons(subjectId, targetGrade) || []));
-    const customLessons = useCurriculumPack
-      ? []
-      : (activeSubjectSource ? [] : (customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || []));
-    const publishedLessons = useCurriculumPack
-      ? []
-      : (activeSubjectSource ? [] : (publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || []));
+    const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
+    const publishedLessons = publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
     const mergedGroups = buildChapterVariantGroups({
       subjectId,
       targetGrade,
@@ -16259,7 +16255,13 @@ const headerHideTimerRef = useRef(null);
       currentUserId: supabaseAuthState.userId,
       archivedVariantKeys: archivedLessonVariantKeys,
     });
-    const activationAdjustedGroups = useCurriculumPack ? mergedGroups : mergedGroups.map((group) => {
+    const scopedSourceAdjustedGroups = (useCurriculumPack || activeSubjectSource) ? mergedGroups.map((group) => {
+      const scopedBaseVariant = group.variants.find((variant) => variant.sourceType === "builtin") || null;
+      return scopedBaseVariant
+        ? { ...group, activeVariant: scopedBaseVariant, activeLesson: scopedBaseVariant.lesson }
+        : group;
+    }) : mergedGroups;
+    const activationAdjustedGroups = useCurriculumPack ? scopedSourceAdjustedGroups : scopedSourceAdjustedGroups.map((group) => {
       const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, group.canonicalLessonKey);
       if (!lessonActivation) return group;
       if (lessonActivation.sourceKind === "builtin_lesson") {
