@@ -15684,6 +15684,7 @@ const headerHideTimerRef = useRef(null);
   const supabaseCloudRealtimeChannelRef = useRef(null);
   const supabasePublishedContentRealtimeChannelRef = useRef(null);
   const supabaseContentRelationshipRealtimeChannelRef = useRef(null);
+  const curriculumStartupRefreshKeyRef = useRef("");
   const dictionaryHydratedFromDbRef = useRef(false);
   const dictionaryPersistedSnapshotRef = useRef(normalizeWordMeaningCache(stored?.wordMeaningCache || {}));
   const skipNextDictionaryQueueRef = useRef(false);
@@ -24011,6 +24012,28 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     });
     return undefined;
   }, [dbLoaded]);
+
+  useEffect(() => {
+    if (!dbLoaded) return undefined;
+    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
+    if (!settings.url || !settings.anonKey) return undefined;
+    const refreshKey = `${String(supabaseAuthState.userId || "").trim().toLowerCase() || "anon"}::${Number(Boolean(dbLoaded))}`;
+    if (curriculumStartupRefreshKeyRef.current === refreshKey) return undefined;
+    curriculumStartupRefreshKeyRef.current = refreshKey;
+    let cancelled = false;
+    (async () => {
+      try {
+        await refreshPublishedContentState();
+        if (cancelled) return;
+        await refreshContentRelationshipStateRef.current();
+      } catch (error) {
+        console.log("Unable to perform background curriculum refresh on app load:", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dbLoaded, refreshPublishedContentState, supabaseAuthState.userId, supabaseDictionarySync]);
 
   useEffect(() => {
     if (publishedContentSnapshotPersistTimerRef.current) {
@@ -32567,6 +32590,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               )}
             </button>
           ) : null}
+          <button type="button" className="ghost-cta" onClick={handleRefreshCurriculumContent} disabled={contentRelationshipBusy}>
+            {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
+          </button>
           {canExportContent ? (
             <button type="button" className={`ghost-cta${chapterSelectionMode ? " active" : ""}`} onClick={handleToggleChapterSelectionMode}>
               {renderLocalizedTextNode(
