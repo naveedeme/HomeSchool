@@ -2958,6 +2958,32 @@ function normalizeStoredContentRelationshipSnapshot(snapshot = null) {
   };
 }
 
+function hasMeaningfulContentRelationshipSnapshot(snapshot = null) {
+  const normalized = normalizeStoredContentRelationshipSnapshot(snapshot);
+  return Boolean(
+    normalized.lastUpdatedAt
+    || normalized.systemSettings.length
+    || normalized.curriculumPacks.length
+    || normalized.curriculumPackSubjects.length
+    || normalized.curriculumPackLessons.length
+    || normalized.curriculumScopeAssignments.length
+    || normalized.schools.length
+    || normalized.memberships.length
+    || normalized.parentLinks.length
+    || normalized.links.length
+    || normalized.contentActivations.length
+    || normalized.publishedSubjectSources.length
+    || normalized.lessonArchives.length
+    || normalized.assignments.length
+    || normalized.diaryEntries.length
+    || normalized.diaryCompletions.length
+    || normalized.autoDiaryOverrides.length
+    || normalized.testTemplates.length
+    || normalized.weeklyTestAssignments.length
+    || normalized.weeklyTestResults.length
+  );
+}
+
 function normalizeLessonArchiveRecord(raw) {
   const archiveId = String(raw?.archive_id || raw?.archiveId || "").trim();
   const subject = String(raw?.subject || "").trim();
@@ -16213,7 +16239,7 @@ const headerHideTimerRef = useRef(null);
     const safeSubjectId = String(subjectId || "").trim().toLowerCase();
     const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
     const assignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
-      schoolId: String(activeInstitutionSchoolId || "").trim(),
+      schoolId: String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim(),
       targetGrade,
       targetStudentEmail: scopedContentActivationViewerEmail,
     });
@@ -16238,22 +16264,22 @@ const headerHideTimerRef = useRef(null);
       .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lesson?.title || left.lessonKey).localeCompare(String(right.lesson?.title || right.lessonKey)));
     const hasCoverage = subjectRows.some((entry) => !entry.isHidden) || entries.length > 0;
     return { assignment, pack, subjectRows, lessonRows, entries, hasCoverage };
-  }, [activeInstitutionSchoolId, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
+  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
   const getEffectiveSubjectActivation = useCallback((subjectId, targetGrade) => resolveScopedActivation(visibleContentActivations, {
     activationType: "subject",
     subject: subjectId,
-    schoolId: String(activeInstitutionSchoolId || "").trim(),
+    schoolId: String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim(),
     targetGrade,
     targetStudentEmail: scopedContentActivationViewerEmail,
-  }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
+  }), [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, scopedContentActivationViewerEmail, visibleContentActivations]);
   const getEffectiveLessonActivation = useCallback((subjectId, targetGrade, lessonKey) => resolveScopedActivation(visibleContentActivations, {
     activationType: "lesson",
     subject: subjectId,
     lessonKey,
-    schoolId: String(activeInstitutionSchoolId || "").trim(),
+    schoolId: String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim(),
     targetGrade,
     targetStudentEmail: scopedContentActivationViewerEmail,
-  }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
+  }), [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, scopedContentActivationViewerEmail, visibleContentActivations]);
   const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
     const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
     const useCurriculumPack = Boolean(curriculumPackContext.assignment?.packId) && (curriculumPackContext.entries.length > 0 || !curriculumRuntimeSettings.allowBuiltinFallback);
@@ -16358,7 +16384,7 @@ const headerHideTimerRef = useRef(null);
   const allSubjects = useMemo(() => {
     const customSubjects = Object.values(customContentState.subjectsById || {});
     const currentAssignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
-      schoolId: String(activeInstitutionSchoolId || "").trim(),
+      schoolId: String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim(),
       targetGrade: grade,
       targetStudentEmail: scopedContentActivationViewerEmail,
     });
@@ -16373,7 +16399,7 @@ const headerHideTimerRef = useRef(null);
     const packSubjects = buildCurriculumPackSubjectDefinitions(packSubjectRows, packLessonRows, SUBJECTS);
     const baseSubjects = curriculumRuntimeSettings.allowBuiltinFallback ? mergeSubjectCollections(SUBJECTS, packSubjects) : packSubjects;
     return mergeSubjectCollections(baseSubjects, customSubjects);
-  }, [activeInstitutionSchoolId, curriculumPackSubjectRowsByPack, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.subjectsById, grade, scopedContentActivationViewerEmail, visibleCurriculumPackLessons, visibleCurriculumScopeAssignments]);
+  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, curriculumPackSubjectRowsByPack, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.subjectsById, grade, scopedContentActivationViewerEmail, visibleCurriculumPackLessons, visibleCurriculumScopeAssignments]);
   const contentDataLoader = useMemo(() => ({
     ...window.HomeSchoolData,
     SUBJECTS: allSubjects,
@@ -17442,9 +17468,13 @@ const headerHideTimerRef = useRef(null);
     return selectedLessonVisibleAssignments.filter((assignment) => String(assignment.contentId || "").trim() === safeContentId);
   }, [selectedLessonSourceScopeSummary.contentId, selectedLessonVisibleAssignments]);
   const refreshContentRelationshipStateRef = useRef(async () => createEmptyContentRelationshipState());
+  const curriculumSelectionReconcileModeRef = useRef("idle");
   const ensureSupabaseClientRef = useRef(() => {
     throw new Error("Supabase client not ready");
   });
+  const requestCurriculumSelectionReconcile = useCallback(() => {
+    curriculumSelectionReconcileModeRef.current = "apply";
+  }, []);
   const archiveMemberAuthoredContent = useCallback(async (client, schoolId, memberEmail) => {
     const safeMemberEmail = String(memberEmail || "").trim().toLowerCase();
     const safeSchoolId = String(schoolId || "").trim();
@@ -17758,6 +17788,7 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("The selected curriculum pack could not be found.", "منتخب شدہ نصابی پیک نہیں ملا۔", language), "alert");
       return;
     }
+    requestCurriculumSelectionReconcile();
     setContentRelationshipBusy(true);
     try {
       const client = ensureSupabaseClientRef.current();
@@ -17791,7 +17822,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [canManageContentAccess, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, showAppToast, supabaseAuthState.userId]);
+  }, [canManageContentAccess, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
   const handleSyncCurriculumPackWithSchool = useCallback(async () => {
     if (!canManageInstitution && !canManageContentAccess) {
       showAppToast(joinLocalizedText("Your role cannot sync curriculum for a school.", "آپ کا کردار اسکول کے لیے نصاب ہم آہنگ نہیں کر سکتا۔", language), "alert");
@@ -17816,6 +17847,7 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("The selected curriculum pack could not be found.", "منتخب شدہ نصابی پیک نہیں ملا۔", language), "alert");
       return;
     }
+    requestCurriculumSelectionReconcile();
     setContentRelationshipBusy(true);
     try {
       const client = ensureSupabaseClientRef.current();
@@ -17850,7 +17882,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, curriculumPackLookup, curriculumSchoolPackDraftId, language, showAppToast, supabaseAuthState.userId]);
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, curriculumPackLookup, curriculumSchoolPackDraftId, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
   const handleResetSchoolCurriculumToGlobal = useCallback(async () => {
     if (!canManageInstitution && !canManageContentAccess) {
       showAppToast(joinLocalizedText("Your role cannot reset school curriculum inheritance.", "آپ کا کردار اسکول کے نصابی وراثت کو ری سیٹ نہیں کر سکتا۔", language), "alert");
@@ -17913,6 +17945,7 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("The selected curriculum pack could not be found.", "منتخب شدہ نصابی پیک نہیں ملا۔", language), "alert");
       return;
     }
+    requestCurriculumSelectionReconcile();
     setContentRelationshipBusy(true);
     try {
       const client = ensureSupabaseClientRef.current();
@@ -17948,7 +17981,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradePackDraftId, curriculumGradeTarget, curriculumPackLookup, language, showAppToast, supabaseAuthState.userId]);
+  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradePackDraftId, curriculumGradeTarget, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
   const handleResetGradeCurriculumToInherited = useCallback(async () => {
     if (!canManageScopedCurriculum) {
       showAppToast(joinLocalizedText("Your role cannot reset grade curriculum inheritance.", "آپ کا کردار جماعت کے نصابی وراثت کو ری سیٹ نہیں کر سکتا۔", language), "alert");
@@ -18018,6 +18051,7 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("The selected curriculum pack could not be found.", "منتخب شدہ نصابی پیک نہیں ملا۔", language), "alert");
       return;
     }
+    requestCurriculumSelectionReconcile();
     setContentRelationshipBusy(true);
     try {
       const client = ensureSupabaseClientRef.current();
@@ -18056,7 +18090,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, curriculumLearnerPackDraftId, curriculumPackLookup, language, showAppToast, supabaseAuthState.userId]);
+  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, curriculumLearnerPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
   const handleResetLearnerCurriculumToInherited = useCallback(async () => {
     if (!canManageScopedCurriculum) {
       showAppToast(joinLocalizedText("Your role cannot reset learner curriculum inheritance.", "آپ کا کردار سیکھنے والے کی نصابی وراثت کو ری سیٹ نہیں کر سکتا۔", language), "alert");
@@ -18137,6 +18171,7 @@ const headerHideTimerRef = useRef(null);
       throw new Error("Choose a learner first.");
     }
     const client = ensureSupabaseClientRef.current();
+    requestCurriculumSelectionReconcile();
     const nowIso = new Date().toISOString();
     const optimisticPacks = [];
     const optimisticPackSubjects = [];
@@ -18399,7 +18434,7 @@ const headerHideTimerRef = useRef(null);
     refreshContentRelationshipStateRef.current().catch((error) => {
       console.log("Unable to refresh curriculum relationship state after sync:", error);
     });
-  }, [accessibleSchools, activeInstitutionSchoolIdResolved, allSubjects, canManageContentAccess, contentActivationDraftSchoolId, contentActivationDraftStudentEmail, contentIdentityEmail, curriculumLearnerEmail, curriculumPackLookup, ensureSupabaseClientRef, refreshContentRelationshipStateRef, subjectLookup, visibleCurriculumPackLessons, visibleCurriculumPackSubjects, visibleCurriculumPacks, visibleCurriculumScopeAssignments]);
+  }, [accessibleSchools, activeInstitutionSchoolIdResolved, allSubjects, canManageContentAccess, contentActivationDraftSchoolId, contentActivationDraftStudentEmail, contentIdentityEmail, curriculumLearnerEmail, curriculumPackLookup, ensureSupabaseClientRef, refreshContentRelationshipStateRef, requestCurriculumSelectionReconcile, subjectLookup, visibleCurriculumPackLessons, visibleCurriculumPackSubjects, visibleCurriculumPacks, visibleCurriculumScopeAssignments]);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -20536,9 +20571,21 @@ const headerHideTimerRef = useRef(null);
   }, [myChapterArrangeSubjectOptions, myChaptersArrangeMode, myChaptersArrangeSubjectId, selectedSubject?.id]);
   useEffect(() => {
     if (!selectedLesson || !selectedSubject || !selectedLessonChapterGroup?.activeLesson) return;
+    const currentCanonicalKey = getCanonicalLessonKeyForLesson(selectedLesson);
+    const nextCanonicalKey = getCanonicalLessonKeyForLesson(selectedLessonChapterGroup.activeLesson);
+    if (currentCanonicalKey && nextCanonicalKey && currentCanonicalKey !== nextCanonicalKey) {
+      curriculumSelectionReconcileModeRef.current = "idle";
+      setSelectedLesson(selectedLessonChapterGroup.activeLesson);
+      return;
+    }
     const currentIdentity = getLessonVariantIdentity(selectedLesson);
     const nextIdentity = getLessonVariantIdentity(selectedLessonChapterGroup.activeLesson);
-    if (currentIdentity === nextIdentity && selectedLesson === selectedLessonChapterGroup.activeLesson) return;
+    if (currentIdentity === nextIdentity && selectedLesson === selectedLessonChapterGroup.activeLesson) {
+      curriculumSelectionReconcileModeRef.current = "idle";
+      return;
+    }
+    if (curriculumSelectionReconcileModeRef.current !== "apply") return;
+    curriculumSelectionReconcileModeRef.current = "idle";
     setSelectedLesson(selectedLessonChapterGroup.activeLesson);
   }, [selectedLesson, selectedLessonChapterGroup, selectedSubject]);
   useEffect(() => {
@@ -22731,10 +22778,21 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       return createEmptyPublishedContentState();
     }
   }, [ensureSupabaseClient, supabaseDictionarySync]);
+  const getRetainedContentRelationshipState = useCallback(() => {
+    const currentSnapshot = normalizeStoredContentRelationshipSnapshot(contentRelationshipState || {});
+    if (hasMeaningfulContentRelationshipSnapshot(currentSnapshot)) {
+      return { ...currentSnapshot, loaded: true };
+    }
+    const storedSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
+    if (hasMeaningfulContentRelationshipSnapshot(storedSnapshot)) {
+      return { ...storedSnapshot, loaded: true };
+    }
+    return { ...createEmptyContentRelationshipState(), loaded: true };
+  }, [contentRelationshipState]);
   const refreshContentRelationshipState = useCallback(async (sessionOverride = null) => {
     const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
     if (!settings.url || !settings.anonKey) {
-      const nextState = { ...createEmptyContentRelationshipState(), loaded: true };
+      const nextState = getRetainedContentRelationshipState();
       setContentRelationshipState(nextState);
       return nextState;
     }
@@ -22743,7 +22801,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       const session = sessionOverride || (await client.auth.getSession())?.data?.session || null;
       const userEmail = String(session?.user?.email || contentIdentityEmail || "").trim().toLowerCase();
       if (!session?.user?.id || !userEmail) {
-        const nextState = { ...createEmptyContentRelationshipState(), loaded: true };
+        const nextState = getRetainedContentRelationshipState();
         setContentRelationshipState(nextState);
         return nextState;
       }
@@ -23181,12 +23239,33 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       return mergedState;
     } catch (error) {
       console.log("Unable to refresh institutional relationships:", error);
-      const nextState = { ...createEmptyContentRelationshipState(), loaded: true };
+      const nextState = getRetainedContentRelationshipState();
       setContentRelationshipState(nextState);
       return nextState;
     }
-  }, [activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, canAssignContent, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, contentRelationshipState.lessonArchives, ensureSupabaseClient, grade, supabaseDictionarySync]);
+  }, [activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, canAssignContent, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, ensureSupabaseClient, getRetainedContentRelationshipState, grade, supabaseDictionarySync]);
   refreshContentRelationshipStateRef.current = refreshContentRelationshipState;
+  const handleRefreshCurriculumContent = useCallback(async () => {
+    const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
+    if (!settings.url || !settings.anonKey) {
+      showAppToast(joinLocalizedText("Supabase sync is not configured.", "Supabase ربط ترتیب نہیں دیا گیا۔", language), "alert");
+      return;
+    }
+    requestCurriculumSelectionReconcile();
+    setContentRelationshipBusy(true);
+    try {
+      await refreshPublishedContentState();
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Curriculum refreshed.", "نصاب تازہ کر دیا گیا۔", language), "check");
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(`Unable to refresh curriculum: ${error?.message || error}`, `نصاب تازہ نہیں ہو سکا: ${error?.message || error}`, language),
+        "alert",
+      );
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [language, refreshPublishedContentState, requestCurriculumSelectionReconcile, showAppToast, supabaseDictionarySync]);
   const handleSaveTeacherStudentLink = useCallback(async () => {
     if (!canManageStudentLinks) {
       showAppToast(joinLocalizedText("Your content role cannot manage teacher-student links.", "آپ کے مواد والے کردار کو استاد اور طالب علم کے روابط سنبھالنے کی اجازت نہیں۔", language), "alert");
@@ -23813,7 +23892,16 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   useEffect(() => {
     if (!dbLoaded) return undefined;
     if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
-      setContentRelationshipState((current) => ({ ...createEmptyContentRelationshipState(), loaded: true }));
+      setContentRelationshipState((current) => {
+        const normalizedCurrent = normalizeStoredContentRelationshipSnapshot(current || {});
+        if (hasMeaningfulContentRelationshipSnapshot(normalizedCurrent)) {
+          return { ...normalizedCurrent, loaded: true };
+        }
+        const storedSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
+        return hasMeaningfulContentRelationshipSnapshot(storedSnapshot)
+          ? { ...storedSnapshot, loaded: true }
+          : { ...createEmptyContentRelationshipState(), loaded: true };
+      });
       return undefined;
     }
     let cancelled = false;
@@ -23829,7 +23917,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     return () => {
       cancelled = true;
     };
-  }, [dbLoaded, grade, refreshContentRelationshipState, supabaseAuthState.email, supabaseAuthState.userId, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
+  }, [dbLoaded, refreshContentRelationshipState, supabaseAuthState.userId, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
 
   useEffect(() => {
     const snapshot = {
@@ -30900,15 +30988,23 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   >
                     {renderLocalizedTextNode(joinLocalizedText("Create Built-in Seed Pack", "بنیادی سیڈ پیک بنائیں", language), language)}
                   </button>
-                  <button
-                    type="button"
-                    className="ghost-cta"
-                    onClick={handleSyncCurriculumPackGlobally}
-                    disabled={contentRelationshipBusy || !curriculumGlobalPackDraftId}
-                  >
-                    {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="ghost-cta"
+                  onClick={handleSyncCurriculumPackGlobally}
+                  disabled={contentRelationshipBusy || !curriculumGlobalPackDraftId}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-cta"
+                  onClick={handleRefreshCurriculumContent}
+                  disabled={contentRelationshipBusy}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
+                </button>
+              </div>
               ) : null}
               <div className="chapter-badge-row" style={{ marginTop: 12 }}>
                 <button
@@ -32473,6 +32569,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   {renderLocalizedTextNode(subjectSourcePublishBusy ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language) : joinLocalizedText("Publish Subject Source", "مضمون ماخذ شائع کریں", language), language)}
                 </button>
               ) : null}
+              <button type="button" className="ghost-cta" onClick={handleRefreshCurriculumContent} disabled={contentRelationshipBusy}>
+                {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
+              </button>
               <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("school")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
                 {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
               </button>
@@ -32786,6 +32885,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     )}
                   </button>
                 ) : null}
+                <button type="button" className="ghost-cta" onClick={handleRefreshCurriculumContent} disabled={contentRelationshipBusy}>
+                  {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
+                </button>
                 <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
                   {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
                 </button>
