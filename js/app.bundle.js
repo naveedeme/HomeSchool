@@ -13751,6 +13751,20 @@ ${marker} `);
       const safeRows = Array.isArray(contentRelationshipState.publishedSubjectSources) ? contentRelationshipState.publishedSubjectSources : [];
       return safeRows.map((entry) => normalizePublishedSubjectSourceRecord(entry)).filter(Boolean).filter((entry) => entry.isPublished && !entry.deletedAt).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
     }, [contentRelationshipState.publishedSubjectSources]);
+    const visibleSystemSettings = useMemo(() => {
+      const safeRows = Array.isArray(contentRelationshipState.systemSettings) ? contentRelationshipState.systemSettings : [];
+      return safeRows.map((entry) => normalizeSystemSettingRecord(entry)).filter(Boolean).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+    }, [contentRelationshipState.systemSettings]);
+    const curriculumRuntimeSettings = useMemo(() => {
+      const runtimeSetting = visibleSystemSettings.find((entry) => entry.settingKey === "curriculum_runtime") || null;
+      return normalizeCurriculumRuntimeSettings((runtimeSetting == null ? void 0 : runtimeSetting.settingValue) || runtimeSetting);
+    }, [visibleSystemSettings]);
+    const builtinLessonLayerState = useMemo(() => {
+      const layerSetting = visibleSystemSettings.find((entry) => entry.settingKey === "builtin_lesson_layer") || null;
+      const nextState = normalizeBuiltinLessonLayerState((layerSetting == null ? void 0 : layerSetting.settingValue) || layerSetting);
+      setRuntimeBuiltinLessonLayerState(nextState);
+      return nextState;
+    }, [visibleSystemSettings]);
     const archivedLessonVariantKeys = useMemo(() => {
       const nextKeys = new Set(
         visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId))
@@ -13794,20 +13808,6 @@ ${marker} `);
       });
       return lookup;
     }, [visiblePublishedSubjectSources]);
-    const visibleSystemSettings = useMemo(() => {
-      const safeRows = Array.isArray(contentRelationshipState.systemSettings) ? contentRelationshipState.systemSettings : [];
-      return safeRows.map((entry) => normalizeSystemSettingRecord(entry)).filter(Boolean).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
-    }, [contentRelationshipState.systemSettings]);
-    const curriculumRuntimeSettings = useMemo(() => {
-      const runtimeSetting = visibleSystemSettings.find((entry) => entry.settingKey === "curriculum_runtime") || null;
-      return normalizeCurriculumRuntimeSettings((runtimeSetting == null ? void 0 : runtimeSetting.settingValue) || runtimeSetting);
-    }, [visibleSystemSettings]);
-    const builtinLessonLayerState = useMemo(() => {
-      const layerSetting = visibleSystemSettings.find((entry) => entry.settingKey === "builtin_lesson_layer") || null;
-      const nextState = normalizeBuiltinLessonLayerState((layerSetting == null ? void 0 : layerSetting.settingValue) || layerSetting);
-      setRuntimeBuiltinLessonLayerState(nextState);
-      return nextState;
-    }, [visibleSystemSettings]);
     const visibleCurriculumPacks = useMemo(() => {
       const safeRows = Array.isArray(contentRelationshipState.curriculumPacks) ? contentRelationshipState.curriculumPacks : [];
       return safeRows.map((entry) => normalizeCurriculumPackRecord(entry)).filter(Boolean).filter((entry) => entry.status !== "archived").sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
