@@ -122,6 +122,12 @@
     }
     return source;
   }
+  function normalizeGradeOptionIds(list = []) {
+    return (Array.isArray(list) ? list : []).map((entry) => {
+      var _a, _b, _c;
+      return typeof entry === "object" && entry !== null ? Number((_c = (_b = (_a = entry.id) != null ? _a : entry.value) != null ? _b : entry.grade) != null ? _c : entry.name) : Number(entry);
+    }).filter((value) => Number.isFinite(value) && value >= 1 && value <= 12).filter((value, index, values) => values.indexOf(value) === index).sort((left, right) => left - right);
+  }
   function LessonEditableText({
     value,
     fieldPath = null,
@@ -13556,18 +13562,19 @@ ${marker} `);
       () => Boolean(canManageContentAccess || canAdministerLessonLibrary),
       [canAdministerLessonLibrary, canManageContentAccess]
     );
+    const allGradeOptionIds = useMemo(() => normalizeGradeOptionIds(GRADES), []);
     const contentActivationScopedSchoolId = useMemo(() => canManageContentAccess ? String(contentActivationDraftSchoolId || activeInstitutionSchoolIdResolved || "").trim() : String(activeInstitutionSchoolIdResolved || "").trim(), [activeInstitutionSchoolIdResolved, canManageContentAccess, contentActivationDraftSchoolId]);
     const contentActivationScopedMemberships = useMemo(
       () => safeSchoolMemberships.filter((entry) => entry.status === "active" && (!contentActivationScopedSchoolId || entry.schoolId === contentActivationScopedSchoolId)),
       [contentActivationScopedSchoolId, safeSchoolMemberships]
     );
     const contentActivationScopedGradeOptions = useMemo(() => {
-      if (canManageContentAccess) return GRADES;
+      if (canManageContentAccess) return allGradeOptionIds;
       const scopedGrades = Array.from(new Set(
         contentActivationScopedMemberships.flatMap((entry) => Array.isArray(entry.gradeScope) ? entry.gradeScope : []).map((value) => Number(value)).filter((value) => Number.isFinite(value) && value >= 1 && value <= 12)
       )).sort((left, right) => left - right);
-      return scopedGrades.length ? scopedGrades : GRADES;
-    }, [canManageContentAccess, contentActivationScopedMemberships]);
+      return scopedGrades.length ? scopedGrades : allGradeOptionIds;
+    }, [allGradeOptionIds, canManageContentAccess, contentActivationScopedMemberships]);
     const contentActivationResolvedGrade = useMemo(() => {
       const safeDraft = String(contentActivationDraftGrade || "").trim().toLowerCase();
       if (safeDraft === "all") return null;

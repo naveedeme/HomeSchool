@@ -130,6 +130,14 @@ function removeEditableLessonField(source, descriptor) {
   return source;
 }
 
+function normalizeGradeOptionIds(list = []) {
+  return (Array.isArray(list) ? list : [])
+    .map((entry) => (typeof entry === "object" && entry !== null ? Number(entry.id ?? entry.value ?? entry.grade ?? entry.name) : Number(entry)))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 12)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .sort((left, right) => left - right);
+}
+
 function LessonEditableText({
   value,
   fieldPath = null,
@@ -16147,6 +16155,7 @@ const headerHideTimerRef = useRef(null);
     () => Boolean(canManageContentAccess || canAdministerLessonLibrary),
     [canAdministerLessonLibrary, canManageContentAccess],
   );
+  const allGradeOptionIds = useMemo(() => normalizeGradeOptionIds(GRADES), []);
   const contentActivationScopedSchoolId = useMemo(() => (
     canManageContentAccess
       ? String(contentActivationDraftSchoolId || activeInstitutionSchoolIdResolved || "").trim()
@@ -16157,15 +16166,15 @@ const headerHideTimerRef = useRef(null);
     [contentActivationScopedSchoolId, safeSchoolMemberships],
   );
   const contentActivationScopedGradeOptions = useMemo(() => {
-    if (canManageContentAccess) return GRADES;
+    if (canManageContentAccess) return allGradeOptionIds;
     const scopedGrades = Array.from(new Set(
       contentActivationScopedMemberships
         .flatMap((entry) => (Array.isArray(entry.gradeScope) ? entry.gradeScope : []))
         .map((value) => Number(value))
         .filter((value) => Number.isFinite(value) && value >= 1 && value <= 12),
     )).sort((left, right) => left - right);
-    return scopedGrades.length ? scopedGrades : GRADES;
-  }, [canManageContentAccess, contentActivationScopedMemberships]);
+    return scopedGrades.length ? scopedGrades : allGradeOptionIds;
+  }, [allGradeOptionIds, canManageContentAccess, contentActivationScopedMemberships]);
   const contentActivationResolvedGrade = useMemo(() => {
     const safeDraft = String(contentActivationDraftGrade || "").trim().toLowerCase();
     if (safeDraft === "all") return null;
