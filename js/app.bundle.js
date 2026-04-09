@@ -16860,15 +16860,19 @@ ${marker} `);
       questions: getMergedQuiz(group.subjectId, group.grade, group.activeLesson.key),
       fallbackNumber: index + 1
     } : null).filter(Boolean), [getMergedQuiz, selectedChapterKeys, selectedSubjectChapterGroups]);
-    const selectedSubjectPublishedSources = useMemo(() => selectedSubject && grade ? visiblePublishedSubjectSources.filter((entry) => entry.subject === selectedSubject.id) : [], [grade, selectedSubject, visiblePublishedSubjectSources]);
+    const selectedSubjectPublishedSources = useMemo(() => selectedSubject && grade ? visiblePublishedSubjectSources.filter((entry) => entry.subject === selectedSubject.id && (entry.grade === null || Number(entry.grade) === Number(grade))) : [], [grade, selectedSubject, visiblePublishedSubjectSources]);
     const selectedSubjectActiveSourceActivation = useMemo(
       () => selectedSubject && grade ? getEffectiveSubjectActivation(selectedSubject.id, grade) : null,
       [getEffectiveSubjectActivation, grade, selectedSubject]
     );
-    const selectedSubjectActivePublishedSource = useMemo(
-      () => (selectedSubjectActiveSourceActivation == null ? void 0 : selectedSubjectActiveSourceActivation.subjectSourceId) ? publishedSubjectSourceLookup.get(String(selectedSubjectActiveSourceActivation.subjectSourceId || "").trim()) || null : null,
-      [publishedSubjectSourceLookup, selectedSubjectActiveSourceActivation]
-    );
+    const selectedSubjectActivePublishedSource = useMemo(() => {
+      if (!(selectedSubjectActiveSourceActivation == null ? void 0 : selectedSubjectActiveSourceActivation.subjectSourceId) || !selectedSubject || !grade) return null;
+      const matchedSource = publishedSubjectSourceLookup.get(String(selectedSubjectActiveSourceActivation.subjectSourceId || "").trim()) || null;
+      if (!matchedSource) return null;
+      if (matchedSource.subject !== selectedSubject.id) return null;
+      if (matchedSource.grade !== null && Number(matchedSource.grade) !== Number(grade)) return null;
+      return matchedSource;
+    }, [grade, publishedSubjectSourceLookup, selectedSubject, selectedSubjectActiveSourceActivation]);
     useEffect(() => {
       const availableIds = /* @__PURE__ */ new Set(["__builtin__", ...selectedSubjectPublishedSources.map((entry) => entry.sourceId)]);
       if (!availableIds.has(subjectSourceDraftId)) {
