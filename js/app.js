@@ -18045,7 +18045,13 @@ const headerHideTimerRef = useRef(null);
     }
     const safeSubjectId = String(subjectId || "").trim().toLowerCase();
     const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
-    const schoolId = normalizedScopeType === "global" ? "" : String(getScopedActivationSchoolId(normalizedScopeType === "learner" ? "student" : normalizedScopeType) || "").trim();
+    const schoolId = normalizedScopeType === "global"
+      ? ""
+      : String(
+        canManageContentAccess
+          ? (contentActivationDraftSchoolId || activeInstitutionSchoolIdResolved || "")
+          : (activeInstitutionSchoolIdResolved || "")
+      ).trim();
     const targetStudentEmail = normalizedScopeType === "learner"
       ? String(contentActivationDraftStudentEmail || curriculumLearnerEmail || "").trim().toLowerCase()
       : "";
@@ -18280,7 +18286,7 @@ const headerHideTimerRef = useRef(null);
       }
     }
     await refreshContentRelationshipStateRef.current();
-  }, [accessibleSchools, allSubjects, contentActivationDraftStudentEmail, contentIdentityEmail, curriculumLearnerEmail, curriculumPackLookup, ensureSupabaseClientRef, getScopedActivationSchoolId, refreshContentRelationshipStateRef, subjectLookup, visibleContentActivations, visibleCurriculumPackLessons, visibleCurriculumPackSubjects, visibleCurriculumPacks, visibleCurriculumScopeAssignments]);
+  }, [accessibleSchools, activeInstitutionSchoolIdResolved, allSubjects, canManageContentAccess, contentActivationDraftSchoolId, contentActivationDraftStudentEmail, contentIdentityEmail, curriculumLearnerEmail, curriculumPackLookup, ensureSupabaseClientRef, refreshContentRelationshipStateRef, subjectLookup, visibleCurriculumPackLessons, visibleCurriculumPackSubjects, visibleCurriculumPacks, visibleCurriculumScopeAssignments]);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -30710,7 +30716,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
             ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "ابھی کوئی اسکول منسلک نہیں۔", language), language)}</p>}
           </div>
-          {canManageContentAccess ? (
+          {canManageScopedCurriculum ? (
             <div className="review-panel chapter-card-panel" data-ui-language={language}>
               <div className="review-panel-head">
                 <div>
@@ -30733,48 +30739,50 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <span>{renderLocalizedTextNode(globalCurriculumPack ? joinLocalizedText(`v${globalCurriculumPack.versionNo}`, `ورژن ${globalCurriculumPack.versionNo}`, language) : joinLocalizedText("Not assigned", "مقرر نہیں", language), language)}</span>
                 </div>
               </div>
-              <div className="chapter-browser-filter-row" style={{ marginTop: 12, alignItems: "stretch" }}>
-                <select
-                  className="settings-select"
-                  value={curriculumGlobalPackDraftId}
-                  onChange={(event) => setCurriculumGlobalPackDraftId(event.target.value)}
-                  disabled={contentRelationshipBusy}
-                >
-                  {visibleCurriculumPacks.length ? (
-                    visibleCurriculumPacks.map((pack) => (
-                      <option key={pack.packId} value={pack.packId}>
-                        {pack.name} {joinLocalizedText(`(v${pack.versionNo})`, `(ورژن ${pack.versionNo})`, language)}
+              {canManageContentAccess ? (
+                <div className="chapter-browser-filter-row" style={{ marginTop: 12, alignItems: "stretch" }}>
+                  <select
+                    className="settings-select"
+                    value={curriculumGlobalPackDraftId}
+                    onChange={(event) => setCurriculumGlobalPackDraftId(event.target.value)}
+                    disabled={contentRelationshipBusy}
+                  >
+                    {visibleCurriculumPacks.length ? (
+                      visibleCurriculumPacks.map((pack) => (
+                        <option key={pack.packId} value={pack.packId}>
+                          {pack.name} {joinLocalizedText(`(v${pack.versionNo})`, `(ورژن ${pack.versionNo})`, language)}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">
+                        {language === "ur" ? "ابھی کوئی نصابی پیک موجود نہیں" : "No curriculum pack exists yet"}
                       </option>
-                    ))
-                  ) : (
-                    <option value="">
-                      {language === "ur" ? "ابھی کوئی نصابی پیک موجود نہیں" : "No curriculum pack exists yet"}
-                    </option>
-                  )}
-                </select>
-                <button
-                  type="button"
-                  className="ghost-cta"
-                  onClick={handleCreateBuiltInCurriculumSeedPack}
-                  disabled={contentRelationshipBusy}
-                >
-                  {renderLocalizedTextNode(joinLocalizedText("Create Built-in Seed Pack", "بنیادی سیڈ پیک بنائیں", language), language)}
-                </button>
-                <button
-                  type="button"
-                  className="ghost-cta"
-                  onClick={handleSyncCurriculumPackGlobally}
-                  disabled={contentRelationshipBusy || !curriculumGlobalPackDraftId}
-                >
-                  {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
-                </button>
-              </div>
+                    )}
+                  </select>
+                  <button
+                    type="button"
+                    className="ghost-cta"
+                    onClick={handleCreateBuiltInCurriculumSeedPack}
+                    disabled={contentRelationshipBusy}
+                  >
+                    {renderLocalizedTextNode(joinLocalizedText("Create Built-in Seed Pack", "بنیادی سیڈ پیک بنائیں", language), language)}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-cta"
+                    onClick={handleSyncCurriculumPackGlobally}
+                    disabled={contentRelationshipBusy || !curriculumGlobalPackDraftId}
+                  >
+                    {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
+                  </button>
+                </div>
+              ) : null}
               <div className="chapter-badge-row" style={{ marginTop: 12 }}>
                 <button
                   type="button"
                   className={`chapter-badge ${curriculumRuntimeSettings.allowBuiltinFallback ? "active" : "neutral"}`}
                   onClick={() => handleSetCurriculumRuntimeFallback(!curriculumRuntimeSettings.allowBuiltinFallback)}
-                  disabled={contentRelationshipBusy}
+                  disabled={contentRelationshipBusy || !canManageContentAccess}
                 >
                   {renderLocalizedTextNode(
                     curriculumRuntimeSettings.allowBuiltinFallback
@@ -30785,6 +30793,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </button>
               </div>
               <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Create one Supabase seed pack from the current built-in curriculum, then sync the chosen pack globally to make it the active app-wide curriculum.", "موجودہ بنیادی نصاب سے ایک Supabase سیڈ پیک بنائیں، پھر منتخب پیک کو عالمی طور پر ہم آہنگ کریں تاکہ وہ پورے ایپ کا فعال نصاب بن جائے۔", language), language)}</p>
+              {!canManageContentAccess ? <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Only the app admin can change the global runtime fallback and global pack here, but scoped curriculum panels below still reflect the active inheritance chain.", "یہاں صرف ایپ ایڈمن عالمی رن ٹائم بیک اَپ اور عالمی پیک بدل سکتا ہے، مگر نیچے موجود محدود نصابی پینل پھر بھی فعال وراثتی سلسلہ دکھاتے ہیں۔", language), language)}</p> : null}
               <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("When fallback is on, any missing curriculum pack content falls back to built-in lessons. Turn it off once the Supabase curriculum is complete and verified.", "جب بیک اَپ فعال ہو تو پیک میں غائب نصابی مواد خودکار طور پر بنیادی اسباق سے پورا کیا جاتا ہے۔ جب Supabase والا نصاب مکمل اور تصدیق شدہ ہو جائے تو اسے بند کر دیں۔", language), language)}</p>
             </div>
           ) : null}
@@ -32309,6 +32318,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   {renderLocalizedTextNode(subjectSourcePublishBusy ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language) : joinLocalizedText("Publish Subject Source", "مضمون ماخذ شائع کریں", language), language)}
                 </button>
               ) : null}
+              <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("school")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
+                {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
+              </button>
+              {canReplaceDefaultEverywhere ? (
+                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("global")} disabled={contentRelationshipBusy}>
+                  {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
+                </button>
+              ) : null}
               <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("school")} disabled={contentRelationshipBusy}>
                 {renderLocalizedTextNode(joinLocalizedText("Set Active For School", "اسکول کے لیے فعال کریں", language), language)}
               </button>
@@ -32584,6 +32601,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                         : joinLocalizedText("Publish", "شائع کریں", language),
                       language,
                     )}
+                  </button>
+                ) : null}
+                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
+                  {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
+                </button>
+                {canReplaceDefaultEverywhere ? (
+                  <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("global")} disabled={contentRelationshipBusy}>
+                    {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
                   </button>
                 ) : null}
                 <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy}>
