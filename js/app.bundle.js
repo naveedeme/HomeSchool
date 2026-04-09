@@ -15535,7 +15535,7 @@ ${marker} `);
       }
       setContentRelationshipBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
         const activationId = `activation_${simpleHash(buildContentActivationPreferenceKey({
           activationType: safeActivationType,
@@ -15595,7 +15595,7 @@ ${marker} `);
       } finally {
         setContentRelationshipBusy(false);
       }
-    }, [canAdministerLessonLibrary, contentActivationDraftScope, contentActivationDraftStudentEmail, contentIdentityEmail, ensureSupabaseClient, getScopedActivationSchoolId, getScopedActivationTargetGrade, language, refreshContentRelationshipState, schoolEffectivePermission, showAppToast, supabaseAuthState.userId]);
+    }, [canAdministerLessonLibrary, contentActivationDraftScope, contentActivationDraftStudentEmail, contentIdentityEmail, ensureSupabaseClientRef, getScopedActivationSchoolId, getScopedActivationTargetGrade, language, refreshContentRelationshipState, schoolEffectivePermission, showAppToast, supabaseAuthState.userId]);
     const handleActivateSelectedLessonScoped = useCallback(async (forcedScopeType = "") => {
       if (!selectedLessonChapterGroup || !selectedLessonOpenedVariant) return;
       const sourceType = String(selectedLessonOpenedVariant.sourceType || "").trim();
@@ -15628,7 +15628,7 @@ ${marker} `);
       }
       setSubjectSourcePublishBusy(true);
       try {
-        const client = ensureSupabaseClient();
+        const client = ensureSupabaseClientRef.current();
         const currentSource = selectedSubjectPublishedSources.find((entry) => entry.sourceId === subjectSourceDraftId && String(entry.authorUserId || "").trim() === String(supabaseAuthState.userId || "").trim()) || null;
         const sourceId = (currentSource == null ? void 0 : currentSource.sourceId) || `subject_source_${simpleHash(`${supabaseAuthState.userId}_${selectedSubject.id}_${grade}_${Date.now()}_${Math.random()}`)}`;
         const nowIso = (/* @__PURE__ */ new Date()).toISOString();
@@ -15670,7 +15670,7 @@ ${marker} `);
       } finally {
         setSubjectSourcePublishBusy(false);
       }
-    }, [effectiveCanPublishContent, ensureSupabaseClient, grade, language, refreshContentRelationshipState, selectedSubject, selectedSubjectExportEntries, selectedSubjectPublishedSources, showAppToast, subjectSourceDraftId, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
+    }, [effectiveCanPublishContent, ensureSupabaseClientRef, grade, language, refreshContentRelationshipState, selectedSubject, selectedSubjectExportEntries, selectedSubjectPublishedSources, showAppToast, subjectSourceDraftId, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
     const handleActivateSelectedSubjectSourceScoped = useCallback(async (forcedScopeType = "") => {
       if (!selectedSubject || !grade) return;
       const selectedSource = subjectSourceDraftId === "__builtin__" ? null : selectedSubjectPublishedSources.find((entry) => entry.sourceId === subjectSourceDraftId) || null;
