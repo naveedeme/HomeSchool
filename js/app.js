@@ -21037,6 +21037,36 @@ const headerHideTimerRef = useRef(null);
       );
     }
   }, [builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, updateChapterSourceSelection]);
+  const handleDeleteLessonArchivePermanently = useCallback(async (archive) => {
+    const normalized = normalizeLessonArchiveRecord(archive);
+    if (!canAdministerLessonLibrary) {
+      showAppToast(joinLocalizedText("Only admins can permanently delete archived lessons.", "صرف ایڈمن محفوظ شدہ اسباق مستقل حذف کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!normalized) return;
+    try {
+      if (normalized.sourceType === "builtin" || normalized.sourceType === "builtin_history") {
+        const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+        delete nextLayerState.archives[normalized.archiveId];
+        await persistBuiltinLessonLayerState(nextLayerState);
+      }
+      const client = ensureSupabaseClientRef.current();
+      const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
+      if (error) throw error;
+      setContentRelationshipState((current) => ({
+        ...current,
+        lessonArchives: removeLessonArchiveEntry(current?.lessonArchives, normalized.archiveId),
+        lastUpdatedAt: Date.now(),
+      }));
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Archived lesson deleted permanently", "محفوظ شدہ سبق مستقل حذف کر دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(`Unable to permanently delete archived lesson: ${error?.message || error}`, `محفوظ شدہ سبق مستقل حذف نہیں ہو سکا: ${error?.message || error}`, language),
+        "alert",
+      );
+    }
+  }, [builtinLessonLayerState, canAdministerLessonLibrary, language, persistBuiltinLessonLayerState, showAppToast]);
   const lessonEditContextValue = useMemo(() => ({
     enabled: lessonEditMode,
     draft: lessonEditDraft,
@@ -32733,9 +32763,10 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                         {renderLocalizedTextNode(joinLocalizedText(`${lessonInfo?.subject ? getSubjectDisplayName(lessonInfo.subject, "en") : entry.subject} • ${entry.sourceType === "slot" ? "lesson slot removed" : entry.sourceType === "builtin_history" ? "previous built-in archived" : "default removed"} by ${entry.archivedByEmail || "admin"}`, `${lessonInfo?.subject ? getSubjectDisplayName(lessonInfo.subject, "ur") : entry.subject} • ${entry.sourceType === "slot" ? "سبق خانہ ہٹایا گیا" : entry.sourceType === "builtin_history" ? "پچھلا بنیادی سبق محفوظ کیا گیا" : "بنیادی سبق ہٹایا گیا"} • ${entry.archivedByEmail || "ایڈمن"}`, language), language)}
                       </div>
                       <div className="result-actions chapter-card-actions" style={{ marginTop: 8 }}>
-                        <button type="button" className="ghost-cta" onClick={() => handleRestoreLessonArchive(entry)}>{renderLocalizedTextNode(joinLocalizedText("Restore lesson", "سبق بحال کریں", language), language)}</button>
-                      </div>
-                    </div>
+                    <button type="button" className="ghost-cta" onClick={() => handleRestoreLessonArchive(entry)}>{renderLocalizedTextNode(joinLocalizedText("Restore lesson", "سبق بحال کریں", language), language)}</button>
+                    <button type="button" className="ghost-cta" onClick={() => handleDeleteLessonArchivePermanently(entry)}>{renderLocalizedTextNode(joinLocalizedText("Delete permanently", "مستقل حذف کریں", language), language)}</button>
+                  </div>
+                </div>
                   );
                 })}
               </div>
@@ -33565,12 +33596,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 ) : null}
                 {canAdministerLessonLibrary && selectedLessonOpenedVariant?.sourceType === "published" && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
                   <button type="button" className="ghost-cta" onClick={() => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant)} disabled={contentRelationshipBusy}>
-                    {renderLocalizedTextNode(joinLocalizedText("Replace Built-in For Good", "بنیادی سبق کو مستقل بدلیں", language), language)}
+                    {renderLocalizedTextNode(joinLocalizedText("Replace Built-in Permanently", "بنیادی سبق کو مستقل بدلیں", language), language)}
                   </button>
                 ) : null}
                 {selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
                   <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)} disabled={contentRelationshipBusy}>
-                    {renderLocalizedTextNode(joinLocalizedText("Delete Built-in For Good", "بنیادی سبق مستقل حذف کریں", language), language)}
+                    {renderLocalizedTextNode(joinLocalizedText("Delete Built-in Permanently", "بنیادی سبق مستقل حذف کریں", language), language)}
                   </button>
                 ) : null}
               </div>
@@ -33626,12 +33657,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             ) : null}
             {canAdministerLessonLibrary && selectedLessonOpenedVariant?.sourceType === "published" && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
               <button type="button" className="ghost-cta" onClick={() => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant)}>
-                {renderLocalizedTextNode(joinLocalizedText("Replace Built-in For Good", "بنیادی سبق کو مستقل بدلیں", language), language)}
+                {renderLocalizedTextNode(joinLocalizedText("Replace Built-in Permanently", "بنیادی سبق کو مستقل بدلیں", language), language)}
               </button>
             ) : null}
             {canAdministerLessonLibrary && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
               <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)}>
-                {renderLocalizedTextNode(joinLocalizedText("Delete Built-in For Good", "بنیادی سبق مستقل حذف کریں", language), language)}
+                {renderLocalizedTextNode(joinLocalizedText("Delete Built-in Permanently", "بنیادی سبق مستقل حذف کریں", language), language)}
               </button>
             ) : null}
             {canAdministerLessonLibrary ? (
