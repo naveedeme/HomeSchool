@@ -15694,14 +15694,23 @@ const headerHideTimerRef = useRef(null);
   const tutorSupportsMedia = currentTutorProviderId === "gemini";
 
   const showAppToast = useCallback((text, icon = "copy") => {
+    const normalizedIcon = String(icon || "copy").trim().toLowerCase() || "copy";
+    const tone = normalizedIcon === "alert"
+      ? "alert"
+      : normalizedIcon === "check"
+        ? "success"
+        : (normalizedIcon === "sync" || normalizedIcon === "send")
+          ? "accent"
+          : "neutral";
     if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current);
     setCopyToast({
       id: Date.now() + Math.random(),
       text: String(text || ""),
-      icon: icon || "copy",
+      icon: normalizedIcon,
+      tone,
     });
-    copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 1800);
-  }, [supabasePendingEmail]);
+    copyToastTimerRef.current = setTimeout(() => setCopyToast(null), 5200);
+  }, []);
 
   const refreshSupabaseSyncActivity = useCallback(async (overrides = null) => {
     if (!window.HomeSchoolDB?.getCloudSyncStatusSummary) return;
@@ -36579,7 +36588,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       onChange={handleImportTestTemplates}
     />
     {copyToast ? (
-      <div key={copyToast.id} className="copy-toast" role="status" aria-live="polite">
+      <div
+        key={copyToast.id}
+        className={`copy-toast tone-${copyToast.tone || "neutral"}`}
+        role="status"
+        aria-live="polite"
+        data-ui-language={language}
+      >
         {renderIconGlyph(copyToast.icon || "copy")}
         <span>{renderLocalizedTextNode(copyToast.text, language)}</span>
       </div>
