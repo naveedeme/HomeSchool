@@ -2932,6 +2932,32 @@ function createEmptyContentRelationshipState() {
   };
 }
 
+function normalizeStoredContentRelationshipSnapshot(snapshot = null) {
+  const source = snapshot && typeof snapshot === "object" ? snapshot : {};
+  const normalizeList = (rows, normalizeFn) => (
+    (Array.isArray(rows) ? rows : [])
+      .map((entry) => normalizeFn(entry))
+      .filter(Boolean)
+  );
+  return {
+    ...createEmptyContentRelationshipState(),
+    loaded: Boolean(source.loaded),
+    systemSettings: normalizeList(source.systemSettings, normalizeSystemSettingRecord),
+    curriculumPacks: normalizeList(source.curriculumPacks, normalizeCurriculumPackRecord),
+    curriculumPackSubjects: normalizeList(source.curriculumPackSubjects, normalizeCurriculumPackSubjectRecord),
+    curriculumPackLessons: normalizeList(source.curriculumPackLessons, normalizeCurriculumPackLessonRecord),
+    curriculumScopeAssignments: normalizeList(source.curriculumScopeAssignments, normalizeCurriculumScopeAssignmentRecord),
+    contentActivations: normalizeList(source.contentActivations, normalizeContentActivationRecord),
+    publishedSubjectSources: normalizeList(source.publishedSubjectSources, normalizePublishedSubjectSourceRecord).filter((entry) => !entry.deletedAt),
+    lessonArchives: normalizeList(source.lessonArchives, normalizeLessonArchiveRecord),
+    schools: normalizeList(source.schools, normalizeSchoolRecord),
+    memberships: normalizeList(source.memberships, normalizeSchoolMembershipRecord),
+    parentLinks: normalizeList(source.parentLinks, normalizeParentStudentLinkRecord),
+    links: normalizeList(source.links, normalizeTeacherStudentLinkRecord),
+    lastUpdatedAt: Number(source.lastUpdatedAt) || 0,
+  };
+}
+
 function normalizeLessonArchiveRecord(raw) {
   const archiveId = String(raw?.archive_id || raw?.archiveId || "").trim();
   const subject = String(raw?.subject || "").trim();
@@ -15008,6 +15034,7 @@ function HomeschoolApp() {
   const storedDictionarySyncConflicts = sanitizeDictionaryConflictRecords(stored?.dictionarySyncConflicts || []);
   const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
   const storedAiTutorHistory = localStorageFallback("hs_ai_tutor_history") || {};
+  const storedContentRelationshipSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
   const initialTutorLanguage = stored?.language || "en";
   const initialTutorSessions = normalizeTutorSessions(storedAiTutorHistory.sessions, initialTutorLanguage);
   const initialActiveTutorSessionId = initialTutorSessions.some((session) => session.id === storedAiTutorHistory.activeSessionId)
@@ -15125,7 +15152,7 @@ function HomeschoolApp() {
   const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
   const [customContentState, setCustomContentState] = useState(createEmptyCustomContentState());
   const [publishedContentState, setPublishedContentState] = useState(createEmptyPublishedContentState());
-  const [contentRelationshipState, setContentRelationshipState] = useState(createEmptyContentRelationshipState());
+  const [contentRelationshipState, setContentRelationshipState] = useState(storedContentRelationshipSnapshot);
   const [activeInstitutionSchoolId, setActiveInstitutionSchoolId] = useState(String(stored?.activeInstitutionSchoolId || "").trim());
   const [chapterSourcePreferences, setChapterSourcePreferences] = useState(normalizeChapterSourcePreferences(stored?.chapterSourcePreferences || {}));
   const [lessonOrderPreferences, setLessonOrderPreferences] = useState(normalizeLessonOrderPreferences(stored?.lessonOrderPreferences || {}));
@@ -23803,6 +23830,26 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       cancelled = true;
     };
   }, [dbLoaded, grade, refreshContentRelationshipState, supabaseAuthState.email, supabaseAuthState.userId, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
+
+  useEffect(() => {
+    const snapshot = {
+      loaded: Boolean(contentRelationshipState.loaded),
+      systemSettings: Array.isArray(contentRelationshipState.systemSettings) ? contentRelationshipState.systemSettings : [],
+      curriculumPacks: Array.isArray(contentRelationshipState.curriculumPacks) ? contentRelationshipState.curriculumPacks : [],
+      curriculumPackSubjects: Array.isArray(contentRelationshipState.curriculumPackSubjects) ? contentRelationshipState.curriculumPackSubjects : [],
+      curriculumPackLessons: Array.isArray(contentRelationshipState.curriculumPackLessons) ? contentRelationshipState.curriculumPackLessons : [],
+      curriculumScopeAssignments: Array.isArray(contentRelationshipState.curriculumScopeAssignments) ? contentRelationshipState.curriculumScopeAssignments : [],
+      contentActivations: Array.isArray(contentRelationshipState.contentActivations) ? contentRelationshipState.contentActivations : [],
+      publishedSubjectSources: Array.isArray(contentRelationshipState.publishedSubjectSources) ? contentRelationshipState.publishedSubjectSources : [],
+      lessonArchives: Array.isArray(contentRelationshipState.lessonArchives) ? contentRelationshipState.lessonArchives : [],
+      schools: Array.isArray(contentRelationshipState.schools) ? contentRelationshipState.schools : [],
+      memberships: Array.isArray(contentRelationshipState.memberships) ? contentRelationshipState.memberships : [],
+      parentLinks: Array.isArray(contentRelationshipState.parentLinks) ? contentRelationshipState.parentLinks : [],
+      links: Array.isArray(contentRelationshipState.links) ? contentRelationshipState.links : [],
+      lastUpdatedAt: Number(contentRelationshipState.lastUpdatedAt) || 0,
+    };
+    localStorageFallback("hs_curriculum_relationship_snapshot", snapshot);
+  }, [contentRelationshipState]);
 
   useEffect(() => {
     const existingChannel = supabaseRealtimeChannelRef.current;
