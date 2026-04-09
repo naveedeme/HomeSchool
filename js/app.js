@@ -890,6 +890,23 @@ function resolveCurriculumScopeAssignment(records = [], {
   return matches[0] || null;
 }
 
+function getCurriculumScopeDisplayText(scopeType = "", language = "en") {
+  const safeScopeType = String(scopeType || "").trim().toLowerCase();
+  if (safeScopeType === "learner") {
+    return joinLocalizedText("Learner override", "طالب علم کی تخصیص", language);
+  }
+  if (safeScopeType === "grade") {
+    return joinLocalizedText("Grade override", "جماعتی تخصیص", language);
+  }
+  if (safeScopeType === "school") {
+    return joinLocalizedText("School override", "اسکولی تخصیص", language);
+  }
+  if (safeScopeType === "global") {
+    return joinLocalizedText("Global curriculum", "عالمی نصاب", language);
+  }
+  return joinLocalizedText("Built-in fallback", "بنیادی بیک اپ", language);
+}
+
 function materializeSubjectSourceChapters(sourceRecord, targetSubjectId = "", targetGrade = null) {
   const normalized = normalizePublishedSubjectSourceRecord(sourceRecord);
   if (!normalized?.payload) return [];
@@ -16272,6 +16289,27 @@ const headerHideTimerRef = useRef(null);
     () => (globalCurriculumAssignment?.packId ? curriculumPackLookup.get(globalCurriculumAssignment.packId) || null : null),
     [curriculumPackLookup, globalCurriculumAssignment],
   );
+  const currentViewerCurriculumAssignment = useMemo(() => resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
+    schoolId: String(activeInstitutionSchoolId || "").trim(),
+    targetGrade: grade,
+    targetStudentEmail: scopedContentActivationViewerEmail,
+  }), [activeInstitutionSchoolId, grade, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
+  const currentViewerCurriculumPack = useMemo(
+    () => (currentViewerCurriculumAssignment?.packId ? curriculumPackLookup.get(currentViewerCurriculumAssignment.packId) || null : null),
+    [curriculumPackLookup, currentViewerCurriculumAssignment],
+  );
+  const currentViewerCurriculumSummary = useMemo(() => ({
+    scopeType: currentViewerCurriculumAssignment?.scopeType || "",
+    scopeLabel: currentViewerCurriculumAssignment?.scopeType
+      ? getCurriculumScopeDisplayText(currentViewerCurriculumAssignment.scopeType, language)
+      : (curriculumRuntimeSettings.allowBuiltinFallback
+        ? joinLocalizedText("Built-in fallback", "بنیادی بیک اپ", language)
+        : joinLocalizedText("No active curriculum pack", "کوئی فعال نصابی پیک نہیں", language)),
+    packName: currentViewerCurriculumPack?.name
+      || (curriculumRuntimeSettings.allowBuiltinFallback
+        ? joinLocalizedText("Built-in curriculum fallback", "بنیادی نصابی بیک اپ", language)
+        : joinLocalizedText("No active curriculum pack", "کوئی فعال نصابی پیک نہیں", language)),
+  }), [currentViewerCurriculumAssignment?.scopeType, currentViewerCurriculumPack?.name, curriculumRuntimeSettings.allowBuiltinFallback, language]);
   useEffect(() => {
     const availablePackIds = new Set(visibleCurriculumPacks.map((entry) => entry.packId));
     const preferredPackId = String(globalCurriculumAssignment?.packId || "").trim();
@@ -16786,14 +16824,18 @@ const headerHideTimerRef = useRef(null);
     )) || null;
     return assignment?.packId ? curriculumPackLookup.get(assignment.packId) || null : null;
   }, [contentActivationResolvedGrade, contentActivationScopeLearnerEmail, contentActivationScopedSchoolId, curriculumPackLookup, visibleCurriculumScopeAssignments]);
+  const contentActivationEffectiveAssignment = useMemo(() => resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
+    schoolId: String(contentActivationScopedSchoolId || "").trim(),
+    targetGrade: contentActivationResolvedGrade,
+    targetStudentEmail: contentActivationScopeLearnerEmail,
+  }), [contentActivationResolvedGrade, contentActivationScopeLearnerEmail, contentActivationScopedSchoolId, visibleCurriculumScopeAssignments]);
   const contentActivationEffectivePack = useMemo(() => {
-    const assignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
-      schoolId: String(contentActivationScopedSchoolId || "").trim(),
-      targetGrade: contentActivationResolvedGrade,
-      targetStudentEmail: contentActivationScopeLearnerEmail,
-    });
-    return assignment?.packId ? curriculumPackLookup.get(assignment.packId) || null : null;
-  }, [contentActivationResolvedGrade, contentActivationScopeLearnerEmail, contentActivationScopedSchoolId, curriculumPackLookup, visibleCurriculumScopeAssignments]);
+    return contentActivationEffectiveAssignment?.packId ? curriculumPackLookup.get(contentActivationEffectiveAssignment.packId) || null : null;
+  }, [contentActivationEffectiveAssignment, curriculumPackLookup]);
+  const contentActivationEffectiveScopeLabel = useMemo(
+    () => getCurriculumScopeDisplayText(contentActivationEffectiveAssignment?.scopeType || "", language),
+    [contentActivationEffectiveAssignment?.scopeType, language],
+  );
   useEffect(() => {
     const safeDraft = String(contentActivationDraftGrade || "").trim().toLowerCase();
     if (safeDraft === "current" || safeDraft === "all") return;
@@ -32501,6 +32543,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </p>
           </div>
         </div>
+        <div className="chapter-badge-row" style={(selectedSubject?.id === "urdu" || isUrduUi(language)) ? { direction: "rtl" } : null}>
+          <span className="chapter-badge active">
+            {renderLocalizedTextNode(currentViewerCurriculumSummary.scopeLabel, language)}
+          </span>
+          <span className="chapter-badge neutral">
+            {renderLocalizedTextNode(currentViewerCurriculumSummary.packName, language)}
+          </span>
+        </div>
         <div className="subject-chapter-actions" style={(selectedSubject?.id === "urdu" || isUrduUi(language)) ? { direction: "rtl" } : {}}>
           {canImportChapters || canImportSubjects ? (
             <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
@@ -32666,6 +32716,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <span>{renderLocalizedTextNode(contentActivationEffectivePack?.name || globalCurriculumPack?.name || joinLocalizedText("No active pack", "کوئی فعال پیک نہیں", language), language)}</span>
               </div>
             </div>
+            <p className="goal-progress-meta" style={{ marginTop: 10 }}>
+              {renderLocalizedTextNode(joinLocalizedText(`Effective scope: ${contentActivationEffectiveScopeLabel}`, `مؤثر دائرہ: ${contentActivationEffectiveScopeLabel}`, language), language)}
+            </p>
             <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
               {effectiveCanPublishContent ? (
                 <button type="button" className="ghost-cta" onClick={handlePublishWholeSubjectSource} disabled={subjectSourcePublishBusy || !selectedSubjectLessons.length}>
@@ -32848,6 +32901,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
             </div>
           ) : null}
+          <div className="chapter-badge-row" style={(selectedSubject?.id === "urdu" || isUrduUi(language)) ? { direction: "rtl", marginBottom: 16 } : { marginBottom: 16 }}>
+            <span className="chapter-badge active">
+              {renderLocalizedTextNode(currentViewerCurriculumSummary.scopeLabel, language)}
+            </span>
+            <span className="chapter-badge neutral">
+              {renderLocalizedTextNode(currentViewerCurriculumSummary.packName, language)}
+            </span>
+          </div>
           {canAdministerLessonLibrary && selectedLesson && selectedLessonChapterGroup ? (
             <div className="review-panel chapter-scope-panel" data-ui-language={language}>
               <div className="review-panel-head">
@@ -32972,6 +33033,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <span>{renderLocalizedTextNode(contentActivationEffectivePack?.name || globalCurriculumPack?.name || joinLocalizedText("No active pack", "کوئی فعال پیک نہیں", language), language)}</span>
                 </div>
               </div>
+              <p className="goal-progress-meta" style={{ marginTop: 10 }}>
+                {renderLocalizedTextNode(joinLocalizedText(`Effective scope: ${contentActivationEffectiveScopeLabel}`, `مؤثر دائرہ: ${contentActivationEffectiveScopeLabel}`, language), language)}
+              </p>
               <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
                 {(canSavePublishedLocally || canAdministerLessonLibrary) ? (
                   <button type="button" className="ghost-cta" onClick={() => handleSavePublishedChapterLocally(selectedSubject?.id, grade, selectedLesson)} disabled={!selectedSubject?.id || !selectedLesson}>
