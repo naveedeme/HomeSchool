@@ -431,11 +431,15 @@
   let runtimeBuiltinLessonMutationMap = /* @__PURE__ */ new Map();
   let runtimeBuiltinLessonMutationSubjectGradeKeys = /* @__PURE__ */ new Set();
   let runtimeBuiltinLessonMutationQuestionKeys = /* @__PURE__ */ new Set();
+  let runtimeBuiltinResolvedLessonCache = /* @__PURE__ */ new Map();
+  let runtimeBuiltinResolvedQuestionCache = /* @__PURE__ */ new Map();
   function setRuntimeBuiltinLessonLayerState(nextState = null) {
     runtimeBuiltinLessonLayerState = normalizeBuiltinLessonLayerState(nextState);
     runtimeBuiltinLessonMutationMap = new Map(Object.entries(runtimeBuiltinLessonLayerState.slots || {}));
     runtimeBuiltinLessonMutationSubjectGradeKeys = /* @__PURE__ */ new Set();
     runtimeBuiltinLessonMutationQuestionKeys = /* @__PURE__ */ new Set();
+    runtimeBuiltinResolvedLessonCache = /* @__PURE__ */ new Map();
+    runtimeBuiltinResolvedQuestionCache = /* @__PURE__ */ new Map();
     runtimeBuiltinLessonMutationMap.forEach((entry, slotKey) => {
       const [subject = "", grade = "", lessonKey = ""] = String(slotKey || "").split("::");
       if (subject && grade) runtimeBuiltinLessonMutationSubjectGradeKeys.add(`${subject}::${grade}`);
@@ -455,7 +459,10 @@
     if (!runtimeBuiltinLessonMutationMap.size || !runtimeBuiltinLessonMutationSubjectGradeKeys.has(`${safeSubjectId}::${safeGrade}`)) {
       return baseLessons;
     }
-    return baseLessons.reduce((acc, lesson) => {
+    const cacheKey = `${safeSubjectId}::${safeGrade}`;
+    const cachedLessons = runtimeBuiltinResolvedLessonCache.get(cacheKey);
+    if (cachedLessons) return cachedLessons;
+    const resolvedLessons = baseLessons.reduce((acc, lesson) => {
       const lessonKey = getCanonicalLessonKeyForLesson(lesson);
       const mutation = getBuiltinLessonLayerMutation(safeSubjectId, safeGrade, lessonKey);
       if (!mutation) {
@@ -464,24 +471,31 @@
       }
       if (mutation.action === "delete") return acc;
       if (mutation.action === "replace" && mutation.lesson) {
-        acc.push(cloneSerializableValue(mutation.__runtimeResolvedLesson || mutation.lesson));
+        acc.push(mutation.__runtimeResolvedLesson || mutation.lesson);
         return acc;
       }
       acc.push(lesson);
       return acc;
     }, []);
+    runtimeBuiltinResolvedLessonCache.set(cacheKey, resolvedLessons);
+    return resolvedLessons;
   }
   function getQuiz(subjectId, targetGrade, lessonKey) {
     const safeSubjectId = String(subjectId || "").trim();
     const safeGrade = Number(targetGrade);
     const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey });
-    if (!runtimeBuiltinLessonMutationMap.size || !runtimeBuiltinLessonMutationQuestionKeys.has(`${safeSubjectId}::${safeGrade}::${safeLessonKey}`)) {
+    const cacheKey = `${safeSubjectId}::${safeGrade}::${safeLessonKey}`;
+    if (!runtimeBuiltinLessonMutationMap.size || !runtimeBuiltinLessonMutationQuestionKeys.has(cacheKey)) {
       return rawGetQuiz(subjectId, targetGrade, lessonKey);
     }
+    const cachedQuestions = runtimeBuiltinResolvedQuestionCache.get(cacheKey);
+    if (cachedQuestions) return cachedQuestions;
     const mutation = getBuiltinLessonLayerMutation(subjectId, targetGrade, lessonKey);
     if ((mutation == null ? void 0 : mutation.action) === "delete") return [];
     if ((mutation == null ? void 0 : mutation.action) === "replace" && Array.isArray(mutation.questions)) {
-      return cloneSerializableValue(mutation.__runtimeResolvedQuestions || mutation.questions);
+      const resolvedQuestions = mutation.__runtimeResolvedQuestions || mutation.questions;
+      runtimeBuiltinResolvedQuestionCache.set(cacheKey, resolvedQuestions);
+      return resolvedQuestions;
     }
     return rawGetQuiz(subjectId, targetGrade, lessonKey);
   }
