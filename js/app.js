@@ -16642,6 +16642,50 @@ const headerHideTimerRef = useRef(null);
     const numeric = Number(contentActivationDraftGrade);
     return Number.isFinite(numeric) ? Math.max(1, Math.min(12, numeric)) : (Number(grade) || null);
   }, [contentActivationDraftGrade, grade]);
+  const contentActivationScopeLearnerEmail = useMemo(
+    () => String(contentActivationDraftStudentEmail || "").trim().toLowerCase(),
+    [contentActivationDraftStudentEmail],
+  );
+  const contentActivationSchoolPack = useMemo(() => {
+    const safeSchoolId = String(contentActivationScopedSchoolId || "").trim();
+    if (!safeSchoolId) return null;
+    const assignment = visibleCurriculumScopeAssignments.find((entry) => entry.scopeType === "school" && entry.schoolId === safeSchoolId) || null;
+    return assignment?.packId ? curriculumPackLookup.get(assignment.packId) || null : null;
+  }, [contentActivationScopedSchoolId, curriculumPackLookup, visibleCurriculumScopeAssignments]);
+  const contentActivationGradePack = useMemo(() => {
+    const safeSchoolId = String(contentActivationScopedSchoolId || "").trim();
+    if (!safeSchoolId || !Number.isFinite(Number(contentActivationResolvedGrade))) return null;
+    const assignment = visibleCurriculumScopeAssignments.find((entry) => (
+      entry.scopeType === "grade"
+      && entry.schoolId === safeSchoolId
+      && Number(entry.grade) === Number(contentActivationResolvedGrade)
+    )) || null;
+    return assignment?.packId ? curriculumPackLookup.get(assignment.packId) || null : null;
+  }, [contentActivationResolvedGrade, contentActivationScopedSchoolId, curriculumPackLookup, visibleCurriculumScopeAssignments]);
+  const contentActivationLearnerPack = useMemo(() => {
+    const safeSchoolId = String(contentActivationScopedSchoolId || "").trim();
+    const safeLearnerEmail = String(contentActivationScopeLearnerEmail || "").trim().toLowerCase();
+    if (!safeSchoolId || !safeLearnerEmail) return null;
+    const assignment = visibleCurriculumScopeAssignments.find((entry) => (
+      entry.scopeType === "learner"
+      && entry.schoolId === safeSchoolId
+      && entry.studentEmail === safeLearnerEmail
+      && (
+        entry.grade === null
+        || !Number.isFinite(Number(contentActivationResolvedGrade))
+        || Number(entry.grade) === Number(contentActivationResolvedGrade)
+      )
+    )) || null;
+    return assignment?.packId ? curriculumPackLookup.get(assignment.packId) || null : null;
+  }, [contentActivationResolvedGrade, contentActivationScopeLearnerEmail, contentActivationScopedSchoolId, curriculumPackLookup, visibleCurriculumScopeAssignments]);
+  const contentActivationEffectivePack = useMemo(() => {
+    const assignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
+      schoolId: String(contentActivationScopedSchoolId || "").trim(),
+      targetGrade: contentActivationResolvedGrade,
+      targetStudentEmail: contentActivationScopeLearnerEmail,
+    });
+    return assignment?.packId ? curriculumPackLookup.get(assignment.packId) || null : null;
+  }, [contentActivationResolvedGrade, contentActivationScopeLearnerEmail, contentActivationScopedSchoolId, curriculumPackLookup, visibleCurriculumScopeAssignments]);
   useEffect(() => {
     const safeDraft = String(contentActivationDraftGrade || "").trim().toLowerCase();
     if (safeDraft === "current" || safeDraft === "all") return;
@@ -32312,6 +32356,28 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </select>
               </label>
             </div>
+            <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 12 }}>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Global", "عالمی", language), language)}</strong>
+                <span>{renderLocalizedTextNode(globalCurriculumPack?.name || joinLocalizedText("No global pack", "کوئی عالمی پیک نہیں", language), language)}</span>
+              </div>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("School", "اسکول", language), language)}</strong>
+                <span>{renderLocalizedTextNode(contentActivationSchoolPack?.name || joinLocalizedText("Inherited", "وراثتی", language), language)}</span>
+              </div>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Grade", "جماعت", language), language)}</strong>
+                <span>{renderLocalizedTextNode(contentActivationGradePack?.name || joinLocalizedText("Inherited", "وراثتی", language), language)}</span>
+              </div>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Learner", "سیکھنے والا", language), language)}</strong>
+                <span>{renderLocalizedTextNode(contentActivationLearnerPack?.name || joinLocalizedText("Inherited", "وراثتی", language), language)}</span>
+              </div>
+              <div className="profile-report-summary-card">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Effective", "مؤثر", language), language)}</strong>
+                <span>{renderLocalizedTextNode(contentActivationEffectivePack?.name || globalCurriculumPack?.name || joinLocalizedText("No active pack", "کوئی فعال پیک نہیں", language), language)}</span>
+              </div>
+            </div>
             <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
               {effectiveCanPublishContent ? (
                 <button type="button" className="ghost-cta" onClick={handlePublishWholeSubjectSource} disabled={subjectSourcePublishBusy || !selectedSubjectLessons.length}>
@@ -32592,6 +32658,28 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     ))}
                   </select>
                 </label>
+              </div>
+              <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 12 }}>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Global", "عالمی", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(globalCurriculumPack?.name || joinLocalizedText("No global pack", "کوئی عالمی پیک نہیں", language), language)}</span>
+                </div>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("School", "اسکول", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(contentActivationSchoolPack?.name || joinLocalizedText("Inherited", "وراثتی", language), language)}</span>
+                </div>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Grade", "جماعت", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(contentActivationGradePack?.name || joinLocalizedText("Inherited", "وراثتی", language), language)}</span>
+                </div>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Learner", "سیکھنے والا", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(contentActivationLearnerPack?.name || joinLocalizedText("Inherited", "وراثتی", language), language)}</span>
+                </div>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Effective", "مؤثر", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(contentActivationEffectivePack?.name || globalCurriculumPack?.name || joinLocalizedText("No active pack", "کوئی فعال پیک نہیں", language), language)}</span>
+                </div>
               </div>
               <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
                 {(canSavePublishedLocally || canAdministerLessonLibrary) ? (
