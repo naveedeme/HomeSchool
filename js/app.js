@@ -17727,7 +17727,7 @@ const headerHideTimerRef = useRef(null);
     }
   }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftName, schoolDraftNormalizedAutoDiarySettings, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
   const handleSetCurriculumRuntimeFallback = useCallback(async (allowBuiltinFallback) => {
-    if (!canManageContentAccess) {
+    if (!canReplaceDefaultEverywhere) {
       showAppToast(joinLocalizedText("Only the app admin can manage curriculum runtime.", "صرف ایپ ایڈمن نصاب کے رن ٹائم کو منظم کر سکتا ہے۔", language), "alert");
       return;
     }
@@ -17760,9 +17760,9 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [canManageContentAccess, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+  }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
   const handleCreateBuiltInCurriculumSeedPack = useCallback(async () => {
-    if (!canManageContentAccess) {
+    if (!canReplaceDefaultEverywhere) {
       showAppToast(joinLocalizedText("Only the app admin can seed the curriculum pack.", "صرف ایپ ایڈمن نصابی پیک تخلیق کر سکتا ہے۔", language), "alert");
       return;
     }
@@ -17864,9 +17864,9 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [canManageContentAccess, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+  }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
   const handleSyncCurriculumPackGlobally = useCallback(async () => {
-    if (!canManageContentAccess) {
+    if (!canReplaceDefaultEverywhere) {
       showAppToast(joinLocalizedText("Only the app admin can sync a global curriculum pack.", "صرف ایپ ایڈمن عالمی نصابی پیک ہم آہنگ کر سکتا ہے۔", language), "alert");
       return;
     }
@@ -17918,7 +17918,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [canManageContentAccess, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+  }, [canReplaceDefaultEverywhere, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
   const handleSyncCurriculumPackWithSchool = useCallback(async () => {
     if (!canManageInstitution && !canManageContentAccess) {
       showAppToast(joinLocalizedText("Your role cannot sync curriculum for a school.", "آپ کا کردار اسکول کے لیے نصاب ہم آہنگ نہیں کر سکتا۔", language), "alert");
@@ -31133,7 +31133,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <span>{renderLocalizedTextNode(globalCurriculumPack ? joinLocalizedText(`v${globalCurriculumPack.versionNo}`, `ورژن ${globalCurriculumPack.versionNo}`, language) : joinLocalizedText("Not assigned", "مقرر نہیں", language), language)}</span>
                 </div>
               </div>
-              {canManageContentAccess ? (
+              {canReplaceDefaultEverywhere ? (
                 <div className="chapter-browser-filter-row" style={{ marginTop: 12, alignItems: "stretch" }}>
                   <select
                     className="settings-select"
@@ -31184,7 +31184,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   type="button"
                   className={`chapter-badge ${curriculumRuntimeSettings.allowBuiltinFallback ? "active" : "neutral"}`}
                   onClick={() => handleSetCurriculumRuntimeFallback(!curriculumRuntimeSettings.allowBuiltinFallback)}
-                  disabled={contentRelationshipBusy || !canManageContentAccess}
+                  disabled={contentRelationshipBusy || !canReplaceDefaultEverywhere}
                 >
                   {renderLocalizedTextNode(
                     curriculumRuntimeSettings.allowBuiltinFallback
@@ -31195,7 +31195,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </button>
               </div>
               <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Create one Supabase seed pack from the current built-in curriculum, then sync the chosen pack globally to make it the active app-wide curriculum.", "موجودہ بنیادی نصاب سے ایک Supabase سیڈ پیک بنائیں، پھر منتخب پیک کو عالمی طور پر ہم آہنگ کریں تاکہ وہ پورے ایپ کا فعال نصاب بن جائے۔", language), language)}</p>
-              {!canManageContentAccess ? <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Only the app admin can change the global runtime fallback and global pack here, but scoped curriculum panels below still reflect the active inheritance chain.", "یہاں صرف ایپ ایڈمن عالمی رن ٹائم بیک اَپ اور عالمی پیک بدل سکتا ہے، مگر نیچے موجود محدود نصابی پینل پھر بھی فعال وراثتی سلسلہ دکھاتے ہیں۔", language), language)}</p> : null}
+              {!canReplaceDefaultEverywhere ? <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Only the app admin can change the global runtime fallback and global pack here, but scoped curriculum panels below still reflect the active inheritance chain.", "یہاں صرف ایپ ایڈمن عالمی رن ٹائم بیک اَپ اور عالمی پیک بدل سکتا ہے، مگر نیچے موجود محدود نصابی پینل پھر بھی فعال وراثتی سلسلہ دکھاتے ہیں۔", language), language)}</p> : null}
               <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("When fallback is on, any missing curriculum pack content falls back to built-in lessons. Turn it off once the Supabase curriculum is complete and verified.", "جب بیک اَپ فعال ہو تو پیک میں غائب نصابی مواد خودکار طور پر بنیادی اسباق سے پورا کیا جاتا ہے۔ جب Supabase والا نصاب مکمل اور تصدیق شدہ ہو جائے تو اسے بند کر دیں۔", language), language)}</p>
             </div>
           ) : null}
