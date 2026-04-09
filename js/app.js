@@ -16171,6 +16171,9 @@ const headerHideTimerRef = useRef(null);
     () => (globalCurriculumAssignment?.packId ? curriculumPackLookup.get(globalCurriculumAssignment.packId) || null : null),
     [curriculumPackLookup, globalCurriculumAssignment],
   );
+  const curriculumScopeResolutionReady = !supabaseDictionarySync.url
+    || !supabaseDictionarySync.anonKey
+    || contentRelationshipState.loaded;
   useEffect(() => {
     const availablePackIds = new Set(visibleCurriculumPacks.map((entry) => entry.packId));
     const preferredPackId = String(globalCurriculumAssignment?.packId || "").trim();
@@ -32456,6 +32459,10 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     handleToggleSelectedChapterKey(group.canonicalLessonKey);
                     return;
                   }
+                  if (!curriculumScopeResolutionReady) {
+                    showAppToast(joinLocalizedText("Curriculum is still loading. Please wait a moment.", "نصاب ابھی لوڈ ہو رہا ہے۔ براہِ کرم ایک لمحہ انتظار کریں۔", language), "alert");
+                    return;
+                  }
                   setSelectedLesson(lesson);
                 }}
                 style={rtlUi ? { direction: "rtl", textAlign: "right" } : {}}
@@ -32524,7 +32531,17 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && (
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && !curriculumScopeResolutionReady && (
+        <div className="review-panel chapter-scope-panel" data-ui-language={language}>
+          <div className="review-panel-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Loading Curriculum", "نصاب لوڈ ہو رہا ہے", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("The app is resolving the active curriculum source for this chapter so it opens with the final synced lesson.", "ایپ اس سبق کے لیے فعال نصابی ماخذ طے کر رہی ہے تاکہ باب آخری ہم آہنگ سبق کے ساتھ کھلے۔", language), language)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && (
         <LessonEditContext.Provider value={lessonEditContextValue}>
         <>
           {activeDiaryTask ? (
@@ -32961,7 +32978,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </LessonEditContext.Provider>
       )}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && !selDay && (<>
         <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: selectedLesson.key || "english", sectionLabel: selectedLesson.title }} />
           <button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 {ui.startQuiz}</button>
         </div>
@@ -32989,7 +33006,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {posTab === "verbs" && pacedPos.verbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVerbDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedAdverbDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedAdverbDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📝 Day {selectedAdverbDay.day} — Vocabulary</h3>{selectedAdverbDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -32998,7 +33015,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedPrepDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedPrepDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📍 Day {selectedPrepDay.day} — Prepositions</h3>{selectedPrepDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33008,7 +33025,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {selectedPrepDay.difficult && (<div className="adverb-detail-section"><h3>📚 Difficult Words</h3>{selectedPrepDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>)}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedAdjDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedAdjDay && (<>
         <div className="tts-hint">🔊 Tap English forms → hear all 3 forms spoken | Tap Urdu → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>🏷️ Day {selectedAdjDay.day} — Adjective Forms</h3>{selectedAdjDay.words.map((w, i) => <AdjWordRow key={i} en={w.en} ur={w.ur} comp={w.comp} sup={w.super} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33017,7 +33034,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedConjDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedConjDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>🔗 Day {selectedConjDay.day} — Conjunctions</h3>{selectedConjDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33027,7 +33044,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {selectedConjDay.difficult && (<div className="adverb-detail-section"><h3>📚 Difficult Words</h3>{selectedConjDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>)}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedPronDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedPronDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>👤 Day {selectedPronDay.day} — Pronouns</h3>{selectedPronDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33036,7 +33053,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedNounDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedNounDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📦 Day {selectedNounDay.day} — Collective Nouns</h3>{selectedNounDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33045,7 +33062,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedVerbDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedVerbDay && (<>
         <div className="tts-hint">🔊 Tap V1 → V2 → V3 forms spoken | Tap Urdu → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>✏️ Day {selectedVerbDay.day} — Verb Forms</h3>{selectedVerbDay.words.map((w, i) => <VerbWordRow key={i} en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33054,9 +33071,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasMathSub && mathSubIdx === null && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && lessonRenderSource?.hasMathSub && mathSubIdx === null && (<>
         {(() => { const isUr = selectedSubject?.id === "urdu"; return (<>
         <div className="lesson-detail" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /></div>
         <h3 className="section-title" style={{ marginTop: 8, direction: isUr?"rtl":"ltr", textAlign: isUr?"right":"left" }}>{isUr ? "📐 موضوعات" : "📐 Topics"}</h3>
@@ -33079,7 +33096,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </>); })()}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasMathSub && mathSubIdx !== null && (() => {
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && lessonRenderSource?.hasMathSub && mathSubIdx !== null && (() => {
         const sub = normalizeSubLesson(activeLessonSubs[mathSubIdx], selectedSubject?.id, { respectProvidedContent: respectProvidedLessonContent });
         const isTensesSub = !!sub?.isTensesSub;
         const adjustedDayLessons = sub.dayLessons;
@@ -33611,13 +33628,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </>);
       })()}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasVocab && !selectedVocabDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && lessonRenderSource?.hasVocab && !selectedVocabDay && (<>
         <div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "vocabulary", sectionLabel: lessonRenderSource?.title }} /></div>
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice | 55 Days of Vocabulary</div>
         {pacedVocab.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && selectedVocabDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasVocab && selectedVocabDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu → Urdu voice | Tap sentence → hear it!</div>
         <div className="adverb-detail-section"><h3>📝 Day {selectedVocabDay.day} — Words</h3>
           {selectedVocabDay.words.map((w, i) => (
@@ -33636,7 +33653,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasTenses && !selectedTensePara && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && lessonRenderSource?.hasTenses && !selectedTensePara && (<>
         <div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "tenses", sectionLabel: lessonRenderSource?.title }} /></div>
 
         <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
@@ -33669,7 +33686,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </>)}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasTenses && selectedTensePara && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasTenses && selectedTensePara && (<>
         <div className="tts-hint">🔊 Tap any sentence to hear it read aloud!</div>
         <div className="adverb-detail-section"><h3>📖 {selectedTensePara.title}</h3>
           {selectedTensePara.para.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => <SpeakableSentence key={i} text={s} lang="en" studyItem={{ subject: "english", section: "tenseParagraphs", sectionLabel: selectedTensePara.title }} />)}
