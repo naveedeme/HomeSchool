@@ -18027,6 +18027,260 @@ const headerHideTimerRef = useRef(null);
       setContentRelationshipBusy(false);
     }
   }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, language, showAppToast, supabaseAuthState.userId]);
+  const handleSyncCurriculumIntoScopePack = useCallback(async ({
+    scopeType = "school",
+    syncType = "lesson",
+    subjectId = "",
+    targetGrade = null,
+    lessonPayload = null,
+    lessonQuestions = [],
+    subjectPayload = null,
+    note = "",
+  } = {}) => {
+    const normalizedScopeType = String(scopeType || "").trim().toLowerCase() === "student"
+      ? "learner"
+      : String(scopeType || "").trim().toLowerCase();
+    if (!["global", "school", "grade", "learner"].includes(normalizedScopeType)) {
+      throw new Error("Unsupported curriculum scope.");
+    }
+    const safeSubjectId = String(subjectId || "").trim().toLowerCase();
+    const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
+    const schoolId = normalizedScopeType === "global" ? "" : String(getScopedActivationSchoolId(normalizedScopeType === "learner" ? "student" : normalizedScopeType) || "").trim();
+    const targetStudentEmail = normalizedScopeType === "learner"
+      ? String(contentActivationDraftStudentEmail || curriculumLearnerEmail || "").trim().toLowerCase()
+      : "";
+    if (!safeSubjectId) throw new Error("Choose a subject first.");
+    if (normalizedScopeType !== "global" && !schoolId) throw new Error("Choose a school first.");
+    if ((normalizedScopeType === "grade" || normalizedScopeType === "learner") && !Number.isFinite(numericGrade)) {
+      throw new Error("Choose a grade first.");
+    }
+    if (normalizedScopeType === "learner" && !targetStudentEmail) {
+      throw new Error("Choose a learner first.");
+    }
+    const client = ensureSupabaseClientRef.current();
+    const nowIso = new Date().toISOString();
+    const exactAssignment = visibleCurriculumScopeAssignments.find((entry) => {
+      if (entry.scopeType !== normalizedScopeType) return false;
+      if (normalizedScopeType === "global") return true;
+      if (entry.schoolId !== schoolId) return false;
+      if (normalizedScopeType === "school") return true;
+      if (normalizedScopeType === "grade") return Number(entry.grade) === numericGrade;
+      return entry.studentEmail === targetStudentEmail && (entry.grade === null || Number(entry.grade) === numericGrade);
+    }) || null;
+    const inheritedAssignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
+      schoolId,
+      targetGrade: numericGrade,
+      targetStudentEmail,
+    });
+    const inheritedPackId = String(exactAssignment?.packId || inheritedAssignment?.packId || "").trim();
+    let targetPackId = String(exactAssignment?.packId || "").trim();
+    if (!targetPackId) {
+      targetPackId = `pack_${simpleHash(`${normalizedScopeType}_${schoolId || "global"}_${numericGrade || "all"}_${targetStudentEmail || "all"}_${Date.now()}`)}`;
+      const parentPack = inheritedPackId ? curriculumPackLookup.get(inheritedPackId) || null : null;
+      const scopePackName = normalizedScopeType === "global"
+        ? `Global curriculum ${toIsoDateString(Date.now())}`
+        : normalizedScopeType === "school"
+          ? `${accessibleSchools.find((entry) => entry.schoolId === schoolId)?.schoolName || schoolId} curriculum`
+          : normalizedScopeType === "grade"
+            ? `${accessibleSchools.find((entry) => entry.schoolId === schoolId)?.schoolName || schoolId} Grade ${numericGrade} curriculum`
+            : `${targetStudentEmail} curriculum`;
+      const packRow = {
+        pack_id: targetPackId,
+        name: scopePackName,
+        description: note || `Scoped curriculum pack for ${normalizedScopeType}.`,
+        scope_origin: normalizedScopeType,
+        origin_school_id: schoolId || null,
+        origin_grade: normalizedScopeType === "grade" || normalizedScopeType === "learner" ? numericGrade : null,
+        origin_student_email: normalizedScopeType === "learner" ? targetStudentEmail : null,
+        parent_pack_id: parentPack?.packId || null,
+        status: "published",
+        version_no: Math.max(1, Number(parentPack?.versionNo || 0) + 1),
+        created_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+        updated_at: nowIso,
+      };
+      const { error: packError } = await client.from(SUPABASE_CURRICULUM_PACKS_TABLE).upsert(packRow, { onConflict: "pack_id" });
+      if (packError) throw packError;
+      if (inheritedPackId) {
+        const clonedSubjectRows = visibleCurriculumPackSubjects
+          .filter((entry) => entry.packId === inheritedPackId)
+          .map((entry) => ({
+            pack_subject_id: `pack_subject_${simpleHash(`${targetPackId}_${entry.subjectKey}_${entry.grade ?? "all"}`)}`,
+            pack_id: targetPackId,
+            subject_key: entry.subjectKey,
+            subject_title: entry.subjectTitle,
+            subject_title_ur: entry.subjectTitleUr,
+            grade: entry.grade,
+            order_index: entry.orderIndex,
+            is_hidden: Boolean(entry.isHidden),
+            source_type: entry.sourceType || "custom",
+            source_subject_id: entry.sourceSubjectId || null,
+            payload: cloneSerializableValue(entry.payload) || {},
+            updated_at: nowIso,
+          }));
+        const clonedLessonRows = visibleCurriculumPackLessons
+          .filter((entry) => entry.packId === inheritedPackId)
+          .map((entry) => ({
+            pack_lesson_id: `pack_lesson_${simpleHash(`${targetPackId}_${entry.subjectKey}_${entry.grade}_${entry.lessonKey}`)}`,
+            pack_id: targetPackId,
+            subject_key: entry.subjectKey,
+            grade: entry.grade,
+            lesson_key: entry.lessonKey,
+            lesson_title: entry.lessonTitle,
+            lesson_title_ur: entry.lessonTitleUr,
+            order_index: entry.orderIndex,
+            is_hidden: Boolean(entry.isHidden),
+            slot_action: entry.slotAction || "normal",
+            source_type: entry.sourceType || "custom",
+            source_lesson_id: entry.sourceLessonId || null,
+            content_payload: cloneSerializableValue(entry.contentPayload) || {},
+            updated_at: nowIso,
+          }));
+        if (clonedSubjectRows.length) {
+          const { error: subjectCloneError } = await client.from(SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE).upsert(clonedSubjectRows, { onConflict: "pack_subject_id" });
+          if (subjectCloneError) throw subjectCloneError;
+        }
+        if (clonedLessonRows.length) {
+          const { error: lessonCloneError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(clonedLessonRows, { onConflict: "pack_lesson_id" });
+          if (lessonCloneError) throw lessonCloneError;
+        }
+      }
+      const assignmentId = normalizedScopeType === "global"
+        ? "curriculum_global_default"
+        : normalizedScopeType === "school"
+          ? `curriculum_school_${simpleHash(schoolId)}`
+          : normalizedScopeType === "grade"
+            ? `curriculum_grade_${simpleHash(`${schoolId}_${numericGrade}`)}`
+            : `curriculum_learner_${simpleHash(`${schoolId}_${targetStudentEmail}_${numericGrade || "all"}`)}`;
+      if (normalizedScopeType === "global") {
+        const { error: deactivateGlobalError } = await client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .update({ status: "inactive", updated_at: nowIso })
+          .eq("scope_type", "global")
+          .eq("status", "active");
+        if (deactivateGlobalError) throw deactivateGlobalError;
+      }
+      const assignmentRow = {
+        assignment_id: assignmentId,
+        scope_type: normalizedScopeType,
+        school_id: normalizedScopeType === "global" ? null : schoolId,
+        grade: normalizedScopeType === "grade" || normalizedScopeType === "learner" ? numericGrade : null,
+        student_email: normalizedScopeType === "learner" ? targetStudentEmail : null,
+        pack_id: targetPackId,
+        status: "active",
+        assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+        note: note || null,
+        updated_at: nowIso,
+      };
+      const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(assignmentRow, { onConflict: "assignment_id" });
+      if (assignmentError) throw assignmentError;
+    }
+    const targetSubject = normalizeSubjectDefinition(subjectPayload?.subjectMeta || subjectLookup[safeSubjectId] || { id: safeSubjectId, name: safeSubjectId, nameUr: safeSubjectId });
+    const subjectRow = {
+      pack_subject_id: `pack_subject_${simpleHash(`${targetPackId}_${safeSubjectId}_${numericGrade ?? "all"}`)}`,
+      pack_id: targetPackId,
+      subject_key: safeSubjectId,
+      subject_title: targetSubject.name,
+      subject_title_ur: targetSubject.nameUr,
+      grade: null,
+      order_index: (Array.isArray(allSubjects) ? allSubjects : []).findIndex((entry) => entry.id === safeSubjectId),
+      is_hidden: false,
+      source_type: syncType === "subject" ? "published_subject" : "custom",
+      source_subject_id: subjectPayload?.sourceId || targetSubject.id || null,
+      payload: {
+        icon: targetSubject.icon || "",
+        color: targetSubject.color || "",
+        sourceType: syncType,
+      },
+      updated_at: nowIso,
+    };
+    const { error: subjectError } = await client.from(SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE).upsert(subjectRow, { onConflict: "pack_subject_id" });
+    if (subjectError) throw subjectError;
+    if (syncType === "lesson") {
+      const lessonData = cloneSerializableValue(lessonPayload?.lesson || {}) || {};
+      const canonicalLessonKey = resolveCustomChapterLessonKey({
+        lessonKey: lessonPayload?.lessonKey || lessonData?.key || lessonData?.id || lessonData?.title || "",
+        title: lessonData?.title || lessonData?.titleUr || "",
+        fallbackNumber: lessonPayload?.fallbackNumber || 1,
+      });
+      const lessonRow = {
+        pack_lesson_id: `pack_lesson_${simpleHash(`${targetPackId}_${safeSubjectId}_${numericGrade}_${canonicalLessonKey}`)}`,
+        pack_id: targetPackId,
+        subject_key: safeSubjectId,
+        grade: numericGrade,
+        lesson_key: canonicalLessonKey,
+        lesson_title: String(lessonData?.title || canonicalLessonKey).trim() || canonicalLessonKey,
+        lesson_title_ur: String(lessonData?.titleUr || lessonData?.title || canonicalLessonKey).trim() || canonicalLessonKey,
+        order_index: Number.isFinite(Number(lessonPayload?.fallbackNumber)) ? Math.max(0, Number(lessonPayload.fallbackNumber) - 1) : 0,
+        is_hidden: false,
+        slot_action: "normal",
+        source_type: lessonPayload?.sourceType || "custom",
+        source_lesson_id: lessonPayload?.contentId || canonicalLessonKey,
+        content_payload: {
+          lesson: stripRuntimeLessonMarkers(lessonData),
+          questions: cloneSerializableValue(lessonQuestions) || [],
+        },
+        updated_at: nowIso,
+      };
+      const { error: lessonError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(lessonRow, { onConflict: "pack_lesson_id" });
+      if (lessonError) throw lessonError;
+    } else if (syncType === "subject") {
+      const exportEntries = Array.isArray(subjectPayload?.entries) ? subjectPayload.entries : [];
+      const nextLessonKeys = new Set();
+      const lessonRows = exportEntries.map((entry, index) => {
+        const lessonData = cloneSerializableValue(entry?.lesson || {}) || {};
+        const canonicalLessonKey = resolveCustomChapterLessonKey({
+          lessonKey: lessonData?.key || lessonData?.id || lessonData?.title || "",
+          title: lessonData?.title || lessonData?.titleUr || "",
+          fallbackNumber: entry?.fallbackNumber || index + 1,
+        });
+        nextLessonKeys.add(canonicalLessonKey);
+        return {
+          pack_lesson_id: `pack_lesson_${simpleHash(`${targetPackId}_${safeSubjectId}_${numericGrade}_${canonicalLessonKey}`)}`,
+          pack_id: targetPackId,
+          subject_key: safeSubjectId,
+          grade: numericGrade,
+          lesson_key: canonicalLessonKey,
+          lesson_title: String(lessonData?.title || canonicalLessonKey).trim() || canonicalLessonKey,
+          lesson_title_ur: String(lessonData?.titleUr || lessonData?.title || canonicalLessonKey).trim() || canonicalLessonKey,
+          order_index: index,
+          is_hidden: false,
+          slot_action: "normal",
+          source_type: subjectPayload?.sourceType || "published_subject",
+          source_lesson_id: subjectPayload?.sourceId || canonicalLessonKey,
+          content_payload: {
+            lesson: stripRuntimeLessonMarkers(lessonData),
+            questions: cloneSerializableValue(entry?.questions || []) || [],
+          },
+          updated_at: nowIso,
+        };
+      });
+      const existingPackLessonRows = visibleCurriculumPackLessons.filter((entry) => entry.packId === targetPackId && entry.subjectKey === safeSubjectId && Number(entry.grade) === numericGrade);
+      const rowsToRemove = existingPackLessonRows
+        .filter((entry) => !nextLessonKeys.has(entry.lessonKey))
+        .map((entry) => ({
+          pack_lesson_id: entry.packLessonId,
+          pack_id: targetPackId,
+          subject_key: entry.subjectKey,
+          grade: entry.grade,
+          lesson_key: entry.lessonKey,
+          lesson_title: entry.lessonTitle,
+          lesson_title_ur: entry.lessonTitleUr,
+          order_index: entry.orderIndex,
+          is_hidden: true,
+          slot_action: "removed",
+          source_type: entry.sourceType || "custom",
+          source_lesson_id: entry.sourceLessonId || null,
+          content_payload: cloneSerializableValue(entry.contentPayload) || {},
+          updated_at: nowIso,
+        }));
+      const combinedRows = [...lessonRows, ...rowsToRemove];
+      if (combinedRows.length) {
+        const { error: lessonError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(combinedRows, { onConflict: "pack_lesson_id" });
+        if (lessonError) throw lessonError;
+      }
+    }
+    await refreshContentRelationshipStateRef.current();
+  }, [accessibleSchools, allSubjects, contentActivationDraftStudentEmail, contentIdentityEmail, curriculumLearnerEmail, curriculumPackLookup, ensureSupabaseClientRef, getScopedActivationSchoolId, refreshContentRelationshipStateRef, subjectLookup, visibleContentActivations, visibleCurriculumPackLessons, visibleCurriculumPackSubjects, visibleCurriculumPacks, visibleCurriculumScopeAssignments]);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -19521,6 +19775,7 @@ const headerHideTimerRef = useRef(null);
     subjectSourceId = "",
     label = "",
     forcedScopeType = "",
+    silentSuccess = false,
   } = {}) => {
     const scopeType = ["global", "school", "grade", "student"].includes(String(forcedScopeType || contentActivationDraftScope || "").trim().toLowerCase())
       ? String(forcedScopeType || contentActivationDraftScope || "").trim().toLowerCase()
@@ -19603,7 +19858,9 @@ const headerHideTimerRef = useRef(null);
         }));
       }
       await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText("Active curriculum source saved", "فعال نصابی ماخذ محفوظ ہو گیا", language), "check");
+      if (!silentSuccess) {
+        showAppToast(joinLocalizedText("Active curriculum source saved", "فعال نصابی ماخذ محفوظ ہو گیا", language), "check");
+      }
     } catch (error) {
       const activationErrorMessage = String(error?.message || error || "").trim();
       const missingTable = String(error?.code || "").trim() === "42P01" || /content_activations|does not exist|could not find the table/i.test(activationErrorMessage);
@@ -19630,16 +19887,37 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Publish this lesson copy first, then activate it for schools, grades, or learners.", "اس سبق کی کاپی پہلے شائع کریں، پھر اسے اسکول، جماعت، یا طالب علم کے لیے فعال کریں۔", language), "alert");
       return;
     }
-    await handleSaveScopedContentActivation({
-      activationType: "lesson",
-      subjectId: selectedLessonChapterGroup.subjectId,
-      lessonKey: selectedLessonChapterGroup.canonicalLessonKey,
-      sourceKind: sourceType === "builtin" ? "builtin_lesson" : "published_lesson",
-      contentId: sourceType === "builtin" ? "" : String(selectedLessonSourceScopeSummary.contentId || "").trim(),
-      label: getChapterVariantDisplayLabel(selectedLessonOpenedVariant),
-      forcedScopeType,
-    });
-  }, [handleSaveScopedContentActivation, language, selectedLessonChapterGroup, selectedLessonOpenedVariant, selectedLessonSourceScopeSummary.contentId, selectedLessonSourceScopeSummary.contentId, showAppToast]);
+    try {
+      await handleSaveScopedContentActivation({
+        activationType: "lesson",
+        subjectId: selectedLessonChapterGroup.subjectId,
+        lessonKey: selectedLessonChapterGroup.canonicalLessonKey,
+        sourceKind: sourceType === "builtin" ? "builtin_lesson" : "published_lesson",
+        contentId: sourceType === "builtin" ? "" : String(selectedLessonSourceScopeSummary.contentId || "").trim(),
+        label: getChapterVariantDisplayLabel(selectedLessonOpenedVariant),
+        forcedScopeType,
+        silentSuccess: true,
+      });
+      await handleSyncCurriculumIntoScopePack({
+        scopeType: forcedScopeType || contentActivationDraftScope,
+        syncType: "lesson",
+        subjectId: selectedLessonChapterGroup.subjectId,
+        targetGrade: grade,
+        lessonPayload: {
+          lesson: selectedLessonOpenedVariant.lesson || selectedLesson,
+          lessonKey: selectedLessonChapterGroup.canonicalLessonKey,
+          fallbackNumber: Math.max(1, selectedSubjectChapterGroups.findIndex((group) => group.canonicalLessonKey === selectedLessonChapterGroup.canonicalLessonKey) + 1),
+          sourceType: sourceType === "builtin" ? "builtin_seed" : "published_lesson",
+          contentId: sourceType === "builtin" ? "" : String(selectedLessonSourceScopeSummary.contentId || "").trim(),
+        },
+        lessonQuestions: activeLessonQuizQuestions,
+        note: `Lesson synced from ${getChapterVariantDisplayLabel(selectedLessonOpenedVariant)}`,
+      });
+      showAppToast(joinLocalizedText("Lesson activation saved and synced to curriculum packs.", "سبق کی فعالی محفوظ ہو گئی اور نصابی پیکس میں ہم آہنگ ہو گئی۔", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to sync this lesson into curriculum packs: ${error?.message || error}`, `یہ سبق نصابی پیکس میں ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    }
+  }, [activeLessonQuizQuestions, contentActivationDraftScope, grade, handleSaveScopedContentActivation, handleSyncCurriculumIntoScopePack, language, selectedLesson, selectedLessonChapterGroup, selectedLessonOpenedVariant, selectedLessonSourceScopeSummary.contentId, selectedSubjectChapterGroups, showAppToast]);
   const handlePublishWholeSubjectSource = useCallback(async () => {
     if (!effectiveCanPublishContent) {
       showAppToast(joinLocalizedText("Only authorized editors or admins can publish subject sources.", "صرف مجاز ایڈیٹر یا ایڈمن مضمون کے ماخذ شائع کر سکتے ہیں۔", language), "alert");
@@ -19711,15 +19989,52 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Choose a published subject source first.", "پہلے ایک شائع شدہ مضمون کا ماخذ منتخب کریں۔", language), "alert");
       return;
     }
-    await handleSaveScopedContentActivation({
-      activationType: "subject",
-      subjectId: selectedSubject.id,
-      sourceKind: selectedSource ? "published_subject" : "builtin_subject",
-      subjectSourceId: selectedSource?.sourceId || "",
-      label: selectedSource?.label || `${selectedSubject.name || selectedSubject.id}`,
-      forcedScopeType,
-    });
-  }, [grade, handleSaveScopedContentActivation, language, selectedSubject, selectedSubjectPublishedSources, showAppToast, subjectSourceDraftId]);
+    const subjectEntries = selectedSource
+      ? materializeSubjectSourceChapters(selectedSource, selectedSubject.id, grade).map((entry, index) => ({
+          lesson: entry.lesson,
+          questions: entry.questions,
+          fallbackNumber: index + 1,
+        }))
+      : (Array.isArray(getLessons(selectedSubject.id, grade)) ? getLessons(selectedSubject.id, grade) : []).map((lesson, index) => {
+          const canonicalLessonKey = resolveCustomChapterLessonKey({
+            lessonKey: lesson?.key || lesson?.id || lesson?.title || lesson?.titleUr || "",
+            title: lesson?.title || lesson?.titleUr || "",
+            fallbackNumber: index + 1,
+          });
+          return {
+            lesson,
+            questions: Array.isArray(getQuiz(selectedSubject.id, grade, canonicalLessonKey)) ? cloneSerializableValue(getQuiz(selectedSubject.id, grade, canonicalLessonKey)) : [],
+            fallbackNumber: index + 1,
+          };
+        });
+    try {
+      await handleSaveScopedContentActivation({
+        activationType: "subject",
+        subjectId: selectedSubject.id,
+        sourceKind: selectedSource ? "published_subject" : "builtin_subject",
+        subjectSourceId: selectedSource?.sourceId || "",
+        label: selectedSource?.label || `${selectedSubject.name || selectedSubject.id}`,
+        forcedScopeType,
+        silentSuccess: true,
+      });
+      await handleSyncCurriculumIntoScopePack({
+        scopeType: forcedScopeType || contentActivationDraftScope,
+        syncType: "subject",
+        subjectId: selectedSubject.id,
+        targetGrade: grade,
+        subjectPayload: {
+          sourceId: selectedSource?.sourceId || "",
+          sourceType: selectedSource ? "published_subject" : "builtin_seed",
+          subjectMeta: selectedSubject,
+          entries: subjectEntries,
+        },
+        note: `Subject synced from ${selectedSource?.label || selectedSubject.name || selectedSubject.id}`,
+      });
+      showAppToast(joinLocalizedText("Subject activation saved and synced to curriculum packs.", "مضمون کی فعالی محفوظ ہو گئی اور نصابی پیکس میں ہم آہنگ ہو گئی۔", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to sync this subject into curriculum packs: ${error?.message || error}`, `یہ مضمون نصابی پیکس میں ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    }
+  }, [contentActivationDraftScope, grade, handleSaveScopedContentActivation, handleSyncCurriculumIntoScopePack, language, selectedSubject, selectedSubjectPublishedSources, showAppToast, subjectSourceDraftId]);
   const updateChapterSourceSelection = useCallback((subjectId, targetGrade, canonicalLessonKey, nextSelection = null, options = {}) => {
     if (!canChooseContentSource && !options.force) {
       if (!options.silent) {
