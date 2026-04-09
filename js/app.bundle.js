@@ -365,7 +365,8 @@
     const safeArchives = source.archives && typeof source.archives === "object" ? source.archives : {};
     const nextState = {
       slots: {},
-      archives: {}
+      archives: {},
+      tombstones: {}
     };
     Object.entries(safeSlots).forEach(([rawKey, rawEntry]) => {
       var _a;
@@ -423,6 +424,27 @@
         questions: Array.isArray(entry.questions) ? cloneSerializableValue(entry.questions) : [],
         archivedByEmail: String(entry.archivedByEmail || entry.archived_by_email || "").trim().toLowerCase(),
         archivedAt: Number(new Date(entry.archivedAt || entry.archived_at || entry.updatedAt || entry.updated_at || Date.now()).getTime()) || Date.now()
+      };
+    });
+    const safeTombstones = source.tombstones && typeof source.tombstones === "object" ? source.tombstones : {};
+    Object.entries(safeTombstones).forEach(([rawKey, rawEntry]) => {
+      var _a;
+      const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+      const rawKeyParts = String(rawKey || "").split("::");
+      const slotKey = buildBuiltinLessonSlotKey(
+        entry.subject || rawKeyParts[0] || "",
+        ((_a = entry.grade) != null ? _a : rawKeyParts[1]) || "",
+        entry.lessonKey || rawKeyParts[2] || ""
+      );
+      if (!slotKey) return;
+      const [subject = "", grade = "", lessonKey = ""] = slotKey.split("::");
+      nextState.tombstones[slotKey] = {
+        subject,
+        grade: Number(grade),
+        lessonKey,
+        title: String(entry.title || "").trim(),
+        deletedByEmail: String(entry.deletedByEmail || entry.deleted_by_email || "").trim().toLowerCase(),
+        deletedAt: Number(new Date(entry.deletedAt || entry.deleted_at || entry.updatedAt || entry.updated_at || Date.now()).getTime()) || Date.now()
       };
     });
     return nextState;
@@ -13728,9 +13750,18 @@ ${marker} `);
       const safeRows = Array.isArray(contentRelationshipState.publishedSubjectSources) ? contentRelationshipState.publishedSubjectSources : [];
       return safeRows.map((entry) => normalizePublishedSubjectSourceRecord(entry)).filter(Boolean).filter((entry) => entry.isPublished && !entry.deletedAt).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
     }, [contentRelationshipState.publishedSubjectSources]);
-    const archivedLessonVariantKeys = useMemo(() => new Set(
-      visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId))
-    ), [visibleLessonArchives]);
+    const archivedLessonVariantKeys = useMemo(() => {
+      const nextKeys = new Set(
+        visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId))
+      );
+      Object.values(builtinLessonLayerState.tombstones || {}).forEach((entry) => {
+        const normalized = entry && typeof entry === "object" ? entry : null;
+        if (!normalized) return;
+        const slotKey = buildLessonArchiveKey(normalized.subject, normalized.grade, normalized.lessonKey, "slot");
+        if (slotKey) nextKeys.add(slotKey);
+      });
+      return nextKeys;
+    }, [builtinLessonLayerState.tombstones, visibleLessonArchives]);
     const publishedLessonContentLookup = useMemo(() => {
       const lookup = /* @__PURE__ */ new Map();
       Object.values(publishedContentState.lessonsBySubjectGrade || {}).forEach((bucket) => {
@@ -17952,7 +17983,7 @@ ${marker} `);
       }
     }, [buildBuiltinLessonArchiveSnapshot, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, publishedLessonQuestionLookup, selectedLessonOpenedVariant, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, upsertBuiltinLessonArchive]);
     const handleArchiveLessonSlot = useCallback(async (group) => {
-      var _a2;
+      var _a2, _b2;
       if (!canAdministerLessonLibrary) {
         showAppToast(joinLocalizedText("Only admins can remove whole lesson slots.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0645\u06A9\u0645\u0644 \u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u06C1\u0679\u0627 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -17990,6 +18021,17 @@ ${marker} `);
           lessonArchives: upsertLessonArchiveEntry(current == null ? void 0 : current.lessonArchives, row),
           lastUpdatedAt: Date.now()
         }));
+        const slotKey = buildBuiltinLessonSlotKey(group.subjectId, group.grade, group.canonicalLessonKey);
+        const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+        nextLayerState.tombstones[slotKey] = {
+          subject: group.subjectId,
+          grade: Number(group.grade),
+          lessonKey: group.canonicalLessonKey,
+          title: String(group.title || ((_b2 = group.activeLesson) == null ? void 0 : _b2.title) || group.canonicalLessonKey).trim(),
+          deletedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+          deletedAt: Date.now()
+        };
+        await persistBuiltinLessonLayerState(nextLayerState);
         updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
         await refreshContentRelationshipStateRef.current();
         showAppToast(joinLocalizedText("Lesson slot removed", "\u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u06C1\u0679\u0627 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
@@ -17999,7 +18041,7 @@ ${marker} `);
           "alert"
         );
       }
-    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
     const handleQuickRemoveLessonGroup = useCallback(async (group) => {
       const activeVariant = (group == null ? void 0 : group.activeVariant) || null;
       if (!activeVariant) return;
@@ -18043,6 +18085,10 @@ ${marker} `);
             delete nextLayerState.slots[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)];
           }
           await persistBuiltinLessonLayerState(nextLayerState);
+        } else if (normalized.sourceType === "slot") {
+          nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+          delete nextLayerState.tombstones[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)];
+          await persistBuiltinLessonLayerState(nextLayerState);
         }
         const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
@@ -18074,6 +18120,17 @@ ${marker} `);
           const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
           delete nextLayerState.archives[normalized.archiveId];
           await persistBuiltinLessonLayerState(nextLayerState);
+        } else if (normalized.sourceType === "slot") {
+          const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+          nextLayerState.tombstones[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)] = {
+            subject: normalized.subject,
+            grade: Number(normalized.grade),
+            lessonKey: normalized.lessonKey,
+            title: String(normalized.title || normalized.lessonKey).trim(),
+            deletedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+            deletedAt: Date.now()
+          };
+          await persistBuiltinLessonLayerState(nextLayerState);
         }
         const client = ensureSupabaseClientRef.current();
         const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
@@ -18091,7 +18148,7 @@ ${marker} `);
           "alert"
         );
       }
-    }, [builtinLessonLayerState, canAdministerLessonLibrary, language, persistBuiltinLessonLayerState, showAppToast]);
+    }, [builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast]);
     const lessonEditContextValue = useMemo(() => ({
       enabled: lessonEditMode,
       draft: lessonEditDraft,

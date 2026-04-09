@@ -412,6 +412,7 @@ function normalizeBuiltinLessonLayerState(raw = null) {
   const nextState = {
     slots: {},
     archives: {},
+    tombstones: {},
   };
   Object.entries(safeSlots).forEach(([rawKey, rawEntry]) => {
     const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
@@ -470,6 +471,26 @@ function normalizeBuiltinLessonLayerState(raw = null) {
       questions: Array.isArray(entry.questions) ? cloneSerializableValue(entry.questions) : [],
       archivedByEmail: String(entry.archivedByEmail || entry.archived_by_email || "").trim().toLowerCase(),
       archivedAt: Number(new Date(entry.archivedAt || entry.archived_at || entry.updatedAt || entry.updated_at || Date.now()).getTime()) || Date.now(),
+    };
+  });
+  const safeTombstones = source.tombstones && typeof source.tombstones === "object" ? source.tombstones : {};
+  Object.entries(safeTombstones).forEach(([rawKey, rawEntry]) => {
+    const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+    const rawKeyParts = String(rawKey || "").split("::");
+    const slotKey = buildBuiltinLessonSlotKey(
+      entry.subject || rawKeyParts[0] || "",
+      (entry.grade ?? rawKeyParts[1]) || "",
+      entry.lessonKey || rawKeyParts[2] || "",
+    );
+    if (!slotKey) return;
+    const [subject = "", grade = "", lessonKey = ""] = slotKey.split("::");
+    nextState.tombstones[slotKey] = {
+      subject,
+      grade: Number(grade),
+      lessonKey,
+      title: String(entry.title || "").trim(),
+      deletedByEmail: String(entry.deletedByEmail || entry.deleted_by_email || "").trim().toLowerCase(),
+      deletedAt: Number(new Date(entry.deletedAt || entry.deleted_at || entry.updatedAt || entry.updated_at || Date.now()).getTime()) || Date.now(),
     };
   });
   return nextState;
@@ -16376,9 +16397,18 @@ const headerHideTimerRef = useRef(null);
       .filter((entry) => entry.isPublished && !entry.deletedAt)
       .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
   }, [contentRelationshipState.publishedSubjectSources]);
-  const archivedLessonVariantKeys = useMemo(() => new Set(
-    visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId)),
-  ), [visibleLessonArchives]);
+  const archivedLessonVariantKeys = useMemo(() => {
+    const nextKeys = new Set(
+      visibleLessonArchives.map((entry) => buildLessonArchiveKey(entry.subject, entry.grade, entry.lessonKey, entry.sourceType, entry.contentId)),
+    );
+    Object.values(builtinLessonLayerState.tombstones || {}).forEach((entry) => {
+      const normalized = entry && typeof entry === "object" ? entry : null;
+      if (!normalized) return;
+      const slotKey = buildLessonArchiveKey(normalized.subject, normalized.grade, normalized.lessonKey, "slot");
+      if (slotKey) nextKeys.add(slotKey);
+    });
+    return nextKeys;
+  }, [builtinLessonLayerState.tombstones, visibleLessonArchives]);
   const publishedLessonContentLookup = useMemo(() => {
     const lookup = new Map();
     Object.values(publishedContentState.lessonsBySubjectGrade || {}).forEach((bucket) => {
@@ -20966,6 +20996,17 @@ const headerHideTimerRef = useRef(null);
         lessonArchives: upsertLessonArchiveEntry(current?.lessonArchives, row),
         lastUpdatedAt: Date.now(),
       }));
+      const slotKey = buildBuiltinLessonSlotKey(group.subjectId, group.grade, group.canonicalLessonKey);
+      const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+      nextLayerState.tombstones[slotKey] = {
+        subject: group.subjectId,
+        grade: Number(group.grade),
+        lessonKey: group.canonicalLessonKey,
+        title: String(group.title || group.activeLesson?.title || group.canonicalLessonKey).trim(),
+        deletedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+        deletedAt: Date.now(),
+      };
+      await persistBuiltinLessonLayerState(nextLayerState);
       updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
       await refreshContentRelationshipStateRef.current();
       showAppToast(joinLocalizedText("Lesson slot removed", "سبق خانہ ہٹا دیا گیا", language), "check");
@@ -20975,7 +21016,7 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
   const handleQuickRemoveLessonGroup = useCallback(async (group) => {
     const activeVariant = group?.activeVariant || null;
     if (!activeVariant) return;
@@ -21018,6 +21059,10 @@ const headerHideTimerRef = useRef(null);
           delete nextLayerState.slots[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)];
         }
         await persistBuiltinLessonLayerState(nextLayerState);
+      } else if (normalized.sourceType === "slot") {
+        nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+        delete nextLayerState.tombstones[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)];
+        await persistBuiltinLessonLayerState(nextLayerState);
       }
       const client = ensureSupabaseClientRef.current();
       const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
@@ -21049,6 +21094,17 @@ const headerHideTimerRef = useRef(null);
         const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
         delete nextLayerState.archives[normalized.archiveId];
         await persistBuiltinLessonLayerState(nextLayerState);
+      } else if (normalized.sourceType === "slot") {
+        const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+        nextLayerState.tombstones[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)] = {
+          subject: normalized.subject,
+          grade: Number(normalized.grade),
+          lessonKey: normalized.lessonKey,
+          title: String(normalized.title || normalized.lessonKey).trim(),
+          deletedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+          deletedAt: Date.now(),
+        };
+        await persistBuiltinLessonLayerState(nextLayerState);
       }
       const client = ensureSupabaseClientRef.current();
       const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
@@ -21066,7 +21122,7 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [builtinLessonLayerState, canAdministerLessonLibrary, language, persistBuiltinLessonLayerState, showAppToast]);
+  }, [builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast]);
   const lessonEditContextValue = useMemo(() => ({
     enabled: lessonEditMode,
     draft: lessonEditDraft,
