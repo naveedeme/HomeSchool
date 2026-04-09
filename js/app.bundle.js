@@ -1461,24 +1461,173 @@
     });
     return nodes;
   }
-  function collectDiaryExercisePartOutlineNodes(exercise = {}, baseKey = "", routeMeta = {}, isUrdu = false) {
-    const nodes = [];
-    const parts = Array.isArray(exercise == null ? void 0 : exercise.parts) ? exercise.parts : [];
-    parts.forEach((part, index) => {
-      const label = normalizeDiaryOutlineLeafLabel(part, isUrdu ? `\u062D\u0635\u06C1 ${index + 1}` : `Part ${index + 1}`);
-      if (!label) return;
-      nodes.push({
-        key: `${baseKey}_part_${index}`,
-        label,
+  const DIARY_EXERCISE_META_KEYS = /* @__PURE__ */ new Set([
+    "q",
+    "prompt",
+    "question",
+    "label",
+    "title",
+    "name",
+    "heading",
+    "text",
+    "content",
+    "c",
+    "id",
+    "key",
+    "targetId",
+    "exerciseId",
+    "__groupLabel"
+  ]);
+  const DIARY_EXERCISE_ANSWER_KEYS = /* @__PURE__ */ new Set([
+    "ans",
+    "answer",
+    "answers",
+    "correct",
+    "correctAnswer",
+    "correctAnswers",
+    "solution",
+    "solutions",
+    "explanation",
+    "hint"
+  ]);
+  function buildDiaryExerciseCollectionLabel(rawKey = "", isUrdu = false) {
+    const safeKey = String(rawKey || "").trim();
+    if (!safeKey) return isUrdu ? "\u062A\u0641\u0635\u06CC\u0644" : "Details";
+    const spaced = safeKey.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!spaced) return isUrdu ? "\u062A\u0641\u0635\u06CC\u0644" : "Details";
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  }
+  function hasDiaryExerciseNestedContent(value) {
+    if (Array.isArray(value)) return value.some((entry) => hasDiaryExerciseNestedContent(entry));
+    if (value && typeof value === "object") {
+      return Object.entries(value).some(([key, entryValue]) => {
+        if (String(key || "").startsWith("__")) return false;
+        return hasDiaryExerciseNestedContent(entryValue);
+      });
+    }
+    return Boolean(String(value || "").trim());
+  }
+  function getDiaryExerciseNestedEntries(source = {}) {
+    if (!source || typeof source !== "object" || Array.isArray(source)) return [];
+    const preferredOrder = [
+      "parts",
+      "items",
+      "questions",
+      "questionGroups",
+      "groups",
+      "sections",
+      "rows",
+      "entries",
+      "matches",
+      "pairs",
+      "blanks",
+      "sentences",
+      "words",
+      "examples"
+    ];
+    const scoreKey = (key = "") => {
+      const safeKey = String(key || "").trim();
+      const preferredIndex = preferredOrder.indexOf(safeKey);
+      return preferredIndex >= 0 ? preferredIndex : preferredOrder.length + 1;
+    };
+    return Object.entries(source).filter(([key]) => {
+      const safeKey = String(key || "").trim();
+      return safeKey && !safeKey.startsWith("__") && !DIARY_EXERCISE_META_KEYS.has(safeKey) && !DIARY_EXERCISE_ANSWER_KEYS.has(safeKey);
+    }).filter(([, value]) => hasDiaryExerciseNestedContent(value)).sort((left, right) => {
+      const scoreDelta = scoreKey(left[0]) - scoreKey(right[0]);
+      if (scoreDelta) return scoreDelta;
+      return String(left[0] || "").localeCompare(String(right[0] || ""));
+    });
+  }
+  function collectDiaryExerciseValueNodes(value, baseKey = "", routeMeta = {}, isUrdu = false, options = {}) {
+    const directListKeys = /* @__PURE__ */ new Set(["parts", "items", "questions", "rows", "entries", "matches", "pairs", "blanks", "sentences", "words", "examples"]);
+    const rawKey = String((options == null ? void 0 : options.rawKey) || "").trim();
+    if (Array.isArray(value)) {
+      const itemNodes = value.flatMap((entry, index) => {
+        const fallbackLabel = rawKey ? `${buildDiaryExerciseCollectionLabel(rawKey, isUrdu)} ${index + 1}` : isUrdu ? `\u062D\u0635\u06C1 ${index + 1}` : `Part ${index + 1}`;
+        return collectDiaryExerciseValueNodes(entry, `${baseKey}_${rawKey || "item"}_${index}`, routeMeta, isUrdu, {
+          fallbackLabel
+        });
+      });
+      if (!rawKey || directListKeys.has(rawKey)) return itemNodes;
+      if (!itemNodes.length) return [];
+      return [{
+        key: `${baseKey}_${rawKey}`,
+        label: buildDiaryExerciseCollectionLabel(rawKey, isUrdu),
         routeMeta: {
           ...routeMeta,
           subTab: "exercises",
           targetId: String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "exercises") || "").trim()
         },
-        children: []
-      });
-    });
-    return nodes;
+        children: itemNodes
+      }];
+    }
+    if (value && typeof value === "object") {
+      const nestedEntries = getDiaryExerciseNestedEntries(value);
+      const label2 = normalizeDiaryOutlineLeafLabel(
+        value,
+        String((options == null ? void 0 : options.fallbackLabel) || buildDiaryExerciseCollectionLabel(rawKey, isUrdu) || "").trim()
+      );
+      if (!nestedEntries.length) {
+        if (!label2) return [];
+        return [{
+          key: `${baseKey}_leaf`,
+          label: label2,
+          routeMeta: {
+            ...routeMeta,
+            subTab: "exercises",
+            targetId: String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "exercises") || "").trim()
+          },
+          children: []
+        }];
+      }
+      const children = nestedEntries.flatMap(([childKey, childValue], childIndex) => collectDiaryExerciseValueNodes(
+        childValue,
+        `${baseKey}_${childKey}_${childIndex}`,
+        routeMeta,
+        isUrdu,
+        {
+          rawKey: childKey,
+          fallbackLabel: buildDiaryExerciseCollectionLabel(childKey, isUrdu)
+        }
+      ));
+      return [{
+        key: `${baseKey}_node`,
+        label: label2 || buildDiaryExerciseCollectionLabel(rawKey, isUrdu),
+        routeMeta: {
+          ...routeMeta,
+          subTab: "exercises",
+          targetId: String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "exercises") || "").trim()
+        },
+        children
+      }];
+    }
+    const label = normalizeDiaryOutlineLeafLabel(value, String((options == null ? void 0 : options.fallbackLabel) || "").trim());
+    if (!label) return [];
+    return [{
+      key: `${baseKey}_leaf`,
+      label,
+      routeMeta: {
+        ...routeMeta,
+        subTab: "exercises",
+        targetId: String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "exercises") || "").trim()
+      },
+      children: []
+    }];
+  }
+  function collectDiaryExercisePartOutlineNodes(exercise = {}, baseKey = "", routeMeta = {}, isUrdu = false) {
+    const nestedEntries = getDiaryExerciseNestedEntries(exercise);
+    if (!nestedEntries.length) return [];
+    return nestedEntries.flatMap(([childKey, childValue], index) => collectDiaryExerciseValueNodes(
+      childValue,
+      `${baseKey}_${childKey}_${index}`,
+      routeMeta,
+      isUrdu,
+      {
+        rawKey: childKey,
+        fallbackLabel: buildDiaryExerciseCollectionLabel(childKey, isUrdu)
+      }
+    ));
   }
   function attachDiaryRouteMeta(nodes = [], extraRouteMeta = {}) {
     return (Array.isArray(nodes) ? nodes : []).map((node) => ({
