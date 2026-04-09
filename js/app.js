@@ -16239,7 +16239,7 @@ const headerHideTimerRef = useRef(null);
     const safeSubjectId = String(subjectId || "").trim().toLowerCase();
     const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
     const assignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
-      schoolId: String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim(),
+      schoolId: String(activeInstitutionSchoolId || "").trim(),
       targetGrade,
       targetStudentEmail: scopedContentActivationViewerEmail,
     });
@@ -16264,22 +16264,22 @@ const headerHideTimerRef = useRef(null);
       .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lesson?.title || left.lessonKey).localeCompare(String(right.lesson?.title || right.lessonKey)));
     const hasCoverage = subjectRows.some((entry) => !entry.isHidden) || entries.length > 0;
     return { assignment, pack, subjectRows, lessonRows, entries, hasCoverage };
-  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
+  }, [activeInstitutionSchoolId, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
   const getEffectiveSubjectActivation = useCallback((subjectId, targetGrade) => resolveScopedActivation(visibleContentActivations, {
     activationType: "subject",
     subject: subjectId,
-    schoolId: String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim(),
+    schoolId: String(activeInstitutionSchoolId || "").trim(),
     targetGrade,
     targetStudentEmail: scopedContentActivationViewerEmail,
-  }), [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, scopedContentActivationViewerEmail, visibleContentActivations]);
+  }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
   const getEffectiveLessonActivation = useCallback((subjectId, targetGrade, lessonKey) => resolveScopedActivation(visibleContentActivations, {
     activationType: "lesson",
     subject: subjectId,
     lessonKey,
-    schoolId: String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim(),
+    schoolId: String(activeInstitutionSchoolId || "").trim(),
     targetGrade,
     targetStudentEmail: scopedContentActivationViewerEmail,
-  }), [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, scopedContentActivationViewerEmail, visibleContentActivations]);
+  }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
   const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
     const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
     const useCurriculumPack = Boolean(curriculumPackContext.assignment?.packId) && (curriculumPackContext.entries.length > 0 || !curriculumRuntimeSettings.allowBuiltinFallback);
@@ -16384,7 +16384,7 @@ const headerHideTimerRef = useRef(null);
   const allSubjects = useMemo(() => {
     const customSubjects = Object.values(customContentState.subjectsById || {});
     const currentAssignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
-      schoolId: String(activeInstitutionSchoolIdResolved || activeInstitutionSchoolId || "").trim(),
+      schoolId: String(activeInstitutionSchoolId || "").trim(),
       targetGrade: grade,
       targetStudentEmail: scopedContentActivationViewerEmail,
     });
@@ -16399,7 +16399,7 @@ const headerHideTimerRef = useRef(null);
     const packSubjects = buildCurriculumPackSubjectDefinitions(packSubjectRows, packLessonRows, SUBJECTS);
     const baseSubjects = curriculumRuntimeSettings.allowBuiltinFallback ? mergeSubjectCollections(SUBJECTS, packSubjects) : packSubjects;
     return mergeSubjectCollections(baseSubjects, customSubjects);
-  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, curriculumPackSubjectRowsByPack, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.subjectsById, grade, scopedContentActivationViewerEmail, visibleCurriculumPackLessons, visibleCurriculumScopeAssignments]);
+  }, [activeInstitutionSchoolId, curriculumPackSubjectRowsByPack, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.subjectsById, grade, scopedContentActivationViewerEmail, visibleCurriculumPackLessons, visibleCurriculumScopeAssignments]);
   const contentDataLoader = useMemo(() => ({
     ...window.HomeSchoolData,
     SUBJECTS: allSubjects,
