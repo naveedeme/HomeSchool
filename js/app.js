@@ -223,6 +223,42 @@ function createEmptyPublishedContentState() {
   };
 }
 
+function normalizePublishedContentSnapshot(snapshot = {}) {
+  const nextState = createEmptyPublishedContentState();
+  const lessons = Array.isArray(snapshot?.lessons) ? snapshot.lessons : [];
+  const quizzes = Array.isArray(snapshot?.quizzes) ? snapshot.quizzes : [];
+  lessons.forEach((record) => {
+    const subject = String(record?.subject || "").trim();
+    const grade = Number(record?.grade);
+    const lessonKey = String(record?.lessonKey || record?.data?.key || record?.data?.id || "").trim();
+    if (!subject || !Number.isFinite(grade) || !lessonKey || !record?.data) return;
+    const bucketKey = `${subject}::${grade}`;
+    if (!nextState.lessonsBySubjectGrade[bucketKey]) nextState.lessonsBySubjectGrade[bucketKey] = [];
+    nextState.lessonsBySubjectGrade[bucketKey].push(cloneSerializableValue(record.data));
+  });
+  quizzes.forEach((record) => {
+    const subject = String(record?.subject || "").trim();
+    const grade = Number(record?.grade);
+    const lessonKey = String(record?.lessonKey || "").trim();
+    if (!subject || !Number.isFinite(grade) || !lessonKey) return;
+    nextState.quizzesByKey[`${subject}::${grade}::${lessonKey}`] = Array.isArray(record?.questions)
+      ? cloneSerializableValue(record.questions)
+      : [];
+  });
+  nextState.loaded = Boolean(snapshot?.loaded) || lessons.length > 0 || quizzes.length > 0;
+  return nextState;
+}
+
+function hasMeaningfulPublishedContentSnapshot(snapshot = null) {
+  const normalized = normalizePublishedContentSnapshot(snapshot || {});
+  return Boolean(
+    Object.keys(normalized.lessonsBySubjectGrade || {}).length
+    || Object.keys(normalized.quizzesByKey || {}).length
+  );
+}
+
+const MANUAL_CURRICULUM_REFRESH_ONLY = true;
+
 function normalizeCustomContentSnapshot(snapshot = {}) {
   const nextState = createEmptyCustomContentState();
   const subjects = Array.isArray(snapshot?.subjects) ? snapshot.subjects : [];
@@ -15060,6 +15096,7 @@ function HomeschoolApp() {
   const storedDictionarySyncConflicts = sanitizeDictionaryConflictRecords(stored?.dictionarySyncConflicts || []);
   const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
   const storedAiTutorHistory = localStorageFallback("hs_ai_tutor_history") || {};
+  const storedPublishedContentSnapshot = normalizePublishedContentSnapshot(localStorageFallback("hs_published_content_snapshot") || {});
   const storedContentRelationshipSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
   const initialTutorLanguage = stored?.language || "en";
   const initialTutorSessions = normalizeTutorSessions(storedAiTutorHistory.sessions, initialTutorLanguage);
@@ -15087,6 +15124,8 @@ function HomeschoolApp() {
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
   const persistCustomizationRef = useRef(null);
   const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
+  const publishedContentSnapshotPersistTimerRef = useRef(null);
+  const curriculumRelationshipSnapshotPersistTimerRef = useRef(null);
   const [language, setLanguage] = useState(stored?.language || "en");
   const [themeMode, setThemeMode] = useState(stored?.themeMode || "light");
   const [fontSizeMode, setFontSizeMode] = useState(["small", "normal", "large", "xlarge"].includes(stored?.fontSizeMode) ? stored.fontSizeMode : "normal");
@@ -15177,7 +15216,7 @@ function HomeschoolApp() {
   const [selectedAiProvider, setSelectedAiProvider] = useState(storedAiTutorPreferences?.providerId || "openai");
   const [currentVersion, setCurrentVersion] = useState(window.HomeSchoolData.VERSION);
   const [customContentState, setCustomContentState] = useState(createEmptyCustomContentState());
-  const [publishedContentState, setPublishedContentState] = useState(createEmptyPublishedContentState());
+  const [publishedContentState, setPublishedContentState] = useState(storedPublishedContentSnapshot);
   const [contentRelationshipState, setContentRelationshipState] = useState(storedContentRelationshipSnapshot);
   const [activeInstitutionSchoolId, setActiveInstitutionSchoolId] = useState(String(stored?.activeInstitutionSchoolId || "").trim());
   const [chapterSourcePreferences, setChapterSourcePreferences] = useState(normalizeChapterSourcePreferences(stored?.chapterSourcePreferences || {}));
@@ -18431,10 +18470,7 @@ const headerHideTimerRef = useRef(null);
         lastUpdatedAt: Date.now(),
       }));
     }
-    refreshContentRelationshipStateRef.current().catch((error) => {
-      console.log("Unable to refresh curriculum relationship state after sync:", error);
-    });
-  }, [accessibleSchools, activeInstitutionSchoolIdResolved, allSubjects, canManageContentAccess, contentActivationDraftSchoolId, contentActivationDraftStudentEmail, contentIdentityEmail, curriculumLearnerEmail, curriculumPackLookup, ensureSupabaseClientRef, refreshContentRelationshipStateRef, requestCurriculumSelectionReconcile, subjectLookup, visibleCurriculumPackLessons, visibleCurriculumPackSubjects, visibleCurriculumPacks, visibleCurriculumScopeAssignments]);
+  }, [accessibleSchools, activeInstitutionSchoolIdResolved, allSubjects, canManageContentAccess, contentActivationDraftSchoolId, contentActivationDraftStudentEmail, contentIdentityEmail, curriculumLearnerEmail, curriculumPackLookup, ensureSupabaseClientRef, requestCurriculumSelectionReconcile, subjectLookup, visibleCurriculumPackLessons, visibleCurriculumPackSubjects, visibleCurriculumPacks, visibleCurriculumScopeAssignments]);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -22757,8 +22793,21 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   const refreshPublishedContentState = useCallback(async () => {
     const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
     if (!settings.url || !settings.anonKey) {
-      setPublishedContentState((current) => ({ ...createEmptyPublishedContentState(), loaded: true }));
-      return createEmptyPublishedContentState();
+      const currentSnapshot = normalizePublishedContentSnapshot(publishedContentState || {});
+      if (hasMeaningfulPublishedContentSnapshot(currentSnapshot)) {
+        const nextState = { ...currentSnapshot, loaded: true };
+        setPublishedContentState(nextState);
+        return nextState;
+      }
+      const storedSnapshot = normalizePublishedContentSnapshot(localStorageFallback("hs_published_content_snapshot") || {});
+      if (hasMeaningfulPublishedContentSnapshot(storedSnapshot)) {
+        const nextState = { ...storedSnapshot, loaded: true };
+        setPublishedContentState(nextState);
+        return nextState;
+      }
+      const nextState = { ...createEmptyPublishedContentState(), loaded: true };
+      setPublishedContentState(nextState);
+      return nextState;
     }
     try {
       const client = ensureSupabaseClient();
@@ -22774,10 +22823,14 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       return normalized;
     } catch (error) {
       console.log("Unable to refresh published chapter content:", error);
-      setPublishedContentState((current) => ({ ...current, loaded: true }));
-      return createEmptyPublishedContentState();
+      const currentSnapshot = normalizePublishedContentSnapshot(publishedContentState || {});
+      const nextState = hasMeaningfulPublishedContentSnapshot(currentSnapshot)
+        ? { ...currentSnapshot, loaded: true }
+        : { ...createEmptyPublishedContentState(), loaded: true };
+      setPublishedContentState(nextState);
+      return nextState;
     }
-  }, [ensureSupabaseClient, supabaseDictionarySync]);
+  }, [ensureSupabaseClient, publishedContentState, supabaseDictionarySync]);
   const getRetainedContentRelationshipState = useCallback(() => {
     const currentSnapshot = normalizeStoredContentRelationshipSnapshot(contentRelationshipState || {});
     if (hasMeaningfulContentRelationshipSnapshot(currentSnapshot)) {
@@ -23870,54 +23923,71 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
 
   useEffect(() => {
     if (!dbLoaded) return undefined;
-    if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
-      setPublishedContentState((current) => ({ ...createEmptyPublishedContentState(), loaded: true }));
-      return undefined;
-    }
-    let cancelled = false;
-    refreshPublishedContentState().then((state) => {
-      if (cancelled) return;
-      if (!state?.loaded) {
-        setPublishedContentState((current) => ({ ...current, loaded: true }));
+    setPublishedContentState((current) => {
+      const normalizedCurrent = normalizePublishedContentSnapshot(current || {});
+      if (hasMeaningfulPublishedContentSnapshot(normalizedCurrent)) {
+        return { ...normalizedCurrent, loaded: true };
       }
-    }).catch((error) => {
-      console.log("Unable to load published chapter content:", error);
-      if (!cancelled) setPublishedContentState((current) => ({ ...current, loaded: true }));
+      const storedSnapshot = normalizePublishedContentSnapshot(localStorageFallback("hs_published_content_snapshot") || {});
+      return hasMeaningfulPublishedContentSnapshot(storedSnapshot)
+        ? { ...storedSnapshot, loaded: true }
+        : { ...createEmptyPublishedContentState(), loaded: true };
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [dbLoaded, refreshPublishedContentState, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
+    return undefined;
+  }, [dbLoaded]);
 
   useEffect(() => {
     if (!dbLoaded) return undefined;
-    if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey) {
-      setContentRelationshipState((current) => {
-        const normalizedCurrent = normalizeStoredContentRelationshipSnapshot(current || {});
-        if (hasMeaningfulContentRelationshipSnapshot(normalizedCurrent)) {
-          return { ...normalizedCurrent, loaded: true };
-        }
-        const storedSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
-        return hasMeaningfulContentRelationshipSnapshot(storedSnapshot)
-          ? { ...storedSnapshot, loaded: true }
-          : { ...createEmptyContentRelationshipState(), loaded: true };
-      });
-      return undefined;
-    }
-    let cancelled = false;
-    refreshContentRelationshipState().then((state) => {
-      if (cancelled) return;
-      if (!state?.loaded) {
-        setContentRelationshipState((current) => ({ ...current, loaded: true }));
+    setContentRelationshipState((current) => {
+      const normalizedCurrent = normalizeStoredContentRelationshipSnapshot(current || {});
+      if (hasMeaningfulContentRelationshipSnapshot(normalizedCurrent)) {
+        return { ...normalizedCurrent, loaded: true };
       }
-    }).catch((error) => {
-      console.log("Unable to load teacher-student relationships:", error);
-      if (!cancelled) setContentRelationshipState((current) => ({ ...current, loaded: true }));
+      const storedSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
+      return hasMeaningfulContentRelationshipSnapshot(storedSnapshot)
+        ? { ...storedSnapshot, loaded: true }
+        : { ...createEmptyContentRelationshipState(), loaded: true };
     });
-    return () => {
-      cancelled = true;
+    return undefined;
+  }, [dbLoaded]);
+
+  useEffect(() => {
+    if (publishedContentSnapshotPersistTimerRef.current) {
+      clearTimeout(publishedContentSnapshotPersistTimerRef.current);
+      publishedContentSnapshotPersistTimerRef.current = null;
+    }
+    const snapshot = {
+      loaded: Boolean(publishedContentState.loaded),
+      lessons: Object.entries(publishedContentState.lessonsBySubjectGrade || {}).flatMap(([bucketKey, lessons]) => {
+        const [subject = "", grade = ""] = String(bucketKey || "").split("::");
+        return (Array.isArray(lessons) ? lessons : []).map((lesson) => ({
+          subject,
+          grade: Number(grade),
+          lessonKey: String(lesson?.key || lesson?.id || lesson?.title || "").trim(),
+          data: cloneSerializableValue(lesson) || {},
+        }));
+      }),
+      quizzes: Object.entries(publishedContentState.quizzesByKey || {}).map(([bucketKey, questions]) => {
+        const [subject = "", grade = "", lessonKey = ""] = String(bucketKey || "").split("::");
+        return {
+          subject,
+          grade: Number(grade),
+          lessonKey,
+          questions: cloneSerializableValue(questions) || [],
+        };
+      }),
     };
-  }, [dbLoaded, refreshContentRelationshipState, supabaseAuthState.userId, supabaseDictionarySync.anonKey, supabaseDictionarySync.url]);
+    publishedContentSnapshotPersistTimerRef.current = setTimeout(() => {
+      localStorageFallback("hs_published_content_snapshot", snapshot);
+      publishedContentSnapshotPersistTimerRef.current = null;
+    }, 400);
+    return () => {
+      if (publishedContentSnapshotPersistTimerRef.current) {
+        clearTimeout(publishedContentSnapshotPersistTimerRef.current);
+        publishedContentSnapshotPersistTimerRef.current = null;
+      }
+    };
+  }, [publishedContentState]);
 
   useEffect(() => {
     const snapshot = {
@@ -23936,7 +24006,20 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       links: Array.isArray(contentRelationshipState.links) ? contentRelationshipState.links : [],
       lastUpdatedAt: Number(contentRelationshipState.lastUpdatedAt) || 0,
     };
-    localStorageFallback("hs_curriculum_relationship_snapshot", snapshot);
+    if (curriculumRelationshipSnapshotPersistTimerRef.current) {
+      clearTimeout(curriculumRelationshipSnapshotPersistTimerRef.current);
+      curriculumRelationshipSnapshotPersistTimerRef.current = null;
+    }
+    curriculumRelationshipSnapshotPersistTimerRef.current = setTimeout(() => {
+      localStorageFallback("hs_curriculum_relationship_snapshot", snapshot);
+      curriculumRelationshipSnapshotPersistTimerRef.current = null;
+    }, 400);
+    return () => {
+      if (curriculumRelationshipSnapshotPersistTimerRef.current) {
+        clearTimeout(curriculumRelationshipSnapshotPersistTimerRef.current);
+        curriculumRelationshipSnapshotPersistTimerRef.current = null;
+      }
+    };
   }, [contentRelationshipState]);
 
   useEffect(() => {
@@ -23993,6 +24076,9 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       existingChannel.unsubscribe();
       supabasePublishedContentRealtimeChannelRef.current = null;
     }
+    if (MANUAL_CURRICULUM_REFRESH_ONLY) {
+      return undefined;
+    }
     if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey || !supabaseDictionarySync.realtimeEnabled) {
       return undefined;
     }
@@ -24030,6 +24116,9 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     if (existingChannel?.unsubscribe) {
       existingChannel.unsubscribe();
       supabaseContentRelationshipRealtimeChannelRef.current = null;
+    }
+    if (MANUAL_CURRICULUM_REFRESH_ONLY) {
+      return undefined;
     }
     if (!supabaseDictionarySync.url || !supabaseDictionarySync.anonKey || !supabaseDictionarySync.realtimeEnabled || !supabaseAuthState.userId) {
       return undefined;
@@ -32930,6 +33019,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language) : joinLocalizedText("Import Content", "مواد درآمد کریں", language), language)}
               </button>
             ) : null}
+            <button type="button" className="ghost-cta" onClick={handleRefreshCurriculumContent} disabled={contentRelationshipBusy}>
+              {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
+            </button>
             {effectiveCanPublishContent ? (
               <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
                 {renderLocalizedTextNode(
