@@ -16171,9 +16171,6 @@ const headerHideTimerRef = useRef(null);
     () => (globalCurriculumAssignment?.packId ? curriculumPackLookup.get(globalCurriculumAssignment.packId) || null : null),
     [curriculumPackLookup, globalCurriculumAssignment],
   );
-  const curriculumScopeResolutionReady = !supabaseDictionarySync.url
-    || !supabaseDictionarySync.anonKey
-    || contentRelationshipState.loaded;
   useEffect(() => {
     const availablePackIds = new Set(visibleCurriculumPacks.map((entry) => entry.packId));
     const preferredPackId = String(globalCurriculumAssignment?.packId || "").trim();
@@ -18114,6 +18111,10 @@ const headerHideTimerRef = useRef(null);
     }
     const client = ensureSupabaseClientRef.current();
     const nowIso = new Date().toISOString();
+    const optimisticPacks = [];
+    const optimisticPackSubjects = [];
+    const optimisticPackLessons = [];
+    const optimisticAssignments = [];
     const exactAssignment = visibleCurriculumScopeAssignments.find((entry) => {
       if (entry.scopeType !== normalizedScopeType) return false;
       if (normalizedScopeType === "global") return true;
@@ -18155,6 +18156,8 @@ const headerHideTimerRef = useRef(null);
       };
       const { error: packError } = await client.from(SUPABASE_CURRICULUM_PACKS_TABLE).upsert(packRow, { onConflict: "pack_id" });
       if (packError) throw packError;
+      const normalizedPack = normalizeCurriculumPackRecord(packRow);
+      if (normalizedPack) optimisticPacks.push(normalizedPack);
       if (inheritedPackId) {
         const clonedSubjectRows = visibleCurriculumPackSubjects
           .filter((entry) => entry.packId === inheritedPackId)
@@ -18193,10 +18196,12 @@ const headerHideTimerRef = useRef(null);
         if (clonedSubjectRows.length) {
           const { error: subjectCloneError } = await client.from(SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE).upsert(clonedSubjectRows, { onConflict: "pack_subject_id" });
           if (subjectCloneError) throw subjectCloneError;
+          optimisticPackSubjects.push(...clonedSubjectRows.map((entry) => normalizeCurriculumPackSubjectRecord(entry)).filter(Boolean));
         }
         if (clonedLessonRows.length) {
           const { error: lessonCloneError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(clonedLessonRows, { onConflict: "pack_lesson_id" });
           if (lessonCloneError) throw lessonCloneError;
+          optimisticPackLessons.push(...clonedLessonRows.map((entry) => normalizeCurriculumPackLessonRecord(entry)).filter(Boolean));
         }
       }
       const assignmentId = normalizedScopeType === "global"
@@ -18228,6 +18233,8 @@ const headerHideTimerRef = useRef(null);
       };
       const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(assignmentRow, { onConflict: "assignment_id" });
       if (assignmentError) throw assignmentError;
+      const normalizedAssignment = normalizeCurriculumScopeAssignmentRecord(assignmentRow);
+      if (normalizedAssignment) optimisticAssignments.push(normalizedAssignment);
     }
     const targetSubject = normalizeSubjectDefinition(subjectPayload?.subjectMeta || subjectLookup[safeSubjectId] || { id: safeSubjectId, name: safeSubjectId, nameUr: safeSubjectId });
     const subjectRow = {
@@ -18250,6 +18257,8 @@ const headerHideTimerRef = useRef(null);
     };
     const { error: subjectError } = await client.from(SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE).upsert(subjectRow, { onConflict: "pack_subject_id" });
     if (subjectError) throw subjectError;
+    const normalizedSubjectRow = normalizeCurriculumPackSubjectRecord(subjectRow);
+    if (normalizedSubjectRow) optimisticPackSubjects.push(normalizedSubjectRow);
     if (syncType === "lesson") {
       const lessonData = cloneSerializableValue(lessonPayload?.lesson || {}) || {};
       const canonicalLessonKey = resolveCustomChapterLessonKey({
@@ -18278,6 +18287,8 @@ const headerHideTimerRef = useRef(null);
       };
       const { error: lessonError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(lessonRow, { onConflict: "pack_lesson_id" });
       if (lessonError) throw lessonError;
+      const normalizedLessonRow = normalizeCurriculumPackLessonRecord(lessonRow);
+      if (normalizedLessonRow) optimisticPackLessons.push(normalizedLessonRow);
     } else if (syncType === "subject") {
       const exportEntries = Array.isArray(subjectPayload?.entries) ? subjectPayload.entries : [];
       const nextLessonKeys = new Set();
@@ -18332,9 +18343,35 @@ const headerHideTimerRef = useRef(null);
       if (combinedRows.length) {
         const { error: lessonError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(combinedRows, { onConflict: "pack_lesson_id" });
         if (lessonError) throw lessonError;
+        optimisticPackLessons.push(...combinedRows.map((entry) => normalizeCurriculumPackLessonRecord(entry)).filter(Boolean));
       }
     }
-    await refreshContentRelationshipStateRef.current();
+    if (optimisticPacks.length || optimisticPackSubjects.length || optimisticPackLessons.length || optimisticAssignments.length) {
+      const mergeByKey = (rows, additions, getKey) => {
+        const nextMap = new Map();
+        (Array.isArray(rows) ? rows : []).forEach((entry) => {
+          const key = getKey(entry);
+          if (key) nextMap.set(key, entry);
+        });
+        additions.forEach((entry) => {
+          const key = getKey(entry);
+          if (key) nextMap.set(key, entry);
+        });
+        return Array.from(nextMap.values());
+      };
+      setContentRelationshipState((state) => ({
+        ...state,
+        loaded: true,
+        curriculumPacks: mergeByKey(state?.curriculumPacks, optimisticPacks, (entry) => normalizeCurriculumPackRecord(entry)?.packId),
+        curriculumPackSubjects: mergeByKey(state?.curriculumPackSubjects, optimisticPackSubjects, (entry) => normalizeCurriculumPackSubjectRecord(entry)?.packSubjectId),
+        curriculumPackLessons: mergeByKey(state?.curriculumPackLessons, optimisticPackLessons, (entry) => normalizeCurriculumPackLessonRecord(entry)?.packLessonId),
+        curriculumScopeAssignments: mergeByKey(state?.curriculumScopeAssignments, optimisticAssignments, (entry) => normalizeCurriculumScopeAssignmentRecord(entry)?.assignmentId),
+        lastUpdatedAt: Date.now(),
+      }));
+    }
+    refreshContentRelationshipStateRef.current().catch((error) => {
+      console.log("Unable to refresh curriculum relationship state after sync:", error);
+    });
   }, [accessibleSchools, activeInstitutionSchoolIdResolved, allSubjects, canManageContentAccess, contentActivationDraftSchoolId, contentActivationDraftStudentEmail, contentIdentityEmail, curriculumLearnerEmail, curriculumPackLookup, ensureSupabaseClientRef, refreshContentRelationshipStateRef, subjectLookup, visibleCurriculumPackLessons, visibleCurriculumPackSubjects, visibleCurriculumPacks, visibleCurriculumScopeAssignments]);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
@@ -32459,10 +32496,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     handleToggleSelectedChapterKey(group.canonicalLessonKey);
                     return;
                   }
-                  if (!curriculumScopeResolutionReady) {
-                    showAppToast(joinLocalizedText("Curriculum is still loading. Please wait a moment.", "نصاب ابھی لوڈ ہو رہا ہے۔ براہِ کرم ایک لمحہ انتظار کریں۔", language), "alert");
-                    return;
-                  }
                   setSelectedLesson(lesson);
                 }}
                 style={rtlUi ? { direction: "rtl", textAlign: "right" } : {}}
@@ -32531,17 +32564,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && !curriculumScopeResolutionReady && (
-        <div className="review-panel chapter-scope-panel" data-ui-language={language}>
-          <div className="review-panel-head">
-            <div>
-              <h3>{renderLocalizedTextNode(joinLocalizedText("Loading Curriculum", "نصاب لوڈ ہو رہا ہے", language), language)}</h3>
-              <p>{renderLocalizedTextNode(joinLocalizedText("The app is resolving the active curriculum source for this chapter so it opens with the final synced lesson.", "ایپ اس سبق کے لیے فعال نصابی ماخذ طے کر رہی ہے تاکہ باب آخری ہم آہنگ سبق کے ساتھ کھلے۔", language), language)}</p>
-            </div>
-          </div>
-        </div>
-      )}
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && (
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && (
         <LessonEditContext.Provider value={lessonEditContextValue}>
         <>
           {activeDiaryTask ? (
@@ -32978,7 +33001,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </LessonEditContext.Provider>
       )}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && !selDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
         <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: selectedLesson.key || "english", sectionLabel: selectedLesson.title }} />
           <button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 {ui.startQuiz}</button>
         </div>
@@ -33006,7 +33029,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {posTab === "verbs" && pacedPos.verbs.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVerbDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedAdverbDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedAdverbDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📝 Day {selectedAdverbDay.day} — Vocabulary</h3>{selectedAdverbDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33015,7 +33038,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedPrepDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedPrepDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📍 Day {selectedPrepDay.day} — Prepositions</h3>{selectedPrepDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33025,7 +33048,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {selectedPrepDay.difficult && (<div className="adverb-detail-section"><h3>📚 Difficult Words</h3>{selectedPrepDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>)}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedAdjDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedAdjDay && (<>
         <div className="tts-hint">🔊 Tap English forms → hear all 3 forms spoken | Tap Urdu → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>🏷️ Day {selectedAdjDay.day} — Adjective Forms</h3>{selectedAdjDay.words.map((w, i) => <AdjWordRow key={i} en={w.en} ur={w.ur} comp={w.comp} sup={w.super} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33034,7 +33057,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedConjDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedConjDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>🔗 Day {selectedConjDay.day} — Conjunctions</h3>{selectedConjDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33044,7 +33067,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {selectedConjDay.difficult && (<div className="adverb-detail-section"><h3>📚 Difficult Words</h3>{selectedConjDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>)}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedPronDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedPronDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>👤 Day {selectedPronDay.day} — Pronouns</h3>{selectedPronDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33053,7 +33076,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedNounDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedNounDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📦 Day {selectedNounDay.day} — Collective Nouns</h3>{selectedNounDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33062,7 +33085,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasAdverbs && selectedVerbDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && selectedVerbDay && (<>
         <div className="tts-hint">🔊 Tap V1 → V2 → V3 forms spoken | Tap Urdu → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>✏️ Day {selectedVerbDay.day} — Verb Forms</h3>{selectedVerbDay.words.map((w, i) => <VerbWordRow key={i} en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
@@ -33071,9 +33094,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && lessonRenderSource?.hasMathSub && mathSubIdx === null && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasMathSub && mathSubIdx === null && (<>
         {(() => { const isUr = selectedSubject?.id === "urdu"; return (<>
         <div className="lesson-detail" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /></div>
         <h3 className="section-title" style={{ marginTop: 8, direction: isUr?"rtl":"ltr", textAlign: isUr?"right":"left" }}>{isUr ? "📐 موضوعات" : "📐 Topics"}</h3>
@@ -33096,7 +33119,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </>); })()}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && lessonRenderSource?.hasMathSub && mathSubIdx !== null && (() => {
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasMathSub && mathSubIdx !== null && (() => {
         const sub = normalizeSubLesson(activeLessonSubs[mathSubIdx], selectedSubject?.id, { respectProvidedContent: respectProvidedLessonContent });
         const isTensesSub = !!sub?.isTensesSub;
         const adjustedDayLessons = sub.dayLessons;
@@ -33628,13 +33651,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </>);
       })()}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && lessonRenderSource?.hasVocab && !selectedVocabDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasVocab && !selectedVocabDay && (<>
         <div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "vocabulary", sectionLabel: lessonRenderSource?.title }} /></div>
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice | 55 Days of Vocabulary</div>
         {pacedVocab.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasVocab && selectedVocabDay && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasVocab && selectedVocabDay && (<>
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu → Urdu voice | Tap sentence → hear it!</div>
         <div className="adverb-detail-section"><h3>📝 Day {selectedVocabDay.day} — Words</h3>
           {selectedVocabDay.words.map((w, i) => (
@@ -33653,7 +33676,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && lessonRenderSource?.hasTenses && !selectedTensePara && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasTenses && !selectedTensePara && (<>
         <div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "tenses", sectionLabel: lessonRenderSource?.title }} /></div>
 
         <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
@@ -33686,7 +33709,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </>)}
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && curriculumScopeResolutionReady && selectedLesson.hasTenses && selectedTensePara && (<>
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasTenses && selectedTensePara && (<>
         <div className="tts-hint">🔊 Tap any sentence to hear it read aloud!</div>
         <div className="adverb-detail-section"><h3>📖 {selectedTensePara.title}</h3>
           {selectedTensePara.para.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => <SpeakableSentence key={i} text={s} lang="en" studyItem={{ subject: "english", section: "tenseParagraphs", sectionLabel: selectedTensePara.title }} />)}
@@ -36380,3 +36403,4 @@ if (!window.__HOME_SCHOOL_BOOTSTRAPPED__ && document.getElementById('root')) {
   root.render(<HomeschoolApp />);
   window.__HOME_SCHOOL_BOOTSTRAPPED__ = true;
 }
+
