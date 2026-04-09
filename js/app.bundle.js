@@ -13743,12 +13743,22 @@ ${marker} `);
     }, [archivedLessonVariantKeys, chapterSourcePreferences, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
     const getMergedLessons = useCallback((subjectId, targetGrade) => getMergedLessonGroups(subjectId, targetGrade).map((group) => group.activeLesson).filter(Boolean), [getMergedLessonGroups]);
     const getMergedQuiz = useCallback((subjectId, targetGrade, lessonKey) => {
-      var _a2, _b2, _c2;
+      var _a2, _b2, _c2, _d2;
       const normalizedLessonKey = String(lessonKey || "").trim();
+      const mergedGroup = getMergedLessonGroups(subjectId, targetGrade).find((group) => String((group == null ? void 0 : group.canonicalLessonKey) || "").trim() === normalizedLessonKey) || null;
+      const mergedVariant = (mergedGroup == null ? void 0 : mergedGroup.activeVariant) || null;
+      if ((mergedVariant == null ? void 0 : mergedVariant.sourceType) === "published" && mergedVariant.contentId) {
+        const publishedQuestions = publishedLessonQuestionLookup.get(String(mergedVariant.contentId || "").trim());
+        if (Array.isArray(publishedQuestions) && publishedQuestions.length > 0) return publishedQuestions;
+      }
+      if ((mergedVariant == null ? void 0 : mergedVariant.sourceType) === "custom") {
+        const customQuiz2 = (_a2 = customContentState.quizzesByKey) == null ? void 0 : _a2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
+        if (Array.isArray(customQuiz2) && customQuiz2.length > 0) return customQuiz2;
+      }
       const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
       const packEntry = curriculumPackContext.entries.find((entry) => String(entry.lessonKey || "").trim() === normalizedLessonKey) || null;
       if (Array.isArray(packEntry == null ? void 0 : packEntry.questions) && packEntry.questions.length > 0) return packEntry.questions;
-      if (((_a2 = curriculumPackContext.assignment) == null ? void 0 : _a2.packId) && !curriculumRuntimeSettings.allowBuiltinFallback) return [];
+      if (((_b2 = curriculumPackContext.assignment) == null ? void 0 : _b2.packId) && !curriculumRuntimeSettings.allowBuiltinFallback) return [];
       const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
       if ((subjectActivation == null ? void 0 : subjectActivation.sourceKind) === "published_subject" && subjectActivation.subjectSourceId) {
         const subjectSource = publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null;
@@ -13760,12 +13770,12 @@ ${marker} `);
         const publishedQuestions = publishedLessonQuestionLookup.get(String(lessonActivation.contentId || "").trim());
         if (Array.isArray(publishedQuestions) && publishedQuestions.length > 0) return publishedQuestions;
       }
-      const customQuiz = (_b2 = customContentState.quizzesByKey) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
+      const customQuiz = (_c2 = customContentState.quizzesByKey) == null ? void 0 : _c2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
       if (Array.isArray(customQuiz) && customQuiz.length > 0) return customQuiz;
-      const publishedQuiz = (_c2 = publishedContentState.quizzesByKey) == null ? void 0 : _c2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
+      const publishedQuiz = (_d2 = publishedContentState.quizzesByKey) == null ? void 0 : _d2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
       if (Array.isArray(publishedQuiz) && publishedQuiz.length > 0) return publishedQuiz;
       return getQuiz(subjectId, targetGrade, normalizedLessonKey) || [];
-    }, [curriculumRuntimeSettings.allowBuiltinFallback, customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
+    }, [curriculumRuntimeSettings.allowBuiltinFallback, customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, getMergedLessonGroups, getResolvedCurriculumPackContext, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
     const allSubjects = useMemo(() => {
       const customSubjects = Object.values(customContentState.subjectsById || {});
       const currentAssignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {

@@ -16392,6 +16392,17 @@ const headerHideTimerRef = useRef(null);
   ), [getMergedLessonGroups]);
   const getMergedQuiz = useCallback((subjectId, targetGrade, lessonKey) => {
     const normalizedLessonKey = String(lessonKey || "").trim();
+    const mergedGroup = getMergedLessonGroups(subjectId, targetGrade)
+      .find((group) => String(group?.canonicalLessonKey || "").trim() === normalizedLessonKey) || null;
+    const mergedVariant = mergedGroup?.activeVariant || null;
+    if (mergedVariant?.sourceType === "published" && mergedVariant.contentId) {
+      const publishedQuestions = publishedLessonQuestionLookup.get(String(mergedVariant.contentId || "").trim());
+      if (Array.isArray(publishedQuestions) && publishedQuestions.length > 0) return publishedQuestions;
+    }
+    if (mergedVariant?.sourceType === "custom") {
+      const customQuiz = customContentState.quizzesByKey?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
+      if (Array.isArray(customQuiz) && customQuiz.length > 0) return customQuiz;
+    }
     const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
     const packEntry = curriculumPackContext.entries.find((entry) => String(entry.lessonKey || "").trim() === normalizedLessonKey) || null;
     if (Array.isArray(packEntry?.questions) && packEntry.questions.length > 0) return packEntry.questions;
@@ -16413,7 +16424,7 @@ const headerHideTimerRef = useRef(null);
     const publishedQuiz = publishedContentState.quizzesByKey?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
     if (Array.isArray(publishedQuiz) && publishedQuiz.length > 0) return publishedQuiz;
     return getQuiz(subjectId, targetGrade, normalizedLessonKey) || [];
-  }, [curriculumRuntimeSettings.allowBuiltinFallback, customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
+  }, [curriculumRuntimeSettings.allowBuiltinFallback, customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, getMergedLessonGroups, getResolvedCurriculumPackContext, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
   const allSubjects = useMemo(() => {
     const customSubjects = Object.values(customContentState.subjectsById || {});
     const currentAssignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
