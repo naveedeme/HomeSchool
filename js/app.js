@@ -32321,6 +32321,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("school")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
                 {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
               </button>
+              <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("grade")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
+                {renderLocalizedTextNode(joinLocalizedText("Sync with Grade", "جماعت کے ساتھ ہم آہنگی", language), language)}
+              </button>
+              <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
+                {renderLocalizedTextNode(joinLocalizedText("Sync with Learner", "سیکھنے والے کے ساتھ ہم آہنگی", language), language)}
+              </button>
               {canReplaceDefaultEverywhere ? (
                 <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("global")} disabled={contentRelationshipBusy}>
                   {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
@@ -32605,6 +32611,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 ) : null}
                 <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
                   {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
+                </button>
+                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("grade")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
+                  {renderLocalizedTextNode(joinLocalizedText("Sync with Grade", "جماعت کے ساتھ ہم آہنگی", language), language)}
+                </button>
+                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
+                  {renderLocalizedTextNode(joinLocalizedText("Sync with Learner", "سیکھنے والے کے ساتھ ہم آہنگی", language), language)}
                 </button>
                 {canReplaceDefaultEverywhere ? (
                   <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("global")} disabled={contentRelationshipBusy}>
