@@ -15457,6 +15457,7 @@ function HomeschoolApp() {
   const [selectedChapterKeys, setSelectedChapterKeys] = useState([]);
   const [subjectLessonArrangeMode, setSubjectLessonArrangeMode] = useState(false);
   const [subjectLessonRemoveMode, setSubjectLessonRemoveMode] = useState(false);
+  const [subjectLessonPermanentDeleteMode, setSubjectLessonPermanentDeleteMode] = useState(false);
   const [myChaptersArrangeMode, setMyChaptersArrangeMode] = useState(false);
   const [myChaptersArrangeSubjectId, setMyChaptersArrangeSubjectId] = useState("all");
   const [lessonOrderDrafts, setLessonOrderDrafts] = useState({});
@@ -20079,6 +20080,7 @@ const headerHideTimerRef = useRef(null);
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);
     setSubjectLessonRemoveMode(false);
+    setSubjectLessonPermanentDeleteMode(false);
     startLessonArrangeMode(selectedSubject.id, grade);
     setSubjectLessonArrangeMode(true);
   }, [canAdministerLessonLibrary, grade, selectedSubject, startLessonArrangeMode]);
@@ -20097,10 +20099,22 @@ const headerHideTimerRef = useRef(null);
       setChapterSelectionMode(false);
       setSelectedChapterKeys([]);
       setSubjectLessonArrangeMode(false);
+      setSubjectLessonPermanentDeleteMode(false);
       setLessonArrangeDragState(null);
     }
     setSubjectLessonRemoveMode((current) => !current);
   }, [canAdministerLessonLibrary, subjectLessonRemoveMode]);
+  const handleToggleSubjectLessonPermanentDeleteMode = useCallback(() => {
+    if (!canAdministerLessonLibrary) return;
+    if (!subjectLessonPermanentDeleteMode) {
+      setChapterSelectionMode(false);
+      setSelectedChapterKeys([]);
+      setSubjectLessonArrangeMode(false);
+      setSubjectLessonRemoveMode(false);
+      setLessonArrangeDragState(null);
+    }
+    setSubjectLessonPermanentDeleteMode((current) => !current);
+  }, [canAdministerLessonLibrary, subjectLessonPermanentDeleteMode]);
   const handleSaveSubjectLessonOrder = useCallback(() => {
     if (!selectedSubject || !grade) return;
     saveLessonOrderDraft(selectedSubject.id, grade);
@@ -21017,6 +21031,82 @@ const headerHideTimerRef = useRef(null);
       );
     }
   }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  const handleDeleteLessonSlotPermanently = useCallback(async (group) => {
+    if (!canAdministerLessonLibrary) {
+      showAppToast(joinLocalizedText("Only admins can permanently delete lessons.", "صرف ایڈمن اسباق کو مستقل حذف کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!group?.canonicalLessonKey) {
+      showAppToast(joinLocalizedText("No lesson slot is available here.", "یہاں کوئی سبق خانہ دستیاب نہیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in as admin first.", "پہلے ایڈمن کے طور پر سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    try {
+      const client = ensureSupabaseClientRef.current();
+      const schoolScopeId = String(activeInstitutionSchoolId || activeInstitutionSchoolIdResolved || "").trim();
+      const slotKey = buildBuiltinLessonSlotKey(group.subjectId, group.grade, group.canonicalLessonKey);
+      const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+      delete nextLayerState.slots[slotKey];
+      Object.entries(nextLayerState.archives || {}).forEach(([archiveId, archiveEntry]) => {
+        const normalizedArchive = normalizeLessonArchiveRecord(archiveEntry && typeof archiveEntry === "object"
+          ? { ...archiveEntry, archive_id: archiveId, archiveId }
+          : null);
+        if (!normalizedArchive) return;
+        if (normalizedArchive.subject !== group.subjectId) return;
+        if (Number(normalizedArchive.grade) !== Number(group.grade)) return;
+        if (normalizedArchive.lessonKey !== group.canonicalLessonKey) return;
+        const archiveSchoolId = String(normalizedArchive.schoolId || "").trim();
+        if ((schoolScopeId || archiveSchoolId) && archiveSchoolId !== schoolScopeId) return;
+        delete nextLayerState.archives[archiveId];
+      });
+      nextLayerState.tombstones[slotKey] = {
+        subject: group.subjectId,
+        grade: Number(group.grade),
+        lessonKey: group.canonicalLessonKey,
+        title: String(group.title || group.activeLesson?.title || group.canonicalLessonKey).trim(),
+        deletedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+        deletedAt: Date.now(),
+      };
+      await persistBuiltinLessonLayerState(nextLayerState);
+      let deleteQuery = client
+        .from(SUPABASE_LESSON_ARCHIVES_TABLE)
+        .delete()
+        .eq("subject", group.subjectId)
+        .eq("grade", Number(group.grade))
+        .eq("lesson_key", group.canonicalLessonKey);
+      deleteQuery = schoolScopeId ? deleteQuery.eq("school_id", schoolScopeId) : deleteQuery.is("school_id", null);
+      const { error } = await deleteQuery;
+      if (error) throw error;
+      setContentRelationshipState((current) => ({
+        ...current,
+        lessonArchives: (Array.isArray(current?.lessonArchives) ? current.lessonArchives : []).filter((entry) => {
+          const normalizedEntry = normalizeLessonArchiveRecord(entry);
+          if (!normalizedEntry) return false;
+          if (normalizedEntry.subject !== group.subjectId) return true;
+          if (Number(normalizedEntry.grade) !== Number(group.grade)) return true;
+          if (normalizedEntry.lessonKey !== group.canonicalLessonKey) return true;
+          const archiveSchoolId = String(normalizedEntry.schoolId || "").trim();
+          if ((schoolScopeId || archiveSchoolId) && archiveSchoolId !== schoolScopeId) return true;
+          return false;
+        }),
+        lastUpdatedAt: Date.now(),
+      }));
+      updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
+      if (String(getCanonicalLessonKeyForLesson(selectedLesson) || "").trim() === String(group.canonicalLessonKey || "").trim()) {
+        setSelectedLesson(null);
+      }
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Lesson deleted permanently", "سبق مستقل طور پر حذف کر دیا گیا", language), "check");
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(`Unable to permanently delete lesson: ${error?.message || error}`, `سبق مستقل طور پر حذف نہیں ہو سکا: ${error?.message || error}`, language),
+        "alert",
+      );
+    }
+  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, selectedLesson, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
   const handleQuickRemoveLessonGroup = useCallback(async (group) => {
     const activeVariant = group?.activeVariant || null;
     if (!activeVariant) return;
@@ -21136,6 +21226,7 @@ const headerHideTimerRef = useRef(null);
   useEffect(() => {
     setSubjectLessonArrangeMode(false);
     setSubjectLessonRemoveMode(false);
+    setSubjectLessonPermanentDeleteMode(false);
     setLessonArrangeDragState(null);
   }, [grade, selectedSubject?.id]);
   useEffect(() => {
@@ -33182,6 +33273,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               {renderLocalizedTextNode(subjectLessonRemoveMode ? joinLocalizedText("Done Removing", "حذف مکمل", language) : joinLocalizedText("Remove Chapter", "سبق حذف کریں", language), language)}
             </button>
           ) : null}
+          {canAdministerLessonLibrary ? (
+            <button type="button" className={`ghost-cta${subjectLessonPermanentDeleteMode ? " active" : ""}`} onClick={handleToggleSubjectLessonPermanentDeleteMode} disabled={!selectedSubjectChapterGroups.length}>
+              {renderLocalizedTextNode(subjectLessonPermanentDeleteMode ? joinLocalizedText("Done Deleting", "مستقل حذف مکمل", language) : joinLocalizedText("Delete Permanently", "مستقل حذف", language), language)}
+            </button>
+          ) : null}
           <div className="subject-chapter-actions-copy">
             {renderLocalizedTextNode(
               canImportChapters || canImportSubjects || canExportContent || canAdministerLessonLibrary
@@ -33191,6 +33287,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 ? joinLocalizedText("Hold Ctrl and drag a lesson card to reorder it, or use the move buttons, then save the order for this subject.", "سبق کو دوبارہ ترتیب دینے کے لیے Ctrl دبا کر کارڈ گھسیٹیں یا اوپر نیچے کے بٹن استعمال کریں، پھر اس مضمون کی ترتیب محفوظ کریں۔", language)
                 : subjectLessonRemoveMode
                 ? joinLocalizedText("Tap the delete icon on a lesson card to remove the built-in copy, delete the local copy, or remove the whole slot when only a published copy is active.", "سبق کارڈ پر حذف کے نشان کو دبائیں تاکہ بنیادی کاپی ہٹ جائے، مقامی کاپی حذف ہو جائے، یا جب صرف شائع شدہ کاپی فعال ہو تو پورا سبق خانہ ہٹ جائے۔", language)
+                : subjectLessonPermanentDeleteMode
+                ? joinLocalizedText("Tap the delete icon on a lesson card to permanently delete that whole lesson slot from the active built-in layer.", "سبق کارڈ پر حذف کے نشان کو دبائیں تاکہ وہ پورا سبق خانہ فعال بنیادی سطح سے مستقل طور پر حذف ہو جائے۔", language)
                 : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، باب پیک درآمد کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language))
                 : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "مواد درآمد اور اشاعت کے اوزار ایڈمن سنبھالتے ہیں۔ آپ کے موجودہ کردار کے لیے یہ مضمون صرف دیکھنے کے قابل ہے۔", language),
               language,
@@ -33351,7 +33449,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             return (
               <button
                 key={lesson.id}
-                className={`lesson-card${chapterSelectionMode && isSelected ? " selected" : ""}${subjectLessonArrangeMode ? " arrange-mode" : ""}${subjectLessonRemoveMode ? " remove-mode" : ""}${lessonArrangeDragState?.canonicalLessonKey === group.canonicalLessonKey ? " dragging" : ""}`}
+                className={`lesson-card${chapterSelectionMode && isSelected ? " selected" : ""}${subjectLessonArrangeMode ? " arrange-mode" : ""}${(subjectLessonRemoveMode || subjectLessonPermanentDeleteMode) ? " remove-mode" : ""}${lessonArrangeDragState?.canonicalLessonKey === group.canonicalLessonKey ? " dragging" : ""}`}
                 data-ui-language={language}
                 draggable={subjectLessonArrangeMode}
                 onDragStart={(event) => handleLessonArrangeDragStart(event, selectedSubject?.id, grade, group.canonicalLessonKey)}
@@ -33359,6 +33457,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 onDragEnd={subjectLessonArrangeMode ? handleLessonArrangeDragEnd : undefined}
                 onDrop={subjectLessonArrangeMode ? (event) => handleLessonArrangeDrop(event, selectedSubject?.id, grade, group.canonicalLessonKey) : undefined}
                 onClick={() => {
+                  if (subjectLessonPermanentDeleteMode) return;
                   if (subjectLessonRemoveMode) return;
                   if (subjectLessonArrangeMode) return;
                   if (chapterSelectionMode) {
@@ -33369,21 +33468,29 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 }}
                 style={rtlUi ? { direction: "rtl", textAlign: "right" } : {}}
               >
-                {subjectLessonRemoveMode ? (
+                {(subjectLessonRemoveMode || subjectLessonPermanentDeleteMode) ? (
                   <span
                     className="lesson-card-remove-trigger"
                     role="button"
                     tabIndex={0}
-                    title={renderLocalizedTextNode(joinLocalizedText("Remove this chapter", "یہ سبق حذف کریں", language), language)}
-                    aria-label={renderLocalizedTextNode(joinLocalizedText("Remove this chapter", "یہ سبق حذف کریں", language), language)}
+                    title={renderLocalizedTextNode(subjectLessonPermanentDeleteMode ? joinLocalizedText("Delete this lesson permanently", "اس سبق کو مستقل حذف کریں", language) : joinLocalizedText("Remove this chapter", "یہ سبق حذف کریں", language), language)}
+                    aria-label={renderLocalizedTextNode(subjectLessonPermanentDeleteMode ? joinLocalizedText("Delete this lesson permanently", "اس سبق کو مستقل حذف کریں", language) : joinLocalizedText("Remove this chapter", "یہ سبق حذف کریں", language), language)}
                     onClick={(event) => {
                       event.stopPropagation();
+                      if (subjectLessonPermanentDeleteMode) {
+                        handleDeleteLessonSlotPermanently(group);
+                        return;
+                      }
                       handleQuickRemoveLessonGroup(group);
                     }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         event.stopPropagation();
+                        if (subjectLessonPermanentDeleteMode) {
+                          handleDeleteLessonSlotPermanently(group);
+                          return;
+                        }
                         handleQuickRemoveLessonGroup(group);
                       }
                     }}
@@ -33408,6 +33515,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     {renderLocalizedTextNode(
                       subjectLessonArrangeMode
                         ? joinLocalizedText("Drag with Ctrl or use the move buttons", "Ctrl دبا کر گھسیٹیں یا بٹن استعمال کریں", language)
+                        : subjectLessonPermanentDeleteMode
+                        ? joinLocalizedText("Tap the top icon to permanently delete this lesson slot", "اس سبق خانے کو مستقل حذف کرنے کے لیے اوپر والا نشان دبائیں", language)
                         : chapterSelectionMode
                         ? isSelected
                           ? joinLocalizedText("Selected for export", "برآمد کے لیے منتخب", language)

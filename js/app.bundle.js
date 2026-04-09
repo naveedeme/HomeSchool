@@ -12876,6 +12876,7 @@ ${marker} `);
     const [selectedChapterKeys, setSelectedChapterKeys] = useState([]);
     const [subjectLessonArrangeMode, setSubjectLessonArrangeMode] = useState(false);
     const [subjectLessonRemoveMode, setSubjectLessonRemoveMode] = useState(false);
+    const [subjectLessonPermanentDeleteMode, setSubjectLessonPermanentDeleteMode] = useState(false);
     const [myChaptersArrangeMode, setMyChaptersArrangeMode] = useState(false);
     const [myChaptersArrangeSubjectId, setMyChaptersArrangeSubjectId] = useState("all");
     const [lessonOrderDrafts, setLessonOrderDrafts] = useState({});
@@ -17133,6 +17134,7 @@ ${marker} `);
       setChapterSelectionMode(false);
       setSelectedChapterKeys([]);
       setSubjectLessonRemoveMode(false);
+      setSubjectLessonPermanentDeleteMode(false);
       startLessonArrangeMode(selectedSubject.id, grade);
       setSubjectLessonArrangeMode(true);
     }, [canAdministerLessonLibrary, grade, selectedSubject, startLessonArrangeMode]);
@@ -17151,10 +17153,22 @@ ${marker} `);
         setChapterSelectionMode(false);
         setSelectedChapterKeys([]);
         setSubjectLessonArrangeMode(false);
+        setSubjectLessonPermanentDeleteMode(false);
         setLessonArrangeDragState(null);
       }
       setSubjectLessonRemoveMode((current) => !current);
     }, [canAdministerLessonLibrary, subjectLessonRemoveMode]);
+    const handleToggleSubjectLessonPermanentDeleteMode = useCallback(() => {
+      if (!canAdministerLessonLibrary) return;
+      if (!subjectLessonPermanentDeleteMode) {
+        setChapterSelectionMode(false);
+        setSelectedChapterKeys([]);
+        setSubjectLessonArrangeMode(false);
+        setSubjectLessonRemoveMode(false);
+        setLessonArrangeDragState(null);
+      }
+      setSubjectLessonPermanentDeleteMode((current) => !current);
+    }, [canAdministerLessonLibrary, subjectLessonPermanentDeleteMode]);
     const handleSaveSubjectLessonOrder = useCallback(() => {
       if (!selectedSubject || !grade) return;
       saveLessonOrderDraft(selectedSubject.id, grade);
@@ -18042,6 +18056,76 @@ ${marker} `);
         );
       }
     }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+    const handleDeleteLessonSlotPermanently = useCallback(async (group) => {
+      var _a2;
+      if (!canAdministerLessonLibrary) {
+        showAppToast(joinLocalizedText("Only admins can permanently delete lessons.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      if (!(group == null ? void 0 : group.canonicalLessonKey)) {
+        showAppToast(joinLocalizedText("No lesson slot is available here.", "\u06CC\u06C1\u0627\u06BA \u06A9\u0648\u0626\u06CC \u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      if (!supabaseAuthState.userId || !contentIdentityEmail) {
+        showAppToast(joinLocalizedText("Sign in as admin first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u0688\u0645\u0646 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      try {
+        const client = ensureSupabaseClientRef.current();
+        const schoolScopeId = String(activeInstitutionSchoolId || activeInstitutionSchoolIdResolved || "").trim();
+        const slotKey = buildBuiltinLessonSlotKey(group.subjectId, group.grade, group.canonicalLessonKey);
+        const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+        delete nextLayerState.slots[slotKey];
+        Object.entries(nextLayerState.archives || {}).forEach(([archiveId, archiveEntry]) => {
+          const normalizedArchive = normalizeLessonArchiveRecord(archiveEntry && typeof archiveEntry === "object" ? { ...archiveEntry, archive_id: archiveId, archiveId } : null);
+          if (!normalizedArchive) return;
+          if (normalizedArchive.subject !== group.subjectId) return;
+          if (Number(normalizedArchive.grade) !== Number(group.grade)) return;
+          if (normalizedArchive.lessonKey !== group.canonicalLessonKey) return;
+          const archiveSchoolId = String(normalizedArchive.schoolId || "").trim();
+          if ((schoolScopeId || archiveSchoolId) && archiveSchoolId !== schoolScopeId) return;
+          delete nextLayerState.archives[archiveId];
+        });
+        nextLayerState.tombstones[slotKey] = {
+          subject: group.subjectId,
+          grade: Number(group.grade),
+          lessonKey: group.canonicalLessonKey,
+          title: String(group.title || ((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.canonicalLessonKey).trim(),
+          deletedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+          deletedAt: Date.now()
+        };
+        await persistBuiltinLessonLayerState(nextLayerState);
+        let deleteQuery = client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("subject", group.subjectId).eq("grade", Number(group.grade)).eq("lesson_key", group.canonicalLessonKey);
+        deleteQuery = schoolScopeId ? deleteQuery.eq("school_id", schoolScopeId) : deleteQuery.is("school_id", null);
+        const { error } = await deleteQuery;
+        if (error) throw error;
+        setContentRelationshipState((current) => ({
+          ...current,
+          lessonArchives: (Array.isArray(current == null ? void 0 : current.lessonArchives) ? current.lessonArchives : []).filter((entry) => {
+            const normalizedEntry = normalizeLessonArchiveRecord(entry);
+            if (!normalizedEntry) return false;
+            if (normalizedEntry.subject !== group.subjectId) return true;
+            if (Number(normalizedEntry.grade) !== Number(group.grade)) return true;
+            if (normalizedEntry.lessonKey !== group.canonicalLessonKey) return true;
+            const archiveSchoolId = String(normalizedEntry.schoolId || "").trim();
+            if ((schoolScopeId || archiveSchoolId) && archiveSchoolId !== schoolScopeId) return true;
+            return false;
+          }),
+          lastUpdatedAt: Date.now()
+        }));
+        updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
+        if (String(getCanonicalLessonKeyForLesson(selectedLesson) || "").trim() === String(group.canonicalLessonKey || "").trim()) {
+          setSelectedLesson(null);
+        }
+        await refreshContentRelationshipStateRef.current();
+        showAppToast(joinLocalizedText("Lesson deleted permanently", "\u0633\u0628\u0642 \u0645\u0633\u062A\u0642\u0644 \u0637\u0648\u0631 \u067E\u0631 \u062D\u0630\u0641 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
+      } catch (error) {
+        showAppToast(
+          joinLocalizedText(`Unable to permanently delete lesson: ${(error == null ? void 0 : error.message) || error}`, `\u0633\u0628\u0642 \u0645\u0633\u062A\u0642\u0644 \u0637\u0648\u0631 \u067E\u0631 \u062D\u0630\u0641 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language),
+          "alert"
+        );
+      }
+    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, selectedLesson, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
     const handleQuickRemoveLessonGroup = useCallback(async (group) => {
       const activeVariant = (group == null ? void 0 : group.activeVariant) || null;
       if (!activeVariant) return;
@@ -18162,6 +18246,7 @@ ${marker} `);
     useEffect(() => {
       setSubjectLessonArrangeMode(false);
       setSubjectLessonRemoveMode(false);
+      setSubjectLessonPermanentDeleteMode(false);
       setLessonArrangeDragState(null);
     }, [grade, selectedSubject == null ? void 0 : selectedSubject.id]);
     useEffect(() => {
@@ -27656,8 +27741,8 @@ ${error.message || error}`);
     )) : null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleRefreshCurriculumContent, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Refresh Content", "\u0645\u0648\u0627\u062F \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language), language)), canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${chapterSelectionMode ? " active" : ""}`, onClick: handleToggleChapterSelectionMode }, renderLocalizedTextNode(
       chapterSelectionMode ? joinLocalizedText("Done Selecting", "\u0627\u0646\u062A\u062E\u0627\u0628 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Select Lessons", "\u0627\u0633\u0628\u0627\u0642 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language),
       language
-    )) : null, chapterSelectionMode && canExportContent ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSelectAllSubjectChapters, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Select All", "\u0633\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClearSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Export Selected", "\u0645\u0646\u062A\u062E\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportAllSubjectLessons, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportWholeSubject, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "\u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && !subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenSubjectLessonArrangeMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Arrange Lessons", "\u0627\u0633\u0628\u0627\u0642 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSaveSubjectLessonOrder, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Save Order", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleCancelSubjectLessonArrangeMode }, renderLocalizedTextNode(joinLocalizedText("Cancel Arrange", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u0646\u0633\u0648\u062E", language), language))) : null, canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${subjectLessonRemoveMode ? " active" : ""}`, onClick: handleToggleSubjectLessonRemoveMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(subjectLessonRemoveMode ? joinLocalizedText("Done Removing", "\u062D\u0630\u0641 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Remove Chapter", "\u0633\u0628\u0642 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
-      canImportChapters || canImportSubjects || canExportContent || canAdministerLessonLibrary ? chapterSelectionMode && canExportContent ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06C1\u06CC\u06BA\u06D4`, language) : subjectLessonArrangeMode ? joinLocalizedText("Hold Ctrl and drag a lesson card to reorder it, or use the move buttons, then save the order for this subject.", "\u0633\u0628\u0642 \u06A9\u0648 \u062F\u0648\u0628\u0627\u0631\u06C1 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u06A9\u0627\u0631\u0688 \u06AF\u06BE\u0633\u06CC\u0679\u06CC\u06BA \u06CC\u0627 \u0627\u0648\u067E\u0631 \u0646\u06CC\u0686\u06D2 \u06A9\u06D2 \u0628\u0679\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA\u06D4", language) : subjectLessonRemoveMode ? joinLocalizedText("Tap the delete icon on a lesson card to remove the built-in copy, delete the local copy, or remove the whole slot when only a published copy is active.", "\u0633\u0628\u0642 \u06A9\u0627\u0631\u0688 \u067E\u0631 \u062D\u0630\u0641 \u06A9\u06D2 \u0646\u0634\u0627\u0646 \u06A9\u0648 \u062F\u0628\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0646\u06CC\u0627\u062F\u06CC \u06A9\u0627\u067E\u06CC \u06C1\u0679 \u062C\u0627\u0626\u06D2\u060C \u0645\u0642\u0627\u0645\u06CC \u06A9\u0627\u067E\u06CC \u062D\u0630\u0641 \u06C1\u0648 \u062C\u0627\u0626\u06D2\u060C \u06CC\u0627 \u062C\u0628 \u0635\u0631\u0641 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC \u0641\u0639\u0627\u0644 \u06C1\u0648 \u062A\u0648 \u067E\u0648\u0631\u0627 \u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u06C1\u0679 \u062C\u0627\u0626\u06D2\u06D4", language) : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "\u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u0628\u0627\u0628 \u067E\u06CC\u06A9 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0627\u06CC\u06A9 \u067E\u06CC\u06A9 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language) : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u0627\u0648\u0631 \u0627\u0634\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0648\u0632\u0627\u0631 \u0627\u06CC\u0688\u0645\u0646 \u0633\u0646\u0628\u06BE\u0627\u0644\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0622\u067E \u06A9\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06CC\u06C1 \u0645\u0636\u0645\u0648\u0646 \u0635\u0631\u0641 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0642\u0627\u0628\u0644 \u06C1\u06D2\u06D4", language),
+    )) : null, chapterSelectionMode && canExportContent ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSelectAllSubjectChapters, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Select All", "\u0633\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClearSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Export Selected", "\u0645\u0646\u062A\u062E\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportAllSubjectLessons, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportWholeSubject, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "\u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && !subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenSubjectLessonArrangeMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Arrange Lessons", "\u0627\u0633\u0628\u0627\u0642 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSaveSubjectLessonOrder, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Save Order", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleCancelSubjectLessonArrangeMode }, renderLocalizedTextNode(joinLocalizedText("Cancel Arrange", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u0646\u0633\u0648\u062E", language), language))) : null, canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${subjectLessonRemoveMode ? " active" : ""}`, onClick: handleToggleSubjectLessonRemoveMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(subjectLessonRemoveMode ? joinLocalizedText("Done Removing", "\u062D\u0630\u0641 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Remove Chapter", "\u0633\u0628\u0642 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${subjectLessonPermanentDeleteMode ? " active" : ""}`, onClick: handleToggleSubjectLessonPermanentDeleteMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(subjectLessonPermanentDeleteMode ? joinLocalizedText("Done Deleting", "\u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Delete Permanently", "\u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641", language), language)) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
+      canImportChapters || canImportSubjects || canExportContent || canAdministerLessonLibrary ? chapterSelectionMode && canExportContent ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06C1\u06CC\u06BA\u06D4`, language) : subjectLessonArrangeMode ? joinLocalizedText("Hold Ctrl and drag a lesson card to reorder it, or use the move buttons, then save the order for this subject.", "\u0633\u0628\u0642 \u06A9\u0648 \u062F\u0648\u0628\u0627\u0631\u06C1 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u06A9\u0627\u0631\u0688 \u06AF\u06BE\u0633\u06CC\u0679\u06CC\u06BA \u06CC\u0627 \u0627\u0648\u067E\u0631 \u0646\u06CC\u0686\u06D2 \u06A9\u06D2 \u0628\u0679\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA\u06D4", language) : subjectLessonRemoveMode ? joinLocalizedText("Tap the delete icon on a lesson card to remove the built-in copy, delete the local copy, or remove the whole slot when only a published copy is active.", "\u0633\u0628\u0642 \u06A9\u0627\u0631\u0688 \u067E\u0631 \u062D\u0630\u0641 \u06A9\u06D2 \u0646\u0634\u0627\u0646 \u06A9\u0648 \u062F\u0628\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0646\u06CC\u0627\u062F\u06CC \u06A9\u0627\u067E\u06CC \u06C1\u0679 \u062C\u0627\u0626\u06D2\u060C \u0645\u0642\u0627\u0645\u06CC \u06A9\u0627\u067E\u06CC \u062D\u0630\u0641 \u06C1\u0648 \u062C\u0627\u0626\u06D2\u060C \u06CC\u0627 \u062C\u0628 \u0635\u0631\u0641 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC \u0641\u0639\u0627\u0644 \u06C1\u0648 \u062A\u0648 \u067E\u0648\u0631\u0627 \u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u06C1\u0679 \u062C\u0627\u0626\u06D2\u06D4", language) : subjectLessonPermanentDeleteMode ? joinLocalizedText("Tap the delete icon on a lesson card to permanently delete that whole lesson slot from the active built-in layer.", "\u0633\u0628\u0642 \u06A9\u0627\u0631\u0688 \u067E\u0631 \u062D\u0630\u0641 \u06A9\u06D2 \u0646\u0634\u0627\u0646 \u06A9\u0648 \u062F\u0628\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0648\u06C1 \u067E\u0648\u0631\u0627 \u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u0641\u0639\u0627\u0644 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0637\u062D \u0633\u06D2 \u0645\u0633\u062A\u0642\u0644 \u0637\u0648\u0631 \u067E\u0631 \u062D\u0630\u0641 \u06C1\u0648 \u062C\u0627\u0626\u06D2\u06D4", language) : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "\u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u0628\u0627\u0628 \u067E\u06CC\u06A9 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0627\u06CC\u06A9 \u067E\u06CC\u06A9 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language) : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u0627\u0648\u0631 \u0627\u0634\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0648\u0632\u0627\u0631 \u0627\u06CC\u0688\u0645\u0646 \u0633\u0646\u0628\u06BE\u0627\u0644\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0622\u067E \u06A9\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06CC\u06C1 \u0645\u0636\u0645\u0648\u0646 \u0635\u0631\u0641 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0642\u0627\u0628\u0644 \u06C1\u06D2\u06D4", language),
       language
     ))), canManageScopedCurriculum ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-scope-panel", "data-ui-language": language, style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Subject Source Control", "\u0645\u0636\u0645\u0648\u0646 \u0645\u0627\u062E\u0630 \u06A9\u0646\u0679\u0631\u0648\u0644", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Publish this subject as one reusable source, then activate it for one school, one grade, one learner, or everywhere.", "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u0648 \u0627\u06CC\u06A9 \u0642\u0627\u0628\u0644\u0650 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u0645\u0627\u062E\u0630 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644\u060C \u0627\u06CC\u06A9 \u062C\u0645\u0627\u0639\u062A\u060C \u0627\u06CC\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645\u060C \u06CC\u0627 \u06C1\u0631 \u062C\u06AF\u06C1 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0641\u0639\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
       (selectedSubjectActivePublishedSource == null ? void 0 : selectedSubjectActivePublishedSource.label) || joinLocalizedText("Built-in subject", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0645\u0636\u0645\u0648\u0646", language),
@@ -27685,7 +27770,7 @@ ${error.message || error}`);
         "button",
         {
           key: lesson.id,
-          className: `lesson-card${chapterSelectionMode && isSelected ? " selected" : ""}${subjectLessonArrangeMode ? " arrange-mode" : ""}${subjectLessonRemoveMode ? " remove-mode" : ""}${(lessonArrangeDragState == null ? void 0 : lessonArrangeDragState.canonicalLessonKey) === group.canonicalLessonKey ? " dragging" : ""}`,
+          className: `lesson-card${chapterSelectionMode && isSelected ? " selected" : ""}${subjectLessonArrangeMode ? " arrange-mode" : ""}${subjectLessonRemoveMode || subjectLessonPermanentDeleteMode ? " remove-mode" : ""}${(lessonArrangeDragState == null ? void 0 : lessonArrangeDragState.canonicalLessonKey) === group.canonicalLessonKey ? " dragging" : ""}`,
           "data-ui-language": language,
           draggable: subjectLessonArrangeMode,
           onDragStart: (event) => handleLessonArrangeDragStart(event, selectedSubject == null ? void 0 : selectedSubject.id, grade, group.canonicalLessonKey),
@@ -27693,6 +27778,7 @@ ${error.message || error}`);
           onDragEnd: subjectLessonArrangeMode ? handleLessonArrangeDragEnd : void 0,
           onDrop: subjectLessonArrangeMode ? (event) => handleLessonArrangeDrop(event, selectedSubject == null ? void 0 : selectedSubject.id, grade, group.canonicalLessonKey) : void 0,
           onClick: () => {
+            if (subjectLessonPermanentDeleteMode) return;
             if (subjectLessonRemoveMode) return;
             if (subjectLessonArrangeMode) return;
             if (chapterSelectionMode) {
@@ -27703,22 +27789,30 @@ ${error.message || error}`);
           },
           style: rtlUi ? { direction: "rtl", textAlign: "right" } : {}
         },
-        subjectLessonRemoveMode ? /* @__PURE__ */ React.createElement(
+        subjectLessonRemoveMode || subjectLessonPermanentDeleteMode ? /* @__PURE__ */ React.createElement(
           "span",
           {
             className: "lesson-card-remove-trigger",
             role: "button",
             tabIndex: 0,
-            title: renderLocalizedTextNode(joinLocalizedText("Remove this chapter", "\u06CC\u06C1 \u0633\u0628\u0642 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language),
-            "aria-label": renderLocalizedTextNode(joinLocalizedText("Remove this chapter", "\u06CC\u06C1 \u0633\u0628\u0642 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language),
+            title: renderLocalizedTextNode(subjectLessonPermanentDeleteMode ? joinLocalizedText("Delete this lesson permanently", "\u0627\u0633 \u0633\u0628\u0642 \u06A9\u0648 \u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Remove this chapter", "\u06CC\u06C1 \u0633\u0628\u0642 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language),
+            "aria-label": renderLocalizedTextNode(subjectLessonPermanentDeleteMode ? joinLocalizedText("Delete this lesson permanently", "\u0627\u0633 \u0633\u0628\u0642 \u06A9\u0648 \u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language) : joinLocalizedText("Remove this chapter", "\u06CC\u06C1 \u0633\u0628\u0642 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language),
             onClick: (event) => {
               event.stopPropagation();
+              if (subjectLessonPermanentDeleteMode) {
+                handleDeleteLessonSlotPermanently(group);
+                return;
+              }
               handleQuickRemoveLessonGroup(group);
             },
             onKeyDown: (event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 event.stopPropagation();
+                if (subjectLessonPermanentDeleteMode) {
+                  handleDeleteLessonSlotPermanently(group);
+                  return;
+                }
                 handleQuickRemoveLessonGroup(group);
               }
             }
@@ -27731,7 +27825,7 @@ ${error.message || error}`);
         sourceBadges.length ? /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row lesson-source-badges" }, sourceBadges.map((badge) => /* @__PURE__ */ React.createElement("span", { key: `${lesson.id}_${badge.tone}_${badge.label}`, className: `chapter-badge ${badge.tone}` }, renderLocalizedTextNode(badge.label, language)))) : null,
         /* @__PURE__ */ React.createElement("p", { className: previewIsUrdu ? "urdu-copy" : "" }, previewText),
         /* @__PURE__ */ React.createElement("div", { className: "lesson-status", style: { color: completed ? "var(--success)" : "var(--text-muted)" } }, /* @__PURE__ */ React.createElement("span", { "aria-hidden": "true" }, chapterSelectionMode ? isSelected ? "\u2611" : "\u2610" : completed ? "\u2705" : "\u25CB"), /* @__PURE__ */ React.createElement("span", { className: `lesson-status-copy${rtlUi ? " urdu-copy" : ""}` }, renderLocalizedTextNode(
-          subjectLessonArrangeMode ? joinLocalizedText("Drag with Ctrl or use the move buttons", "Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u06AF\u06BE\u0633\u06CC\u0679\u06CC\u06BA \u06CC\u0627 \u0628\u0679\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language) : chapterSelectionMode ? isSelected ? joinLocalizedText("Selected for export", "\u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628", language) : joinLocalizedText("Tap to select", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062F\u0628\u0627\u0626\u06CC\u06BA", language) : statusCopy,
+          subjectLessonArrangeMode ? joinLocalizedText("Drag with Ctrl or use the move buttons", "Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u06AF\u06BE\u0633\u06CC\u0679\u06CC\u06BA \u06CC\u0627 \u0628\u0679\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language) : subjectLessonPermanentDeleteMode ? joinLocalizedText("Tap the top icon to permanently delete this lesson slot", "\u0627\u0633 \u0633\u0628\u0642 \u062E\u0627\u0646\u06D2 \u06A9\u0648 \u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u0648\u067E\u0631 \u0648\u0627\u0644\u0627 \u0646\u0634\u0627\u0646 \u062F\u0628\u0627\u0626\u06CC\u06BA", language) : chapterSelectionMode ? isSelected ? joinLocalizedText("Selected for export", "\u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628", language) : joinLocalizedText("Tap to select", "\u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062F\u0628\u0627\u0626\u06CC\u06BA", language) : statusCopy,
           language
         ))),
         subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement("div", { className: "result-actions chapter-card-actions", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: (event) => {
