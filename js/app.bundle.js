@@ -209,8 +209,13 @@
     return {
       lessonsBySubjectGrade: {},
       quizzesByKey: {},
-      loaded: false
+      loaded: false,
+      snapshotKey: ""
     };
+  }
+  function buildPublishedContentSnapshotStorageKey(syncSettings = {}) {
+    const url = String((syncSettings == null ? void 0 : syncSettings.url) || "").trim().toLowerCase() || "default";
+    return `hs_published_content_snapshot::${simpleHash(url)}`;
   }
   function normalizePublishedContentSnapshot(snapshot = {}) {
     const nextState = createEmptyPublishedContentState();
@@ -234,6 +239,7 @@
       nextState.quizzesByKey[`${subject}::${grade}::${lessonKey}`] = Array.isArray(record == null ? void 0 : record.questions) ? cloneSerializableValue(record.questions) : [];
     });
     nextState.loaded = Boolean(snapshot == null ? void 0 : snapshot.loaded) || lessons.length > 0 || quizzes.length > 0;
+    nextState.snapshotKey = String((snapshot == null ? void 0 : snapshot.snapshotKey) || "").trim();
     return nextState;
   }
   function hasMeaningfulPublishedContentSnapshot(snapshot = null) {
@@ -2608,6 +2614,7 @@
   function createEmptyContentRelationshipState() {
     return {
       loaded: false,
+      snapshotKey: "",
       systemSettings: [],
       curriculumPacks: [],
       curriculumPackSubjects: [],
@@ -2630,12 +2637,18 @@
       lastUpdatedAt: 0
     };
   }
+  function buildContentRelationshipSnapshotStorageKey(syncSettings = {}, identity = "") {
+    const url = String((syncSettings == null ? void 0 : syncSettings.url) || "").trim().toLowerCase() || "default";
+    const actor = String(identity || (syncSettings == null ? void 0 : syncSettings.authEmail) || "").trim().toLowerCase() || "anon";
+    return `hs_curriculum_relationship_snapshot::${simpleHash(`${url}::${actor}`)}`;
+  }
   function normalizeStoredContentRelationshipSnapshot(snapshot = null) {
     const source = snapshot && typeof snapshot === "object" ? snapshot : {};
     const normalizeList = (rows, normalizeFn) => (Array.isArray(rows) ? rows : []).map((entry) => normalizeFn(entry)).filter(Boolean);
     return {
       ...createEmptyContentRelationshipState(),
       loaded: Boolean(source.loaded),
+      snapshotKey: String(source.snapshotKey || "").trim(),
       systemSettings: normalizeList(source.systemSettings, normalizeSystemSettingRecord),
       curriculumPacks: normalizeList(source.curriculumPacks, normalizeCurriculumPackRecord),
       curriculumPackSubjects: normalizeList(source.curriculumPackSubjects, normalizeCurriculumPackSubjectRecord),
@@ -12553,8 +12566,17 @@ ${marker} `);
     const storedDictionarySyncConflicts = sanitizeDictionaryConflictRecords((stored == null ? void 0 : stored.dictionarySyncConflicts) || []);
     const storedAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
     const storedAiTutorHistory = localStorageFallback("hs_ai_tutor_history") || {};
-    const storedPublishedContentSnapshot = normalizePublishedContentSnapshot(localStorageFallback("hs_published_content_snapshot") || {});
-    const storedContentRelationshipSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
+    const initialPublishedContentSnapshotStorageKey = buildPublishedContentSnapshotStorageKey(storedSupabaseSyncSettings);
+    const initialContentRelationshipSnapshotStorageKey = buildContentRelationshipSnapshotStorageKey(
+      storedSupabaseSyncSettings,
+      (storedSupabaseSyncSettings == null ? void 0 : storedSupabaseSyncSettings.authEmail) || ""
+    );
+    const storedPublishedContentSnapshot = normalizePublishedContentSnapshot(
+      localStorageFallback(initialPublishedContentSnapshotStorageKey) || localStorageFallback("hs_published_content_snapshot") || {}
+    );
+    const storedContentRelationshipSnapshot = normalizeStoredContentRelationshipSnapshot(
+      localStorageFallback(initialContentRelationshipSnapshotStorageKey) || localStorageFallback("hs_curriculum_relationship_snapshot") || {}
+    );
     const initialTutorLanguage = (stored == null ? void 0 : stored.language) || "en";
     const initialTutorSessions = normalizeTutorSessions(storedAiTutorHistory.sessions, initialTutorLanguage);
     const initialActiveTutorSessionId = initialTutorSessions.some((session) => session.id === storedAiTutorHistory.activeSessionId) ? storedAiTutorHistory.activeSessionId : (_a = initialTutorSessions[0]) == null ? void 0 : _a.id;
@@ -12932,6 +12954,17 @@ ${marker} `);
     const effectiveCanUnpublishContent = Boolean(effectiveContentRoleCapabilities.unpublishContent);
     const canSeeLearnerManagement = canManageStudentLinks || canManageContentAccess;
     const contentIdentityEmail = String(supabaseAuthState.email || supabasePendingEmail || supabaseDictionarySync.authEmail || "").trim().toLowerCase();
+    const publishedContentSnapshotStorageKey = useMemo(
+      () => buildPublishedContentSnapshotStorageKey(supabaseDictionarySync),
+      [supabaseDictionarySync]
+    );
+    const curriculumRelationshipSnapshotStorageKey = useMemo(
+      () => buildContentRelationshipSnapshotStorageKey(
+        supabaseDictionarySync,
+        supabaseAuthState.email || contentIdentityEmail || (supabaseDictionarySync == null ? void 0 : supabaseDictionarySync.authEmail) || ""
+      ),
+      [contentIdentityEmail, supabaseAuthState.email, supabaseDictionarySync]
+    );
     const schoolDraftNormalizedAutoDiarySettings = useMemo(
       () => normalizeAutoDiarySettings(schoolDraftAutoDiarySettings, { yearStartDate: schoolDraftYearStartDate }),
       [schoolDraftAutoDiarySettings, schoolDraftYearStartDate]
@@ -19780,12 +19813,14 @@ ${marker} `);
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
       if (!settings.url || !settings.anonKey) {
         const currentSnapshot = normalizePublishedContentSnapshot(publishedContentState || {});
-        if (hasMeaningfulPublishedContentSnapshot(currentSnapshot)) {
+        if (hasMeaningfulPublishedContentSnapshot(currentSnapshot) && String(currentSnapshot.snapshotKey || "") === publishedContentSnapshotStorageKey) {
           const nextState2 = { ...currentSnapshot, loaded: true };
           setPublishedContentState(nextState2);
           return nextState2;
         }
-        const storedSnapshot = normalizePublishedContentSnapshot(localStorageFallback("hs_published_content_snapshot") || {});
+        const storedSnapshot = normalizePublishedContentSnapshot(
+          localStorageFallback(publishedContentSnapshotStorageKey) || localStorageFallback("hs_published_content_snapshot") || {}
+        );
         if (hasMeaningfulPublishedContentSnapshot(storedSnapshot)) {
           const nextState2 = { ...storedSnapshot, loaded: true };
           setPublishedContentState(nextState2);
@@ -19799,7 +19834,10 @@ ${marker} `);
         const client = ensureSupabaseClient();
         const { data, error } = await client.from(SUPABASE_PUBLISHED_CONTENT_TABLE).select("content_id, author_user_id, author_username, subject, grade, lesson_key, payload, questions, forked_from_content_id, is_published, published_at, updated_at, deleted_at").eq("is_published", true).is("deleted_at", null).order("published_at", { ascending: false });
         if (error) throw error;
-        const normalized = normalizePublishedContentRows(data || []);
+        const normalized = {
+          ...normalizePublishedContentRows(data || []),
+          snapshotKey: publishedContentSnapshotStorageKey
+        };
         setPublishedContentState(normalized);
         return normalized;
       } catch (error) {
@@ -19809,18 +19847,20 @@ ${marker} `);
         setPublishedContentState(nextState);
         return nextState;
       }
-    }, [ensureSupabaseClient, publishedContentState, supabaseDictionarySync]);
+    }, [ensureSupabaseClient, publishedContentSnapshotStorageKey, publishedContentState, supabaseDictionarySync]);
     const getRetainedContentRelationshipState = useCallback(() => {
       const currentSnapshot = normalizeStoredContentRelationshipSnapshot(contentRelationshipState || {});
-      if (hasMeaningfulContentRelationshipSnapshot(currentSnapshot)) {
+      if (hasMeaningfulContentRelationshipSnapshot(currentSnapshot) && String(currentSnapshot.snapshotKey || "") === curriculumRelationshipSnapshotStorageKey) {
         return { ...currentSnapshot, loaded: true };
       }
-      const storedSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
+      const storedSnapshot = normalizeStoredContentRelationshipSnapshot(
+        localStorageFallback(curriculumRelationshipSnapshotStorageKey) || localStorageFallback("hs_curriculum_relationship_snapshot") || {}
+      );
       if (hasMeaningfulContentRelationshipSnapshot(storedSnapshot)) {
         return { ...storedSnapshot, loaded: true };
       }
       return { ...createEmptyContentRelationshipState(), loaded: true };
-    }, [contentRelationshipState]);
+    }, [contentRelationshipState, curriculumRelationshipSnapshotStorageKey]);
     const refreshContentRelationshipState = useCallback(async (sessionOverride = null) => {
       var _a2, _b2, _c2, _d2;
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
@@ -20113,6 +20153,7 @@ ${marker} `);
         const nextState = {
           ...createEmptyContentRelationshipState(),
           loaded: true,
+          snapshotKey: curriculumRelationshipSnapshotStorageKey,
           systemSettings: Array.from(rowMaps.systemSettings.values()),
           curriculumPacks: Array.from(rowMaps.curriculumPacks.values()),
           curriculumPackSubjects: Array.from(rowMaps.curriculumPackSubjects.values()),
@@ -20162,7 +20203,7 @@ ${marker} `);
         setContentRelationshipState(nextState);
         return nextState;
       }
-    }, [activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, canAssignContent, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, ensureSupabaseClient, getRetainedContentRelationshipState, grade, supabaseDictionarySync]);
+    }, [activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, canAssignContent, canManageContentAccess, canManageStudentLinks, contentIdentityEmail, curriculumRelationshipSnapshotStorageKey, ensureSupabaseClient, getRetainedContentRelationshipState, grade, supabaseDictionarySync]);
     refreshContentRelationshipStateRef.current = refreshContentRelationshipState;
     const handleRefreshCurriculumContent = useCallback(async () => {
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
@@ -20733,26 +20774,30 @@ ${marker} `);
       if (!dbLoaded) return void 0;
       setPublishedContentState((current) => {
         const normalizedCurrent = normalizePublishedContentSnapshot(current || {});
-        if (hasMeaningfulPublishedContentSnapshot(normalizedCurrent)) {
+        if (hasMeaningfulPublishedContentSnapshot(normalizedCurrent) && String(normalizedCurrent.snapshotKey || "") === publishedContentSnapshotStorageKey) {
           return { ...normalizedCurrent, loaded: true };
         }
-        const storedSnapshot = normalizePublishedContentSnapshot(localStorageFallback("hs_published_content_snapshot") || {});
+        const storedSnapshot = normalizePublishedContentSnapshot(
+          localStorageFallback(publishedContentSnapshotStorageKey) || localStorageFallback("hs_published_content_snapshot") || {}
+        );
         return hasMeaningfulPublishedContentSnapshot(storedSnapshot) ? { ...storedSnapshot, loaded: true } : { ...createEmptyPublishedContentState(), loaded: true };
       });
       return void 0;
-    }, [dbLoaded]);
+    }, [dbLoaded, publishedContentSnapshotStorageKey]);
     useEffect(() => {
       if (!dbLoaded) return void 0;
       setContentRelationshipState((current) => {
         const normalizedCurrent = normalizeStoredContentRelationshipSnapshot(current || {});
-        if (hasMeaningfulContentRelationshipSnapshot(normalizedCurrent)) {
+        if (hasMeaningfulContentRelationshipSnapshot(normalizedCurrent) && String(normalizedCurrent.snapshotKey || "") === curriculumRelationshipSnapshotStorageKey) {
           return { ...normalizedCurrent, loaded: true };
         }
-        const storedSnapshot = normalizeStoredContentRelationshipSnapshot(localStorageFallback("hs_curriculum_relationship_snapshot") || {});
+        const storedSnapshot = normalizeStoredContentRelationshipSnapshot(
+          localStorageFallback(curriculumRelationshipSnapshotStorageKey) || localStorageFallback("hs_curriculum_relationship_snapshot") || {}
+        );
         return hasMeaningfulContentRelationshipSnapshot(storedSnapshot) ? { ...storedSnapshot, loaded: true } : { ...createEmptyContentRelationshipState(), loaded: true };
       });
       return void 0;
-    }, [dbLoaded]);
+    }, [curriculumRelationshipSnapshotStorageKey, dbLoaded]);
     useEffect(() => {
       if (!dbLoaded) return void 0;
       const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
@@ -20781,6 +20826,7 @@ ${marker} `);
       }
       const snapshot = {
         loaded: Boolean(publishedContentState.loaded),
+        snapshotKey: publishedContentSnapshotStorageKey,
         lessons: Object.entries(publishedContentState.lessonsBySubjectGrade || {}).flatMap(([bucketKey, lessons]) => {
           const [subject = "", grade2 = ""] = String(bucketKey || "").split("::");
           return (Array.isArray(lessons) ? lessons : []).map((lesson) => ({
@@ -20801,7 +20847,7 @@ ${marker} `);
         })
       };
       publishedContentSnapshotPersistTimerRef.current = setTimeout(() => {
-        localStorageFallback("hs_published_content_snapshot", snapshot);
+        localStorageFallback(publishedContentSnapshotStorageKey, snapshot);
         publishedContentSnapshotPersistTimerRef.current = null;
       }, 400);
       return () => {
@@ -20810,10 +20856,11 @@ ${marker} `);
           publishedContentSnapshotPersistTimerRef.current = null;
         }
       };
-    }, [publishedContentState]);
+    }, [publishedContentSnapshotStorageKey, publishedContentState]);
     useEffect(() => {
       const snapshot = {
         loaded: Boolean(contentRelationshipState.loaded),
+        snapshotKey: curriculumRelationshipSnapshotStorageKey,
         systemSettings: Array.isArray(contentRelationshipState.systemSettings) ? contentRelationshipState.systemSettings : [],
         curriculumPacks: Array.isArray(contentRelationshipState.curriculumPacks) ? contentRelationshipState.curriculumPacks : [],
         curriculumPackSubjects: Array.isArray(contentRelationshipState.curriculumPackSubjects) ? contentRelationshipState.curriculumPackSubjects : [],
@@ -20833,7 +20880,7 @@ ${marker} `);
         curriculumRelationshipSnapshotPersistTimerRef.current = null;
       }
       curriculumRelationshipSnapshotPersistTimerRef.current = setTimeout(() => {
-        localStorageFallback("hs_curriculum_relationship_snapshot", snapshot);
+        localStorageFallback(curriculumRelationshipSnapshotStorageKey, snapshot);
         curriculumRelationshipSnapshotPersistTimerRef.current = null;
       }, 400);
       return () => {
@@ -20842,7 +20889,7 @@ ${marker} `);
           curriculumRelationshipSnapshotPersistTimerRef.current = null;
         }
       };
-    }, [contentRelationshipState]);
+    }, [contentRelationshipState, curriculumRelationshipSnapshotStorageKey]);
     useEffect(() => {
       const existingChannel = supabaseRealtimeChannelRef.current;
       if (existingChannel == null ? void 0 : existingChannel.unsubscribe) {
