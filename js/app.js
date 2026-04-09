@@ -15988,11 +15988,21 @@ const headerHideTimerRef = useRef(null);
     () => (Array.isArray(contentRelationshipState.memberships) ? contentRelationshipState.memberships.map((entry) => normalizeSchoolMembershipRecord(entry)).filter(Boolean) : []),
     [contentRelationshipState.memberships],
   );
+  const contentActivationScopedSchoolIdEarly = canManageContentAccess
+    ? String(contentActivationDraftSchoolId || activeInstitutionSchoolId || "").trim()
+    : String(activeInstitutionSchoolId || "").trim();
+  const contentActivationResolvedGradeEarly = (() => {
+    const safeDraft = String(contentActivationDraftGrade || "").trim().toLowerCase();
+    if (safeDraft === "all") return null;
+    if (safeDraft === "current") return Number(grade) || null;
+    const numeric = Number(contentActivationDraftGrade);
+    return Number.isFinite(numeric) ? Math.max(1, Math.min(12, numeric)) : (Number(grade) || null);
+  })();
   const activationStudentOptions = useMemo(() => {
     const map = new Map((Array.isArray(linkedStudentOptions) ? linkedStudentOptions : []).map((entry) => [entry.studentEmail, entry]));
     safeSchoolMemberships
       .filter((entry) => entry.status === "active")
-      .filter((entry) => !activeInstitutionSchoolId || entry.schoolId === activeInstitutionSchoolId)
+      .filter((entry) => !contentActivationScopedSchoolIdEarly || entry.schoolId === contentActivationScopedSchoolIdEarly)
       .filter((entry) => String(entry.role || "").trim().toLowerCase() === "student")
       .forEach((entry) => {
         const studentEmail = String(entry.memberEmail || "").trim().toLowerCase();
@@ -16006,11 +16016,13 @@ const headerHideTimerRef = useRef(null);
           });
         }
       });
-    return Array.from(map.values()).sort((left, right) => {
-      if ((left.studentGrade || 999) !== (right.studentGrade || 999)) return (left.studentGrade || 999) - (right.studentGrade || 999);
-      return String(left.studentEmail || "").localeCompare(String(right.studentEmail || ""));
-    });
-  }, [activeInstitutionSchoolId, linkedStudentOptions, safeSchoolMemberships]);
+    return Array.from(map.values())
+      .filter((entry) => !Number.isFinite(Number(contentActivationResolvedGradeEarly)) || Number(entry.studentGrade || 0) === Number(contentActivationResolvedGradeEarly))
+      .sort((left, right) => {
+        if ((left.studentGrade || 999) !== (right.studentGrade || 999)) return (left.studentGrade || 999) - (right.studentGrade || 999);
+        return String(left.studentEmail || "").localeCompare(String(right.studentEmail || ""));
+      });
+  }, [contentActivationResolvedGradeEarly, contentActivationScopedSchoolIdEarly, linkedStudentOptions, safeSchoolMemberships]);
   useEffect(() => {
     if (contentActivationDraftScope !== "student") return;
     if (!activationStudentOptions.length) return;
@@ -16131,6 +16143,54 @@ const headerHideTimerRef = useRef(null);
     ),
     [canAdministerLessonLibrary, canManageContentAccess, schoolEffectivePermission],
   );
+  const canReplaceDefaultEverywhere = useMemo(
+    () => Boolean(canManageContentAccess || canAdministerLessonLibrary),
+    [canAdministerLessonLibrary, canManageContentAccess],
+  );
+  const contentActivationScopedSchoolId = useMemo(() => (
+    canManageContentAccess
+      ? String(contentActivationDraftSchoolId || activeInstitutionSchoolIdResolved || "").trim()
+      : String(activeInstitutionSchoolIdResolved || "").trim()
+  ), [activeInstitutionSchoolIdResolved, canManageContentAccess, contentActivationDraftSchoolId]);
+  const contentActivationScopedMemberships = useMemo(
+    () => safeSchoolMemberships.filter((entry) => entry.status === "active" && (!contentActivationScopedSchoolId || entry.schoolId === contentActivationScopedSchoolId)),
+    [contentActivationScopedSchoolId, safeSchoolMemberships],
+  );
+  const contentActivationScopedGradeOptions = useMemo(() => {
+    if (canManageContentAccess) return GRADES;
+    const scopedGrades = Array.from(new Set(
+      contentActivationScopedMemberships
+        .flatMap((entry) => (Array.isArray(entry.gradeScope) ? entry.gradeScope : []))
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value >= 1 && value <= 12),
+    )).sort((left, right) => left - right);
+    return scopedGrades.length ? scopedGrades : GRADES;
+  }, [canManageContentAccess, contentActivationScopedMemberships]);
+  const contentActivationResolvedGrade = useMemo(() => {
+    const safeDraft = String(contentActivationDraftGrade || "").trim().toLowerCase();
+    if (safeDraft === "all") return null;
+    if (safeDraft === "current") return Number(grade) || null;
+    const numeric = Number(contentActivationDraftGrade);
+    return Number.isFinite(numeric) ? Math.max(1, Math.min(12, numeric)) : (Number(grade) || null);
+  }, [contentActivationDraftGrade, grade]);
+  useEffect(() => {
+    const safeDraft = String(contentActivationDraftGrade || "").trim().toLowerCase();
+    if (safeDraft === "current" || safeDraft === "all") return;
+    const numeric = Number(contentActivationDraftGrade);
+    if (!Number.isFinite(numeric)) {
+      setContentActivationDraftGrade("current");
+      return;
+    }
+    if (canManageContentAccess) return;
+    if (contentActivationScopedGradeOptions.some((entry) => Number(entry) === numeric)) return;
+    if (contentActivationScopedGradeOptions.some((entry) => Number(entry) === Number(grade))) {
+      setContentActivationDraftGrade("current");
+      return;
+    }
+    if (contentActivationScopedGradeOptions.length) {
+      setContentActivationDraftGrade(String(contentActivationScopedGradeOptions[0]));
+    }
+  }, [canManageContentAccess, contentActivationDraftGrade, contentActivationScopedGradeOptions, grade]);
   const visibleTeacherStudentLinks = useMemo(() => {
     const bySchool = activeInstitutionSchoolIdResolved
       ? managedTeacherStudentLinks.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
@@ -18436,16 +18496,12 @@ const headerHideTimerRef = useRef(null);
   }, [canExportContent, grade, language, selectedSubject, selectedSubjectExportEntries, showAppToast]);
   const getScopedActivationSchoolId = useCallback((scopeType) => {
     if (scopeType === "global") return "";
-    if (canManageContentAccess) return String(contentActivationDraftSchoolId || activeInstitutionSchoolIdResolved || "").trim();
-    return String(activeInstitutionSchoolIdResolved || "").trim();
-  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentActivationDraftSchoolId]);
+    return String(contentActivationScopedSchoolId || "").trim();
+  }, [contentActivationScopedSchoolId]);
   const getScopedActivationTargetGrade = useCallback((scopeType) => {
     if (scopeType !== "grade" && scopeType !== "student") return null;
-    if (String(contentActivationDraftGrade || "").trim().toLowerCase() === "all") return null;
-    if (String(contentActivationDraftGrade || "").trim().toLowerCase() === "current") return Number(grade) || null;
-    const numeric = Number(contentActivationDraftGrade);
-    return Number.isFinite(numeric) ? Math.max(1, Math.min(12, numeric)) : (Number(grade) || null);
-  }, [contentActivationDraftGrade, grade]);
+    return contentActivationResolvedGrade;
+  }, [contentActivationResolvedGrade]);
   const handleSaveScopedContentActivation = useCallback(async ({
     activationType = "lesson",
     subjectId = "",
@@ -18459,6 +18515,10 @@ const headerHideTimerRef = useRef(null);
     const scopeType = ["global", "school", "grade", "student"].includes(String(forcedScopeType || contentActivationDraftScope || "").trim().toLowerCase())
       ? String(forcedScopeType || contentActivationDraftScope || "").trim().toLowerCase()
       : "school";
+    if (scopeType === "global" && !canReplaceDefaultEverywhere) {
+      showAppToast(joinLocalizedText("Only app admins can replace the default everywhere.", "صرف ایپ ایڈمن ہر جگہ بنیادی ماخذ بدل سکتے ہیں۔", language), "alert");
+      return;
+    }
     if (!(canAdministerLessonLibrary || schoolEffectivePermission("chooseContentSource") || schoolEffectivePermission("manageInstitution"))) {
       showAppToast(joinLocalizedText("Your role cannot activate curriculum sources here.", "آپ کے کردار کو یہاں نصابی ماخذ فعال کرنے کی اجازت نہیں۔", language), "alert");
       return;
@@ -18552,7 +18612,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [canAdministerLessonLibrary, contentActivationDraftScope, contentActivationDraftStudentEmail, contentIdentityEmail, ensureSupabaseClientRef, getScopedActivationSchoolId, getScopedActivationTargetGrade, language, refreshContentRelationshipStateRef, schoolEffectivePermission, showAppToast, supabaseAuthState.userId]);
+  }, [canAdministerLessonLibrary, canReplaceDefaultEverywhere, contentActivationDraftScope, contentActivationDraftStudentEmail, contentIdentityEmail, ensureSupabaseClientRef, getScopedActivationSchoolId, getScopedActivationTargetGrade, language, refreshContentRelationshipStateRef, schoolEffectivePermission, showAppToast, supabaseAuthState.userId]);
   const handleActivateSelectedLessonScoped = useCallback(async (forcedScopeType = "") => {
     if (!selectedLessonChapterGroup || !selectedLessonOpenedVariant) return;
     const sourceType = String(selectedLessonOpenedVariant.sourceType || "").trim();
@@ -18748,7 +18808,7 @@ const headerHideTimerRef = useRef(null);
     showAppToast(joinLocalizedText("Chapter exported", "سبق برآمد کر دیا گیا", language), "copy");
   }, [canExportContent, getMergedQuiz, language, showAppToast]);
   const handleSavePublishedChapterLocally = useCallback(async (subjectId, targetGrade, lesson) => {
-    if (!canSavePublishedLocally) {
+    if (!canSavePublishedLocally && !canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Your content role does not allow saving published chapters locally.", "آپ کے مواد والے کردار کو شائع شدہ ابواب مقامی طور پر محفوظ کرنے کی اجازت نہیں۔", language), "alert");
       return;
     }
@@ -18776,7 +18836,7 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [canSavePublishedLocally, getMergedQuiz, language, refreshCustomContentState, showAppToast]);
+  }, [canAdministerLessonLibrary, canSavePublishedLocally, getMergedQuiz, language, refreshCustomContentState, showAppToast]);
   useEffect(() => {
     setLessonEditMode(false);
     setLessonEditDraft(null);
@@ -30407,42 +30467,54 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 )}
               </span>
             </div>
-            <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+            <div className="curriculum-action-grid">
               {canManageContentAccess ? (
-                <select className="dictionary-select" value={contentActivationDraftSchoolId} onChange={(event) => setContentActivationDraftSchoolId(event.target.value)}>
-                  <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose school", "اسکول منتخب کریں", language), language)}</option>
-                  {accessibleSchools.map((school) => (
-                    <option key={`subject_scope_school_${school.schoolId}`} value={school.schoolId}>
-                      {school.schoolName}
+                <label className="curriculum-action-field">
+                  <span>{renderLocalizedTextNode(joinLocalizedText("School", "اسکول", language), language)}</span>
+                  <select className="dictionary-select" value={contentActivationDraftSchoolId} onChange={(event) => setContentActivationDraftSchoolId(event.target.value)}>
+                    <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose school", "اسکول منتخب کریں", language), language)}</option>
+                    {accessibleSchools.map((school) => (
+                      <option key={`subject_scope_school_${school.schoolId}`} value={school.schoolId}>
+                        {school.schoolName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <label className="curriculum-action-field">
+                <span>{renderLocalizedTextNode(joinLocalizedText("Source", "ماخذ", language), language)}</span>
+                <select className="dictionary-select" value={subjectSourceDraftId} onChange={(event) => setSubjectSourceDraftId(event.target.value)}>
+                  <option value="__builtin__">{renderLocalizedTextNode(joinLocalizedText("Built-in subject library", "بنیادی مضمون لائبریری", language), language)}</option>
+                  {selectedSubjectPublishedSources.map((entry) => (
+                    <option key={`subject_source_${entry.sourceId}`} value={entry.sourceId}>
+                      {entry.label || `${selectedSubject?.name || selectedSubject?.id} source`}
                     </option>
                   ))}
                 </select>
-              ) : null}
-              <select className="dictionary-select" value={subjectSourceDraftId} onChange={(event) => setSubjectSourceDraftId(event.target.value)}>
-                <option value="__builtin__">{renderLocalizedTextNode(joinLocalizedText("Built-in subject library", "بنیادی مضمون لائبریری", language), language)}</option>
-                {selectedSubjectPublishedSources.map((entry) => (
-                  <option key={`subject_source_${entry.sourceId}`} value={entry.sourceId}>
-                    {entry.label || `${selectedSubject?.name || selectedSubject?.id} source`}
-                  </option>
-                ))}
-              </select>
-              <select className="dictionary-select" value={contentActivationDraftGrade} onChange={(event) => setContentActivationDraftGrade(event.target.value)}>
-                <option value="current">{renderLocalizedTextNode(joinLocalizedText(`Current grade (${grade})`, `موجودہ جماعت (${grade})`, language), language)}</option>
-                <option value="all">{renderLocalizedTextNode(joinLocalizedText("All grades", "تمام جماعتیں", language), language)}</option>
-                {GRADES.map((entry) => (
-                  <option key={`subject_scope_grade_${entry}`} value={String(entry)}>
-                    {renderLocalizedTextNode(joinLocalizedText(`Grade ${entry}`, `جماعت ${entry}`, language), language)}
-                  </option>
-                ))}
-              </select>
-              <select className="dictionary-select" value={contentActivationDraftStudentEmail} onChange={(event) => setContentActivationDraftStudentEmail(event.target.value)} disabled={!activationStudentOptions.length}>
-                <option value="">{renderLocalizedTextNode(joinLocalizedText("Specific learner", "مخصوص طالب علم", language), language)}</option>
-                {activationStudentOptions.map((entry) => (
-                  <option key={`subject_scope_student_${entry.studentEmail}`} value={entry.studentEmail}>
-                    {entry.studentEmail}
-                  </option>
-                ))}
-              </select>
+              </label>
+              <label className="curriculum-action-field">
+                <span>{renderLocalizedTextNode(joinLocalizedText("Target grade", "ہدف جماعت", language), language)}</span>
+                <select className="dictionary-select" value={contentActivationDraftGrade} onChange={(event) => setContentActivationDraftGrade(event.target.value)}>
+                  <option value="current">{renderLocalizedTextNode(joinLocalizedText(`Current grade (${grade})`, `موجودہ جماعت (${grade})`, language), language)}</option>
+                  <option value="all">{renderLocalizedTextNode(joinLocalizedText("All grades", "تمام جماعتیں", language), language)}</option>
+                  {contentActivationScopedGradeOptions.map((entry) => (
+                    <option key={`subject_scope_grade_${entry}`} value={String(entry)}>
+                      {renderLocalizedTextNode(joinLocalizedText(`Grade ${entry}`, `جماعت ${entry}`, language), language)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="curriculum-action-field">
+                <span>{renderLocalizedTextNode(joinLocalizedText("Specific learner", "مخصوص طالب علم", language), language)}</span>
+                <select className="dictionary-select" value={contentActivationDraftStudentEmail} onChange={(event) => setContentActivationDraftStudentEmail(event.target.value)} disabled={!activationStudentOptions.length}>
+                  <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose learner", "طالب علم منتخب کریں", language), language)}</option>
+                  {activationStudentOptions.map((entry) => (
+                    <option key={`subject_scope_student_${entry.studentEmail}`} value={entry.studentEmail}>
+                      {`${entry.studentEmail}${entry.studentGrade ? ` • Grade ${entry.studentGrade}` : ""}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
               {effectiveCanPublishContent ? (
@@ -30459,7 +30531,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
                 {renderLocalizedTextNode(joinLocalizedText("Set Active For Learner", "طالب علم کے لیے فعال کریں", language), language)}
               </button>
-              {canManageContentAccess ? (
+              {canReplaceDefaultEverywhere ? (
                 <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedSubjectSourceScoped("global")} disabled={contentRelationshipBusy}>
                   {renderLocalizedTextNode(joinLocalizedText("Replace Default Everywhere", "ہر جگہ بنیادی ماخذ بدلیں", language), language)}
                 </button>
@@ -30679,30 +30751,54 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <p>{renderLocalizedTextNode(joinLocalizedText("Use explicit admin actions here: keep a local draft private, publish it for everyone, activate it for one school or grade, activate it for one learner, replace the default everywhere, or hide the built-in source.", "یہاں واضح ایڈمن اعمال استعمال کریں: مقامی مسودہ نجی رکھیں، سب کے لیے شائع کریں، ایک اسکول یا جماعت کے لیے فعال کریں، ایک طالب علم کے لیے فعال کریں، ہر جگہ بنیادی ماخذ بدلیں، یا بنیادی ماخذ چھپا دیں۔", language), language)}</p>
                 </div>
               </div>
-              <div className="chapter-browser-filter-row" style={{ alignItems: "stretch" }}>
+              <div className="curriculum-action-grid">
                 {canManageContentAccess ? (
-                  <select className="dictionary-select" value={contentActivationDraftSchoolId} onChange={(event) => setContentActivationDraftSchoolId(event.target.value)}>
-                    <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose school", "اسکول منتخب کریں", language), language)}</option>
-                    {accessibleSchools.map((school) => (
-                      <option key={`lesson_scope_school_${school.schoolId}`} value={school.schoolId}>{school.schoolName}</option>
+                  <label className="curriculum-action-field">
+                    <span>{renderLocalizedTextNode(joinLocalizedText("School", "اسکول", language), language)}</span>
+                    <select className="dictionary-select" value={contentActivationDraftSchoolId} onChange={(event) => setContentActivationDraftSchoolId(event.target.value)}>
+                      <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose school", "اسکول منتخب کریں", language), language)}</option>
+                      {accessibleSchools.map((school) => (
+                        <option key={`lesson_scope_school_${school.schoolId}`} value={school.schoolId}>{school.schoolName}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <label className="curriculum-action-field">
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Target grade", "ہدف جماعت", language), language)}</span>
+                  <select className="dictionary-select" value={contentActivationDraftGrade} onChange={(event) => setContentActivationDraftGrade(event.target.value)}>
+                    <option value="current">{renderLocalizedTextNode(joinLocalizedText(`Current grade (${grade})`, `موجودہ جماعت (${grade})`, language), language)}</option>
+                    <option value="all">{renderLocalizedTextNode(joinLocalizedText("All grades", "تمام جماعتیں", language), language)}</option>
+                    {contentActivationScopedGradeOptions.map((entry) => (
+                      <option key={`lesson_scope_grade_${entry}`} value={String(entry)}>{renderLocalizedTextNode(joinLocalizedText(`Grade ${entry}`, `جماعت ${entry}`, language), language)}</option>
                     ))}
                   </select>
-                ) : null}
-                <select className="dictionary-select" value={contentActivationDraftGrade} onChange={(event) => setContentActivationDraftGrade(event.target.value)}>
-                  <option value="current">{renderLocalizedTextNode(joinLocalizedText(`Current grade (${grade})`, `موجودہ جماعت (${grade})`, language), language)}</option>
-                  <option value="all">{renderLocalizedTextNode(joinLocalizedText("All grades", "تمام جماعتیں", language), language)}</option>
-                  {GRADES.map((entry) => (
-                    <option key={`lesson_scope_grade_${entry}`} value={String(entry)}>{renderLocalizedTextNode(joinLocalizedText(`Grade ${entry}`, `جماعت ${entry}`, language), language)}</option>
-                  ))}
-                </select>
-                <select className="dictionary-select" value={contentActivationDraftStudentEmail} onChange={(event) => setContentActivationDraftStudentEmail(event.target.value)} disabled={!activationStudentOptions.length}>
-                  <option value="">{renderLocalizedTextNode(joinLocalizedText("Specific learner", "مخصوص طالب علم", language), language)}</option>
-                  {activationStudentOptions.map((entry) => (
-                    <option key={`lesson_scope_student_${entry.studentEmail}`} value={entry.studentEmail}>{entry.studentEmail}</option>
-                  ))}
-                </select>
+                </label>
+                <label className="curriculum-action-field">
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Specific learner", "مخصوص طالب علم", language), language)}</span>
+                  <select className="dictionary-select" value={contentActivationDraftStudentEmail} onChange={(event) => setContentActivationDraftStudentEmail(event.target.value)} disabled={!activationStudentOptions.length}>
+                    <option value="">{renderLocalizedTextNode(joinLocalizedText("Choose learner", "طالب علم منتخب کریں", language), language)}</option>
+                    {activationStudentOptions.map((entry) => (
+                      <option key={`lesson_scope_student_${entry.studentEmail}`} value={entry.studentEmail}>{`${entry.studentEmail}${entry.studentGrade ? ` • Grade ${entry.studentGrade}` : ""}`}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
               <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
+                {(canSavePublishedLocally || canAdministerLessonLibrary) ? (
+                  <button type="button" className="ghost-cta" onClick={() => handleSavePublishedChapterLocally(selectedSubject?.id, grade, selectedLesson)} disabled={!selectedSubject?.id || !selectedLesson}>
+                    {renderLocalizedTextNode(joinLocalizedText("Save Local Draft", "مقامی مسودہ محفوظ کریں", language), language)}
+                  </button>
+                ) : null}
+                {effectiveCanPublishContent ? (
+                  <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
+                    {renderLocalizedTextNode(
+                      chapterPublishBusy
+                        ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language)
+                        : joinLocalizedText("Publish", "شائع کریں", language),
+                      language,
+                    )}
+                  </button>
+                ) : null}
                 <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy}>
                   {renderLocalizedTextNode(joinLocalizedText("Set Active For School", "اسکول کے لیے فعال کریں", language), language)}
                 </button>
@@ -30712,7 +30808,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
                   {renderLocalizedTextNode(joinLocalizedText("Set Active For Learner", "طالب علم کے لیے فعال کریں", language), language)}
                 </button>
-                {canManageContentAccess ? (
+                {canReplaceDefaultEverywhere ? (
                   <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("global")} disabled={contentRelationshipBusy}>
                     {renderLocalizedTextNode(joinLocalizedText("Replace Default Everywhere", "ہر جگہ بنیادی ماخذ بدلیں", language), language)}
                   </button>
