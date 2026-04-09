@@ -18278,7 +18278,7 @@ const headerHideTimerRef = useRef(null);
           ],
         }));
       }
-      await refreshContentRelationshipState();
+      await refreshContentRelationshipStateRef.current();
       showAppToast(joinLocalizedText("Active curriculum source saved", "فعال نصابی ماخذ محفوظ ہو گیا", language), "check");
     } catch (error) {
       const activationErrorMessage = String(error?.message || error || "").trim();
@@ -18298,7 +18298,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [canAdministerLessonLibrary, contentActivationDraftScope, contentActivationDraftStudentEmail, contentIdentityEmail, ensureSupabaseClientRef, getScopedActivationSchoolId, getScopedActivationTargetGrade, language, refreshContentRelationshipState, schoolEffectivePermission, showAppToast, supabaseAuthState.userId]);
+  }, [canAdministerLessonLibrary, contentActivationDraftScope, contentActivationDraftStudentEmail, contentIdentityEmail, ensureSupabaseClientRef, getScopedActivationSchoolId, getScopedActivationTargetGrade, language, refreshContentRelationshipStateRef, schoolEffectivePermission, showAppToast, supabaseAuthState.userId]);
   const handleActivateSelectedLessonScoped = useCallback(async (forcedScopeType = "") => {
     if (!selectedLessonChapterGroup || !selectedLessonOpenedVariant) return;
     const sourceType = String(selectedLessonOpenedVariant.sourceType || "").trim();
@@ -18357,7 +18357,7 @@ const headerHideTimerRef = useRef(null);
       }, { onConflict: "source_id" });
       if (error) throw error;
       setSubjectSourceDraftId(sourceId);
-      await refreshContentRelationshipState();
+      await refreshContentRelationshipStateRef.current();
       showAppToast(joinLocalizedText("Subject source published", "مضمون کا ماخذ شائع ہو گیا", language), "check");
     } catch (error) {
       const publishErrorMessage = String(error?.message || error || "").trim();
@@ -18377,7 +18377,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setSubjectSourcePublishBusy(false);
     }
-  }, [effectiveCanPublishContent, ensureSupabaseClientRef, grade, language, refreshContentRelationshipState, selectedSubject, selectedSubjectExportEntries, selectedSubjectPublishedSources, showAppToast, subjectSourceDraftId, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
+  }, [effectiveCanPublishContent, ensureSupabaseClientRef, grade, language, refreshContentRelationshipStateRef, selectedSubject, selectedSubjectExportEntries, selectedSubjectPublishedSources, showAppToast, subjectSourceDraftId, supabaseAccountUsername, supabaseAuthState.email, supabaseAuthState.userId]);
   const handleActivateSelectedSubjectSourceScoped = useCallback(async (forcedScopeType = "") => {
     if (!selectedSubject || !grade) return;
     const selectedSource = subjectSourceDraftId === "__builtin__"
