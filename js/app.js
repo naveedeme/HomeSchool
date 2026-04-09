@@ -16347,13 +16347,7 @@ const headerHideTimerRef = useRef(null);
       currentUserId: supabaseAuthState.userId,
       archivedVariantKeys: archivedLessonVariantKeys,
     });
-    const scopedSourceAdjustedGroups = (useCurriculumPack || activeSubjectSource) ? mergedGroups.map((group) => {
-      const scopedBaseVariant = group.variants.find((variant) => variant.sourceType === "builtin") || null;
-      return scopedBaseVariant
-        ? { ...group, activeVariant: scopedBaseVariant, activeLesson: scopedBaseVariant.lesson }
-        : group;
-    }) : mergedGroups;
-    const activationAdjustedGroups = useCurriculumPack ? scopedSourceAdjustedGroups : scopedSourceAdjustedGroups.map((group) => {
+    const activationAdjustedGroups = useCurriculumPack ? mergedGroups : mergedGroups.map((group) => {
       const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, group.canonicalLessonKey);
       if (!lessonActivation) return group;
       if (lessonActivation.sourceKind === "builtin_lesson") {

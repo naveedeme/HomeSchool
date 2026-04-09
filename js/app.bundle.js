@@ -13702,11 +13702,7 @@ ${marker} `);
         currentUserId: supabaseAuthState.userId,
         archivedVariantKeys: archivedLessonVariantKeys
       });
-      const scopedSourceAdjustedGroups = useCurriculumPack || activeSubjectSource ? mergedGroups.map((group) => {
-        const scopedBaseVariant = group.variants.find((variant) => variant.sourceType === "builtin") || null;
-        return scopedBaseVariant ? { ...group, activeVariant: scopedBaseVariant, activeLesson: scopedBaseVariant.lesson } : group;
-      }) : mergedGroups;
-      const activationAdjustedGroups = useCurriculumPack ? scopedSourceAdjustedGroups : scopedSourceAdjustedGroups.map((group) => {
+      const activationAdjustedGroups = useCurriculumPack ? mergedGroups : mergedGroups.map((group) => {
         var _a3, _b3, _c3, _d2, _e2, _f2, _g2;
         const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, group.canonicalLessonKey);
         if (!lessonActivation) return group;
