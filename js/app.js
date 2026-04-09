@@ -15152,6 +15152,7 @@ function HomeschoolApp() {
   const [contentActivationDraftGrade, setContentActivationDraftGrade] = useState("current");
   const [contentActivationDraftStudentEmail, setContentActivationDraftStudentEmail] = useState("");
   const [curriculumGlobalPackDraftId, setCurriculumGlobalPackDraftId] = useState("");
+  const [curriculumSchoolPackDraftId, setCurriculumSchoolPackDraftId] = useState("");
   const [subjectSourceDraftId, setSubjectSourceDraftId] = useState("__builtin__");
   const [subjectSourcePublishBusy, setSubjectSourcePublishBusy] = useState(false);
   const [schoolDraftName, setSchoolDraftName] = useState("");
@@ -16166,6 +16167,14 @@ const headerHideTimerRef = useRef(null);
     () => (globalCurriculumAssignment?.packId ? curriculumPackLookup.get(globalCurriculumAssignment.packId) || null : null),
     [curriculumPackLookup, globalCurriculumAssignment],
   );
+  const activeSchoolCurriculumAssignment = useMemo(
+    () => visibleCurriculumScopeAssignments.find((entry) => entry.scopeType === "school" && entry.schoolId === activeInstitutionSchoolIdResolved) || null,
+    [activeInstitutionSchoolIdResolved, visibleCurriculumScopeAssignments],
+  );
+  const activeSchoolCurriculumPack = useMemo(
+    () => (activeSchoolCurriculumAssignment?.packId ? curriculumPackLookup.get(activeSchoolCurriculumAssignment.packId) || null : null),
+    [activeSchoolCurriculumAssignment, curriculumPackLookup],
+  );
   useEffect(() => {
     const availablePackIds = new Set(visibleCurriculumPacks.map((entry) => entry.packId));
     const preferredPackId = String(globalCurriculumAssignment?.packId || "").trim();
@@ -16177,6 +16186,17 @@ const headerHideTimerRef = useRef(null);
     const fallbackPackId = visibleCurriculumPacks[0]?.packId || "";
     if (curriculumGlobalPackDraftId !== fallbackPackId) setCurriculumGlobalPackDraftId(fallbackPackId);
   }, [curriculumGlobalPackDraftId, globalCurriculumAssignment, visibleCurriculumPacks]);
+  useEffect(() => {
+    const availablePackIds = new Set(visibleCurriculumPacks.map((entry) => entry.packId));
+    const preferredPackId = String(activeSchoolCurriculumAssignment?.packId || globalCurriculumAssignment?.packId || "").trim();
+    if (preferredPackId && availablePackIds.has(preferredPackId)) {
+      if (curriculumSchoolPackDraftId !== preferredPackId) setCurriculumSchoolPackDraftId(preferredPackId);
+      return;
+    }
+    if (curriculumSchoolPackDraftId && availablePackIds.has(curriculumSchoolPackDraftId)) return;
+    const fallbackPackId = visibleCurriculumPacks[0]?.packId || "";
+    if (curriculumSchoolPackDraftId !== fallbackPackId) setCurriculumSchoolPackDraftId(fallbackPackId);
+  }, [activeSchoolCurriculumAssignment, curriculumSchoolPackDraftId, globalCurriculumAssignment, visibleCurriculumPacks]);
   const getResolvedCurriculumPackContext = useCallback((subjectId, targetGrade) => {
     const safeSubjectId = String(subjectId || "").trim().toLowerCase();
     const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
@@ -17615,6 +17635,98 @@ const headerHideTimerRef = useRef(null);
       setContentRelationshipBusy(false);
     }
   }, [canManageContentAccess, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, showAppToast, supabaseAuthState.userId]);
+  const handleSyncCurriculumPackWithSchool = useCallback(async () => {
+    if (!canManageInstitution && !canManageContentAccess) {
+      showAppToast(joinLocalizedText("Your role cannot sync curriculum for a school.", "آپ کا کردار اسکول کے لیے نصاب ہم آہنگ نہیں کر سکتا۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to sync a school curriculum pack.", "اسکول نصابی پیک ہم آہنگ کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    const safeSchoolId = String(activeInstitutionSchoolIdResolved || "").trim();
+    if (!safeSchoolId) {
+      showAppToast(joinLocalizedText("Choose a school first.", "پہلے ایک اسکول منتخب کریں۔", language), "alert");
+      return;
+    }
+    const safePackId = String(curriculumSchoolPackDraftId || "").trim();
+    if (!safePackId) {
+      showAppToast(joinLocalizedText("Choose a curriculum pack first.", "پہلے ایک نصابی پیک منتخب کریں۔", language), "alert");
+      return;
+    }
+    const selectedPack = curriculumPackLookup.get(safePackId) || null;
+    if (!selectedPack) {
+      showAppToast(joinLocalizedText("The selected curriculum pack could not be found.", "منتخب شدہ نصابی پیک نہیں ملا۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClientRef.current();
+      const nowIso = new Date().toISOString();
+      const { error: deactivateError } = await client
+        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+        .update({ status: "inactive", updated_at: nowIso })
+        .eq("scope_type", "school")
+        .eq("school_id", safeSchoolId)
+        .eq("status", "active");
+      if (deactivateError) throw deactivateError;
+      const nextAssignment = {
+        assignment_id: `curriculum_school_${simpleHash(safeSchoolId)}`,
+        scope_type: "school",
+        school_id: safeSchoolId,
+        grade: null,
+        student_email: null,
+        pack_id: safePackId,
+        status: "active",
+        assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+        note: `School curriculum synced to ${selectedPack.name}`,
+        updated_at: nowIso,
+      };
+      const { error: assignmentError } = await client
+        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+        .upsert(nextAssignment, { onConflict: "assignment_id" });
+      if (assignmentError) throw assignmentError;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText(`Curriculum synced with school ${safeSchoolId}.`, `نصاب کو اسکول ${safeSchoolId} کے ساتھ ہم آہنگ کر دیا گیا ہے۔`, language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to sync the school curriculum pack: ${error?.message || error}`, `اسکول نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, curriculumPackLookup, curriculumSchoolPackDraftId, language, showAppToast, supabaseAuthState.userId]);
+  const handleResetSchoolCurriculumToGlobal = useCallback(async () => {
+    if (!canManageInstitution && !canManageContentAccess) {
+      showAppToast(joinLocalizedText("Your role cannot reset school curriculum inheritance.", "آپ کا کردار اسکول کے نصابی وراثت کو ری سیٹ نہیں کر سکتا۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to reset school curriculum inheritance.", "اسکول نصابی وراثت ری سیٹ کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    const safeSchoolId = String(activeInstitutionSchoolIdResolved || "").trim();
+    if (!safeSchoolId) {
+      showAppToast(joinLocalizedText("Choose a school first.", "پہلے ایک اسکول منتخب کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClientRef.current();
+      const nowIso = new Date().toISOString();
+      const { error } = await client
+        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+        .update({ status: "inactive", updated_at: nowIso })
+        .eq("scope_type", "school")
+        .eq("school_id", safeSchoolId)
+        .eq("status", "active");
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("School curriculum now inherits the global pack again.", "اسکول کا نصاب دوبارہ عالمی پیک سے وراثت لے گا۔", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to reset school curriculum inheritance: ${error?.message || error}`, `اسکول نصابی وراثت ری سیٹ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -30059,6 +30171,75 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
               <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Create one Supabase seed pack from the current built-in curriculum, then sync the chosen pack globally to make it the active app-wide curriculum.", "موجودہ بنیادی نصاب سے ایک Supabase سیڈ پیک بنائیں، پھر منتخب پیک کو عالمی طور پر ہم آہنگ کریں تاکہ وہ پورے ایپ کا فعال نصاب بن جائے۔", language), language)}</p>
               <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("When fallback is on, any missing curriculum pack content falls back to built-in lessons. Turn it off once the Supabase curriculum is complete and verified.", "جب بیک اَپ فعال ہو تو پیک میں غائب نصابی مواد خودکار طور پر بنیادی اسباق سے پورا کیا جاتا ہے۔ جب Supabase والا نصاب مکمل اور تصدیق شدہ ہو جائے تو اسے بند کر دیں۔", language), language)}</p>
+            </div>
+          ) : null}
+          {(canManageInstitution || canManageContentAccess) ? (
+            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("School Curriculum", "اسکول نصاب", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Assign a specific Supabase curriculum pack to the currently selected school, or reset the school back to the active global pack.", "فی الوقت منتخب اسکول کے لیے ایک مخصوص Supabase نصابی پیک مقرر کریں، یا اسکول کو دوبارہ فعال عالمی پیک پر لے آئیں۔", language), language)}</p>
+                </div>
+                <span className="goal-progress-badge">
+                  {renderLocalizedTextNode(
+                    activeSchoolCurriculumPack?.name
+                      || globalCurriculumPack?.name
+                      || joinLocalizedText("No pack", "کوئی پیک نہیں", language),
+                    language,
+                  )}
+                </span>
+              </div>
+              <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 10 }}>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Selected school", "منتخب اسکول", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(accessibleSchools.find((school) => school.schoolId === activeInstitutionSchoolIdResolved)?.schoolName || joinLocalizedText("No school selected", "کوئی اسکول منتخب نہیں", language), language)}</span>
+                </div>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Active school pack", "فعال اسکول پیک", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(activeSchoolCurriculumPack?.name || joinLocalizedText("Inherited from global", "عالمی پیک سے وراثت", language), language)}</span>
+                </div>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Global fallback", "عالمی وراثت", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(globalCurriculumPack?.name || joinLocalizedText("No global pack assigned", "کوئی عالمی پیک مقرر نہیں", language), language)}</span>
+                </div>
+              </div>
+              <div className="chapter-browser-filter-row" style={{ marginTop: 12, alignItems: "stretch" }}>
+                <select
+                  className="settings-select"
+                  value={curriculumSchoolPackDraftId}
+                  onChange={(event) => setCurriculumSchoolPackDraftId(event.target.value)}
+                  disabled={contentRelationshipBusy || !activeInstitutionSchoolIdResolved}
+                >
+                  {visibleCurriculumPacks.length ? (
+                    visibleCurriculumPacks.map((pack) => (
+                      <option key={`school_pack_${pack.packId}`} value={pack.packId}>
+                        {pack.name} {joinLocalizedText(`(v${pack.versionNo})`, `(ورژن ${pack.versionNo})`, language)}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">
+                      {language === "ur" ? "ابھی کوئی نصابی پیک موجود نہیں" : "No curriculum pack exists yet"}
+                    </option>
+                  )}
+                </select>
+                <button
+                  type="button"
+                  className="ghost-cta"
+                  onClick={handleSyncCurriculumPackWithSchool}
+                  disabled={contentRelationshipBusy || !activeInstitutionSchoolIdResolved || !curriculumSchoolPackDraftId}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-cta"
+                  onClick={handleResetSchoolCurriculumToGlobal}
+                  disabled={contentRelationshipBusy || !activeInstitutionSchoolIdResolved || !activeSchoolCurriculumAssignment}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Reset to Global", "عالمی پیک پر واپس", language), language)}
+                </button>
+              </div>
+              <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("This step adds school-level overrides only. If no school pack is active, the selected school inherits the current global curriculum pack automatically.", "اس مرحلے میں صرف اسکول سطح کی تخصیص شامل ہے۔ اگر کوئی اسکول پیک فعال نہ ہو تو منتخب اسکول خودکار طور پر موجودہ عالمی نصابی پیک سے وراثت لے گا۔", language), language)}</p>
             </div>
           ) : null}
           {canManageInstitution ? (
