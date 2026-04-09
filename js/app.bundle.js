@@ -23105,7 +23105,9 @@ ${error.message || error}`);
       return (lesson.subs || []).map((sub) => {
         var _a2;
         const settingKey = getSubsectionSettingKey(sub.t);
-        if (!settingKey) return sub;
+        if (!settingKey) {
+          return cloneSerializableValue(normalizeSubLesson(sub, subjectId, { respectProvidedContent })) || sub;
+        }
         return buildDerivedDayBasedSub(sub, settingKey, ((_a2 = daySectionSettings[settingKey]) == null ? void 0 : _a2.itemsPerDay) || 5, subjectId, { respectProvidedContent });
       });
     }, [daySectionSettings]);

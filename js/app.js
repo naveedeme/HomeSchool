@@ -26325,7 +26325,9 @@ const lessons = getMergedLessons(subjectId, grade);
     const respectProvidedContent = shouldRespectProvidedLessonContent(lesson);
     return (lesson.subs || []).map((sub) => {
       const settingKey = getSubsectionSettingKey(sub.t);
-      if (!settingKey) return sub;
+      if (!settingKey) {
+        return cloneSerializableValue(normalizeSubLesson(sub, subjectId, { respectProvidedContent })) || sub;
+      }
       return buildDerivedDayBasedSub(sub, settingKey, daySectionSettings[settingKey]?.itemsPerDay || 5, subjectId, { respectProvidedContent });
     });
   }, [daySectionSettings]);
