@@ -7,8 +7,8 @@ const {
   POS_DATA,
   TENSES_DATA,
   VOCABULARY_DATA,
-  getLessons,
-  getQuiz,
+  getLessons: rawGetLessons,
+  getQuiz: rawGetQuiz,
 } = window.HomeSchoolData;
 const { loadState, saveState, localStorageFallback, debounce, downloadJson, calculateXP, calculateStreak, formatDate, isTtsEnabled, getStorageEstimateLabel, regroupDayEntries, regroupSentencePairs, validateProgressImport, applyThemeMode, getResolvedTheme, isStandaloneMode, hideLaunchSplash, registerServiceWorker, checkServiceWorkerForUpdates, applyServiceWorkerUpdate, setPendingReviewBadge, getSpeechConfig } = window.HomeSchoolUtils;
 const { SettingsPanel } = window.HomeSchoolSettings || {};
@@ -395,6 +395,127 @@ function resolveCustomChapterLessonKey({ lessonKey = "", title = "", fallbackNum
 
 function cloneSerializableValue(value) {
   return JSON.parse(JSON.stringify(value == null ? null : value));
+}
+
+function buildBuiltinLessonSlotKey(subject = "", grade = null, lessonKey = "") {
+  const safeSubject = String(subject || "").trim().toLowerCase();
+  const safeGrade = Number(grade);
+  const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey });
+  if (!safeSubject || !Number.isFinite(safeGrade) || !safeLessonKey) return "";
+  return `${safeSubject}::${safeGrade}::${safeLessonKey}`;
+}
+
+function normalizeBuiltinLessonLayerState(raw = null) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const safeSlots = source.slots && typeof source.slots === "object" ? source.slots : {};
+  const safeArchives = source.archives && typeof source.archives === "object" ? source.archives : {};
+  const nextState = {
+    slots: {},
+    archives: {},
+  };
+  Object.entries(safeSlots).forEach(([rawKey, rawEntry]) => {
+    const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+    const rawKeyParts = String(rawKey || "").split("::");
+    const slotKey = buildBuiltinLessonSlotKey(
+      entry.subject || rawKeyParts[0] || "",
+      (entry.grade ?? rawKeyParts[1]) || "",
+      entry.lessonKey || rawKeyParts[2] || "",
+    );
+    if (!slotKey) return;
+    const [subject = "", grade = "", lessonKey = ""] = slotKey.split("::");
+    const actionRaw = String(entry.action || "").trim().toLowerCase();
+    const action = actionRaw === "delete" ? "delete" : "replace";
+    const normalizedEntry = {
+      action,
+      subject,
+      grade: Number(grade),
+      lessonKey,
+      title: String(entry.title || "").trim(),
+      contentId: String(entry.contentId || entry.sourceContentId || "").trim(),
+      updatedByEmail: String(entry.updatedByEmail || entry.updated_by_email || "").trim().toLowerCase(),
+      updatedAt: Number(new Date(entry.updatedAt || entry.updated_at || Date.now()).getTime()) || Date.now(),
+      lesson: null,
+      questions: [],
+    };
+    if (action === "replace" && entry.lesson && typeof entry.lesson === "object") {
+      const lessonData = stripRuntimeLessonMarkers(cloneSerializableValue(entry.lesson) || {});
+      lessonData.key = lessonKey;
+      lessonData.id = `${subject}_${Number(grade)}_${lessonKey}`;
+      if (!lessonData.title && normalizedEntry.title) lessonData.title = normalizedEntry.title;
+      normalizedEntry.lesson = lessonData;
+      normalizedEntry.questions = Array.isArray(entry.questions) ? cloneSerializableValue(entry.questions) : [];
+    }
+    nextState.slots[slotKey] = normalizedEntry;
+  });
+  Object.entries(safeArchives).forEach(([archiveId, rawEntry]) => {
+    const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+    const slotKey = buildBuiltinLessonSlotKey(entry.subject || "", entry.grade, entry.lessonKey || "");
+    if (!String(archiveId || "").trim() || !slotKey) return;
+    const [subject = "", grade = "", lessonKey = ""] = slotKey.split("::");
+    const lessonData = entry.lesson && typeof entry.lesson === "object"
+      ? stripRuntimeLessonMarkers(cloneSerializableValue(entry.lesson) || {})
+      : null;
+    if (lessonData) {
+      lessonData.key = lessonKey;
+      lessonData.id = `${subject}_${Number(grade)}_${lessonKey}`;
+      if (!lessonData.title && entry.title) lessonData.title = String(entry.title || "").trim();
+    }
+    nextState.archives[String(archiveId).trim()] = {
+      archiveId: String(archiveId).trim(),
+      subject,
+      grade: Number(grade),
+      lessonKey,
+      title: String(entry.title || "").trim(),
+      lesson: lessonData,
+      questions: Array.isArray(entry.questions) ? cloneSerializableValue(entry.questions) : [],
+      archivedByEmail: String(entry.archivedByEmail || entry.archived_by_email || "").trim().toLowerCase(),
+      archivedAt: Number(new Date(entry.archivedAt || entry.archived_at || entry.updatedAt || entry.updated_at || Date.now()).getTime()) || Date.now(),
+    };
+  });
+  return nextState;
+}
+
+let runtimeBuiltinLessonLayerState = normalizeBuiltinLessonLayerState();
+let runtimeBuiltinLessonMutationMap = new Map();
+
+function setRuntimeBuiltinLessonLayerState(nextState = null) {
+  runtimeBuiltinLessonLayerState = normalizeBuiltinLessonLayerState(nextState);
+  runtimeBuiltinLessonMutationMap = new Map(Object.entries(runtimeBuiltinLessonLayerState.slots || {}));
+}
+
+function getBuiltinLessonLayerMutation(subject = "", grade = null, lessonKey = "") {
+  return runtimeBuiltinLessonMutationMap.get(buildBuiltinLessonSlotKey(subject, grade, lessonKey)) || null;
+}
+
+function getLessons(subjectId, targetGrade) {
+  const safeSubjectId = String(subjectId || "").trim();
+  const safeGrade = Number(targetGrade);
+  const baseLessons = Array.isArray(rawGetLessons(safeSubjectId, safeGrade)) ? rawGetLessons(safeSubjectId, safeGrade) : [];
+  if (!runtimeBuiltinLessonMutationMap.size) return baseLessons;
+  return baseLessons.reduce((acc, lesson) => {
+    const lessonKey = getCanonicalLessonKeyForLesson(lesson);
+    const mutation = getBuiltinLessonLayerMutation(safeSubjectId, safeGrade, lessonKey);
+    if (!mutation) {
+      acc.push(lesson);
+      return acc;
+    }
+    if (mutation.action === "delete") return acc;
+    if (mutation.action === "replace" && mutation.lesson) {
+      acc.push(cloneSerializableValue(mutation.lesson));
+      return acc;
+    }
+    acc.push(lesson);
+    return acc;
+  }, []);
+}
+
+function getQuiz(subjectId, targetGrade, lessonKey) {
+  const mutation = getBuiltinLessonLayerMutation(subjectId, targetGrade, lessonKey);
+  if (mutation?.action === "delete") return [];
+  if (mutation?.action === "replace" && Array.isArray(mutation.questions)) {
+    return cloneSerializableValue(mutation.questions);
+  }
+  return rawGetQuiz(subjectId, targetGrade, lessonKey);
 }
 
 function stripRuntimeLessonMarkers(lesson = {}) {
@@ -3058,7 +3179,7 @@ function normalizeLessonArchiveRecord(raw) {
   const grade = Number(raw?.grade);
   const lessonKey = resolveCustomChapterLessonKey({ lessonKey: raw?.lesson_key || raw?.lessonKey || "" });
   if (!archiveId || !subject || !Number.isFinite(grade) || !lessonKey) return null;
-  const sourceType = ["builtin", "custom", "published", "slot"].includes(String(raw?.source_type || raw?.sourceType || "").trim())
+  const sourceType = ["builtin", "builtin_history", "custom", "published", "slot"].includes(String(raw?.source_type || raw?.sourceType || "").trim())
     ? String(raw?.source_type || raw?.sourceType || "").trim()
     : "builtin";
   return {
@@ -16259,6 +16380,12 @@ const headerHideTimerRef = useRef(null);
     const runtimeSetting = visibleSystemSettings.find((entry) => entry.settingKey === "curriculum_runtime") || null;
     return normalizeCurriculumRuntimeSettings(runtimeSetting?.settingValue || runtimeSetting);
   }, [visibleSystemSettings]);
+  const builtinLessonLayerState = useMemo(() => {
+    const layerSetting = visibleSystemSettings.find((entry) => entry.settingKey === "builtin_lesson_layer") || null;
+    const nextState = normalizeBuiltinLessonLayerState(layerSetting?.settingValue || layerSetting);
+    setRuntimeBuiltinLessonLayerState(nextState);
+    return nextState;
+  }, [visibleSystemSettings]);
   const visibleCurriculumPacks = useMemo(() => {
     const safeRows = Array.isArray(contentRelationshipState.curriculumPacks) ? contentRelationshipState.curriculumPacks : [];
     return safeRows
@@ -19400,7 +19527,7 @@ const headerHideTimerRef = useRef(null);
   }, [allSubjects, dbLoaded, getLessons, grade]);
   const visibleArchivedLessonEntries = useMemo(() => (
     visibleLessonArchives
-      .filter((entry) => entry.sourceType === "builtin" || entry.sourceType === "slot")
+      .filter((entry) => entry.sourceType === "builtin" || entry.sourceType === "builtin_history" || entry.sourceType === "slot")
       .filter((entry) => !grade || Number(entry.grade) === Number(grade))
   ), [grade, visibleLessonArchives]);
   const buildLessonOrderDraftFromGroups = useCallback((groups = []) => (
@@ -20553,6 +20680,85 @@ const headerHideTimerRef = useRef(null);
       setLessonEditBusy(false);
     }
   }, [canAdministerLessonLibrary, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection]);
+  const persistBuiltinLessonLayerState = useCallback(async (nextLayerState) => {
+    const normalizedLayerState = normalizeBuiltinLessonLayerState(nextLayerState);
+    const client = ensureSupabaseClientRef.current();
+    const row = {
+      setting_key: "builtin_lesson_layer",
+      setting_value: normalizedLayerState,
+      updated_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await client.from(SUPABASE_SYSTEM_SETTINGS_TABLE).upsert(row, { onConflict: "setting_key" });
+    if (error) throw error;
+    const normalizedRow = normalizeSystemSettingRecord(row);
+    setContentRelationshipState((current) => {
+      const safeSettings = Array.isArray(current?.systemSettings) ? current.systemSettings : [];
+      const nextSettings = safeSettings
+        .map((entry) => normalizeSystemSettingRecord(entry))
+        .filter(Boolean)
+        .filter((entry) => entry.settingKey !== "builtin_lesson_layer");
+      if (normalizedRow) nextSettings.push(normalizedRow);
+      return {
+        ...current,
+        systemSettings: nextSettings,
+        lastUpdatedAt: Date.now(),
+      };
+    });
+    setRuntimeBuiltinLessonLayerState(normalizedLayerState);
+    return normalizedLayerState;
+  }, [contentIdentityEmail]);
+  const buildBuiltinLessonArchiveSnapshot = useCallback((group, builtinVariant) => {
+    if (!group?.canonicalLessonKey || !builtinVariant?.lesson) return null;
+    const builtinLesson = stripRuntimeLessonMarkers(cloneSerializableValue(builtinVariant.lesson) || {});
+    builtinLesson.key = group.canonicalLessonKey;
+    builtinLesson.id = `${group.subjectId}_${Number(group.grade)}_${group.canonicalLessonKey}`;
+    if (!builtinLesson.title) builtinLesson.title = String(group.title || group.canonicalLessonKey).trim();
+    const builtinQuestions = Array.isArray(getQuiz(group.subjectId, group.grade, group.canonicalLessonKey))
+      ? cloneSerializableValue(getQuiz(group.subjectId, group.grade, group.canonicalLessonKey))
+      : [];
+    return {
+      subject: group.subjectId,
+      grade: Number(group.grade),
+      lessonKey: group.canonicalLessonKey,
+      title: String(builtinLesson.title || group.title || group.canonicalLessonKey).trim(),
+      lesson: builtinLesson,
+      questions: builtinQuestions,
+      archivedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+      archivedAt: Date.now(),
+    };
+  }, [contentIdentityEmail]);
+  const upsertBuiltinLessonArchive = useCallback(async (group, archivePayload, archiveSourceType = "builtin") => {
+    const safePayload = archivePayload && typeof archivePayload === "object" ? archivePayload : null;
+    if (!group?.canonicalLessonKey || !safePayload) return null;
+    const archiveSchoolId = String(activeInstitutionSchoolId || activeInstitutionSchoolIdResolved || "").trim();
+    const archiveId = `lesson_archive_${simpleHash(`${archiveSchoolId || "global"}::${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}::builtin`)}`;
+      const row = {
+        archive_id: archiveId,
+        school_id: archiveSchoolId || null,
+        subject: group.subjectId,
+        grade: Number(group.grade),
+        lesson_key: group.canonicalLessonKey,
+        source_type: archiveSourceType === "builtin_history" ? "builtin_history" : "builtin",
+        content_id: null,
+      title: String(safePayload.title || group.title || group.canonicalLessonKey).trim(),
+      archived_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+      status: "active",
+      updated_at: new Date().toISOString(),
+    };
+    const client = ensureSupabaseClientRef.current();
+    const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).upsert(row, { onConflict: "archive_id" });
+    if (error) throw error;
+    setContentRelationshipState((current) => ({
+      ...current,
+      lessonArchives: upsertLessonArchiveEntry(current?.lessonArchives, row),
+      lastUpdatedAt: Date.now(),
+    }));
+    return {
+      archiveId,
+      row,
+    };
+  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, contentIdentityEmail]);
   const handleDeleteLocalChapter = useCallback(async (group) => {
     if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can delete local chapter copies.", "صرف ایڈمن مقامی ابواب کی کاپیاں حذف کر سکتے ہیں۔", language), "alert");
@@ -20590,40 +20796,98 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     try {
-      const client = ensureSupabaseClientRef.current();
-      const nowIso = new Date().toISOString();
-      const archiveSchoolId = String(activeInstitutionSchoolId || activeInstitutionSchoolIdResolved || "").trim();
-      const archiveId = `lesson_archive_${simpleHash(`${archiveSchoolId || "global"}::${group.subjectId}::${Number(group.grade)}::${group.canonicalLessonKey}::builtin`)}`;
-      const row = {
-        archive_id: archiveId,
-        school_id: archiveSchoolId || null,
+      const archivePayload = buildBuiltinLessonArchiveSnapshot(group, builtinVariant);
+      const archiveResult = await upsertBuiltinLessonArchive(group, archivePayload, "builtin");
+      const slotKey = buildBuiltinLessonSlotKey(group.subjectId, group.grade, group.canonicalLessonKey);
+      const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+      nextLayerState.slots[slotKey] = {
+        action: "delete",
         subject: group.subjectId,
         grade: Number(group.grade),
-        lesson_key: group.canonicalLessonKey,
-        source_type: "builtin",
-        content_id: null,
-        title: String(group.title || group.activeLesson?.title || group.canonicalLessonKey).trim(),
-        archived_by_email: contentIdentityEmail,
-        status: "active",
-        updated_at: nowIso,
+        lessonKey: group.canonicalLessonKey,
+        title: String(group.title || builtinVariant.lesson?.title || group.canonicalLessonKey).trim(),
+        updatedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+        updatedAt: Date.now(),
       };
-      const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).upsert(row, { onConflict: "archive_id" });
-      if (error) throw error;
-      setContentRelationshipState((current) => ({
-        ...current,
-        lessonArchives: upsertLessonArchiveEntry(current?.lessonArchives, row),
-        lastUpdatedAt: Date.now(),
-      }));
+      if (archiveResult?.archiveId && archivePayload) {
+        nextLayerState.archives[archiveResult.archiveId] = {
+          ...archivePayload,
+          archiveId: archiveResult.archiveId,
+        };
+      }
+      await persistBuiltinLessonLayerState(nextLayerState);
       updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
+      setSelectedLesson(null);
       await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText("Default lesson removed", "بنیادی سبق ہٹا دیا گیا", language), "check");
+      showAppToast(joinLocalizedText("Built-in lesson deleted for good", "بنیادی سبق مستقل طور پر حذف کر دیا گیا", language), "check");
     } catch (error) {
       showAppToast(
         joinLocalizedText(`Unable to remove default lesson: ${error?.message || error}`, `بنیادی سبق ہٹایا نہیں جا سکا: ${error?.message || error}`, language),
         "alert",
       );
     }
-  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, canAdministerLessonLibrary, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  }, [buildBuiltinLessonArchiveSnapshot, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, upsertBuiltinLessonArchive]);
+  const handlePromotePublishedLessonToBuiltin = useCallback(async (group, publishedVariant = null) => {
+    if (!canAdministerLessonLibrary) {
+      showAppToast(joinLocalizedText("Only admins can replace a built-in lesson for good.", "صرف ایڈمن بنیادی سبق کو مستقل طور پر بدل سکتے ہیں۔", language), "alert");
+      return;
+    }
+    const builtinVariant = group?.variants?.find((variant) => variant.sourceType === "builtin") || null;
+    const targetPublishedVariant = (publishedVariant?.sourceType === "published" ? publishedVariant : null)
+      || (selectedLessonOpenedVariant?.sourceType === "published" ? selectedLessonOpenedVariant : null)
+      || (group?.variants || []).find((variant) => variant.sourceType === "published")
+      || null;
+    if (!builtinVariant || !targetPublishedVariant?.lesson) {
+      showAppToast(joinLocalizedText("Open a published lesson copy first.", "پہلے شائع شدہ سبق کی کاپی کھولیں۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in as admin first.", "پہلے ایڈمن کے طور پر سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    try {
+      const archivePayload = buildBuiltinLessonArchiveSnapshot(group, builtinVariant);
+      const archiveResult = await upsertBuiltinLessonArchive(group, archivePayload, "builtin_history");
+      const slotKey = buildBuiltinLessonSlotKey(group.subjectId, group.grade, group.canonicalLessonKey);
+      const promotedLesson = stripRuntimeLessonMarkers(cloneSerializableValue(targetPublishedVariant.lesson) || {});
+      promotedLesson.key = group.canonicalLessonKey;
+      promotedLesson.id = `${group.subjectId}_${Number(group.grade)}_${group.canonicalLessonKey}`;
+      const promotedQuestions = targetPublishedVariant.contentId
+        ? (Array.isArray(publishedLessonQuestionLookup.get(String(targetPublishedVariant.contentId || "").trim()))
+            ? cloneSerializableValue(publishedLessonQuestionLookup.get(String(targetPublishedVariant.contentId || "").trim()))
+            : [])
+        : [];
+      const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+      nextLayerState.slots[slotKey] = {
+        action: "replace",
+        subject: group.subjectId,
+        grade: Number(group.grade),
+        lessonKey: group.canonicalLessonKey,
+        title: String(promotedLesson.title || group.title || group.canonicalLessonKey).trim(),
+        contentId: String(targetPublishedVariant.contentId || "").trim(),
+        lesson: promotedLesson,
+        questions: promotedQuestions,
+        updatedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+        updatedAt: Date.now(),
+      };
+      if (archiveResult?.archiveId && archivePayload) {
+        nextLayerState.archives[archiveResult.archiveId] = {
+          ...archivePayload,
+          archiveId: archiveResult.archiveId,
+        };
+      }
+      await persistBuiltinLessonLayerState(nextLayerState);
+      updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
+      setSelectedLesson(null);
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Published lesson became the built-in lesson for this slot", "اس خانے کے لیے شائع شدہ سبق اب بنیادی سبق بن گیا ہے", language), "check");
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(`Unable to replace the built-in lesson: ${error?.message || error}`, `بنیادی سبق تبدیل نہیں ہو سکا: ${error?.message || error}`, language),
+        "alert",
+      );
+    }
+  }, [buildBuiltinLessonArchiveSnapshot, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, publishedLessonQuestionLookup, selectedLessonOpenedVariant, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, upsertBuiltinLessonArchive]);
   const handleArchiveLessonSlot = useCallback(async (group) => {
     if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can remove whole lesson slots.", "صرف ایڈمن مکمل سبق خانہ ہٹا سکتے ہیں۔", language), "alert");
@@ -20693,6 +20957,28 @@ const headerHideTimerRef = useRef(null);
     }
     if (!normalized) return;
     try {
+      let nextLayerState = builtinLessonLayerState;
+      if (normalized.sourceType === "builtin" || normalized.sourceType === "builtin_history") {
+        const archivedBuiltinPayload = builtinLessonLayerState.archives?.[normalized.archiveId] || null;
+        nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+        delete nextLayerState.archives[normalized.archiveId];
+        if (archivedBuiltinPayload?.lesson) {
+          nextLayerState.slots[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)] = {
+            action: "replace",
+            subject: normalized.subject,
+            grade: Number(normalized.grade),
+            lessonKey: normalized.lessonKey,
+            title: String(archivedBuiltinPayload.title || normalized.title || normalized.lessonKey).trim(),
+            lesson: stripRuntimeLessonMarkers(cloneSerializableValue(archivedBuiltinPayload.lesson) || {}),
+            questions: Array.isArray(archivedBuiltinPayload.questions) ? cloneSerializableValue(archivedBuiltinPayload.questions) : [],
+            updatedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+            updatedAt: Date.now(),
+          };
+        } else {
+          delete nextLayerState.slots[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)];
+        }
+        await persistBuiltinLessonLayerState(nextLayerState);
+      }
       const client = ensureSupabaseClientRef.current();
       const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
       if (error) throw error;
@@ -20701,6 +20987,7 @@ const headerHideTimerRef = useRef(null);
         lessonArchives: removeLessonArchiveEntry(current?.lessonArchives, normalized.archiveId),
         lastUpdatedAt: Date.now(),
       }));
+      updateChapterSourceSelection(normalized.subject, normalized.grade, normalized.lessonKey, null, { silent: true, force: true });
       await refreshContentRelationshipStateRef.current();
       showAppToast(joinLocalizedText("Lesson restored", "سبق بحال کر دیا گیا", language), "check");
     } catch (error) {
@@ -20709,7 +20996,7 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [canAdministerLessonLibrary, language, showAppToast]);
+  }, [builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, updateChapterSourceSelection]);
   const lessonEditContextValue = useMemo(() => ({
     enabled: lessonEditMode,
     draft: lessonEditDraft,
@@ -32403,7 +32690,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                         <span>{renderLocalizedTextNode(joinLocalizedText(`Grade ${entry.grade}`, `جماعت ${entry.grade}`, language), language)}</span>
                       </div>
                       <div className="goal-progress-meta">
-                        {renderLocalizedTextNode(joinLocalizedText(`${lessonInfo?.subject ? getSubjectDisplayName(lessonInfo.subject, "en") : entry.subject} • ${entry.sourceType === "slot" ? "lesson slot removed" : "default removed"} by ${entry.archivedByEmail || "admin"}`, `${lessonInfo?.subject ? getSubjectDisplayName(lessonInfo.subject, "ur") : entry.subject} • ${entry.sourceType === "slot" ? "سبق خانہ ہٹایا گیا" : "بنیادی سبق ہٹایا گیا"} • ${entry.archivedByEmail || "ایڈمن"}`, language), language)}
+                        {renderLocalizedTextNode(joinLocalizedText(`${lessonInfo?.subject ? getSubjectDisplayName(lessonInfo.subject, "en") : entry.subject} • ${entry.sourceType === "slot" ? "lesson slot removed" : entry.sourceType === "builtin_history" ? "previous built-in archived" : "default removed"} by ${entry.archivedByEmail || "admin"}`, `${lessonInfo?.subject ? getSubjectDisplayName(lessonInfo.subject, "ur") : entry.subject} • ${entry.sourceType === "slot" ? "سبق خانہ ہٹایا گیا" : entry.sourceType === "builtin_history" ? "پچھلا بنیادی سبق محفوظ کیا گیا" : "بنیادی سبق ہٹایا گیا"} • ${entry.archivedByEmail || "ایڈمن"}`, language), language)}
                       </div>
                       <div className="result-actions chapter-card-actions" style={{ marginTop: 8 }}>
                         <button type="button" className="ghost-cta" onClick={() => handleRestoreLessonArchive(entry)}>{renderLocalizedTextNode(joinLocalizedText("Restore lesson", "سبق بحال کریں", language), language)}</button>
@@ -33236,9 +33523,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     {renderLocalizedTextNode(joinLocalizedText("Replace Default Everywhere", "ہر جگہ بنیادی ماخذ بدلیں", language), language)}
                   </button>
                 ) : null}
+                {canAdministerLessonLibrary && selectedLessonOpenedVariant?.sourceType === "published" && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
+                  <button type="button" className="ghost-cta" onClick={() => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant)} disabled={contentRelationshipBusy}>
+                    {renderLocalizedTextNode(joinLocalizedText("Replace Built-in For Good", "بنیادی سبق کو مستقل بدلیں", language), language)}
+                  </button>
+                ) : null}
                 {selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
-                  <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)}>
-                    {renderLocalizedTextNode(joinLocalizedText("Hide Built-in Source", "بنیادی ماخذ چھپائیں", language), language)}
+                  <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)} disabled={contentRelationshipBusy}>
+                    {renderLocalizedTextNode(joinLocalizedText("Delete Built-in For Good", "بنیادی سبق مستقل حذف کریں", language), language)}
                   </button>
                 ) : null}
               </div>
@@ -33292,9 +33584,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}
               </button>
             ) : null}
+            {canAdministerLessonLibrary && selectedLessonOpenedVariant?.sourceType === "published" && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
+              <button type="button" className="ghost-cta" onClick={() => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant)}>
+                {renderLocalizedTextNode(joinLocalizedText("Replace Built-in For Good", "بنیادی سبق کو مستقل بدلیں", language), language)}
+              </button>
+            ) : null}
             {canAdministerLessonLibrary && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
               <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)}>
-                {renderLocalizedTextNode(joinLocalizedText("Remove Default", "بنیادی سبق ہٹائیں", language), language)}
+                {renderLocalizedTextNode(joinLocalizedText("Delete Built-in For Good", "بنیادی سبق مستقل حذف کریں", language), language)}
               </button>
             ) : null}
             {canAdministerLessonLibrary ? (
