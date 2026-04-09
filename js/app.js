@@ -1852,6 +1852,26 @@ function collectDiaryExercisePartOutlineNodes(exercise = {}, baseKey = "", route
   ));
 }
 
+function collectDiaryWordProblemOutlineNodes(problemEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
+  const nodes = [];
+  const safeEntries = Array.isArray(problemEntries) ? problemEntries : [];
+  safeEntries.forEach((problem, index) => {
+    const label = normalizeDiaryOutlineLeafLabel(problem, isUrdu ? `عملی سوال ${index + 1}` : `Word Problem ${index + 1}`);
+    if (!label) return;
+    nodes.push({
+      key: `${baseKey}_word_problem_${index}`,
+      label,
+      routeMeta: {
+        ...routeMeta,
+        subTab: "exercises",
+        targetId: String(routeMeta?.targetId || buildDiarySectionTargetId(routeMeta?.targetBaseId, "exercises") || "").trim(),
+      },
+      children: [],
+    });
+  });
+  return nodes;
+}
+
 function attachDiaryRouteMeta(nodes = [], extraRouteMeta = {}) {
   return (Array.isArray(nodes) ? nodes : []).map((node) => ({
     ...node,
@@ -2114,7 +2134,31 @@ function buildDiarySelectionOutlineFromSub(sub = {}, subjectId = "", routeMeta =
       });
     });
   }
-  if (exerciseEntries.length) {
+  const wordProblemEntries = Array.isArray(sub?.wordProblems) ? sub.wordProblems : [];
+  if (exerciseEntries.length || wordProblemEntries.length) {
+    const exerciseChildren = [
+      ...collectDiaryExerciseOutlineNodes(
+        exerciseEntries,
+        `${baseKey}_exercises`,
+        safeRouteMeta,
+        isUrdu,
+      ),
+      ...(wordProblemEntries.length ? [{
+        key: `${baseKey}_word_problems`,
+        label: isUrdu ? "عملی سوالات" : "Word Problems",
+        routeMeta: {
+          ...safeRouteMeta,
+          subTab: "exercises",
+          targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
+        },
+        children: collectDiaryWordProblemOutlineNodes(
+          wordProblemEntries,
+          `${baseKey}_word_problems`,
+          safeRouteMeta,
+          isUrdu,
+        ),
+      }] : []),
+    ];
     children.push({
       key: `${baseKey}_exercises`,
       label: isUrdu ? "مشقیں" : "Exercises",
@@ -2124,12 +2168,7 @@ function buildDiarySelectionOutlineFromSub(sub = {}, subjectId = "", routeMeta =
         targetScope: "section",
         targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
       },
-      children: collectDiaryExerciseOutlineNodes(
-        exerciseEntries,
-        `${baseKey}_exercises`,
-        safeRouteMeta,
-        isUrdu,
-      ),
+      children: exerciseChildren,
     });
   }
   const hasQuiz = Boolean(
@@ -2208,17 +2247,31 @@ function buildDiarySelectionOutlineFromLesson(lesson = {}, subjectId = "", route
   }
   const exerciseEntries = [];
   if (Array.isArray(lesson?.exercises)) exerciseEntries.push(...lesson.exercises);
-  if (exerciseEntries.length) {
+  const wordProblemEntries = Array.isArray(lesson?.wordProblems) ? lesson.wordProblems : [];
+  if (exerciseEntries.length || wordProblemEntries.length) {
     children.push({
       key: `${baseKey}_exercises`,
       label: isUrdu ? "مشقیں" : "Exercises",
       routeMeta: { ...routeMeta, subTab: "exercises", targetScope: "section" },
-      children: collectDiaryExerciseOutlineNodes(
-        exerciseEntries,
-        `${baseKey}_exercises`,
-        routeMeta,
-        isUrdu,
-      ),
+      children: [
+        ...collectDiaryExerciseOutlineNodes(
+          exerciseEntries,
+          `${baseKey}_exercises`,
+          routeMeta,
+          isUrdu,
+        ),
+        ...(wordProblemEntries.length ? [{
+          key: `${baseKey}_word_problems`,
+          label: isUrdu ? "عملی سوالات" : "Word Problems",
+          routeMeta: { ...routeMeta, subTab: "exercises", targetId: buildDiarySectionTargetId(routeMeta?.targetBaseId, "exercises") },
+          children: collectDiaryWordProblemOutlineNodes(
+            wordProblemEntries,
+            `${baseKey}_word_problems`,
+            routeMeta,
+            isUrdu,
+          ),
+        }] : []),
+      ],
     });
   }
   const hasQuiz = Boolean(
@@ -2303,7 +2356,8 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
       });
     });
   }
-  if (exerciseEntries.length) {
+  const wordProblemEntries = Array.isArray(sub?.wordProblems) ? sub.wordProblems : [];
+  if (exerciseEntries.length || wordProblemEntries.length) {
     const exerciseChildren = Array.isArray(sub?.exerciseGroups) && sub.exerciseGroups.length
       ? sub.exerciseGroups.map((group, groupIndex) => ({
           key: `${baseKey}_exercise_group_${groupIndex}`,
@@ -2340,7 +2394,26 @@ function buildDiaryLessonOutlineFromSub(sub = {}, subjectId = "", routeMeta = {}
         targetScope: "section",
         targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
       },
-      children: exerciseChildren,
+      children: wordProblemEntries.length
+        ? [
+            ...exerciseChildren,
+            {
+              key: `${baseKey}_word_problems`,
+              label: isUrdu ? "عملی سوالات" : "Word Problems",
+              routeMeta: {
+                ...safeRouteMeta,
+                subTab: "exercises",
+                targetId: buildDiarySectionTargetId(targetBaseId, "exercises"),
+              },
+              children: collectDiaryWordProblemOutlineNodes(
+                wordProblemEntries,
+                `${baseKey}_word_problems`,
+                safeRouteMeta,
+                isUrdu,
+              ),
+            },
+          ]
+        : exerciseChildren,
     });
   }
   const hasQuiz = Boolean(
@@ -2388,17 +2461,31 @@ function buildDiaryLessonOutlineFromLesson(lesson = {}, subjectId = "", routeMet
   }
   const exerciseEntries = [];
   if (Array.isArray(lesson?.exercises)) exerciseEntries.push(...lesson.exercises);
-  if (exerciseEntries.length) {
+  const wordProblemEntries = Array.isArray(lesson?.wordProblems) ? lesson.wordProblems : [];
+  if (exerciseEntries.length || wordProblemEntries.length) {
     children.push({
       key: `${baseKey}_exercises`,
       label: isUrdu ? "مشقیں" : "Exercises",
       routeMeta: { ...routeMeta, subTab: "exercises", targetScope: "section" },
-      children: collectDiaryExerciseOutlineNodes(
-        exerciseEntries,
-        `${baseKey}_exercises`,
-        routeMeta,
-        isUrdu,
-      ),
+      children: [
+        ...collectDiaryExerciseOutlineNodes(
+          exerciseEntries,
+          `${baseKey}_exercises`,
+          routeMeta,
+          isUrdu,
+        ),
+        ...(wordProblemEntries.length ? [{
+          key: `${baseKey}_word_problems`,
+          label: isUrdu ? "عملی سوالات" : "Word Problems",
+          routeMeta: { ...routeMeta, subTab: "exercises", targetId: buildDiarySectionTargetId(routeMeta?.targetBaseId, "exercises") },
+          children: collectDiaryWordProblemOutlineNodes(
+            wordProblemEntries,
+            `${baseKey}_word_problems`,
+            routeMeta,
+            isUrdu,
+          ),
+        }] : []),
+      ],
     });
   }
   const hasQuiz = Boolean(

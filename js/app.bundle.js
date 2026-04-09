@@ -1629,6 +1629,25 @@
       }
     ));
   }
+  function collectDiaryWordProblemOutlineNodes(problemEntries = [], baseKey = "", routeMeta = {}, isUrdu = false) {
+    const nodes = [];
+    const safeEntries = Array.isArray(problemEntries) ? problemEntries : [];
+    safeEntries.forEach((problem, index) => {
+      const label = normalizeDiaryOutlineLeafLabel(problem, isUrdu ? `\u0639\u0645\u0644\u06CC \u0633\u0648\u0627\u0644 ${index + 1}` : `Word Problem ${index + 1}`);
+      if (!label) return;
+      nodes.push({
+        key: `${baseKey}_word_problem_${index}`,
+        label,
+        routeMeta: {
+          ...routeMeta,
+          subTab: "exercises",
+          targetId: String((routeMeta == null ? void 0 : routeMeta.targetId) || buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "exercises") || "").trim()
+        },
+        children: []
+      });
+    });
+    return nodes;
+  }
   function attachDiaryRouteMeta(nodes = [], extraRouteMeta = {}) {
     return (Array.isArray(nodes) ? nodes : []).map((node) => ({
       ...node,
@@ -1856,7 +1875,31 @@
         });
       });
     }
-    if (exerciseEntries.length) {
+    const wordProblemEntries = Array.isArray(sub == null ? void 0 : sub.wordProblems) ? sub.wordProblems : [];
+    if (exerciseEntries.length || wordProblemEntries.length) {
+      const exerciseChildren = [
+        ...collectDiaryExerciseOutlineNodes(
+          exerciseEntries,
+          `${baseKey}_exercises`,
+          safeRouteMeta,
+          isUrdu
+        ),
+        ...wordProblemEntries.length ? [{
+          key: `${baseKey}_word_problems`,
+          label: isUrdu ? "\u0639\u0645\u0644\u06CC \u0633\u0648\u0627\u0644\u0627\u062A" : "Word Problems",
+          routeMeta: {
+            ...safeRouteMeta,
+            subTab: "exercises",
+            targetId: buildDiarySectionTargetId(targetBaseId, "exercises")
+          },
+          children: collectDiaryWordProblemOutlineNodes(
+            wordProblemEntries,
+            `${baseKey}_word_problems`,
+            safeRouteMeta,
+            isUrdu
+          )
+        }] : []
+      ];
       children.push({
         key: `${baseKey}_exercises`,
         label: isUrdu ? "\u0645\u0634\u0642\u06CC\u06BA" : "Exercises",
@@ -1866,12 +1909,7 @@
           targetScope: "section",
           targetId: buildDiarySectionTargetId(targetBaseId, "exercises")
         },
-        children: collectDiaryExerciseOutlineNodes(
-          exerciseEntries,
-          `${baseKey}_exercises`,
-          safeRouteMeta,
-          isUrdu
-        )
+        children: exerciseChildren
       });
     }
     const hasQuiz = Boolean(
@@ -1941,17 +1979,31 @@
     }
     const exerciseEntries = [];
     if (Array.isArray(lesson == null ? void 0 : lesson.exercises)) exerciseEntries.push(...lesson.exercises);
-    if (exerciseEntries.length) {
+    const wordProblemEntries = Array.isArray(lesson == null ? void 0 : lesson.wordProblems) ? lesson.wordProblems : [];
+    if (exerciseEntries.length || wordProblemEntries.length) {
       children.push({
         key: `${baseKey}_exercises`,
         label: isUrdu ? "\u0645\u0634\u0642\u06CC\u06BA" : "Exercises",
         routeMeta: { ...routeMeta, subTab: "exercises", targetScope: "section" },
-        children: collectDiaryExerciseOutlineNodes(
-          exerciseEntries,
-          `${baseKey}_exercises`,
-          routeMeta,
-          isUrdu
-        )
+        children: [
+          ...collectDiaryExerciseOutlineNodes(
+            exerciseEntries,
+            `${baseKey}_exercises`,
+            routeMeta,
+            isUrdu
+          ),
+          ...wordProblemEntries.length ? [{
+            key: `${baseKey}_word_problems`,
+            label: isUrdu ? "\u0639\u0645\u0644\u06CC \u0633\u0648\u0627\u0644\u0627\u062A" : "Word Problems",
+            routeMeta: { ...routeMeta, subTab: "exercises", targetId: buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "exercises") },
+            children: collectDiaryWordProblemOutlineNodes(
+              wordProblemEntries,
+              `${baseKey}_word_problems`,
+              routeMeta,
+              isUrdu
+            )
+          }] : []
+        ]
       });
     }
     const hasQuiz = Boolean(
@@ -2028,7 +2080,8 @@
         });
       });
     }
-    if (exerciseEntries.length) {
+    const wordProblemEntries = Array.isArray(sub == null ? void 0 : sub.wordProblems) ? sub.wordProblems : [];
+    if (exerciseEntries.length || wordProblemEntries.length) {
       const exerciseChildren = Array.isArray(sub == null ? void 0 : sub.exerciseGroups) && sub.exerciseGroups.length ? sub.exerciseGroups.map((group, groupIndex) => ({
         key: `${baseKey}_exercise_group_${groupIndex}`,
         label: normalizeDiaryOutlineLeafLabel(group, isUrdu ? `\u0645\u0634\u0642 \u06AF\u0631\u0648\u067E ${groupIndex + 1}` : `Exercise Group ${groupIndex + 1}`),
@@ -2063,7 +2116,24 @@
           targetScope: "section",
           targetId: buildDiarySectionTargetId(targetBaseId, "exercises")
         },
-        children: exerciseChildren
+        children: wordProblemEntries.length ? [
+          ...exerciseChildren,
+          {
+            key: `${baseKey}_word_problems`,
+            label: isUrdu ? "\u0639\u0645\u0644\u06CC \u0633\u0648\u0627\u0644\u0627\u062A" : "Word Problems",
+            routeMeta: {
+              ...safeRouteMeta,
+              subTab: "exercises",
+              targetId: buildDiarySectionTargetId(targetBaseId, "exercises")
+            },
+            children: collectDiaryWordProblemOutlineNodes(
+              wordProblemEntries,
+              `${baseKey}_word_problems`,
+              safeRouteMeta,
+              isUrdu
+            )
+          }
+        ] : exerciseChildren
       });
     }
     const hasQuiz = Boolean(
@@ -2106,17 +2176,31 @@
     }
     const exerciseEntries = [];
     if (Array.isArray(lesson == null ? void 0 : lesson.exercises)) exerciseEntries.push(...lesson.exercises);
-    if (exerciseEntries.length) {
+    const wordProblemEntries = Array.isArray(lesson == null ? void 0 : lesson.wordProblems) ? lesson.wordProblems : [];
+    if (exerciseEntries.length || wordProblemEntries.length) {
       children.push({
         key: `${baseKey}_exercises`,
         label: isUrdu ? "\u0645\u0634\u0642\u06CC\u06BA" : "Exercises",
         routeMeta: { ...routeMeta, subTab: "exercises", targetScope: "section" },
-        children: collectDiaryExerciseOutlineNodes(
-          exerciseEntries,
-          `${baseKey}_exercises`,
-          routeMeta,
-          isUrdu
-        )
+        children: [
+          ...collectDiaryExerciseOutlineNodes(
+            exerciseEntries,
+            `${baseKey}_exercises`,
+            routeMeta,
+            isUrdu
+          ),
+          ...wordProblemEntries.length ? [{
+            key: `${baseKey}_word_problems`,
+            label: isUrdu ? "\u0639\u0645\u0644\u06CC \u0633\u0648\u0627\u0644\u0627\u062A" : "Word Problems",
+            routeMeta: { ...routeMeta, subTab: "exercises", targetId: buildDiarySectionTargetId(routeMeta == null ? void 0 : routeMeta.targetBaseId, "exercises") },
+            children: collectDiaryWordProblemOutlineNodes(
+              wordProblemEntries,
+              `${baseKey}_word_problems`,
+              routeMeta,
+              isUrdu
+            )
+          }] : []
+        ]
       });
     }
     const hasQuiz = Boolean(
