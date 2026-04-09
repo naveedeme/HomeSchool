@@ -26243,10 +26243,13 @@ const lessons = getMergedLessons(subjectId, grade);
     const subjectId = String(task?.subject || "").trim();
     if (!lesson || !subjectId) return [];
     const lessonRouteKey = String(getLessonKeyValue(lesson) || lesson?.id || "lesson").trim() || "lesson";
+    const leadUnit = task?.taskUnits?.[0] || null;
     if (lesson?.hasMathSub) {
       const derivedSubs = getDerivedLessonDiarySubs(lesson, subjectId);
       const leadUnit = task?.taskUnits?.[0] || null;
       const matchedSubIndex = findDiarySubIndex(derivedSubs, {
+        explicitSubKey: task?.subsectionKey,
+        explicitSubTitle: task?.subsectionTitle,
         unitSourceKey: leadUnit?.sourceMeta?.key,
         unitSourceTitle: leadUnit?.sourceMeta?.title,
         taskTitle: task?.title,
@@ -26258,8 +26261,37 @@ const lessons = getMergedLessons(subjectId, grade);
         const fullOutline = [buildDiaryLessonOutlineFromSub(matchedSub, subjectId, {
           targetBaseId: buildDiaryLessonTargetBaseId(subjectId, lessonRouteKey, effectiveSubIndex),
         })];
-        const selectedOutlineKeys = collectDiaryTaskSelectedOutlineKeys(fullOutline, task);
-        return selectedOutlineKeys.length ? filterDiaryOutlineNodesBySelection(fullOutline, selectedOutlineKeys) : fullOutline;
+        return fullOutline;
+      }
+    }
+    const subsectionCollections = [
+      lesson?.subsections,
+      lesson?.subs,
+      lesson?.sections,
+      lesson?.subLessons,
+      lesson?.days,
+      lesson?.mathSubs,
+      lesson?.topics,
+    ];
+    const subsectionObjects = subsectionCollections
+      .find((collection) => Array.isArray(collection) && collection.some((entry) => entry && typeof entry === "object"))
+      ?.filter((entry) => entry && typeof entry === "object")
+      || [];
+    if (subsectionObjects.length) {
+      const matchedSubIndex = findDiarySubIndex(subsectionObjects, {
+        explicitSubKey: task?.subsectionKey,
+        explicitSubTitle: task?.subsectionTitle,
+        unitSourceKey: leadUnit?.sourceMeta?.key,
+        unitSourceTitle: leadUnit?.sourceMeta?.title,
+        taskTitle: task?.title,
+        unitTitle: leadUnit?.title,
+      });
+      const effectiveSubIndex = matchedSubIndex >= 0 ? matchedSubIndex : 0;
+      const matchedSub = subsectionObjects[effectiveSubIndex] || subsectionObjects[0] || null;
+      if (matchedSub) {
+        return [buildDiaryLessonOutlineFromSub(matchedSub, subjectId, {
+          targetBaseId: buildDiaryLessonTargetBaseId(subjectId, lessonRouteKey, effectiveSubIndex),
+        })];
       }
     }
     const fullOutline = attachDiaryRouteMeta([buildDiaryLessonOutlineFromLesson(lesson, subjectId)], {
