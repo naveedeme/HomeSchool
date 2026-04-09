@@ -548,6 +548,209 @@
       deletedAt: (raw == null ? void 0 : raw.deleted_at) || (raw == null ? void 0 : raw.deletedAt) ? Number(new Date((raw == null ? void 0 : raw.deleted_at) || (raw == null ? void 0 : raw.deletedAt)).getTime()) || Date.now() : null
     };
   }
+  function normalizeCurriculumRuntimeSettings(raw = null) {
+    var _a, _b;
+    const source = raw && typeof raw === "object" ? raw.settingValue && typeof raw.settingValue === "object" ? raw.settingValue : raw : {};
+    return {
+      mode: "supabase_only",
+      allowBuiltinFallback: Boolean(
+        (_b = (_a = source.allowBuiltinFallback) != null ? _a : source.allow_builtin_fallback) != null ? _b : DEFAULT_CURRICULUM_RUNTIME_SETTINGS.allowBuiltinFallback
+      )
+    };
+  }
+  function normalizeSystemSettingRecord(raw) {
+    const settingKey = String((raw == null ? void 0 : raw.setting_key) || (raw == null ? void 0 : raw.settingKey) || "").trim();
+    if (!settingKey) return null;
+    const settingValue = (raw == null ? void 0 : raw.setting_value) && typeof raw.setting_value === "object" ? cloneSerializableValue(raw.setting_value) : (raw == null ? void 0 : raw.settingValue) && typeof raw.settingValue === "object" ? cloneSerializableValue(raw.settingValue) : {};
+    return {
+      settingKey,
+      settingValue,
+      updatedByEmail: String((raw == null ? void 0 : raw.updated_by_email) || (raw == null ? void 0 : raw.updatedByEmail) || "").trim().toLowerCase(),
+      updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now()
+    };
+  }
+  function normalizeCurriculumPackRecord(raw) {
+    var _a, _b, _c;
+    const packId = String((raw == null ? void 0 : raw.pack_id) || (raw == null ? void 0 : raw.packId) || "").trim();
+    if (!packId) return null;
+    const scopeOriginRaw = String((raw == null ? void 0 : raw.scope_origin) || (raw == null ? void 0 : raw.scopeOrigin) || "global").trim().toLowerCase();
+    const scopeOrigin = ["global", "school", "grade", "learner"].includes(scopeOriginRaw) ? scopeOriginRaw : "global";
+    const statusRaw = String((raw == null ? void 0 : raw.status) || "draft").trim().toLowerCase();
+    const status = ["draft", "published", "archived"].includes(statusRaw) ? statusRaw : "draft";
+    return {
+      packId,
+      name: String((raw == null ? void 0 : raw.name) || packId).trim() || packId,
+      description: String((raw == null ? void 0 : raw.description) || "").trim(),
+      scopeOrigin,
+      originSchoolId: String((raw == null ? void 0 : raw.origin_school_id) || (raw == null ? void 0 : raw.originSchoolId) || "").trim(),
+      originGrade: Number.isFinite(Number((_a = raw == null ? void 0 : raw.origin_grade) != null ? _a : raw == null ? void 0 : raw.originGrade)) ? Number((_b = raw == null ? void 0 : raw.origin_grade) != null ? _b : raw == null ? void 0 : raw.originGrade) : null,
+      originStudentEmail: String((raw == null ? void 0 : raw.origin_student_email) || (raw == null ? void 0 : raw.originStudentEmail) || "").trim().toLowerCase(),
+      parentPackId: String((raw == null ? void 0 : raw.parent_pack_id) || (raw == null ? void 0 : raw.parentPackId) || "").trim(),
+      status,
+      versionNo: Math.max(1, Number((_c = raw == null ? void 0 : raw.version_no) != null ? _c : raw == null ? void 0 : raw.versionNo) || 1),
+      createdByEmail: String((raw == null ? void 0 : raw.created_by_email) || (raw == null ? void 0 : raw.createdByEmail) || "").trim().toLowerCase(),
+      createdAt: Number(new Date((raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || (raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now(),
+      updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || (raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || Date.now()).getTime()) || Date.now()
+    };
+  }
+  function normalizeCurriculumPackSubjectRecord(raw) {
+    var _a, _b, _c, _d;
+    const packSubjectId = String((raw == null ? void 0 : raw.pack_subject_id) || (raw == null ? void 0 : raw.packSubjectId) || "").trim();
+    const packId = String((raw == null ? void 0 : raw.pack_id) || (raw == null ? void 0 : raw.packId) || "").trim();
+    const subjectKey = String((raw == null ? void 0 : raw.subject_key) || (raw == null ? void 0 : raw.subjectKey) || (raw == null ? void 0 : raw.subject) || "").trim().toLowerCase();
+    if (!packSubjectId || !packId || !subjectKey) return null;
+    return {
+      packSubjectId,
+      packId,
+      subjectKey,
+      subjectTitle: String((raw == null ? void 0 : raw.subject_title) || (raw == null ? void 0 : raw.subjectTitle) || subjectKey).trim() || subjectKey,
+      subjectTitleUr: String((raw == null ? void 0 : raw.subject_title_ur) || (raw == null ? void 0 : raw.subjectTitleUr) || (raw == null ? void 0 : raw.subject_title) || (raw == null ? void 0 : raw.subjectTitle) || subjectKey).trim() || subjectKey,
+      grade: Number.isFinite(Number(raw == null ? void 0 : raw.grade)) ? Number(raw == null ? void 0 : raw.grade) : null,
+      orderIndex: Number.isFinite(Number((_a = raw == null ? void 0 : raw.order_index) != null ? _a : raw == null ? void 0 : raw.orderIndex)) ? Number((_b = raw == null ? void 0 : raw.order_index) != null ? _b : raw == null ? void 0 : raw.orderIndex) : 0,
+      isHidden: Boolean((_d = (_c = raw == null ? void 0 : raw.is_hidden) != null ? _c : raw == null ? void 0 : raw.isHidden) != null ? _d : false),
+      sourceType: String((raw == null ? void 0 : raw.source_type) || (raw == null ? void 0 : raw.sourceType) || "custom").trim().toLowerCase() || "custom",
+      sourceSubjectId: String((raw == null ? void 0 : raw.source_subject_id) || (raw == null ? void 0 : raw.sourceSubjectId) || "").trim(),
+      payload: (raw == null ? void 0 : raw.payload) && typeof raw.payload === "object" ? cloneSerializableValue(raw.payload) : {},
+      createdAt: Number(new Date((raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || (raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now(),
+      updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || (raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || Date.now()).getTime()) || Date.now()
+    };
+  }
+  function normalizeCurriculumPackLessonRecord(raw) {
+    var _a, _b, _c, _d, _e, _f;
+    const packLessonId = String((raw == null ? void 0 : raw.pack_lesson_id) || (raw == null ? void 0 : raw.packLessonId) || "").trim();
+    const packId = String((raw == null ? void 0 : raw.pack_id) || (raw == null ? void 0 : raw.packId) || "").trim();
+    const subjectKey = String((raw == null ? void 0 : raw.subject_key) || (raw == null ? void 0 : raw.subjectKey) || (raw == null ? void 0 : raw.subject) || "").trim().toLowerCase();
+    const grade = Number(raw == null ? void 0 : raw.grade);
+    const lessonKey = resolveCustomChapterLessonKey({
+      lessonKey: (raw == null ? void 0 : raw.lesson_key) || (raw == null ? void 0 : raw.lessonKey) || ((_a = raw == null ? void 0 : raw.content_payload) == null ? void 0 : _a.key) || ((_b = raw == null ? void 0 : raw.contentPayload) == null ? void 0 : _b.key) || (raw == null ? void 0 : raw.lesson_title) || (raw == null ? void 0 : raw.lessonTitle) || ""
+    });
+    if (!packLessonId || !packId || !subjectKey || !Number.isFinite(grade) || !lessonKey) return null;
+    const slotActionRaw = String((raw == null ? void 0 : raw.slot_action) || (raw == null ? void 0 : raw.slotAction) || "normal").trim().toLowerCase();
+    const slotAction = ["normal", "replaced", "removed"].includes(slotActionRaw) ? slotActionRaw : "normal";
+    return {
+      packLessonId,
+      packId,
+      subjectKey,
+      grade,
+      lessonKey,
+      lessonTitle: String((raw == null ? void 0 : raw.lesson_title) || (raw == null ? void 0 : raw.lessonTitle) || lessonKey).trim() || lessonKey,
+      lessonTitleUr: String((raw == null ? void 0 : raw.lesson_title_ur) || (raw == null ? void 0 : raw.lessonTitleUr) || (raw == null ? void 0 : raw.lesson_title) || (raw == null ? void 0 : raw.lessonTitle) || lessonKey).trim() || lessonKey,
+      orderIndex: Number.isFinite(Number((_c = raw == null ? void 0 : raw.order_index) != null ? _c : raw == null ? void 0 : raw.orderIndex)) ? Number((_d = raw == null ? void 0 : raw.order_index) != null ? _d : raw == null ? void 0 : raw.orderIndex) : 0,
+      isHidden: Boolean((_f = (_e = raw == null ? void 0 : raw.is_hidden) != null ? _e : raw == null ? void 0 : raw.isHidden) != null ? _f : false),
+      slotAction,
+      sourceType: String((raw == null ? void 0 : raw.source_type) || (raw == null ? void 0 : raw.sourceType) || "custom").trim().toLowerCase() || "custom",
+      sourceLessonId: String((raw == null ? void 0 : raw.source_lesson_id) || (raw == null ? void 0 : raw.sourceLessonId) || "").trim(),
+      contentPayload: (raw == null ? void 0 : raw.content_payload) && typeof raw.content_payload === "object" ? cloneSerializableValue(raw.content_payload) : (raw == null ? void 0 : raw.contentPayload) && typeof raw.contentPayload === "object" ? cloneSerializableValue(raw.contentPayload) : {},
+      createdAt: Number(new Date((raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || (raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now(),
+      updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || (raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || Date.now()).getTime()) || Date.now()
+    };
+  }
+  function buildCurriculumPackLessonEntry(raw) {
+    const normalized = normalizeCurriculumPackLessonRecord(raw);
+    if (!normalized || normalized.isHidden || normalized.slotAction === "removed") return null;
+    const payload = normalized.contentPayload && typeof normalized.contentPayload === "object" ? normalized.contentPayload : {};
+    const lessonSource = payload.lesson && typeof payload.lesson === "object" ? cloneSerializableValue(payload.lesson) : payload.payload && typeof payload.payload === "object" ? cloneSerializableValue(payload.payload) : cloneSerializableValue(payload);
+    const lesson = lessonSource && typeof lessonSource === "object" ? lessonSource : {};
+    const questions = Array.isArray(payload.questions) ? cloneSerializableValue(payload.questions) : Array.isArray(payload.quiz) ? cloneSerializableValue(payload.quiz) : Array.isArray(payload.quizQuestions) ? cloneSerializableValue(payload.quizQuestions) : [];
+    return {
+      packId: normalized.packId,
+      packLessonId: normalized.packLessonId,
+      subject: normalized.subjectKey,
+      grade: normalized.grade,
+      lessonKey: normalized.lessonKey,
+      orderIndex: normalized.orderIndex,
+      questions,
+      lesson: {
+        ...lesson,
+        key: normalized.lessonKey,
+        id: `curriculum_pack_${normalized.packId}_${normalized.lessonKey}`,
+        title: String((lesson == null ? void 0 : lesson.title) || normalized.lessonTitle || normalized.lessonKey).trim() || normalized.lessonKey,
+        titleUr: String((lesson == null ? void 0 : lesson.titleUr) || normalized.lessonTitleUr || (lesson == null ? void 0 : lesson.title) || normalized.lessonTitle || normalized.lessonKey).trim() || normalized.lessonKey,
+        __curriculumPack: true,
+        __curriculumPackId: normalized.packId,
+        __curriculumPackLessonId: normalized.packLessonId,
+        __sourceLabel: normalized.lessonTitle ? `Curriculum pack - ${normalized.lessonTitle}` : "Curriculum pack"
+      }
+    };
+  }
+  function buildCurriculumPackSubjectDefinitions(packSubjectRows = [], packLessonRows = [], fallbackSubjects = []) {
+    const fallbackLookup = new Map((Array.isArray(fallbackSubjects) ? fallbackSubjects : []).map((entry) => {
+      const normalized = normalizeSubjectDefinition(entry);
+      return [normalized.id, normalized];
+    }));
+    const merged = /* @__PURE__ */ new Map();
+    (Array.isArray(packSubjectRows) ? packSubjectRows : []).filter((entry) => entry && !entry.isHidden).sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0)).forEach((entry) => {
+      var _a, _b;
+      const fallback = fallbackLookup.get(entry.subjectKey) || {};
+      merged.set(entry.subjectKey, normalizeSubjectDefinition({
+        id: entry.subjectKey,
+        name: entry.subjectTitle,
+        nameUr: entry.subjectTitleUr,
+        icon: (_a = entry == null ? void 0 : entry.payload) == null ? void 0 : _a.icon,
+        color: (_b = entry == null ? void 0 : entry.payload) == null ? void 0 : _b.color
+      }, fallback));
+    });
+    (Array.isArray(packLessonRows) ? packLessonRows : []).filter((entry) => entry && !entry.isHidden && entry.slotAction !== "removed").forEach((entry) => {
+      if (merged.has(entry.subjectKey)) return;
+      const fallback = fallbackLookup.get(entry.subjectKey) || {};
+      merged.set(entry.subjectKey, normalizeSubjectDefinition({
+        id: entry.subjectKey,
+        name: fallback.name || entry.subjectKey,
+        nameUr: fallback.nameUr || fallback.name || entry.subjectKey,
+        icon: fallback.icon,
+        color: fallback.color
+      }, fallback));
+    });
+    return Array.from(merged.values());
+  }
+  function normalizeCurriculumScopeAssignmentRecord(raw) {
+    const assignmentId = String((raw == null ? void 0 : raw.assignment_id) || (raw == null ? void 0 : raw.assignmentId) || "").trim();
+    const scopeTypeRaw = String((raw == null ? void 0 : raw.scope_type) || (raw == null ? void 0 : raw.scopeType) || "global").trim().toLowerCase();
+    const scopeType = scopeTypeRaw === "student" ? "learner" : ["global", "school", "grade", "learner"].includes(scopeTypeRaw) ? scopeTypeRaw : "global";
+    const packId = String((raw == null ? void 0 : raw.pack_id) || (raw == null ? void 0 : raw.packId) || "").trim();
+    if (!assignmentId || !packId) return null;
+    return {
+      assignmentId,
+      scopeType,
+      schoolId: String((raw == null ? void 0 : raw.school_id) || (raw == null ? void 0 : raw.schoolId) || "").trim(),
+      grade: Number.isFinite(Number(raw == null ? void 0 : raw.grade)) ? Number(raw == null ? void 0 : raw.grade) : null,
+      studentEmail: String((raw == null ? void 0 : raw.student_email) || (raw == null ? void 0 : raw.studentEmail) || "").trim().toLowerCase(),
+      packId,
+      status: String((raw == null ? void 0 : raw.status) || "active").trim().toLowerCase() || "active",
+      assignedByEmail: String((raw == null ? void 0 : raw.assigned_by_email) || (raw == null ? void 0 : raw.assignedByEmail) || "").trim().toLowerCase(),
+      note: String((raw == null ? void 0 : raw.note) || "").trim(),
+      createdAt: Number(new Date((raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || (raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || Date.now()).getTime()) || Date.now(),
+      updatedAt: Number(new Date((raw == null ? void 0 : raw.updated_at) || (raw == null ? void 0 : raw.updatedAt) || (raw == null ? void 0 : raw.created_at) || (raw == null ? void 0 : raw.createdAt) || Date.now()).getTime()) || Date.now()
+    };
+  }
+  function resolveCurriculumScopeAssignment(records = [], {
+    schoolId = "",
+    targetGrade = null,
+    targetStudentEmail = ""
+  } = {}) {
+    const safeSchoolId = String(schoolId || "").trim();
+    const safeStudentEmail = String(targetStudentEmail || "").trim().toLowerCase();
+    const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
+    const matches = (Array.isArray(records) ? records : []).map((entry) => normalizeCurriculumScopeAssignmentRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => {
+      if (entry.scopeType === "global") return true;
+      if (!safeSchoolId || entry.schoolId !== safeSchoolId) return false;
+      if (entry.scopeType === "school") return true;
+      if (entry.scopeType === "grade") {
+        return entry.grade === null || numericGrade !== null && Number(entry.grade) === numericGrade;
+      }
+      if (entry.scopeType === "learner") {
+        if (!safeStudentEmail || entry.studentEmail !== safeStudentEmail) return false;
+        return entry.grade === null || numericGrade !== null && Number(entry.grade) === numericGrade;
+      }
+      return false;
+    }).sort((left, right) => {
+      const leftScopeScore = left.scopeType === "learner" ? 4 : left.scopeType === "grade" ? 3 : left.scopeType === "school" ? 2 : 1;
+      const rightScopeScore = right.scopeType === "learner" ? 4 : right.scopeType === "grade" ? 3 : right.scopeType === "school" ? 2 : 1;
+      if (leftScopeScore !== rightScopeScore) return rightScopeScore - leftScopeScore;
+      return (right.updatedAt || 0) - (left.updatedAt || 0);
+    });
+    return matches[0] || null;
+  }
   function materializeSubjectSourceChapters(sourceRecord, targetSubjectId = "", targetGrade = null) {
     var _a;
     const normalized = normalizePublishedSubjectSourceRecord(sourceRecord);
@@ -2358,6 +2561,11 @@
   function createEmptyContentRelationshipState() {
     return {
       loaded: false,
+      systemSettings: [],
+      curriculumPacks: [],
+      curriculumPackSubjects: [],
+      curriculumPackLessons: [],
+      curriculumScopeAssignments: [],
       schools: [],
       memberships: [],
       parentLinks: [],
@@ -5750,6 +5958,15 @@
   const SUPABASE_TEST_TEMPLATES_TABLE = "test_templates";
   const SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE = "weekly_test_assignments";
   const SUPABASE_WEEKLY_TEST_RESULTS_TABLE = "weekly_test_results";
+  const SUPABASE_SYSTEM_SETTINGS_TABLE = "system_settings";
+  const SUPABASE_CURRICULUM_PACKS_TABLE = "curriculum_packs";
+  const SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE = "curriculum_pack_subjects";
+  const SUPABASE_CURRICULUM_PACK_LESSONS_TABLE = "curriculum_pack_lessons";
+  const SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE = "curriculum_scope_assignments";
+  const DEFAULT_CURRICULUM_RUNTIME_SETTINGS = Object.freeze({
+    mode: "supabase_only",
+    allowBuiltinFallback: true
+  });
   const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
   const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -12403,6 +12620,7 @@ ${marker} `);
     const [contentActivationDraftSchoolId, setContentActivationDraftSchoolId] = useState(String((stored == null ? void 0 : stored.activeInstitutionSchoolId) || "").trim());
     const [contentActivationDraftGrade, setContentActivationDraftGrade] = useState("current");
     const [contentActivationDraftStudentEmail, setContentActivationDraftStudentEmail] = useState("");
+    const [curriculumGlobalPackDraftId, setCurriculumGlobalPackDraftId] = useState("");
     const [subjectSourceDraftId, setSubjectSourceDraftId] = useState("__builtin__");
     const [subjectSourcePublishBusy, setSubjectSourcePublishBusy] = useState(false);
     const [schoolDraftName, setSchoolDraftName] = useState("");
@@ -13275,10 +13493,112 @@ ${marker} `);
       });
       return lookup;
     }, [visiblePublishedSubjectSources]);
+    const visibleSystemSettings = useMemo(() => {
+      const safeRows = Array.isArray(contentRelationshipState.systemSettings) ? contentRelationshipState.systemSettings : [];
+      return safeRows.map((entry) => normalizeSystemSettingRecord(entry)).filter(Boolean).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+    }, [contentRelationshipState.systemSettings]);
+    const curriculumRuntimeSettings = useMemo(() => {
+      const runtimeSetting = visibleSystemSettings.find((entry) => entry.settingKey === "curriculum_runtime") || null;
+      return normalizeCurriculumRuntimeSettings((runtimeSetting == null ? void 0 : runtimeSetting.settingValue) || runtimeSetting);
+    }, [visibleSystemSettings]);
+    const visibleCurriculumPacks = useMemo(() => {
+      const safeRows = Array.isArray(contentRelationshipState.curriculumPacks) ? contentRelationshipState.curriculumPacks : [];
+      return safeRows.map((entry) => normalizeCurriculumPackRecord(entry)).filter(Boolean).filter((entry) => entry.status !== "archived").sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+    }, [contentRelationshipState.curriculumPacks]);
+    const visibleCurriculumPackSubjects = useMemo(() => {
+      const safeRows = Array.isArray(contentRelationshipState.curriculumPackSubjects) ? contentRelationshipState.curriculumPackSubjects : [];
+      return safeRows.map((entry) => normalizeCurriculumPackSubjectRecord(entry)).filter(Boolean).sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.subjectTitle || left.subjectKey).localeCompare(String(right.subjectTitle || right.subjectKey)));
+    }, [contentRelationshipState.curriculumPackSubjects]);
+    const visibleCurriculumPackLessons = useMemo(() => {
+      const safeRows = Array.isArray(contentRelationshipState.curriculumPackLessons) ? contentRelationshipState.curriculumPackLessons : [];
+      return safeRows.map((entry) => normalizeCurriculumPackLessonRecord(entry)).filter(Boolean).sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lessonTitle || left.lessonKey).localeCompare(String(right.lessonTitle || right.lessonKey)));
+    }, [contentRelationshipState.curriculumPackLessons]);
+    const visibleCurriculumScopeAssignments = useMemo(() => {
+      const safeRows = Array.isArray(contentRelationshipState.curriculumScopeAssignments) ? contentRelationshipState.curriculumScopeAssignments : [];
+      return safeRows.map((entry) => normalizeCurriculumScopeAssignmentRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+    }, [contentRelationshipState.curriculumScopeAssignments]);
+    const curriculumPackLookup = useMemo(() => {
+      const lookup = /* @__PURE__ */ new Map();
+      visibleCurriculumPacks.forEach((entry) => {
+        if (entry == null ? void 0 : entry.packId) lookup.set(entry.packId, entry);
+      });
+      return lookup;
+    }, [visibleCurriculumPacks]);
+    const curriculumPackSubjectRowsByPack = useMemo(() => {
+      const lookup = /* @__PURE__ */ new Map();
+      visibleCurriculumPackSubjects.forEach((entry) => {
+        const packId = String((entry == null ? void 0 : entry.packId) || "").trim();
+        if (!packId) return;
+        if (!lookup.has(packId)) lookup.set(packId, []);
+        lookup.get(packId).push(entry);
+      });
+      return lookup;
+    }, [visibleCurriculumPackSubjects]);
+    const curriculumPackLessonRowsByPackSubjectGrade = useMemo(() => {
+      const lookup = /* @__PURE__ */ new Map();
+      visibleCurriculumPackLessons.forEach((entry) => {
+        const packId = String((entry == null ? void 0 : entry.packId) || "").trim();
+        const subjectKey = String((entry == null ? void 0 : entry.subjectKey) || "").trim().toLowerCase();
+        const numericGrade = Number(entry == null ? void 0 : entry.grade);
+        if (!packId || !subjectKey || !Number.isFinite(numericGrade)) return;
+        const bucketKey = `${packId}::${subjectKey}::${numericGrade}`;
+        if (!lookup.has(bucketKey)) lookup.set(bucketKey, []);
+        lookup.get(bucketKey).push(entry);
+      });
+      return lookup;
+    }, [visibleCurriculumPackLessons]);
     const scopedContentActivationViewerEmail = useMemo(
       () => canChooseContentSource ? "" : String(contentIdentityEmail || "").trim().toLowerCase(),
       [canChooseContentSource, contentIdentityEmail]
     );
+    const globalCurriculumAssignment = useMemo(
+      () => visibleCurriculumScopeAssignments.find((entry) => entry.scopeType === "global") || null,
+      [visibleCurriculumScopeAssignments]
+    );
+    const globalCurriculumPack = useMemo(
+      () => (globalCurriculumAssignment == null ? void 0 : globalCurriculumAssignment.packId) ? curriculumPackLookup.get(globalCurriculumAssignment.packId) || null : null,
+      [curriculumPackLookup, globalCurriculumAssignment]
+    );
+    useEffect(() => {
+      var _a2;
+      const availablePackIds = new Set(visibleCurriculumPacks.map((entry) => entry.packId));
+      const preferredPackId = String((globalCurriculumAssignment == null ? void 0 : globalCurriculumAssignment.packId) || "").trim();
+      if (preferredPackId && availablePackIds.has(preferredPackId)) {
+        if (curriculumGlobalPackDraftId !== preferredPackId) setCurriculumGlobalPackDraftId(preferredPackId);
+        return;
+      }
+      if (curriculumGlobalPackDraftId && availablePackIds.has(curriculumGlobalPackDraftId)) return;
+      const fallbackPackId = ((_a2 = visibleCurriculumPacks[0]) == null ? void 0 : _a2.packId) || "";
+      if (curriculumGlobalPackDraftId !== fallbackPackId) setCurriculumGlobalPackDraftId(fallbackPackId);
+    }, [curriculumGlobalPackDraftId, globalCurriculumAssignment, visibleCurriculumPacks]);
+    const getResolvedCurriculumPackContext = useCallback((subjectId, targetGrade) => {
+      const safeSubjectId = String(subjectId || "").trim().toLowerCase();
+      const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
+      const assignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
+        schoolId: String(activeInstitutionSchoolId || "").trim(),
+        targetGrade,
+        targetStudentEmail: scopedContentActivationViewerEmail
+      });
+      if (!(assignment == null ? void 0 : assignment.packId) || !safeSubjectId || numericGrade === null) {
+        return {
+          assignment: assignment || null,
+          pack: (assignment == null ? void 0 : assignment.packId) ? curriculumPackLookup.get(assignment.packId) || null : null,
+          subjectRows: [],
+          lessonRows: [],
+          entries: [],
+          hasCoverage: false
+        };
+      }
+      const pack = curriculumPackLookup.get(assignment.packId) || null;
+      const subjectRows = (curriculumPackSubjectRowsByPack.get(assignment.packId) || []).filter((entry) => entry.subjectKey === safeSubjectId && (entry.grade === null || Number(entry.grade) === numericGrade));
+      const lessonRows = curriculumPackLessonRowsByPackSubjectGrade.get(`${assignment.packId}::${safeSubjectId}::${numericGrade}`) || [];
+      const entries = lessonRows.map((entry) => buildCurriculumPackLessonEntry(entry)).filter(Boolean).sort((left, right) => {
+        var _a2, _b2;
+        return (left.orderIndex || 0) - (right.orderIndex || 0) || String(((_a2 = left.lesson) == null ? void 0 : _a2.title) || left.lessonKey).localeCompare(String(((_b2 = right.lesson) == null ? void 0 : _b2.title) || right.lessonKey));
+      });
+      const hasCoverage = subjectRows.some((entry) => !entry.isHidden) || entries.length > 0;
+      return { assignment, pack, subjectRows, lessonRows, entries, hasCoverage };
+    }, [activeInstitutionSchoolId, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
     const getEffectiveSubjectActivation = useCallback((subjectId, targetGrade) => resolveScopedActivation(visibleContentActivations, {
       activationType: "subject",
       subject: subjectId,
@@ -13295,13 +13615,15 @@ ${marker} `);
       targetStudentEmail: scopedContentActivationViewerEmail
     }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
     const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
-      var _a2, _b2;
-      const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
+      var _a2, _b2, _c2;
+      const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
+      const useCurriculumPack = Boolean((_a2 = curriculumPackContext.assignment) == null ? void 0 : _a2.packId) && (curriculumPackContext.entries.length > 0 || !curriculumRuntimeSettings.allowBuiltinFallback);
+      const subjectActivation = useCurriculumPack ? null : getEffectiveSubjectActivation(subjectId, targetGrade);
       const activeSubjectSource = (subjectActivation == null ? void 0 : subjectActivation.sourceKind) === "published_subject" ? publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null : null;
-      const sourceChapters = activeSubjectSource ? materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade) : [];
-      const baseLessons = activeSubjectSource ? sourceChapters.map((entry) => entry.lesson).filter(Boolean) : getLessons(subjectId, targetGrade) || [];
-      const customLessons = activeSubjectSource ? [] : ((_a2 = customContentState.lessonsBySubjectGrade) == null ? void 0 : _a2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
-      const publishedLessons = activeSubjectSource ? [] : ((_b2 = publishedContentState.lessonsBySubjectGrade) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
+      const sourceChapters = useCurriculumPack ? curriculumPackContext.entries : activeSubjectSource ? materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade) : [];
+      const baseLessons = useCurriculumPack ? sourceChapters.map((entry) => entry.lesson).filter(Boolean) : activeSubjectSource ? sourceChapters.map((entry) => entry.lesson).filter(Boolean) : getLessons(subjectId, targetGrade) || [];
+      const customLessons = useCurriculumPack ? [] : activeSubjectSource ? [] : ((_b2 = customContentState.lessonsBySubjectGrade) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
+      const publishedLessons = useCurriculumPack ? [] : activeSubjectSource ? [] : ((_c2 = publishedContentState.lessonsBySubjectGrade) == null ? void 0 : _c2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
       const mergedGroups = buildChapterVariantGroups({
         subjectId,
         targetGrade,
@@ -13313,8 +13635,8 @@ ${marker} `);
         currentUserId: supabaseAuthState.userId,
         archivedVariantKeys: archivedLessonVariantKeys
       });
-      const activationAdjustedGroups = mergedGroups.map((group) => {
-        var _a3, _b3, _c2, _d2, _e2, _f2, _g2;
+      const activationAdjustedGroups = useCurriculumPack ? mergedGroups : mergedGroups.map((group) => {
+        var _a3, _b3, _c3, _d2, _e2, _f2, _g2;
         const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, group.canonicalLessonKey);
         if (!lessonActivation) return group;
         if (lessonActivation.sourceKind === "builtin_lesson") {
@@ -13334,7 +13656,7 @@ ${marker} `);
               sourceKey: getLessonVariantIdentity(publishedLesson),
               contentId: String(((_a3 = publishedLesson == null ? void 0 : publishedLesson.publication) == null ? void 0 : _a3.contentId) || (publishedLesson == null ? void 0 : publishedLesson.__contentId) || "").trim(),
               authorUserId: String(((_b3 = publishedLesson == null ? void 0 : publishedLesson.publication) == null ? void 0 : _b3.authorUserId) || (publishedLesson == null ? void 0 : publishedLesson.__contentOwnerId) || "").trim(),
-              authorUsername: String(((_c2 = publishedLesson == null ? void 0 : publishedLesson.publication) == null ? void 0 : _c2.authorUsername) || (publishedLesson == null ? void 0 : publishedLesson.__publishedBy) || "").trim(),
+              authorUsername: String(((_c3 = publishedLesson == null ? void 0 : publishedLesson.publication) == null ? void 0 : _c3.authorUsername) || (publishedLesson == null ? void 0 : publishedLesson.__publishedBy) || "").trim(),
               forkedFromContentId: String(((_d2 = publishedLesson == null ? void 0 : publishedLesson.publication) == null ? void 0 : _d2.forkedFromContentId) || (publishedLesson == null ? void 0 : publishedLesson.__forkedFromContentId) || "").trim(),
               ownedByCurrentUser: Boolean(supabaseAuthState.userId) && String(((_e2 = publishedLesson == null ? void 0 : publishedLesson.publication) == null ? void 0 : _e2.authorUserId) || (publishedLesson == null ? void 0 : publishedLesson.__contentOwnerId) || "").trim() === String(supabaseAuthState.userId || "").trim(),
               updatedAt: Number(((_f2 = publishedLesson == null ? void 0 : publishedLesson.publication) == null ? void 0 : _f2.updatedAt) || ((_g2 = publishedLesson == null ? void 0 : publishedLesson.publication) == null ? void 0 : _g2.publishedAt) || 0) || 0
@@ -13351,11 +13673,15 @@ ${marker} `);
         return group;
       });
       return applySavedLessonOrder(activationAdjustedGroups, lessonOrderPreferences, subjectId, targetGrade);
-    }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
+    }, [archivedLessonVariantKeys, chapterSourcePreferences, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
     const getMergedLessons = useCallback((subjectId, targetGrade) => getMergedLessonGroups(subjectId, targetGrade).map((group) => group.activeLesson).filter(Boolean), [getMergedLessonGroups]);
     const getMergedQuiz = useCallback((subjectId, targetGrade, lessonKey) => {
-      var _a2, _b2;
+      var _a2, _b2, _c2;
       const normalizedLessonKey = String(lessonKey || "").trim();
+      const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
+      const packEntry = curriculumPackContext.entries.find((entry) => String(entry.lessonKey || "").trim() === normalizedLessonKey) || null;
+      if (Array.isArray(packEntry == null ? void 0 : packEntry.questions) && packEntry.questions.length > 0) return packEntry.questions;
+      if (((_a2 = curriculumPackContext.assignment) == null ? void 0 : _a2.packId) && !curriculumRuntimeSettings.allowBuiltinFallback) return [];
       const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
       if ((subjectActivation == null ? void 0 : subjectActivation.sourceKind) === "published_subject" && subjectActivation.subjectSourceId) {
         const subjectSource = publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null;
@@ -13367,18 +13693,33 @@ ${marker} `);
         const publishedQuestions = publishedLessonQuestionLookup.get(String(lessonActivation.contentId || "").trim());
         if (Array.isArray(publishedQuestions) && publishedQuestions.length > 0) return publishedQuestions;
       }
-      const customQuiz = (_a2 = customContentState.quizzesByKey) == null ? void 0 : _a2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
+      const customQuiz = (_b2 = customContentState.quizzesByKey) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
       if (Array.isArray(customQuiz) && customQuiz.length > 0) return customQuiz;
-      const publishedQuiz = (_b2 = publishedContentState.quizzesByKey) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
+      const publishedQuiz = (_c2 = publishedContentState.quizzesByKey) == null ? void 0 : _c2[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
       if (Array.isArray(publishedQuiz) && publishedQuiz.length > 0) return publishedQuiz;
       return getQuiz(subjectId, targetGrade, normalizedLessonKey) || [];
-    }, [customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
+    }, [curriculumRuntimeSettings.allowBuiltinFallback, customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
+    const allSubjects = useMemo(() => {
+      const customSubjects = Object.values(customContentState.subjectsById || {});
+      const currentAssignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
+        schoolId: String(activeInstitutionSchoolId || "").trim(),
+        targetGrade: grade,
+        targetStudentEmail: scopedContentActivationViewerEmail
+      });
+      if (!(currentAssignment == null ? void 0 : currentAssignment.packId)) return mergeSubjectCollections(SUBJECTS, customSubjects);
+      const numericGrade = Number.isFinite(Number(grade)) ? Number(grade) : null;
+      const packSubjectRows = (curriculumPackSubjectRowsByPack.get(currentAssignment.packId) || []).filter((entry) => numericGrade === null || entry.grade === null || Number(entry.grade) === numericGrade);
+      const packLessonRows = visibleCurriculumPackLessons.filter((entry) => entry.packId === currentAssignment.packId && (numericGrade === null || Number(entry.grade) === numericGrade));
+      const packSubjects = buildCurriculumPackSubjectDefinitions(packSubjectRows, packLessonRows, SUBJECTS);
+      const baseSubjects = curriculumRuntimeSettings.allowBuiltinFallback ? mergeSubjectCollections(SUBJECTS, packSubjects) : packSubjects;
+      return mergeSubjectCollections(baseSubjects, customSubjects);
+    }, [activeInstitutionSchoolId, curriculumPackSubjectRowsByPack, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.subjectsById, grade, scopedContentActivationViewerEmail, visibleCurriculumPackLessons, visibleCurriculumScopeAssignments]);
     const contentDataLoader = useMemo(() => ({
       ...window.HomeSchoolData,
-      SUBJECTS: mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {})),
+      SUBJECTS: allSubjects,
       getLessons: getMergedLessons,
       getQuiz: getMergedQuiz
-    }), [customContentState.subjectsById, getMergedLessons, getMergedQuiz]);
+    }), [allSubjects, getMergedLessons, getMergedQuiz]);
     const selectedSubjectChapterGroups = useMemo(
       () => selectedSubject && grade ? getMergedLessonGroups(selectedSubject.id, grade) : [],
       [getMergedLessonGroups, grade, selectedSubject]
@@ -13386,10 +13727,6 @@ ${marker} `);
     const selectedSubjectLessons = useMemo(
       () => selectedSubjectChapterGroups.map((group) => group.activeLesson).filter(Boolean),
       [selectedSubjectChapterGroups]
-    );
-    const allSubjects = useMemo(
-      () => mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {})),
-      [customContentState.subjectsById]
     );
     const schoolDraftAutoDiaryVisibleSubjects = useMemo(() => {
       const normalized = schoolDraftNormalizedAutoDiarySettings;
@@ -14360,6 +14697,187 @@ ${marker} `);
         setContentRelationshipBusy(false);
       }
     }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftName, schoolDraftNormalizedAutoDiarySettings, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
+    const handleSetCurriculumRuntimeFallback = useCallback(async (allowBuiltinFallback) => {
+      if (!canManageContentAccess) {
+        showAppToast(joinLocalizedText("Only the app admin can manage curriculum runtime.", "\u0635\u0631\u0641 \u0627\u06CC\u067E \u0627\u06CC\u0688\u0645\u0646 \u0646\u0635\u0627\u0628 \u06A9\u06D2 \u0631\u0646 \u0679\u0627\u0626\u0645 \u06A9\u0648 \u0645\u0646\u0638\u0645 \u06A9\u0631 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u06D4", language), "alert");
+        return;
+      }
+      if (!supabaseAuthState.userId || !contentIdentityEmail) {
+        showAppToast(joinLocalizedText("Sign in first to manage curriculum runtime.", "\u0646\u0635\u0627\u0628 \u06A9\u06D2 \u0631\u0646 \u0679\u0627\u0626\u0645 \u06A9\u0648 \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      setContentRelationshipBusy(true);
+      try {
+        const client = ensureSupabaseClientRef.current();
+        const nextSetting = {
+          setting_key: "curriculum_runtime",
+          setting_value: {
+            mode: "supabase_only",
+            allow_builtin_fallback: Boolean(allowBuiltinFallback)
+          },
+          updated_by_email: String(contentIdentityEmail || "").trim().toLowerCase()
+        };
+        const { error } = await client.from(SUPABASE_SYSTEM_SETTINGS_TABLE).upsert(nextSetting, { onConflict: "setting_key" });
+        if (error) throw error;
+        await refreshContentRelationshipStateRef.current();
+        showAppToast(
+          Boolean(allowBuiltinFallback) ? joinLocalizedText("Built-in fallback enabled for migration testing.", "\u0645\u0646\u062A\u0642\u0644\u06CC \u06A9\u06CC \u0622\u0632\u0645\u0627\u0626\u0634 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4", language) : joinLocalizedText("Built-in fallback disabled. Curriculum now resolves from Supabase only.", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0628\u0646\u062F \u06C1\u0648 \u06AF\u06CC\u0627\u06D4 \u0627\u0628 \u0646\u0635\u0627\u0628 \u0635\u0631\u0641 Supabase \u0633\u06D2 \u062D\u0644 \u06C1\u0648\u06AF\u0627\u06D4", language),
+          "check"
+        );
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to update curriculum runtime: ${(error == null ? void 0 : error.message) || error}`, `\u0646\u0635\u0627\u0628 \u06A9\u06D2 \u0631\u0646 \u0679\u0627\u0626\u0645 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentRelationshipBusy(false);
+      }
+    }, [canManageContentAccess, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+    const handleCreateBuiltInCurriculumSeedPack = useCallback(async () => {
+      if (!canManageContentAccess) {
+        showAppToast(joinLocalizedText("Only the app admin can seed the curriculum pack.", "\u0635\u0631\u0641 \u0627\u06CC\u067E \u0627\u06CC\u0688\u0645\u0646 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u062A\u062E\u0644\u06CC\u0642 \u06A9\u0631 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u06D4", language), "alert");
+        return;
+      }
+      if (!supabaseAuthState.userId || !contentIdentityEmail) {
+        showAppToast(joinLocalizedText("Sign in first to seed the curriculum pack.", "\u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0628\u0646\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      setContentRelationshipBusy(true);
+      try {
+        const client = ensureSupabaseClientRef.current();
+        const now = Date.now();
+        const nowIso = new Date(now).toISOString();
+        const packId = `pack_${simpleHash(`global_seed_${contentIdentityEmail}_${nowIso}`)}`;
+        const packName = `Global seed pack ${toIsoDateString(now)}`;
+        const gradeOptions = normalizeGradeOptionIds(GRADES);
+        const seedPackRow = {
+          pack_id: packId,
+          name: packName,
+          description: "Seeded from built-in curriculum for Supabase migration.",
+          scope_origin: "global",
+          status: "published",
+          version_no: 1,
+          created_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+          updated_at: nowIso
+        };
+        const seedSubjectRows = (Array.isArray(SUBJECTS) ? SUBJECTS : []).map((subject, index) => {
+          const normalizedSubject = normalizeSubjectDefinition(subject);
+          return {
+            pack_subject_id: `pack_subject_${simpleHash(`${packId}_${normalizedSubject.id}`)}`,
+            pack_id: packId,
+            subject_key: normalizedSubject.id,
+            subject_title: normalizedSubject.name,
+            subject_title_ur: normalizedSubject.nameUr,
+            grade: null,
+            order_index: index,
+            is_hidden: false,
+            source_type: "builtin_seed",
+            source_subject_id: normalizedSubject.id,
+            payload: {
+              icon: normalizedSubject.icon || "",
+              color: normalizedSubject.color || ""
+            },
+            updated_at: nowIso
+          };
+        });
+        const seedLessonRows = [];
+        (Array.isArray(SUBJECTS) ? SUBJECTS : []).forEach((subject) => {
+          const normalizedSubject = normalizeSubjectDefinition(subject);
+          gradeOptions.forEach((grade2) => {
+            const lessonRows = Array.isArray(getLessons(normalizedSubject.id, grade2)) ? getLessons(normalizedSubject.id, grade2) : [];
+            lessonRows.forEach((lesson, lessonIndex) => {
+              const canonicalLessonKey = resolveCustomChapterLessonKey({
+                lessonKey: (lesson == null ? void 0 : lesson.key) || (lesson == null ? void 0 : lesson.id) || (lesson == null ? void 0 : lesson.title) || (lesson == null ? void 0 : lesson.titleUr) || "",
+                title: (lesson == null ? void 0 : lesson.title) || (lesson == null ? void 0 : lesson.titleUr) || "",
+                fallbackNumber: lessonIndex + 1
+              });
+              if (!canonicalLessonKey) return;
+              const quizRows = Array.isArray(getQuiz(normalizedSubject.id, grade2, canonicalLessonKey)) ? cloneSerializableValue(getQuiz(normalizedSubject.id, grade2, canonicalLessonKey)) : [];
+              seedLessonRows.push({
+                pack_lesson_id: `pack_lesson_${simpleHash(`${packId}_${normalizedSubject.id}_${grade2}_${canonicalLessonKey}`)}`,
+                pack_id: packId,
+                subject_key: normalizedSubject.id,
+                grade: grade2,
+                lesson_key: canonicalLessonKey,
+                lesson_title: String((lesson == null ? void 0 : lesson.title) || canonicalLessonKey).trim() || canonicalLessonKey,
+                lesson_title_ur: String((lesson == null ? void 0 : lesson.titleUr) || (lesson == null ? void 0 : lesson.title) || canonicalLessonKey).trim() || canonicalLessonKey,
+                order_index: lessonIndex,
+                is_hidden: false,
+                slot_action: "normal",
+                source_type: "builtin_seed",
+                source_lesson_id: canonicalLessonKey,
+                content_payload: {
+                  lesson: stripRuntimeLessonMarkers(cloneSerializableValue(lesson) || {}),
+                  questions: quizRows
+                },
+                updated_at: nowIso
+              });
+            });
+          });
+        });
+        const { error: packError } = await client.from(SUPABASE_CURRICULUM_PACKS_TABLE).upsert(seedPackRow, { onConflict: "pack_id" });
+        if (packError) throw packError;
+        if (seedSubjectRows.length) {
+          const { error: subjectError } = await client.from(SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE).upsert(seedSubjectRows, { onConflict: "pack_subject_id" });
+          if (subjectError) throw subjectError;
+        }
+        if (seedLessonRows.length) {
+          const { error: lessonError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(seedLessonRows, { onConflict: "pack_lesson_id" });
+          if (lessonError) throw lessonError;
+        }
+        setCurriculumGlobalPackDraftId(packId);
+        await refreshContentRelationshipStateRef.current();
+        showAppToast(joinLocalizedText("Built-in curriculum was seeded into a global Supabase pack.", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628 \u06A9\u0648 \u0639\u0627\u0644\u0645\u06CC Supabase \u067E\u06CC\u06A9 \u0645\u06CC\u06BA \u0645\u0646\u062A\u0642\u0644 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4", language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to create built-in seed pack: ${(error == null ? void 0 : error.message) || error}`, `\u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA \u0628\u0646\u0627\u06CC\u0627 \u062C\u0627 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentRelationshipBusy(false);
+      }
+    }, [canManageContentAccess, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+    const handleSyncCurriculumPackGlobally = useCallback(async () => {
+      if (!canManageContentAccess) {
+        showAppToast(joinLocalizedText("Only the app admin can sync a global curriculum pack.", "\u0635\u0631\u0641 \u0627\u06CC\u067E \u0627\u06CC\u0688\u0645\u0646 \u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u06D4", language), "alert");
+        return;
+      }
+      if (!supabaseAuthState.userId || !contentIdentityEmail) {
+        showAppToast(joinLocalizedText("Sign in first to sync the global curriculum pack.", "\u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const safePackId = String(curriculumGlobalPackDraftId || "").trim();
+      if (!safePackId) {
+        showAppToast(joinLocalizedText("Choose a curriculum pack first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      const selectedPack = curriculumPackLookup.get(safePackId) || null;
+      if (!selectedPack) {
+        showAppToast(joinLocalizedText("The selected curriculum pack could not be found.", "\u0645\u0646\u062A\u062E\u0628 \u0634\u062F\u06C1 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA \u0645\u0644\u0627\u06D4", language), "alert");
+        return;
+      }
+      setContentRelationshipBusy(true);
+      try {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+        const { error: deactivateError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "global").eq("status", "active");
+        if (deactivateError) throw deactivateError;
+        const nextAssignment = {
+          assignment_id: "curriculum_global_default",
+          scope_type: "global",
+          school_id: null,
+          grade: null,
+          student_email: null,
+          pack_id: safePackId,
+          status: "active",
+          assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+          note: `Global curriculum synced to ${selectedPack.name}`,
+          updated_at: nowIso
+        };
+        const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
+        if (assignmentError) throw assignmentError;
+        await refreshContentRelationshipStateRef.current();
+        showAppToast(joinLocalizedText(`Global curriculum synced to ${selectedPack.name}.`, `\u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628 \u06A9\u0648 ${selectedPack.name} \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4`, language), "check");
+      } catch (error) {
+        showAppToast(joinLocalizedText(`Unable to sync the global curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
+      } finally {
+        setContentRelationshipBusy(false);
+      }
+    }, [canManageContentAccess, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, showAppToast, supabaseAuthState.userId]);
     const handleSaveSchoolMembership = useCallback(async () => {
       if (!canManageInstitution) {
         showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0633\u06A9\u0648\u0644 \u0645\u0645\u0628\u0631\u0634\u067E \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -18436,10 +18954,30 @@ ${marker} `);
           if (result.error && table === SUPABASE_PUBLISHED_SUBJECT_SOURCES_TABLE && (String(result.error.code || "").trim() === "42P01" || /does not exist|could not find the table|relation .*published_subject_sources/i.test(String(result.error.message || "")))) {
             return [];
           }
+          if (result.error && table === SUPABASE_SYSTEM_SETTINGS_TABLE && (String(result.error.code || "").trim() === "42P01" || /does not exist|could not find the table|relation .*system_settings/i.test(String(result.error.message || "")))) {
+            return [];
+          }
+          if (result.error && table === SUPABASE_CURRICULUM_PACKS_TABLE && (String(result.error.code || "").trim() === "42P01" || /does not exist|could not find the table|relation .*curriculum_packs/i.test(String(result.error.message || "")))) {
+            return [];
+          }
+          if (result.error && table === SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE && (String(result.error.code || "").trim() === "42P01" || /does not exist|could not find the table|relation .*curriculum_pack_subjects/i.test(String(result.error.message || "")))) {
+            return [];
+          }
+          if (result.error && table === SUPABASE_CURRICULUM_PACK_LESSONS_TABLE && (String(result.error.code || "").trim() === "42P01" || /does not exist|could not find the table|relation .*curriculum_pack_lessons/i.test(String(result.error.message || "")))) {
+            return [];
+          }
+          if (result.error && table === SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE && (String(result.error.code || "").trim() === "42P01" || /does not exist|could not find the table|relation .*curriculum_scope_assignments/i.test(String(result.error.message || "")))) {
+            return [];
+          }
           if (result.error) throw result.error;
           return Array.isArray(result.data) ? result.data.map((row) => normalizeFn(row)).filter(Boolean) : [];
         };
         const rowMaps = {
+          systemSettings: /* @__PURE__ */ new Map(),
+          curriculumPacks: /* @__PURE__ */ new Map(),
+          curriculumPackSubjects: /* @__PURE__ */ new Map(),
+          curriculumPackLessons: /* @__PURE__ */ new Map(),
+          curriculumScopeAssignments: /* @__PURE__ */ new Map(),
           schools: /* @__PURE__ */ new Map(),
           memberships: /* @__PURE__ */ new Map(),
           parentLinks: /* @__PURE__ */ new Map(),
@@ -18465,6 +19003,41 @@ ${marker} `);
             if (!previous || nextUpdatedAt >= previousUpdatedAt) rowMaps[kind].set(rowId, row);
           });
         };
+        collectRows("systemSettings", await fetchNormalizedRows(
+          SUPABASE_SYSTEM_SETTINGS_TABLE,
+          "setting_key, setting_value, updated_by_email, updated_at",
+          normalizeSystemSettingRecord,
+          null,
+          "updated_at"
+        ), "settingKey");
+        collectRows("curriculumPacks", await fetchNormalizedRows(
+          SUPABASE_CURRICULUM_PACKS_TABLE,
+          "pack_id, name, description, scope_origin, origin_school_id, origin_grade, origin_student_email, parent_pack_id, status, version_no, created_by_email, created_at, updated_at",
+          normalizeCurriculumPackRecord,
+          null,
+          "updated_at"
+        ), "packId");
+        collectRows("curriculumPackSubjects", await fetchNormalizedRows(
+          SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE,
+          "pack_subject_id, pack_id, subject_key, subject_title, subject_title_ur, grade, order_index, is_hidden, source_type, source_subject_id, payload, created_at, updated_at",
+          normalizeCurriculumPackSubjectRecord,
+          null,
+          "updated_at"
+        ), "packSubjectId");
+        collectRows("curriculumPackLessons", await fetchNormalizedRows(
+          SUPABASE_CURRICULUM_PACK_LESSONS_TABLE,
+          "pack_lesson_id, pack_id, subject_key, grade, lesson_key, lesson_title, lesson_title_ur, order_index, is_hidden, slot_action, source_type, source_lesson_id, content_payload, created_at, updated_at",
+          normalizeCurriculumPackLessonRecord,
+          null,
+          "updated_at"
+        ), "packLessonId");
+        collectRows("curriculumScopeAssignments", await fetchNormalizedRows(
+          SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE,
+          "assignment_id, scope_type, school_id, grade, student_email, pack_id, status, assigned_by_email, note, created_at, updated_at",
+          normalizeCurriculumScopeAssignmentRecord,
+          null,
+          "updated_at"
+        ), "assignmentId");
         const selfMemberships = canManageContentAccess ? [] : await fetchNormalizedRows(
           SUPABASE_SCHOOL_MEMBERSHIPS_TABLE,
           "membership_id, school_id, member_email, role, grade_scope, permissions_override, status, linked_by_email, created_at, updated_at",
@@ -18624,6 +19197,11 @@ ${marker} `);
         const nextState = {
           ...createEmptyContentRelationshipState(),
           loaded: true,
+          systemSettings: Array.from(rowMaps.systemSettings.values()),
+          curriculumPacks: Array.from(rowMaps.curriculumPacks.values()),
+          curriculumPackSubjects: Array.from(rowMaps.curriculumPackSubjects.values()),
+          curriculumPackLessons: Array.from(rowMaps.curriculumPackLessons.values()),
+          curriculumScopeAssignments: Array.from(rowMaps.curriculumScopeAssignments.values()),
           schools: Array.from(rowMaps.schools.values()),
           memberships: Array.from(rowMaps.memberships.values()),
           parentLinks: Array.from(rowMaps.parentLinks.values()),
@@ -19451,6 +20029,51 @@ ${marker} `);
           if (!active) return;
           refreshContentRelationshipState().catch((error) => {
             console.log("Unable to refresh weekly test results from realtime:", error);
+          });
+        }).on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_SYSTEM_SETTINGS_TABLE
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh system settings from realtime:", error);
+          });
+        }).on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CURRICULUM_PACKS_TABLE
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh curriculum packs from realtime:", error);
+          });
+        }).on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh curriculum pack subjects from realtime:", error);
+          });
+        }).on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CURRICULUM_PACK_LESSONS_TABLE
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh curriculum pack lessons from realtime:", error);
+          });
+        }).on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh curriculum scope assignments from realtime:", error);
           });
         }).subscribe();
         supabaseContentRelationshipRealtimeChannelRef.current = channel;
@@ -25180,7 +25803,46 @@ ${error.message || error}`);
         setChapterAssignmentDraftStudentEmail(link.studentEmail);
         setProfilesSectionTab("assignments");
       } }, renderLocalizedTextNode(joinLocalizedText("Assign Chapters", "\u0627\u0628\u0648\u0627\u0628 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteTeacherStudentLink(link), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove Link", "\u0631\u0628\u0637 \u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No learner links yet. Link a learner first, then use chapter assignments.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0631\u0628\u0637 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4 \u067E\u06C1\u0644\u06D2 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0628\u0627\u0628 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))) : null,
-      profilesSectionTab === "institution" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "\u0627\u0633\u06A9\u0648\u0644 \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "\u0627\u062F\u0627\u0631\u062A\u06CC \u0688\u06BE\u0627\u0646\u0686\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0628\u0646\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0633\u0627\u062A\u0630\u06C1 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06A9\u0627\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0628\u0686\u0648\u06BA \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(accessibleSchools.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(accessibleSchools.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Schools", "\u0627\u0633\u06A9\u0648\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F454}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Your institution role", "\u0622\u067E \u06A9\u0627 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Members in scope", "\u062F\u0627\u0626\u0631\u06C1 \u06A9\u06D2 \u0645\u0645\u0628\u0631\u0632", language), language)))), accessibleSchools.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 14 } }, accessibleSchools.map((school) => /* @__PURE__ */ React.createElement("button", { key: school.schoolId, type: "button", className: `profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`, onClick: () => setActiveInstitutionSchoolId(school.schoolId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-avatar", "aria-hidden": "true" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(school.schoolName, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "\u2014"}`, `\u067E\u0631\u0646\u0633\u067E\u0644 ${school.principalEmail || "\u2014"}`, language), language)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0633\u0644\u06A9 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))), canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create or Update School", "\u0627\u0633\u06A9\u0648\u0644 \u0628\u0646\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use one school record per institution, then link principals, teachers, students, and parents beneath it.", "\u06C1\u0631 \u0627\u062F\u0627\u0631\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u06A9\u06D2 \u0646\u06CC\u0686\u06D2 \u067E\u0631\u0646\u0633\u067E\u0644\u060C \u0627\u0633\u0627\u062A\u0630\u06C1\u060C \u0637\u0644\u0628\u06C1\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolDraftName, onChange: (event) => setSchoolDraftName(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0646\u0627\u0645" : "School name" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftOwnerEmail, onChange: (event) => setSchoolDraftOwnerEmail(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0627\u0644\u06A9 \u0627\u06CC \u0645\u06CC\u0644" : "School owner email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftPrincipalEmail, onChange: (event) => setSchoolDraftPrincipalEmail(event.target.value), placeholder: language === "ur" ? "\u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u06CC \u0645\u06CC\u0644" : "Principal email" }), /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftYearStartDate, onChange: setSchoolDraftYearStartDate, language })), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Auto Diary Control Center", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0646\u0679\u0631\u0648\u0644 \u0633\u06CC\u0646\u0679\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Simple controls first. Open Advanced only when you really need to tune the engine.", "\u067E\u06C1\u0644\u06D2 \u0633\u0627\u062F\u06C1 \u06A9\u0646\u0679\u0631\u0648\u0644\u0632\u06D4 \u062C\u062F\u06CC\u062F \u0633\u06CC\u0679\u0646\u06AF\u0632 \u0635\u0631\u0641 \u0627\u0633\u06CC \u0648\u0642\u062A \u06A9\u06BE\u0648\u0644\u06CC\u06BA \u062C\u0628 \u0648\u0627\u0642\u0639\u06CC \u0628\u0627\u0631\u06CC\u06A9 \u0627\u06CC\u0688\u062C\u0633\u0679\u0645\u0646\u0679 \u0686\u0627\u06C1\u06CC\u06D2 \u06C1\u0648\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Calendar", "\u06A9\u06CC\u0644\u0646\u0688\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${formatReadableDateLabel(schoolDraftNormalizedAutoDiarySettings.calendar.startDate, language)} start \u2022 ${schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.length} study days`, `${formatReadableDateLabel(schoolDraftNormalizedAutoDiarySettings.calendar.startDate, language)} \u0622\u063A\u0627\u0632 \u2022 ${schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.length} \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0646`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftNormalizedAutoDiarySettings.subjects.mode === "all" ? joinLocalizedText("All current and future subjects are included.", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0627\u0648\u0631 \u0622\u0626\u0646\u062F\u06C1 \u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0634\u0627\u0645\u0644 \u06C1\u06CC\u06BA\u06D4", language) : joinLocalizedText(`${schoolDraftAutoDiaryVisibleSubjects.length} selected subjects`, `${schoolDraftAutoDiaryVisibleSubjects.length} \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Progression", "\u067E\u06CC\u0634 \u0631\u0641\u062A", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftAutoDiaryProgressionPreset === "structured" ? joinLocalizedText("Steady curriculum", "\u0646\u0635\u0627\u0628\u06CC \u0631\u0641\u062A\u0627\u0631", language) : schoolDraftAutoDiaryProgressionPreset === "mastery" ? joinLocalizedText("Mastery first", "\u067E\u06C1\u0644\u06D2 \u0645\u06C1\u0627\u0631\u062A", language) : schoolDraftAutoDiaryProgressionPreset === "balanced" ? joinLocalizedText("Balanced carry-forward", "\u0645\u062A\u0648\u0627\u0632\u0646 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0627\u0624", language) : joinLocalizedText("Custom progression", "\u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftAutoDiaryWeeklyTestPreset === "disabled" ? joinLocalizedText("Disabled", "\u063A\u06CC\u0631 \u0641\u0639\u0627\u0644", language) : schoolDraftAutoDiaryWeeklyTestPreset === "current_focus" ? joinLocalizedText("Current week focused", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u06C1\u0641\u062A\u06D2 \u067E\u0631 \u062A\u0648\u062C\u06C1", language) : schoolDraftAutoDiaryWeeklyTestPreset === "revision_heavy" ? joinLocalizedText("Revision heavy", "\u0632\u06CC\u0627\u062F\u06C1 \u062F\u06C1\u0631\u0627\u0626\u06CC", language) : schoolDraftAutoDiaryWeeklyTestPreset === "standard" ? joinLocalizedText("Standard balance", "\u0645\u0639\u06CC\u0627\u0631\u06CC \u062A\u0648\u0627\u0632\u0646", language) : joinLocalizedText("Custom weekly test", "\u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u0627 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-control-grid", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item auto-diary-simple-block" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Calendar", "\u06A9\u06CC\u0644\u0646\u0688\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("When the diary starts and which days it runs.", "\u0688\u0627\u0626\u0631\u06CC \u06A9\u0628 \u0634\u0631\u0648\u0639 \u06C1\u0648 \u0627\u0648\u0631 \u06A9\u0646 \u062F\u0646\u0648\u06BA \u0645\u06CC\u06BA \u0686\u0644\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-field-stack" }, /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftNormalizedAutoDiarySettings.calendar.startDate, onChange: (value) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, startDate: value } })), language }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.calendar.testDay, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, testDay: Number(event.target.value) || 6 } })) }, AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `auto_test_day_quick_${entry.value}`, value: entry.value }, renderLocalizedTextNode(joinLocalizedText(`Test day: ${entry.en}`, `\u0679\u06CC\u0633\u0679 \u06A9\u0627 \u062F\u0646: ${entry.ur}`, language), language))))), /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 10 } }, AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => {
+      profilesSectionTab === "institution" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "\u0627\u0633\u06A9\u0648\u0644 \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "\u0627\u062F\u0627\u0631\u062A\u06CC \u0688\u06BE\u0627\u0646\u0686\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0628\u0646\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0633\u0627\u062A\u0630\u06C1 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06A9\u0627\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0628\u0686\u0648\u06BA \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(accessibleSchools.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(accessibleSchools.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Schools", "\u0627\u0633\u06A9\u0648\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F454}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Your institution role", "\u0622\u067E \u06A9\u0627 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Members in scope", "\u062F\u0627\u0626\u0631\u06C1 \u06A9\u06D2 \u0645\u0645\u0628\u0631\u0632", language), language)))), accessibleSchools.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 14 } }, accessibleSchools.map((school) => /* @__PURE__ */ React.createElement("button", { key: school.schoolId, type: "button", className: `profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`, onClick: () => setActiveInstitutionSchoolId(school.schoolId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-avatar", "aria-hidden": "true" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(school.schoolName, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "\u2014"}`, `\u067E\u0631\u0646\u0633\u067E\u0644 ${school.principalEmail || "\u2014"}`, language), language)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0633\u0644\u06A9 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))), canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Curriculum Runtime", "\u0646\u0635\u0627\u0628 \u0631\u0646 \u0679\u0627\u0626\u0645", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Supabase is now the primary curriculum source. Keep built-in fallback on only while validating the migration.", "\u0627\u0628 Supabase \u06C1\u06CC \u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628\u06CC \u0630\u0631\u06CC\u0639\u06C1 \u06C1\u06D2\u06D4 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0635\u0631\u0641 \u0627\u0633\u06CC \u0648\u0642\u062A \u0641\u0639\u0627\u0644 \u0631\u06A9\u06BE\u06CC\u06BA \u062C\u0628 \u0645\u0646\u062A\u0642\u0644\u06CC \u06A9\u06CC \u067E\u0691\u062A\u0627\u0644 \u06A9\u0631\u0646\u06CC \u06C1\u0648\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(curriculumRuntimeSettings.allowBuiltinFallback ? joinLocalizedText("Fallback on", "\u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644", language) : joinLocalizedText("Fallback off", "\u0628\u06CC\u06A9 \u0627\u064E\u067E \u0628\u0646\u062F", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Runtime mode", "\u0631\u0646 \u0679\u0627\u0626\u0645 \u0645\u0648\u0688", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Supabase only", "\u0635\u0631\u0641 Supabase", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Global pack", "\u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No global pack assigned yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Pack version", "\u067E\u06CC\u06A9 \u0648\u0631\u0698\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(globalCurriculumPack ? joinLocalizedText(`v${globalCurriculumPack.versionNo}`, `\u0648\u0631\u0698\u0646 ${globalCurriculumPack.versionNo}`, language) : joinLocalizedText("Not assigned", "\u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { marginTop: 12, alignItems: "stretch" } }, /* @__PURE__ */ React.createElement(
+        "select",
+        {
+          className: "settings-select",
+          value: curriculumGlobalPackDraftId,
+          onChange: (event) => setCurriculumGlobalPackDraftId(event.target.value),
+          disabled: contentRelationshipBusy
+        },
+        visibleCurriculumPacks.length ? visibleCurriculumPacks.map((pack) => /* @__PURE__ */ React.createElement("option", { key: pack.packId, value: pack.packId }, pack.name, " ", joinLocalizedText(`(v${pack.versionNo})`, `(\u0648\u0631\u0698\u0646 ${pack.versionNo})`, language))) : /* @__PURE__ */ React.createElement("option", { value: "" }, language === "ur" ? "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA" : "No curriculum pack exists yet")
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "ghost-cta",
+          onClick: handleCreateBuiltInCurriculumSeedPack,
+          disabled: contentRelationshipBusy
+        },
+        renderLocalizedTextNode(joinLocalizedText("Create Built-in Seed Pack", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u06CC\u0688 \u067E\u06CC\u06A9 \u0628\u0646\u0627\u0626\u06CC\u06BA", language), language)
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "ghost-cta",
+          onClick: handleSyncCurriculumPackGlobally,
+          disabled: contentRelationshipBusy || !curriculumGlobalPackDraftId
+        },
+        renderLocalizedTextNode(joinLocalizedText("Sync Globally", "\u0639\u0627\u0644\u0645\u06CC \u06C1\u0645 \u0622\u06C1\u0646\u06AF\u06CC", language), language)
+      )), /* @__PURE__ */ React.createElement("div", { className: "chapter-badge-row", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: `chapter-badge ${curriculumRuntimeSettings.allowBuiltinFallback ? "active" : "neutral"}`,
+          onClick: () => handleSetCurriculumRuntimeFallback(!curriculumRuntimeSettings.allowBuiltinFallback),
+          disabled: contentRelationshipBusy
+        },
+        renderLocalizedTextNode(
+          curriculumRuntimeSettings.allowBuiltinFallback ? joinLocalizedText("Built-in fallback is on", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644 \u06C1\u06D2", language) : joinLocalizedText("Built-in fallback is off", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0628\u0646\u062F \u06C1\u06D2", language),
+          language
+        )
+      )), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Create one Supabase seed pack from the current built-in curriculum, then sync the chosen pack globally to make it the active app-wide curriculum.", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628 \u0633\u06D2 \u0627\u06CC\u06A9 Supabase \u0633\u06CC\u0688 \u067E\u06CC\u06A9 \u0628\u0646\u0627\u0626\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0645\u0646\u062A\u062E\u0628 \u067E\u06CC\u06A9 \u06A9\u0648 \u0639\u0627\u0644\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0648\u06C1 \u067E\u0648\u0631\u06D2 \u0627\u06CC\u067E \u06A9\u0627 \u0641\u0639\u0627\u0644 \u0646\u0635\u0627\u0628 \u0628\u0646 \u062C\u0627\u0626\u06D2\u06D4", language), language)), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("When fallback is on, any missing curriculum pack content falls back to built-in lessons. Turn it off once the Supabase curriculum is complete and verified.", "\u062C\u0628 \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644 \u06C1\u0648 \u062A\u0648 \u067E\u06CC\u06A9 \u0645\u06CC\u06BA \u063A\u0627\u0626\u0628 \u0646\u0635\u0627\u0628\u06CC \u0645\u0648\u0627\u062F \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0627\u0633\u0628\u0627\u0642 \u0633\u06D2 \u067E\u0648\u0631\u0627 \u06A9\u06CC\u0627 \u062C\u0627\u062A\u0627 \u06C1\u06D2\u06D4 \u062C\u0628 Supabase \u0648\u0627\u0644\u0627 \u0646\u0635\u0627\u0628 \u0645\u06A9\u0645\u0644 \u0627\u0648\u0631 \u062A\u0635\u062F\u06CC\u0642 \u0634\u062F\u06C1 \u06C1\u0648 \u062C\u0627\u0626\u06D2 \u062A\u0648 \u0627\u0633\u06D2 \u0628\u0646\u062F \u06A9\u0631 \u062F\u06CC\u06BA\u06D4", language), language))) : null, canManageInstitution ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Create or Update School", "\u0627\u0633\u06A9\u0648\u0644 \u0628\u0646\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Use one school record per institution, then link principals, teachers, students, and parents beneath it.", "\u06C1\u0631 \u0627\u062F\u0627\u0631\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644 \u0631\u06CC\u06A9\u0627\u0631\u0688 \u0631\u06A9\u06BE\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u06A9\u06D2 \u0646\u06CC\u0686\u06D2 \u067E\u0631\u0646\u0633\u067E\u0644\u060C \u0627\u0633\u0627\u062A\u0630\u06C1\u060C \u0637\u0644\u0628\u06C1\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { alignItems: "stretch" } }, /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", value: schoolDraftName, onChange: (event) => setSchoolDraftName(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0646\u0627\u0645" : "School name" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftOwnerEmail, onChange: (event) => setSchoolDraftOwnerEmail(event.target.value), placeholder: language === "ur" ? "\u0627\u0633\u06A9\u0648\u0644 \u0645\u0627\u0644\u06A9 \u0627\u06CC \u0645\u06CC\u0644" : "School owner email" }), /* @__PURE__ */ React.createElement("input", { className: "settings-text-input", type: "email", dir: "ltr", value: schoolDraftPrincipalEmail, onChange: (event) => setSchoolDraftPrincipalEmail(event.target.value), placeholder: language === "ur" ? "\u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u06CC \u0645\u06CC\u0644" : "Principal email" }), /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftYearStartDate, onChange: setSchoolDraftYearStartDate, language })), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Auto Diary Control Center", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u06A9\u0646\u0679\u0631\u0648\u0644 \u0633\u06CC\u0646\u0679\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Simple controls first. Open Advanced only when you really need to tune the engine.", "\u067E\u06C1\u0644\u06D2 \u0633\u0627\u062F\u06C1 \u06A9\u0646\u0679\u0631\u0648\u0644\u0632\u06D4 \u062C\u062F\u06CC\u062F \u0633\u06CC\u0679\u0646\u06AF\u0632 \u0635\u0631\u0641 \u0627\u0633\u06CC \u0648\u0642\u062A \u06A9\u06BE\u0648\u0644\u06CC\u06BA \u062C\u0628 \u0648\u0627\u0642\u0639\u06CC \u0628\u0627\u0631\u06CC\u06A9 \u0627\u06CC\u0688\u062C\u0633\u0679\u0645\u0646\u0679 \u0686\u0627\u06C1\u06CC\u06D2 \u06C1\u0648\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Calendar", "\u06A9\u06CC\u0644\u0646\u0688\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`${formatReadableDateLabel(schoolDraftNormalizedAutoDiarySettings.calendar.startDate, language)} start \u2022 ${schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.length} study days`, `${formatReadableDateLabel(schoolDraftNormalizedAutoDiarySettings.calendar.startDate, language)} \u0622\u063A\u0627\u0632 \u2022 ${schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.length} \u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u062F\u0646`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftNormalizedAutoDiarySettings.subjects.mode === "all" ? joinLocalizedText("All current and future subjects are included.", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0627\u0648\u0631 \u0622\u0626\u0646\u062F\u06C1 \u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0634\u0627\u0645\u0644 \u06C1\u06CC\u06BA\u06D4", language) : joinLocalizedText(`${schoolDraftAutoDiaryVisibleSubjects.length} selected subjects`, `${schoolDraftAutoDiaryVisibleSubjects.length} \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Progression", "\u067E\u06CC\u0634 \u0631\u0641\u062A", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftAutoDiaryProgressionPreset === "structured" ? joinLocalizedText("Steady curriculum", "\u0646\u0635\u0627\u0628\u06CC \u0631\u0641\u062A\u0627\u0631", language) : schoolDraftAutoDiaryProgressionPreset === "mastery" ? joinLocalizedText("Mastery first", "\u067E\u06C1\u0644\u06D2 \u0645\u06C1\u0627\u0631\u062A", language) : schoolDraftAutoDiaryProgressionPreset === "balanced" ? joinLocalizedText("Balanced carry-forward", "\u0645\u062A\u0648\u0627\u0632\u0646 \u0622\u06AF\u06D2 \u0628\u0691\u06BE\u0627\u0624", language) : joinLocalizedText("Custom progression", "\u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u06CC \u067E\u06CC\u0634 \u0631\u0641\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Weekly Test", "\u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(schoolDraftAutoDiaryWeeklyTestPreset === "disabled" ? joinLocalizedText("Disabled", "\u063A\u06CC\u0631 \u0641\u0639\u0627\u0644", language) : schoolDraftAutoDiaryWeeklyTestPreset === "current_focus" ? joinLocalizedText("Current week focused", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u06C1\u0641\u062A\u06D2 \u067E\u0631 \u062A\u0648\u062C\u06C1", language) : schoolDraftAutoDiaryWeeklyTestPreset === "revision_heavy" ? joinLocalizedText("Revision heavy", "\u0632\u06CC\u0627\u062F\u06C1 \u062F\u06C1\u0631\u0627\u0626\u06CC", language) : schoolDraftAutoDiaryWeeklyTestPreset === "standard" ? joinLocalizedText("Standard balance", "\u0645\u0639\u06CC\u0627\u0631\u06CC \u062A\u0648\u0627\u0632\u0646", language) : joinLocalizedText("Custom weekly test", "\u0627\u067E\u0646\u06CC \u0645\u0631\u0636\u06CC \u06A9\u0627 \u06C1\u0641\u062A\u06C1 \u0648\u0627\u0631 \u0679\u06CC\u0633\u0679", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-control-grid", style: { marginTop: 12 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item auto-diary-simple-block" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Calendar", "\u06A9\u06CC\u0644\u0646\u0688\u0631", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("When the diary starts and which days it runs.", "\u0688\u0627\u0626\u0631\u06CC \u06A9\u0628 \u0634\u0631\u0648\u0639 \u06C1\u0648 \u0627\u0648\u0631 \u06A9\u0646 \u062F\u0646\u0648\u06BA \u0645\u06CC\u06BA \u0686\u0644\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-field-stack" }, /* @__PURE__ */ React.createElement(CalendarDateField, { value: schoolDraftNormalizedAutoDiarySettings.calendar.startDate, onChange: (value) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, startDate: value } })), language }), /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.calendar.testDay, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, calendar: { ...current.calendar, testDay: Number(event.target.value) || 6 } })) }, AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => /* @__PURE__ */ React.createElement("option", { key: `auto_test_day_quick_${entry.value}`, value: entry.value }, renderLocalizedTextNode(joinLocalizedText(`Test day: ${entry.en}`, `\u0679\u06CC\u0633\u0679 \u06A9\u0627 \u062F\u0646: ${entry.ur}`, language), language))))), /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 10 } }, AUTO_DIARY_ISO_DAY_OPTIONS.map((entry) => {
         const selected = schoolDraftNormalizedAutoDiarySettings.calendar.studyDays.includes(entry.value);
         return /* @__PURE__ */ React.createElement("button", { key: `study_day_quick_${entry.value}`, type: "button", className: `profile-switcher-chip${selected ? " active" : ""}`, onClick: () => handleToggleSchoolDraftStudyDay(entry.value) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(language === "ur" ? entry.ur : entry.en, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(selected ? joinLocalizedText("Included in study week", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u06D2 \u06C1\u0641\u062A\u06D2 \u0645\u06CC\u06BA \u0634\u0627\u0645\u0644", language) : joinLocalizedText("Not used for auto diary", "\u062E\u0648\u062F\u06A9\u0627\u0631 \u0688\u0627\u0626\u0631\u06CC \u0645\u06CC\u06BA \u0634\u0627\u0645\u0644 \u0646\u06C1\u06CC\u06BA", language), language))));
       }))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-item auto-diary-simple-block" }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-item-head" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Subjects", "\u0645\u0636\u0627\u0645\u06CC\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Choose whether every subject joins automatically or only the ones you pick.", "\u0637\u06D2 \u06A9\u0631\u06CC\u06BA \u06A9\u06C1 \u06C1\u0631 \u0645\u0636\u0645\u0648\u0646 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0634\u0627\u0645\u0644 \u06C1\u0648 \u06CC\u0627 \u0635\u0631\u0641 \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "auto-diary-field-stack" }, /* @__PURE__ */ React.createElement("select", { className: "settings-select", value: schoolDraftNormalizedAutoDiarySettings.subjects.mode, onChange: (event) => updateSchoolDraftAutoDiarySettings((current) => ({ ...current, subjects: { ...current.subjects, mode: event.target.value === "selected" ? "selected" : "all" } })) }, /* @__PURE__ */ React.createElement("option", { value: "all" }, renderLocalizedTextNode(joinLocalizedText("Include all subjects", "\u062A\u0645\u0627\u0645 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("option", { value: "selected" }, renderLocalizedTextNode(joinLocalizedText("Use only selected subjects", "\u0635\u0631\u0641 \u0645\u0646\u062A\u062E\u0628 \u0645\u0636\u0627\u0645\u06CC\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA", language), language)))), schoolDraftNormalizedAutoDiarySettings.subjects.mode === "selected" ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 10 } }, allSubjects.map((subject) => {

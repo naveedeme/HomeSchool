@@ -617,6 +617,243 @@ function normalizePublishedSubjectSourceRecord(raw) {
   };
 }
 
+function normalizeCurriculumRuntimeSettings(raw = null) {
+  const source = raw && typeof raw === "object"
+    ? (raw.settingValue && typeof raw.settingValue === "object" ? raw.settingValue : raw)
+    : {};
+  return {
+    mode: "supabase_only",
+    allowBuiltinFallback: Boolean(
+      source.allowBuiltinFallback
+      ?? source.allow_builtin_fallback
+      ?? DEFAULT_CURRICULUM_RUNTIME_SETTINGS.allowBuiltinFallback
+    ),
+  };
+}
+
+function normalizeSystemSettingRecord(raw) {
+  const settingKey = String(raw?.setting_key || raw?.settingKey || "").trim();
+  if (!settingKey) return null;
+  const settingValue = raw?.setting_value && typeof raw.setting_value === "object"
+    ? cloneSerializableValue(raw.setting_value)
+    : (raw?.settingValue && typeof raw.settingValue === "object" ? cloneSerializableValue(raw.settingValue) : {});
+  return {
+    settingKey,
+    settingValue,
+    updatedByEmail: String(raw?.updated_by_email || raw?.updatedByEmail || "").trim().toLowerCase(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeCurriculumPackRecord(raw) {
+  const packId = String(raw?.pack_id || raw?.packId || "").trim();
+  if (!packId) return null;
+  const scopeOriginRaw = String(raw?.scope_origin || raw?.scopeOrigin || "global").trim().toLowerCase();
+  const scopeOrigin = ["global", "school", "grade", "learner"].includes(scopeOriginRaw) ? scopeOriginRaw : "global";
+  const statusRaw = String(raw?.status || "draft").trim().toLowerCase();
+  const status = ["draft", "published", "archived"].includes(statusRaw) ? statusRaw : "draft";
+  return {
+    packId,
+    name: String(raw?.name || packId).trim() || packId,
+    description: String(raw?.description || "").trim(),
+    scopeOrigin,
+    originSchoolId: String(raw?.origin_school_id || raw?.originSchoolId || "").trim(),
+    originGrade: Number.isFinite(Number(raw?.origin_grade ?? raw?.originGrade)) ? Number(raw?.origin_grade ?? raw?.originGrade) : null,
+    originStudentEmail: String(raw?.origin_student_email || raw?.originStudentEmail || "").trim().toLowerCase(),
+    parentPackId: String(raw?.parent_pack_id || raw?.parentPackId || "").trim(),
+    status,
+    versionNo: Math.max(1, Number(raw?.version_no ?? raw?.versionNo) || 1),
+    createdByEmail: String(raw?.created_by_email || raw?.createdByEmail || "").trim().toLowerCase(),
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeCurriculumPackSubjectRecord(raw) {
+  const packSubjectId = String(raw?.pack_subject_id || raw?.packSubjectId || "").trim();
+  const packId = String(raw?.pack_id || raw?.packId || "").trim();
+  const subjectKey = String(raw?.subject_key || raw?.subjectKey || raw?.subject || "").trim().toLowerCase();
+  if (!packSubjectId || !packId || !subjectKey) return null;
+  return {
+    packSubjectId,
+    packId,
+    subjectKey,
+    subjectTitle: String(raw?.subject_title || raw?.subjectTitle || subjectKey).trim() || subjectKey,
+    subjectTitleUr: String(raw?.subject_title_ur || raw?.subjectTitleUr || raw?.subject_title || raw?.subjectTitle || subjectKey).trim() || subjectKey,
+    grade: Number.isFinite(Number(raw?.grade)) ? Number(raw?.grade) : null,
+    orderIndex: Number.isFinite(Number(raw?.order_index ?? raw?.orderIndex)) ? Number(raw?.order_index ?? raw?.orderIndex) : 0,
+    isHidden: Boolean(raw?.is_hidden ?? raw?.isHidden ?? false),
+    sourceType: String(raw?.source_type || raw?.sourceType || "custom").trim().toLowerCase() || "custom",
+    sourceSubjectId: String(raw?.source_subject_id || raw?.sourceSubjectId || "").trim(),
+    payload: raw?.payload && typeof raw.payload === "object"
+      ? cloneSerializableValue(raw.payload)
+      : {},
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function normalizeCurriculumPackLessonRecord(raw) {
+  const packLessonId = String(raw?.pack_lesson_id || raw?.packLessonId || "").trim();
+  const packId = String(raw?.pack_id || raw?.packId || "").trim();
+  const subjectKey = String(raw?.subject_key || raw?.subjectKey || raw?.subject || "").trim().toLowerCase();
+  const grade = Number(raw?.grade);
+  const lessonKey = resolveCustomChapterLessonKey({
+    lessonKey: raw?.lesson_key || raw?.lessonKey || raw?.content_payload?.key || raw?.contentPayload?.key || raw?.lesson_title || raw?.lessonTitle || "",
+  });
+  if (!packLessonId || !packId || !subjectKey || !Number.isFinite(grade) || !lessonKey) return null;
+  const slotActionRaw = String(raw?.slot_action || raw?.slotAction || "normal").trim().toLowerCase();
+  const slotAction = ["normal", "replaced", "removed"].includes(slotActionRaw) ? slotActionRaw : "normal";
+  return {
+    packLessonId,
+    packId,
+    subjectKey,
+    grade,
+    lessonKey,
+    lessonTitle: String(raw?.lesson_title || raw?.lessonTitle || lessonKey).trim() || lessonKey,
+    lessonTitleUr: String(raw?.lesson_title_ur || raw?.lessonTitleUr || raw?.lesson_title || raw?.lessonTitle || lessonKey).trim() || lessonKey,
+    orderIndex: Number.isFinite(Number(raw?.order_index ?? raw?.orderIndex)) ? Number(raw?.order_index ?? raw?.orderIndex) : 0,
+    isHidden: Boolean(raw?.is_hidden ?? raw?.isHidden ?? false),
+    slotAction,
+    sourceType: String(raw?.source_type || raw?.sourceType || "custom").trim().toLowerCase() || "custom",
+    sourceLessonId: String(raw?.source_lesson_id || raw?.sourceLessonId || "").trim(),
+    contentPayload: raw?.content_payload && typeof raw.content_payload === "object"
+      ? cloneSerializableValue(raw.content_payload)
+      : (raw?.contentPayload && typeof raw.contentPayload === "object" ? cloneSerializableValue(raw.contentPayload) : {}),
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function buildCurriculumPackLessonEntry(raw) {
+  const normalized = normalizeCurriculumPackLessonRecord(raw);
+  if (!normalized || normalized.isHidden || normalized.slotAction === "removed") return null;
+  const payload = normalized.contentPayload && typeof normalized.contentPayload === "object" ? normalized.contentPayload : {};
+  const lessonSource = payload.lesson && typeof payload.lesson === "object"
+    ? cloneSerializableValue(payload.lesson)
+    : (payload.payload && typeof payload.payload === "object" ? cloneSerializableValue(payload.payload) : cloneSerializableValue(payload));
+  const lesson = lessonSource && typeof lessonSource === "object" ? lessonSource : {};
+  const questions = Array.isArray(payload.questions)
+    ? cloneSerializableValue(payload.questions)
+    : Array.isArray(payload.quiz)
+      ? cloneSerializableValue(payload.quiz)
+      : Array.isArray(payload.quizQuestions)
+        ? cloneSerializableValue(payload.quizQuestions)
+        : [];
+  return {
+    packId: normalized.packId,
+    packLessonId: normalized.packLessonId,
+    subject: normalized.subjectKey,
+    grade: normalized.grade,
+    lessonKey: normalized.lessonKey,
+    orderIndex: normalized.orderIndex,
+    questions,
+    lesson: {
+      ...lesson,
+      key: normalized.lessonKey,
+      id: `curriculum_pack_${normalized.packId}_${normalized.lessonKey}`,
+      title: String(lesson?.title || normalized.lessonTitle || normalized.lessonKey).trim() || normalized.lessonKey,
+      titleUr: String(lesson?.titleUr || normalized.lessonTitleUr || lesson?.title || normalized.lessonTitle || normalized.lessonKey).trim() || normalized.lessonKey,
+      __curriculumPack: true,
+      __curriculumPackId: normalized.packId,
+      __curriculumPackLessonId: normalized.packLessonId,
+      __sourceLabel: normalized.lessonTitle ? `Curriculum pack - ${normalized.lessonTitle}` : "Curriculum pack",
+    },
+  };
+}
+
+function buildCurriculumPackSubjectDefinitions(packSubjectRows = [], packLessonRows = [], fallbackSubjects = []) {
+  const fallbackLookup = new Map((Array.isArray(fallbackSubjects) ? fallbackSubjects : []).map((entry) => {
+    const normalized = normalizeSubjectDefinition(entry);
+    return [normalized.id, normalized];
+  }));
+  const merged = new Map();
+  (Array.isArray(packSubjectRows) ? packSubjectRows : [])
+    .filter((entry) => entry && !entry.isHidden)
+    .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0))
+    .forEach((entry) => {
+      const fallback = fallbackLookup.get(entry.subjectKey) || {};
+      merged.set(entry.subjectKey, normalizeSubjectDefinition({
+        id: entry.subjectKey,
+        name: entry.subjectTitle,
+        nameUr: entry.subjectTitleUr,
+        icon: entry?.payload?.icon,
+        color: entry?.payload?.color,
+      }, fallback));
+    });
+  (Array.isArray(packLessonRows) ? packLessonRows : [])
+    .filter((entry) => entry && !entry.isHidden && entry.slotAction !== "removed")
+    .forEach((entry) => {
+      if (merged.has(entry.subjectKey)) return;
+      const fallback = fallbackLookup.get(entry.subjectKey) || {};
+      merged.set(entry.subjectKey, normalizeSubjectDefinition({
+        id: entry.subjectKey,
+        name: fallback.name || entry.subjectKey,
+        nameUr: fallback.nameUr || fallback.name || entry.subjectKey,
+        icon: fallback.icon,
+        color: fallback.color,
+      }, fallback));
+    });
+  return Array.from(merged.values());
+}
+
+function normalizeCurriculumScopeAssignmentRecord(raw) {
+  const assignmentId = String(raw?.assignment_id || raw?.assignmentId || "").trim();
+  const scopeTypeRaw = String(raw?.scope_type || raw?.scopeType || "global").trim().toLowerCase();
+  const scopeType = scopeTypeRaw === "student"
+    ? "learner"
+    : (["global", "school", "grade", "learner"].includes(scopeTypeRaw) ? scopeTypeRaw : "global");
+  const packId = String(raw?.pack_id || raw?.packId || "").trim();
+  if (!assignmentId || !packId) return null;
+  return {
+    assignmentId,
+    scopeType,
+    schoolId: String(raw?.school_id || raw?.schoolId || "").trim(),
+    grade: Number.isFinite(Number(raw?.grade)) ? Number(raw?.grade) : null,
+    studentEmail: String(raw?.student_email || raw?.studentEmail || "").trim().toLowerCase(),
+    packId,
+    status: String(raw?.status || "active").trim().toLowerCase() || "active",
+    assignedByEmail: String(raw?.assigned_by_email || raw?.assignedByEmail || "").trim().toLowerCase(),
+    note: String(raw?.note || "").trim(),
+    createdAt: Number(new Date(raw?.created_at || raw?.createdAt || raw?.updated_at || raw?.updatedAt || Date.now()).getTime()) || Date.now(),
+    updatedAt: Number(new Date(raw?.updated_at || raw?.updatedAt || raw?.created_at || raw?.createdAt || Date.now()).getTime()) || Date.now(),
+  };
+}
+
+function resolveCurriculumScopeAssignment(records = [], {
+  schoolId = "",
+  targetGrade = null,
+  targetStudentEmail = "",
+} = {}) {
+  const safeSchoolId = String(schoolId || "").trim();
+  const safeStudentEmail = String(targetStudentEmail || "").trim().toLowerCase();
+  const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
+  const matches = (Array.isArray(records) ? records : [])
+    .map((entry) => normalizeCurriculumScopeAssignmentRecord(entry))
+    .filter(Boolean)
+    .filter((entry) => entry.status === "active")
+    .filter((entry) => {
+      if (entry.scopeType === "global") return true;
+      if (!safeSchoolId || entry.schoolId !== safeSchoolId) return false;
+      if (entry.scopeType === "school") return true;
+      if (entry.scopeType === "grade") {
+        return entry.grade === null || (numericGrade !== null && Number(entry.grade) === numericGrade);
+      }
+      if (entry.scopeType === "learner") {
+        if (!safeStudentEmail || entry.studentEmail !== safeStudentEmail) return false;
+        return entry.grade === null || (numericGrade !== null && Number(entry.grade) === numericGrade);
+      }
+      return false;
+    })
+    .sort((left, right) => {
+      const leftScopeScore = left.scopeType === "learner" ? 4 : left.scopeType === "grade" ? 3 : left.scopeType === "school" ? 2 : 1;
+      const rightScopeScore = right.scopeType === "learner" ? 4 : right.scopeType === "grade" ? 3 : right.scopeType === "school" ? 2 : 1;
+      if (leftScopeScore !== rightScopeScore) return rightScopeScore - leftScopeScore;
+      return (right.updatedAt || 0) - (left.updatedAt || 0);
+    });
+  return matches[0] || null;
+}
+
 function materializeSubjectSourceChapters(sourceRecord, targetSubjectId = "", targetGrade = null) {
   const normalized = normalizePublishedSubjectSourceRecord(sourceRecord);
   if (!normalized?.payload) return [];
@@ -2672,6 +2909,11 @@ function shouldIncludeAutoDiarySubject(subject, autoDiarySettings = null) {
 function createEmptyContentRelationshipState() {
   return {
     loaded: false,
+    systemSettings: [],
+    curriculumPacks: [],
+    curriculumPackSubjects: [],
+    curriculumPackLessons: [],
+    curriculumScopeAssignments: [],
     schools: [],
     memberships: [],
     parentLinks: [],
@@ -6331,6 +6573,15 @@ const SUPABASE_AUTO_DIARY_OVERRIDES_TABLE = "auto_diary_overrides";
 const SUPABASE_TEST_TEMPLATES_TABLE = "test_templates";
 const SUPABASE_WEEKLY_TEST_ASSIGNMENTS_TABLE = "weekly_test_assignments";
 const SUPABASE_WEEKLY_TEST_RESULTS_TABLE = "weekly_test_results";
+const SUPABASE_SYSTEM_SETTINGS_TABLE = "system_settings";
+const SUPABASE_CURRICULUM_PACKS_TABLE = "curriculum_packs";
+const SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE = "curriculum_pack_subjects";
+const SUPABASE_CURRICULUM_PACK_LESSONS_TABLE = "curriculum_pack_lessons";
+const SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE = "curriculum_scope_assignments";
+const DEFAULT_CURRICULUM_RUNTIME_SETTINGS = Object.freeze({
+  mode: "supabase_only",
+  allowBuiltinFallback: true,
+});
 const SUPABASE_SYNC_STORAGE_KEY = "hs_supabase_dictionary_sync";
 const SUPABASE_DICTIONARY_SETUP_SQL = `create table if not exists public.dictionary_entries (
   user_id uuid not null,
@@ -14900,6 +15151,7 @@ function HomeschoolApp() {
   const [contentActivationDraftSchoolId, setContentActivationDraftSchoolId] = useState(String(stored?.activeInstitutionSchoolId || "").trim());
   const [contentActivationDraftGrade, setContentActivationDraftGrade] = useState("current");
   const [contentActivationDraftStudentEmail, setContentActivationDraftStudentEmail] = useState("");
+  const [curriculumGlobalPackDraftId, setCurriculumGlobalPackDraftId] = useState("");
   const [subjectSourceDraftId, setSubjectSourceDraftId] = useState("__builtin__");
   const [subjectSourcePublishBusy, setSubjectSourcePublishBusy] = useState(false);
   const [schoolDraftName, setSchoolDraftName] = useState("");
@@ -15831,10 +16083,130 @@ const headerHideTimerRef = useRef(null);
     });
     return lookup;
   }, [visiblePublishedSubjectSources]);
+  const visibleSystemSettings = useMemo(() => {
+    const safeRows = Array.isArray(contentRelationshipState.systemSettings) ? contentRelationshipState.systemSettings : [];
+    return safeRows
+      .map((entry) => normalizeSystemSettingRecord(entry))
+      .filter(Boolean)
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [contentRelationshipState.systemSettings]);
+  const curriculumRuntimeSettings = useMemo(() => {
+    const runtimeSetting = visibleSystemSettings.find((entry) => entry.settingKey === "curriculum_runtime") || null;
+    return normalizeCurriculumRuntimeSettings(runtimeSetting?.settingValue || runtimeSetting);
+  }, [visibleSystemSettings]);
+  const visibleCurriculumPacks = useMemo(() => {
+    const safeRows = Array.isArray(contentRelationshipState.curriculumPacks) ? contentRelationshipState.curriculumPacks : [];
+    return safeRows
+      .map((entry) => normalizeCurriculumPackRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.status !== "archived")
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [contentRelationshipState.curriculumPacks]);
+  const visibleCurriculumPackSubjects = useMemo(() => {
+    const safeRows = Array.isArray(contentRelationshipState.curriculumPackSubjects) ? contentRelationshipState.curriculumPackSubjects : [];
+    return safeRows
+      .map((entry) => normalizeCurriculumPackSubjectRecord(entry))
+      .filter(Boolean)
+      .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.subjectTitle || left.subjectKey).localeCompare(String(right.subjectTitle || right.subjectKey)));
+  }, [contentRelationshipState.curriculumPackSubjects]);
+  const visibleCurriculumPackLessons = useMemo(() => {
+    const safeRows = Array.isArray(contentRelationshipState.curriculumPackLessons) ? contentRelationshipState.curriculumPackLessons : [];
+    return safeRows
+      .map((entry) => normalizeCurriculumPackLessonRecord(entry))
+      .filter(Boolean)
+      .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lessonTitle || left.lessonKey).localeCompare(String(right.lessonTitle || right.lessonKey)));
+  }, [contentRelationshipState.curriculumPackLessons]);
+  const visibleCurriculumScopeAssignments = useMemo(() => {
+    const safeRows = Array.isArray(contentRelationshipState.curriculumScopeAssignments) ? contentRelationshipState.curriculumScopeAssignments : [];
+    return safeRows
+      .map((entry) => normalizeCurriculumScopeAssignmentRecord(entry))
+      .filter(Boolean)
+      .filter((entry) => entry.status === "active")
+      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  }, [contentRelationshipState.curriculumScopeAssignments]);
+  const curriculumPackLookup = useMemo(() => {
+    const lookup = new Map();
+    visibleCurriculumPacks.forEach((entry) => {
+      if (entry?.packId) lookup.set(entry.packId, entry);
+    });
+    return lookup;
+  }, [visibleCurriculumPacks]);
+  const curriculumPackSubjectRowsByPack = useMemo(() => {
+    const lookup = new Map();
+    visibleCurriculumPackSubjects.forEach((entry) => {
+      const packId = String(entry?.packId || "").trim();
+      if (!packId) return;
+      if (!lookup.has(packId)) lookup.set(packId, []);
+      lookup.get(packId).push(entry);
+    });
+    return lookup;
+  }, [visibleCurriculumPackSubjects]);
+  const curriculumPackLessonRowsByPackSubjectGrade = useMemo(() => {
+    const lookup = new Map();
+    visibleCurriculumPackLessons.forEach((entry) => {
+      const packId = String(entry?.packId || "").trim();
+      const subjectKey = String(entry?.subjectKey || "").trim().toLowerCase();
+      const numericGrade = Number(entry?.grade);
+      if (!packId || !subjectKey || !Number.isFinite(numericGrade)) return;
+      const bucketKey = `${packId}::${subjectKey}::${numericGrade}`;
+      if (!lookup.has(bucketKey)) lookup.set(bucketKey, []);
+      lookup.get(bucketKey).push(entry);
+    });
+    return lookup;
+  }, [visibleCurriculumPackLessons]);
   const scopedContentActivationViewerEmail = useMemo(
     () => (canChooseContentSource ? "" : String(contentIdentityEmail || "").trim().toLowerCase()),
     [canChooseContentSource, contentIdentityEmail],
   );
+  const globalCurriculumAssignment = useMemo(
+    () => visibleCurriculumScopeAssignments.find((entry) => entry.scopeType === "global") || null,
+    [visibleCurriculumScopeAssignments],
+  );
+  const globalCurriculumPack = useMemo(
+    () => (globalCurriculumAssignment?.packId ? curriculumPackLookup.get(globalCurriculumAssignment.packId) || null : null),
+    [curriculumPackLookup, globalCurriculumAssignment],
+  );
+  useEffect(() => {
+    const availablePackIds = new Set(visibleCurriculumPacks.map((entry) => entry.packId));
+    const preferredPackId = String(globalCurriculumAssignment?.packId || "").trim();
+    if (preferredPackId && availablePackIds.has(preferredPackId)) {
+      if (curriculumGlobalPackDraftId !== preferredPackId) setCurriculumGlobalPackDraftId(preferredPackId);
+      return;
+    }
+    if (curriculumGlobalPackDraftId && availablePackIds.has(curriculumGlobalPackDraftId)) return;
+    const fallbackPackId = visibleCurriculumPacks[0]?.packId || "";
+    if (curriculumGlobalPackDraftId !== fallbackPackId) setCurriculumGlobalPackDraftId(fallbackPackId);
+  }, [curriculumGlobalPackDraftId, globalCurriculumAssignment, visibleCurriculumPacks]);
+  const getResolvedCurriculumPackContext = useCallback((subjectId, targetGrade) => {
+    const safeSubjectId = String(subjectId || "").trim().toLowerCase();
+    const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
+    const assignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
+      schoolId: String(activeInstitutionSchoolId || "").trim(),
+      targetGrade,
+      targetStudentEmail: scopedContentActivationViewerEmail,
+    });
+    if (!assignment?.packId || !safeSubjectId || numericGrade === null) {
+      return {
+        assignment: assignment || null,
+        pack: assignment?.packId ? curriculumPackLookup.get(assignment.packId) || null : null,
+        subjectRows: [],
+        lessonRows: [],
+        entries: [],
+        hasCoverage: false,
+      };
+    }
+    const pack = curriculumPackLookup.get(assignment.packId) || null;
+    const subjectRows = (curriculumPackSubjectRowsByPack.get(assignment.packId) || []).filter((entry) => (
+      entry.subjectKey === safeSubjectId && (entry.grade === null || Number(entry.grade) === numericGrade)
+    ));
+    const lessonRows = curriculumPackLessonRowsByPackSubjectGrade.get(`${assignment.packId}::${safeSubjectId}::${numericGrade}`) || [];
+    const entries = lessonRows
+      .map((entry) => buildCurriculumPackLessonEntry(entry))
+      .filter(Boolean)
+      .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lesson?.title || left.lessonKey).localeCompare(String(right.lesson?.title || right.lessonKey)));
+    const hasCoverage = subjectRows.some((entry) => !entry.isHidden) || entries.length > 0;
+    return { assignment, pack, subjectRows, lessonRows, entries, hasCoverage };
+  }, [activeInstitutionSchoolId, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
   const getEffectiveSubjectActivation = useCallback((subjectId, targetGrade) => resolveScopedActivation(visibleContentActivations, {
     activationType: "subject",
     subject: subjectId,
@@ -15851,20 +16223,26 @@ const headerHideTimerRef = useRef(null);
     targetStudentEmail: scopedContentActivationViewerEmail,
   }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
   const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
-    const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
+    const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
+    const useCurriculumPack = Boolean(curriculumPackContext.assignment?.packId) && (curriculumPackContext.entries.length > 0 || !curriculumRuntimeSettings.allowBuiltinFallback);
+    const subjectActivation = useCurriculumPack ? null : getEffectiveSubjectActivation(subjectId, targetGrade);
     const activeSubjectSource = subjectActivation?.sourceKind === "published_subject"
       ? publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null
       : null;
-    const sourceChapters = activeSubjectSource ? materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade) : [];
-    const baseLessons = activeSubjectSource
+    const sourceChapters = useCurriculumPack
+      ? curriculumPackContext.entries
+      : (activeSubjectSource ? materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade) : []);
+    const baseLessons = useCurriculumPack
       ? sourceChapters.map((entry) => entry.lesson).filter(Boolean)
-      : (getLessons(subjectId, targetGrade) || []);
-    const customLessons = activeSubjectSource
+      : (activeSubjectSource
+        ? sourceChapters.map((entry) => entry.lesson).filter(Boolean)
+        : (getLessons(subjectId, targetGrade) || []));
+    const customLessons = useCurriculumPack
       ? []
-      : (customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || []);
-    const publishedLessons = activeSubjectSource
+      : (activeSubjectSource ? [] : (customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || []));
+    const publishedLessons = useCurriculumPack
       ? []
-      : (publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || []);
+      : (activeSubjectSource ? [] : (publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || []));
     const mergedGroups = buildChapterVariantGroups({
       subjectId,
       targetGrade,
@@ -15876,7 +16254,7 @@ const headerHideTimerRef = useRef(null);
       currentUserId: supabaseAuthState.userId,
       archivedVariantKeys: archivedLessonVariantKeys,
     });
-    const activationAdjustedGroups = mergedGroups.map((group) => {
+    const activationAdjustedGroups = useCurriculumPack ? mergedGroups : mergedGroups.map((group) => {
       const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, group.canonicalLessonKey);
       if (!lessonActivation) return group;
       if (lessonActivation.sourceKind === "builtin_lesson") {
@@ -15913,7 +16291,7 @@ const headerHideTimerRef = useRef(null);
       return group;
     });
     return applySavedLessonOrder(activationAdjustedGroups, lessonOrderPreferences, subjectId, targetGrade);
-  }, [archivedLessonVariantKeys, chapterSourcePreferences, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
+  }, [archivedLessonVariantKeys, chapterSourcePreferences, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
   const getMergedLessons = useCallback((subjectId, targetGrade) => (
     getMergedLessonGroups(subjectId, targetGrade)
       .map((group) => group.activeLesson)
@@ -15921,6 +16299,10 @@ const headerHideTimerRef = useRef(null);
   ), [getMergedLessonGroups]);
   const getMergedQuiz = useCallback((subjectId, targetGrade, lessonKey) => {
     const normalizedLessonKey = String(lessonKey || "").trim();
+    const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
+    const packEntry = curriculumPackContext.entries.find((entry) => String(entry.lessonKey || "").trim() === normalizedLessonKey) || null;
+    if (Array.isArray(packEntry?.questions) && packEntry.questions.length > 0) return packEntry.questions;
+    if (curriculumPackContext.assignment?.packId && !curriculumRuntimeSettings.allowBuiltinFallback) return [];
     const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
     if (subjectActivation?.sourceKind === "published_subject" && subjectActivation.subjectSourceId) {
       const subjectSource = publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null;
@@ -15938,13 +16320,32 @@ const headerHideTimerRef = useRef(null);
     const publishedQuiz = publishedContentState.quizzesByKey?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}::${normalizedLessonKey}`];
     if (Array.isArray(publishedQuiz) && publishedQuiz.length > 0) return publishedQuiz;
     return getQuiz(subjectId, targetGrade, normalizedLessonKey) || [];
-  }, [customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
+  }, [curriculumRuntimeSettings.allowBuiltinFallback, customContentState.quizzesByKey, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, publishedContentState.quizzesByKey, publishedLessonQuestionLookup, publishedSubjectSourceLookup]);
+  const allSubjects = useMemo(() => {
+    const customSubjects = Object.values(customContentState.subjectsById || {});
+    const currentAssignment = resolveCurriculumScopeAssignment(visibleCurriculumScopeAssignments, {
+      schoolId: String(activeInstitutionSchoolId || "").trim(),
+      targetGrade: grade,
+      targetStudentEmail: scopedContentActivationViewerEmail,
+    });
+    if (!currentAssignment?.packId) return mergeSubjectCollections(SUBJECTS, customSubjects);
+    const numericGrade = Number.isFinite(Number(grade)) ? Number(grade) : null;
+    const packSubjectRows = (curriculumPackSubjectRowsByPack.get(currentAssignment.packId) || []).filter((entry) => (
+      numericGrade === null || entry.grade === null || Number(entry.grade) === numericGrade
+    ));
+    const packLessonRows = visibleCurriculumPackLessons.filter((entry) => (
+      entry.packId === currentAssignment.packId && (numericGrade === null || Number(entry.grade) === numericGrade)
+    ));
+    const packSubjects = buildCurriculumPackSubjectDefinitions(packSubjectRows, packLessonRows, SUBJECTS);
+    const baseSubjects = curriculumRuntimeSettings.allowBuiltinFallback ? mergeSubjectCollections(SUBJECTS, packSubjects) : packSubjects;
+    return mergeSubjectCollections(baseSubjects, customSubjects);
+  }, [activeInstitutionSchoolId, curriculumPackSubjectRowsByPack, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.subjectsById, grade, scopedContentActivationViewerEmail, visibleCurriculumPackLessons, visibleCurriculumScopeAssignments]);
   const contentDataLoader = useMemo(() => ({
     ...window.HomeSchoolData,
-    SUBJECTS: mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {})),
+    SUBJECTS: allSubjects,
     getLessons: getMergedLessons,
     getQuiz: getMergedQuiz,
-  }), [customContentState.subjectsById, getMergedLessons, getMergedQuiz]);
+  }), [allSubjects, getMergedLessons, getMergedQuiz]);
   const selectedSubjectChapterGroups = useMemo(
     () => (selectedSubject && grade ? getMergedLessonGroups(selectedSubject.id, grade) : []),
     [getMergedLessonGroups, grade, selectedSubject],
@@ -15952,10 +16353,6 @@ const headerHideTimerRef = useRef(null);
   const selectedSubjectLessons = useMemo(
     () => selectedSubjectChapterGroups.map((group) => group.activeLesson).filter(Boolean),
     [selectedSubjectChapterGroups],
-  );
-  const allSubjects = useMemo(
-    () => mergeSubjectCollections(SUBJECTS, Object.values(customContentState.subjectsById || {})),
-    [customContentState.subjectsById],
   );
   const schoolDraftAutoDiaryVisibleSubjects = useMemo(() => {
     const normalized = schoolDraftNormalizedAutoDiarySettings;
@@ -17026,6 +17423,198 @@ const headerHideTimerRef = useRef(null);
       setContentRelationshipBusy(false);
     }
   }, [archiveMemberAuthoredContent, canManageInstitution, contentIdentityEmail, language, schoolDraftName, schoolDraftNormalizedAutoDiarySettings, schoolDraftOwnerEmail, schoolDraftPrincipalEmail, schoolDraftYearStartDate, showAppToast, supabaseAuthState.userId]);
+  const handleSetCurriculumRuntimeFallback = useCallback(async (allowBuiltinFallback) => {
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only the app admin can manage curriculum runtime.", "صرف ایپ ایڈمن نصاب کے رن ٹائم کو منظم کر سکتا ہے۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to manage curriculum runtime.", "نصاب کے رن ٹائم کو منظم کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClientRef.current();
+      const nextSetting = {
+        setting_key: "curriculum_runtime",
+        setting_value: {
+          mode: "supabase_only",
+          allow_builtin_fallback: Boolean(allowBuiltinFallback),
+        },
+        updated_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+      };
+      const { error } = await client.from(SUPABASE_SYSTEM_SETTINGS_TABLE).upsert(nextSetting, { onConflict: "setting_key" });
+      if (error) throw error;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(
+        Boolean(allowBuiltinFallback)
+          ? joinLocalizedText("Built-in fallback enabled for migration testing.", "منتقلی کی آزمائش کے لیے بنیادی بیک اَپ فعال ہو گیا۔", language)
+          : joinLocalizedText("Built-in fallback disabled. Curriculum now resolves from Supabase only.", "بنیادی بیک اَپ بند ہو گیا۔ اب نصاب صرف Supabase سے حل ہوگا۔", language),
+        "check",
+      );
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to update curriculum runtime: ${error?.message || error}`, `نصاب کے رن ٹائم کی ترتیب تازہ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canManageContentAccess, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+  const handleCreateBuiltInCurriculumSeedPack = useCallback(async () => {
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only the app admin can seed the curriculum pack.", "صرف ایپ ایڈمن نصابی پیک تخلیق کر سکتا ہے۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to seed the curriculum pack.", "نصابی پیک بنانے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClientRef.current();
+      const now = Date.now();
+      const nowIso = new Date(now).toISOString();
+      const packId = `pack_${simpleHash(`global_seed_${contentIdentityEmail}_${nowIso}`)}`;
+      const packName = `Global seed pack ${toIsoDateString(now)}`;
+      const gradeOptions = normalizeGradeOptionIds(GRADES);
+      const seedPackRow = {
+        pack_id: packId,
+        name: packName,
+        description: "Seeded from built-in curriculum for Supabase migration.",
+        scope_origin: "global",
+        status: "published",
+        version_no: 1,
+        created_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+        updated_at: nowIso,
+      };
+      const seedSubjectRows = (Array.isArray(SUBJECTS) ? SUBJECTS : [])
+        .map((subject, index) => {
+          const normalizedSubject = normalizeSubjectDefinition(subject);
+          return {
+            pack_subject_id: `pack_subject_${simpleHash(`${packId}_${normalizedSubject.id}`)}`,
+            pack_id: packId,
+            subject_key: normalizedSubject.id,
+            subject_title: normalizedSubject.name,
+            subject_title_ur: normalizedSubject.nameUr,
+            grade: null,
+            order_index: index,
+            is_hidden: false,
+            source_type: "builtin_seed",
+            source_subject_id: normalizedSubject.id,
+            payload: {
+              icon: normalizedSubject.icon || "",
+              color: normalizedSubject.color || "",
+            },
+            updated_at: nowIso,
+          };
+        });
+      const seedLessonRows = [];
+      (Array.isArray(SUBJECTS) ? SUBJECTS : []).forEach((subject) => {
+        const normalizedSubject = normalizeSubjectDefinition(subject);
+        gradeOptions.forEach((grade) => {
+          const lessonRows = Array.isArray(getLessons(normalizedSubject.id, grade)) ? getLessons(normalizedSubject.id, grade) : [];
+          lessonRows.forEach((lesson, lessonIndex) => {
+            const canonicalLessonKey = resolveCustomChapterLessonKey({
+              lessonKey: lesson?.key || lesson?.id || lesson?.title || lesson?.titleUr || "",
+              title: lesson?.title || lesson?.titleUr || "",
+              fallbackNumber: lessonIndex + 1,
+            });
+            if (!canonicalLessonKey) return;
+            const quizRows = Array.isArray(getQuiz(normalizedSubject.id, grade, canonicalLessonKey))
+              ? cloneSerializableValue(getQuiz(normalizedSubject.id, grade, canonicalLessonKey))
+              : [];
+            seedLessonRows.push({
+              pack_lesson_id: `pack_lesson_${simpleHash(`${packId}_${normalizedSubject.id}_${grade}_${canonicalLessonKey}`)}`,
+              pack_id: packId,
+              subject_key: normalizedSubject.id,
+              grade,
+              lesson_key: canonicalLessonKey,
+              lesson_title: String(lesson?.title || canonicalLessonKey).trim() || canonicalLessonKey,
+              lesson_title_ur: String(lesson?.titleUr || lesson?.title || canonicalLessonKey).trim() || canonicalLessonKey,
+              order_index: lessonIndex,
+              is_hidden: false,
+              slot_action: "normal",
+              source_type: "builtin_seed",
+              source_lesson_id: canonicalLessonKey,
+              content_payload: {
+                lesson: stripRuntimeLessonMarkers(cloneSerializableValue(lesson) || {}),
+                questions: quizRows,
+              },
+              updated_at: nowIso,
+            });
+          });
+        });
+      });
+      const { error: packError } = await client.from(SUPABASE_CURRICULUM_PACKS_TABLE).upsert(seedPackRow, { onConflict: "pack_id" });
+      if (packError) throw packError;
+      if (seedSubjectRows.length) {
+        const { error: subjectError } = await client.from(SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE).upsert(seedSubjectRows, { onConflict: "pack_subject_id" });
+        if (subjectError) throw subjectError;
+      }
+      if (seedLessonRows.length) {
+        const { error: lessonError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(seedLessonRows, { onConflict: "pack_lesson_id" });
+        if (lessonError) throw lessonError;
+      }
+      setCurriculumGlobalPackDraftId(packId);
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText("Built-in curriculum was seeded into a global Supabase pack.", "بنیادی نصاب کو عالمی Supabase پیک میں منتقل کر دیا گیا ہے۔", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to create built-in seed pack: ${error?.message || error}`, `بنیادی نصابی پیک نہیں بنایا جا سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canManageContentAccess, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+  const handleSyncCurriculumPackGlobally = useCallback(async () => {
+    if (!canManageContentAccess) {
+      showAppToast(joinLocalizedText("Only the app admin can sync a global curriculum pack.", "صرف ایپ ایڈمن عالمی نصابی پیک ہم آہنگ کر سکتا ہے۔", language), "alert");
+      return;
+    }
+    if (!supabaseAuthState.userId || !contentIdentityEmail) {
+      showAppToast(joinLocalizedText("Sign in first to sync the global curriculum pack.", "عالمی نصابی پیک ہم آہنگ کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
+      return;
+    }
+    const safePackId = String(curriculumGlobalPackDraftId || "").trim();
+    if (!safePackId) {
+      showAppToast(joinLocalizedText("Choose a curriculum pack first.", "پہلے ایک نصابی پیک منتخب کریں۔", language), "alert");
+      return;
+    }
+    const selectedPack = curriculumPackLookup.get(safePackId) || null;
+    if (!selectedPack) {
+      showAppToast(joinLocalizedText("The selected curriculum pack could not be found.", "منتخب شدہ نصابی پیک نہیں ملا۔", language), "alert");
+      return;
+    }
+    setContentRelationshipBusy(true);
+    try {
+      const client = ensureSupabaseClientRef.current();
+      const nowIso = new Date().toISOString();
+      const { error: deactivateError } = await client
+        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+        .update({ status: "inactive", updated_at: nowIso })
+        .eq("scope_type", "global")
+        .eq("status", "active");
+      if (deactivateError) throw deactivateError;
+      const nextAssignment = {
+        assignment_id: "curriculum_global_default",
+        scope_type: "global",
+        school_id: null,
+        grade: null,
+        student_email: null,
+        pack_id: safePackId,
+        status: "active",
+        assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+        note: `Global curriculum synced to ${selectedPack.name}`,
+        updated_at: nowIso,
+      };
+      const { error: assignmentError } = await client
+        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+        .upsert(nextAssignment, { onConflict: "assignment_id" });
+      if (assignmentError) throw assignmentError;
+      await refreshContentRelationshipStateRef.current();
+      showAppToast(joinLocalizedText(`Global curriculum synced to ${selectedPack.name}.`, `عالمی نصاب کو ${selectedPack.name} کے ساتھ ہم آہنگ کر دیا گیا ہے۔`, language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to sync the global curriculum pack: ${error?.message || error}`, `عالمی نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setContentRelationshipBusy(false);
+    }
+  }, [canManageContentAccess, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, showAppToast, supabaseAuthState.userId]);
   const handleSaveSchoolMembership = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage school memberships.", "آپ کے مواد والے کردار کو اسکول ممبرشپ منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -21412,10 +22001,65 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         ) {
           return [];
         }
+        if (
+          result.error
+          && table === SUPABASE_SYSTEM_SETTINGS_TABLE
+          && (
+            String(result.error.code || "").trim() === "42P01"
+            || /does not exist|could not find the table|relation .*system_settings/i.test(String(result.error.message || ""))
+          )
+        ) {
+          return [];
+        }
+        if (
+          result.error
+          && table === SUPABASE_CURRICULUM_PACKS_TABLE
+          && (
+            String(result.error.code || "").trim() === "42P01"
+            || /does not exist|could not find the table|relation .*curriculum_packs/i.test(String(result.error.message || ""))
+          )
+        ) {
+          return [];
+        }
+        if (
+          result.error
+          && table === SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE
+          && (
+            String(result.error.code || "").trim() === "42P01"
+            || /does not exist|could not find the table|relation .*curriculum_pack_subjects/i.test(String(result.error.message || ""))
+          )
+        ) {
+          return [];
+        }
+        if (
+          result.error
+          && table === SUPABASE_CURRICULUM_PACK_LESSONS_TABLE
+          && (
+            String(result.error.code || "").trim() === "42P01"
+            || /does not exist|could not find the table|relation .*curriculum_pack_lessons/i.test(String(result.error.message || ""))
+          )
+        ) {
+          return [];
+        }
+        if (
+          result.error
+          && table === SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE
+          && (
+            String(result.error.code || "").trim() === "42P01"
+            || /does not exist|could not find the table|relation .*curriculum_scope_assignments/i.test(String(result.error.message || ""))
+          )
+        ) {
+          return [];
+        }
         if (result.error) throw result.error;
         return Array.isArray(result.data) ? result.data.map((row) => normalizeFn(row)).filter(Boolean) : [];
       };
       const rowMaps = {
+        systemSettings: new Map(),
+        curriculumPacks: new Map(),
+        curriculumPackSubjects: new Map(),
+        curriculumPackLessons: new Map(),
+        curriculumScopeAssignments: new Map(),
         schools: new Map(),
         memberships: new Map(),
         parentLinks: new Map(),
@@ -21441,6 +22085,42 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
           if (!previous || nextUpdatedAt >= previousUpdatedAt) rowMaps[kind].set(rowId, row);
         });
       };
+
+      collectRows("systemSettings", await fetchNormalizedRows(
+        SUPABASE_SYSTEM_SETTINGS_TABLE,
+        "setting_key, setting_value, updated_by_email, updated_at",
+        normalizeSystemSettingRecord,
+        null,
+        "updated_at",
+      ), "settingKey");
+      collectRows("curriculumPacks", await fetchNormalizedRows(
+        SUPABASE_CURRICULUM_PACKS_TABLE,
+        "pack_id, name, description, scope_origin, origin_school_id, origin_grade, origin_student_email, parent_pack_id, status, version_no, created_by_email, created_at, updated_at",
+        normalizeCurriculumPackRecord,
+        null,
+        "updated_at",
+      ), "packId");
+      collectRows("curriculumPackSubjects", await fetchNormalizedRows(
+        SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE,
+        "pack_subject_id, pack_id, subject_key, subject_title, subject_title_ur, grade, order_index, is_hidden, source_type, source_subject_id, payload, created_at, updated_at",
+        normalizeCurriculumPackSubjectRecord,
+        null,
+        "updated_at",
+      ), "packSubjectId");
+      collectRows("curriculumPackLessons", await fetchNormalizedRows(
+        SUPABASE_CURRICULUM_PACK_LESSONS_TABLE,
+        "pack_lesson_id, pack_id, subject_key, grade, lesson_key, lesson_title, lesson_title_ur, order_index, is_hidden, slot_action, source_type, source_lesson_id, content_payload, created_at, updated_at",
+        normalizeCurriculumPackLessonRecord,
+        null,
+        "updated_at",
+      ), "packLessonId");
+      collectRows("curriculumScopeAssignments", await fetchNormalizedRows(
+        SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE,
+        "assignment_id, scope_type, school_id, grade, student_email, pack_id, status, assigned_by_email, note, created_at, updated_at",
+        normalizeCurriculumScopeAssignmentRecord,
+        null,
+        "updated_at",
+      ), "assignmentId");
 
       const selfMemberships = canManageContentAccess
         ? []
@@ -21610,6 +22290,11 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       const nextState = {
         ...createEmptyContentRelationshipState(),
         loaded: true,
+        systemSettings: Array.from(rowMaps.systemSettings.values()),
+        curriculumPacks: Array.from(rowMaps.curriculumPacks.values()),
+        curriculumPackSubjects: Array.from(rowMaps.curriculumPackSubjects.values()),
+        curriculumPackLessons: Array.from(rowMaps.curriculumPackLessons.values()),
+        curriculumScopeAssignments: Array.from(rowMaps.curriculumScopeAssignments.values()),
         schools: Array.from(rowMaps.schools.values()),
         memberships: Array.from(rowMaps.memberships.values()),
         parentLinks: Array.from(rowMaps.parentLinks.values()),
@@ -22518,6 +23203,56 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
           if (!active) return;
           refreshContentRelationshipState().catch((error) => {
             console.log("Unable to refresh weekly test results from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_SYSTEM_SETTINGS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh system settings from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CURRICULUM_PACKS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh curriculum packs from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh curriculum pack subjects from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CURRICULUM_PACK_LESSONS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh curriculum pack lessons from realtime:", error);
+          });
+        })
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE,
+        }, () => {
+          if (!active) return;
+          refreshContentRelationshipState().catch((error) => {
+            console.log("Unable to refresh curriculum scope assignments from realtime:", error);
           });
         })
         .subscribe();
@@ -29248,6 +29983,84 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
             ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "ابھی کوئی اسکول منسلک نہیں۔", language), language)}</p>}
           </div>
+          {canManageContentAccess ? (
+            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Curriculum Runtime", "نصاب رن ٹائم", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Supabase is now the primary curriculum source. Keep built-in fallback on only while validating the migration.", "اب Supabase ہی بنیادی نصابی ذریعہ ہے۔ بنیادی بیک اَپ صرف اسی وقت فعال رکھیں جب منتقلی کی پڑتال کرنی ہو۔", language), language)}</p>
+                </div>
+                <span className="goal-progress-badge">{renderLocalizedTextNode(curriculumRuntimeSettings.allowBuiltinFallback ? joinLocalizedText("Fallback on", "بیک اَپ فعال", language) : joinLocalizedText("Fallback off", "بیک اَپ بند", language), language)}</span>
+              </div>
+              <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 10 }}>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Runtime mode", "رن ٹائم موڈ", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Supabase only", "صرف Supabase", language), language)}</span>
+                </div>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Global pack", "عالمی پیک", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(globalCurriculumPack?.name || joinLocalizedText("No global pack assigned yet", "ابھی کوئی عالمی پیک مقرر نہیں", language), language)}</span>
+                </div>
+                <div className="profile-report-summary-card">
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Pack version", "پیک ورژن", language), language)}</strong>
+                  <span>{renderLocalizedTextNode(globalCurriculumPack ? joinLocalizedText(`v${globalCurriculumPack.versionNo}`, `ورژن ${globalCurriculumPack.versionNo}`, language) : joinLocalizedText("Not assigned", "مقرر نہیں", language), language)}</span>
+                </div>
+              </div>
+              <div className="chapter-browser-filter-row" style={{ marginTop: 12, alignItems: "stretch" }}>
+                <select
+                  className="settings-select"
+                  value={curriculumGlobalPackDraftId}
+                  onChange={(event) => setCurriculumGlobalPackDraftId(event.target.value)}
+                  disabled={contentRelationshipBusy}
+                >
+                  {visibleCurriculumPacks.length ? (
+                    visibleCurriculumPacks.map((pack) => (
+                      <option key={pack.packId} value={pack.packId}>
+                        {pack.name} {joinLocalizedText(`(v${pack.versionNo})`, `(ورژن ${pack.versionNo})`, language)}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">
+                      {language === "ur" ? "ابھی کوئی نصابی پیک موجود نہیں" : "No curriculum pack exists yet"}
+                    </option>
+                  )}
+                </select>
+                <button
+                  type="button"
+                  className="ghost-cta"
+                  onClick={handleCreateBuiltInCurriculumSeedPack}
+                  disabled={contentRelationshipBusy}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Create Built-in Seed Pack", "بنیادی سیڈ پیک بنائیں", language), language)}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-cta"
+                  onClick={handleSyncCurriculumPackGlobally}
+                  disabled={contentRelationshipBusy || !curriculumGlobalPackDraftId}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
+                </button>
+              </div>
+              <div className="chapter-badge-row" style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className={`chapter-badge ${curriculumRuntimeSettings.allowBuiltinFallback ? "active" : "neutral"}`}
+                  onClick={() => handleSetCurriculumRuntimeFallback(!curriculumRuntimeSettings.allowBuiltinFallback)}
+                  disabled={contentRelationshipBusy}
+                >
+                  {renderLocalizedTextNode(
+                    curriculumRuntimeSettings.allowBuiltinFallback
+                      ? joinLocalizedText("Built-in fallback is on", "بنیادی بیک اَپ فعال ہے", language)
+                      : joinLocalizedText("Built-in fallback is off", "بنیادی بیک اَپ بند ہے", language),
+                    language,
+                  )}
+                </button>
+              </div>
+              <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("Create one Supabase seed pack from the current built-in curriculum, then sync the chosen pack globally to make it the active app-wide curriculum.", "موجودہ بنیادی نصاب سے ایک Supabase سیڈ پیک بنائیں، پھر منتخب پیک کو عالمی طور پر ہم آہنگ کریں تاکہ وہ پورے ایپ کا فعال نصاب بن جائے۔", language), language)}</p>
+              <p className="goal-progress-meta" style={{ marginTop: 10 }}>{renderLocalizedTextNode(joinLocalizedText("When fallback is on, any missing curriculum pack content falls back to built-in lessons. Turn it off once the Supabase curriculum is complete and verified.", "جب بیک اَپ فعال ہو تو پیک میں غائب نصابی مواد خودکار طور پر بنیادی اسباق سے پورا کیا جاتا ہے۔ جب Supabase والا نصاب مکمل اور تصدیق شدہ ہو جائے تو اسے بند کر دیں۔", language), language)}</p>
+            </div>
+          ) : null}
           {canManageInstitution ? (
             <div className="review-panel chapter-card-panel" data-ui-language={language}>
               <div className="review-panel-head">
