@@ -477,10 +477,21 @@ function normalizeBuiltinLessonLayerState(raw = null) {
 
 let runtimeBuiltinLessonLayerState = normalizeBuiltinLessonLayerState();
 let runtimeBuiltinLessonMutationMap = new Map();
+let runtimeBuiltinLessonMutationSubjectGradeKeys = new Set();
+let runtimeBuiltinLessonMutationQuestionKeys = new Set();
 
 function setRuntimeBuiltinLessonLayerState(nextState = null) {
   runtimeBuiltinLessonLayerState = normalizeBuiltinLessonLayerState(nextState);
   runtimeBuiltinLessonMutationMap = new Map(Object.entries(runtimeBuiltinLessonLayerState.slots || {}));
+  runtimeBuiltinLessonMutationSubjectGradeKeys = new Set();
+  runtimeBuiltinLessonMutationQuestionKeys = new Set();
+  runtimeBuiltinLessonMutationMap.forEach((entry, slotKey) => {
+    const [subject = "", grade = "", lessonKey = ""] = String(slotKey || "").split("::");
+    if (subject && grade) runtimeBuiltinLessonMutationSubjectGradeKeys.add(`${subject}::${grade}`);
+    if (subject && grade && lessonKey) runtimeBuiltinLessonMutationQuestionKeys.add(`${subject}::${grade}::${lessonKey}`);
+    if (entry?.lesson) entry.__runtimeResolvedLesson = stripRuntimeLessonMarkers(cloneSerializableValue(entry.lesson) || {});
+    if (Array.isArray(entry?.questions)) entry.__runtimeResolvedQuestions = cloneSerializableValue(entry.questions);
+  });
 }
 
 function getBuiltinLessonLayerMutation(subject = "", grade = null, lessonKey = "") {
@@ -490,8 +501,14 @@ function getBuiltinLessonLayerMutation(subject = "", grade = null, lessonKey = "
 function getLessons(subjectId, targetGrade) {
   const safeSubjectId = String(subjectId || "").trim();
   const safeGrade = Number(targetGrade);
-  const baseLessons = Array.isArray(rawGetLessons(safeSubjectId, safeGrade)) ? rawGetLessons(safeSubjectId, safeGrade) : [];
-  if (!runtimeBuiltinLessonMutationMap.size) return baseLessons;
+  const rawLessons = rawGetLessons(safeSubjectId, safeGrade);
+  const baseLessons = Array.isArray(rawLessons) ? rawLessons : [];
+  if (
+    !runtimeBuiltinLessonMutationMap.size
+    || !runtimeBuiltinLessonMutationSubjectGradeKeys.has(`${safeSubjectId}::${safeGrade}`)
+  ) {
+    return baseLessons;
+  }
   return baseLessons.reduce((acc, lesson) => {
     const lessonKey = getCanonicalLessonKeyForLesson(lesson);
     const mutation = getBuiltinLessonLayerMutation(safeSubjectId, safeGrade, lessonKey);
@@ -501,7 +518,7 @@ function getLessons(subjectId, targetGrade) {
     }
     if (mutation.action === "delete") return acc;
     if (mutation.action === "replace" && mutation.lesson) {
-      acc.push(cloneSerializableValue(mutation.lesson));
+      acc.push(cloneSerializableValue(mutation.__runtimeResolvedLesson || mutation.lesson));
       return acc;
     }
     acc.push(lesson);
@@ -510,10 +527,19 @@ function getLessons(subjectId, targetGrade) {
 }
 
 function getQuiz(subjectId, targetGrade, lessonKey) {
+  const safeSubjectId = String(subjectId || "").trim();
+  const safeGrade = Number(targetGrade);
+  const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey });
+  if (
+    !runtimeBuiltinLessonMutationMap.size
+    || !runtimeBuiltinLessonMutationQuestionKeys.has(`${safeSubjectId}::${safeGrade}::${safeLessonKey}`)
+  ) {
+    return rawGetQuiz(subjectId, targetGrade, lessonKey);
+  }
   const mutation = getBuiltinLessonLayerMutation(subjectId, targetGrade, lessonKey);
   if (mutation?.action === "delete") return [];
   if (mutation?.action === "replace" && Array.isArray(mutation.questions)) {
-    return cloneSerializableValue(mutation.questions);
+    return cloneSerializableValue(mutation.__runtimeResolvedQuestions || mutation.questions);
   }
   return rawGetQuiz(subjectId, targetGrade, lessonKey);
 }
