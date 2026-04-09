@@ -15241,6 +15241,8 @@ function HomeschoolApp() {
   const [chapterImportBusy, setChapterImportBusy] = useState(false);
   const [chapterPublishBusy, setChapterPublishBusy] = useState(false);
   const [contentRelationshipBusy, setContentRelationshipBusy] = useState(false);
+  const [activeCurriculumPanelBusyScope, setActiveCurriculumPanelBusyScope] = useState("");
+  const [pendingCurriculumPanelToast, setPendingCurriculumPanelToast] = useState(null);
   const [chapterSelectionMode, setChapterSelectionMode] = useState(false);
   const [selectedChapterKeys, setSelectedChapterKeys] = useState([]);
   const [subjectLessonArrangeMode, setSubjectLessonArrangeMode] = useState(false);
@@ -17597,6 +17599,41 @@ const headerHideTimerRef = useRef(null);
       console.log("Unable to archive test assignments for removed member:", safeMemberEmail, error);
     }
   }, []);
+  useEffect(() => {
+    if (contentRelationshipBusy || !pendingCurriculumPanelToast?.message) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      showAppToast(pendingCurriculumPanelToast.message, pendingCurriculumPanelToast.tone || "check");
+      setPendingCurriculumPanelToast(null);
+    }, 120);
+    return () => window.clearTimeout(timeoutId);
+  }, [contentRelationshipBusy, pendingCurriculumPanelToast, showAppToast]);
+  const runCurriculumPanelAction = useCallback(async ({
+    scopeKey,
+    execute,
+    successMessage,
+    errorMessage,
+    successTone = "check",
+  }) => {
+    setActiveCurriculumPanelBusyScope(scopeKey);
+    setContentRelationshipBusy(true);
+    setPendingCurriculumPanelToast(null);
+    try {
+      await execute();
+      if (successMessage) {
+        setPendingCurriculumPanelToast({ message: successMessage, tone: successTone });
+      }
+      return true;
+    } catch (error) {
+      setPendingCurriculumPanelToast({
+        message: typeof errorMessage === "function" ? errorMessage(error) : (errorMessage || String(error?.message || error || "")),
+        tone: "alert",
+      });
+      return false;
+    } finally {
+      setContentRelationshipBusy(false);
+      window.setTimeout(() => setActiveCurriculumPanelBusyScope(""), 0);
+    }
+  }, []);
   const handleSaveSchool = useCallback(async () => {
     if (!canManageInstitution) {
       showAppToast(joinLocalizedText("Your content role cannot manage schools.", "آپ کے مواد والے کردار کو اسکول منظم کرنے کی اجازت نہیں۔", language), "alert");
@@ -17735,8 +17772,9 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Sign in first to manage curriculum runtime.", "نصاب کے رن ٹائم کو منظم کرنے کے لیے پہلے سائن اِن کریں۔", language), "alert");
       return;
     }
-    setContentRelationshipBusy(true);
-    try {
+    await runCurriculumPanelAction({
+      scopeKey: "runtime",
+      execute: async () => {
       const client = ensureSupabaseClientRef.current();
       const nextSetting = {
         setting_key: "curriculum_runtime",
@@ -17749,18 +17787,13 @@ const headerHideTimerRef = useRef(null);
       const { error } = await client.from(SUPABASE_SYSTEM_SETTINGS_TABLE).upsert(nextSetting, { onConflict: "setting_key" });
       if (error) throw error;
       await refreshContentRelationshipStateRef.current();
-      showAppToast(
-        Boolean(allowBuiltinFallback)
-          ? joinLocalizedText("Built-in fallback enabled for migration testing.", "منتقلی کی آزمائش کے لیے بنیادی بیک اَپ فعال ہو گیا۔", language)
-          : joinLocalizedText("Built-in fallback disabled. Curriculum now resolves from Supabase only.", "بنیادی بیک اَپ بند ہو گیا۔ اب نصاب صرف Supabase سے حل ہوگا۔", language),
-        "check",
-      );
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to update curriculum runtime: ${error?.message || error}`, `نصاب کے رن ٹائم کی ترتیب تازہ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+      },
+      successMessage: Boolean(allowBuiltinFallback)
+        ? joinLocalizedText("Built-in fallback enabled for migration testing.", "منتقلی کی آزمائش کے لیے بنیادی بیک اَپ فعال ہو گیا۔", language)
+        : joinLocalizedText("Built-in fallback disabled. Curriculum now resolves from Supabase only.", "بنیادی بیک اَپ بند ہو گیا۔ اب نصاب صرف Supabase سے حل ہوگا۔", language),
+      errorMessage: (error) => joinLocalizedText(`Unable to update curriculum runtime: ${error?.message || error}`, `نصاب کے رن ٹائم کی ترتیب تازہ نہیں ہو سکی: ${error?.message || error}`, language),
+    });
+  }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleCreateBuiltInCurriculumSeedPack = useCallback(async () => {
     if (!canReplaceDefaultEverywhere) {
       showAppToast(joinLocalizedText("Only the app admin can seed the curriculum pack.", "صرف ایپ ایڈمن نصابی پیک تخلیق کر سکتا ہے۔", language), "alert");
@@ -17770,8 +17803,9 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Sign in first to seed the curriculum pack.", "نصابی پیک بنانے کے لیے پہلے سائن اِن کریں۔", language), "alert");
       return;
     }
-    setContentRelationshipBusy(true);
-    try {
+    await runCurriculumPanelAction({
+      scopeKey: "runtime",
+      execute: async () => {
       const client = ensureSupabaseClientRef.current();
       const now = Date.now();
       const nowIso = new Date(now).toISOString();
@@ -17858,13 +17892,11 @@ const headerHideTimerRef = useRef(null);
       }
       setCurriculumGlobalPackDraftId(packId);
       await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText("Built-in curriculum was seeded into a global Supabase pack.", "بنیادی نصاب کو عالمی Supabase پیک میں منتقل کر دیا گیا ہے۔", language), "check");
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to create built-in seed pack: ${error?.message || error}`, `بنیادی نصابی پیک نہیں بنایا جا سکا: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+      },
+      successMessage: joinLocalizedText("Built-in curriculum was seeded into a global Supabase pack.", "بنیادی نصاب کو عالمی Supabase پیک میں منتقل کر دیا گیا ہے۔", language),
+      errorMessage: (error) => joinLocalizedText(`Unable to create built-in seed pack: ${error?.message || error}`, `بنیادی نصابی پیک نہیں بنایا جا سکا: ${error?.message || error}`, language),
+    });
+  }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleSyncCurriculumPackGlobally = useCallback(async () => {
     if (!canReplaceDefaultEverywhere) {
       showAppToast(joinLocalizedText("Only the app admin can sync a global curriculum pack.", "صرف ایپ ایڈمن عالمی نصابی پیک ہم آہنگ کر سکتا ہے۔", language), "alert");
@@ -17885,8 +17917,9 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     requestCurriculumSelectionReconcile();
-    setContentRelationshipBusy(true);
-    try {
+    await runCurriculumPanelAction({
+      scopeKey: "runtime",
+      execute: async () => {
       const client = ensureSupabaseClientRef.current();
       const nowIso = new Date().toISOString();
       const { error: deactivateError } = await client
@@ -17912,13 +17945,11 @@ const headerHideTimerRef = useRef(null);
         .upsert(nextAssignment, { onConflict: "assignment_id" });
       if (assignmentError) throw assignmentError;
       await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText(`Global curriculum synced to ${selectedPack.name}.`, `عالمی نصاب کو ${selectedPack.name} کے ساتھ ہم آہنگ کر دیا گیا ہے۔`, language), "check");
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to sync the global curriculum pack: ${error?.message || error}`, `عالمی نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [canReplaceDefaultEverywhere, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+      },
+      successMessage: joinLocalizedText(`Global curriculum synced to ${selectedPack.name}.`, `عالمی نصاب کو ${selectedPack.name} کے ساتھ ہم آہنگ کر دیا گیا ہے۔`, language),
+      errorMessage: (error) => joinLocalizedText(`Unable to sync the global curriculum pack: ${error?.message || error}`, `عالمی نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language),
+    });
+  }, [canReplaceDefaultEverywhere, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleSyncCurriculumPackWithSchool = useCallback(async () => {
     if (!canManageInstitution && !canManageContentAccess) {
       showAppToast(joinLocalizedText("Your role cannot sync curriculum for a school.", "آپ کا کردار اسکول کے لیے نصاب ہم آہنگ نہیں کر سکتا۔", language), "alert");
@@ -17944,41 +17975,40 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     requestCurriculumSelectionReconcile();
-    setContentRelationshipBusy(true);
-    try {
-      const client = ensureSupabaseClientRef.current();
-      const nowIso = new Date().toISOString();
-      const { error: deactivateError } = await client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .update({ status: "inactive", updated_at: nowIso })
-        .eq("scope_type", "school")
-        .eq("school_id", safeSchoolId)
-        .eq("status", "active");
-      if (deactivateError) throw deactivateError;
-      const nextAssignment = {
-        assignment_id: `curriculum_school_${simpleHash(safeSchoolId)}`,
-        scope_type: "school",
-        school_id: safeSchoolId,
-        grade: null,
-        student_email: null,
-        pack_id: safePackId,
-        status: "active",
-        assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
-        note: `School curriculum synced to ${selectedPack.name}`,
-        updated_at: nowIso,
-      };
-      const { error: assignmentError } = await client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .upsert(nextAssignment, { onConflict: "assignment_id" });
-      if (assignmentError) throw assignmentError;
-      await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText(`Curriculum synced with school ${safeSchoolId}.`, `نصاب کو اسکول ${safeSchoolId} کے ساتھ ہم آہنگ کر دیا گیا ہے۔`, language), "check");
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to sync the school curriculum pack: ${error?.message || error}`, `اسکول نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, curriculumPackLookup, curriculumSchoolPackDraftId, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+    await runCurriculumPanelAction({
+      scopeKey: "school",
+      execute: async () => {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = new Date().toISOString();
+        const { error: deactivateError } = await client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .update({ status: "inactive", updated_at: nowIso })
+          .eq("scope_type", "school")
+          .eq("school_id", safeSchoolId)
+          .eq("status", "active");
+        if (deactivateError) throw deactivateError;
+        const nextAssignment = {
+          assignment_id: `curriculum_school_${simpleHash(safeSchoolId)}`,
+          scope_type: "school",
+          school_id: safeSchoolId,
+          grade: null,
+          student_email: null,
+          pack_id: safePackId,
+          status: "active",
+          assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+          note: `School curriculum synced to ${selectedPack.name}`,
+          updated_at: nowIso,
+        };
+        const { error: assignmentError } = await client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .upsert(nextAssignment, { onConflict: "assignment_id" });
+        if (assignmentError) throw assignmentError;
+        await refreshContentRelationshipStateRef.current();
+      },
+      successMessage: joinLocalizedText(`Curriculum synced with school ${safeSchoolId}.`, `نصاب کو اسکول ${safeSchoolId} کے ساتھ ہم آہنگ کر دیا گیا ہے۔`, language),
+      errorMessage: (error) => joinLocalizedText(`Unable to sync the school curriculum pack: ${error?.message || error}`, `اسکول نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language),
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, curriculumPackLookup, curriculumSchoolPackDraftId, language, requestCurriculumSelectionReconcile, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleResetSchoolCurriculumToGlobal = useCallback(async () => {
     if (!canManageInstitution && !canManageContentAccess) {
       showAppToast(joinLocalizedText("Your role cannot reset school curriculum inheritance.", "آپ کا کردار اسکول کے نصابی وراثت کو ری سیٹ نہیں کر سکتا۔", language), "alert");
@@ -17993,25 +18023,24 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Choose a school first.", "پہلے ایک اسکول منتخب کریں۔", language), "alert");
       return;
     }
-    setContentRelationshipBusy(true);
-    try {
-      const client = ensureSupabaseClientRef.current();
-      const nowIso = new Date().toISOString();
-      const { error } = await client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .update({ status: "inactive", updated_at: nowIso })
-        .eq("scope_type", "school")
-        .eq("school_id", safeSchoolId)
-        .eq("status", "active");
-      if (error) throw error;
-      await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText("School curriculum now inherits the global pack again.", "اسکول کا نصاب دوبارہ عالمی پیک سے وراثت لے گا۔", language), "check");
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to reset school curriculum inheritance: ${error?.message || error}`, `اسکول نصابی وراثت ری سیٹ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+    await runCurriculumPanelAction({
+      scopeKey: "school",
+      execute: async () => {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = new Date().toISOString();
+        const { error } = await client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .update({ status: "inactive", updated_at: nowIso })
+          .eq("scope_type", "school")
+          .eq("school_id", safeSchoolId)
+          .eq("status", "active");
+        if (error) throw error;
+        await refreshContentRelationshipStateRef.current();
+      },
+      successMessage: joinLocalizedText("School curriculum now inherits the global pack again.", "اسکول کا نصاب دوبارہ عالمی پیک سے وراثت لے گا۔", language),
+      errorMessage: (error) => joinLocalizedText(`Unable to reset school curriculum inheritance: ${error?.message || error}`, `اسکول نصابی وراثت ری سیٹ نہیں ہو سکی: ${error?.message || error}`, language),
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleSyncCurriculumPackWithGrade = useCallback(async () => {
     if (!canManageScopedCurriculum) {
       showAppToast(joinLocalizedText("Your role cannot sync curriculum for a grade.", "آپ کا کردار جماعت کے لیے نصاب ہم آہنگ نہیں کر سکتا۔", language), "alert");
@@ -18042,42 +18071,41 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     requestCurriculumSelectionReconcile();
-    setContentRelationshipBusy(true);
-    try {
-      const client = ensureSupabaseClientRef.current();
-      const nowIso = new Date().toISOString();
-      const { error: deactivateError } = await client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .update({ status: "inactive", updated_at: nowIso })
-        .eq("scope_type", "grade")
-        .eq("school_id", safeSchoolId)
-        .eq("grade", safeGrade)
-        .eq("status", "active");
-      if (deactivateError) throw deactivateError;
-      const nextAssignment = {
-        assignment_id: `curriculum_grade_${simpleHash(`${safeSchoolId}_${safeGrade}`)}`,
-        scope_type: "grade",
-        school_id: safeSchoolId,
-        grade: safeGrade,
-        student_email: null,
-        pack_id: safePackId,
-        status: "active",
-        assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
-        note: `Grade ${safeGrade} curriculum synced to ${selectedPack.name}`,
-        updated_at: nowIso,
-      };
-      const { error: assignmentError } = await client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .upsert(nextAssignment, { onConflict: "assignment_id" });
-      if (assignmentError) throw assignmentError;
-      await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText(`Curriculum synced with Grade ${safeGrade}.`, `نصاب کو جماعت ${safeGrade} کے ساتھ ہم آہنگ کر دیا گیا ہے۔`, language), "check");
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to sync the grade curriculum pack: ${error?.message || error}`, `جماعتی نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradePackDraftId, curriculumGradeTarget, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+    await runCurriculumPanelAction({
+      scopeKey: "grade",
+      execute: async () => {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = new Date().toISOString();
+        const { error: deactivateError } = await client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .update({ status: "inactive", updated_at: nowIso })
+          .eq("scope_type", "grade")
+          .eq("school_id", safeSchoolId)
+          .eq("grade", safeGrade)
+          .eq("status", "active");
+        if (deactivateError) throw deactivateError;
+        const nextAssignment = {
+          assignment_id: `curriculum_grade_${simpleHash(`${safeSchoolId}_${safeGrade}`)}`,
+          scope_type: "grade",
+          school_id: safeSchoolId,
+          grade: safeGrade,
+          student_email: null,
+          pack_id: safePackId,
+          status: "active",
+          assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+          note: `Grade ${safeGrade} curriculum synced to ${selectedPack.name}`,
+          updated_at: nowIso,
+        };
+        const { error: assignmentError } = await client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .upsert(nextAssignment, { onConflict: "assignment_id" });
+        if (assignmentError) throw assignmentError;
+        await refreshContentRelationshipStateRef.current();
+      },
+      successMessage: joinLocalizedText(`Curriculum synced with Grade ${safeGrade}.`, `نصاب کو جماعت ${safeGrade} کے ساتھ ہم آہنگ کر دیا گیا ہے۔`, language),
+      errorMessage: (error) => joinLocalizedText(`Unable to sync the grade curriculum pack: ${error?.message || error}`, `جماعتی نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language),
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradePackDraftId, curriculumGradeTarget, curriculumPackLookup, language, requestCurriculumSelectionReconcile, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleResetGradeCurriculumToInherited = useCallback(async () => {
     if (!canManageScopedCurriculum) {
       showAppToast(joinLocalizedText("Your role cannot reset grade curriculum inheritance.", "آپ کا کردار جماعت کے نصابی وراثت کو ری سیٹ نہیں کر سکتا۔", language), "alert");
@@ -18097,26 +18125,25 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Choose a grade first.", "پہلے ایک جماعت منتخب کریں۔", language), "alert");
       return;
     }
-    setContentRelationshipBusy(true);
-    try {
-      const client = ensureSupabaseClientRef.current();
-      const nowIso = new Date().toISOString();
-      const { error } = await client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .update({ status: "inactive", updated_at: nowIso })
-        .eq("scope_type", "grade")
-        .eq("school_id", safeSchoolId)
-        .eq("grade", safeGrade)
-        .eq("status", "active");
-      if (error) throw error;
-      await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText(`Grade ${safeGrade} now inherits the school/global pack again.`, `جماعت ${safeGrade} دوبارہ اسکول یا عالمی پیک سے وراثت لے گی۔`, language), "check");
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to reset grade curriculum inheritance: ${error?.message || error}`, `جماعتی نصابی وراثت ری سیٹ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, language, showAppToast, supabaseAuthState.userId]);
+    await runCurriculumPanelAction({
+      scopeKey: "grade",
+      execute: async () => {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = new Date().toISOString();
+        const { error } = await client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .update({ status: "inactive", updated_at: nowIso })
+          .eq("scope_type", "grade")
+          .eq("school_id", safeSchoolId)
+          .eq("grade", safeGrade)
+          .eq("status", "active");
+        if (error) throw error;
+        await refreshContentRelationshipStateRef.current();
+      },
+      successMessage: joinLocalizedText(`Grade ${safeGrade} now inherits the school/global pack again.`, `جماعت ${safeGrade} دوبارہ اسکول یا عالمی پیک سے وراثت لے گی۔`, language),
+      errorMessage: (error) => joinLocalizedText(`Unable to reset grade curriculum inheritance: ${error?.message || error}`, `جماعتی نصابی وراثت ری سیٹ نہیں ہو سکی: ${error?.message || error}`, language),
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleSyncCurriculumPackWithLearner = useCallback(async () => {
     if (!canManageScopedCurriculum) {
       showAppToast(joinLocalizedText("Your role cannot sync curriculum for a learner.", "آپ کا کردار کسی سیکھنے والے کے لیے نصاب ہم آہنگ نہیں کر سکتا۔", language), "alert");
@@ -18148,45 +18175,44 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     requestCurriculumSelectionReconcile();
-    setContentRelationshipBusy(true);
-    try {
-      const client = ensureSupabaseClientRef.current();
-      const nowIso = new Date().toISOString();
-      const deactivateQuery = client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .update({ status: "inactive", updated_at: nowIso })
-        .eq("scope_type", "learner")
-        .eq("school_id", safeSchoolId)
-        .eq("student_email", safeLearnerEmail)
-        .eq("status", "active");
-      const { error: deactivateError } = Number.isFinite(safeGrade)
-        ? await deactivateQuery.eq("grade", safeGrade)
-        : await deactivateQuery;
-      if (deactivateError) throw deactivateError;
-      const nextAssignment = {
-        assignment_id: `curriculum_learner_${simpleHash(`${safeSchoolId}_${safeLearnerEmail}_${Number.isFinite(safeGrade) ? safeGrade : "all"}`)}`,
-        scope_type: "learner",
-        school_id: safeSchoolId,
-        grade: Number.isFinite(safeGrade) ? safeGrade : null,
-        student_email: safeLearnerEmail,
-        pack_id: safePackId,
-        status: "active",
-        assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
-        note: `Learner curriculum synced to ${selectedPack.name}`,
-        updated_at: nowIso,
-      };
-      const { error: assignmentError } = await client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .upsert(nextAssignment, { onConflict: "assignment_id" });
-      if (assignmentError) throw assignmentError;
-      await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText("Learner curriculum synced.", "سیکھنے والے کا نصاب ہم آہنگ کر دیا گیا ہے۔", language), "check");
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to sync the learner curriculum pack: ${error?.message || error}`, `سیکھنے والے کا نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, curriculumLearnerPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+    await runCurriculumPanelAction({
+      scopeKey: "learner",
+      execute: async () => {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = new Date().toISOString();
+        const deactivateQuery = client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .update({ status: "inactive", updated_at: nowIso })
+          .eq("scope_type", "learner")
+          .eq("school_id", safeSchoolId)
+          .eq("student_email", safeLearnerEmail)
+          .eq("status", "active");
+        const { error: deactivateError } = Number.isFinite(safeGrade)
+          ? await deactivateQuery.eq("grade", safeGrade)
+          : await deactivateQuery;
+        if (deactivateError) throw deactivateError;
+        const nextAssignment = {
+          assignment_id: `curriculum_learner_${simpleHash(`${safeSchoolId}_${safeLearnerEmail}_${Number.isFinite(safeGrade) ? safeGrade : "all"}`)}`,
+          scope_type: "learner",
+          school_id: safeSchoolId,
+          grade: Number.isFinite(safeGrade) ? safeGrade : null,
+          student_email: safeLearnerEmail,
+          pack_id: safePackId,
+          status: "active",
+          assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+          note: `Learner curriculum synced to ${selectedPack.name}`,
+          updated_at: nowIso,
+        };
+        const { error: assignmentError } = await client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .upsert(nextAssignment, { onConflict: "assignment_id" });
+        if (assignmentError) throw assignmentError;
+        await refreshContentRelationshipStateRef.current();
+      },
+      successMessage: joinLocalizedText("Learner curriculum synced.", "سیکھنے والے کا نصاب ہم آہنگ کر دیا گیا ہے۔", language),
+      errorMessage: (error) => joinLocalizedText(`Unable to sync the learner curriculum pack: ${error?.message || error}`, `سیکھنے والے کا نصابی پیک ہم آہنگ نہیں ہو سکا: ${error?.message || error}`, language),
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, curriculumLearnerPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleResetLearnerCurriculumToInherited = useCallback(async () => {
     if (!canManageScopedCurriculum) {
       showAppToast(joinLocalizedText("Your role cannot reset learner curriculum inheritance.", "آپ کا کردار سیکھنے والے کی نصابی وراثت کو ری سیٹ نہیں کر سکتا۔", language), "alert");
@@ -18207,29 +18233,28 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Choose a learner first.", "پہلے ایک سیکھنے والا منتخب کریں۔", language), "alert");
       return;
     }
-    setContentRelationshipBusy(true);
-    try {
-      const client = ensureSupabaseClientRef.current();
-      const nowIso = new Date().toISOString();
-      const resetQuery = client
-        .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
-        .update({ status: "inactive", updated_at: nowIso })
-        .eq("scope_type", "learner")
-        .eq("school_id", safeSchoolId)
-        .eq("student_email", safeLearnerEmail)
-        .eq("status", "active");
-      const { error } = Number.isFinite(safeGrade)
-        ? await resetQuery.eq("grade", safeGrade)
-        : await resetQuery;
-      if (error) throw error;
-      await refreshContentRelationshipStateRef.current();
-      showAppToast(joinLocalizedText("Learner now inherits the grade/school/global curriculum again.", "سیکھنے والا اب دوبارہ جماعت، اسکول یا عالمی نصاب سے وراثت لے گا۔", language), "check");
-    } catch (error) {
-      showAppToast(joinLocalizedText(`Unable to reset learner curriculum inheritance: ${error?.message || error}`, `سیکھنے والے کی نصابی وراثت ری سیٹ نہیں ہو سکی: ${error?.message || error}`, language), "alert");
-    } finally {
-      setContentRelationshipBusy(false);
-    }
-  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, language, showAppToast, supabaseAuthState.userId]);
+    await runCurriculumPanelAction({
+      scopeKey: "learner",
+      execute: async () => {
+        const client = ensureSupabaseClientRef.current();
+        const nowIso = new Date().toISOString();
+        const resetQuery = client
+          .from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE)
+          .update({ status: "inactive", updated_at: nowIso })
+          .eq("scope_type", "learner")
+          .eq("school_id", safeSchoolId)
+          .eq("student_email", safeLearnerEmail)
+          .eq("status", "active");
+        const { error } = Number.isFinite(safeGrade)
+          ? await resetQuery.eq("grade", safeGrade)
+          : await resetQuery;
+        if (error) throw error;
+        await refreshContentRelationshipStateRef.current();
+      },
+      successMessage: joinLocalizedText("Learner now inherits the grade/school/global curriculum again.", "سیکھنے والا اب دوبارہ جماعت، اسکول یا عالمی نصاب سے وراثت لے گا۔", language),
+      errorMessage: (error) => joinLocalizedText(`Unable to reset learner curriculum inheritance: ${error?.message || error}`, `سیکھنے والے کی نصابی وراثت ری سیٹ نہیں ہو سکی: ${error?.message || error}`, language),
+    });
+  }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
   const handleSyncCurriculumIntoScopePack = useCallback(async ({
     scopeType = "school",
     syncType = "lesson",
@@ -31111,7 +31136,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             ) : <p className="empty-state">{renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "ابھی کوئی اسکول منسلک نہیں۔", language), language)}</p>}
           </div>
           {canManageScopedCurriculum ? (
-            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+            <div className="review-panel chapter-card-panel curriculum-panel-shell" data-ui-language={language}>
+              {contentRelationshipBusy && activeCurriculumPanelBusyScope === "runtime" ? (
+                <div className="curriculum-panel-loading-overlay" role="status" aria-live="polite">
+                  <span className="curriculum-panel-loading-spinner" aria-hidden="true" />
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Working on curriculum runtime...", "نصاب کے رن ٹائم پر کام ہو رہا ہے...", language), language)}</strong>
+                </div>
+              ) : null}
               <div className="review-panel-head">
                 <div>
                   <h3>{renderLocalizedTextNode(joinLocalizedText("Curriculum Runtime", "نصاب رن ٹائم", language), language)}</h3>
@@ -31200,7 +31231,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </div>
           ) : null}
           {(canManageInstitution || canManageContentAccess) ? (
-            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+            <div className="review-panel chapter-card-panel curriculum-panel-shell" data-ui-language={language}>
+              {contentRelationshipBusy && activeCurriculumPanelBusyScope === "school" ? (
+                <div className="curriculum-panel-loading-overlay" role="status" aria-live="polite">
+                  <span className="curriculum-panel-loading-spinner" aria-hidden="true" />
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Updating school curriculum...", "اسکول کے نصاب کو تازہ کیا جا رہا ہے...", language), language)}</strong>
+                </div>
+              ) : null}
               <div className="review-panel-head">
                 <div>
                   <h3>{renderLocalizedTextNode(joinLocalizedText("School Curriculum", "اسکول نصاب", language), language)}</h3>
@@ -31269,7 +31306,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </div>
           ) : null}
           {canManageScopedCurriculum ? (
-            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+            <div className="review-panel chapter-card-panel curriculum-panel-shell" data-ui-language={language}>
+              {contentRelationshipBusy && activeCurriculumPanelBusyScope === "grade" ? (
+                <div className="curriculum-panel-loading-overlay" role="status" aria-live="polite">
+                  <span className="curriculum-panel-loading-spinner" aria-hidden="true" />
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Updating grade curriculum...", "جماعت کے نصاب کو تازہ کیا جا رہا ہے...", language), language)}</strong>
+                </div>
+              ) : null}
               <div className="review-panel-head">
                 <div>
                   <h3>{renderLocalizedTextNode(joinLocalizedText("Grade Curriculum", "جماعتی نصاب", language), language)}</h3>
@@ -31351,7 +31394,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </div>
           ) : null}
           {canManageScopedCurriculum ? (
-            <div className="review-panel chapter-card-panel" data-ui-language={language}>
+            <div className="review-panel chapter-card-panel curriculum-panel-shell" data-ui-language={language}>
+              {contentRelationshipBusy && activeCurriculumPanelBusyScope === "learner" ? (
+                <div className="curriculum-panel-loading-overlay" role="status" aria-live="polite">
+                  <span className="curriculum-panel-loading-spinner" aria-hidden="true" />
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Updating learner curriculum...", "سیکھنے والے کے نصاب کو تازہ کیا جا رہا ہے...", language), language)}</strong>
+                </div>
+              ) : null}
               <div className="review-panel-head">
                 <div>
                   <h3>{renderLocalizedTextNode(joinLocalizedText("Learner Curriculum", "سیکھنے والے کا نصاب", language), language)}</h3>

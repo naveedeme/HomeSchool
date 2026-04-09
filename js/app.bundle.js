@@ -12679,6 +12679,8 @@ ${marker} `);
     const [chapterImportBusy, setChapterImportBusy] = useState(false);
     const [chapterPublishBusy, setChapterPublishBusy] = useState(false);
     const [contentRelationshipBusy, setContentRelationshipBusy] = useState(false);
+    const [activeCurriculumPanelBusyScope, setActiveCurriculumPanelBusyScope] = useState("");
+    const [pendingCurriculumPanelToast, setPendingCurriculumPanelToast] = useState(null);
     const [chapterSelectionMode, setChapterSelectionMode] = useState(false);
     const [selectedChapterKeys, setSelectedChapterKeys] = useState([]);
     const [subjectLessonArrangeMode, setSubjectLessonArrangeMode] = useState(false);
@@ -14812,6 +14814,41 @@ ${marker} `);
         console.log("Unable to archive test assignments for removed member:", safeMemberEmail, error);
       }
     }, []);
+    useEffect(() => {
+      if (contentRelationshipBusy || !(pendingCurriculumPanelToast == null ? void 0 : pendingCurriculumPanelToast.message)) return void 0;
+      const timeoutId = window.setTimeout(() => {
+        showAppToast(pendingCurriculumPanelToast.message, pendingCurriculumPanelToast.tone || "check");
+        setPendingCurriculumPanelToast(null);
+      }, 120);
+      return () => window.clearTimeout(timeoutId);
+    }, [contentRelationshipBusy, pendingCurriculumPanelToast, showAppToast]);
+    const runCurriculumPanelAction = useCallback(async ({
+      scopeKey,
+      execute,
+      successMessage,
+      errorMessage,
+      successTone = "check"
+    }) => {
+      setActiveCurriculumPanelBusyScope(scopeKey);
+      setContentRelationshipBusy(true);
+      setPendingCurriculumPanelToast(null);
+      try {
+        await execute();
+        if (successMessage) {
+          setPendingCurriculumPanelToast({ message: successMessage, tone: successTone });
+        }
+        return true;
+      } catch (error) {
+        setPendingCurriculumPanelToast({
+          message: typeof errorMessage === "function" ? errorMessage(error) : errorMessage || String((error == null ? void 0 : error.message) || error || ""),
+          tone: "alert"
+        });
+        return false;
+      } finally {
+        setContentRelationshipBusy(false);
+        window.setTimeout(() => setActiveCurriculumPanelBusyScope(""), 0);
+      }
+    }, []);
     const handleSaveSchool = useCallback(async () => {
       if (!canManageInstitution) {
         showAppToast(joinLocalizedText("Your content role cannot manage schools.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -14944,30 +14981,26 @@ ${marker} `);
         showAppToast(joinLocalizedText("Sign in first to manage curriculum runtime.", "\u0646\u0635\u0627\u0628 \u06A9\u06D2 \u0631\u0646 \u0679\u0627\u0626\u0645 \u06A9\u0648 \u0645\u0646\u0638\u0645 \u06A9\u0631\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const nextSetting = {
-          setting_key: "curriculum_runtime",
-          setting_value: {
-            mode: "supabase_only",
-            allow_builtin_fallback: Boolean(allowBuiltinFallback)
-          },
-          updated_by_email: String(contentIdentityEmail || "").trim().toLowerCase()
-        };
-        const { error } = await client.from(SUPABASE_SYSTEM_SETTINGS_TABLE).upsert(nextSetting, { onConflict: "setting_key" });
-        if (error) throw error;
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(
-          Boolean(allowBuiltinFallback) ? joinLocalizedText("Built-in fallback enabled for migration testing.", "\u0645\u0646\u062A\u0642\u0644\u06CC \u06A9\u06CC \u0622\u0632\u0645\u0627\u0626\u0634 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4", language) : joinLocalizedText("Built-in fallback disabled. Curriculum now resolves from Supabase only.", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0628\u0646\u062F \u06C1\u0648 \u06AF\u06CC\u0627\u06D4 \u0627\u0628 \u0646\u0635\u0627\u0628 \u0635\u0631\u0641 Supabase \u0633\u06D2 \u062D\u0644 \u06C1\u0648\u06AF\u0627\u06D4", language),
-          "check"
-        );
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to update curriculum runtime: ${(error == null ? void 0 : error.message) || error}`, `\u0646\u0635\u0627\u0628 \u06A9\u06D2 \u0631\u0646 \u0679\u0627\u0626\u0645 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+      await runCurriculumPanelAction({
+        scopeKey: "runtime",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const nextSetting = {
+            setting_key: "curriculum_runtime",
+            setting_value: {
+              mode: "supabase_only",
+              allow_builtin_fallback: Boolean(allowBuiltinFallback)
+            },
+            updated_by_email: String(contentIdentityEmail || "").trim().toLowerCase()
+          };
+          const { error } = await client.from(SUPABASE_SYSTEM_SETTINGS_TABLE).upsert(nextSetting, { onConflict: "setting_key" });
+          if (error) throw error;
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: Boolean(allowBuiltinFallback) ? joinLocalizedText("Built-in fallback enabled for migration testing.", "\u0645\u0646\u062A\u0642\u0644\u06CC \u06A9\u06CC \u0622\u0632\u0645\u0627\u0626\u0634 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644 \u06C1\u0648 \u06AF\u06CC\u0627\u06D4", language) : joinLocalizedText("Built-in fallback disabled. Curriculum now resolves from Supabase only.", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0628\u0646\u062F \u06C1\u0648 \u06AF\u06CC\u0627\u06D4 \u0627\u0628 \u0646\u0635\u0627\u0628 \u0635\u0631\u0641 Supabase \u0633\u06D2 \u062D\u0644 \u06C1\u0648\u06AF\u0627\u06D4", language),
+        errorMessage: (error) => joinLocalizedText(`Unable to update curriculum runtime: ${(error == null ? void 0 : error.message) || error}`, `\u0646\u0635\u0627\u0628 \u06A9\u06D2 \u0631\u0646 \u0679\u0627\u0626\u0645 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleCreateBuiltInCurriculumSeedPack = useCallback(async () => {
       if (!canReplaceDefaultEverywhere) {
         showAppToast(joinLocalizedText("Only the app admin can seed the curriculum pack.", "\u0635\u0631\u0641 \u0627\u06CC\u067E \u0627\u06CC\u0688\u0645\u0646 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u062A\u062E\u0644\u06CC\u0642 \u06A9\u0631 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u06D4", language), "alert");
@@ -14977,98 +15010,97 @@ ${marker} `);
         showAppToast(joinLocalizedText("Sign in first to seed the curriculum pack.", "\u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0628\u0646\u0627\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u067E\u06C1\u0644\u06D2 \u0633\u0627\u0626\u0646 \u0627\u0650\u0646 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const now = Date.now();
-        const nowIso = new Date(now).toISOString();
-        const packId = `pack_${simpleHash(`global_seed_${contentIdentityEmail}_${nowIso}`)}`;
-        const packName = `Global seed pack ${toIsoDateString(now)}`;
-        const gradeOptions = normalizeGradeOptionIds(GRADES);
-        const seedPackRow = {
-          pack_id: packId,
-          name: packName,
-          description: "Seeded from built-in curriculum for Supabase migration.",
-          scope_origin: "global",
-          status: "published",
-          version_no: 1,
-          created_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
-          updated_at: nowIso
-        };
-        const seedSubjectRows = (Array.isArray(SUBJECTS) ? SUBJECTS : []).map((subject, index) => {
-          const normalizedSubject = normalizeSubjectDefinition(subject);
-          return {
-            pack_subject_id: `pack_subject_${simpleHash(`${packId}_${normalizedSubject.id}`)}`,
+      await runCurriculumPanelAction({
+        scopeKey: "runtime",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const now = Date.now();
+          const nowIso = new Date(now).toISOString();
+          const packId = `pack_${simpleHash(`global_seed_${contentIdentityEmail}_${nowIso}`)}`;
+          const packName = `Global seed pack ${toIsoDateString(now)}`;
+          const gradeOptions = normalizeGradeOptionIds(GRADES);
+          const seedPackRow = {
             pack_id: packId,
-            subject_key: normalizedSubject.id,
-            subject_title: normalizedSubject.name,
-            subject_title_ur: normalizedSubject.nameUr,
-            grade: null,
-            order_index: index,
-            is_hidden: false,
-            source_type: "builtin_seed",
-            source_subject_id: normalizedSubject.id,
-            payload: {
-              icon: normalizedSubject.icon || "",
-              color: normalizedSubject.color || ""
-            },
+            name: packName,
+            description: "Seeded from built-in curriculum for Supabase migration.",
+            scope_origin: "global",
+            status: "published",
+            version_no: 1,
+            created_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
             updated_at: nowIso
           };
-        });
-        const seedLessonRows = [];
-        (Array.isArray(SUBJECTS) ? SUBJECTS : []).forEach((subject) => {
-          const normalizedSubject = normalizeSubjectDefinition(subject);
-          gradeOptions.forEach((grade2) => {
-            const lessonRows = Array.isArray(getLessons(normalizedSubject.id, grade2)) ? getLessons(normalizedSubject.id, grade2) : [];
-            lessonRows.forEach((lesson, lessonIndex) => {
-              const canonicalLessonKey = resolveCustomChapterLessonKey({
-                lessonKey: (lesson == null ? void 0 : lesson.key) || (lesson == null ? void 0 : lesson.id) || (lesson == null ? void 0 : lesson.title) || (lesson == null ? void 0 : lesson.titleUr) || "",
-                title: (lesson == null ? void 0 : lesson.title) || (lesson == null ? void 0 : lesson.titleUr) || "",
-                fallbackNumber: lessonIndex + 1
-              });
-              if (!canonicalLessonKey) return;
-              const quizRows = Array.isArray(getQuiz(normalizedSubject.id, grade2, canonicalLessonKey)) ? cloneSerializableValue(getQuiz(normalizedSubject.id, grade2, canonicalLessonKey)) : [];
-              seedLessonRows.push({
-                pack_lesson_id: `pack_lesson_${simpleHash(`${packId}_${normalizedSubject.id}_${grade2}_${canonicalLessonKey}`)}`,
-                pack_id: packId,
-                subject_key: normalizedSubject.id,
-                grade: grade2,
-                lesson_key: canonicalLessonKey,
-                lesson_title: String((lesson == null ? void 0 : lesson.title) || canonicalLessonKey).trim() || canonicalLessonKey,
-                lesson_title_ur: String((lesson == null ? void 0 : lesson.titleUr) || (lesson == null ? void 0 : lesson.title) || canonicalLessonKey).trim() || canonicalLessonKey,
-                order_index: lessonIndex,
-                is_hidden: false,
-                slot_action: "normal",
-                source_type: "builtin_seed",
-                source_lesson_id: canonicalLessonKey,
-                content_payload: {
-                  lesson: stripRuntimeLessonMarkers(cloneSerializableValue(lesson) || {}),
-                  questions: quizRows
-                },
-                updated_at: nowIso
+          const seedSubjectRows = (Array.isArray(SUBJECTS) ? SUBJECTS : []).map((subject, index) => {
+            const normalizedSubject = normalizeSubjectDefinition(subject);
+            return {
+              pack_subject_id: `pack_subject_${simpleHash(`${packId}_${normalizedSubject.id}`)}`,
+              pack_id: packId,
+              subject_key: normalizedSubject.id,
+              subject_title: normalizedSubject.name,
+              subject_title_ur: normalizedSubject.nameUr,
+              grade: null,
+              order_index: index,
+              is_hidden: false,
+              source_type: "builtin_seed",
+              source_subject_id: normalizedSubject.id,
+              payload: {
+                icon: normalizedSubject.icon || "",
+                color: normalizedSubject.color || ""
+              },
+              updated_at: nowIso
+            };
+          });
+          const seedLessonRows = [];
+          (Array.isArray(SUBJECTS) ? SUBJECTS : []).forEach((subject) => {
+            const normalizedSubject = normalizeSubjectDefinition(subject);
+            gradeOptions.forEach((grade2) => {
+              const lessonRows = Array.isArray(getLessons(normalizedSubject.id, grade2)) ? getLessons(normalizedSubject.id, grade2) : [];
+              lessonRows.forEach((lesson, lessonIndex) => {
+                const canonicalLessonKey = resolveCustomChapterLessonKey({
+                  lessonKey: (lesson == null ? void 0 : lesson.key) || (lesson == null ? void 0 : lesson.id) || (lesson == null ? void 0 : lesson.title) || (lesson == null ? void 0 : lesson.titleUr) || "",
+                  title: (lesson == null ? void 0 : lesson.title) || (lesson == null ? void 0 : lesson.titleUr) || "",
+                  fallbackNumber: lessonIndex + 1
+                });
+                if (!canonicalLessonKey) return;
+                const quizRows = Array.isArray(getQuiz(normalizedSubject.id, grade2, canonicalLessonKey)) ? cloneSerializableValue(getQuiz(normalizedSubject.id, grade2, canonicalLessonKey)) : [];
+                seedLessonRows.push({
+                  pack_lesson_id: `pack_lesson_${simpleHash(`${packId}_${normalizedSubject.id}_${grade2}_${canonicalLessonKey}`)}`,
+                  pack_id: packId,
+                  subject_key: normalizedSubject.id,
+                  grade: grade2,
+                  lesson_key: canonicalLessonKey,
+                  lesson_title: String((lesson == null ? void 0 : lesson.title) || canonicalLessonKey).trim() || canonicalLessonKey,
+                  lesson_title_ur: String((lesson == null ? void 0 : lesson.titleUr) || (lesson == null ? void 0 : lesson.title) || canonicalLessonKey).trim() || canonicalLessonKey,
+                  order_index: lessonIndex,
+                  is_hidden: false,
+                  slot_action: "normal",
+                  source_type: "builtin_seed",
+                  source_lesson_id: canonicalLessonKey,
+                  content_payload: {
+                    lesson: stripRuntimeLessonMarkers(cloneSerializableValue(lesson) || {}),
+                    questions: quizRows
+                  },
+                  updated_at: nowIso
+                });
               });
             });
           });
-        });
-        const { error: packError } = await client.from(SUPABASE_CURRICULUM_PACKS_TABLE).upsert(seedPackRow, { onConflict: "pack_id" });
-        if (packError) throw packError;
-        if (seedSubjectRows.length) {
-          const { error: subjectError } = await client.from(SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE).upsert(seedSubjectRows, { onConflict: "pack_subject_id" });
-          if (subjectError) throw subjectError;
-        }
-        if (seedLessonRows.length) {
-          const { error: lessonError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(seedLessonRows, { onConflict: "pack_lesson_id" });
-          if (lessonError) throw lessonError;
-        }
-        setCurriculumGlobalPackDraftId(packId);
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText("Built-in curriculum was seeded into a global Supabase pack.", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628 \u06A9\u0648 \u0639\u0627\u0644\u0645\u06CC Supabase \u067E\u06CC\u06A9 \u0645\u06CC\u06BA \u0645\u0646\u062A\u0642\u0644 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4", language), "check");
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to create built-in seed pack: ${(error == null ? void 0 : error.message) || error}`, `\u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA \u0628\u0646\u0627\u06CC\u0627 \u062C\u0627 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+          const { error: packError } = await client.from(SUPABASE_CURRICULUM_PACKS_TABLE).upsert(seedPackRow, { onConflict: "pack_id" });
+          if (packError) throw packError;
+          if (seedSubjectRows.length) {
+            const { error: subjectError } = await client.from(SUPABASE_CURRICULUM_PACK_SUBJECTS_TABLE).upsert(seedSubjectRows, { onConflict: "pack_subject_id" });
+            if (subjectError) throw subjectError;
+          }
+          if (seedLessonRows.length) {
+            const { error: lessonError } = await client.from(SUPABASE_CURRICULUM_PACK_LESSONS_TABLE).upsert(seedLessonRows, { onConflict: "pack_lesson_id" });
+            if (lessonError) throw lessonError;
+          }
+          setCurriculumGlobalPackDraftId(packId);
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: joinLocalizedText("Built-in curriculum was seeded into a global Supabase pack.", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628 \u06A9\u0648 \u0639\u0627\u0644\u0645\u06CC Supabase \u067E\u06CC\u06A9 \u0645\u06CC\u06BA \u0645\u0646\u062A\u0642\u0644 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4", language),
+        errorMessage: (error) => joinLocalizedText(`Unable to create built-in seed pack: ${(error == null ? void 0 : error.message) || error}`, `\u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA \u0628\u0646\u0627\u06CC\u0627 \u062C\u0627 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [canReplaceDefaultEverywhere, contentIdentityEmail, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleSyncCurriculumPackGlobally = useCallback(async () => {
       if (!canReplaceDefaultEverywhere) {
         showAppToast(joinLocalizedText("Only the app admin can sync a global curriculum pack.", "\u0635\u0631\u0641 \u0627\u06CC\u067E \u0627\u06CC\u0688\u0645\u0646 \u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u06D4", language), "alert");
@@ -15089,34 +15121,33 @@ ${marker} `);
         return;
       }
       requestCurriculumSelectionReconcile();
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const { error: deactivateError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "global").eq("status", "active");
-        if (deactivateError) throw deactivateError;
-        const nextAssignment = {
-          assignment_id: "curriculum_global_default",
-          scope_type: "global",
-          school_id: null,
-          grade: null,
-          student_email: null,
-          pack_id: safePackId,
-          status: "active",
-          assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
-          note: `Global curriculum synced to ${selectedPack.name}`,
-          updated_at: nowIso
-        };
-        const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
-        if (assignmentError) throw assignmentError;
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText(`Global curriculum synced to ${selectedPack.name}.`, `\u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628 \u06A9\u0648 ${selectedPack.name} \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4`, language), "check");
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to sync the global curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [canReplaceDefaultEverywhere, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+      await runCurriculumPanelAction({
+        scopeKey: "runtime",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+          const { error: deactivateError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "global").eq("status", "active");
+          if (deactivateError) throw deactivateError;
+          const nextAssignment = {
+            assignment_id: "curriculum_global_default",
+            scope_type: "global",
+            school_id: null,
+            grade: null,
+            student_email: null,
+            pack_id: safePackId,
+            status: "active",
+            assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+            note: `Global curriculum synced to ${selectedPack.name}`,
+            updated_at: nowIso
+          };
+          const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
+          if (assignmentError) throw assignmentError;
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: joinLocalizedText(`Global curriculum synced to ${selectedPack.name}.`, `\u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628 \u06A9\u0648 ${selectedPack.name} \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4`, language),
+        errorMessage: (error) => joinLocalizedText(`Unable to sync the global curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [canReplaceDefaultEverywhere, contentIdentityEmail, curriculumGlobalPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleSyncCurriculumPackWithSchool = useCallback(async () => {
       if (!canManageInstitution && !canManageContentAccess) {
         showAppToast(joinLocalizedText("Your role cannot sync curriculum for a school.", "\u0622\u067E \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u0635\u0627\u0628 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u0627\u06D4", language), "alert");
@@ -15142,34 +15173,33 @@ ${marker} `);
         return;
       }
       requestCurriculumSelectionReconcile();
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const { error: deactivateError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "school").eq("school_id", safeSchoolId).eq("status", "active");
-        if (deactivateError) throw deactivateError;
-        const nextAssignment = {
-          assignment_id: `curriculum_school_${simpleHash(safeSchoolId)}`,
-          scope_type: "school",
-          school_id: safeSchoolId,
-          grade: null,
-          student_email: null,
-          pack_id: safePackId,
-          status: "active",
-          assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
-          note: `School curriculum synced to ${selectedPack.name}`,
-          updated_at: nowIso
-        };
-        const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
-        if (assignmentError) throw assignmentError;
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText(`Curriculum synced with school ${safeSchoolId}.`, `\u0646\u0635\u0627\u0628 \u06A9\u0648 \u0627\u0633\u06A9\u0648\u0644 ${safeSchoolId} \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4`, language), "check");
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to sync the school curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u0627\u0633\u06A9\u0648\u0644 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, curriculumPackLookup, curriculumSchoolPackDraftId, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+      await runCurriculumPanelAction({
+        scopeKey: "school",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+          const { error: deactivateError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "school").eq("school_id", safeSchoolId).eq("status", "active");
+          if (deactivateError) throw deactivateError;
+          const nextAssignment = {
+            assignment_id: `curriculum_school_${simpleHash(safeSchoolId)}`,
+            scope_type: "school",
+            school_id: safeSchoolId,
+            grade: null,
+            student_email: null,
+            pack_id: safePackId,
+            status: "active",
+            assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+            note: `School curriculum synced to ${selectedPack.name}`,
+            updated_at: nowIso
+          };
+          const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
+          if (assignmentError) throw assignmentError;
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: joinLocalizedText(`Curriculum synced with school ${safeSchoolId}.`, `\u0646\u0635\u0627\u0628 \u06A9\u0648 \u0627\u0633\u06A9\u0648\u0644 ${safeSchoolId} \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4`, language),
+        errorMessage: (error) => joinLocalizedText(`Unable to sync the school curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u0627\u0633\u06A9\u0648\u0644 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, curriculumPackLookup, curriculumSchoolPackDraftId, language, requestCurriculumSelectionReconcile, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleResetSchoolCurriculumToGlobal = useCallback(async () => {
       if (!canManageInstitution && !canManageContentAccess) {
         showAppToast(joinLocalizedText("Your role cannot reset school curriculum inheritance.", "\u0622\u067E \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u06A9\u0648 \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u0627\u06D4", language), "alert");
@@ -15184,20 +15214,19 @@ ${marker} `);
         showAppToast(joinLocalizedText("Choose a school first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const { error } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "school").eq("school_id", safeSchoolId).eq("status", "active");
-        if (error) throw error;
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText("School curriculum now inherits the global pack again.", "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0646\u0635\u0627\u0628 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u0627\u06D4", language), "check");
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to reset school curriculum inheritance: ${(error == null ? void 0 : error.message) || error}`, `\u0627\u0633\u06A9\u0648\u0644 \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, language, showAppToast, supabaseAuthState.userId]);
+      await runCurriculumPanelAction({
+        scopeKey: "school",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+          const { error } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "school").eq("school_id", safeSchoolId).eq("status", "active");
+          if (error) throw error;
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: joinLocalizedText("School curriculum now inherits the global pack again.", "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u0627 \u0646\u0635\u0627\u0628 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u0627\u06D4", language),
+        errorMessage: (error) => joinLocalizedText(`Unable to reset school curriculum inheritance: ${(error == null ? void 0 : error.message) || error}`, `\u0627\u0633\u06A9\u0648\u0644 \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [activeInstitutionSchoolIdResolved, canManageContentAccess, canManageInstitution, contentIdentityEmail, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleSyncCurriculumPackWithGrade = useCallback(async () => {
       if (!canManageScopedCurriculum) {
         showAppToast(joinLocalizedText("Your role cannot sync curriculum for a grade.", "\u0622\u067E \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u0635\u0627\u0628 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u0627\u06D4", language), "alert");
@@ -15228,34 +15257,33 @@ ${marker} `);
         return;
       }
       requestCurriculumSelectionReconcile();
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const { error: deactivateError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "grade").eq("school_id", safeSchoolId).eq("grade", safeGrade).eq("status", "active");
-        if (deactivateError) throw deactivateError;
-        const nextAssignment = {
-          assignment_id: `curriculum_grade_${simpleHash(`${safeSchoolId}_${safeGrade}`)}`,
-          scope_type: "grade",
-          school_id: safeSchoolId,
-          grade: safeGrade,
-          student_email: null,
-          pack_id: safePackId,
-          status: "active",
-          assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
-          note: `Grade ${safeGrade} curriculum synced to ${selectedPack.name}`,
-          updated_at: nowIso
-        };
-        const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
-        if (assignmentError) throw assignmentError;
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText(`Curriculum synced with Grade ${safeGrade}.`, `\u0646\u0635\u0627\u0628 \u06A9\u0648 \u062C\u0645\u0627\u0639\u062A ${safeGrade} \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4`, language), "check");
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to sync the grade curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u062C\u0645\u0627\u0639\u062A\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradePackDraftId, curriculumGradeTarget, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+      await runCurriculumPanelAction({
+        scopeKey: "grade",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+          const { error: deactivateError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "grade").eq("school_id", safeSchoolId).eq("grade", safeGrade).eq("status", "active");
+          if (deactivateError) throw deactivateError;
+          const nextAssignment = {
+            assignment_id: `curriculum_grade_${simpleHash(`${safeSchoolId}_${safeGrade}`)}`,
+            scope_type: "grade",
+            school_id: safeSchoolId,
+            grade: safeGrade,
+            student_email: null,
+            pack_id: safePackId,
+            status: "active",
+            assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+            note: `Grade ${safeGrade} curriculum synced to ${selectedPack.name}`,
+            updated_at: nowIso
+          };
+          const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
+          if (assignmentError) throw assignmentError;
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: joinLocalizedText(`Curriculum synced with Grade ${safeGrade}.`, `\u0646\u0635\u0627\u0628 \u06A9\u0648 \u062C\u0645\u0627\u0639\u062A ${safeGrade} \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4`, language),
+        errorMessage: (error) => joinLocalizedText(`Unable to sync the grade curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u062C\u0645\u0627\u0639\u062A\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradePackDraftId, curriculumGradeTarget, curriculumPackLookup, language, requestCurriculumSelectionReconcile, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleResetGradeCurriculumToInherited = useCallback(async () => {
       if (!canManageScopedCurriculum) {
         showAppToast(joinLocalizedText("Your role cannot reset grade curriculum inheritance.", "\u0622\u067E \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u06A9\u0648 \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u0627\u06D4", language), "alert");
@@ -15275,20 +15303,19 @@ ${marker} `);
         showAppToast(joinLocalizedText("Choose a grade first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u062C\u0645\u0627\u0639\u062A \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const { error } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "grade").eq("school_id", safeSchoolId).eq("grade", safeGrade).eq("status", "active");
-        if (error) throw error;
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText(`Grade ${safeGrade} now inherits the school/global pack again.`, `\u062C\u0645\u0627\u0639\u062A ${safeGrade} \u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u0633\u06A9\u0648\u0644 \u06CC\u0627 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u06CC\u06D4`, language), "check");
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to reset grade curriculum inheritance: ${(error == null ? void 0 : error.message) || error}`, `\u062C\u0645\u0627\u0639\u062A\u06CC \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, language, showAppToast, supabaseAuthState.userId]);
+      await runCurriculumPanelAction({
+        scopeKey: "grade",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+          const { error } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "grade").eq("school_id", safeSchoolId).eq("grade", safeGrade).eq("status", "active");
+          if (error) throw error;
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: joinLocalizedText(`Grade ${safeGrade} now inherits the school/global pack again.`, `\u062C\u0645\u0627\u0639\u062A ${safeGrade} \u062F\u0648\u0628\u0627\u0631\u06C1 \u0627\u0633\u06A9\u0648\u0644 \u06CC\u0627 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u06CC\u06D4`, language),
+        errorMessage: (error) => joinLocalizedText(`Unable to reset grade curriculum inheritance: ${(error == null ? void 0 : error.message) || error}`, `\u062C\u0645\u0627\u0639\u062A\u06CC \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleSyncCurriculumPackWithLearner = useCallback(async () => {
       if (!canManageScopedCurriculum) {
         showAppToast(joinLocalizedText("Your role cannot sync curriculum for a learner.", "\u0622\u067E \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0633\u06CC \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u0635\u0627\u0628 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u0627\u06D4", language), "alert");
@@ -15320,35 +15347,34 @@ ${marker} `);
         return;
       }
       requestCurriculumSelectionReconcile();
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const deactivateQuery = client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "learner").eq("school_id", safeSchoolId).eq("student_email", safeLearnerEmail).eq("status", "active");
-        const { error: deactivateError } = Number.isFinite(safeGrade) ? await deactivateQuery.eq("grade", safeGrade) : await deactivateQuery;
-        if (deactivateError) throw deactivateError;
-        const nextAssignment = {
-          assignment_id: `curriculum_learner_${simpleHash(`${safeSchoolId}_${safeLearnerEmail}_${Number.isFinite(safeGrade) ? safeGrade : "all"}`)}`,
-          scope_type: "learner",
-          school_id: safeSchoolId,
-          grade: Number.isFinite(safeGrade) ? safeGrade : null,
-          student_email: safeLearnerEmail,
-          pack_id: safePackId,
-          status: "active",
-          assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
-          note: `Learner curriculum synced to ${selectedPack.name}`,
-          updated_at: nowIso
-        };
-        const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
-        if (assignmentError) throw assignmentError;
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText("Learner curriculum synced.", "\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u0627 \u0646\u0635\u0627\u0628 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4", language), "check");
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to sync the learner curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u0627 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, curriculumLearnerPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, showAppToast, supabaseAuthState.userId]);
+      await runCurriculumPanelAction({
+        scopeKey: "learner",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+          const deactivateQuery = client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "learner").eq("school_id", safeSchoolId).eq("student_email", safeLearnerEmail).eq("status", "active");
+          const { error: deactivateError } = Number.isFinite(safeGrade) ? await deactivateQuery.eq("grade", safeGrade) : await deactivateQuery;
+          if (deactivateError) throw deactivateError;
+          const nextAssignment = {
+            assignment_id: `curriculum_learner_${simpleHash(`${safeSchoolId}_${safeLearnerEmail}_${Number.isFinite(safeGrade) ? safeGrade : "all"}`)}`,
+            scope_type: "learner",
+            school_id: safeSchoolId,
+            grade: Number.isFinite(safeGrade) ? safeGrade : null,
+            student_email: safeLearnerEmail,
+            pack_id: safePackId,
+            status: "active",
+            assigned_by_email: String(contentIdentityEmail || "").trim().toLowerCase(),
+            note: `Learner curriculum synced to ${selectedPack.name}`,
+            updated_at: nowIso
+          };
+          const { error: assignmentError } = await client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).upsert(nextAssignment, { onConflict: "assignment_id" });
+          if (assignmentError) throw assignmentError;
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: joinLocalizedText("Learner curriculum synced.", "\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u0627 \u0646\u0635\u0627\u0628 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627 \u06C1\u06D2\u06D4", language),
+        errorMessage: (error) => joinLocalizedText(`Unable to sync the learner curriculum pack: ${(error == null ? void 0 : error.message) || error}`, `\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u0627 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, curriculumLearnerPackDraftId, curriculumPackLookup, language, requestCurriculumSelectionReconcile, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleResetLearnerCurriculumToInherited = useCallback(async () => {
       if (!canManageScopedCurriculum) {
         showAppToast(joinLocalizedText("Your role cannot reset learner curriculum inheritance.", "\u0622\u067E \u06A9\u0627 \u06A9\u0631\u062F\u0627\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u06A9\u0648 \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06A9\u0631 \u0633\u06A9\u062A\u0627\u06D4", language), "alert");
@@ -15369,21 +15395,20 @@ ${marker} `);
         showAppToast(joinLocalizedText("Choose a learner first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u0627 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
-      setContentRelationshipBusy(true);
-      try {
-        const client = ensureSupabaseClientRef.current();
-        const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-        const resetQuery = client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "learner").eq("school_id", safeSchoolId).eq("student_email", safeLearnerEmail).eq("status", "active");
-        const { error } = Number.isFinite(safeGrade) ? await resetQuery.eq("grade", safeGrade) : await resetQuery;
-        if (error) throw error;
-        await refreshContentRelationshipStateRef.current();
-        showAppToast(joinLocalizedText("Learner now inherits the grade/school/global curriculum again.", "\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u0627 \u0627\u0628 \u062F\u0648\u0628\u0627\u0631\u06C1 \u062C\u0645\u0627\u0639\u062A\u060C \u0627\u0633\u06A9\u0648\u0644 \u06CC\u0627 \u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u0627\u06D4", language), "check");
-      } catch (error) {
-        showAppToast(joinLocalizedText(`Unable to reset learner curriculum inheritance: ${(error == null ? void 0 : error.message) || error}`, `\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language), "alert");
-      } finally {
-        setContentRelationshipBusy(false);
-      }
-    }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, language, showAppToast, supabaseAuthState.userId]);
+      await runCurriculumPanelAction({
+        scopeKey: "learner",
+        execute: async () => {
+          const client = ensureSupabaseClientRef.current();
+          const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+          const resetQuery = client.from(SUPABASE_CURRICULUM_SCOPE_ASSIGNMENTS_TABLE).update({ status: "inactive", updated_at: nowIso }).eq("scope_type", "learner").eq("school_id", safeSchoolId).eq("student_email", safeLearnerEmail).eq("status", "active");
+          const { error } = Number.isFinite(safeGrade) ? await resetQuery.eq("grade", safeGrade) : await resetQuery;
+          if (error) throw error;
+          await refreshContentRelationshipStateRef.current();
+        },
+        successMessage: joinLocalizedText("Learner now inherits the grade/school/global curriculum again.", "\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u0627 \u0627\u0628 \u062F\u0648\u0628\u0627\u0631\u06C1 \u062C\u0645\u0627\u0639\u062A\u060C \u0627\u0633\u06A9\u0648\u0644 \u06CC\u0627 \u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u0627\u06D4", language),
+        errorMessage: (error) => joinLocalizedText(`Unable to reset learner curriculum inheritance: ${(error == null ? void 0 : error.message) || error}`, `\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u0646\u0635\u0627\u0628\u06CC \u0648\u0631\u0627\u062B\u062A \u0631\u06CC \u0633\u06CC\u0679 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC: ${(error == null ? void 0 : error.message) || error}`, language)
+      });
+    }, [activeInstitutionSchoolIdResolved, canManageScopedCurriculum, contentIdentityEmail, curriculumGradeTarget, curriculumLearnerEmail, language, runCurriculumPanelAction, showAppToast, supabaseAuthState.userId]);
     const handleSyncCurriculumIntoScopePack = useCallback(async ({
       scopeType = "school",
       syncType = "lesson",
@@ -26795,7 +26820,7 @@ ${error.message || error}`);
         setChapterAssignmentDraftStudentEmail(link.studentEmail);
         setProfilesSectionTab("assignments");
       } }, renderLocalizedTextNode(joinLocalizedText("Assign Chapters", "\u0627\u0628\u0648\u0627\u0628 \u062A\u0641\u0648\u06CC\u0636 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteTeacherStudentLink(link), disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Remove Link", "\u0631\u0628\u0637 \u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language))))) : /* @__PURE__ */ React.createElement("div", { className: "review-panel" }, /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No learner links yet. Link a learner first, then use chapter assignments.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0631\u0628\u0637 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1\u06CC\u06BA\u06D4 \u067E\u06C1\u0644\u06D2 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645 \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0628\u0627\u0628 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language)))) : null,
-      profilesSectionTab === "institution" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "\u0627\u0633\u06A9\u0648\u0644 \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "\u0627\u062F\u0627\u0631\u062A\u06CC \u0688\u06BE\u0627\u0646\u0686\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0628\u0646\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0633\u0627\u062A\u0630\u06C1 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06A9\u0627\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0628\u0686\u0648\u06BA \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(accessibleSchools.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(accessibleSchools.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Schools", "\u0627\u0633\u06A9\u0648\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F454}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Your institution role", "\u0622\u067E \u06A9\u0627 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Members in scope", "\u062F\u0627\u0626\u0631\u06C1 \u06A9\u06D2 \u0645\u0645\u0628\u0631\u0632", language), language)))), accessibleSchools.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 14 } }, accessibleSchools.map((school) => /* @__PURE__ */ React.createElement("button", { key: school.schoolId, type: "button", className: `profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`, onClick: () => setActiveInstitutionSchoolId(school.schoolId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-avatar", "aria-hidden": "true" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(school.schoolName, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "\u2014"}`, `\u067E\u0631\u0646\u0633\u067E\u0644 ${school.principalEmail || "\u2014"}`, language), language)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0633\u0644\u06A9 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))), canManageScopedCurriculum ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Curriculum Runtime", "\u0646\u0635\u0627\u0628 \u0631\u0646 \u0679\u0627\u0626\u0645", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Supabase is now the primary curriculum source. Keep built-in fallback on only while validating the migration.", "\u0627\u0628 Supabase \u06C1\u06CC \u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628\u06CC \u0630\u0631\u06CC\u0639\u06C1 \u06C1\u06D2\u06D4 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0635\u0631\u0641 \u0627\u0633\u06CC \u0648\u0642\u062A \u0641\u0639\u0627\u0644 \u0631\u06A9\u06BE\u06CC\u06BA \u062C\u0628 \u0645\u0646\u062A\u0642\u0644\u06CC \u06A9\u06CC \u067E\u0691\u062A\u0627\u0644 \u06A9\u0631\u0646\u06CC \u06C1\u0648\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(curriculumRuntimeSettings.allowBuiltinFallback ? joinLocalizedText("Fallback on", "\u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644", language) : joinLocalizedText("Fallback off", "\u0628\u06CC\u06A9 \u0627\u064E\u067E \u0628\u0646\u062F", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Runtime mode", "\u0631\u0646 \u0679\u0627\u0626\u0645 \u0645\u0648\u0688", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Supabase only", "\u0635\u0631\u0641 Supabase", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Global pack", "\u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No global pack assigned yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Pack version", "\u067E\u06CC\u06A9 \u0648\u0631\u0698\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(globalCurriculumPack ? joinLocalizedText(`v${globalCurriculumPack.versionNo}`, `\u0648\u0631\u0698\u0646 ${globalCurriculumPack.versionNo}`, language) : joinLocalizedText("Not assigned", "\u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA", language), language)))), canReplaceDefaultEverywhere ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { marginTop: 12, alignItems: "stretch" } }, /* @__PURE__ */ React.createElement(
+      profilesSectionTab === "institution" ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-management-panel", "data-ui-language": language, style: { marginTop: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Hierarchy", "\u0627\u0633\u06A9\u0648\u0644 \u062F\u0631\u062C\u06C1 \u0628\u0646\u062F\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Build the institutional ladder once so principals supervise teachers, teachers teach linked learners, and parents stay scoped to their children.", "\u0627\u062F\u0627\u0631\u062A\u06CC \u0688\u06BE\u0627\u0646\u0686\u06C1 \u0627\u06CC\u06A9 \u0628\u0627\u0631 \u0628\u0646\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u067E\u0631\u0646\u0633\u067E\u0644 \u0627\u0633\u0627\u062A\u0630\u06C1 \u06A9\u06CC \u0646\u06AF\u0631\u0627\u0646\u06CC \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0633\u0627\u062A\u0630\u06C1 \u0645\u0646\u0633\u0644\u06A9 \u0637\u0644\u0628\u06C1 \u06A9\u06D2 \u0633\u0627\u062A\u06BE \u06A9\u0627\u0645 \u06A9\u0631\u06CC\u06BA\u060C \u0627\u0648\u0631 \u0648\u0627\u0644\u062F\u06CC\u0646 \u0635\u0631\u0641 \u0627\u067E\u0646\u06D2 \u0628\u0686\u0648\u06BA \u062A\u06A9 \u0645\u062D\u062F\u0648\u062F \u0631\u06C1\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, formatNumberLabel(accessibleSchools.length))), /* @__PURE__ */ React.createElement("div", { className: "stat-grid" }, /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(accessibleSchools.length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Schools", "\u0627\u0633\u06A9\u0648\u0644", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F454}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, renderLocalizedTextNode(getContentManagerRoleLabel(currentUserInstitutionRole || contentManagerRole, language), language)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Your institution role", "\u0622\u067E \u06A9\u0627 \u0627\u062F\u0627\u0631\u062A\u06CC \u06A9\u0631\u062F\u0627\u0631", language), language))), /* @__PURE__ */ React.createElement("div", { className: "stat-card" }, /* @__PURE__ */ React.createElement("div", { className: "stat-icon" }, "\u{1F465}"), /* @__PURE__ */ React.createElement("div", { className: "stat-value" }, formatNumberLabel(safeSchoolMemberships.filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved).length)), /* @__PURE__ */ React.createElement("div", { className: "stat-label" }, renderLocalizedTextNode(joinLocalizedText("Members in scope", "\u062F\u0627\u0626\u0631\u06C1 \u06A9\u06D2 \u0645\u0645\u0628\u0631\u0632", language), language)))), accessibleSchools.length ? /* @__PURE__ */ React.createElement("div", { className: "profile-switcher-chip-row", style: { marginTop: 14 } }, accessibleSchools.map((school) => /* @__PURE__ */ React.createElement("button", { key: school.schoolId, type: "button", className: `profile-switcher-chip${school.schoolId === activeInstitutionSchoolIdResolved ? " active" : ""}`, onClick: () => setActiveInstitutionSchoolId(school.schoolId) }, /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-avatar", "aria-hidden": "true" }, "\u{1F3EB}"), /* @__PURE__ */ React.createElement("span", { className: "profile-switcher-chip-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(school.schoolName, language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Principal ${school.principalEmail || "\u2014"}`, `\u067E\u0631\u0646\u0633\u067E\u0644 ${school.principalEmail || "\u2014"}`, language), language)))))) : /* @__PURE__ */ React.createElement("p", { className: "empty-state" }, renderLocalizedTextNode(joinLocalizedText("No school is linked yet.", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u0633\u0644\u06A9 \u0646\u06C1\u06CC\u06BA\u06D4", language), language))), canManageScopedCurriculum ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel curriculum-panel-shell", "data-ui-language": language }, contentRelationshipBusy && activeCurriculumPanelBusyScope === "runtime" ? /* @__PURE__ */ React.createElement("div", { className: "curriculum-panel-loading-overlay", role: "status", "aria-live": "polite" }, /* @__PURE__ */ React.createElement("span", { className: "curriculum-panel-loading-spinner", "aria-hidden": "true" }), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Working on curriculum runtime...", "\u0646\u0635\u0627\u0628 \u06A9\u06D2 \u0631\u0646 \u0679\u0627\u0626\u0645 \u067E\u0631 \u06A9\u0627\u0645 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Curriculum Runtime", "\u0646\u0635\u0627\u0628 \u0631\u0646 \u0679\u0627\u0626\u0645", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Supabase is now the primary curriculum source. Keep built-in fallback on only while validating the migration.", "\u0627\u0628 Supabase \u06C1\u06CC \u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628\u06CC \u0630\u0631\u06CC\u0639\u06C1 \u06C1\u06D2\u06D4 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0635\u0631\u0641 \u0627\u0633\u06CC \u0648\u0642\u062A \u0641\u0639\u0627\u0644 \u0631\u06A9\u06BE\u06CC\u06BA \u062C\u0628 \u0645\u0646\u062A\u0642\u0644\u06CC \u06A9\u06CC \u067E\u0691\u062A\u0627\u0644 \u06A9\u0631\u0646\u06CC \u06C1\u0648\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(curriculumRuntimeSettings.allowBuiltinFallback ? joinLocalizedText("Fallback on", "\u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644", language) : joinLocalizedText("Fallback off", "\u0628\u06CC\u06A9 \u0627\u064E\u067E \u0628\u0646\u062F", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Runtime mode", "\u0631\u0646 \u0679\u0627\u0626\u0645 \u0645\u0648\u0688", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Supabase only", "\u0635\u0631\u0641 Supabase", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Global pack", "\u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No global pack assigned yet", "\u0627\u0628\u06BE\u06CC \u06A9\u0648\u0626\u06CC \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Pack version", "\u067E\u06CC\u06A9 \u0648\u0631\u0698\u0646", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(globalCurriculumPack ? joinLocalizedText(`v${globalCurriculumPack.versionNo}`, `\u0648\u0631\u0698\u0646 ${globalCurriculumPack.versionNo}`, language) : joinLocalizedText("Not assigned", "\u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA", language), language)))), canReplaceDefaultEverywhere ? /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { marginTop: 12, alignItems: "stretch" } }, /* @__PURE__ */ React.createElement(
         "select",
         {
           className: "settings-select",
@@ -26843,7 +26868,7 @@ ${error.message || error}`);
           curriculumRuntimeSettings.allowBuiltinFallback ? joinLocalizedText("Built-in fallback is on", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644 \u06C1\u06D2", language) : joinLocalizedText("Built-in fallback is off", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0628\u0646\u062F \u06C1\u06D2", language),
           language
         )
-      )), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Create one Supabase seed pack from the current built-in curriculum, then sync the chosen pack globally to make it the active app-wide curriculum.", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628 \u0633\u06D2 \u0627\u06CC\u06A9 Supabase \u0633\u06CC\u0688 \u067E\u06CC\u06A9 \u0628\u0646\u0627\u0626\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0645\u0646\u062A\u062E\u0628 \u067E\u06CC\u06A9 \u06A9\u0648 \u0639\u0627\u0644\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0648\u06C1 \u067E\u0648\u0631\u06D2 \u0627\u06CC\u067E \u06A9\u0627 \u0641\u0639\u0627\u0644 \u0646\u0635\u0627\u0628 \u0628\u0646 \u062C\u0627\u0626\u06D2\u06D4", language), language)), !canReplaceDefaultEverywhere ? /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Only the app admin can change the global runtime fallback and global pack here, but scoped curriculum panels below still reflect the active inheritance chain.", "\u06CC\u06C1\u0627\u06BA \u0635\u0631\u0641 \u0627\u06CC\u067E \u0627\u06CC\u0688\u0645\u0646 \u0639\u0627\u0644\u0645\u06CC \u0631\u0646 \u0679\u0627\u0626\u0645 \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0627\u0648\u0631 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0628\u062F\u0644 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u060C \u0645\u06AF\u0631 \u0646\u06CC\u0686\u06D2 \u0645\u0648\u062C\u0648\u062F \u0645\u062D\u062F\u0648\u062F \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u0646\u0644 \u067E\u06BE\u0631 \u0628\u06BE\u06CC \u0641\u0639\u0627\u0644 \u0648\u0631\u0627\u062B\u062A\u06CC \u0633\u0644\u0633\u0644\u06C1 \u062F\u06A9\u06BE\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)) : null, /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("When fallback is on, any missing curriculum pack content falls back to built-in lessons. Turn it off once the Supabase curriculum is complete and verified.", "\u062C\u0628 \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644 \u06C1\u0648 \u062A\u0648 \u067E\u06CC\u06A9 \u0645\u06CC\u06BA \u063A\u0627\u0626\u0628 \u0646\u0635\u0627\u0628\u06CC \u0645\u0648\u0627\u062F \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0627\u0633\u0628\u0627\u0642 \u0633\u06D2 \u067E\u0648\u0631\u0627 \u06A9\u06CC\u0627 \u062C\u0627\u062A\u0627 \u06C1\u06D2\u06D4 \u062C\u0628 Supabase \u0648\u0627\u0644\u0627 \u0646\u0635\u0627\u0628 \u0645\u06A9\u0645\u0644 \u0627\u0648\u0631 \u062A\u0635\u062F\u06CC\u0642 \u0634\u062F\u06C1 \u06C1\u0648 \u062C\u0627\u0626\u06D2 \u062A\u0648 \u0627\u0633\u06D2 \u0628\u0646\u062F \u06A9\u0631 \u062F\u06CC\u06BA\u06D4", language), language))) : null, canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Curriculum", "\u0627\u0633\u06A9\u0648\u0644 \u0646\u0635\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Assign a specific Supabase curriculum pack to the currently selected school, or reset the school back to the active global pack.", "\u0641\u06CC \u0627\u0644\u0648\u0642\u062A \u0645\u0646\u062A\u062E\u0628 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0645\u062E\u0635\u0648\u0635 Supabase \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u0648 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0641\u0639\u0627\u0644 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u067E\u0631 \u0644\u06D2 \u0622\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
+      )), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Create one Supabase seed pack from the current built-in curriculum, then sync the chosen pack globally to make it the active app-wide curriculum.", "\u0645\u0648\u062C\u0648\u062F\u06C1 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0646\u0635\u0627\u0628 \u0633\u06D2 \u0627\u06CC\u06A9 Supabase \u0633\u06CC\u0688 \u067E\u06CC\u06A9 \u0628\u0646\u0627\u0626\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0645\u0646\u062A\u062E\u0628 \u067E\u06CC\u06A9 \u06A9\u0648 \u0639\u0627\u0644\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u06C1\u0645 \u0622\u06C1\u0646\u06AF \u06A9\u0631\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0648\u06C1 \u067E\u0648\u0631\u06D2 \u0627\u06CC\u067E \u06A9\u0627 \u0641\u0639\u0627\u0644 \u0646\u0635\u0627\u0628 \u0628\u0646 \u062C\u0627\u0626\u06D2\u06D4", language), language)), !canReplaceDefaultEverywhere ? /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("Only the app admin can change the global runtime fallback and global pack here, but scoped curriculum panels below still reflect the active inheritance chain.", "\u06CC\u06C1\u0627\u06BA \u0635\u0631\u0641 \u0627\u06CC\u067E \u0627\u06CC\u0688\u0645\u0646 \u0639\u0627\u0644\u0645\u06CC \u0631\u0646 \u0679\u0627\u0626\u0645 \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0627\u0648\u0631 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0628\u062F\u0644 \u0633\u06A9\u062A\u0627 \u06C1\u06D2\u060C \u0645\u06AF\u0631 \u0646\u06CC\u0686\u06D2 \u0645\u0648\u062C\u0648\u062F \u0645\u062D\u062F\u0648\u062F \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u0646\u0644 \u067E\u06BE\u0631 \u0628\u06BE\u06CC \u0641\u0639\u0627\u0644 \u0648\u0631\u0627\u062B\u062A\u06CC \u0633\u0644\u0633\u0644\u06C1 \u062F\u06A9\u06BE\u0627\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), language)) : null, /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("When fallback is on, any missing curriculum pack content falls back to built-in lessons. Turn it off once the Supabase curriculum is complete and verified.", "\u062C\u0628 \u0628\u06CC\u06A9 \u0627\u064E\u067E \u0641\u0639\u0627\u0644 \u06C1\u0648 \u062A\u0648 \u067E\u06CC\u06A9 \u0645\u06CC\u06BA \u063A\u0627\u0626\u0628 \u0646\u0635\u0627\u0628\u06CC \u0645\u0648\u0627\u062F \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0627\u0633\u0628\u0627\u0642 \u0633\u06D2 \u067E\u0648\u0631\u0627 \u06A9\u06CC\u0627 \u062C\u0627\u062A\u0627 \u06C1\u06D2\u06D4 \u062C\u0628 Supabase \u0648\u0627\u0644\u0627 \u0646\u0635\u0627\u0628 \u0645\u06A9\u0645\u0644 \u0627\u0648\u0631 \u062A\u0635\u062F\u06CC\u0642 \u0634\u062F\u06C1 \u06C1\u0648 \u062C\u0627\u0626\u06D2 \u062A\u0648 \u0627\u0633\u06D2 \u0628\u0646\u062F \u06A9\u0631 \u062F\u06CC\u06BA\u06D4", language), language))) : null, canManageInstitution || canManageContentAccess ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel curriculum-panel-shell", "data-ui-language": language }, contentRelationshipBusy && activeCurriculumPanelBusyScope === "school" ? /* @__PURE__ */ React.createElement("div", { className: "curriculum-panel-loading-overlay", role: "status", "aria-live": "polite" }, /* @__PURE__ */ React.createElement("span", { className: "curriculum-panel-loading-spinner", "aria-hidden": "true" }), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Updating school curriculum...", "\u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u0646\u0635\u0627\u0628 \u06A9\u0648 \u062A\u0627\u0632\u06C1 \u06A9\u06CC\u0627 \u062C\u0627 \u0631\u06C1\u0627 \u06C1\u06D2...", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("School Curriculum", "\u0627\u0633\u06A9\u0648\u0644 \u0646\u0635\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Assign a specific Supabase curriculum pack to the currently selected school, or reset the school back to the active global pack.", "\u0641\u06CC \u0627\u0644\u0648\u0642\u062A \u0645\u0646\u062A\u062E\u0628 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0627\u06CC\u06A9 \u0645\u062E\u0635\u0648\u0635 Supabase \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u0648 \u062F\u0648\u0628\u0627\u0631\u06C1 \u0641\u0639\u0627\u0644 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u067E\u0631 \u0644\u06D2 \u0622\u0626\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
         (activeSchoolCurriculumPack == null ? void 0 : activeSchoolCurriculumPack.name) || (globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No pack", "\u06A9\u0648\u0626\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA", language),
         language
       ))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Selected school", "\u0645\u0646\u062A\u062E\u0628 \u0627\u0633\u06A9\u0648\u0644", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(((_o = accessibleSchools.find((school) => school.schoolId === activeInstitutionSchoolIdResolved)) == null ? void 0 : _o.schoolName) || joinLocalizedText("No school selected", "\u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u0645\u0646\u062A\u062E\u0628 \u0646\u06C1\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Active school pack", "\u0641\u0639\u0627\u0644 \u0627\u0633\u06A9\u0648\u0644 \u067E\u06CC\u06A9", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((activeSchoolCurriculumPack == null ? void 0 : activeSchoolCurriculumPack.name) || joinLocalizedText("Inherited from global", "\u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Global fallback", "\u0639\u0627\u0644\u0645\u06CC \u0648\u0631\u0627\u062B\u062A", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No global pack assigned", "\u06A9\u0648\u0626\u06CC \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u0646\u06C1\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { marginTop: 12, alignItems: "stretch" } }, /* @__PURE__ */ React.createElement(
@@ -26873,7 +26898,7 @@ ${error.message || error}`);
           disabled: contentRelationshipBusy || !activeInstitutionSchoolIdResolved || !activeSchoolCurriculumAssignment
         },
         renderLocalizedTextNode(joinLocalizedText("Reset to Global", "\u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u067E\u0631 \u0648\u0627\u067E\u0633", language), language)
-      )), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("This step adds school-level overrides only. If no school pack is active, the selected school inherits the current global curriculum pack automatically.", "\u0627\u0633 \u0645\u0631\u062D\u0644\u06D2 \u0645\u06CC\u06BA \u0635\u0631\u0641 \u0627\u0633\u06A9\u0648\u0644 \u0633\u0637\u062D \u06A9\u06CC \u062A\u062E\u0635\u06CC\u0635 \u0634\u0627\u0645\u0644 \u06C1\u06D2\u06D4 \u0627\u06AF\u0631 \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u067E\u06CC\u06A9 \u0641\u0639\u0627\u0644 \u0646\u06C1 \u06C1\u0648 \u062A\u0648 \u0645\u0646\u062A\u062E\u0628 \u0627\u0633\u06A9\u0648\u0644 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u0627\u06D4", language), language))) : null, canManageScopedCurriculum ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Grade Curriculum", "\u062C\u0645\u0627\u0639\u062A\u06CC \u0646\u0635\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Assign a specific curriculum pack to one grade inside the selected school. If no grade override exists, that grade inherits the school pack and then the global pack.", "\u0645\u0646\u062A\u062E\u0628 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u0627\u0646\u062F\u0631 \u0627\u06CC\u06A9 \u0645\u062E\u0635\u0648\u0635 \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u06A9\u0631\u06CC\u06BA\u06D4 \u0627\u06AF\u0631 \u062C\u0645\u0627\u0639\u062A\u06CC \u062A\u062E\u0635\u06CC\u0635 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1 \u06C1\u0648 \u062A\u0648 \u0648\u06C1 \u062C\u0645\u0627\u0639\u062A \u067E\u06C1\u0644\u06D2 \u0627\u0633\u06A9\u0648\u0644 \u067E\u06CC\u06A9 \u0627\u0648\u0631 \u067E\u06BE\u0631 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u06CC\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
+      )), /* @__PURE__ */ React.createElement("p", { className: "goal-progress-meta", style: { marginTop: 10 } }, renderLocalizedTextNode(joinLocalizedText("This step adds school-level overrides only. If no school pack is active, the selected school inherits the current global curriculum pack automatically.", "\u0627\u0633 \u0645\u0631\u062D\u0644\u06D2 \u0645\u06CC\u06BA \u0635\u0631\u0641 \u0627\u0633\u06A9\u0648\u0644 \u0633\u0637\u062D \u06A9\u06CC \u062A\u062E\u0635\u06CC\u0635 \u0634\u0627\u0645\u0644 \u06C1\u06D2\u06D4 \u0627\u06AF\u0631 \u06A9\u0648\u0626\u06CC \u0627\u0633\u06A9\u0648\u0644 \u067E\u06CC\u06A9 \u0641\u0639\u0627\u0644 \u0646\u06C1 \u06C1\u0648 \u062A\u0648 \u0645\u0646\u062A\u062E\u0628 \u0627\u0633\u06A9\u0648\u0644 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0637\u0648\u0631 \u067E\u0631 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0639\u0627\u0644\u0645\u06CC \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u0627\u06D4", language), language))) : null, canManageScopedCurriculum ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel curriculum-panel-shell", "data-ui-language": language }, contentRelationshipBusy && activeCurriculumPanelBusyScope === "grade" ? /* @__PURE__ */ React.createElement("div", { className: "curriculum-panel-loading-overlay", role: "status", "aria-live": "polite" }, /* @__PURE__ */ React.createElement("span", { className: "curriculum-panel-loading-spinner", "aria-hidden": "true" }), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Updating grade curriculum...", "\u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0646\u0635\u0627\u0628 \u06A9\u0648 \u062A\u0627\u0632\u06C1 \u06A9\u06CC\u0627 \u062C\u0627 \u0631\u06C1\u0627 \u06C1\u06D2...", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Grade Curriculum", "\u062C\u0645\u0627\u0639\u062A\u06CC \u0646\u0635\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Assign a specific curriculum pack to one grade inside the selected school. If no grade override exists, that grade inherits the school pack and then the global pack.", "\u0645\u0646\u062A\u062E\u0628 \u0627\u0633\u06A9\u0648\u0644 \u06A9\u06D2 \u0627\u0646\u062F\u0631 \u0627\u06CC\u06A9 \u0645\u062E\u0635\u0648\u0635 \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u06A9\u0631\u06CC\u06BA\u06D4 \u0627\u06AF\u0631 \u062C\u0645\u0627\u0639\u062A\u06CC \u062A\u062E\u0635\u06CC\u0635 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1 \u06C1\u0648 \u062A\u0648 \u0648\u06C1 \u062C\u0645\u0627\u0639\u062A \u067E\u06C1\u0644\u06D2 \u0627\u0633\u06A9\u0648\u0644 \u067E\u06CC\u06A9 \u0627\u0648\u0631 \u067E\u06BE\u0631 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u06CC\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
         (activeGradeCurriculumPack == null ? void 0 : activeGradeCurriculumPack.name) || (activeSchoolCurriculumPack == null ? void 0 : activeSchoolCurriculumPack.name) || (globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No pack", "\u06A9\u0648\u0626\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA", language),
         language
       ))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Selected grade", "\u0645\u0646\u062A\u062E\u0628 \u062C\u0645\u0627\u0639\u062A", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText(`Grade ${Number(curriculumGradeTarget) || "\u2014"}`, `\u062C\u0645\u0627\u0639\u062A ${Number(curriculumGradeTarget) || "\u2014"}`, language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Active grade pack", "\u0641\u0639\u0627\u0644 \u062C\u0645\u0627\u0639\u062A\u06CC \u067E\u06CC\u06A9", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((activeGradeCurriculumPack == null ? void 0 : activeGradeCurriculumPack.name) || joinLocalizedText("Inherited from school/global", "\u0627\u0633\u06A9\u0648\u0644 \u06CC\u0627 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("School fallback", "\u0627\u0633\u06A9\u0648\u0644\u06CC \u0648\u0631\u0627\u062B\u062A", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((activeSchoolCurriculumPack == null ? void 0 : activeSchoolCurriculumPack.name) || (globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No inherited pack", "\u06A9\u0648\u0626\u06CC \u0648\u0631\u0627\u062B\u062A\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { marginTop: 12, alignItems: "stretch" } }, /* @__PURE__ */ React.createElement(
@@ -26913,7 +26938,7 @@ ${error.message || error}`);
           disabled: contentRelationshipBusy || !activeInstitutionSchoolIdResolved || !activeGradeCurriculumAssignment
         },
         renderLocalizedTextNode(joinLocalizedText("Reset to Inherited", "\u0648\u0631\u0627\u062B\u062A\u06CC \u062D\u0627\u0644\u062A \u067E\u0631 \u0648\u0627\u067E\u0633", language), language)
-      ))) : null, canManageScopedCurriculum ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Learner Curriculum", "\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u0627 \u0646\u0635\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Assign a specific curriculum pack to one learner inside the selected grade. If no learner override exists, that learner inherits the grade pack, then the school pack, then the global pack.", "\u0645\u0646\u062A\u062E\u0628 \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0646\u062F\u0631 \u0627\u06CC\u06A9 \u0645\u062E\u0635\u0648\u0635 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u06A9\u0631\u06CC\u06BA\u06D4 \u0627\u06AF\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u062A\u062E\u0635\u06CC\u0635 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1 \u06C1\u0648 \u062A\u0648 \u0648\u06C1 \u067E\u06C1\u0644\u06D2 \u062C\u0645\u0627\u0639\u062A\u06CC \u067E\u06CC\u06A9\u060C \u067E\u06BE\u0631 \u0627\u0633\u06A9\u0648\u0644 \u067E\u06CC\u06A9\u060C \u0627\u0648\u0631 \u067E\u06BE\u0631 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u0627\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
+      ))) : null, canManageScopedCurriculum ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-card-panel curriculum-panel-shell", "data-ui-language": language }, contentRelationshipBusy && activeCurriculumPanelBusyScope === "learner" ? /* @__PURE__ */ React.createElement("div", { className: "curriculum-panel-loading-overlay", role: "status", "aria-live": "polite" }, /* @__PURE__ */ React.createElement("span", { className: "curriculum-panel-loading-spinner", "aria-hidden": "true" }), /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Updating learner curriculum...", "\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0646\u0635\u0627\u0628 \u06A9\u0648 \u062A\u0627\u0632\u06C1 \u06A9\u06CC\u0627 \u062C\u0627 \u0631\u06C1\u0627 \u06C1\u06D2...", language), language))) : null, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Learner Curriculum", "\u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u0627 \u0646\u0635\u0627\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Assign a specific curriculum pack to one learner inside the selected grade. If no learner override exists, that learner inherits the grade pack, then the school pack, then the global pack.", "\u0645\u0646\u062A\u062E\u0628 \u062C\u0645\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0646\u062F\u0631 \u0627\u06CC\u06A9 \u0645\u062E\u0635\u0648\u0635 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0646\u0635\u0627\u0628\u06CC \u067E\u06CC\u06A9 \u0645\u0642\u0631\u0631 \u06A9\u0631\u06CC\u06BA\u06D4 \u0627\u06AF\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u06D2 \u06A9\u06CC \u062A\u062E\u0635\u06CC\u0635 \u0645\u0648\u062C\u0648\u062F \u0646\u06C1 \u06C1\u0648 \u062A\u0648 \u0648\u06C1 \u067E\u06C1\u0644\u06D2 \u062C\u0645\u0627\u0639\u062A\u06CC \u067E\u06CC\u06A9\u060C \u067E\u06BE\u0631 \u0627\u0633\u06A9\u0648\u0644 \u067E\u06CC\u06A9\u060C \u0627\u0648\u0631 \u067E\u06BE\u0631 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A \u0644\u06D2 \u06AF\u0627\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
         (activeLearnerCurriculumPack == null ? void 0 : activeLearnerCurriculumPack.name) || (activeGradeCurriculumPack == null ? void 0 : activeGradeCurriculumPack.name) || (activeSchoolCurriculumPack == null ? void 0 : activeSchoolCurriculumPack.name) || (globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No pack", "\u06A9\u0648\u0626\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA", language),
         language
       ))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-row auto-diary-summary-row", style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Selected learner", "\u0645\u0646\u062A\u062E\u0628 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u0627", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(((_p = curriculumLearnerOptions.find((entry) => entry.email === curriculumLearnerEmail)) == null ? void 0 : _p.label) || joinLocalizedText("No learner selected", "\u06A9\u0648\u0626\u06CC \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u0627 \u0645\u0646\u062A\u062E\u0628 \u0646\u06C1\u06CC\u06BA", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Active learner pack", "\u0641\u0639\u0627\u0644 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u0648\u0627\u0644\u0627 \u067E\u06CC\u06A9", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((activeLearnerCurriculumPack == null ? void 0 : activeLearnerCurriculumPack.name) || joinLocalizedText("Inherited from grade/school/global", "\u062C\u0645\u0627\u0639\u062A\u060C \u0627\u0633\u06A9\u0648\u0644 \u06CC\u0627 \u0639\u0627\u0644\u0645\u06CC \u067E\u06CC\u06A9 \u0633\u06D2 \u0648\u0631\u0627\u062B\u062A", language), language))), /* @__PURE__ */ React.createElement("div", { className: "profile-report-summary-card" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Grade fallback", "\u062C\u0645\u0627\u0639\u062A\u06CC \u0648\u0631\u0627\u062B\u062A", language), language)), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode((activeGradeCurriculumPack == null ? void 0 : activeGradeCurriculumPack.name) || (activeSchoolCurriculumPack == null ? void 0 : activeSchoolCurriculumPack.name) || (globalCurriculumPack == null ? void 0 : globalCurriculumPack.name) || joinLocalizedText("No inherited pack", "\u06A9\u0648\u0626\u06CC \u0648\u0631\u0627\u062B\u062A\u06CC \u067E\u06CC\u06A9 \u0646\u06C1\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "chapter-browser-filter-row", style: { marginTop: 12, alignItems: "stretch" } }, /* @__PURE__ */ React.createElement(

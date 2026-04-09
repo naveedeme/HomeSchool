@@ -337,6 +337,11 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .chapter-card-actions{justify-content:flex-start;flex-wrap:wrap}
 .chapter-card-panel.arrange-mode{border-style:dashed}
 .chapter-card-panel.dragging{opacity:.74;transform:scale(.995)}
+.curriculum-panel-shell{position:relative;overflow:hidden}
+.curriculum-panel-loading-overlay{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:18px;border-radius:inherit;background:color-mix(in srgb,var(--bg-card) 86%,white 14%);backdrop-filter:blur(4px);text-align:center}
+.curriculum-panel-loading-overlay strong{font-size:13px;font-weight:800;letter-spacing:.01em;color:var(--text-primary)}
+.curriculum-panel-loading-spinner{width:34px;height:34px;border-radius:50%;border:3px solid color-mix(in srgb,var(--text-primary) 14%,transparent);border-top-color:var(--accent);animation:curriculumPanelSpin .72s linear infinite}
+@keyframes curriculumPanelSpin{to{transform:rotate(360deg)}}
 .lesson-detail .start-quiz-btn{margin-top:20px;width:100%;padding:14px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--accent),#0EA5E9);color:#0F172A;font-family:var(--font);font-size:16px;font-weight:700;cursor:pointer;transition:all .2s}
 .quiz-container{animation:fadeSlide .3s ease}@keyframes fadeSlide{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .quiz-progress{display:flex;gap:4px;margin-bottom:20px}.quiz-progress .qp-dot{flex:1;height:4px;background:var(--bg-elevated);border-radius:2px;transition:background .3s}.quiz-progress .qp-dot.done{background:var(--success)}.quiz-progress .qp-dot.current{background:var(--accent)}
