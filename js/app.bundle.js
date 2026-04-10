@@ -27275,7 +27275,7 @@ ${error.message || error}`);
         type: "button",
         className: `page-section-shutter-handle${pageSectionShutterOpen ? " open" : ""}`,
         "aria-expanded": pageSectionShutterOpen ? "true" : "false",
-        onClick: () => setPageSectionShutterOpen((current) => !current)
+        onClick: isMobileNavViewport ? () => setPageSectionShutterOpen((current) => !current) : void 0
       },
       /* @__PURE__ */ React.createElement("span", { className: "page-section-shutter-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(currentPageSectionNav.title, language))),
       /* @__PURE__ */ React.createElement("span", { className: "page-section-shutter-chevron", "aria-hidden": "true" }, "\u25BE")

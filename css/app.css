@@ -671,7 +671,6 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .page-section-shutter[data-ui-language="ur"] .page-section-shutter-handle,.page-section-shutter[data-ui-language="ur"] .page-section-shutter-copy{text-align:center;direction:rtl}
 @media (min-width: 641px){
   .page-section-shutter{background:transparent;border-bottom:none}
-  .page-section-shutter-handle{background:transparent;box-shadow:none}
   .page-section-shutter:hover .page-section-shutter-panel{grid-template-rows:1fr}
   .page-section-shutter:hover .page-section-shutter-chevron{transform:rotate(180deg)}
 }
