@@ -15614,6 +15614,7 @@ function HomeschoolApp() {
   const [navBarHidden, setNavBarHidden] = useState(false);
   const [isMobileNavViewport, setIsMobileNavViewport] = useState(() => (typeof window !== "undefined" ? (window.innerWidth || 0) <= 900 : false));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [pageSectionShutterOpen, setPageSectionShutterOpen] = useState(false);
   const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
   const [gamificationState, setGamificationState] = useState(normalizeGamificationState(stored?.gamificationState || {}));
@@ -16900,6 +16901,9 @@ const headerHideTimerRef = useRef(null);
     if (!mobileNavOpen) return;
     setProfileSwitcherOpen(false);
   }, [mobileNavOpen]);
+  useEffect(() => {
+    setPageSectionShutterOpen(false);
+  }, [tab]);
   const currentUserInstitutionRole = useMemo(() => {
     if (!currentUserSchoolMemberships.length || !activeInstitutionSchoolIdResolved) return "";
     const scopedRoles = currentUserSchoolMemberships
@@ -30516,6 +30520,113 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               ? ui.tutor
               : ui.home;
   const showBack = selectedSubject || selectedLesson || quizActive || quizDone || selDay || tab !== "home";
+  const isHomeLandingPage = tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !quizDone && !selDay;
+  const isReviewLandingPage = tab === "review" && !activeReviewCard && !reviewSessionDone && !practiceMode;
+  const renderInlinePageSectionTabs = false;
+  const currentPageSectionNav = useMemo(() => {
+    if (isHomeLandingPage) {
+      const items = [
+        { id: "subjects", label: joinLocalizedText("Subjects", "مضامین", language) },
+        { id: "goals", label: joinLocalizedText("Goals", "اہداف", language) },
+        { id: "focus", label: joinLocalizedText("Time & Focus", "وقت اور توجہ", language) },
+        { id: "discovery", label: joinLocalizedText("Discovery", "تلاش", language) },
+      ];
+      return {
+        context: "home",
+        title: joinLocalizedText("Home Sections", "ہوم حصے", language),
+        ariaLabel: joinLocalizedText("Home sections", "ہوم حصے", language),
+        activeId: homeSectionTab,
+        items,
+      };
+    }
+    if (tab === "profiles") {
+      const items = [
+        { id: "profiles", label: joinLocalizedText("Profiles", "پروفائلز", language) },
+        { id: "reports", label: joinLocalizedText("Reports", "رپورٹس", language) },
+        ...(canSeeLearnerManagement ? [{ id: "learners", label: joinLocalizedText("Learners", "سیکھنے والے", language) }] : []),
+        ...((canManageInstitution || accessibleSchools.length > 0) ? [{ id: "institution", label: joinLocalizedText("Institution", "ادارہ", language) }] : []),
+        ...((canManageParentLinks || linkedChildOptions.length > 0 || visibleParentStudentLinks.length > 0) ? [{ id: "family", label: joinLocalizedText("Family", "خاندان", language) }] : []),
+        ...((canAssignContent || canManageContentAccess || visibleChapterAssignments.length > 0) ? [{ id: "assignments", label: joinLocalizedText("Assignments", "تفویضات", language) }] : []),
+        { id: "chapters", label: joinLocalizedText("My Chapters", "میرے ابواب", language) },
+        { id: "library", label: joinLocalizedText("Published", "شائع شدہ", language) },
+        { id: "cloud", label: joinLocalizedText("Cloud Sync", "کلاؤڈ سنک", language) },
+        { id: "notifications", label: joinLocalizedText("Notifications", "نوٹیفکیشنز", language) },
+      ];
+      return {
+        context: "profiles",
+        title: joinLocalizedText("Profile Sections", "پروفائل حصے", language),
+        ariaLabel: joinLocalizedText("Profile sections", "پروفائل حصے", language),
+        activeId: profilesSectionTab,
+        items,
+      };
+    }
+    if (tab === "progress") {
+      const items = [
+        { id: "overview", label: joinLocalizedText("Overview", "جائزہ", language) },
+        { id: "subjects", label: joinLocalizedText("Subjects", "مضامین", language) },
+        { id: "favorites", label: ui.favorites },
+        { id: "badges", label: ui.badges },
+        { id: "timetracking", label: joinLocalizedText("Time & Attendance", "وقت اور حاضری", language) },
+      ];
+      return {
+        context: "progress",
+        title: joinLocalizedText("Progress Sections", "پروگریس حصے", language),
+        ariaLabel: joinLocalizedText("Progress sections", "پروگریس حصے", language),
+        activeId: progressSectionTab,
+        items,
+      };
+    }
+    if (tab === "diary") {
+      const items = [
+        { id: "daily", label: joinLocalizedText("Daily Diary", "روزانہ ڈائری", language) },
+        { id: "teacher", label: joinLocalizedText("Teacher's Diary", "استاد کی ڈائری", language) },
+        { id: "assignments", label: joinLocalizedText("Assignments", "تفویضات", language) },
+        { id: "saturday", label: joinLocalizedText("Weekly Test", "ہفتہ وار ٹیسٹ", language) },
+        ...((canManageTests || availableTestTemplates.length > 0) ? [{ id: "templates", label: joinLocalizedText("Templates", "ٹیمپلیٹس", language) }] : []),
+        ...((canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess)
+          ? [{ id: "dashboard", label: joinLocalizedText("Performance", "کارکردگی", language) }]
+          : []),
+      ];
+      return {
+        context: "diary",
+        title: joinLocalizedText("Diary Sections", "ڈائری حصے", language),
+        ariaLabel: joinLocalizedText("Diary sections", "ڈائری حصے", language),
+        activeId: diarySectionTab,
+        items,
+      };
+    }
+    if (isReviewLandingPage) {
+      const items = [
+        { id: "queue", label: joinLocalizedText("Review Queue", "ریویو قطار", language) },
+        { id: "practice", label: joinLocalizedText("Practice Lab", "پریکٹس لیب", language) },
+        { id: "weakwords", label: joinLocalizedText("Weak Words", "کمزور الفاظ", language) },
+        { id: "insights", label: joinLocalizedText("Insights", "تجزیہ", language) },
+        { id: "lists", label: joinLocalizedText("Lists & Notes", "فہرستیں اور نوٹس", language) },
+      ];
+      return {
+        context: "review",
+        title: joinLocalizedText("Review Sections", "ریویو حصے", language),
+        ariaLabel: joinLocalizedText("Review sections", "ریویو حصے", language),
+        activeId: reviewSectionTab,
+        items,
+      };
+    }
+    return null;
+  }, [accessibleSchools.length, allSubjects, availableTestTemplates.length, canAssignContent, canManageContentAccess, canManageDiary, canManageInstitution, canManageParentLinks, canManageTests, canSeeLearnerManagement, diarySectionTab, homeSectionTab, isHomeLandingPage, isReviewLandingPage, language, linkedChildOptions.length, profilesSectionTab, progressSectionTab, reviewSectionTab, tab, ui.badges, ui.favorites, visibleChapterAssignments.length, visibleParentStudentLinks.length, visibleTeacherStudentLinks.length]);
+  const handlePageSectionNavSelect = useCallback((nextSectionId) => {
+    const safeSectionId = String(nextSectionId || "").trim();
+    if (!safeSectionId || !currentPageSectionNav?.context) return;
+    if (currentPageSectionNav.context === "home") setHomeSectionTab(safeSectionId);
+    if (currentPageSectionNav.context === "profiles") setProfilesSectionTab(safeSectionId);
+    if (currentPageSectionNav.context === "progress") setProgressSectionTab(safeSectionId);
+    if (currentPageSectionNav.context === "diary") setDiarySectionTab(safeSectionId);
+    if (currentPageSectionNav.context === "review") setReviewSectionTab(safeSectionId);
+    setPageSectionShutterOpen(false);
+  }, [currentPageSectionNav?.context]);
+  const activePageSectionLabel = useMemo(() => {
+    if (!currentPageSectionNav?.items?.length) return "";
+    return currentPageSectionNav.items.find((entry) => entry.id === currentPageSectionNav.activeId)?.label || currentPageSectionNav.items[0]?.label || "";
+  }, [currentPageSectionNav]);
   const currentQuiz = activeLessonQuizQuestions;
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
   const quizRecordedTotalMs = quizElapsedMs.reduce((sum, value) => sum + (Number(value) || 0), 0);
@@ -30867,6 +30978,36 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       </div>
     </div>
     {isMobileNavViewport ? renderMobileNavDrawer() : null}
+    {currentPageSectionNav?.items?.length ? (
+      <div className={`page-section-shutter${pageSectionShutterOpen ? " open" : ""}`} data-ui-language={language}>
+        <button
+          type="button"
+          className={`page-section-shutter-handle${pageSectionShutterOpen ? " open" : ""}`}
+          aria-expanded={pageSectionShutterOpen ? "true" : "false"}
+          onClick={() => setPageSectionShutterOpen((current) => !current)}
+        >
+          <span className="page-section-shutter-copy">
+            <strong>{renderLocalizedTextNode(currentPageSectionNav.title, language)}</strong>
+            <span>{renderLocalizedTextNode(activePageSectionLabel, language)}</span>
+          </span>
+          <span className="page-section-shutter-chevron" aria-hidden="true">⌄</span>
+        </button>
+        <div className="page-section-shutter-panel">
+          <div className="review-section-tabs page-section-shutter-tabs" role="tablist" aria-label={currentPageSectionNav.ariaLabel}>
+            {currentPageSectionNav.items.map((item) => (
+              <button
+                key={`page_section_${currentPageSectionNav.context}_${item.id}`}
+                type="button"
+                className={`review-section-tab${currentPageSectionNav.activeId === item.id ? " active" : ""}`}
+                onClick={() => handlePageSectionNavSelect(item.id)}
+              >
+                {renderLocalizedTextNode(item.label, language)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    ) : null}
     <div className="app-body">
       {!isMobileNavViewport && navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
       {!isMobileNavViewport && navPosition === "left" ? renderNavBar("left") : null}
@@ -30896,6 +31037,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <span className="grade-tag">{renderLocalizedTextNode(ui.grade, language)} {grade}</span>
         </div>
         {canShowInstallBanner && <div className="app-status-card" data-ui-language={language}><div className="app-status-head"><h3>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerTitle, UI_TEXT.ur.installBannerTitle, language, bannerTitleOptions)}</h3><button className="banner-dismiss" onClick={() => setInstallBannerDismissed(true)} aria-label={ui.hideBanner}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.hideBanner, UI_TEXT.ur.hideBanner, language, bannerButtonOptions)}</button></div><p>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBannerText, UI_TEXT.ur.installBannerText, language, bannerBodyOptions)}</p>{(canInstallApp || installAvailability === "available") && <p className="install-browser-hint">{renderSeparatedLocalizedTextNode(UI_TEXT.en.installBrowserHint, UI_TEXT.ur.installBrowserHint, language, bannerBodyOptions)}</p>}<div className="app-status-grid"><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installStatus, UI_TEXT.ur.installStatus, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(isInstalled || installAvailability === "installed" ? UI_TEXT.en.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.en.appInstallAvailable : UI_TEXT.en.appInstallUnavailable, isInstalled || installAvailability === "installed" ? UI_TEXT.ur.appInstalled : canInstallApp || installAvailability === "available" ? UI_TEXT.ur.appInstallAvailable : UI_TEXT.ur.appInstallUnavailable, language, bannerValueOptions)}</span></div><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.offlineAccess, UI_TEXT.ur.offlineAccess, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(serviceWorkerStatus === "ready" ? UI_TEXT.en.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.en.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.en.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.en.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.en.offlineUnsupported : UI_TEXT.en.offlineError, serviceWorkerStatus === "ready" ? UI_TEXT.ur.offlineReady : serviceWorkerStatus === "caching" || serviceWorkerStatus === "checking" ? UI_TEXT.ur.offlineCaching : serviceWorkerStatus === "local-static" ? UI_TEXT.ur.offlineLocalStatic : serviceWorkerStatus === "update-ready" ? UI_TEXT.ur.updateReady : serviceWorkerStatus === "unsupported" ? UI_TEXT.ur.offlineUnsupported : UI_TEXT.ur.offlineError, language, bannerValueOptions)}</span></div><div className="status-pill"><strong>{renderSeparatedLocalizedTextNode(UI_TEXT.en.networkStatus, UI_TEXT.ur.networkStatus, language, bannerLabelOptions)}</strong><span>{renderSeparatedLocalizedTextNode(isOnline ? UI_TEXT.en.online : UI_TEXT.en.offline, isOnline ? UI_TEXT.ur.online : UI_TEXT.ur.offline, language, bannerValueOptions)}</span></div></div><div className="app-status-actions">{canInstallApp && <button className="install-cta" onClick={handleInstallApp}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.installApp, UI_TEXT.ur.installApp, language, bannerButtonOptions)}</button>}{serviceWorkerStatus === "update-ready" && <button className="ghost-cta" onClick={applyServiceWorkerUpdate}>{renderSeparatedLocalizedTextNode(UI_TEXT.en.refreshToUpdate, UI_TEXT.ur.refreshToUpdate, language, bannerButtonOptions)}</button>}</div></div>}
+        {renderInlinePageSectionTabs ? (
         <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "ہوم حصے" : "Home sections"}>
           <button type="button" className={`review-section-tab${homeSectionTab === "subjects" ? " active" : ""}`} onClick={() => setHomeSectionTab("subjects")}>
             {renderLocalizedTextNode(joinLocalizedText("Subjects", "مضامین", language), language)}
@@ -30910,6 +31052,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             {renderLocalizedTextNode(joinLocalizedText("Discovery", "تلاش", language), language)}
           </button>
         </div>
+        ) : null}
 
         <div
           key={`${transitionMode}:home:${homeSectionTab}`}
@@ -31506,6 +31649,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       </>)}
 
       {tab === "profiles" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
+        {renderInlinePageSectionTabs ? (
         <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "پروفائل حصے" : "Profile sections"}>
           <button type="button" className={`review-section-tab${profilesSectionTab === "profiles" ? " active" : ""}`} onClick={() => setProfilesSectionTab("profiles")}>
             {renderLocalizedTextNode(joinLocalizedText("Profiles", "پروفائلز", language), language)}
@@ -31546,6 +31690,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             {renderLocalizedTextNode(joinLocalizedText("Notifications", "نوٹیفکیشنز", language), language)}
           </button>
         </div>
+        ) : null}
 
         <div
           key={`${transitionMode}:profiles:${profilesSectionTab}`}
@@ -34834,6 +34979,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       </div>)}
 
       {tab === "progress" && (<>
+        {renderInlinePageSectionTabs ? (
         <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "پروگریس حصے" : "Progress sections"}>
           <button type="button" className={`review-section-tab${progressSectionTab === "overview" ? " active" : ""}`} onClick={() => setProgressSectionTab("overview")}>
             {renderLocalizedTextNode(joinLocalizedText("Overview", "جائزہ", language), language)}
@@ -34851,6 +34997,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             {renderLocalizedTextNode(joinLocalizedText("Time & Attendance", "وقت اور حاضری", language), language)}
           </button>
         </div>
+        ) : null}
 
         <div
           key={`${transitionMode}:${progressSectionTab}`}
@@ -34960,6 +35107,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       </>)}
 
       {tab === "diary" && (<>
+        {renderInlinePageSectionTabs ? (
         <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "ڈائری حصے" : "Diary sections"}>
           <button type="button" className={`review-section-tab${diarySectionTab === "daily" ? " active" : ""}`} onClick={() => setDiarySectionTab("daily")}>{renderLocalizedTextNode(joinLocalizedText("Daily Diary", "روزانہ ڈائری", language), language)}</button>
           <button type="button" className={`review-section-tab${diarySectionTab === "teacher" ? " active" : ""}`} onClick={() => setDiarySectionTab("teacher")}>{renderLocalizedTextNode(joinLocalizedText("Teacher's Diary", "استاد کی ڈائری", language), language)}</button>
@@ -34968,6 +35116,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           {(canManageTests || availableTestTemplates.length > 0) ? <button type="button" className={`review-section-tab${diarySectionTab === "templates" ? " active" : ""}`} onClick={() => setDiarySectionTab("templates")}>{renderLocalizedTextNode(joinLocalizedText("Templates", "ٹیمپلیٹس", language), language)}</button> : null}
           {(canManageDiary || canManageTests || linkedChildOptions.length > 0 || visibleTeacherStudentLinks.length > 0 || canManageInstitution || canManageContentAccess) ? <button type="button" className={`review-section-tab${diarySectionTab === "dashboard" ? " active" : ""}`} onClick={() => setDiarySectionTab("dashboard")}>{renderLocalizedTextNode(joinLocalizedText("Performance", "کارکردگی", language), language)}</button> : null}
         </div>
+        ) : null}
         <div key={`${transitionMode}:diary:${diarySectionTab}`} className={`review-section-transition${!reducedMotion && transitionMode !== "none" ? " transition-enabled" : ""}`} data-transition-mode={transitionMode}>
           {activeStandaloneDiaryTask && ["daily", "assignments", "teacher"].includes(String(diarySectionTab || "").trim()) ? (
             <div className="review-panel chapter-card-panel" data-ui-language={language} style={{ marginBottom: 16 }}>
@@ -35501,6 +35650,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
 
       {tab === "review" && (<>
         {!activeReviewCard && !reviewSessionDone && !practiceMode && <>
+          {renderInlinePageSectionTabs ? (
           <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "ریویو حصے" : "Review sections"}>
             <button type="button" className={`review-section-tab${reviewSectionTab === "queue" ? " active" : ""}`} onClick={() => setReviewSectionTab("queue")}>
               {renderLocalizedTextNode(joinLocalizedText("Review Queue", "ریویو قطار", language), language)}
@@ -35518,6 +35668,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               {renderLocalizedTextNode(joinLocalizedText("Lists & Notes", "فہرستیں اور نوٹس", language), language)}
             </button>
           </div>
+          ) : null}
 
           <div
             key={`${transitionMode}:${reviewSectionTab}`}
