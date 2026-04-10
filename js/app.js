@@ -15612,6 +15612,8 @@ function HomeschoolApp() {
   const [navHidden, setNavHidden] = useState(false);
   const [navBarAutoHide, setNavBarAutoHide] = useState(Boolean(stored?.navBarAutoHide));
   const [navBarHidden, setNavBarHidden] = useState(false);
+  const [isMobileNavViewport, setIsMobileNavViewport] = useState(() => (typeof window !== "undefined" ? (window.innerWidth || 0) <= 900 : false));
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
   const [gamificationState, setGamificationState] = useState(normalizeGamificationState(stored?.gamificationState || {}));
@@ -16881,6 +16883,23 @@ const headerHideTimerRef = useRef(null);
     if (!activeInstitutionSchoolIdResolved) return;
     setContentActivationDraftSchoolId((current) => current || activeInstitutionSchoolIdResolved);
   }, [activeInstitutionSchoolIdResolved]);
+  useEffect(() => {
+    const syncMobileViewport = () => {
+      setIsMobileNavViewport((window.innerWidth || 0) <= 900);
+    };
+    syncMobileViewport();
+    window.addEventListener("resize", syncMobileViewport);
+    return () => {
+      window.removeEventListener("resize", syncMobileViewport);
+    };
+  }, []);
+  useEffect(() => {
+    if (!isMobileNavViewport && mobileNavOpen) setMobileNavOpen(false);
+  }, [isMobileNavViewport, mobileNavOpen]);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    setProfileSwitcherOpen(false);
+  }, [mobileNavOpen]);
   const currentUserInstitutionRole = useMemo(() => {
     if (!currentUserSchoolMemberships.length || !activeInstitutionSchoolIdResolved) return "";
     const scopedRoles = currentUserSchoolMemberships
@@ -30559,6 +30578,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     { id: "settings", icon: "⚙️", label: ui.settings },
   ];
   const handleNavItemSelect = (nextTab) => {
+    setMobileNavOpen(false);
     if (nextTab === "home") {
       goHome();
       return;
@@ -30634,6 +30654,43 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       ))}
     </div>
   );
+  const renderMobileNavDrawer = () => (
+    <>
+      <button
+        type="button"
+        className={`mobile-nav-backdrop${mobileNavOpen ? " open" : ""}`}
+        aria-label={joinLocalizedText("Close navigation", "نیویگیشن بند کریں", language)}
+        onClick={() => setMobileNavOpen(false)}
+      />
+      <aside className={`mobile-nav-drawer${mobileNavOpen ? " open" : ""}`} data-ui-language={language}>
+        <div className="mobile-nav-drawer-head">
+          <strong>{renderLocalizedTextNode(joinLocalizedText("Navigation", "نیویگیشن", language), language)}</strong>
+          <button
+            type="button"
+            className="mobile-nav-close"
+            aria-label={joinLocalizedText("Close navigation", "نیویگیشن بند کریں", language)}
+            onClick={() => setMobileNavOpen(false)}
+          >
+            ×
+          </button>
+        </div>
+        <div className="mobile-nav-drawer-list">
+          {navItems.map((item) => (
+            <button
+              key={`mobile_nav_${item.id}`}
+              type="button"
+              className={`nav-item ${tab === item.id ? "active" : ""}`}
+              style={isUrduUi(language) ? { fontFamily: "var(--font-ur)" } : {}}
+              onClick={() => handleNavItemSelect(item.id)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              {renderLocalizedTextNode(item.label, language)}
+            </button>
+          ))}
+        </div>
+      </aside>
+    </>
+  );
   const importConflictLabels = {
     profile: ui.importConflictProfile,
     progress: ui.importConflictProgress,
@@ -30700,10 +30757,23 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     }
     return <span aria-hidden="true">•</span>;
   };
-  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: wordMeaningPopover?.normalizedWord || "" }}><LessonEditContext.Provider value={lessonEditContextValue}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" ? " navbar-autohide-enabled" : ""}${navBarHidden ? " nav-bar-hidden" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
+  return (<AppContext.Provider value={{ currentVersion, updateAvailable, ttsEnabled, language, storageLabel, reviewWordLookup, studyMetaLookup, customLists: reviewAnalytics.customLists || [], onToggleFavorite: handleToggleFavorite, onToggleStudyFavorite: handleToggleStudyFavorite, onSaveWordNote: handleSaveWordNote, onSaveStudyNote: handleSaveStudyNote, onToggleCardInList: handleToggleCardInList, onDeleteCustomList: handleDeleteCustomList, onViewStudyItem: handleViewStudyItem, viewTargetId, buildViewSource, onLookupWordMeaning: handleLookupWordMeaning, closeWordMeaningPopover, activeLookupWord: wordMeaningPopover?.normalizedWord || "" }}><LessonEditContext.Provider value={lessonEditContextValue}><><div className={`app-container nav-position-${navPosition}${navAutoHide ? " nav-autohide-enabled" : ""}${navHidden ? " nav-hidden" : ""}${navBarAutoHide && navPosition !== "top" && !isMobileNavViewport ? " navbar-autohide-enabled" : ""}${navBarHidden && !isMobileNavViewport ? " nav-bar-hidden" : ""}${isMobileNavViewport ? " mobile-nav-viewport" : ""}${mobileNavOpen ? " mobile-nav-open" : ""} font-size-${fontSizeMode}${highContrast ? " high-contrast-mode" : ""}${reducedMotion ? " reduced-motion-mode" : ""}${focusMode ? " focus-mode" : ""}${readingMode ? " reading-mode" : ""}`} style={{ zoom: fontSizeZoom, ...(navAutoHide ? { "--header-hide-offset": `${headerHideOffset || 0}px`, "--header-visible-offset": navHidden ? "0px" : `${headerHideOffset || 0}px` } : {}), ...(navBarAutoHide && navPosition !== "top" && !isMobileNavViewport ? { "--nav-hide-offset": `${navBarOffset || 0}px`, "--nav-visible-offset": navBarHidden ? "0px" : `${navBarOffset || 0}px` } : {}) }}>
     {navAutoHide ? <div className="header-reveal-hotspot" onMouseEnter={revealAutoHideHeader} onMouseMove={revealAutoHideHeader} onPointerDown={revealAutoHideHeader} /> : null}
     <div ref={headerRef} className={`app-header${navPosition === "top" ? " app-header-top-nav" : ""}`} data-tab={tab} onMouseEnter={navAutoHide ? revealAutoHideHeader : undefined} onMouseLeave={navAutoHide ? concealAutoHideHeader : undefined}>
       <div className="header-leading">
+        {isMobileNavViewport ? (
+          <button
+            type="button"
+            className={`mobile-nav-toggle${mobileNavOpen ? " active" : ""}`}
+            aria-label={joinLocalizedText("Open navigation", "نیویگیشن کھولیں", language)}
+            aria-expanded={mobileNavOpen ? "true" : "false"}
+            onClick={() => setMobileNavOpen((current) => !current)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+        ) : null}
         <span className="back-btn-slot">{showBack ? <button className="back-btn" onClick={goBack}>←</button> : null}</span>
         <div className="header-profile-shell">
           <button
@@ -30765,7 +30835,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           ) : null}
         </div>
       </div>
-      {navPosition === "top"
+      {!isMobileNavViewport && navPosition === "top"
         ? renderNavBar("top", true)
         : <h1 style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}>{renderLocalizedTextNode(headerTitle, language)}</h1>}
       <div className="header-actions">
@@ -30796,9 +30866,10 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         ><span>⭐</span><span>{xp} XP</span></button>
       </div>
     </div>
+    {isMobileNavViewport ? renderMobileNavDrawer() : null}
     <div className="app-body">
-      {navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
-      {navPosition === "left" ? renderNavBar("left") : null}
+      {!isMobileNavViewport && navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
+      {!isMobileNavViewport && navPosition === "left" ? renderNavBar("left") : null}
       <div ref={contentRef} key={`${transitionMode}:${routeTransitionKey}`} className={`content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}${tab === "tutor" ? " tutor-tab-active" : ""}`} data-transition-mode={transitionMode} data-ui-language={language}>
       {tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && (<>
         <div className="welcome-card" data-ui-language={language}>
@@ -37138,11 +37209,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         ) : null}
       </>)}
       </div>
-      {navBarAutoHide && navPosition === "right" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-right" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
-      {navPosition === "right" ? renderNavBar("right") : null}
+      {!isMobileNavViewport && navBarAutoHide && navPosition === "right" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-right" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
+      {!isMobileNavViewport && navPosition === "right" ? renderNavBar("right") : null}
     </div>
-    {navBarAutoHide && navPosition === "bottom" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-bottom" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
-    {navPosition === "bottom" ? renderNavBar("bottom") : null}
+    {!isMobileNavViewport && navBarAutoHide && navPosition === "bottom" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-bottom" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
+    {!isMobileNavViewport && navPosition === "bottom" ? renderNavBar("bottom") : null}
     {pronunciationLabOpen ? (
       <div className="pronunciation-lab-overlay" onClick={handleClosePronunciationLab}>
         <div className="pronunciation-lab-modal" onClick={(event) => event.stopPropagation()}>
