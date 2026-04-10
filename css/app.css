@@ -769,6 +769,10 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
   .study-note-dialog{padding:16px;border-radius:18px}
   .study-note-actions{flex-wrap:wrap}
   .study-note-actions .study-tool-btn{flex:1;justify-content:center}
+  .inline-study-row{flex-direction:column;align-items:stretch;gap:0;margin-bottom:12px}
+  .inline-study-row .study-tools.inline{align-self:center;margin-top:-1px;padding:4px 10px 0;border:1px solid var(--border);border-top:none;border-radius:0 0 14px 14px;background:color-mix(in srgb,var(--bg-card) 96%,white);box-shadow:0 12px 20px rgba(15,23,42,.06)}
+  .inline-study-row .study-tools.inline .study-tool-row{justify-content:center;gap:10px}
+  .inline-study-row .study-tools.inline .study-tool-btn.icon-only{width:36px;min-width:36px;height:36px;border-radius:12px}
 }
 @media (max-width: 640px){
   .flashcard-stage{padding-inline:10px}
