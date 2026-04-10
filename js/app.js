@@ -954,17 +954,37 @@ function buildCurriculumPackLessonEntry(raw) {
   const normalized = normalizeCurriculumPackLessonRecord(raw);
   if (!normalized || normalized.isHidden || normalized.slotAction === "removed") return null;
   const payload = normalized.contentPayload && typeof normalized.contentPayload === "object" ? normalized.contentPayload : {};
-  const lessonSource = payload.lesson && typeof payload.lesson === "object"
-    ? cloneSerializableValue(payload.lesson)
-    : (payload.payload && typeof payload.payload === "object" ? cloneSerializableValue(payload.payload) : cloneSerializableValue(payload));
-  const lesson = lessonSource && typeof lessonSource === "object" ? lessonSource : {};
-  const questions = Array.isArray(payload.questions)
-    ? cloneSerializableValue(payload.questions)
-    : Array.isArray(payload.quiz)
-      ? cloneSerializableValue(payload.quiz)
-      : Array.isArray(payload.quizQuestions)
-        ? cloneSerializableValue(payload.quizQuestions)
-        : [];
+  let lesson = {};
+  let questions = [];
+  if (normalized.sourceType === "builtin_seed") {
+    const builtinLessons = Array.isArray(getLessons(normalized.subjectKey, normalized.grade))
+      ? getLessons(normalized.subjectKey, normalized.grade)
+      : [];
+    const liveBuiltinLesson = builtinLessons.find((entry) => (
+      resolveCustomChapterLessonKey({
+        lessonKey: entry?.key || entry?.id || entry?.title || entry?.titleUr || "",
+        title: entry?.title || entry?.titleUr || "",
+      }) === normalized.lessonKey
+    )) || null;
+    if (liveBuiltinLesson) {
+      lesson = cloneSerializableValue(liveBuiltinLesson) || {};
+      const liveBuiltinQuestions = getQuiz(normalized.subjectKey, normalized.grade, normalized.lessonKey);
+      questions = Array.isArray(liveBuiltinQuestions) ? cloneSerializableValue(liveBuiltinQuestions) : [];
+    }
+  }
+  if (!lesson || !Object.keys(lesson).length) {
+    const lessonSource = payload.lesson && typeof payload.lesson === "object"
+      ? cloneSerializableValue(payload.lesson)
+      : (payload.payload && typeof payload.payload === "object" ? cloneSerializableValue(payload.payload) : cloneSerializableValue(payload));
+    lesson = lessonSource && typeof lessonSource === "object" ? lessonSource : {};
+    questions = Array.isArray(payload.questions)
+      ? cloneSerializableValue(payload.questions)
+      : Array.isArray(payload.quiz)
+        ? cloneSerializableValue(payload.quiz)
+        : Array.isArray(payload.quizQuestions)
+          ? cloneSerializableValue(payload.quizQuestions)
+          : [];
+  }
   return {
     packId: normalized.packId,
     packLessonId: normalized.packLessonId,
@@ -16594,8 +16614,48 @@ const headerHideTimerRef = useRef(null);
       .map((entry) => buildCurriculumPackLessonEntry(entry))
       .filter(Boolean)
       .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lesson?.title || left.lessonKey).localeCompare(String(right.lesson?.title || right.lessonKey)));
-    const hasCoverage = subjectRows.some((entry) => !entry.isHidden) || entries.length > 0;
-    return { assignment, pack, subjectRows, lessonRows, entries, hasCoverage };
+    const usesBuiltinSeedSource = subjectRows.some((entry) => entry.sourceType === "builtin_seed")
+      || lessonRows.some((entry) => entry?.sourceType === "builtin_seed" || String(entry?.source_type || "").trim().toLowerCase() === "builtin_seed");
+    const augmentedEntries = (() => {
+      if (!usesBuiltinSeedSource) return entries;
+      const existingLessonKeys = new Set((Array.isArray(lessonRows) ? lessonRows : []).map((entry) => (
+        resolveCustomChapterLessonKey({
+          lessonKey: entry?.lessonKey || entry?.lesson_key || entry?.sourceLessonId || entry?.source_lesson_id || "",
+          title: entry?.lessonTitle || entry?.lesson_title || "",
+        })
+      )).filter(Boolean));
+      const builtinLessons = Array.isArray(getLessons(safeSubjectId, numericGrade))
+        ? getLessons(safeSubjectId, numericGrade)
+        : [];
+      const missingEntries = builtinLessons.reduce((acc, lesson, lessonIndex) => {
+        const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
+        if (!canonicalLessonKey || existingLessonKeys.has(canonicalLessonKey)) return acc;
+        const builtinQuestions = getQuiz(safeSubjectId, numericGrade, canonicalLessonKey);
+        acc.push({
+          packId: assignment.packId,
+          packLessonId: `builtin_seed_live_${assignment.packId}_${safeSubjectId}_${numericGrade}_${canonicalLessonKey}`,
+          subject: safeSubjectId,
+          grade: numericGrade,
+          lessonKey: canonicalLessonKey,
+          orderIndex: lessonIndex,
+          questions: Array.isArray(builtinQuestions) ? cloneSerializableValue(builtinQuestions) : [],
+          lesson: {
+            ...(cloneSerializableValue(lesson) || {}),
+            key: canonicalLessonKey,
+            id: `curriculum_pack_${assignment.packId}_${canonicalLessonKey}`,
+            __curriculumPack: true,
+            __curriculumPackId: assignment.packId,
+            __curriculumPackLessonId: `builtin_seed_live_${assignment.packId}_${safeSubjectId}_${numericGrade}_${canonicalLessonKey}`,
+            __sourceLabel: lesson?.title ? `Curriculum pack - ${lesson.title}` : "Curriculum pack",
+          },
+        });
+        return acc;
+      }, []);
+      return [...entries, ...missingEntries]
+        .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lesson?.title || left.lessonKey).localeCompare(String(right.lesson?.title || right.lessonKey)));
+    })();
+    const hasCoverage = subjectRows.some((entry) => !entry.isHidden) || augmentedEntries.length > 0;
+    return { assignment, pack, subjectRows, lessonRows, entries: augmentedEntries, hasCoverage };
   }, [activeInstitutionSchoolId, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
   const getEffectiveSubjectActivation = useCallback((subjectId, targetGrade) => resolveScopedActivation(visibleContentActivations, {
     activationType: "subject",
