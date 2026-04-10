@@ -660,7 +660,7 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .review-panel-head h3{font-size:16px;font-weight:800;margin-bottom:4px}
 .review-panel-head p{font-size:12px;color:var(--text-secondary);line-height:1.5}
 .page-section-shutter{padding:0 20px 10px;background:var(--bg-secondary);border-bottom:1px solid color-mix(in srgb,var(--border) 88%,transparent);position:relative;z-index:95}
-.page-section-shutter-handle{width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 14px 7px;border:none;border-radius:0 0 18px 18px;background:linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 94%,transparent),color-mix(in srgb,var(--bg-elevated) 92%,var(--bg-card)));color:var(--text-primary);cursor:pointer;text-align:center;box-shadow:0 12px 24px color-mix(in srgb,var(--bg-primary) 10%,transparent)}
+.page-section-shutter-handle{width:100%;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:2px;padding:8px 14px 7px;border:none;border-radius:0 0 18px 18px;background:linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 94%,transparent),color-mix(in srgb,var(--bg-elevated) 92%,var(--bg-card)));color:var(--text-primary);cursor:pointer;text-align:center;box-shadow:0 12px 24px color-mix(in srgb,var(--bg-primary) 10%,transparent)}
 .page-section-shutter-copy{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
 .page-section-shutter-copy strong{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);line-height:1.2}
 .page-section-shutter-chevron{font-size:14px;line-height:1;transition:transform .2s ease;color:var(--accent)}
