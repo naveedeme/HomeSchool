@@ -30980,7 +30980,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           type="button"
           className={`page-section-shutter-handle${pageSectionShutterOpen ? " open" : ""}`}
           aria-expanded={pageSectionShutterOpen ? "true" : "false"}
-          onClick={() => setPageSectionShutterOpen((current) => !current)}
+          onClick={isMobileNavViewport ? () => setPageSectionShutterOpen((current) => !current) : undefined}
         >
           <span className="page-section-shutter-copy">
             <strong>{renderLocalizedTextNode(currentPageSectionNav.title, language)}</strong>
