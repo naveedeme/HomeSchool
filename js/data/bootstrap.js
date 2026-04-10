@@ -45,7 +45,7 @@
   "./js/data/english/grade-3.js",
   "./js/data/english/grade-4.js",
   "./js/data/english/grade-5.js",
-  "./js/data/english/grade-5-tenses-standard.js",
+  "./js/data/english/grade-5-lesson-1-default.js",
   "./js/data/english/grade-6.js",
   "./js/data/english/grade-7.js",
   "./js/data/english/grade-8.js",
