@@ -30620,9 +30620,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     if (currentPageSectionNav.context === "review") setReviewSectionTab(safeSectionId);
     setPageSectionShutterOpen(false);
   };
-  const activePageSectionLabel = !currentPageSectionNav?.items?.length
-    ? ""
-    : currentPageSectionNav.items.find((entry) => entry.id === currentPageSectionNav.activeId)?.label || currentPageSectionNav.items[0]?.label || "";
   const currentQuiz = activeLessonQuizQuestions;
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
   const quizRecordedTotalMs = quizElapsedMs.reduce((sum, value) => sum + (Number(value) || 0), 0);
@@ -30984,9 +30981,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         >
           <span className="page-section-shutter-copy">
             <strong>{renderLocalizedTextNode(currentPageSectionNav.title, language)}</strong>
-            <span>{renderLocalizedTextNode(activePageSectionLabel, language)}</span>
           </span>
-          <span className="page-section-shutter-chevron" aria-hidden="true">⌄</span>
+          <span className="page-section-shutter-chevron" aria-hidden="true">▾</span>
         </button>
         <div className="page-section-shutter-panel">
           <div className="review-section-tabs page-section-shutter-tabs" role="tablist" aria-label={currentPageSectionNav.ariaLabel}>
