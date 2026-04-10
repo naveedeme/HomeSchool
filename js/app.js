@@ -16901,9 +16901,6 @@ const headerHideTimerRef = useRef(null);
     if (!mobileNavOpen) return;
     setProfileSwitcherOpen(false);
   }, [mobileNavOpen]);
-  useEffect(() => {
-    setPageSectionShutterOpen(false);
-  }, [tab]);
   const currentUserInstitutionRole = useMemo(() => {
     if (!currentUserSchoolMemberships.length || !activeInstitutionSchoolIdResolved) return "";
     const scopedRoles = currentUserSchoolMemberships
@@ -30523,7 +30520,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
   const isHomeLandingPage = tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !quizDone && !selDay;
   const isReviewLandingPage = tab === "review" && !activeReviewCard && !reviewSessionDone && !practiceMode;
   const renderInlinePageSectionTabs = false;
-  const currentPageSectionNav = useMemo(() => {
+  const currentPageSectionNav = (() => {
     if (isHomeLandingPage) {
       const items = [
         { id: "subjects", label: joinLocalizedText("Subjects", "مضامین", language) },
@@ -30612,8 +30609,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       };
     }
     return null;
-  }, [accessibleSchools.length, allSubjects, availableTestTemplates.length, canAssignContent, canManageContentAccess, canManageDiary, canManageInstitution, canManageParentLinks, canManageTests, canSeeLearnerManagement, diarySectionTab, homeSectionTab, isHomeLandingPage, isReviewLandingPage, language, linkedChildOptions.length, profilesSectionTab, progressSectionTab, reviewSectionTab, tab, ui.badges, ui.favorites, visibleChapterAssignments.length, visibleParentStudentLinks.length, visibleTeacherStudentLinks.length]);
-  const handlePageSectionNavSelect = useCallback((nextSectionId) => {
+  })();
+  const handlePageSectionNavSelect = (nextSectionId) => {
     const safeSectionId = String(nextSectionId || "").trim();
     if (!safeSectionId || !currentPageSectionNav?.context) return;
     if (currentPageSectionNav.context === "home") setHomeSectionTab(safeSectionId);
@@ -30622,11 +30619,10 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
     if (currentPageSectionNav.context === "diary") setDiarySectionTab(safeSectionId);
     if (currentPageSectionNav.context === "review") setReviewSectionTab(safeSectionId);
     setPageSectionShutterOpen(false);
-  }, [currentPageSectionNav?.context]);
-  const activePageSectionLabel = useMemo(() => {
-    if (!currentPageSectionNav?.items?.length) return "";
-    return currentPageSectionNav.items.find((entry) => entry.id === currentPageSectionNav.activeId)?.label || currentPageSectionNav.items[0]?.label || "";
-  }, [currentPageSectionNav]);
+  };
+  const activePageSectionLabel = !currentPageSectionNav?.items?.length
+    ? ""
+    : currentPageSectionNav.items.find((entry) => entry.id === currentPageSectionNav.activeId)?.label || currentPageSectionNav.items[0]?.label || "";
   const currentQuiz = activeLessonQuizQuestions;
   const quizScore = quizDone ? quizAnswers.reduce((a, v, i) => a + (v === currentQuiz[i]?.c ? 1 : 0), 0) : 0;
   const quizRecordedTotalMs = quizElapsedMs.reduce((sum, value) => sum + (Number(value) || 0), 0);
