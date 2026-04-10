@@ -10114,6 +10114,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
       return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: inlineTools ? "inline-study-row" : "", style: { width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...fillHeight ? { height: "100%", alignSelf: "stretch" } : {} } }, /* @__PURE__ */ React.createElement("div", { style: { flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...fillHeight ? { height: "100%", alignSelf: "stretch" } : {} } }, /* @__PURE__ */ React.createElement(
         "div",
         {
+          className: "inline-study-field",
           style: { display: fillHeight ? "flex" : fullWidth ? "block" : "inline-block", width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: "1px solid var(--border)", background: isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)", color: "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, direction: lang === "ur" ? "rtl" : "ltr", boxShadow: isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none", position: "relative", ...fillHeight ? { height: "100%", alignItems: "center" } : {}, ...buttonStyle }
         },
         /* @__PURE__ */ React.createElement(
@@ -10133,6 +10134,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
     return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: inlineTools ? "inline-study-row" : "", style: { width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...fillHeight ? { height: "100%", alignSelf: "stretch" } : {} } }, /* @__PURE__ */ React.createElement("div", { style: { flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...fillHeight ? { height: "100%", alignSelf: "stretch" } : {} } }, /* @__PURE__ */ React.createElement(
       "div",
       {
+        className: "inline-study-field",
         role: "button",
         tabIndex: 0,
         onClick: handleClick,
@@ -10302,6 +10304,7 @@ ${entry.examplesEng.map((example, index) => `${index + 1}. ${example}`).join("\n
     return /* @__PURE__ */ React.createElement("div", { ...focusProps, className: inlineTools ? "inline-study-row" : "", style: { width: "100%", maxWidth: "100%" } }, /* @__PURE__ */ React.createElement("div", { style: { flex: inlineTools ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" } }, /* @__PURE__ */ React.createElement(
       "div",
       {
+        className: "inline-study-field",
         role: "button",
         tabIndex: 0,
         onClick: handleClick,
