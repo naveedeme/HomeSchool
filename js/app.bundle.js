@@ -857,15 +857,17 @@
     const payload = normalized.contentPayload && typeof normalized.contentPayload === "object" ? normalized.contentPayload : {};
     let lesson = {};
     let questions = [];
+    let resolvedLessonKey = normalized.lessonKey;
     if (normalized.sourceType === "builtin_seed") {
       const builtinLessons = Array.isArray(getLessons(normalized.subjectKey, normalized.grade)) ? getLessons(normalized.subjectKey, normalized.grade) : [];
-      const liveBuiltinLesson = builtinLessons.find((entry) => resolveCustomChapterLessonKey({
-        lessonKey: (entry == null ? void 0 : entry.key) || (entry == null ? void 0 : entry.id) || (entry == null ? void 0 : entry.title) || (entry == null ? void 0 : entry.titleUr) || "",
-        title: (entry == null ? void 0 : entry.title) || (entry == null ? void 0 : entry.titleUr) || ""
-      }) === normalized.lessonKey) || null;
+      const liveBuiltinLesson = builtinLessons.find((entry, index) => {
+        const canonicalKey = getCanonicalLessonKeyForLesson(entry);
+        return canonicalKey === normalized.lessonKey || canonicalKey === normalized.sourceLessonId || String((entry == null ? void 0 : entry.title) || "").trim() === normalized.lessonTitle || index === normalized.orderIndex;
+      }) || null;
       if (liveBuiltinLesson) {
+        resolvedLessonKey = getCanonicalLessonKeyForLesson(liveBuiltinLesson) || normalized.lessonKey;
         lesson = cloneSerializableValue(liveBuiltinLesson) || {};
-        const liveBuiltinQuestions = getQuiz(normalized.subjectKey, normalized.grade, normalized.lessonKey);
+        const liveBuiltinQuestions = getQuiz(normalized.subjectKey, normalized.grade, resolvedLessonKey);
         questions = Array.isArray(liveBuiltinQuestions) ? cloneSerializableValue(liveBuiltinQuestions) : [];
       }
     }
@@ -879,15 +881,15 @@
       packLessonId: normalized.packLessonId,
       subject: normalized.subjectKey,
       grade: normalized.grade,
-      lessonKey: normalized.lessonKey,
+      lessonKey: resolvedLessonKey,
       orderIndex: normalized.orderIndex,
       questions,
       lesson: {
         ...lesson,
-        key: normalized.lessonKey,
-        id: `curriculum_pack_${normalized.packId}_${normalized.lessonKey}`,
-        title: String((lesson == null ? void 0 : lesson.title) || normalized.lessonTitle || normalized.lessonKey).trim() || normalized.lessonKey,
-        titleUr: String((lesson == null ? void 0 : lesson.titleUr) || normalized.lessonTitleUr || (lesson == null ? void 0 : lesson.title) || normalized.lessonTitle || normalized.lessonKey).trim() || normalized.lessonKey,
+        key: resolvedLessonKey,
+        id: `curriculum_pack_${normalized.packId}_${resolvedLessonKey}`,
+        title: String((lesson == null ? void 0 : lesson.title) || normalized.lessonTitle || resolvedLessonKey).trim() || resolvedLessonKey,
+        titleUr: String((lesson == null ? void 0 : lesson.titleUr) || normalized.lessonTitleUr || (lesson == null ? void 0 : lesson.title) || normalized.lessonTitle || resolvedLessonKey).trim() || resolvedLessonKey,
         __curriculumPack: true,
         __curriculumPackId: normalized.packId,
         __curriculumPackLessonId: normalized.packLessonId,
@@ -13942,10 +13944,7 @@ ${marker} `);
       const usesBuiltinSeedSource = subjectRows.some((entry) => entry.sourceType === "builtin_seed") || lessonRows.some((entry) => (entry == null ? void 0 : entry.sourceType) === "builtin_seed" || String((entry == null ? void 0 : entry.source_type) || "").trim().toLowerCase() === "builtin_seed");
       const augmentedEntries = (() => {
         if (!usesBuiltinSeedSource) return entries;
-        const existingLessonKeys = new Set((Array.isArray(lessonRows) ? lessonRows : []).map((entry) => resolveCustomChapterLessonKey({
-          lessonKey: (entry == null ? void 0 : entry.lessonKey) || (entry == null ? void 0 : entry.lesson_key) || (entry == null ? void 0 : entry.sourceLessonId) || (entry == null ? void 0 : entry.source_lesson_id) || "",
-          title: (entry == null ? void 0 : entry.lessonTitle) || (entry == null ? void 0 : entry.lesson_title) || ""
-        })).filter(Boolean));
+        const existingLessonKeys = new Set((Array.isArray(entries) ? entries : []).map((entry) => resolveCustomChapterLessonKey({ lessonKey: (entry == null ? void 0 : entry.lessonKey) || "" })).filter(Boolean));
         const builtinLessons = Array.isArray(getLessons(safeSubjectId, numericGrade)) ? getLessons(safeSubjectId, numericGrade) : [];
         const missingEntries = builtinLessons.reduce((acc, lesson, lessonIndex) => {
           const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
@@ -13971,7 +13970,15 @@ ${marker} `);
           });
           return acc;
         }, []);
-        return [...entries, ...missingEntries].sort((left, right) => {
+        const dedupedEntries = [...entries, ...missingEntries].reduce((acc, entry) => {
+          const canonicalLessonKey = resolveCustomChapterLessonKey({ lessonKey: (entry == null ? void 0 : entry.lessonKey) || "" });
+          if (!canonicalLessonKey || acc.some((current) => resolveCustomChapterLessonKey({ lessonKey: (current == null ? void 0 : current.lessonKey) || "" }) === canonicalLessonKey)) {
+            return acc;
+          }
+          acc.push(entry);
+          return acc;
+        }, []);
+        return dedupedEntries.sort((left, right) => {
           var _a2, _b2;
           return (left.orderIndex || 0) - (right.orderIndex || 0) || String(((_a2 = left.lesson) == null ? void 0 : _a2.title) || left.lessonKey).localeCompare(String(((_b2 = right.lesson) == null ? void 0 : _b2.title) || right.lessonKey));
         });
