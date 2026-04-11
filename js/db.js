@@ -170,6 +170,33 @@
     customSubjects: "&id, updatedAt",
   });
 
+  db.version(13).stores({
+    coreData: "id, type, subject, grade, lessonKey",
+    posData: "id, type, day",
+    tensesData: "id, main, sub",
+    vocabData: "id, day",
+    mathChapters: "id, key, grade",
+    quizData: "id, subject, lessonKey, grade",
+    reviewCards: "id, subject, section, dueAt, box, mastered, updatedAt, lastReviewedAt, prompt",
+    reviewHistory: "id, cardId, dayKey, reviewedAt, subject, section, rating",
+    wordMeta: "id, subject, section, favorite, updatedAt",
+    customLists: "id, updatedAt, name",
+    customListItems: "id, listId, cardId, updatedAt",
+    progress: "id, subject, lessonId, grade, completed, timestamp",
+    userStats: "id",
+    dataVersion: "id, version, lastUpdated",
+    customizations: "++id, type, ts",
+    dictionaryEntries: "&normalized, updatedAt, deletedAt",
+    dictionaryOutbox: "&normalized, updatedAt",
+    dictionarySyncMeta: "&key, updatedAt",
+    cloudSyncOutbox: "&syncKey, dataset, updatedAt",
+    profileSnapshots: "&id, updatedAt",
+    customLessons: "&id, subject, grade, lessonKey, updatedAt",
+    customQuizData: "&id, subject, grade, lessonKey, updatedAt",
+    customSubjects: "&id, updatedAt",
+    sourceFileAccess: "&id, updatedAt",
+  });
+
   const CLOUD_SYNC_SIGNAL_KEY = "hs_cloud_sync_signal";
   const GLOBAL_CLOUD_PROFILE_ID = "__global__";
   let activeCloudProfileId = "default";
@@ -1809,6 +1836,34 @@ async function saveCustomization(type, data, options = {}) {
     return true;
   }
 
+  async function getSourceFileAccessRecord(id = "curriculum_source_root") {
+    if (!db.sourceFileAccess) return null;
+    return db.sourceFileAccess.get(String(id || "curriculum_source_root").trim());
+  }
+
+  async function saveSourceFileAccessRecord(payload = {}) {
+    if (!db.sourceFileAccess) return null;
+    const id = String(payload?.id || "curriculum_source_root").trim();
+    if (!id) {
+      throw new Error("Source file access id is required.");
+    }
+    const record = {
+      id,
+      handle: payload?.handle || null,
+      rootName: String(payload?.rootName || payload?.handle?.name || "").trim(),
+      autoApplyLessonEdits: payload?.autoApplyLessonEdits !== false,
+      updatedAt: Number(payload?.updatedAt) || Date.now(),
+    };
+    await db.sourceFileAccess.put(record);
+    return record;
+  }
+
+  async function deleteSourceFileAccessRecord(id = "curriculum_source_root") {
+    if (!db.sourceFileAccess) return false;
+    await db.sourceFileAccess.delete(String(id || "curriculum_source_root").trim());
+    return true;
+  }
+
   window.HomeSchoolDB = {
     db,
 
@@ -1928,6 +1983,18 @@ async function saveCustomization(type, data, options = {}) {
 
     async deleteCustomChapter(subject, grade, lessonKey) {
       return deleteCustomChapter(subject, grade, lessonKey);
+    },
+
+    async getSourceFileAccessRecord(id = "curriculum_source_root") {
+      return getSourceFileAccessRecord(id);
+    },
+
+    async saveSourceFileAccessRecord(payload = {}) {
+      return saveSourceFileAccessRecord(payload);
+    },
+
+    async deleteSourceFileAccessRecord(id = "curriculum_source_root") {
+      return deleteSourceFileAccessRecord(id);
     },
 
     async getDueReviewCards(limit = 20, now = Date.now()) {

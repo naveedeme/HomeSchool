@@ -397,6 +397,159 @@ function cloneSerializableValue(value) {
   return JSON.parse(JSON.stringify(value == null ? null : value));
 }
 
+const SOURCE_FILE_ACCESS_RECORD_ID = "curriculum_source_root";
+const SOURCE_FILE_MANIFEST_RELATIVE_PATH = ["js", "data", "source-edits.manifest.json"];
+const SOURCE_FILE_RUNTIME_RELATIVE_PATH = ["js", "data", "source-edits.js"];
+const SOURCE_FILE_BOOTSTRAP_RELATIVE_PATH = ["js", "data", "bootstrap.js"];
+const SOURCE_FILE_BOOTSTRAP_SCRIPT = '  "./js/data/source-edits.js",';
+
+function isSourceFileAccessSupported() {
+  return typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
+}
+
+function normalizeSourceFileAccessRecord(raw = null) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  return {
+    id: String(source.id || SOURCE_FILE_ACCESS_RECORD_ID).trim() || SOURCE_FILE_ACCESS_RECORD_ID,
+    handle: source.handle || null,
+    rootName: String(source.rootName || source?.handle?.name || "").trim(),
+    autoApplyLessonEdits: source.autoApplyLessonEdits !== false,
+    updatedAt: Number(source.updatedAt) || 0,
+  };
+}
+
+function encodeJsonBase64(value) {
+  const jsonText = JSON.stringify(value == null ? null : value);
+  const bytes = new TextEncoder().encode(jsonText);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function buildSourceEditManifestKey(subject = "", grade = null, lessonKey = "") {
+  return buildBuiltinLessonSlotKey(subject, grade, lessonKey);
+}
+
+function normalizeSourceEditManifest(raw = null) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const safeOverrides = source.lessonOverrides && typeof source.lessonOverrides === "object" ? source.lessonOverrides : {};
+  const lessonOverrides = {};
+  Object.entries(safeOverrides).forEach(([rawKey, rawEntry]) => {
+    const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+    const rawKeyParts = String(rawKey || "").split("::");
+    const slotKey = buildSourceEditManifestKey(
+      entry.subject || rawKeyParts[0] || "",
+      (entry.grade ?? rawKeyParts[1]) || "",
+      entry.lessonKey || rawKeyParts[2] || "",
+    );
+    if (!slotKey) return;
+    lessonOverrides[slotKey] = {
+      subject: String(entry.subject || "").trim().toLowerCase(),
+      grade: Number(entry.grade),
+      lessonKey: resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
+      lessonId: String(entry.lessonId || "").trim(),
+      slotNumber: Math.max(1, Number(entry.slotNumber) || extractLessonOrdinal(entry.lessonKey, entry.lessonId, entry.title) || 1),
+      title: String(entry.title || "").trim(),
+      payloadBase64: String(entry.payloadBase64 || "").trim(),
+      updatedAt: Number(entry.updatedAt) || Date.now(),
+    };
+  });
+  return {
+    version: 1,
+    updatedAt: String(source.updatedAt || new Date().toISOString()).trim() || new Date().toISOString(),
+    lessonOverrides,
+  };
+}
+
+function buildSourceEditRuntimeScript(manifest = null) {
+  const normalizedManifest = normalizeSourceEditManifest(manifest);
+  return `(() => {
+  "use strict";
+
+  const sourceEdits = ${JSON.stringify(normalizedManifest, null, 2)};
+  const decodeLessonPayload = (payloadBase64) => {
+    try {
+      const binary = atob(payloadBase64);
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch (error) {
+      console.error("Failed to load source-edited built-in lesson payload", error);
+      return null;
+    }
+  };
+  const extractOrdinal = (value = "") => {
+    const match = String(value || "").match(/\\b(?:lesson|chapter|سبق)\\s*[_\\-\\s]?(\\d+)\\b/i) || String(value || "").match(/\\b(\\d+)\\b/);
+    return match ? Number(match[1]) : null;
+  };
+
+  Object.values(sourceEdits.lessonOverrides || {}).forEach((entry) => {
+    const lessons = window.HomeSchoolLessonModules?.[entry.subject]?.[entry.grade];
+    if (!Array.isArray(lessons)) return;
+    const nextLesson = decodeLessonPayload(entry.payloadBase64);
+    if (!nextLesson || typeof nextLesson !== "object") return;
+    const targetIndex = lessons.findIndex((lesson, index) => (
+      String(lesson?.key || "").trim() === entry.lessonKey
+      || String(lesson?.id || "").trim() === entry.lessonId
+      || String(lesson?.title || "").trim() === entry.title
+      || (Number.isFinite(Number(entry.slotNumber)) && index === Number(entry.slotNumber) - 1)
+      || extractOrdinal(lesson?.key || lesson?.id || lesson?.title || "") === Number(entry.slotNumber)
+    ));
+    if (targetIndex < 0) return;
+    const previousLesson = lessons[targetIndex] || {};
+    lessons[targetIndex] = {
+      ...nextLesson,
+      key: entry.lessonKey,
+      id: String(entry.lessonId || previousLesson?.id || [entry.subject, entry.grade, entry.lessonKey].join("_")).trim(),
+    };
+  });
+})();
+`;
+}
+
+async function ensureFileSystemPermission(handle, mode = "readwrite", request = false) {
+  if (!handle) return false;
+  if (typeof handle.queryPermission === "function") {
+    const status = await handle.queryPermission({ mode });
+    if (status === "granted") return true;
+    if (!request) return false;
+  }
+  if (request && typeof handle.requestPermission === "function") {
+    const status = await handle.requestPermission({ mode });
+    return status === "granted";
+  }
+  return false;
+}
+
+async function getDirectoryHandleByPath(rootHandle, segments = [], options = {}) {
+  let currentHandle = rootHandle;
+  for (const segment of Array.isArray(segments) ? segments : []) {
+    const safeSegment = String(segment || "").trim();
+    if (!safeSegment) continue;
+    currentHandle = await currentHandle.getDirectoryHandle(safeSegment, { create: Boolean(options.create) });
+  }
+  return currentHandle;
+}
+
+async function readTextFileIfExists(parentHandle, fileName) {
+  try {
+    const fileHandle = await parentHandle.getFileHandle(fileName, { create: false });
+    const file = await fileHandle.getFile();
+    return await file.text();
+  } catch (error) {
+    if (error?.name === "NotFoundError") return "";
+    throw error;
+  }
+}
+
+async function writeTextFile(parentHandle, fileName, contents) {
+  const fileHandle = await parentHandle.getFileHandle(fileName, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(String(contents || ""));
+  await writable.close();
+}
+
 function buildBuiltinLessonSlotKey(subject = "", grade = null, lessonKey = "") {
   const safeSubject = String(subject || "").trim().toLowerCase();
   const safeGrade = Number(grade);
@@ -15379,6 +15532,7 @@ function HomeschoolApp() {
   const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
   const publishedContentSnapshotPersistTimerRef = useRef(null);
   const curriculumRelationshipSnapshotPersistTimerRef = useRef(null);
+  const sourceFileAccessHandleRef = useRef(null);
   const [language, setLanguage] = useState(stored?.language || "en");
   const [themeMode, setThemeMode] = useState(stored?.themeMode || "light");
   const [fontSizeMode, setFontSizeMode] = useState(["small", "normal", "large", "xlarge"].includes(stored?.fontSizeMode) ? stored.fontSizeMode : "normal");
@@ -15411,8 +15565,30 @@ function HomeschoolApp() {
   const [studentName, setStudentName] = useState(initialActiveStudentProfile?.studentName || stored?.studentName || "");
   const [studentNameUr, setStudentNameUr] = useState(initialActiveStudentProfile?.studentNameUr || stored?.studentNameUr || "");
   const [tab, setTab] = useState("home");
+  const [sourceFileAccessState, setSourceFileAccessState] = useState(() => normalizeSourceFileAccessRecord());
+  const [sourceFileAccessBusy, setSourceFileAccessBusy] = useState(false);
+  const sourceFileAccessSupported = isSourceFileAccessSupported();
   const [reviewSectionTab, setReviewSectionTab] = useState("queue");
   const [homeSectionTab, setHomeSectionTab] = useState("subjects");
+  useEffect(() => {
+    let cancelled = false;
+    if (!window.HomeSchoolDB?.getSourceFileAccessRecord) return undefined;
+    (async () => {
+      try {
+        const storedSourceAccess = normalizeSourceFileAccessRecord(
+          await window.HomeSchoolDB.getSourceFileAccessRecord(SOURCE_FILE_ACCESS_RECORD_ID),
+        );
+        if (cancelled) return;
+        sourceFileAccessHandleRef.current = storedSourceAccess.handle || null;
+        setSourceFileAccessState(storedSourceAccess);
+      } catch (error) {
+        console.warn("Unable to restore source file access handle", error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [progressSectionTab, setProgressSectionTab] = useState("overview");
   const [profilesSectionTab, setProfilesSectionTab] = useState("profiles");
   const [diarySectionTab, setDiarySectionTab] = useState("daily");
@@ -20805,6 +20981,128 @@ const headerHideTimerRef = useRef(null);
     setLessonEditDraft(null);
     setLessonEditBusy(false);
   }, []);
+  const persistSourceFileAccessHandle = useCallback(async (record = null) => {
+    const normalizedRecord = normalizeSourceFileAccessRecord(record);
+    sourceFileAccessHandleRef.current = normalizedRecord.handle || null;
+    setSourceFileAccessState(normalizedRecord);
+    if (normalizedRecord.handle && window.HomeSchoolDB?.saveSourceFileAccessRecord) {
+      await window.HomeSchoolDB.saveSourceFileAccessRecord({
+        id: normalizedRecord.id,
+        handle: normalizedRecord.handle,
+        rootName: normalizedRecord.rootName,
+        autoApplyLessonEdits: normalizedRecord.autoApplyLessonEdits,
+        updatedAt: Date.now(),
+      });
+    }
+    if (!normalizedRecord.handle && window.HomeSchoolDB?.deleteSourceFileAccessRecord) {
+      await window.HomeSchoolDB.deleteSourceFileAccessRecord(SOURCE_FILE_ACCESS_RECORD_ID);
+    }
+  }, []);
+  const handleConnectSourceFiles = useCallback(async () => {
+    if (!sourceFileAccessSupported) {
+      showAppToast(joinLocalizedText("This browser does not support direct source-file access.", "یہ براؤزر براہِ راست ماخذ فائل تک رسائی کی سہولت نہیں دیتا۔", language), "alert");
+      return null;
+    }
+    try {
+      setSourceFileAccessBusy(true);
+      const rootHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+      const granted = await ensureFileSystemPermission(rootHandle, "readwrite", true);
+      if (!granted) throw new Error("Source folder write permission was not granted.");
+      await getDirectoryHandleByPath(rootHandle, ["js", "data"], { create: false });
+      const record = {
+        id: SOURCE_FILE_ACCESS_RECORD_ID,
+        handle: rootHandle,
+        rootName: String(rootHandle?.name || "").trim(),
+        autoApplyLessonEdits: true,
+        updatedAt: Date.now(),
+      };
+      await persistSourceFileAccessHandle(record);
+      showAppToast(joinLocalizedText("Source files connected. Lesson edits will now update built-in source overrides too.", "ماخذ فائلیں منسلک ہو گئیں۔ اب سبق کی تبدیلیاں بنیادی ماخذ اووررائیڈ میں بھی محفوظ ہوں گی۔", language), "check");
+      return record;
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        showAppToast(joinLocalizedText(`Unable to connect source files: ${error?.message || error}`, `ماخذ فائلیں منسلک نہیں ہو سکیں: ${error?.message || error}`, language), "alert");
+      }
+      return null;
+    } finally {
+      setSourceFileAccessBusy(false);
+    }
+  }, [language, persistSourceFileAccessHandle, showAppToast, sourceFileAccessSupported]);
+  const handleDisconnectSourceFiles = useCallback(async () => {
+    try {
+      setSourceFileAccessBusy(true);
+      await persistSourceFileAccessHandle(null);
+      showAppToast(joinLocalizedText("Source files disconnected.", "ماخذ فائلوں کا رابطہ ختم کر دیا گیا۔", language), "check");
+    } catch (error) {
+      showAppToast(joinLocalizedText(`Unable to disconnect source files: ${error?.message || error}`, `ماخذ فائلوں کا رابطہ ختم نہیں ہو سکا: ${error?.message || error}`, language), "alert");
+    } finally {
+      setSourceFileAccessBusy(false);
+    }
+  }, [language, persistSourceFileAccessHandle, showAppToast]);
+  const writeLessonEditsToSourceFiles = useCallback(async ({
+    subjectId,
+    targetGrade,
+    canonicalLessonKey,
+    lessonData,
+    lessonId = "",
+    lessonTitle = "",
+    slotNumber = null,
+  } = {}) => {
+    if (!sourceFileAccessSupported) {
+      throw new Error("Direct source-file access is not supported in this browser.");
+    }
+    let rootHandle = sourceFileAccessHandleRef.current || null;
+    if (!rootHandle) {
+      const connectedRecord = await handleConnectSourceFiles();
+      rootHandle = connectedRecord?.handle || null;
+    }
+    if (!rootHandle) {
+      throw new Error("Connect the HomeSchool project folder to apply source edits.");
+    }
+    const granted = await ensureFileSystemPermission(rootHandle, "readwrite", true);
+    if (!granted) {
+      throw new Error("Source folder write permission was not granted.");
+    }
+    const dataDirectoryHandle = await getDirectoryHandleByPath(rootHandle, ["js", "data"], { create: false });
+    const manifestFileName = SOURCE_FILE_MANIFEST_RELATIVE_PATH[SOURCE_FILE_MANIFEST_RELATIVE_PATH.length - 1];
+    const runtimeFileName = SOURCE_FILE_RUNTIME_RELATIVE_PATH[SOURCE_FILE_RUNTIME_RELATIVE_PATH.length - 1];
+    const bootstrapFileName = SOURCE_FILE_BOOTSTRAP_RELATIVE_PATH[SOURCE_FILE_BOOTSTRAP_RELATIVE_PATH.length - 1];
+    const existingManifestText = await readTextFileIfExists(dataDirectoryHandle, manifestFileName);
+    const existingManifest = existingManifestText ? normalizeSourceEditManifest(JSON.parse(existingManifestText)) : normalizeSourceEditManifest();
+    const slotKey = buildSourceEditManifestKey(subjectId, targetGrade, canonicalLessonKey);
+    if (!slotKey) throw new Error("Unable to resolve source edit lesson slot.");
+    const nextManifest = normalizeSourceEditManifest({
+      ...existingManifest,
+      updatedAt: new Date().toISOString(),
+      lessonOverrides: {
+        ...(existingManifest.lessonOverrides || {}),
+        [slotKey]: {
+          subject: String(subjectId || "").trim().toLowerCase(),
+          grade: Number(targetGrade),
+          lessonKey: resolveCustomChapterLessonKey({ lessonKey: canonicalLessonKey }),
+          lessonId: String(lessonId || `${subjectId}_${targetGrade}_${canonicalLessonKey}`).trim(),
+          slotNumber: Math.max(1, Number(slotNumber) || extractLessonOrdinal(canonicalLessonKey, lessonTitle, selectedLessonChapterGroup?.orderHint + 1) || 1),
+          title: String(lessonTitle || lessonData?.title || canonicalLessonKey).trim(),
+          payloadBase64: encodeJsonBase64(stripRuntimeLessonMarkers(cloneSerializableValue(lessonData) || {})),
+          updatedAt: Date.now(),
+        },
+      },
+    });
+    await writeTextFile(dataDirectoryHandle, manifestFileName, `${JSON.stringify(nextManifest, null, 2)}\n`);
+    await writeTextFile(dataDirectoryHandle, runtimeFileName, `${buildSourceEditRuntimeScript(nextManifest)}\n`);
+    const bootstrapText = await readTextFileIfExists(dataDirectoryHandle, bootstrapFileName);
+    if (!bootstrapText) {
+      throw new Error("Unable to find js/data/bootstrap.js in the selected project folder.");
+    }
+    if (!bootstrapText.includes("./js/data/source-edits.js")) {
+      const insertionTarget = '  "./js/data/index.js"';
+      const nextBootstrapText = bootstrapText.includes(insertionTarget)
+        ? bootstrapText.replace(insertionTarget, `${SOURCE_FILE_BOOTSTRAP_SCRIPT}\n${insertionTarget}`)
+        : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOURCE_FILE_BOOTSTRAP_SCRIPT}\n];\n  document.write`);
+      await writeTextFile(dataDirectoryHandle, bootstrapFileName, nextBootstrapText);
+    }
+    return nextManifest;
+  }, [handleConnectSourceFiles, selectedLessonChapterGroup?.orderHint, sourceFileAccessSupported]);
   const handleSaveLessonEdits = useCallback(async () => {
     if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can edit lessons.", "صرف ایڈمن اسباق میں ترمیم کر سکتے ہیں۔", language), "alert");
@@ -20831,6 +21129,20 @@ const headerHideTimerRef = useRef(null);
         data: nextLessonData,
         questions: getMergedQuiz(selectedSubject.id, grade, canonicalLessonKey),
       });
+      let sourceWriteError = null;
+      try {
+        await writeLessonEditsToSourceFiles({
+          subjectId: selectedSubject.id,
+          targetGrade: grade,
+          canonicalLessonKey,
+          lessonData: nextLessonData,
+          lessonId: nextLessonData.id,
+          lessonTitle: nextLessonData.title || selectedLesson?.title || canonicalLessonKey,
+          slotNumber: (selectedLessonChapterGroup?.orderHint ?? 0) + 1,
+        });
+      } catch (error) {
+        sourceWriteError = error;
+      }
       updateChapterSourceSelection(selectedSubject.id, grade, canonicalLessonKey, { mode: "custom" }, { silent: true, force: true });
       await refreshCustomContentState();
       const savedLessonData = cloneSerializableValue(savedCustomChapter?.lesson?.data || nextLessonData) || {};
@@ -20845,7 +21157,11 @@ const headerHideTimerRef = useRef(null);
       });
       setLessonEditMode(false);
       setLessonEditDraft(null);
-      showAppToast(joinLocalizedText("Lesson changes saved to local copy", "سبق کی تبدیلیاں مقامی کاپی میں محفوظ ہو گئیں", language), "check");
+      if (sourceWriteError) {
+        showAppToast(joinLocalizedText(`Lesson changes saved locally, but source files were not updated: ${sourceWriteError?.message || sourceWriteError}`, `سبق کی تبدیلیاں مقامی طور پر محفوظ ہو گئیں، مگر ماخذ فائلیں تازہ نہیں ہو سکیں: ${sourceWriteError?.message || sourceWriteError}`, language), "alert");
+      } else {
+        showAppToast(joinLocalizedText("Lesson changes saved to local copy and source files", "سبق کی تبدیلیاں مقامی کاپی اور ماخذ فائلوں میں محفوظ ہو گئیں", language), "check");
+      }
     } catch (error) {
       showAppToast(
         joinLocalizedText(`Unable to save lesson changes: ${error?.message || error}`, `سبق کی تبدیلیاں محفوظ نہیں ہو سکیں: ${error?.message || error}`, language),
@@ -20854,7 +21170,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setLessonEditBusy(false);
     }
-  }, [canAdministerLessonLibrary, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection]);
+  }, [canAdministerLessonLibrary, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
   const persistBuiltinLessonLayerState = useCallback(async (nextLayerState) => {
     const normalizedLayerState = normalizeBuiltinLessonLayerState(nextLayerState);
     const client = ensureSupabaseClientRef.current();
@@ -34079,6 +34395,18 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
               </button>
             ) : null}
+            {canAdministerLessonLibrary && sourceFileAccessSupported ? (
+              <button type="button" className="ghost-cta" onClick={sourceFileAccessState.handle ? handleDisconnectSourceFiles : handleConnectSourceFiles} disabled={sourceFileAccessBusy || lessonEditBusy}>
+                {renderLocalizedTextNode(
+                  sourceFileAccessBusy
+                    ? joinLocalizedText("Connecting Source...", "ماخذ منسلک ہو رہا ہے...", language)
+                    : sourceFileAccessState.handle
+                      ? joinLocalizedText(`Source Linked: ${sourceFileAccessState.rootName || "Project"}`, `ماخذ منسلک: ${sourceFileAccessState.rootName || "پروجیکٹ"}`, language)
+                      : joinLocalizedText("Connect Source Files", "ماخذ فائلیں منسلک کریں", language),
+                  language,
+                )}
+              </button>
+            ) : null}
             {canAdministerLessonLibrary && !lessonEditMode ? (
               <button type="button" className="ghost-cta" onClick={handleOpenLessonEditMode}>
                 {renderLocalizedTextNode(joinLocalizedText("Edit Lesson", "سبق میں ترمیم", language), language)}
@@ -34115,6 +34443,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </button>
             ) : null}
           </div>
+          {canAdministerLessonLibrary && sourceFileAccessSupported && sourceFileAccessState.handle ? (
+            <div className="goal-progress-meta" style={{ marginTop: 8 }}>
+              {renderLocalizedTextNode(joinLocalizedText("Lesson saves now also update js/data/source-edits.js in your connected project folder.", "سبق محفوظ کرتے وقت اب آپ کے منسلک منصوبے کے فولڈر میں js/data/source-edits.js بھی تازہ ہو گی۔", language), language)}
+            </div>
+          ) : null}
           {selectedLessonChapterGroup?.variants?.length > 1 ? (
             <div className="review-panel chapter-source-panel" data-ui-language={language}>
               <div className="review-panel-head">
