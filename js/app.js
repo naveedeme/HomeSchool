@@ -407,6 +407,10 @@ function isSourceFileAccessSupported() {
   return typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
 }
 
+function isLocalFileRuntime() {
+  return typeof window !== "undefined" && String(window.location?.protocol || "").trim().toLowerCase() === "file:";
+}
+
 function normalizeSourceFileAccessRecord(raw = null) {
   const source = raw && typeof raw === "object" ? raw : {};
   return {
@@ -15990,6 +15994,10 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
     ];
     return roleCandidates.some((role) => normalizeContentManagerRole(role) === "admin");
   }, [canManageContentAccess, contentAccessState.currentRole, contentManagerRole, liveContentRole, supabaseAuthState.role]);
+  const canUseLocalSourceTools = useMemo(
+    () => canAdministerLessonLibrary || isLocalFileRuntime(),
+    [canAdministerLessonLibrary],
+  );
   const effectiveContentRoleCapabilities = useMemo(() => (
     canAdministerLessonLibrary
       ? getContentRoleCapabilities("admin", contentAccessState.rolePermissions)
@@ -20381,7 +20389,7 @@ const headerHideTimerRef = useRef(null);
     }
   }, [allChapterGroups, allSubjects, canImportChapters, canImportSubjects, grade, language, refreshCustomContentState, selectedLesson, selectedSubject, selectedSubjectLessons.length, showAppToast]);
   const handleOpenDefaultBuiltinImport = useCallback(() => {
-    if (!canAdministerLessonLibrary) {
+    if (!canUseLocalSourceTools) {
       showAppToast(joinLocalizedText("Only admins can add default built-in lessons.", "صرف ایڈمن بنیادی اسباق شامل کر سکتے ہیں۔", language), "alert");
       return;
     }
@@ -20395,11 +20403,11 @@ const headerHideTimerRef = useRef(null);
     }
     if (defaultBuiltinImportInputRef.current) defaultBuiltinImportInputRef.current.value = "";
     defaultBuiltinImportInputRef.current?.click?.();
-  }, [canAdministerLessonLibrary, grade, language, selectedSubject, showAppToast, sourceFileAccessSupported]);
+  }, [canUseLocalSourceTools, grade, language, selectedSubject, showAppToast, sourceFileAccessSupported]);
   const handleImportDefaultBuiltinChapter = useCallback(async (event) => {
     const files = Array.from(event?.target?.files || []);
     if (!files.length) return;
-    if (!canAdministerLessonLibrary) {
+    if (!canUseLocalSourceTools) {
       if (event?.target) event.target.value = "";
       showAppToast(joinLocalizedText("Only admins can add default built-in lessons.", "صرف ایڈمن بنیادی اسباق شامل کر سکتے ہیں۔", language), "alert");
       return;
@@ -20525,7 +20533,7 @@ const headerHideTimerRef = useRef(null);
       setDefaultBuiltinImportBusy(false);
       if (event?.target) event.target.value = "";
     }
-  }, [canAdministerLessonLibrary, grade, language, selectedLesson, selectedSubject, selectedSubjectChapterGroups.length, showAppToast]);
+  }, [canUseLocalSourceTools, grade, language, selectedLesson, selectedSubject, selectedSubjectChapterGroups.length, showAppToast]);
   const handleExportSelectedChapter = useCallback(() => {
     if (!canExportContent) {
       showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "آپ کے مواد والے کردار کو ابواب برآمد کرنے کی اجازت نہیں۔", language), "alert");
@@ -34078,7 +34086,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               )}
             </button>
           ) : null}
-          {canAdministerLessonLibrary ? (
+          {canUseLocalSourceTools ? (
             <button type="button" className="ghost-cta" onClick={handleOpenDefaultBuiltinImport} disabled={defaultBuiltinImportBusy || sourceFileAccessBusy}>
               {renderLocalizedTextNode(
                 defaultBuiltinImportBusy
@@ -34160,7 +34168,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 ? joinLocalizedText("Tap the delete icon on a lesson card to remove the built-in copy, delete the local copy, or remove the whole slot when only a published copy is active.", "سبق کارڈ پر حذف کے نشان کو دبائیں تاکہ بنیادی کاپی ہٹ جائے، مقامی کاپی حذف ہو جائے، یا جب صرف شائع شدہ کاپی فعال ہو تو پورا سبق خانہ ہٹ جائے۔", language)
                 : subjectLessonPermanentDeleteMode
                 ? joinLocalizedText("Tap the delete icon on a lesson card to permanently delete that whole lesson slot from the active built-in layer.", "سبق کارڈ پر حذف کے نشان کو دبائیں تاکہ وہ پورا سبق خانہ فعال بنیادی سطح سے مستقل طور پر حذف ہو جائے۔", language)
-                : canAdministerLessonLibrary
+                : canUseLocalSourceTools
                 ? joinLocalizedText("Import many chapter JSON files, add a JSON as a real default built-in lesson, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، JSON سے ایک حقیقی بنیادی سبق شامل کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language)
                 : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، باب پیک درآمد کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language))
                 : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "مواد درآمد اور اشاعت کے اوزار ایڈمن سنبھالتے ہیں۔ آپ کے موجودہ کردار کے لیے یہ مضمون صرف دیکھنے کے قابل ہے۔", language),
@@ -34673,7 +34681,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
               </button>
             ) : null}
-            {canAdministerLessonLibrary ? (
+            {canUseLocalSourceTools ? (
               <button type="button" className="ghost-cta" onClick={sourceFileAccessState.handle ? handleDisconnectSourceFiles : handleConnectSourceFiles} disabled={sourceFileAccessBusy || lessonEditBusy}>
                 {renderLocalizedTextNode(
                   sourceFileAccessBusy
