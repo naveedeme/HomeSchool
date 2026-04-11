@@ -390,7 +390,9 @@
   function normalizeSourceEditManifest(raw = null) {
     const source = raw && typeof raw === "object" ? raw : {};
     const safeOverrides = source.lessonOverrides && typeof source.lessonOverrides === "object" ? source.lessonOverrides : {};
+    const safeOrderOverrides = source.lessonOrderOverrides && typeof source.lessonOrderOverrides === "object" ? source.lessonOrderOverrides : {};
     const lessonOverrides = {};
+    const lessonOrderOverrides = {};
     Object.entries(safeOverrides).forEach(([rawKey, rawEntry]) => {
       var _a;
       const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
@@ -405,6 +407,7 @@
         subject: String(entry.subject || "").trim().toLowerCase(),
         grade: Number(entry.grade),
         lessonKey: resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }),
+        action: String(entry.action || "").trim().toLowerCase() === "delete" ? "delete" : "replace",
         lessonId: String(entry.lessonId || "").trim(),
         slotNumber: Math.max(1, Number(entry.slotNumber) || extractLessonOrdinal(entry.lessonKey, entry.lessonId, entry.title) || 1),
         title: String(entry.title || "").trim(),
@@ -413,10 +416,21 @@
         updatedAt: Number(entry.updatedAt) || Date.now()
       };
     });
+    Object.entries(safeOrderOverrides).forEach(([rawKey, rawValue]) => {
+      const parts = String(rawKey || "").split("::");
+      const subject = String(parts[0] || "").trim().toLowerCase();
+      const grade = Number(parts[1]);
+      if (!subject || !Number.isFinite(grade)) return;
+      const orderKey = `${subject}::${grade}`;
+      const lessonKeys = Array.from(new Set((Array.isArray(rawValue) ? rawValue : []).map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry || "" })).filter(Boolean)));
+      if (!lessonKeys.length) return;
+      lessonOrderOverrides[orderKey] = lessonKeys;
+    });
     return {
       version: 1,
       updatedAt: String(source.updatedAt || (/* @__PURE__ */ new Date()).toISOString()).trim() || (/* @__PURE__ */ new Date()).toISOString(),
-      lessonOverrides
+      lessonOverrides,
+      lessonOrderOverrides
     };
   }
   function buildSourceEditRuntimeScript(manifest = null) {
@@ -459,9 +473,6 @@
   Object.values(sourceEdits.lessonOverrides || {}).forEach((entry) => {
     const lessons = ensureLessonBucket(entry.subject, entry.grade);
     const quizBucket = ensureQuizBucket(entry.subject, entry.grade);
-    const nextLesson = decodeLessonPayload(entry.payloadBase64);
-    const nextQuestions = decodeLessonPayload(entry.questionsPayloadBase64);
-    if (!nextLesson || typeof nextLesson !== "object") return;
     const targetIndex = lessons.findIndex((lesson, index) => (
       String(lesson?.key || "").trim() === entry.lessonKey
       || String(lesson?.id || "").trim() === entry.lessonId
@@ -469,6 +480,22 @@
       || (Number.isFinite(Number(entry.slotNumber)) && index === Number(entry.slotNumber) - 1)
       || extractOrdinal(lesson?.key || lesson?.id || lesson?.title || "") === Number(entry.slotNumber)
     ));
+    if (entry.action === "delete") {
+      if (targetIndex >= 0) {
+        const removedLesson = lessons[targetIndex] || {};
+        lessons.splice(targetIndex, 1);
+        const removedLessonKey = String(removedLesson?.key || entry.lessonKey || "").trim();
+        if (removedLessonKey && Object.prototype.hasOwnProperty.call(quizBucket, removedLessonKey)) {
+          delete quizBucket[removedLessonKey];
+        }
+      } else if (entry.lessonKey && Object.prototype.hasOwnProperty.call(quizBucket, entry.lessonKey)) {
+        delete quizBucket[entry.lessonKey];
+      }
+      return;
+    }
+    const nextLesson = decodeLessonPayload(entry.payloadBase64);
+    const nextQuestions = decodeLessonPayload(entry.questionsPayloadBase64);
+    if (!nextLesson || typeof nextLesson !== "object") return;
     const previousLesson = targetIndex >= 0 ? (lessons[targetIndex] || {}) : {};
     const resolvedLesson = {
       ...nextLesson,
@@ -488,6 +515,20 @@
       }
       quizBucket[entry.lessonKey] = nextQuestions;
     }
+  });
+  Object.entries(sourceEdits.lessonOrderOverrides || {}).forEach(([orderKey, orderedLessonKeys]) => {
+    const [subject = "", grade = ""] = String(orderKey || "").split("::");
+    const lessons = window.HomeSchoolLessonModules?.[subject]?.[Number(grade)];
+    if (!Array.isArray(lessons) || !Array.isArray(orderedLessonKeys) || !orderedLessonKeys.length) return;
+    const orderLookup = new Map(orderedLessonKeys.map((lessonKey, index) => [String(lessonKey || "").trim(), index]));
+    lessons.sort((left, right) => {
+      const leftKey = String(left?.key || "").trim();
+      const rightKey = String(right?.key || "").trim();
+      const leftIndex = orderLookup.has(leftKey) ? orderLookup.get(leftKey) : Number.MAX_SAFE_INTEGER;
+      const rightIndex = orderLookup.has(rightKey) ? orderLookup.get(rightKey) : Number.MAX_SAFE_INTEGER;
+      if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+      return String(left?.title || leftKey).localeCompare(String(right?.title || rightKey));
+    });
   });
 })();
 `;
@@ -15382,6 +15423,9 @@ ${marker} `);
     const writeLessonEditsToSourceFilesRef = useRef(async () => {
       throw new Error("Source-file lesson writer not ready");
     });
+    const writeLessonOrderToSourceFilesRef = useRef(async () => {
+      throw new Error("Source-file lesson-order writer not ready");
+    });
     const requestCurriculumSelectionReconcile = useCallback(() => {
       curriculumSelectionReconcileModeRef.current = "apply";
     }, []);
@@ -17482,19 +17526,11 @@ ${marker} `);
         window.HomeSchoolLessonModules[safeSubjectId] = window.HomeSchoolLessonModules[safeSubjectId] || {};
         const lessonBucket = Array.isArray(window.HomeSchoolLessonModules[safeSubjectId][safeGrade]) ? window.HomeSchoolLessonModules[safeSubjectId][safeGrade] : [];
         window.HomeSchoolLessonModules[safeSubjectId][safeGrade] = lessonBucket;
-        const targetIndex = lessonBucket.findIndex((lesson, index) => {
-          var _a4, _b3;
-          return String((lesson == null ? void 0 : lesson.key) || "").trim() === safeLessonKey || String((lesson == null ? void 0 : lesson.id) || "").trim() === String(((_a4 = chapter == null ? void 0 : chapter.data) == null ? void 0 : _a4.id) || "").trim() || String((lesson == null ? void 0 : lesson.title) || "").trim() === String(((_b3 = chapter == null ? void 0 : chapter.data) == null ? void 0 : _b3.title) || "").trim() || Number.isFinite(Number(slotNumber)) && index === Number(slotNumber) - 1;
-        });
         const nextLesson = stripRuntimeLessonMarkers(cloneSerializableValue(chapter == null ? void 0 : chapter.data) || {});
         nextLesson.key = safeLessonKey;
         nextLesson.id = String(nextLesson.id || `${safeSubjectId}_${safeGrade}_${safeLessonKey}`).trim();
-        if (targetIndex >= 0) {
-          lessonBucket[targetIndex] = nextLesson;
-        } else {
-          const insertIndex = Math.max(0, Math.min(lessonBucket.length, Number.isFinite(Number(slotNumber)) ? Number(slotNumber) - 1 : lessonBucket.length));
-          lessonBucket.splice(insertIndex, 0, nextLesson);
-        }
+        const insertIndex = Math.max(0, Math.min(lessonBucket.length, Number.isFinite(Number(slotNumber)) ? Number(slotNumber) - 1 : lessonBucket.length));
+        lessonBucket.splice(insertIndex, 0, nextLesson);
         window.HomeSchoolQuizModules = window.HomeSchoolQuizModules || {};
         window.HomeSchoolQuizModules[safeSubjectId] = window.HomeSchoolQuizModules[safeSubjectId] || {};
         if (!window.HomeSchoolQuizModules[safeSubjectId][safeGrade] || typeof window.HomeSchoolQuizModules[safeSubjectId][safeGrade] !== "object") {
@@ -17506,19 +17542,30 @@ ${marker} `);
       try {
         const importedChapters = [];
         const failures = [];
+        let nextSlotNumber = selectedSubjectChapterGroups.length + 1;
         for (const file of files) {
           try {
             const parsed = JSON.parse(await file.text());
             const normalized = normalizeCustomContentImportPayload(parsed, {
               subject: selectedSubject.id,
               grade,
-              nextLessonNumber: selectedSubjectChapterGroups.length + importedChapters.length + 1
+              nextLessonNumber: nextSlotNumber
             });
-            (normalized.chapters || []).forEach((chapter, index) => {
-              var _a3;
+            (normalized.chapters || []).forEach((chapter) => {
+              const assignedSlotNumber = nextSlotNumber++;
+              const assignedLessonKey = `lesson_${assignedSlotNumber}`;
+              const nextLessonData = stripRuntimeLessonMarkers(cloneSerializableValue(chapter == null ? void 0 : chapter.data) || {});
+              nextLessonData.key = assignedLessonKey;
+              nextLessonData.id = `${selectedSubject.id}_${grade}_${assignedLessonKey}`;
               importedChapters.push({
-                chapter,
-                slotNumber: extractLessonOrdinal(chapter.lessonKey, (_a3 = chapter.data) == null ? void 0 : _a3.title, selectedSubjectChapterGroups.length + importedChapters.length + index + 1) || selectedSubjectChapterGroups.length + importedChapters.length + index + 1
+                chapter: {
+                  ...chapter,
+                  subject: selectedSubject.id,
+                  grade: Number(grade),
+                  lessonKey: assignedLessonKey,
+                  data: nextLessonData
+                },
+                slotNumber: assignedSlotNumber
               });
             });
           } catch (error) {
@@ -17539,6 +17586,7 @@ ${marker} `);
             canonicalLessonKey: entry.chapter.lessonKey,
             lessonData: entry.chapter.data,
             questions: entry.chapter.questions,
+            action: "replace",
             lessonId: ((_b2 = entry.chapter.data) == null ? void 0 : _b2.id) || `${entry.chapter.subject}_${entry.chapter.grade}_${entry.chapter.lessonKey}`,
             lessonTitle: ((_c2 = entry.chapter.data) == null ? void 0 : _c2.title) || entry.chapter.lessonKey,
             slotNumber: entry.slotNumber
@@ -17640,14 +17688,14 @@ ${marker} `);
       });
     }, []);
     const handleOpenSubjectLessonArrangeMode = useCallback(() => {
-      if (!canAdministerLessonLibrary || !selectedSubject || !grade) return;
+      if (!canUseLocalSourceTools || !selectedSubject || !grade) return;
       setChapterSelectionMode(false);
       setSelectedChapterKeys([]);
       setSubjectLessonRemoveMode(false);
       setSubjectLessonPermanentDeleteMode(false);
       startLessonArrangeMode(selectedSubject.id, grade);
       setSubjectLessonArrangeMode(true);
-    }, [canAdministerLessonLibrary, grade, selectedSubject, startLessonArrangeMode]);
+    }, [canUseLocalSourceTools, grade, selectedSubject, startLessonArrangeMode]);
     const handleCancelSubjectLessonArrangeMode = useCallback(() => {
       if (!selectedSubject || !grade) {
         setSubjectLessonArrangeMode(false);
@@ -17658,7 +17706,7 @@ ${marker} `);
       setSubjectLessonArrangeMode(false);
     }, [clearLessonOrderDraft, grade, selectedSubject]);
     const handleToggleSubjectLessonRemoveMode = useCallback(() => {
-      if (!canAdministerLessonLibrary) return;
+      if (!canUseLocalSourceTools) return;
       if (!subjectLessonRemoveMode) {
         setChapterSelectionMode(false);
         setSelectedChapterKeys([]);
@@ -17667,9 +17715,9 @@ ${marker} `);
         setLessonArrangeDragState(null);
       }
       setSubjectLessonRemoveMode((current) => !current);
-    }, [canAdministerLessonLibrary, subjectLessonRemoveMode]);
+    }, [canUseLocalSourceTools, subjectLessonRemoveMode]);
     const handleToggleSubjectLessonPermanentDeleteMode = useCallback(() => {
-      if (!canAdministerLessonLibrary) return;
+      if (!canUseLocalSourceTools) return;
       if (!subjectLessonPermanentDeleteMode) {
         setChapterSelectionMode(false);
         setSelectedChapterKeys([]);
@@ -17678,15 +17726,34 @@ ${marker} `);
         setLessonArrangeDragState(null);
       }
       setSubjectLessonPermanentDeleteMode((current) => !current);
-    }, [canAdministerLessonLibrary, subjectLessonPermanentDeleteMode]);
-    const handleSaveSubjectLessonOrder = useCallback(() => {
+    }, [canUseLocalSourceTools, subjectLessonPermanentDeleteMode]);
+    const handleSaveSubjectLessonOrder = useCallback(async () => {
       if (!selectedSubject || !grade) return;
+      const nextOrder = getLessonOrderDraft(selectedSubject.id, grade, selectedSubjectChapterGroups);
       saveLessonOrderDraft(selectedSubject.id, grade);
+      if (canUseLocalSourceTools && sourceFileAccessSupported && nextOrder.length) {
+        try {
+          await writeLessonOrderToSourceFilesRef.current(selectedSubject.id, grade, nextOrder);
+        } catch (error) {
+          showAppToast(
+            joinLocalizedText(
+              `Lesson order saved locally, but source files were not updated: ${(error == null ? void 0 : error.message) || error}`,
+              `\u0627\u0633\u0628\u0627\u0642 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC\u060C \u0645\u06AF\u0631 \u0645\u0627\u062E\u0630 \u0641\u0627\u0626\u0644\u06CC\u06BA \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC\u06BA: ${(error == null ? void 0 : error.message) || error}`,
+              language
+            ),
+            "alert"
+          );
+          clearLessonOrderDraft(selectedSubject.id, grade);
+          setLessonArrangeDragState(null);
+          setSubjectLessonArrangeMode(false);
+          return;
+        }
+      }
       clearLessonOrderDraft(selectedSubject.id, grade);
       setLessonArrangeDragState(null);
       setSubjectLessonArrangeMode(false);
       showAppToast(joinLocalizedText("Lesson order saved", "\u0627\u0633\u0628\u0627\u0642 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC", language), "check");
-    }, [clearLessonOrderDraft, grade, language, saveLessonOrderDraft, selectedSubject, showAppToast]);
+    }, [canUseLocalSourceTools, clearLessonOrderDraft, getLessonOrderDraft, grade, language, saveLessonOrderDraft, selectedSubject, selectedSubjectChapterGroups, showAppToast, sourceFileAccessSupported]);
     const handleToggleMyChaptersArrangeMode = useCallback(() => {
       var _a2;
       if (!canAdministerLessonLibrary) return;
@@ -18330,6 +18397,7 @@ ${marker} `);
       canonicalLessonKey,
       lessonData,
       questions = [],
+      action = "replace",
       lessonId = "",
       lessonTitle = "",
       slotNumber = null
@@ -18366,11 +18434,12 @@ ${marker} `);
             subject: String(subjectId || "").trim().toLowerCase(),
             grade: Number(targetGrade),
             lessonKey: resolveCustomChapterLessonKey({ lessonKey: canonicalLessonKey }),
+            action: String(action || "").trim().toLowerCase() === "delete" ? "delete" : "replace",
             lessonId: String(lessonId || `${subjectId}_${targetGrade}_${canonicalLessonKey}`).trim(),
             slotNumber: Math.max(1, Number(slotNumber) || extractLessonOrdinal(canonicalLessonKey, lessonTitle, (selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.orderHint) + 1) || 1),
             title: String(lessonTitle || (lessonData == null ? void 0 : lessonData.title) || canonicalLessonKey).trim(),
-            payloadBase64: encodeJsonBase64(stripRuntimeLessonMarkers(cloneSerializableValue(lessonData) || {})),
-            questionsPayloadBase64: encodeJsonBase64(Array.isArray(questions) ? cloneSerializableValue(questions) : []),
+            payloadBase64: String(action || "").trim().toLowerCase() === "delete" ? "" : encodeJsonBase64(stripRuntimeLessonMarkers(cloneSerializableValue(lessonData) || {})),
+            questionsPayloadBase64: String(action || "").trim().toLowerCase() === "delete" ? "" : encodeJsonBase64(Array.isArray(questions) ? cloneSerializableValue(questions) : []),
             updatedAt: Date.now()
           }
         }
@@ -18393,7 +18462,54 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }
       return nextManifest;
     }, [handleConnectSourceFiles, selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.orderHint, sourceFileAccessSupported]);
+    const writeLessonOrderToSourceFiles = useCallback(async (subjectId, targetGrade, orderedLessonKeys = []) => {
+      if (!sourceFileAccessSupported) {
+        throw new Error("Direct source-file access is not supported in this browser.");
+      }
+      let rootHandle = sourceFileAccessHandleRef.current || null;
+      if (!rootHandle) {
+        const connectedRecord = await handleConnectSourceFiles();
+        rootHandle = (connectedRecord == null ? void 0 : connectedRecord.handle) || null;
+      }
+      if (!rootHandle) {
+        throw new Error("Connect the HomeSchool project folder to apply source edits.");
+      }
+      const granted = await ensureFileSystemPermission(rootHandle, "readwrite", true);
+      if (!granted) {
+        throw new Error("Source folder write permission was not granted.");
+      }
+      const dataDirectoryHandle = await getDirectoryHandleByPath(rootHandle, ["js", "data"], { create: false });
+      const manifestFileName = SOURCE_FILE_MANIFEST_RELATIVE_PATH[SOURCE_FILE_MANIFEST_RELATIVE_PATH.length - 1];
+      const runtimeFileName = SOURCE_FILE_RUNTIME_RELATIVE_PATH[SOURCE_FILE_RUNTIME_RELATIVE_PATH.length - 1];
+      const bootstrapFileName = SOURCE_FILE_BOOTSTRAP_RELATIVE_PATH[SOURCE_FILE_BOOTSTRAP_RELATIVE_PATH.length - 1];
+      const existingManifestText = await readTextFileIfExists(dataDirectoryHandle, manifestFileName);
+      const existingManifest = existingManifestText ? normalizeSourceEditManifest(JSON.parse(existingManifestText)) : normalizeSourceEditManifest();
+      const orderKey = `${String(subjectId || "").trim().toLowerCase()}::${Number(targetGrade)}`;
+      const nextManifest = normalizeSourceEditManifest({
+        ...existingManifest,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        lessonOrderOverrides: {
+          ...existingManifest.lessonOrderOverrides || {},
+          [orderKey]: Array.from(new Set((Array.isArray(orderedLessonKeys) ? orderedLessonKeys : []).map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry || "" })).filter(Boolean)))
+        }
+      });
+      await writeTextFile(dataDirectoryHandle, manifestFileName, `${JSON.stringify(nextManifest, null, 2)}
+`);
+      await writeTextFile(dataDirectoryHandle, runtimeFileName, `${buildSourceEditRuntimeScript(nextManifest)}
+`);
+      const bootstrapText = await readTextFileIfExists(dataDirectoryHandle, bootstrapFileName);
+      if (bootstrapText && !bootstrapText.includes("./js/data/source-edits.js")) {
+        const insertionTarget = '  "./js/data/index.js"';
+        const nextBootstrapText = bootstrapText.includes(insertionTarget) ? bootstrapText.replace(insertionTarget, `${SOURCE_FILE_BOOTSTRAP_SCRIPT}
+${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOURCE_FILE_BOOTSTRAP_SCRIPT}
+];
+  document.write`);
+        await writeTextFile(dataDirectoryHandle, bootstrapFileName, nextBootstrapText);
+      }
+      return nextManifest;
+    }, [handleConnectSourceFiles, sourceFileAccessSupported]);
     writeLessonEditsToSourceFilesRef.current = writeLessonEditsToSourceFiles;
+    writeLessonOrderToSourceFilesRef.current = writeLessonOrderToSourceFiles;
     const handleSaveLessonEdits = useCallback(async () => {
       var _a2, _b2, _c2;
       if (!canAdministerLessonLibrary) {
@@ -18724,13 +18840,49 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }
     }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
     const handleDeleteLessonSlotPermanently = useCallback(async (group) => {
-      var _a2;
-      if (!canAdministerLessonLibrary) {
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2;
+      if (!canUseLocalSourceTools) {
         showAppToast(joinLocalizedText("Only admins can permanently delete lessons.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
       if (!(group == null ? void 0 : group.canonicalLessonKey)) {
         showAppToast(joinLocalizedText("No lesson slot is available here.", "\u06CC\u06C1\u0627\u06BA \u06A9\u0648\u0626\u06CC \u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
+        return;
+      }
+      if (canUseLocalSourceTools && isLocalFileRuntime()) {
+        try {
+          await writeLessonEditsToSourceFilesRef.current({
+            subjectId: group.subjectId,
+            targetGrade: group.grade,
+            canonicalLessonKey: group.canonicalLessonKey,
+            lessonData: null,
+            questions: [],
+            action: "delete",
+            lessonId: `${group.subjectId}_${Number(group.grade)}_${group.canonicalLessonKey}`,
+            lessonTitle: group.title || ((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.canonicalLessonKey,
+            slotNumber: ((_b2 = group.orderHint) != null ? _b2 : 0) + 1
+          });
+          const lessonBucket = (_d2 = (_c2 = window.HomeSchoolLessonModules) == null ? void 0 : _c2[group.subjectId]) == null ? void 0 : _d2[Number(group.grade)];
+          if (Array.isArray(lessonBucket)) {
+            const targetIndex = lessonBucket.findIndex((lesson) => String((lesson == null ? void 0 : lesson.key) || "").trim() === String(group.canonicalLessonKey || "").trim());
+            if (targetIndex >= 0) lessonBucket.splice(targetIndex, 1);
+          }
+          const quizBucket = (_f2 = (_e2 = window.HomeSchoolQuizModules) == null ? void 0 : _e2[group.subjectId]) == null ? void 0 : _f2[Number(group.grade)];
+          if (quizBucket && typeof quizBucket === "object") {
+            delete quizBucket[group.canonicalLessonKey];
+          }
+          updateChapterSourceSelection(group.subjectId, group.grade, group.canonicalLessonKey, null, { silent: true, force: true });
+          if (String(getCanonicalLessonKeyForLesson(selectedLesson) || "").trim() === String(group.canonicalLessonKey || "").trim()) {
+            setSelectedLesson(null);
+          }
+          setSelectedSubject((current) => current ? { ...current } : current);
+          showAppToast(joinLocalizedText("Lesson deleted permanently", "\u0633\u0628\u0642 \u0645\u0633\u062A\u0642\u0644 \u0637\u0648\u0631 \u067E\u0631 \u062D\u0630\u0641 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
+        } catch (error) {
+          showAppToast(
+            joinLocalizedText(`Unable to permanently delete lesson: ${(error == null ? void 0 : error.message) || error}`, `\u0633\u0628\u0642 \u0645\u0633\u062A\u0642\u0644 \u0637\u0648\u0631 \u067E\u0631 \u062D\u0630\u0641 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u0627: ${(error == null ? void 0 : error.message) || error}`, language),
+            "alert"
+          );
+        }
         return;
       }
       if (!supabaseAuthState.userId || !contentIdentityEmail) {
@@ -18757,7 +18909,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           subject: group.subjectId,
           grade: Number(group.grade),
           lessonKey: group.canonicalLessonKey,
-          title: String(group.title || ((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.canonicalLessonKey).trim(),
+          title: String(group.title || ((_g2 = group.activeLesson) == null ? void 0 : _g2.title) || group.canonicalLessonKey).trim(),
           deletedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
           deletedAt: Date.now()
         };
@@ -18792,7 +18944,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           "alert"
         );
       }
-    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, selectedLesson, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canUseLocalSourceTools, contentIdentityEmail, language, persistBuiltinLessonLayerState, selectedLesson, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
     const handleQuickRemoveLessonGroup = useCallback(async (group) => {
       const activeVariant = (group == null ? void 0 : group.activeVariant) || null;
       if (!activeVariant) return;
@@ -28573,7 +28725,7 @@ ${error.message || error}`);
     )) : null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleRefreshCurriculumContent, disabled: contentRelationshipBusy }, renderLocalizedTextNode(joinLocalizedText("Refresh Content", "\u0645\u0648\u0627\u062F \u062A\u0627\u0632\u06C1 \u06A9\u0631\u06CC\u06BA", language), language)), canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${chapterSelectionMode ? " active" : ""}`, onClick: handleToggleChapterSelectionMode }, renderLocalizedTextNode(
       chapterSelectionMode ? joinLocalizedText("Done Selecting", "\u0627\u0646\u062A\u062E\u0627\u0628 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Select Lessons", "\u0627\u0633\u0628\u0627\u0642 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language),
       language
-    )) : null, chapterSelectionMode && canExportContent ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSelectAllSubjectChapters, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Select All", "\u0633\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClearSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Export Selected", "\u0645\u0646\u062A\u062E\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportAllSubjectLessons, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportWholeSubject, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "\u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && !subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenSubjectLessonArrangeMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Arrange Lessons", "\u0627\u0633\u0628\u0627\u0642 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSaveSubjectLessonOrder, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Save Order", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleCancelSubjectLessonArrangeMode }, renderLocalizedTextNode(joinLocalizedText("Cancel Arrange", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u0646\u0633\u0648\u062E", language), language))) : null, canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${subjectLessonRemoveMode ? " active" : ""}`, onClick: handleToggleSubjectLessonRemoveMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(subjectLessonRemoveMode ? joinLocalizedText("Done Removing", "\u062D\u0630\u0641 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Remove Chapter", "\u0633\u0628\u0642 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${subjectLessonPermanentDeleteMode ? " active" : ""}`, onClick: handleToggleSubjectLessonPermanentDeleteMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(subjectLessonPermanentDeleteMode ? joinLocalizedText("Done Deleting", "\u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Delete Permanently", "\u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641", language), language)) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
+    )) : null, chapterSelectionMode && canExportContent ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSelectAllSubjectChapters, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Select All", "\u0633\u0628 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleClearSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Clear", "\u0635\u0627\u0641 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapters, disabled: !selectedChapterKeys.length }, renderLocalizedTextNode(joinLocalizedText("Export Selected", "\u0645\u0646\u062A\u062E\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language))) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportAllSubjectLessons, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export All Lessons", "\u062A\u0645\u0627\u0645 \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportWholeSubject, disabled: !selectedSubjectLessons.length }, renderLocalizedTextNode(joinLocalizedText("Export Whole Subject", "\u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canUseLocalSourceTools && !subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenSubjectLessonArrangeMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Arrange Lessons", "\u0627\u0633\u0628\u0627\u0642 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u06BA", language), language)) : null, canUseLocalSourceTools && subjectLessonArrangeMode ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSaveSubjectLessonOrder, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(joinLocalizedText("Save Order", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleCancelSubjectLessonArrangeMode }, renderLocalizedTextNode(joinLocalizedText("Cancel Arrange", "\u062A\u0631\u062A\u06CC\u0628 \u0645\u0646\u0633\u0648\u062E", language), language))) : null, canUseLocalSourceTools ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${subjectLessonRemoveMode ? " active" : ""}`, onClick: handleToggleSubjectLessonRemoveMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(subjectLessonRemoveMode ? joinLocalizedText("Done Removing", "\u062D\u0630\u0641 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Remove Chapter", "\u0633\u0628\u0642 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canUseLocalSourceTools ? /* @__PURE__ */ React.createElement("button", { type: "button", className: `ghost-cta${subjectLessonPermanentDeleteMode ? " active" : ""}`, onClick: handleToggleSubjectLessonPermanentDeleteMode, disabled: !selectedSubjectChapterGroups.length }, renderLocalizedTextNode(subjectLessonPermanentDeleteMode ? joinLocalizedText("Done Deleting", "\u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u0645\u06A9\u0645\u0644", language) : joinLocalizedText("Delete Permanently", "\u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641", language), language)) : null, /* @__PURE__ */ React.createElement("div", { className: "subject-chapter-actions-copy" }, renderLocalizedTextNode(
       canImportChapters || canImportSubjects || canExportContent || canAdministerLessonLibrary ? chapterSelectionMode && canExportContent ? joinLocalizedText(`${selectedChapterKeys.length} lesson(s) selected for chapter-pack export.`, `${selectedChapterKeys.length} \u0627\u0633\u0628\u0627\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u06D2 \u0644\u06CC\u06D2 \u0645\u0646\u062A\u062E\u0628 \u06C1\u06CC\u06BA\u06D4`, language) : subjectLessonArrangeMode ? joinLocalizedText("Hold Ctrl and drag a lesson card to reorder it, or use the move buttons, then save the order for this subject.", "\u0633\u0628\u0642 \u06A9\u0648 \u062F\u0648\u0628\u0627\u0631\u06C1 \u062A\u0631\u062A\u06CC\u0628 \u062F\u06CC\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u06A9\u0627\u0631\u0688 \u06AF\u06BE\u0633\u06CC\u0679\u06CC\u06BA \u06CC\u0627 \u0627\u0648\u067E\u0631 \u0646\u06CC\u0686\u06D2 \u06A9\u06D2 \u0628\u0679\u0646 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u06CC \u062A\u0631\u062A\u06CC\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA\u06D4", language) : subjectLessonRemoveMode ? joinLocalizedText("Tap the delete icon on a lesson card to remove the built-in copy, delete the local copy, or remove the whole slot when only a published copy is active.", "\u0633\u0628\u0642 \u06A9\u0627\u0631\u0688 \u067E\u0631 \u062D\u0630\u0641 \u06A9\u06D2 \u0646\u0634\u0627\u0646 \u06A9\u0648 \u062F\u0628\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0628\u0646\u06CC\u0627\u062F\u06CC \u06A9\u0627\u067E\u06CC \u06C1\u0679 \u062C\u0627\u0626\u06D2\u060C \u0645\u0642\u0627\u0645\u06CC \u06A9\u0627\u067E\u06CC \u062D\u0630\u0641 \u06C1\u0648 \u062C\u0627\u0626\u06D2\u060C \u06CC\u0627 \u062C\u0628 \u0635\u0631\u0641 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u06A9\u0627\u067E\u06CC \u0641\u0639\u0627\u0644 \u06C1\u0648 \u062A\u0648 \u067E\u0648\u0631\u0627 \u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u06C1\u0679 \u062C\u0627\u0626\u06D2\u06D4", language) : subjectLessonPermanentDeleteMode ? joinLocalizedText("Tap the delete icon on a lesson card to permanently delete that whole lesson slot from the active built-in layer.", "\u0633\u0628\u0642 \u06A9\u0627\u0631\u0688 \u067E\u0631 \u062D\u0630\u0641 \u06A9\u06D2 \u0646\u0634\u0627\u0646 \u06A9\u0648 \u062F\u0628\u0627\u0626\u06CC\u06BA \u062A\u0627\u06A9\u06C1 \u0648\u06C1 \u067E\u0648\u0631\u0627 \u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u0641\u0639\u0627\u0644 \u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0637\u062D \u0633\u06D2 \u0645\u0633\u062A\u0642\u0644 \u0637\u0648\u0631 \u067E\u0631 \u062D\u0630\u0641 \u06C1\u0648 \u062C\u0627\u0626\u06D2\u06D4", language) : canUseLocalSourceTools ? joinLocalizedText("Import many chapter JSON files, add a JSON as a real default built-in lesson, or export this whole subject as one pack.", "\u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C JSON \u0633\u06D2 \u0627\u06CC\u06A9 \u062D\u0642\u06CC\u0642\u06CC \u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0628\u0642 \u0634\u0627\u0645\u0644 \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0627\u06CC\u06A9 \u067E\u06CC\u06A9 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language) : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "\u06A9\u0626\u06CC \u0628\u0627\u0628 JSON \u0641\u0627\u0626\u0644\u06CC\u06BA \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u0628\u0627\u0628 \u067E\u06CC\u06A9 \u062F\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u060C \u06CC\u0627 \u067E\u0648\u0631\u0627 \u0645\u0636\u0645\u0648\u0646 \u0627\u06CC\u06A9 \u067E\u06CC\u06A9 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA\u06D4", language) : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "\u0645\u0648\u0627\u062F \u062F\u0631\u0622\u0645\u062F \u0627\u0648\u0631 \u0627\u0634\u0627\u0639\u062A \u06A9\u06D2 \u0627\u0648\u0632\u0627\u0631 \u0627\u06CC\u0688\u0645\u0646 \u0633\u0646\u0628\u06BE\u0627\u0644\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4 \u0622\u067E \u06A9\u06D2 \u0645\u0648\u062C\u0648\u062F\u06C1 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u06D2 \u0644\u06CC\u06D2 \u06CC\u06C1 \u0645\u0636\u0645\u0648\u0646 \u0635\u0631\u0641 \u062F\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0642\u0627\u0628\u0644 \u06C1\u06D2\u06D4", language),
       language
     ))), canManageScopedCurriculum ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-scope-panel", "data-ui-language": language, style: { marginBottom: 16 } }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Subject Source Control", "\u0645\u0636\u0645\u0648\u0646 \u0645\u0627\u062E\u0630 \u06A9\u0646\u0679\u0631\u0648\u0644", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Publish this subject as one reusable source, then activate it for one school, one grade, one learner, or everywhere.", "\u0627\u0633 \u0645\u0636\u0645\u0648\u0646 \u06A9\u0648 \u0627\u06CC\u06A9 \u0642\u0627\u0628\u0644\u0650 \u0627\u0633\u062A\u0639\u0645\u0627\u0644 \u0645\u0627\u062E\u0630 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0634\u0627\u0626\u0639 \u06A9\u0631\u06CC\u06BA\u060C \u067E\u06BE\u0631 \u0627\u0633\u06D2 \u0627\u06CC\u06A9 \u0627\u0633\u06A9\u0648\u0644\u060C \u0627\u06CC\u06A9 \u062C\u0645\u0627\u0639\u062A\u060C \u0627\u06CC\u06A9 \u0637\u0627\u0644\u0628 \u0639\u0644\u0645\u060C \u06CC\u0627 \u06C1\u0631 \u062C\u06AF\u06C1 \u06A9\u06D2 \u0644\u06CC\u06D2 \u0641\u0639\u0627\u0644 \u06A9\u0631\u06CC\u06BA\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(
