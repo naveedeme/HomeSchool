@@ -12630,7 +12630,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
   if (editModeActive) {
     return (
       <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
-        <div style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
+        <div className={inlineTools ? "inline-study-content" : ""} style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
           <div
             className="inline-study-field"
             style={{ display: fillHeight ? "flex" : (fullWidth ? "block" : "inline-block"), width: fullWidth ? "100%" : "auto", maxWidth: "100%", textAlign: lang === "ur" ? "right" : "left", padding: "12px 16px", marginBottom: 0, borderRadius: 10, border: "1px solid var(--border)", background: isLight ? "var(--bg-card)" : "rgba(30,41,59,0.6)", color: "var(--text-primary)", fontFamily: lang === "ur" ? "'Noto Nastaliq Urdu', serif" : "'Baloo 2', sans-serif", fontSize: 18, lineHeight: 1.7, direction: lang === "ur" ? "rtl" : "ltr", boxShadow: isLight ? "0 10px 24px rgba(15,23,42,0.05)" : "none", position: "relative", ...(fillHeight ? { height: "100%", alignItems: "center" } : {}), ...buttonStyle }}
@@ -12652,7 +12652,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
   }
   return (
     <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
-      <div style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
+      <div className={inlineTools ? "inline-study-content" : ""} style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
       <div
         className="inline-study-field"
         role="button"
@@ -12845,7 +12845,7 @@ function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, 
   const inlineTools = showStudyToolbar && studyCard;
   return (
     <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: "100%", maxWidth: "100%" }}>
-      <div style={{ flex: inlineTools ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" }}>
+      <div className={inlineTools ? "inline-study-content" : ""} style={{ flex: inlineTools ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" }}>
       <div
         className="inline-study-field"
         role="button"
@@ -15516,6 +15516,7 @@ function WordRow({ en, ur, fieldPathBase = null }) {
   return (
     <div {...focusProps} onClick={editModeActive ? undefined : speakBoth} style={{ cursor: editModeActive ? "default" : "pointer", boxShadow: sBoth ? "0 0 0 1px rgba(56,189,248,0.22)" : "none", transition: "box-shadow 0.2s", flexDirection: "column", alignItems: "stretch", gap: 8 }}>
       <div className="attached-study-shell" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div className="attached-study-content" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         {editModeActive ? (
           <>
             <LessonEditableText value={en} fieldPath={[...fieldPathBase, "en"]} as="div" style={{ flex: 1 }} />
@@ -15527,6 +15528,7 @@ function WordRow({ en, ur, fieldPathBase = null }) {
             <span className={"word-ur" + (sUr ? " word-active" : "")} onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : undefined, transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
           </>
         )}
+        </div>
         <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "englishWords", sectionLabel: "English" }} />
       </div>
       {studyCard?.note ? <div className="word-study-row" onClick={(event) => event.stopPropagation()}><div style={{ width: "100%" }}><span className="word-study-note">{studyCard.note}</span></div></div> : null}
@@ -15553,7 +15555,7 @@ function OppositeWordRow({ en, ur, opposite, oppositeUr, fieldPathBase = null })
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
       <div className="attached-study-shell" style={{ display: "flex", alignItems: "stretch", gap: 8, width: "100%" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, width: "100%", flex: 1 }}>
+      <div className="attached-study-content" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, width: "100%", flex: 1 }}>
         <div style={cardStyle}>
           <span style={labelStyle}>Word</span>
           <SpeakableSentence text={en} lang="en" fullWidth={false} buttonStyle={{ background: isLight ? "rgba(56,189,248,0.10)" : "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.28)", color: isLight ? "var(--text-primary)" : "#E0F2FE", justifyContent: "flex-start" }} fieldPath={fieldPathBase ? [...fieldPathBase, "en"] : null} />
@@ -15589,7 +15591,7 @@ function SentencePairRow({ en, ur, fieldPathBase = null }) {
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
       <div className="attached-study-shell" style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
-        <div style={{ ...cardStyle, flex: 1 }}>
+        <div className="attached-study-content" style={{ ...cardStyle, flex: 1 }}>
           <span style={labelStyle}>English Sentence</span>
           <SpeakableSentence text={en} lang="en" showStudyToolbar={false} buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLight ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0 }} fieldPath={fieldPathBase ? [...fieldPathBase, "en"] : null} />
           <span style={{ ...labelStyle, color: "#22C55E", marginTop: 2 }}>Urdu Translation</span>
@@ -15633,6 +15635,7 @@ function AdjWordRow({ en, ur, comp, sup, fieldPathBase = null }) {
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
       <div className="attached-study-shell" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div className="attached-study-content" style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         {fieldPathBase && lessonEdit?.enabled ? (
           <>
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -15650,6 +15653,7 @@ function AdjWordRow({ en, ur, comp, sup, fieldPathBase = null }) {
             <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
           </>
         )}
+        </div>
         <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "adjectives", sectionLabel: "Adjectives" }} />
       </div>
     </div>
@@ -15688,6 +15692,7 @@ function VerbWordRow({ en, ur, v2, v3, fieldPathBase = null }) {
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
       <div className="attached-study-shell" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div className="attached-study-content" style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         {fieldPathBase && lessonEdit?.enabled ? (
           <>
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -15705,6 +15710,7 @@ function VerbWordRow({ en, ur, v2, v3, fieldPathBase = null }) {
             <span onClick={speakUr} style={{ cursor: "pointer", color: sUr ? "#38BDF8" : "var(--text-secondary)", fontFamily: "'Noto Nastaliq Urdu', serif", fontSize: 14, direction: "rtl", transition: "color 0.2s", flex: 1 }}>{sUr ? "🔊" : "🔈"} {ur}</span>
           </>
         )}
+        </div>
         <InlineStudyActionBar studyItem={{ prompt: en, answer: ur, subject: "english", section: "verbs", sectionLabel: "Verbs" }} />
       </div>
     </div>
@@ -35406,7 +35412,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {selectedTensePara.qs.map((q, i) => (
                   <div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}>
                     <div className="inline-study-row">
-                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                      <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ color: "#F59E0B", fontWeight: 700, flexShrink: 0 }}>Q{i+1}.</span>
                         <span>{q}</span>
                       </div>
@@ -35531,7 +35537,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       className="inline-study-row"
                       style={{ direction: isUr ? "rtl" : "ltr" }}
                     >
-                      <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
+                      <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex" }}>
                 <ExercisePromptContent
                   text={normalizeDiaryOutlineLeafLabel(exampleEntry)}
                   studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
@@ -35564,9 +35570,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               {lessonDay.pairs && lessonDay.pairs.map((pair, i) => (
                 <div key={i} className="word-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, pair, i, `day_${lessonDay.day || dayIdx + 1}`, "pairs")} style={{cursor:"default",gap:10,flexDirection:"column",alignItems:"stretch"}}>
                   <div className="attached-study-shell" style={{display:"flex",alignItems:"stretch",gap:10,width:"100%"}}>
+                  <div className="attached-study-content" style={{flex:1,minWidth:0,display:"flex",alignItems:"stretch",gap:10,width:"100%"}}>
                   <div style={{flex:1}}><SpeakableSentence text={pair.left} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.right }} fieldPath={["subs", mathSubIdx, "dayLessons", dayIdx, "pairs", i, "left"]} /></div>
                   <span style={{color:"var(--accent)",fontWeight:800}}>↔</span>
                   <div style={{flex:1}}><SpeakableSentence text={pair.right} lang="en" showStudyToolbar={false} studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs`, secondaryText: pair.left }} fieldPath={["subs", mathSubIdx, "dayLessons", dayIdx, "pairs", i, "right"]} /></div>
+                  </div>
                   <InlineStudyActionBar studyItem={{ prompt: pair.left, answer: pair.right, subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Pairs` }} />
                   </div>
                 </div>
@@ -35617,7 +35625,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
           {sub.examples.map((ex,i) => (
             <div key={i} className="inline-study-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
-              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
+              <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex" }}>
                 <ExercisePromptContent
                   text={ex}
                   studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
@@ -35630,7 +35638,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           ))}
           {sub.examplesData && sub.examplesData.map((ex,i) => (
             <div key={`examples_data_${i}`} className="inline-study-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
-              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
+              <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex" }}>
                 <ExercisePromptContent
                   text={normalizeDiaryOutlineLeafLabel(ex)}
                   studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Examples` }}
@@ -35699,7 +35707,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       const displayP = p.replace(/(\d)̲/g, '[$1]').replace(/(\d)\u0332/g, '[$1]');
                       return (<div key={"A_"+pi} className="attached-study-shell" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>A{pi+1}</span>
-                        <div style={{flex:1,minWidth:0,display:"flex"}}>
+                        <div className="attached-study-content" style={{flex:1,minWidth:0,display:"flex"}}>
                           <ExercisePromptContent
                             text={displayP}
                             studyItem={{ subject: selectedSubject?.id || "general", section: sub.t, sectionLabel: `${sub.t} Exercise Items` }}
@@ -35741,7 +35749,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       const a = ex.ans[originalIndex];
                       return (<div key={"B_"+pi} className="attached-study-shell" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>B{pi+1}</span>
-                        <div style={{flex:1,minWidth:0,display:"flex"}}>
+                        <div className="attached-study-content" style={{flex:1,minWidth:0,display:"flex"}}>
                           <SpeakableSentence
                             text={a}
                             lang={isUrduText(a)?"ur":"en"}
@@ -35783,7 +35791,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 const promptVisual = getSimpleMachinePromptVisual(sub, ex, displayP);
                 return (<div key={pi} className="attached-study-shell" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:8,paddingRight:isUr?8:0,direction:isUr?"rtl":"ltr"}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{String.fromCharCode(97+pi)}</span>
-                  <div style={{flex:1,minWidth:0,display:"flex",alignItems:"stretch",gap:8}}>
+                  <div className="attached-study-content" style={{flex:1,minWidth:0,display:"flex",alignItems:"stretch",gap:8}}>
                     {promptVisual ? <span style={{alignSelf:"center",display:"inline-flex"}}>{promptVisual}</span> : null}
                     <div style={{flex:1,minWidth:0,display:"flex"}}>
                       <ExercisePromptContent
@@ -35946,7 +35954,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             {selectedTensePara.qs.map((q, i) => (
               <div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}>
                 <div className="inline-study-row">
-                  <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ color: "#F59E0B", fontWeight: 700, flexShrink: 0 }}>Q{i+1}.</span>
                     <span>{q}</span>
                   </div>

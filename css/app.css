@@ -730,6 +730,8 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .study-tool-btn.save{background:linear-gradient(135deg,var(--accent),#0EA5E9);color:#0F172A;border:none}
 .study-tools.inline{margin:0;display:flex;align-items:center}
 .study-tools.inline .study-tool-row{gap:6px;flex-wrap:nowrap}
+.inline-study-content{flex:1;min-width:0}
+.attached-study-content{flex:1;min-width:0}
 .question-actions{display:flex;align-items:center;align-self:center;gap:6px;flex-shrink:0}
 .question-show-btn{display:inline-flex;align-items:center;justify-content:center;align-self:center}
 .inline-study-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -797,29 +799,40 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
   .attached-study-shell,
   .attached-field-actions-shell{flex-direction:column;align-items:stretch;gap:0}
   .inline-study-row{margin-bottom:12px}
+  .inline-study-row > .inline-study-content,
   .inline-study-row > :first-child,
+  .attached-study-shell > .attached-study-content,
   .attached-study-shell > :first-child,
+  .attached-field-actions-shell > .inline-study-content,
   .attached-field-actions-shell > :first-child{width:100%!important;min-width:0!important;flex:1 1 auto!important}
-  .inline-study-row .inline-study-field{border-radius:10px 10px 0 0!important}
-  .attached-study-shell > :first-child > *:first-child,
-  .attached-field-actions-shell > :first-child > *:first-child{border-bottom-left-radius:0!important;border-bottom-right-radius:0!important}
-  .inline-study-row .study-tools.inline,
-  .inline-study-row .question-actions,
+  .inline-study-row > .inline-study-content .inline-study-field,
+  .inline-study-row > :first-child .inline-study-field,
+  .attached-study-content .inline-study-field,
+  .attached-field-actions-shell > .inline-study-content .inline-study-field{border-bottom-left-radius:0!important;border-bottom-right-radius:0!important}
+  .inline-study-row > .study-tools.inline,
+  .inline-study-row > .question-actions,
   .attached-study-shell > .attached-field-actions,
-  .attached-field-actions-shell > .study-tools.inline{width:100%;align-self:stretch;margin-top:-1px;padding:5px 12px 6px;border:1px solid var(--border);border-top:none;border-radius:0 0 14px 14px;background:color-mix(in srgb,var(--bg-card) 98%,white);box-shadow:0 10px 18px rgba(15,23,42,.04)}
-  .inline-study-row .study-tools.inline .study-tool-row,
-  .attached-field-actions-shell > .study-tools.inline .study-tool-row{width:100%;justify-content:flex-end;gap:10px}
-  .inline-study-row .question-actions,
-  .attached-study-shell > .attached-field-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px}
-  .inline-study-row .question-actions .study-tools.inline,
+  .attached-field-actions-shell > .study-tools.inline{width:100%;align-self:stretch;margin-top:-1px;padding:6px 12px 8px;border:1px solid var(--border);border-top:none;border-radius:0 0 16px 16px;background:color-mix(in srgb,var(--bg-card) 98%,white 2%);box-shadow:0 12px 18px rgba(15,23,42,.05)}
+  .inline-study-row > .study-tools.inline .study-tool-row,
+  .inline-study-row > .question-actions .study-tool-row,
+  .attached-study-shell > .attached-field-actions .study-tool-row,
+  .attached-field-actions-shell > .study-tools.inline .study-tool-row{width:100%;justify-content:flex-end;gap:6px}
+  .inline-study-row > .question-actions,
+  .attached-study-shell > .attached-field-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+  .inline-study-row > .question-actions .study-tools.inline,
   .attached-study-shell > .attached-field-actions .study-tools.inline{width:auto;align-self:auto;margin:0;padding:0;border:none;border-radius:0;background:transparent;box-shadow:none}
-  .inline-study-row .question-actions .study-tool-row,
-  .attached-study-shell > .attached-field-actions .study-tool-row{justify-content:flex-end;gap:10px}
-  .inline-study-row .question-actions .question-show-btn,
-  .attached-study-shell > .attached-field-actions .question-show-btn{align-self:auto}
-  .inline-study-row .study-tools.inline .study-tool-btn.icon-only,
+  .inline-study-row > .study-tools.inline .study-tool-btn.icon-only,
+  .inline-study-row > .question-actions .study-tool-btn.icon-only,
   .attached-study-shell > .attached-field-actions .study-tool-btn.icon-only,
-  .attached-field-actions-shell > .study-tools.inline .study-tool-btn.icon-only{width:36px;min-width:36px;height:36px;border-radius:12px}
+  .attached-field-actions-shell > .study-tools.inline .study-tool-btn.icon-only{width:38px;min-width:38px;height:38px;border:none;background:transparent;box-shadow:none;border-radius:10px}
+  .inline-study-row > .study-tools.inline .study-tool-btn.icon-only.active,
+  .inline-study-row > .question-actions .study-tool-btn.icon-only.active,
+  .attached-study-shell > .attached-field-actions .study-tool-btn.icon-only.active,
+  .attached-field-actions-shell > .study-tools.inline .study-tool-btn.icon-only.active{background:rgba(245,158,11,0.10)}
+  .inline-study-row > .study-tools.inline .question-show-btn,
+  .inline-study-row > .question-actions .question-show-btn,
+  .attached-study-shell > .attached-field-actions .question-show-btn,
+  .attached-field-actions-shell > .study-tools.inline .question-show-btn{align-self:auto}
 }
 @media (max-width: 640px){
   .flashcard-stage{padding-inline:10px}
