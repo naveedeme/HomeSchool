@@ -20434,7 +20434,7 @@ const headerHideTimerRef = useRef(null);
       if (event?.target) event.target.value = "";
     }
   }, [allChapterGroups, allSubjects, canImportChapters, canImportSubjects, grade, language, refreshCustomContentState, selectedLesson, selectedSubject, selectedSubjectLessons.length, showAppToast]);
-  const handleOpenDefaultBuiltinImport = useCallback(() => {
+  const handleOpenDefaultBuiltinImport = useCallback(async () => {
     if (!canUseLocalSourceTools) {
       showAppToast(joinLocalizedText("Only admins can add default built-in lessons.", "صرف ایڈمن بنیادی اسباق شامل کر سکتے ہیں۔", language), "alert");
       return;
@@ -20447,9 +20447,13 @@ const headerHideTimerRef = useRef(null);
       showAppToast(joinLocalizedText("Open a subject and choose a grade first.", "پہلے ایک مضمون کھولیں اور جماعت منتخب کریں۔", language), "alert");
       return;
     }
+    if (!sourceFileAccessState.handle) {
+      const connectedRecord = await handleConnectSourceFiles();
+      if (!connectedRecord?.handle) return;
+    }
     if (defaultBuiltinImportInputRef.current) defaultBuiltinImportInputRef.current.value = "";
     defaultBuiltinImportInputRef.current?.click?.();
-  }, [canUseLocalSourceTools, grade, language, selectedSubject, showAppToast, sourceFileAccessSupported]);
+  }, [canUseLocalSourceTools, grade, handleConnectSourceFiles, language, selectedSubject, showAppToast, sourceFileAccessState.handle, sourceFileAccessSupported]);
   const handleImportDefaultBuiltinChapter = useCallback(async (event) => {
     const files = Array.from(event?.target?.files || []);
     if (!files.length) return;
@@ -34235,6 +34239,18 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 chapterImportBusy
                   ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language)
                   : joinLocalizedText("Import Lessons", "اسباق درآمد کریں", language),
+                language,
+              )}
+            </button>
+          ) : null}
+          {canUseLocalSourceTools ? (
+            <button type="button" className="ghost-cta" onClick={sourceFileAccessState.handle ? handleDisconnectSourceFiles : handleConnectSourceFiles} disabled={sourceFileAccessBusy || defaultBuiltinImportBusy}>
+              {renderLocalizedTextNode(
+                sourceFileAccessBusy
+                  ? joinLocalizedText("Connecting Source...", "ماخذ منسلک ہو رہا ہے...", language)
+                  : sourceFileAccessState.handle
+                    ? joinLocalizedText(`Source Linked: ${sourceFileAccessState.rootName || "Project"}`, `ماخذ منسلک: ${sourceFileAccessState.rootName || "پروجیکٹ"}`, language)
+                    : joinLocalizedText("Connect Source Files", "ماخذ فائلیں منسلک کریں", language),
                 language,
               )}
             </button>
