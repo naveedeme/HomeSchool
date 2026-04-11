@@ -24,6 +24,7 @@ const {
 const AppContext = React.createContext(null);
 const LessonEditContext = React.createContext(null);
 const TYPING_TUTOR_EMBED_PATH = "./typing-tutor/index.html";
+const TABLE_TUTOR_EMBED_PATH = "./table-tutor/index.html";
 
 function splitEditableSentenceParts(text) {
   return String(text || "").split(/(?<=[.!?۔؟])\s+/).filter(Boolean);
@@ -15808,7 +15809,7 @@ const [sourceFileAccessState, setSourceFileAccessState] = useState(() => normali
 const [sourceFileAccessBusy, setSourceFileAccessBusy] = useState(false);
 const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const sourceFileAccessSupported = isSourceFileAccessSupported();
-  const [reviewSectionTab, setReviewSectionTab] = useState("queue");
+  const [reviewSectionTab, setReviewSectionTab] = useState("practice");
   const [homeSectionTab, setHomeSectionTab] = useState("subjects");
   useEffect(() => {
     let cancelled = false;
@@ -16032,6 +16033,7 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [flashcardTransitionMode, setFlashcardTransitionMode] = useState("forward");
   const [practiceLabReturnPending, setPracticeLabReturnPending] = useState(false);
   const [typingTutorOpen, setTypingTutorOpen] = useState(false);
+  const [tableTutorOpen, setTableTutorOpen] = useState(false);
   const [pronunciationLabOpen, setPronunciationLabOpen] = useState(false);
   const [pronunciationLabIdx, setPronunciationLabIdx] = useState(0);
   const [pronunciationLabTranscript, setPronunciationLabTranscript] = useState("");
@@ -36741,9 +36743,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         {!activeReviewCard && !reviewSessionDone && !practiceMode && <>
           {renderInlinePageSectionTabs ? (
           <div className="review-section-tabs" role="tablist" aria-label={language === "ur" ? "ریویو حصے" : "Review sections"}>
-            <button type="button" className={`review-section-tab${reviewSectionTab === "queue" ? " active" : ""}`} onClick={() => setReviewSectionTab("queue")}>
-              {renderLocalizedTextNode(joinLocalizedText("Review Queue", "ریویو قطار", language), language)}
-            </button>
             <button type="button" className={`review-section-tab${reviewSectionTab === "practice" ? " active" : ""}`} onClick={() => setReviewSectionTab("practice")}>
               {renderLocalizedTextNode(joinLocalizedText("Practice Lab", "پریکٹس لیب", language), language)}
             </button>
@@ -36756,6 +36755,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             <button type="button" className={`review-section-tab${reviewSectionTab === "lists" ? " active" : ""}`} onClick={() => setReviewSectionTab("lists")}>
               {renderLocalizedTextNode(joinLocalizedText("Lists & Notes", "فہرستیں اور نوٹس", language), language)}
             </button>
+            <button type="button" className={`review-section-tab${reviewSectionTab === "queue" ? " active" : ""}`} onClick={() => setReviewSectionTab("queue")}>
+              {renderLocalizedTextNode(joinLocalizedText("Review Queue", "ریویو قطار", language), language)}
+            </button>
           </div>
           ) : null}
 
@@ -36764,6 +36766,46 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             className={`review-section-transition${!reducedMotion && transitionMode !== "none" ? " transition-enabled" : ""}`}
             data-transition-mode={transitionMode}
           >
+          {reviewSectionTab === "practice" && (
+            <div className="review-panel" id="tutor-lab-panel">
+              <div className="review-panel-head">
+                <div>
+                  <h3>{renderLocalizedTextNode(joinLocalizedText("Tutor Lab", "ٹیوٹر لیب", language), language)}</h3>
+                  <p>{renderLocalizedTextNode(joinLocalizedText("Specialized tutors: Pronunciation, Typing, and Table Tutor.", "مخصوص ٹیوٹر: تلفظ، ٹائپنگ، اور ٹیبل ٹیوٹر۔", language), language)}</p>
+                </div>
+              </div>
+              <div className="practice-tool-row">
+                <button
+                  type="button"
+                  className={`practice-mode-card practice-tool-card${pronunciationLabReadyCount ? "" : " disabled"}`}
+                  onClick={handleOpenPronunciationLab}
+                  disabled={!pronunciationLabReadyCount}
+                >
+                  <span className="practice-mode-icon">🎙️</span>
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Pronunciation Lab", "تلفظ لیب", language), language)}</strong>
+                  <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText(`Listen, speak, and compare with ${pronunciationLabReadyCount} ready prompts from this practice range.`, `اس پریکٹس رینج کے ${pronunciationLabReadyCount} تیار اشاروں کے ساتھ سنیں، بولیں، اور موازنہ کریں۔`, language), language)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="practice-mode-card practice-tool-card"
+                  onClick={() => setTypingTutorOpen(true)}
+                >
+                  <span className="practice-mode-icon">⌨️</span>
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Typing Tutor", "ٹائپنگ ٹیوٹر", language), language)}</strong>
+                  <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the standalone typing project in a separate popup without changing its behavior.", "الگ ٹائپنگ پروجیکٹ کو علیحدہ پاپ اپ میں کھولیں، بغیر اس کی فعالیت بدلے۔", language), language)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="practice-mode-card practice-tool-card"
+                  onClick={() => setTableTutorOpen(true)}
+                >
+                  <span className="practice-mode-icon">🧮</span>
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Table Tutor", "ٹیبل ٹیوٹر", language), language)}</strong>
+                  <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the Table Tutor in a popup.", "ٹیبل ٹیوٹر کو پاپ اپ میں کھولیں۔", language), language)}</span>
+                </button>
+              </div>
+            </div>
+          )}
           {reviewSectionTab === "practice" && <div className="review-panel" id="practice-lab-panel">
             <div className="review-panel-head">
               <div>
@@ -36922,27 +36964,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 </div>
               </div>
             ) : null}
-            <div className="practice-tool-row">
-              <button
-                type="button"
-                className={`practice-mode-card practice-tool-card${pronunciationLabReadyCount ? "" : " disabled"}`}
-                onClick={handleOpenPronunciationLab}
-                disabled={!pronunciationLabReadyCount}
-              >
-                <span className="practice-mode-icon">🎙️</span>
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Pronunciation Lab", "تلفظ لیب", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText(`Listen, speak, and compare with ${pronunciationLabReadyCount} ready prompts from this practice range.`, `اس پریکٹس رینج کے ${pronunciationLabReadyCount} تیار اشاروں کے ساتھ سنیں، بولیں، اور موازنہ کریں۔`, language), language)}</span>
-              </button>
-              <button
-                type="button"
-                className="practice-mode-card practice-tool-card"
-                onClick={() => setTypingTutorOpen(true)}
-              >
-                <span className="practice-mode-icon">⌨️</span>
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Typing Tutor", "ٹائپنگ ٹیوٹر", language), language)}</strong>
-                <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the standalone typing project in a separate popup without changing its behavior.", "الگ ٹائپنگ پروجیکٹ کو علیحدہ پاپ اپ میں کھولیں، بغیر اس کی فعالیت بدلے۔", language), language)}</span>
-              </button>
-            </div>
+
             <div className="practice-mode-grid">
               <button className={`practice-mode-card${practiceModeAvailability.flashcards ? "" : " disabled"}`} onClick={() => handleStartPractice("flashcards")} disabled={!practiceModeAvailability.flashcards}>
                 <span className="practice-mode-icon">🃏</span>
@@ -38583,6 +38605,39 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               className="typing-tutor-frame"
               src={TYPING_TUTOR_EMBED_PATH}
               title="Typing Tutor"
+            />
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    {tableTutorOpen ? (
+      <div className="typing-tutor-overlay" onClick={() => setTableTutorOpen(false)}>
+        <div className="typing-tutor-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="typing-tutor-modal-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Table Tutor", "ٹیبل ٹیوٹر", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("This opens the Table Tutor build inside a popup.", "یہ ٹیبل ٹیوٹر بلڈ کو پاپ اپ میں کھولتا ہے۔", language), language)}</p>
+            </div>
+            <div className="typing-tutor-modal-actions">
+              <a
+                className="ghost-cta"
+                href={TABLE_TUTOR_EMBED_PATH}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Open in new tab", "نئے ٹیب میں کھولیں", language), language)}
+              </a>
+              <button type="button" className="ghost-cta" onClick={() => setTableTutorOpen(false)}>
+                {renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          <div className="typing-tutor-frame-shell">
+            <iframe
+              className="typing-tutor-frame"
+              src={TABLE_TUTOR_EMBED_PATH}
+              title="Table Tutor"
             />
           </div>
         </div>
