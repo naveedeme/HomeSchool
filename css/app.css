@@ -304,6 +304,9 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-card[data-ui-language="ur"] .lesson-status{justify-content:flex-start}
 .lesson-detail{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px}
 .lesson-detail h2{font-size:20px;font-weight:800;margin-bottom:12px}.lesson-detail p{font-size:14px;color:var(--text-secondary);line-height:1.7}
+.lesson-intro-panel{padding:20px;margin-bottom:16px}
+.lesson-intro-panel h2{font-size:14px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}
+.lesson-intro-panel p{font-size:14px;color:var(--text-primary);line-height:1.75}
 .subject-chapter-actions,.subject-chapter-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
 .subject-chapter-actions-copy{font-size:12px;color:var(--text-secondary);line-height:1.5}
 .subject-chapter-toolbar .ghost-cta,.subject-chapter-actions .ghost-cta{display:inline-flex;align-items:center;justify-content:center;min-height:42px}
@@ -653,14 +656,16 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-edit-delete-item-btn{border-color:color-mix(in srgb,#f59e0b 28%,var(--border));background:color-mix(in srgb,#f59e0b 12%,var(--bg-elevated));color:#b45309}
 .lesson-edit-remove-btn{width:30px;border:1px solid color-mix(in srgb,#ef4444 24%,var(--border));background:color-mix(in srgb,#ef4444 8%,var(--bg-elevated));color:#dc2626;font-size:18px;padding:0}
 .lesson-edit-remove-btn:hover{transform:translateY(-1px);background:color-mix(in srgb,#ef4444 14%,var(--bg-elevated));border-color:color-mix(in srgb,#ef4444 38%,var(--border))}
-.chapter-admin-fold{margin-top:12px;border:1px solid color-mix(in srgb,var(--border) 92%,transparent);border-radius:16px;background:color-mix(in srgb,var(--bg-card) 98%,white 2%)}
+.chapter-admin-fold{margin-top:12px;border:1px solid color-mix(in srgb,var(--border) 92%,transparent);border-radius:16px;background:color-mix(in srgb,var(--bg-card) 98%,white 2%);overflow:hidden}
 .chapter-admin-fold-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:none;background:transparent;color:var(--accent);font-family:var(--font);font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
 .chapter-admin-fold-head.open{padding-bottom:10px}
 .chapter-admin-fold-chevron{font-size:14px;line-height:1;transition:transform .18s ease;color:var(--accent)}
 .chapter-admin-fold-head.open .chapter-admin-fold-chevron{transform:rotate(180deg)}
-.chapter-admin-fold-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease}
+.chapter-admin-fold-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease,opacity .18s ease;overflow:hidden;opacity:0;visibility:hidden}
 .chapter-admin-fold.open .chapter-admin-fold-body{grid-template-rows:1fr}
-.chapter-admin-fold-body > *{overflow:hidden;padding:0 14px 14px}
+.chapter-admin-fold.open .chapter-admin-fold-body{opacity:1;visibility:visible}
+.chapter-admin-fold-body > *{overflow:hidden;min-height:0;padding:0 14px 14px}
+.chapter-fold-panel{margin-top:0;box-shadow:none}
 .chapter-admin-fold[data-ui-language="ur"] .chapter-admin-fold-head{direction:rtl}
 .diary-detail-toggle{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;padding:2px 0;border:none;background:transparent;color:var(--text-secondary);font-family:var(--font);text-align:left;cursor:pointer;transition:color .16s ease,opacity .16s ease}
 .diary-detail-toggle:hover{color:var(--text-primary)}
@@ -835,6 +840,16 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
   .attached-field-actions-shell > .study-tools.inline .question-show-btn{align-self:auto}
   .lesson-mobile-shell-word > .attached-study-content,
   .lesson-mobile-shell-word-forms > .attached-study-content{padding:12px 14px;border:1px solid var(--border);border-bottom:none;border-radius:16px 16px 0 0;background:color-mix(in srgb,var(--bg-card) 97%,white 3%);box-shadow:0 12px 18px rgba(15,23,42,.05)}
+  .lesson-mobile-shell-word > .attached-field-actions,
+  .lesson-mobile-shell-word-forms > .attached-field-actions,
+  .lesson-mobile-shell-word-grid > .attached-field-actions,
+  .lesson-mobile-shell-sentence-pair > .attached-field-actions,
+  .lesson-mobile-shell-exercise > .attached-field-actions,
+  .lesson-mobile-shell-word > .study-tools.inline,
+  .lesson-mobile-shell-word-forms > .study-tools.inline,
+  .lesson-mobile-shell-word-grid > .study-tools.inline,
+  .lesson-mobile-shell-sentence-pair > .study-tools.inline,
+  .lesson-mobile-shell-exercise > .study-tools.inline{margin-top:-2px!important;background:color-mix(in srgb,var(--bg-card) 97%,white 3%)!important;border-top-color:transparent!important}
   .lesson-mobile-shell-word > .attached-study-content{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important}
   .lesson-mobile-shell-word > .attached-study-content > .word-en,
   .lesson-mobile-shell-word > .attached-study-content > .word-ur{display:block;padding:10px 12px;border-radius:12px;border:1px solid rgba(56,189,248,.16);background:rgba(56,189,248,.06)}

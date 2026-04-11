@@ -16057,8 +16057,13 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [isMobileNavViewport, setIsMobileNavViewport] = useState(() => (typeof window !== "undefined" ? (window.innerWidth || 0) <= 900 : false));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [pageSectionShutterOpen, setPageSectionShutterOpen] = useState(false);
+  const [subjectSourceControlOpen, setSubjectSourceControlOpen] = useState(false);
   const [lessonAdminToolsOpen, setLessonAdminToolsOpen] = useState(false);
+  const [lessonScopeOpen, setLessonScopeOpen] = useState(false);
+  const [lessonCurriculumPanelOpen, setLessonCurriculumPanelOpen] = useState(false);
   const [lessonCurriculumActionsOpen, setLessonCurriculumActionsOpen] = useState(false);
+  const [chapterSourceOpen, setChapterSourceOpen] = useState(false);
+  const [lessonAssignmentsOpen, setLessonAssignmentsOpen] = useState(false);
   const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
   const [gamificationState, setGamificationState] = useState(normalizeGamificationState(stored?.gamificationState || {}));
@@ -21420,8 +21425,13 @@ const headerHideTimerRef = useRef(null);
     setLessonEditBusy(false);
   }, [selectedLesson]);
   useEffect(() => {
+    setSubjectSourceControlOpen(false);
     setLessonAdminToolsOpen(false);
+    setLessonScopeOpen(false);
+    setLessonCurriculumPanelOpen(false);
     setLessonCurriculumActionsOpen(false);
+    setChapterSourceOpen(false);
+    setLessonAssignmentsOpen(false);
   }, [grade, selectedLesson?.id, selectedLesson?.key, selectedSubject?.id]);
   const handleUpdateLessonEditField = useCallback((fieldPath, nextValue) => {
     setLessonEditDraft((current) => updateEditableLessonDraft(current, fieldPath, nextValue));
@@ -34481,21 +34491,32 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </div>
         </div>
         {canManageScopedCurriculum ? (
-          <div className="review-panel chapter-scope-panel" data-ui-language={language} style={{ marginBottom: 16 }}>
-            <div className="review-panel-head">
-              <div>
-                <h3>{renderLocalizedTextNode(joinLocalizedText("Subject Source Control", "مضمون ماخذ کنٹرول", language), language)}</h3>
-                <p>{renderLocalizedTextNode(joinLocalizedText("Publish this subject as one reusable source, then activate it for one school, one grade, one learner, or everywhere.", "اس مضمون کو ایک قابلِ استعمال ماخذ کے طور پر شائع کریں، پھر اسے ایک اسکول، ایک جماعت، ایک طالب علم، یا ہر جگہ کے لیے فعال کریں۔", language), language)}</p>
-              </div>
-              <span className="goal-progress-badge">
-                {renderLocalizedTextNode(
-                  selectedSubjectActivePublishedSource?.label
-                    || joinLocalizedText("Built-in subject", "بنیادی مضمون", language),
-                  language,
-                )}
-              </span>
-            </div>
-            <div className="curriculum-action-grid">
+          <div className={`chapter-admin-fold${subjectSourceControlOpen ? " open" : ""}`} data-ui-language={language} style={{ marginBottom: 16 }}>
+            <button
+              type="button"
+              className={`chapter-admin-fold-head${subjectSourceControlOpen ? " open" : ""}`}
+              onClick={() => setSubjectSourceControlOpen((current) => !current)}
+              aria-expanded={subjectSourceControlOpen ? "true" : "false"}
+            >
+              <span>{renderLocalizedTextNode(joinLocalizedText("Subject Source Control", "مضمون ماخذ کنٹرول", language), language)}</span>
+              <span className="chapter-admin-fold-chevron" aria-hidden="true">▾</span>
+            </button>
+            <div className="chapter-admin-fold-body">
+              <div className="review-panel chapter-scope-panel chapter-fold-panel" data-ui-language={language} style={{ marginBottom: 0 }}>
+                <div className="review-panel-head">
+                  <div>
+                    <h3>{renderLocalizedTextNode(joinLocalizedText("Subject Source Control", "مضمون ماخذ کنٹرول", language), language)}</h3>
+                    <p>{renderLocalizedTextNode(joinLocalizedText("Publish this subject as one reusable source, then activate it for one school, one grade, one learner, or everywhere.", "اس مضمون کو ایک قابلِ استعمال ماخذ کے طور پر شائع کریں، پھر اسے ایک اسکول، ایک جماعت، ایک طالب علم، یا ہر جگہ کے لیے فعال کریں۔", language), language)}</p>
+                  </div>
+                  <span className="goal-progress-badge">
+                    {renderLocalizedTextNode(
+                      selectedSubjectActivePublishedSource?.label
+                        || joinLocalizedText("Built-in subject", "بنیادی مضمون", language),
+                      language,
+                    )}
+                  </span>
+                </div>
+                <div className="curriculum-action-grid">
               {canManageContentAccess ? (
                 <label className="curriculum-action-field">
                   <span>{renderLocalizedTextNode(joinLocalizedText("School", "اسکول", language), language)}</span>
@@ -34543,8 +34564,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   ))}
                 </select>
               </label>
-            </div>
-            <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 12 }}>
+                </div>
+                <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 12 }}>
               <div className="profile-report-summary-card">
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Global", "عالمی", language), language)}</strong>
                 <span>{renderLocalizedTextNode(globalCurriculumPack?.name || joinLocalizedText("No global pack", "کوئی عالمی پیک نہیں", language), language)}</span>
@@ -34565,11 +34586,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Effective", "مؤثر", language), language)}</strong>
                 <span>{renderLocalizedTextNode(contentActivationEffectivePack?.name || globalCurriculumPack?.name || joinLocalizedText("No active pack", "کوئی فعال پیک نہیں", language), language)}</span>
               </div>
-            </div>
-            <p className="goal-progress-meta" style={{ marginTop: 10 }}>
-              {renderLocalizedTextNode(joinLocalizedText(`Effective scope: ${contentActivationEffectiveScopeLabel}`, `مؤثر دائرہ: ${contentActivationEffectiveScopeLabel}`, language), language)}
-            </p>
-            <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
+                </div>
+                <p className="goal-progress-meta" style={{ marginTop: 10 }}>
+                  {renderLocalizedTextNode(joinLocalizedText(`Effective scope: ${contentActivationEffectiveScopeLabel}`, `مؤثر دائرہ: ${contentActivationEffectiveScopeLabel}`, language), language)}
+                </p>
+                <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
               {effectiveCanPublishContent ? (
                 <button type="button" className="ghost-cta" onClick={handlePublishWholeSubjectSource} disabled={subjectSourcePublishBusy || !selectedSubjectLessons.length}>
                   {renderLocalizedTextNode(subjectSourcePublishBusy ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language) : joinLocalizedText("Publish Subject Source", "مضمون ماخذ شائع کریں", language), language)}
@@ -34606,6 +34627,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   {renderLocalizedTextNode(joinLocalizedText("Replace Default Everywhere", "ہر جگہ بنیادی ماخذ بدلیں", language), language)}
                 </button>
               ) : null}
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
@@ -34771,14 +34794,25 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </span>
           </div>
           {canAdministerLessonLibrary && selectedLesson && selectedLessonChapterGroup ? (
-            <div className="review-panel chapter-scope-panel" data-ui-language={language}>
-              <div className="review-panel-head">
-                <div>
-                  <h3>{renderLocalizedTextNode(joinLocalizedText("Lesson Scope", "سبق کا دائرہ", language), language)}</h3>
-                  <p>{renderLocalizedTextNode(joinLocalizedText("Use one place to decide whether this copy stays private, becomes the active grade lesson, or is delivered to learners through assignments.", "ایک ہی جگہ سے طے کریں کہ یہ کاپی نجی رہے، جماعت کے فعال سبق کے طور پر کھلے، یا تفویض کے ذریعے طلبہ تک پہنچے۔", language), language)}</p>
-                </div>
-              </div>
-              <div className="chapter-scope-grid">
+            <div className={`chapter-admin-fold${lessonScopeOpen ? " open" : ""}`} data-ui-language={language}>
+              <button
+                type="button"
+                className={`chapter-admin-fold-head${lessonScopeOpen ? " open" : ""}`}
+                onClick={() => setLessonScopeOpen((current) => !current)}
+                aria-expanded={lessonScopeOpen ? "true" : "false"}
+              >
+                <span>{renderLocalizedTextNode(joinLocalizedText("Lesson Scope", "سبق کا دائرہ", language), language)}</span>
+                <span className="chapter-admin-fold-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div className="chapter-admin-fold-body">
+                <div className="review-panel chapter-scope-panel chapter-fold-panel" data-ui-language={language} style={{ marginBottom: 0 }}>
+                  <div className="review-panel-head">
+                    <div>
+                      <h3>{renderLocalizedTextNode(joinLocalizedText("Lesson Scope", "سبق کا دائرہ", language), language)}</h3>
+                      <p>{renderLocalizedTextNode(joinLocalizedText("Use one place to decide whether this copy stays private, becomes the active grade lesson, or is delivered to learners through assignments.", "ایک ہی جگہ سے طے کریں کہ یہ کاپی نجی رہے، جماعت کے فعال سبق کے طور پر کھلے، یا تفویض کے ذریعے طلبہ تک پہنچے۔", language), language)}</p>
+                    </div>
+                  </div>
+                  <div className="chapter-scope-grid">
                 <div className="chapter-scope-card">
                   <span className="chapter-scope-label">{renderLocalizedTextNode(joinLocalizedText("Opened Copy", "کھلی ہوئی کاپی", language), language)}</span>
                   <strong>{renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonOpenedVariant || selectedLessonChapterGroup.activeVariant), language)}</strong>
@@ -34830,17 +34864,30 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   </div>
                 </div>
               </div>
+                </div>
+              </div>
             </div>
           ) : null}
           {selectedLesson && selectedLessonChapterGroup && canManageScopedCurriculum ? (
-            <div className="review-panel chapter-scope-panel" data-ui-language={language}>
-              <div className="review-panel-head">
-                <div>
-                  <h3>{renderLocalizedTextNode(joinLocalizedText("Curriculum Actions", "نصابی اعمال", language), language)}</h3>
-                  <p>{renderLocalizedTextNode(joinLocalizedText("Use explicit admin actions here: keep a local draft private, publish it for everyone, activate it for one school or grade, activate it for one learner, replace the default everywhere, or hide the built-in source.", "یہاں واضح ایڈمن اعمال استعمال کریں: مقامی مسودہ نجی رکھیں، سب کے لیے شائع کریں، ایک اسکول یا جماعت کے لیے فعال کریں، ایک طالب علم کے لیے فعال کریں، ہر جگہ بنیادی ماخذ بدلیں، یا بنیادی ماخذ چھپا دیں۔", language), language)}</p>
-                </div>
-              </div>
-              <div className="curriculum-action-grid">
+            <div className={`chapter-admin-fold${lessonCurriculumPanelOpen ? " open" : ""}`} data-ui-language={language}>
+              <button
+                type="button"
+                className={`chapter-admin-fold-head${lessonCurriculumPanelOpen ? " open" : ""}`}
+                onClick={() => setLessonCurriculumPanelOpen((current) => !current)}
+                aria-expanded={lessonCurriculumPanelOpen ? "true" : "false"}
+              >
+                <span>{renderLocalizedTextNode(joinLocalizedText("Curriculum Actions", "نصابی اعمال", language), language)}</span>
+                <span className="chapter-admin-fold-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div className="chapter-admin-fold-body">
+                <div className="review-panel chapter-scope-panel chapter-fold-panel" data-ui-language={language} style={{ marginBottom: 0 }}>
+                  <div className="review-panel-head">
+                    <div>
+                      <h3>{renderLocalizedTextNode(joinLocalizedText("Curriculum Actions", "نصابی اعمال", language), language)}</h3>
+                      <p>{renderLocalizedTextNode(joinLocalizedText("Use explicit admin actions here: keep a local draft private, publish it for everyone, activate it for one school or grade, activate it for one learner, replace the default everywhere, or hide the built-in source.", "یہاں واضح ایڈمن اعمال استعمال کریں: مقامی مسودہ نجی رکھیں، سب کے لیے شائع کریں، ایک اسکول یا جماعت کے لیے فعال کریں، ایک طالب علم کے لیے فعال کریں، ہر جگہ بنیادی ماخذ بدلیں، یا بنیادی ماخذ چھپا دیں۔", language), language)}</p>
+                    </div>
+                  </div>
+                  <div className="curriculum-action-grid">
                 {canManageContentAccess ? (
                   <label className="curriculum-action-field">
                     <span>{renderLocalizedTextNode(joinLocalizedText("School", "اسکول", language), language)}</span>
@@ -34871,8 +34918,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     ))}
                   </select>
                 </label>
-              </div>
-              <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 12 }}>
+                  </div>
+                  <div className="profile-report-summary-row auto-diary-summary-row" style={{ marginTop: 12 }}>
                 <div className="profile-report-summary-card">
                   <strong>{renderLocalizedTextNode(joinLocalizedText("Global", "عالمی", language), language)}</strong>
                   <span>{renderLocalizedTextNode(globalCurriculumPack?.name || joinLocalizedText("No global pack", "کوئی عالمی پیک نہیں", language), language)}</span>
@@ -34893,11 +34940,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <strong>{renderLocalizedTextNode(joinLocalizedText("Effective", "مؤثر", language), language)}</strong>
                   <span>{renderLocalizedTextNode(contentActivationEffectivePack?.name || globalCurriculumPack?.name || joinLocalizedText("No active pack", "کوئی فعال پیک نہیں", language), language)}</span>
                 </div>
-              </div>
-              <p className="goal-progress-meta" style={{ marginTop: 10 }}>
-                {renderLocalizedTextNode(joinLocalizedText(`Effective scope: ${contentActivationEffectiveScopeLabel}`, `مؤثر دائرہ: ${contentActivationEffectiveScopeLabel}`, language), language)}
-              </p>
-              <div className={`chapter-admin-fold${lessonCurriculumActionsOpen ? " open" : ""}`} style={{ marginTop: 12 }}>
+                  </div>
+                  <p className="goal-progress-meta" style={{ marginTop: 10 }}>
+                    {renderLocalizedTextNode(joinLocalizedText(`Effective scope: ${contentActivationEffectiveScopeLabel}`, `مؤثر دائرہ: ${contentActivationEffectiveScopeLabel}`, language), language)}
+                  </p>
+                  <div className={`chapter-admin-fold${lessonCurriculumActionsOpen ? " open" : ""}`} style={{ marginTop: 12 }}>
                 <button
                   type="button"
                   className={`chapter-admin-fold-head${lessonCurriculumActionsOpen ? " open" : ""}`}
@@ -34907,7 +34954,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <span>{renderLocalizedTextNode(joinLocalizedText("Chapter Curriculum Controls", "سبق نصابی کنٹرول", language), language)}</span>
                   <span className="chapter-admin-fold-chevron" aria-hidden="true">▾</span>
                 </button>
-                <div className="chapter-admin-fold-body">
+                    <div className="chapter-admin-fold-body">
                   <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
                     {(canSavePublishedLocally || canAdministerLessonLibrary) ? (
                       <button type="button" className="ghost-cta" onClick={() => handleSavePublishedChapterLocally(selectedSubject?.id, grade, selectedLesson)} disabled={!selectedSubject?.id || !selectedLesson}>
@@ -34965,6 +35012,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                         {renderLocalizedTextNode(joinLocalizedText("Delete Built-in Permanently", "بنیادی سبق مستقل حذف کریں", language), language)}
                       </button>
                     ) : null}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -35065,15 +35114,26 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </div>
           ) : null}
           {selectedLessonChapterGroup?.variants?.length > 1 ? (
-            <div className="review-panel chapter-source-panel" data-ui-language={language}>
-              <div className="review-panel-head">
-                <div>
-                  <h3>{renderLocalizedTextNode(joinLocalizedText("Chapter Source", "سبق ماخذ", language), language)}</h3>
-                  <p>{renderLocalizedTextNode(joinLocalizedText("This controls the active lesson copy for the current subject and grade library only. It changes what opens by default here, but it does not replace learner assignments by itself.", "یہ صرف موجودہ مضمون اور جماعت کی لائبریری کے فعال سبق کو کنٹرول کرتا ہے۔ اس سے یہاں بطورِ طے شدہ کھلنے والی کاپی بدلتی ہے، مگر یہ خود بخود طلبہ کی تفویض نہیں بدلتا۔", language), language)}</p>
-                </div>
-                <span className="goal-progress-badge">{renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language)}</span>
-              </div>
-            <div className="chapter-choice-row">
+            <div className={`chapter-admin-fold${chapterSourceOpen ? " open" : ""}`} data-ui-language={language}>
+              <button
+                type="button"
+                className={`chapter-admin-fold-head${chapterSourceOpen ? " open" : ""}`}
+                onClick={() => setChapterSourceOpen((current) => !current)}
+                aria-expanded={chapterSourceOpen ? "true" : "false"}
+              >
+                <span>{renderLocalizedTextNode(joinLocalizedText("Chapter Source", "سبق ماخذ", language), language)}</span>
+                <span className="chapter-admin-fold-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div className="chapter-admin-fold-body">
+                <div className="review-panel chapter-source-panel chapter-fold-panel" data-ui-language={language} style={{ marginBottom: 0 }}>
+                  <div className="review-panel-head">
+                    <div>
+                      <h3>{renderLocalizedTextNode(joinLocalizedText("Chapter Source", "سبق ماخذ", language), language)}</h3>
+                      <p>{renderLocalizedTextNode(joinLocalizedText("This controls the active lesson copy for the current subject and grade library only. It changes what opens by default here, but it does not replace learner assignments by itself.", "یہ صرف موجودہ مضمون اور جماعت کی لائبریری کے فعال سبق کو کنٹرول کرتا ہے۔ اس سے یہاں بطورِ طے شدہ کھلنے والی کاپی بدلتی ہے، مگر یہ خود بخود طلبہ کی تفویض نہیں بدلتا۔", language), language)}</p>
+                    </div>
+                    <span className="goal-progress-badge">{renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language)}</span>
+                  </div>
+                  <div className="chapter-choice-row">
               <button type="button" className={`chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`} onClick={() => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null)} disabled={!canChooseContentSource}>
                 {renderLocalizedTextNode(joinLocalizedText("Auto", "خودکار", language), language)}
               </button>
@@ -35096,23 +35156,36 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   </button>
                 );
               })}
-            </div>
-            {!canChooseContentSource ? (
-              <div className="goal-progress-meta" style={{ marginTop: 10 }}>
-                {renderLocalizedTextNode(joinLocalizedText("This lesson is read-only for students. Teachers and above can choose the active chapter copy.", "یہ سبق طالب علم کے لیے صرف پڑھنے کے قابل ہے۔ فعال باب کی کاپی استاد اور اس سے اوپر والے منتخب کر سکتے ہیں۔", language), language)}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {(selectedLessonPublishedVariants.length > 0 || selectedLessonVisibleAssignments.length > 0) ? (
-          <div className="review-panel chapter-source-panel" data-ui-language={language}>
-            <div className="review-panel-head">
-                <div>
-                  <h3>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویض", language), language)}</h3>
-                  <p>{renderLocalizedTextNode(joinLocalizedText("Assignments deliver a published copy to learners. They do not replace the whole lesson library source unless you also change the active grade source above.", "تفویض شائع شدہ کاپی کو طلبہ تک پہنچاتی ہے۔ جب تک آپ اوپر جماعتی فعال ماخذ نہ بدلیں، یہ پوری سبق لائبریری کو تبدیل نہیں کرتی۔", language), language)}</p>
+                  </div>
+                  {!canChooseContentSource ? (
+                    <div className="goal-progress-meta" style={{ marginTop: 10 }}>
+                      {renderLocalizedTextNode(joinLocalizedText("This lesson is read-only for students. Teachers and above can choose the active chapter copy.", "یہ سبق طالب علم کے لیے صرف پڑھنے کے قابل ہے۔ فعال باب کی کاپی استاد اور اس سے اوپر والے منتخب کر سکتے ہیں۔", language), language)}
+                    </div>
+                  ) : null}
                 </div>
-              <span className="goal-progress-badge">{formatNumberLabel(selectedLessonVisibleAssignments.length)}</span>
+              </div>
             </div>
+          ) : null}
+        {(selectedLessonPublishedVariants.length > 0 || selectedLessonVisibleAssignments.length > 0) ? (
+          <div className={`chapter-admin-fold${lessonAssignmentsOpen ? " open" : ""}`} data-ui-language={language}>
+            <button
+              type="button"
+              className={`chapter-admin-fold-head${lessonAssignmentsOpen ? " open" : ""}`}
+              onClick={() => setLessonAssignmentsOpen((current) => !current)}
+              aria-expanded={lessonAssignmentsOpen ? "true" : "false"}
+            >
+              <span>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویض", language), language)}</span>
+              <span className="chapter-admin-fold-chevron" aria-hidden="true">▾</span>
+            </button>
+            <div className="chapter-admin-fold-body">
+              <div className="review-panel chapter-source-panel chapter-fold-panel" data-ui-language={language} style={{ marginBottom: 0 }}>
+                <div className="review-panel-head">
+                  <div>
+                    <h3>{renderLocalizedTextNode(joinLocalizedText("Assignments", "تفویض", language), language)}</h3>
+                    <p>{renderLocalizedTextNode(joinLocalizedText("Assignments deliver a published copy to learners. They do not replace the whole lesson library source unless you also change the active grade source above.", "تفویض شائع شدہ کاپی کو طلبہ تک پہنچاتی ہے۔ جب تک آپ اوپر جماعتی فعال ماخذ نہ بدلیں، یہ پوری سبق لائبریری کو تبدیل نہیں کرتی۔", language), language)}</p>
+                  </div>
+                  <span className="goal-progress-badge">{formatNumberLabel(selectedLessonVisibleAssignments.length)}</span>
+                </div>
             {selectedLessonChapterGroup?.assignmentSelection?.assignment ? (
               <div className="chapter-badge-row" style={{ marginBottom: 12 }}>
                 <span className="chapter-badge active">
@@ -35228,6 +35301,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 })}
               </div>
             ) : null}
+              </div>
+            </div>
           </div>
         ) : null}
         </>
@@ -35235,7 +35310,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       )}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && selectedLesson.hasAdverbs && !selDay && (<>
-        <div className="lesson-detail"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: selectedLesson.key || "english", sectionLabel: selectedLesson.title }} />
+        <div className="lesson-detail lesson-intro-panel"><h2>{selectedLesson.title}</h2><p>{selectedLesson.content}</p><StudyItemInlineToolbar studyItem={{ prompt: selectedLesson.content, subject: "english", section: selectedLesson.key || "english", sectionLabel: selectedLesson.title }} />
           <button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 {ui.startQuiz}</button>
         </div>
 
@@ -35327,11 +35402,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar variant="section" studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail lesson-intro-panel"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar variant="section" studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasMathSub && mathSubIdx === null && (<>
         {(() => { const isUr = selectedSubject?.id === "urdu"; return (<>
-        <div className="lesson-detail" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /></div>
+        <div className="lesson-detail lesson-intro-panel" style={isUr?{direction:"rtl",fontFamily:"'Noto Nastaliq Urdu',serif",textAlign:"right"}:{}}><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /></div>
         <h3 className="section-title" style={{ marginTop: 8, direction: isUr?"rtl":"ltr", textAlign: isUr?"right":"left" }}>{isUr ? "📐 موضوعات" : "📐 Topics"}</h3>
         {activeLessonSubs.map((sub, i) => {
           const topicColors = ["#38BDF8","#22C55E","#F59E0B","#A855F7","#EC4899","#14B8A6","#F97316"];
@@ -35372,7 +35447,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         if (isTensesSub) {
           return (<>
             {!selectedTensePara ? (<>
-              <div className="lesson-detail"><h2>{sub.t}</h2><p>{sub.c}</p><StudyItemInlineToolbar studyItem={{ prompt: sub.c, subject: "english", section: "tenses", sectionLabel: sub.t }} /></div>
+              <div className="lesson-detail lesson-intro-panel"><h2>{sub.t}</h2><p>{sub.c}</p><StudyItemInlineToolbar studyItem={{ prompt: sub.c, subject: "english", section: "tenses", sectionLabel: sub.t }} /></div>
 
               <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
                 {[{id:"present",label:"🕐 Present",c:"#38BDF8"},{id:"past",label:"🕑 Past",c:"#F59E0B"},{id:"future",label:"🕒 Future",c:"#22C55E"}].map(t => (
@@ -35887,7 +35962,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       })()}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasVocab && !selectedVocabDay && (<>
-        <div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "vocabulary", sectionLabel: lessonRenderSource?.title }} /></div>
+        <div className="lesson-detail lesson-intro-panel"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "vocabulary", sectionLabel: lessonRenderSource?.title }} /></div>
         <div className="tts-hint">🔊 Tap English → English voice | Tap Urdu → Urdu voice | 55 Days of Vocabulary</div>
         {pacedVocab.map(day => (<div key={day.day} className="adverb-day-card" onClick={() => setSelectedVocabDay(day)}><span className="day-num">{getDayDisplayLabel(day.day, language)}</span><h3>{day.words.map(w => w.en).join(" • ")}</h3><div className="word-preview">{day.words.map((w, i) => <span key={i} className="word-chip">{w.ur}</span>)}</div></div>))}
       </>)}
@@ -35912,7 +35987,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       </>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasTenses && !selectedTensePara && (<>
-        <div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "tenses", sectionLabel: lessonRenderSource?.title }} /></div>
+        <div className="lesson-detail lesson-intro-panel"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: "english", section: "tenses", sectionLabel: lessonRenderSource?.title }} /></div>
 
         <div style={{ display: "flex", gap: 6, marginTop: 8, marginBottom: 10 }}>
           {[{id:"present",label:"🕐 Present",c:"#38BDF8"},{id:"past",label:"🕑 Past",c:"#F59E0B"},{id:"future",label:"🕒 Future",c:"#22C55E"}].map(t => (
