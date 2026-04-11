@@ -34078,7 +34078,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               )}
             </button>
           ) : null}
-          {canAdministerLessonLibrary && sourceFileAccessSupported ? (
+          {canAdministerLessonLibrary ? (
             <button type="button" className="ghost-cta" onClick={handleOpenDefaultBuiltinImport} disabled={defaultBuiltinImportBusy || sourceFileAccessBusy}>
               {renderLocalizedTextNode(
                 defaultBuiltinImportBusy
@@ -34160,7 +34160,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 ? joinLocalizedText("Tap the delete icon on a lesson card to remove the built-in copy, delete the local copy, or remove the whole slot when only a published copy is active.", "سبق کارڈ پر حذف کے نشان کو دبائیں تاکہ بنیادی کاپی ہٹ جائے، مقامی کاپی حذف ہو جائے، یا جب صرف شائع شدہ کاپی فعال ہو تو پورا سبق خانہ ہٹ جائے۔", language)
                 : subjectLessonPermanentDeleteMode
                 ? joinLocalizedText("Tap the delete icon on a lesson card to permanently delete that whole lesson slot from the active built-in layer.", "سبق کارڈ پر حذف کے نشان کو دبائیں تاکہ وہ پورا سبق خانہ فعال بنیادی سطح سے مستقل طور پر حذف ہو جائے۔", language)
-                : (canAdministerLessonLibrary && sourceFileAccessSupported)
+                : canAdministerLessonLibrary
                 ? joinLocalizedText("Import many chapter JSON files, add a JSON as a real default built-in lesson, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، JSON سے ایک حقیقی بنیادی سبق شامل کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language)
                 : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، باب پیک درآمد کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language))
                 : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "مواد درآمد اور اشاعت کے اوزار ایڈمن سنبھالتے ہیں۔ آپ کے موجودہ کردار کے لیے یہ مضمون صرف دیکھنے کے قابل ہے۔", language),
@@ -34673,7 +34673,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
               </button>
             ) : null}
-            {canAdministerLessonLibrary && sourceFileAccessSupported ? (
+            {canAdministerLessonLibrary ? (
               <button type="button" className="ghost-cta" onClick={sourceFileAccessState.handle ? handleDisconnectSourceFiles : handleConnectSourceFiles} disabled={sourceFileAccessBusy || lessonEditBusy}>
                 {renderLocalizedTextNode(
                   sourceFileAccessBusy
