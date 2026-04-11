@@ -12542,7 +12542,7 @@ function stripInlineUrduForKnownWords(text, words) {
 }
 
 // ─── TTS Clickable Sentence ───
-function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null, studyItem = null, showStudyToolbar = true, fieldPath = null, multiline = null }) {
+function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = true, buttonStyle = null, textStyle = null, studyItem = null, showStudyToolbar = true, fieldPath = null, multiline = null, mobileVariant = "sentence" }) {
   const app = useContext(AppContext);
   const lessonEdit = useContext(LessonEditContext);
   const studyCard = studyItem ? resolveStudyCard(app, {
@@ -12629,7 +12629,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
   const editModeActive = Boolean(lessonEdit?.enabled && fieldPath);
   if (editModeActive) {
     return (
-      <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
+      <div {...focusProps} className={inlineTools ? `inline-study-row lesson-mobile-shell lesson-mobile-shell-${mobileVariant}` : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
         <div className={inlineTools ? "inline-study-content" : ""} style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
           <div
             className="inline-study-field"
@@ -12651,7 +12651,7 @@ function SpeakableSentence({ text, lang = "en", highlight = null, fullWidth = tr
     );
   }
   return (
-    <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
+    <div {...focusProps} className={inlineTools ? `inline-study-row lesson-mobile-shell lesson-mobile-shell-${mobileVariant}` : ""} style={{ width: fullWidth ? "100%" : "auto", maxWidth: "100%", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
       <div className={inlineTools ? "inline-study-content" : ""} style={{ flex: inlineTools && fullWidth ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools || fillHeight ? "flex" : "block", ...(fillHeight ? { height: "100%", alignSelf: "stretch" } : {}) }}>
       <div
         className="inline-study-field"
@@ -12785,7 +12785,7 @@ function ExercisePromptContent({ text, studyItem = null, buttonStyle = null, fie
   );
 }
 
-function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, showStudyToolbar = true }) {
+function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, showStudyToolbar = true, mobileVariant = "paragraph" }) {
   const app = useContext(AppContext);
   const studyCard = studyItem ? resolveStudyCard(app, {
     prompt: text,
@@ -12844,7 +12844,7 @@ function MixedUrduParagraphSentence({ text, highlight = null, studyItem = null, 
   };
   const inlineTools = showStudyToolbar && studyCard;
   return (
-    <div {...focusProps} className={inlineTools ? "inline-study-row" : ""} style={{ width: "100%", maxWidth: "100%" }}>
+    <div {...focusProps} className={inlineTools ? `inline-study-row lesson-mobile-shell lesson-mobile-shell-${mobileVariant}` : ""} style={{ width: "100%", maxWidth: "100%" }}>
       <div className={inlineTools ? "inline-study-content" : ""} style={{ flex: inlineTools ? 1 : "0 1 auto", minWidth: inlineTools ? 0 : "auto", display: inlineTools ? "flex" : "block" }}>
       <div
         className="inline-study-field"
@@ -15404,13 +15404,13 @@ function StudyWordCard({ card, showStats = true, allowView = false }) {
   );
 }
 
-function StudyItemInlineToolbar({ studyItem }) {
+function StudyItemInlineToolbar({ studyItem, variant = "section" }) {
   const app = useContext(AppContext);
   const card = resolveStudyCard(app, studyItem);
   const focusProps = getStudyFocusProps(app, card);
   if (!card) return null;
   return (
-    <div {...focusProps} className="attached-field-actions-shell" style={{ marginTop: 8, marginBottom: 8, display: "flex", justifyContent: "flex-end" }}>
+    <div {...focusProps} className={`attached-field-actions-shell lesson-mobile-shell lesson-mobile-shell-${variant}`} style={{ marginTop: 8, marginBottom: 8, display: "flex", justifyContent: "flex-end" }}>
       <WordCollectionToolbar card={card} compact={true} iconOnly={true} inline={true} showLists={false} />
     </div>
   );
@@ -15515,7 +15515,7 @@ function WordRow({ en, ur, fieldPathBase = null }) {
   const editModeActive = Boolean(lessonEdit?.enabled && fieldPathBase);
   return (
     <div {...focusProps} onClick={editModeActive ? undefined : speakBoth} style={{ cursor: editModeActive ? "default" : "pointer", boxShadow: sBoth ? "0 0 0 1px rgba(56,189,248,0.22)" : "none", transition: "box-shadow 0.2s", flexDirection: "column", alignItems: "stretch", gap: 8 }}>
-      <div className="attached-study-shell" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div className="attached-study-shell lesson-mobile-shell lesson-mobile-shell-word" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div className="attached-study-content" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         {editModeActive ? (
           <>
@@ -15554,7 +15554,7 @@ function OppositeWordRow({ en, ur, opposite, oppositeUr, fieldPathBase = null })
   const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--text-muted)", textTransform: "uppercase" };
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-      <div className="attached-study-shell" style={{ display: "flex", alignItems: "stretch", gap: 8, width: "100%" }}>
+      <div className="attached-study-shell lesson-mobile-shell lesson-mobile-shell-word-grid" style={{ display: "flex", alignItems: "stretch", gap: 8, width: "100%" }}>
       <div className="attached-study-content" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, width: "100%", flex: 1 }}>
         <div style={cardStyle}>
           <span style={labelStyle}>Word</span>
@@ -15590,7 +15590,7 @@ function SentencePairRow({ en, ur, fieldPathBase = null }) {
   const labelStyle = { fontSize: 11, fontWeight: 800, letterSpacing: 0.5, color: "var(--text-muted)", textTransform: "uppercase" };
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-      <div className="attached-study-shell" style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+      <div className="attached-study-shell lesson-mobile-shell lesson-mobile-shell-sentence-pair" style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
         <div className="attached-study-content" style={{ ...cardStyle, flex: 1 }}>
           <span style={labelStyle}>English Sentence</span>
           <SpeakableSentence text={en} lang="en" showStudyToolbar={false} buttonStyle={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.24)", color: isLight ? "var(--text-primary)" : "#E0F2FE", marginBottom: 0 }} fieldPath={fieldPathBase ? [...fieldPathBase, "en"] : null} />
@@ -15634,7 +15634,7 @@ function AdjWordRow({ en, ur, comp, sup, fieldPathBase = null }) {
   };
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-      <div className="attached-study-shell" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+      <div className="attached-study-shell lesson-mobile-shell lesson-mobile-shell-word-forms" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div className="attached-study-content" style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         {fieldPathBase && lessonEdit?.enabled ? (
           <>
@@ -15691,7 +15691,7 @@ function VerbWordRow({ en, ur, v2, v3, fieldPathBase = null }) {
   };
   return (
     <div {...focusProps} style={{ cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-      <div className="attached-study-shell" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+      <div className="attached-study-shell lesson-mobile-shell lesson-mobile-shell-word-forms" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <div className="attached-study-content" style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         {fieldPathBase && lessonEdit?.enabled ? (
           <>
@@ -35266,7 +35266,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📝 Day {selectedAdverbDay.day} — Vocabulary</h3>{selectedAdverbDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedAdverbDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const aw = selectedAdverbDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={aw?.en} studyItem={{ subject: "english", section: "adverbsParagraphs", sectionLabel: "Adverb Paragraphs" }} />; })}
+          {selectedAdverbDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const aw = selectedAdverbDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={aw?.en} studyItem={{ subject: "english", section: "adverbsParagraphs", sectionLabel: "Adverb Paragraphs" }} mobileVariant="paragraph" />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedAdverbDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
@@ -35275,7 +35275,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📍 Day {selectedPrepDay.day} — Prepositions</h3>{selectedPrepDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedPrepDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const pw = selectedPrepDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={pw?.en} studyItem={{ subject: "english", section: "prepositionsParagraphs", sectionLabel: "Preposition Paragraphs" }} />; })}
+          {selectedPrepDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const pw = selectedPrepDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={pw?.en} studyItem={{ subject: "english", section: "prepositionsParagraphs", sectionLabel: "Preposition Paragraphs" }} mobileVariant="paragraph" />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedPrepDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
         {selectedPrepDay.difficult && (<div className="adverb-detail-section"><h3>📚 Difficult Words</h3>{selectedPrepDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>)}
@@ -35285,7 +35285,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         <div className="tts-hint">🔊 Tap English forms → hear all 3 forms spoken | Tap Urdu → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>🏷️ Day {selectedAdjDay.day} — Adjective Forms</h3>{selectedAdjDay.words.map((w, i) => <AdjWordRow key={i} en={w.en} ur={w.ur} comp={w.comp} sup={w.super} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedAdjDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const aw = selectedAdjDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={aw?.en} studyItem={{ subject: "english", section: "adjectivesParagraphs", sectionLabel: "Adjective Paragraphs" }} />; })}
+          {selectedAdjDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const aw = selectedAdjDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={aw?.en} studyItem={{ subject: "english", section: "adjectivesParagraphs", sectionLabel: "Adjective Paragraphs" }} mobileVariant="paragraph" />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedAdjDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
@@ -35294,7 +35294,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>🔗 Day {selectedConjDay.day} — Conjunctions</h3>{selectedConjDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedConjDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const cw = selectedConjDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split("...")[0].split(" ")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={cw?.en} studyItem={{ subject: "english", section: "conjunctionParagraphs", sectionLabel: "Conjunction Paragraphs" }} />; })}
+          {selectedConjDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const cw = selectedConjDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split("...")[0].split(" ")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={cw?.en} studyItem={{ subject: "english", section: "conjunctionParagraphs", sectionLabel: "Conjunction Paragraphs" }} mobileVariant="paragraph" />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedConjDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
         {selectedConjDay.difficult && (<div className="adverb-detail-section"><h3>📚 Difficult Words</h3>{selectedConjDay.difficult.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>)}
@@ -35304,7 +35304,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>👤 Day {selectedPronDay.day} — Pronouns</h3>{selectedPronDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedPronDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const pw = selectedPronDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0].split("/")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={pw?.en} studyItem={{ subject: "english", section: "pronounParagraphs", sectionLabel: "Pronoun Paragraphs" }} />; })}
+          {selectedPronDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const pw = selectedPronDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase().split(" ")[0].split("/")[0])); return <SpeakableSentence key={i} text={s} lang="en" highlight={pw?.en} studyItem={{ subject: "english", section: "pronounParagraphs", sectionLabel: "Pronoun Paragraphs" }} mobileVariant="paragraph" />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedPronDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
@@ -35313,7 +35313,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         <div className="tts-hint">🔊 Tap English word → English voice | Tap Urdu word → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>📦 Day {selectedNounDay.day} — Collective Nouns</h3>{selectedNounDay.words.map((w, i) => <WordRow key={i} en={w.en} ur={w.ur} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedNounDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const nw = selectedNounDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={nw?.en} studyItem={{ subject: "english", section: "collectiveNounParagraphs", sectionLabel: "Collective Noun Paragraphs" }} />; })}
+          {selectedNounDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const nw = selectedNounDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={nw?.en} studyItem={{ subject: "english", section: "collectiveNounParagraphs", sectionLabel: "Collective Noun Paragraphs" }} mobileVariant="paragraph" />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedNounDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
@@ -35322,12 +35322,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         <div className="tts-hint">🔊 Tap V1 → V2 → V3 forms spoken | Tap Urdu → Urdu voice | Tap sentence → hear it read!</div>
         <div className="adverb-detail-section"><h3>✏️ Day {selectedVerbDay.day} — Verb Forms</h3>{selectedVerbDay.words.map((w, i) => <VerbWordRow key={i} en={w.en} ur={w.ur} v2={w.v2} v3={w.v3} />)}</div>
         <div className="adverb-detail-section"><h3>📖 Practice Paragraph</h3>
-          {selectedVerbDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const vw = selectedVerbDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={vw?.en} studyItem={{ subject: "english", section: "verbParagraphs", sectionLabel: "Verb Paragraphs" }} />; })}
+          {selectedVerbDay.paragraph.split(/(?<=[.!?])\s+/).filter(Boolean).map((s, i) => { const vw = selectedVerbDay.words.find(w => s.toLowerCase().includes(w.en.toLowerCase())); return <SpeakableSentence key={i} text={s} lang="en" highlight={vw?.en} studyItem={{ subject: "english", section: "verbParagraphs", sectionLabel: "Verb Paragraphs" }} mobileVariant="paragraph" />; })}
           <button className="play-all-btn" onClick={() => playAll(selectedVerbDay.paragraph)}>▶️ Play Entire Paragraph</button>
         </div>
       </>)}
 
-      {tab === "home" && selectedLesson && !quizActive && !quizDone && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
+      {tab === "home" && selectedLesson && !quizActive && !quizDone && !lessonRenderSource?.hasAdverbs && !lessonRenderSource?.hasTenses && !lessonRenderSource?.hasVocab && !lessonRenderSource?.hasMathSub && (<div className="lesson-detail"><LessonEditableText as="h2" value={lessonRenderSource?.title} fieldPath={["title"]} /><LessonEditableText as="p" value={lessonRenderSource?.content} fieldPath={["content"]} className={selectedSubject?.id === "urdu" ? "urdu-text" : ""} multiline /><StudyItemInlineToolbar variant="section" studyItem={{ prompt: lessonRenderSource?.content, subject: selectedSubject?.id || "general", section: lessonRenderSource?.key || lessonRenderSource?.title, sectionLabel: lessonRenderSource?.title }} /><button className="start-quiz-btn" onClick={() => { clearQuizAdvanceTimeout(); setQuizActive(true); setQuizIdx(0); setQuizAnswers([]); setQuizElapsedMs([]); setQuizRevealed(false); setQuizDone(false); setQuizTimerRemaining(activeSubjectQuizTimeLimit); quizQuestionStartedAtRef.current = Date.now(); setQuizStartTime(Date.now()); setNewBadges([]); }}>🎯 Start Quiz</button></div>)}
 
       {tab === "home" && selectedLesson && !quizActive && !quizDone && lessonRenderSource?.hasMathSub && mathSubIdx === null && (<>
         {(() => { const isUr = selectedSubject?.id === "urdu"; return (<>
@@ -35411,7 +35411,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               {selectedTensePara.qs && (<div className="adverb-detail-section"><h3>❓ Comprehension Questions</h3>
                 {selectedTensePara.qs.map((q, i) => (
                   <div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}>
-                    <div className="inline-study-row">
+                    <div className="inline-study-row lesson-mobile-shell lesson-mobile-shell-exercise">
                       <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ color: "#F59E0B", fontWeight: 700, flexShrink: 0 }}>Q{i+1}.</span>
                         <span>{q}</span>
@@ -35534,7 +35534,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                     <div
                       key={`lesson_day_example_${lessonDay.day || dayIdx}_${exampleIndex}`}
                       data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, exampleEntry, exampleIndex, `day_${lessonDay.day || dayIdx + 1}`, "examples")}
-                      className="inline-study-row"
+                      className="inline-study-row lesson-mobile-shell lesson-mobile-shell-sentence"
                       style={{ direction: isUr ? "rtl" : "ltr" }}
                     >
                       <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex" }}>
@@ -35624,7 +35624,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <LessonEditableText as="h3" value={sub.examplesLabel || (isUr?"💡 مثالیں":"💡 Examples")} fieldPath={["subs", mathSubIdx, "examplesLabel"]} style={{color:"#38BDF8",margin:0}} />
               </div>
           {sub.examples.map((ex,i) => (
-            <div key={i} className="inline-study-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
+            <div key={i} className="inline-study-row lesson-mobile-shell lesson-mobile-shell-example" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
               <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex" }}>
                 <ExercisePromptContent
                   text={ex}
@@ -35637,7 +35637,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </div>
           ))}
           {sub.examplesData && sub.examplesData.map((ex,i) => (
-            <div key={`examples_data_${i}`} className="inline-study-row" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
+            <div key={`examples_data_${i}`} className="inline-study-row lesson-mobile-shell lesson-mobile-shell-example" data-study-id={buildDiaryExampleTargetId(diaryRouteBaseId, ex, i, "", "examples")} style={{ direction: isUr ? "rtl" : "ltr" }}>
               <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex" }}>
                 <ExercisePromptContent
                   text={normalizeDiaryOutlineLeafLabel(ex)}
@@ -35705,7 +35705,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       const rk = ei+"_A_"+pi;
                       const pc = qColors[(ei+pi+1) % qColors.length];
                       const displayP = p.replace(/(\d)̲/g, '[$1]').replace(/(\d)\u0332/g, '[$1]');
-                      return (<div key={"A_"+pi} className="attached-study-shell" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
+                      return (<div key={"A_"+pi} className="attached-study-shell lesson-mobile-shell lesson-mobile-shell-exercise" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>A{pi+1}</span>
                         <div className="attached-study-content" style={{flex:1,minWidth:0,display:"flex"}}>
                           <ExercisePromptContent
@@ -35747,7 +35747,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                       const rk = ei+"_B_"+originalIndex;
                       const pc = qColors[(ei+pi+3) % qColors.length];
                       const a = ex.ans[originalIndex];
-                      return (<div key={"B_"+pi} className="attached-study-shell" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
+                      return (<div key={"B_"+pi} className="attached-study-shell lesson-mobile-shell lesson-mobile-shell-exercise" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:4,paddingRight:isUr?4:0,direction:isUr?"rtl":"ltr"}}>
                         <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>B{pi+1}</span>
                         <div className="attached-study-content" style={{flex:1,minWidth:0,display:"flex"}}>
                           <SpeakableSentence
@@ -35789,7 +35789,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 // Replace underlined chars (like 4̲) with boxed display
                 const displayP = p.replace(/(\d)̲/g, '[$1]').replace(/(\d)\u0332/g, '[$1]');
                 const promptVisual = getSimpleMachinePromptVisual(sub, ex, displayP);
-                return (<div key={pi} className="attached-study-shell" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:8,paddingRight:isUr?8:0,direction:isUr?"rtl":"ltr"}}>
+                return (<div key={pi} className="attached-study-shell lesson-mobile-shell lesson-mobile-shell-exercise" style={{display:"flex",alignItems:"stretch",gap:8,marginBottom:8,paddingLeft:isUr?0:8,paddingRight:isUr?8:0,direction:isUr?"rtl":"ltr"}}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:28,height:28,borderRadius:8,background:pc+"18",border:"1.5px solid "+pc+"66",color:pc,fontSize:11,fontWeight:800,fontFamily:"'Baloo 2',sans-serif",flexShrink:0}}>{String.fromCharCode(97+pi)}</span>
                   <div className="attached-study-content" style={{flex:1,minWidth:0,display:"flex",alignItems:"stretch",gap:8}}>
                     {promptVisual ? <span style={{alignSelf:"center",display:"inline-flex"}}>{promptVisual}</span> : null}
@@ -35953,7 +35953,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           {selectedTensePara.qs && (<div className="adverb-detail-section"><h3>❓ Comprehension Questions</h3>
             {selectedTensePara.qs.map((q, i) => (
               <div key={i} style={{ padding: "10px 14px", marginBottom: 10, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elevated)", fontSize: 14, color: "var(--text-primary)" }}>
-                <div className="inline-study-row">
+                <div className="inline-study-row lesson-mobile-shell lesson-mobile-shell-exercise">
                   <div className="inline-study-content" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ color: "#F59E0B", fontWeight: 700, flexShrink: 0 }}>Q{i+1}.</span>
                     <span>{q}</span>
