@@ -18960,7 +18960,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }
     }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
     const handleDeleteLessonSlotPermanently = useCallback(async (group) => {
-      var _a2, _b2, _c2, _d2, _e2, _f2, _g2;
+      var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2;
       if (!canUseLocalSourceTools) {
         showAppToast(joinLocalizedText("Only admins can permanently delete lessons.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0627\u0633\u0628\u0627\u0642 \u06A9\u0648 \u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
@@ -18971,6 +18971,9 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }
       if (canUseLocalSourceTools && isLocalFileRuntime()) {
         try {
+          if ((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.deleteCustomChapter) {
+            await window.HomeSchoolDB.deleteCustomChapter(group.subjectId, group.grade, group.canonicalLessonKey);
+          }
           await writeLessonEditsToSourceFilesRef.current({
             subjectId: group.subjectId,
             targetGrade: group.grade,
@@ -18979,15 +18982,15 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
             questions: [],
             action: "delete",
             lessonId: `${group.subjectId}_${Number(group.grade)}_${group.canonicalLessonKey}`,
-            lessonTitle: group.title || ((_a2 = group.activeLesson) == null ? void 0 : _a2.title) || group.canonicalLessonKey,
-            slotNumber: ((_b2 = group.orderHint) != null ? _b2 : 0) + 1
+            lessonTitle: group.title || ((_b2 = group.activeLesson) == null ? void 0 : _b2.title) || group.canonicalLessonKey,
+            slotNumber: ((_c2 = group.orderHint) != null ? _c2 : 0) + 1
           });
-          const lessonBucket = (_d2 = (_c2 = window.HomeSchoolLessonModules) == null ? void 0 : _c2[group.subjectId]) == null ? void 0 : _d2[Number(group.grade)];
+          const lessonBucket = (_e2 = (_d2 = window.HomeSchoolLessonModules) == null ? void 0 : _d2[group.subjectId]) == null ? void 0 : _e2[Number(group.grade)];
           if (Array.isArray(lessonBucket)) {
             const targetIndex = lessonBucket.findIndex((lesson) => String((lesson == null ? void 0 : lesson.key) || "").trim() === String(group.canonicalLessonKey || "").trim());
             if (targetIndex >= 0) lessonBucket.splice(targetIndex, 1);
           }
-          const quizBucket = (_f2 = (_e2 = window.HomeSchoolQuizModules) == null ? void 0 : _e2[group.subjectId]) == null ? void 0 : _f2[Number(group.grade)];
+          const quizBucket = (_g2 = (_f2 = window.HomeSchoolQuizModules) == null ? void 0 : _f2[group.subjectId]) == null ? void 0 : _g2[Number(group.grade)];
           if (quizBucket && typeof quizBucket === "object") {
             delete quizBucket[group.canonicalLessonKey];
           }
@@ -18995,6 +18998,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           if (String(getCanonicalLessonKeyForLesson(selectedLesson) || "").trim() === String(group.canonicalLessonKey || "").trim()) {
             setSelectedLesson(null);
           }
+          await refreshCustomContentState();
           setSelectedSubject((current) => current ? { ...current } : current);
           showAppToast(joinLocalizedText("Lesson deleted permanently", "\u0633\u0628\u0642 \u0645\u0633\u062A\u0642\u0644 \u0637\u0648\u0631 \u067E\u0631 \u062D\u0630\u0641 \u06A9\u0631 \u062F\u06CC\u0627 \u06AF\u06CC\u0627", language), "check");
         } catch (error) {
@@ -19029,7 +19033,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           subject: group.subjectId,
           grade: Number(group.grade),
           lessonKey: group.canonicalLessonKey,
-          title: String(group.title || ((_g2 = group.activeLesson) == null ? void 0 : _g2.title) || group.canonicalLessonKey).trim(),
+          title: String(group.title || ((_h2 = group.activeLesson) == null ? void 0 : _h2.title) || group.canonicalLessonKey).trim(),
           deletedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
           deletedAt: Date.now()
         };
@@ -19064,7 +19068,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           "alert"
         );
       }
-    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canUseLocalSourceTools, contentIdentityEmail, language, persistBuiltinLessonLayerState, selectedLesson, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+    }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canUseLocalSourceTools, contentIdentityEmail, language, persistBuiltinLessonLayerState, refreshCustomContentState, selectedLesson, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
     const handleQuickRemoveLessonGroup = useCallback(async (group) => {
       const activeVariant = (group == null ? void 0 : group.activeVariant) || null;
       if (!activeVariant) return;

@@ -21960,6 +21960,9 @@ const headerHideTimerRef = useRef(null);
     }
     if (canUseLocalSourceTools && isLocalFileRuntime()) {
       try {
+        if (window.HomeSchoolDB?.deleteCustomChapter) {
+          await window.HomeSchoolDB.deleteCustomChapter(group.subjectId, group.grade, group.canonicalLessonKey);
+        }
         await writeLessonEditsToSourceFilesRef.current({
           subjectId: group.subjectId,
           targetGrade: group.grade,
@@ -21984,6 +21987,7 @@ const headerHideTimerRef = useRef(null);
         if (String(getCanonicalLessonKeyForLesson(selectedLesson) || "").trim() === String(group.canonicalLessonKey || "").trim()) {
           setSelectedLesson(null);
         }
+        await refreshCustomContentState();
         setSelectedSubject((current) => (current ? { ...current } : current));
         showAppToast(joinLocalizedText("Lesson deleted permanently", "سبق مستقل طور پر حذف کر دیا گیا", language), "check");
       } catch (error) {
@@ -22060,7 +22064,7 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canUseLocalSourceTools, contentIdentityEmail, language, persistBuiltinLessonLayerState, selectedLesson, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
+  }, [activeInstitutionSchoolId, activeInstitutionSchoolIdResolved, builtinLessonLayerState, canUseLocalSourceTools, contentIdentityEmail, language, persistBuiltinLessonLayerState, refreshCustomContentState, selectedLesson, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection]);
   const handleQuickRemoveLessonGroup = useCallback(async (group) => {
     const activeVariant = group?.activeVariant || null;
     if (!activeVariant) return;
