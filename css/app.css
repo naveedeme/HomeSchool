@@ -653,6 +653,15 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-edit-delete-item-btn{border-color:color-mix(in srgb,#f59e0b 28%,var(--border));background:color-mix(in srgb,#f59e0b 12%,var(--bg-elevated));color:#b45309}
 .lesson-edit-remove-btn{width:30px;border:1px solid color-mix(in srgb,#ef4444 24%,var(--border));background:color-mix(in srgb,#ef4444 8%,var(--bg-elevated));color:#dc2626;font-size:18px;padding:0}
 .lesson-edit-remove-btn:hover{transform:translateY(-1px);background:color-mix(in srgb,#ef4444 14%,var(--bg-elevated));border-color:color-mix(in srgb,#ef4444 38%,var(--border))}
+.chapter-admin-fold{margin-top:12px;border:1px solid color-mix(in srgb,var(--border) 92%,transparent);border-radius:16px;background:color-mix(in srgb,var(--bg-card) 98%,white 2%)}
+.chapter-admin-fold-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:none;background:transparent;color:var(--accent);font-family:var(--font);font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+.chapter-admin-fold-head.open{padding-bottom:10px}
+.chapter-admin-fold-chevron{font-size:14px;line-height:1;transition:transform .18s ease;color:var(--accent)}
+.chapter-admin-fold-head.open .chapter-admin-fold-chevron{transform:rotate(180deg)}
+.chapter-admin-fold-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease}
+.chapter-admin-fold.open .chapter-admin-fold-body{grid-template-rows:1fr}
+.chapter-admin-fold-body > *{overflow:hidden;padding:0 14px 14px}
+.chapter-admin-fold[data-ui-language="ur"] .chapter-admin-fold-head{direction:rtl}
 .diary-detail-toggle{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;padding:2px 0;border:none;background:transparent;color:var(--text-secondary);font-family:var(--font);text-align:left;cursor:pointer;transition:color .16s ease,opacity .16s ease}
 .diary-detail-toggle:hover{color:var(--text-primary)}
 .diary-detail-toggle-label{font-size:11px;font-weight:700;line-height:1.2;letter-spacing:.01em;color:inherit}
@@ -788,7 +797,12 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
   .attached-study-shell,
   .attached-field-actions-shell{flex-direction:column;align-items:stretch;gap:0}
   .inline-study-row{margin-bottom:12px}
+  .inline-study-row > :first-child,
+  .attached-study-shell > :first-child,
+  .attached-field-actions-shell > :first-child{width:100%!important;min-width:0!important;flex:1 1 auto!important}
   .inline-study-row .inline-study-field{border-radius:10px 10px 0 0!important}
+  .attached-study-shell > :first-child > *:first-child,
+  .attached-field-actions-shell > :first-child > *:first-child{border-bottom-left-radius:0!important;border-bottom-right-radius:0!important}
   .inline-study-row .study-tools.inline,
   .inline-study-row .question-actions,
   .attached-study-shell > .attached-field-actions,

@@ -13468,7 +13468,7 @@ function getPracticeTextStyle(text, baseStyle = {}, fallbackLang = "en") {
 function renderMixedScriptText(text, keyBase = "mixed-script") {
   const source = String(text || "");
   const parts = [];
-  const regex = /([\u0600-\u06FF][\u0600-\u06FF\s\u064B-\u065F\u0670\u06D6-\u06ED]*)/gu;
+  const regex = /((?:[\(\[\{«“"']\s*)?[\u0600-\u06FF][\u0600-\u06FF\s\u064B-\u065F\u0670\u06D6-\u06ED]*(?:\s*[\)\]\}»”"'])?)/gu;
   let lastIndex = 0;
   let match;
   while ((match = regex.exec(source)) !== null) {
@@ -16051,6 +16051,8 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [isMobileNavViewport, setIsMobileNavViewport] = useState(() => (typeof window !== "undefined" ? (window.innerWidth || 0) <= 900 : false));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [pageSectionShutterOpen, setPageSectionShutterOpen] = useState(false);
+  const [lessonAdminToolsOpen, setLessonAdminToolsOpen] = useState(false);
+  const [lessonCurriculumActionsOpen, setLessonCurriculumActionsOpen] = useState(false);
   const [transitionMode, setTransitionMode] = useState(["none", "fade", "slide", "zoom"].includes(stored?.transitionMode) ? stored.transitionMode : "slide");
   const [notificationHistory, setNotificationHistory] = useState(Array.isArray(stored?.notificationHistory) ? stored.notificationHistory : []);
   const [gamificationState, setGamificationState] = useState(normalizeGamificationState(stored?.gamificationState || {}));
@@ -21411,6 +21413,10 @@ const headerHideTimerRef = useRef(null);
     setLessonEditDraft(null);
     setLessonEditBusy(false);
   }, [selectedLesson]);
+  useEffect(() => {
+    setLessonAdminToolsOpen(false);
+    setLessonCurriculumActionsOpen(false);
+  }, [grade, selectedLesson?.id, selectedLesson?.key, selectedSubject?.id]);
   const handleUpdateLessonEditField = useCallback((fieldPath, nextValue) => {
     setLessonEditDraft((current) => updateEditableLessonDraft(current, fieldPath, nextValue));
   }, []);
@@ -34885,141 +34891,167 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <p className="goal-progress-meta" style={{ marginTop: 10 }}>
                 {renderLocalizedTextNode(joinLocalizedText(`Effective scope: ${contentActivationEffectiveScopeLabel}`, `مؤثر دائرہ: ${contentActivationEffectiveScopeLabel}`, language), language)}
               </p>
-              <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
-                {(canSavePublishedLocally || canAdministerLessonLibrary) ? (
-                  <button type="button" className="ghost-cta" onClick={() => handleSavePublishedChapterLocally(selectedSubject?.id, grade, selectedLesson)} disabled={!selectedSubject?.id || !selectedLesson}>
-                    {renderLocalizedTextNode(joinLocalizedText("Save Local Draft", "مقامی مسودہ محفوظ کریں", language), language)}
-                  </button>
-                ) : null}
-                {effectiveCanPublishContent ? (
-                  <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
-                    {renderLocalizedTextNode(
-                      chapterPublishBusy
-                        ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language)
-                        : joinLocalizedText("Publish", "شائع کریں", language),
-                      language,
-                    )}
+              <div className={`chapter-admin-fold${lessonCurriculumActionsOpen ? " open" : ""}`} style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className={`chapter-admin-fold-head${lessonCurriculumActionsOpen ? " open" : ""}`}
+                  onClick={() => setLessonCurriculumActionsOpen((current) => !current)}
+                  aria-expanded={lessonCurriculumActionsOpen ? "true" : "false"}
+                >
+                  <span>{renderLocalizedTextNode(joinLocalizedText("Chapter Curriculum Controls", "سبق نصابی کنٹرول", language), language)}</span>
+                  <span className="chapter-admin-fold-chevron" aria-hidden="true">▾</span>
+                </button>
+                <div className="chapter-admin-fold-body">
+                  <div className="result-actions chapter-card-actions" style={{ marginTop: 12 }}>
+                    {(canSavePublishedLocally || canAdministerLessonLibrary) ? (
+                      <button type="button" className="ghost-cta" onClick={() => handleSavePublishedChapterLocally(selectedSubject?.id, grade, selectedLesson)} disabled={!selectedSubject?.id || !selectedLesson}>
+                        {renderLocalizedTextNode(joinLocalizedText("Save Local Draft", "مقامی مسودہ محفوظ کریں", language), language)}
+                      </button>
+                    ) : null}
+                    {effectiveCanPublishContent ? (
+                      <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
+                        {renderLocalizedTextNode(
+                          chapterPublishBusy
+                            ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language)
+                            : joinLocalizedText("Publish", "شائع کریں", language),
+                          language,
+                        )}
+                      </button>
+                    ) : null}
+                    <button type="button" className="ghost-cta" onClick={handleRefreshCurriculumContent} disabled={contentRelationshipBusy}>
+                      {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
+                    </button>
+                    <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
+                      {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
+                    </button>
+                    <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("grade")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
+                      {renderLocalizedTextNode(joinLocalizedText("Sync with Grade", "جماعت کے ساتھ ہم آہنگی", language), language)}
+                    </button>
+                    <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
+                      {renderLocalizedTextNode(joinLocalizedText("Sync with Learner", "سیکھنے والے کے ساتھ ہم آہنگی", language), language)}
+                    </button>
+                    {canReplaceDefaultEverywhere ? (
+                      <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("global")} disabled={contentRelationshipBusy}>
+                        {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
+                      </button>
+                    ) : null}
+                    <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy}>
+                      {renderLocalizedTextNode(joinLocalizedText("Set Active For School", "اسکول کے لیے فعال کریں", language), language)}
+                    </button>
+                    <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("grade")} disabled={contentRelationshipBusy}>
+                      {renderLocalizedTextNode(joinLocalizedText("Set Active For Grade", "جماعت کے لیے فعال کریں", language), language)}
+                    </button>
+                    <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
+                      {renderLocalizedTextNode(joinLocalizedText("Set Active For Learner", "طالب علم کے لیے فعال کریں", language), language)}
+                    </button>
+                    {canReplaceDefaultEverywhere ? (
+                      <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("global")} disabled={contentRelationshipBusy}>
+                        {renderLocalizedTextNode(joinLocalizedText("Replace Default Everywhere", "ہر جگہ بنیادی ماخذ بدلیں", language), language)}
+                      </button>
+                    ) : null}
+                    {canAdministerLessonLibrary && selectedLessonOpenedVariant?.sourceType === "published" && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
+                      <button type="button" className="ghost-cta" onClick={() => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant)} disabled={contentRelationshipBusy}>
+                        {renderLocalizedTextNode(joinLocalizedText("Replace Built-in Permanently", "بنیادی سبق کو مستقل بدلیں", language), language)}
+                      </button>
+                    ) : null}
+                    {selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
+                      <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)} disabled={contentRelationshipBusy}>
+                        {renderLocalizedTextNode(joinLocalizedText("Delete Built-in Permanently", "بنیادی سبق مستقل حذف کریں", language), language)}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <div className={`chapter-admin-fold${lessonAdminToolsOpen ? " open" : ""}`} data-ui-language={language}>
+            <button
+              type="button"
+              className={`chapter-admin-fold-head${lessonAdminToolsOpen ? " open" : ""}`}
+              onClick={() => setLessonAdminToolsOpen((current) => !current)}
+              aria-expanded={lessonAdminToolsOpen ? "true" : "false"}
+            >
+              <span>{renderLocalizedTextNode(joinLocalizedText("Chapter Admin Tools", "سبق ایڈمن اوزار", language), language)}</span>
+              <span className="chapter-admin-fold-chevron" aria-hidden="true">▾</span>
+            </button>
+            <div className="chapter-admin-fold-body">
+              <div className="subject-chapter-toolbar" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
+                {canImportChapters || canImportSubjects ? (
+                  <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
+                    {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language) : joinLocalizedText("Import Content", "مواد درآمد کریں", language), language)}
                   </button>
                 ) : null}
                 <button type="button" className="ghost-cta" onClick={handleRefreshCurriculumContent} disabled={contentRelationshipBusy}>
                   {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
                 </button>
-                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
-                  {renderLocalizedTextNode(joinLocalizedText("Sync with School", "اسکول کے ساتھ ہم آہنگی", language), language)}
-                </button>
-                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("grade")} disabled={contentRelationshipBusy || !contentActivationScopedSchoolId}>
-                  {renderLocalizedTextNode(joinLocalizedText("Sync with Grade", "جماعت کے ساتھ ہم آہنگی", language), language)}
-                </button>
-                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
-                  {renderLocalizedTextNode(joinLocalizedText("Sync with Learner", "سیکھنے والے کے ساتھ ہم آہنگی", language), language)}
-                </button>
-                {canReplaceDefaultEverywhere ? (
-                  <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("global")} disabled={contentRelationshipBusy}>
-                    {renderLocalizedTextNode(joinLocalizedText("Sync Globally", "عالمی ہم آہنگی", language), language)}
+                {effectiveCanPublishContent ? (
+                  <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
+                    {renderLocalizedTextNode(
+                      chapterPublishBusy
+                        ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language)
+                        : String(selectedLesson?.publication?.authorUserId || "").trim() === String(supabaseAuthState.userId || "").trim()
+                          ? joinLocalizedText("Update Published Chapter", "شائع شدہ سبق تازہ کریں", language)
+                          : selectedLesson?.publication?.contentId
+                            ? joinLocalizedText("Publish Copy", "نقل شائع کریں", language)
+                            : joinLocalizedText("Publish Chapter", "سبق شائع کریں", language),
+                      language,
+                    )}
                   </button>
                 ) : null}
-                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("school")} disabled={contentRelationshipBusy}>
-                  {renderLocalizedTextNode(joinLocalizedText("Set Active For School", "اسکول کے لیے فعال کریں", language), language)}
-                </button>
-                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("grade")} disabled={contentRelationshipBusy}>
-                  {renderLocalizedTextNode(joinLocalizedText("Set Active For Grade", "جماعت کے لیے فعال کریں", language), language)}
-                </button>
-                <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("student")} disabled={contentRelationshipBusy || !contentActivationDraftStudentEmail}>
-                  {renderLocalizedTextNode(joinLocalizedText("Set Active For Learner", "طالب علم کے لیے فعال کریں", language), language)}
-                </button>
-                {canReplaceDefaultEverywhere ? (
-                  <button type="button" className="ghost-cta" onClick={() => handleActivateSelectedLessonScoped("global")} disabled={contentRelationshipBusy}>
-                    {renderLocalizedTextNode(joinLocalizedText("Replace Default Everywhere", "ہر جگہ بنیادی ماخذ بدلیں", language), language)}
+                {canExportContent ? (
+                  <button type="button" className="ghost-cta" onClick={handleExportSelectedChapter}>
+                    {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
+                  </button>
+                ) : null}
+                {canUseLocalSourceTools ? (
+                  <button type="button" className="ghost-cta" onClick={sourceFileAccessState.handle ? handleDisconnectSourceFiles : handleConnectSourceFiles} disabled={sourceFileAccessBusy || lessonEditBusy}>
+                    {renderLocalizedTextNode(
+                      sourceFileAccessBusy
+                        ? joinLocalizedText("Connecting Source...", "ماخذ منسلک ہو رہا ہے...", language)
+                        : sourceFileAccessState.handle
+                          ? joinLocalizedText(`Source Linked: ${sourceFileAccessState.rootName || "Project"}`, `ماخذ منسلک: ${sourceFileAccessState.rootName || "پروجیکٹ"}`, language)
+                          : joinLocalizedText("Connect Source Files", "ماخذ فائلیں منسلک کریں", language),
+                      language,
+                    )}
+                  </button>
+                ) : null}
+                {canEditLessonLocally && !lessonEditMode ? (
+                  <button type="button" className="ghost-cta" onClick={handleOpenLessonEditMode}>
+                    {renderLocalizedTextNode(joinLocalizedText("Edit Lesson", "سبق میں ترمیم", language), language)}
+                  </button>
+                ) : null}
+                {canEditLessonLocally && lessonEditMode ? (
+                  <button type="button" className="ghost-cta" onClick={handleSaveLessonEdits} disabled={lessonEditBusy}>
+                    {renderLocalizedTextNode(lessonEditBusy ? joinLocalizedText("Saving...", "محفوظ ہو رہا ہے...", language) : joinLocalizedText("Save Edits", "تبدیلیاں محفوظ کریں", language), language)}
+                  </button>
+                ) : null}
+                {canEditLessonLocally && lessonEditMode ? (
+                  <button type="button" className="ghost-cta" onClick={handleCancelLessonEditMode} disabled={lessonEditBusy}>
+                    {renderLocalizedTextNode(joinLocalizedText("Cancel Edit", "ترمیم منسوخ", language), language)}
+                  </button>
+                ) : null}
+                {canAdministerLessonLibrary && selectedLessonChapterGroup?.activeVariant?.sourceType === "custom" ? (
+                  <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(selectedLessonChapterGroup)}>
+                    {renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}
                   </button>
                 ) : null}
                 {canAdministerLessonLibrary && selectedLessonOpenedVariant?.sourceType === "published" && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
-                  <button type="button" className="ghost-cta" onClick={() => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant)} disabled={contentRelationshipBusy}>
+                  <button type="button" className="ghost-cta" onClick={() => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant)}>
                     {renderLocalizedTextNode(joinLocalizedText("Replace Built-in Permanently", "بنیادی سبق کو مستقل بدلیں", language), language)}
                   </button>
                 ) : null}
-                {selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
-                  <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)} disabled={contentRelationshipBusy}>
+                {canAdministerLessonLibrary && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
+                  <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)}>
                     {renderLocalizedTextNode(joinLocalizedText("Delete Built-in Permanently", "بنیادی سبق مستقل حذف کریں", language), language)}
+                  </button>
+                ) : null}
+                {canAdministerLessonLibrary ? (
+                  <button type="button" className="ghost-cta" onClick={() => handleArchiveLessonSlot(selectedLessonChapterGroup)}>
+                    {renderLocalizedTextNode(joinLocalizedText("Remove Lesson Slot", "سبق خانہ ہٹائیں", language), language)}
                   </button>
                 ) : null}
               </div>
             </div>
-          ) : null}
-          <div className="subject-chapter-toolbar" style={(selectedSubject?.id==="urdu" || isUrduUi(language))?{direction:"rtl"}:{}}>
-            {canImportChapters || canImportSubjects ? (
-              <button type="button" className="ghost-cta" onClick={handleOpenChapterImport} disabled={chapterImportBusy}>
-                {renderLocalizedTextNode(chapterImportBusy ? joinLocalizedText("Importing content...", "مواد درآمد ہو رہا ہے...", language) : joinLocalizedText("Import Content", "مواد درآمد کریں", language), language)}
-              </button>
-            ) : null}
-            <button type="button" className="ghost-cta" onClick={handleRefreshCurriculumContent} disabled={contentRelationshipBusy}>
-              {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
-            </button>
-            {effectiveCanPublishContent ? (
-              <button type="button" className="ghost-cta" onClick={handlePublishSelectedChapter} disabled={chapterPublishBusy}>
-                {renderLocalizedTextNode(
-                  chapterPublishBusy
-                    ? joinLocalizedText("Publishing...", "شائع ہو رہا ہے...", language)
-                    : String(selectedLesson?.publication?.authorUserId || "").trim() === String(supabaseAuthState.userId || "").trim()
-                      ? joinLocalizedText("Update Published Chapter", "شائع شدہ سبق تازہ کریں", language)
-                      : selectedLesson?.publication?.contentId
-                        ? joinLocalizedText("Publish Copy", "نقل شائع کریں", language)
-                        : joinLocalizedText("Publish Chapter", "سبق شائع کریں", language),
-                  language,
-                )}
-              </button>
-            ) : null}
-            {canExportContent ? (
-              <button type="button" className="ghost-cta" onClick={handleExportSelectedChapter}>
-                {renderLocalizedTextNode(joinLocalizedText("Export Chapter", "سبق برآمد کریں", language), language)}
-              </button>
-            ) : null}
-            {canUseLocalSourceTools ? (
-              <button type="button" className="ghost-cta" onClick={sourceFileAccessState.handle ? handleDisconnectSourceFiles : handleConnectSourceFiles} disabled={sourceFileAccessBusy || lessonEditBusy}>
-                {renderLocalizedTextNode(
-                  sourceFileAccessBusy
-                    ? joinLocalizedText("Connecting Source...", "ماخذ منسلک ہو رہا ہے...", language)
-                    : sourceFileAccessState.handle
-                      ? joinLocalizedText(`Source Linked: ${sourceFileAccessState.rootName || "Project"}`, `ماخذ منسلک: ${sourceFileAccessState.rootName || "پروجیکٹ"}`, language)
-                      : joinLocalizedText("Connect Source Files", "ماخذ فائلیں منسلک کریں", language),
-                  language,
-                )}
-              </button>
-            ) : null}
-            {canEditLessonLocally && !lessonEditMode ? (
-              <button type="button" className="ghost-cta" onClick={handleOpenLessonEditMode}>
-                {renderLocalizedTextNode(joinLocalizedText("Edit Lesson", "سبق میں ترمیم", language), language)}
-              </button>
-            ) : null}
-            {canEditLessonLocally && lessonEditMode ? (
-              <button type="button" className="ghost-cta" onClick={handleSaveLessonEdits} disabled={lessonEditBusy}>
-                {renderLocalizedTextNode(lessonEditBusy ? joinLocalizedText("Saving...", "محفوظ ہو رہا ہے...", language) : joinLocalizedText("Save Edits", "تبدیلیاں محفوظ کریں", language), language)}
-              </button>
-            ) : null}
-            {canEditLessonLocally && lessonEditMode ? (
-              <button type="button" className="ghost-cta" onClick={handleCancelLessonEditMode} disabled={lessonEditBusy}>
-                {renderLocalizedTextNode(joinLocalizedText("Cancel Edit", "ترمیم منسوخ", language), language)}
-              </button>
-            ) : null}
-            {canAdministerLessonLibrary && selectedLessonChapterGroup?.activeVariant?.sourceType === "custom" ? (
-              <button type="button" className="ghost-cta" onClick={() => handleDeleteLocalChapter(selectedLessonChapterGroup)}>
-                {renderLocalizedTextNode(joinLocalizedText("Delete local", "مقامی حذف کریں", language), language)}
-              </button>
-            ) : null}
-            {canAdministerLessonLibrary && selectedLessonOpenedVariant?.sourceType === "published" && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
-              <button type="button" className="ghost-cta" onClick={() => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant)}>
-                {renderLocalizedTextNode(joinLocalizedText("Replace Built-in Permanently", "بنیادی سبق کو مستقل بدلیں", language), language)}
-              </button>
-            ) : null}
-            {canAdministerLessonLibrary && selectedLessonChapterGroup?.variants?.some((variant) => variant.sourceType === "builtin") ? (
-              <button type="button" className="ghost-cta" onClick={() => handleArchiveBuiltinLesson(selectedLessonChapterGroup)}>
-                {renderLocalizedTextNode(joinLocalizedText("Delete Built-in Permanently", "بنیادی سبق مستقل حذف کریں", language), language)}
-              </button>
-            ) : null}
-            {canAdministerLessonLibrary ? (
-              <button type="button" className="ghost-cta" onClick={() => handleArchiveLessonSlot(selectedLessonChapterGroup)}>
-                {renderLocalizedTextNode(joinLocalizedText("Remove Lesson Slot", "سبق خانہ ہٹائیں", language), language)}
-              </button>
-            ) : null}
           </div>
           {canAdministerLessonLibrary && sourceFileAccessSupported && sourceFileAccessState.handle ? (
             <div className="goal-progress-meta" style={{ marginTop: 8 }}>
