@@ -43,5 +43,21 @@
   <script src="./js/data-version.js"></script>
   <script src="./js/settings/SettingsPanel.js"></script>
   <script src="./js/app.bundle.js"></script>
+  <script>
+    (function(){
+      if ('serviceWorker' in navigator) {
+        try {
+          if (!localStorage.getItem('sw-unregistered-v1')) {
+            navigator.serviceWorker.getRegistrations().then(function(regs){
+              return Promise.all(regs.map(function(r){ return r.unregister(); }));
+            }).then(function(){
+              localStorage.setItem('sw-unregistered-v1','1');
+              location.reload();
+            }).catch(function(e){ console.error('SW unregister failed', e); });
+          }
+        } catch(e){ console.error(e); }
+      }
+    })();
+  </script>
 </body>
 </html>
