@@ -15420,6 +15420,7 @@ ${marker} `);
     const ensureSupabaseClientRef = useRef(() => {
       throw new Error("Supabase client not ready");
     });
+    const handleConnectSourceFilesRef = useRef(async () => null);
     const writeLessonEditsToSourceFilesRef = useRef(async () => {
       throw new Error("Source-file lesson writer not ready");
     });
@@ -17500,12 +17501,12 @@ ${marker} `);
         return;
       }
       if (!sourceFileAccessState.handle) {
-        const connectedRecord = await handleConnectSourceFiles();
+        const connectedRecord = await handleConnectSourceFilesRef.current();
         if (!(connectedRecord == null ? void 0 : connectedRecord.handle)) return;
       }
       if (defaultBuiltinImportInputRef.current) defaultBuiltinImportInputRef.current.value = "";
       (_b2 = (_a2 = defaultBuiltinImportInputRef.current) == null ? void 0 : _a2.click) == null ? void 0 : _b2.call(_a2);
-    }, [canUseLocalSourceTools, grade, handleConnectSourceFiles, language, selectedSubject, showAppToast, sourceFileAccessState.handle, sourceFileAccessSupported]);
+    }, [canUseLocalSourceTools, grade, language, selectedSubject, showAppToast, sourceFileAccessState.handle, sourceFileAccessSupported]);
     const handleImportDefaultBuiltinChapter = useCallback(async (event) => {
       var _a2, _b2, _c2, _d2;
       const files = Array.from(((_a2 = event == null ? void 0 : event.target) == null ? void 0 : _a2.files) || []);
@@ -18395,6 +18396,7 @@ ${marker} `);
         setSourceFileAccessBusy(false);
       }
     }, [language, persistSourceFileAccessHandle, showAppToast]);
+    handleConnectSourceFilesRef.current = handleConnectSourceFiles;
     const writeLessonEditsToSourceFiles = useCallback(async ({
       subjectId,
       targetGrade,

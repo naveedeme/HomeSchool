@@ -18229,6 +18229,7 @@ const headerHideTimerRef = useRef(null);
   const ensureSupabaseClientRef = useRef(() => {
     throw new Error("Supabase client not ready");
   });
+  const handleConnectSourceFilesRef = useRef(async () => null);
   const writeLessonEditsToSourceFilesRef = useRef(async () => {
     throw new Error("Source-file lesson writer not ready");
   });
@@ -20448,12 +20449,12 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     if (!sourceFileAccessState.handle) {
-      const connectedRecord = await handleConnectSourceFiles();
+      const connectedRecord = await handleConnectSourceFilesRef.current();
       if (!connectedRecord?.handle) return;
     }
     if (defaultBuiltinImportInputRef.current) defaultBuiltinImportInputRef.current.value = "";
     defaultBuiltinImportInputRef.current?.click?.();
-  }, [canUseLocalSourceTools, grade, handleConnectSourceFiles, language, selectedSubject, showAppToast, sourceFileAccessState.handle, sourceFileAccessSupported]);
+  }, [canUseLocalSourceTools, grade, language, selectedSubject, showAppToast, sourceFileAccessState.handle, sourceFileAccessSupported]);
   const handleImportDefaultBuiltinChapter = useCallback(async (event) => {
     const files = Array.from(event?.target?.files || []);
     if (!files.length) return;
@@ -21380,6 +21381,7 @@ const headerHideTimerRef = useRef(null);
       setSourceFileAccessBusy(false);
     }
   }, [language, persistSourceFileAccessHandle, showAppToast]);
+  handleConnectSourceFilesRef.current = handleConnectSourceFiles;
   const writeLessonEditsToSourceFiles = useCallback(async ({
     subjectId,
     targetGrade,
