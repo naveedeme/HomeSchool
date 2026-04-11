@@ -75,6 +75,7 @@
   "./js/data/urdu/grade-9.js",
   "./js/data/urdu/grade-10.js",
   "./js/data/urdu/quizzes.js",
+  "./js/data/source-edits.js",
   "./js/data/index.js"
 ];
   document.write(files.map((src) => '<script src="' + src + '"><\/script>').join(''));
