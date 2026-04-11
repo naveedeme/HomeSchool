@@ -122,6 +122,51 @@
     }
     return source;
   }
+  function getEditablePathFromDescriptor(descriptor) {
+    if (Array.isArray(descriptor)) return descriptor;
+    if (descriptor && typeof descriptor === "object" && descriptor.type === "paragraphSentence") {
+      return Array.isArray(descriptor.path) ? descriptor.path : [];
+    }
+    return [];
+  }
+  function getEditableArrayItemMeta(source, descriptor) {
+    const path = getEditablePathFromDescriptor(descriptor);
+    if (!Array.isArray(path) || !path.length) return null;
+    let resolvedMeta = null;
+    for (let index = 0; index < path.length; index += 1) {
+      if (!Number.isInteger(path[index]) || index < 1) continue;
+      const collectionPath = path.slice(0, index);
+      const itemIndex = path[index];
+      const collection = getEditableValueAtPath(source, collectionPath);
+      if (!Array.isArray(collection)) continue;
+      resolvedMeta = {
+        collectionPath,
+        itemPath: path.slice(0, index + 1),
+        itemIndex,
+        length: collection.length
+      };
+    }
+    return resolvedMeta;
+  }
+  function moveEditableArrayItem(source, descriptor, direction = 0) {
+    if (!source || !Number.isInteger(direction) || direction === 0) return source;
+    const meta = getEditableArrayItemMeta(source, descriptor);
+    if (!meta) return source;
+    const targetIndex = meta.itemIndex + direction;
+    if (targetIndex < 0 || targetIndex >= meta.length) return source;
+    const nextRoot = cloneSerializableValue(source);
+    const collection = getEditableValueAtPath(nextRoot, meta.collectionPath);
+    if (!Array.isArray(collection)) return source;
+    const [movedItem] = collection.splice(meta.itemIndex, 1);
+    collection.splice(targetIndex, 0, movedItem);
+    return nextRoot;
+  }
+  function removeEditableArrayItem(source, descriptor) {
+    if (!source) return source;
+    const meta = getEditableArrayItemMeta(source, descriptor);
+    if (!meta) return source;
+    return removeEditableValueAtPath(source, meta.itemPath);
+  }
   function normalizeGradeOptionIds(list = []) {
     return (Array.isArray(list) ? list : []).map((entry) => {
       var _a, _b, _c;
@@ -138,11 +183,13 @@
     inputStyle = null,
     dir = void 0
   }) {
+    var _a;
     const editContext = useContext(LessonEditContext);
     const safeValue = String(value != null ? value : "");
     if (!(editContext == null ? void 0 : editContext.enabled) || !fieldPath) {
       return React.createElement(as, { className, style, dir }, safeValue);
     }
+    const arrayItemMeta = ((_a = editContext.getArrayItemMeta) == null ? void 0 : _a.call(editContext, fieldPath)) || null;
     const commonInputStyle = {
       width: "100%",
       minWidth: 0,
@@ -178,23 +225,80 @@
       }
     );
     const removeLabel = dir === "rtl" ? "\u06CC\u06C1 \u062D\u0635\u06C1 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA" : "Remove this field";
+    const moveUpLabel = dir === "rtl" ? "\u0627\u0633 \u0627\u0646\u062F\u0631\u0627\u062C \u06A9\u0648 \u0627\u0648\u067E\u0631 \u06A9\u0631\u06CC\u06BA" : "Move this item up";
+    const moveDownLabel = dir === "rtl" ? "\u0627\u0633 \u0627\u0646\u062F\u0631\u0627\u062C \u06A9\u0648 \u0646\u06CC\u0686\u06D2 \u06A9\u0631\u06CC\u06BA" : "Move this item down";
+    const deleteItemLabel = dir === "rtl" ? "\u0627\u0633 \u0627\u0646\u062F\u0631\u0627\u062C \u06A9\u0648 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA" : "Delete this item";
     return React.createElement(
       as,
       { className, style, dir },
-      /* @__PURE__ */ React.createElement("span", { className: `lesson-edit-field-shell${multiline ? " multiline" : ""}` }, /* @__PURE__ */ React.createElement("span", { className: "lesson-edit-field-main" }, inputElement), /* @__PURE__ */ React.createElement(
-        "button",
+      /* @__PURE__ */ React.createElement(
+        "span",
         {
-          type: "button",
-          className: "lesson-edit-remove-btn",
-          onClick: () => {
-            var _a;
-            return (_a = editContext.removeField) == null ? void 0 : _a.call(editContext, fieldPath);
-          },
-          title: removeLabel,
-          "aria-label": removeLabel
+          className: `lesson-edit-field-shell${multiline ? " multiline" : ""}`,
+          onClick: (event) => event.stopPropagation(),
+          onMouseDown: (event) => event.stopPropagation()
         },
-        "\xD7"
-      ))
+        /* @__PURE__ */ React.createElement("span", { className: "lesson-edit-field-main" }, inputElement),
+        /* @__PURE__ */ React.createElement("span", { className: "lesson-edit-field-actions" }, arrayItemMeta ? /* @__PURE__ */ React.createElement("span", { className: "lesson-edit-array-actions" }, /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "lesson-edit-action-btn",
+            onClick: (event) => {
+              var _a2;
+              event.stopPropagation();
+              (_a2 = editContext.moveArrayItem) == null ? void 0 : _a2.call(editContext, fieldPath, -1);
+            },
+            title: moveUpLabel,
+            "aria-label": moveUpLabel,
+            disabled: arrayItemMeta.itemIndex <= 0
+          },
+          "\u2191"
+        ), /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "lesson-edit-action-btn",
+            onClick: (event) => {
+              var _a2;
+              event.stopPropagation();
+              (_a2 = editContext.moveArrayItem) == null ? void 0 : _a2.call(editContext, fieldPath, 1);
+            },
+            title: moveDownLabel,
+            "aria-label": moveDownLabel,
+            disabled: arrayItemMeta.itemIndex >= arrayItemMeta.length - 1
+          },
+          "\u2193"
+        ), /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "lesson-edit-action-btn lesson-edit-delete-item-btn",
+            onClick: (event) => {
+              var _a2;
+              event.stopPropagation();
+              (_a2 = editContext.removeArrayItem) == null ? void 0 : _a2.call(editContext, fieldPath);
+            },
+            title: deleteItemLabel,
+            "aria-label": deleteItemLabel
+          },
+          "Del"
+        )) : null, /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "lesson-edit-remove-btn",
+            onClick: (event) => {
+              var _a2;
+              event.stopPropagation();
+              (_a2 = editContext.removeField) == null ? void 0 : _a2.call(editContext, fieldPath);
+            },
+            title: removeLabel,
+            "aria-label": removeLabel
+          },
+          "\xD7"
+        ))
+      )
     );
   }
   function createEmptyCustomContentState() {
@@ -13448,6 +13552,10 @@ ${marker} `);
       () => canAdministerLessonLibrary || isLocalFileRuntime(),
       [canAdministerLessonLibrary]
     );
+    const canEditLessonLocally = useMemo(
+      () => canAdministerLessonLibrary || canUseLocalSourceTools,
+      [canAdministerLessonLibrary, canUseLocalSourceTools]
+    );
     const effectiveContentRoleCapabilities = useMemo(() => canAdministerLessonLibrary ? getContentRoleCapabilities("admin", contentAccessState.rolePermissions) : contentRoleCapabilities, [canAdministerLessonLibrary, contentAccessState.rolePermissions, contentRoleCapabilities]);
     const effectiveCanPublishContent = Boolean(effectiveContentRoleCapabilities.publishContent);
     const effectiveCanUnpublishContent = Boolean(effectiveContentRoleCapabilities.unpublishContent);
@@ -18323,15 +18431,21 @@ ${marker} `);
     const handleRemoveLessonEditField = useCallback((fieldPath) => {
       setLessonEditDraft((current) => removeEditableLessonField(current, fieldPath));
     }, []);
+    const handleMoveLessonEditArrayItem = useCallback((fieldPath, direction) => {
+      setLessonEditDraft((current) => moveEditableArrayItem(current, fieldPath, direction));
+    }, []);
+    const handleRemoveLessonEditArrayItem = useCallback((fieldPath) => {
+      setLessonEditDraft((current) => removeEditableArrayItem(current, fieldPath));
+    }, []);
     const handleOpenLessonEditMode = useCallback(() => {
-      if (!canAdministerLessonLibrary) {
-        showAppToast(joinLocalizedText("Only admins can edit lessons.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0627\u0633\u0628\u0627\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+      if (!canEditLessonLocally) {
+        showAppToast(joinLocalizedText("Lesson editing is not available here yet.", "\u06CC\u06C1\u0627\u06BA \u0633\u0628\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645 \u0627\u0628\u06BE\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
       if (!selectedLesson) return;
       setLessonEditDraft(materializeEditableLessonData(selectedLesson, selectedSubject == null ? void 0 : selectedSubject.id, daySectionSettings));
       setLessonEditMode(true);
-    }, [canAdministerLessonLibrary, daySectionSettings, language, selectedLesson, selectedSubject == null ? void 0 : selectedSubject.id, showAppToast]);
+    }, [canEditLessonLocally, daySectionSettings, language, selectedLesson, selectedSubject == null ? void 0 : selectedSubject.id, showAppToast]);
     const handleCancelLessonEditMode = useCallback(() => {
       setLessonEditMode(false);
       setLessonEditDraft(null);
@@ -18518,8 +18632,8 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
     writeLessonOrderToSourceFilesRef.current = writeLessonOrderToSourceFiles;
     const handleSaveLessonEdits = useCallback(async () => {
       var _a2, _b2, _c2;
-      if (!canAdministerLessonLibrary) {
-        showAppToast(joinLocalizedText("Only admins can edit lessons.", "\u0635\u0631\u0641 \u0627\u06CC\u0688\u0645\u0646 \u0627\u0633\u0628\u0627\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645 \u06A9\u0631 \u0633\u06A9\u062A\u06D2 \u06C1\u06CC\u06BA\u06D4", language), "alert");
+      if (!canEditLessonLocally) {
+        showAppToast(joinLocalizedText("Lesson editing is not available here yet.", "\u06CC\u06C1\u0627\u06BA \u0633\u0628\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645 \u0627\u0628\u06BE\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
       if (!selectedLesson || !selectedSubject || !grade || !lessonEditDraft) return;
@@ -18585,7 +18699,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       } finally {
         setLessonEditBusy(false);
       }
-    }, [canAdministerLessonLibrary, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
+    }, [canEditLessonLocally, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
     const persistBuiltinLessonLayerState = useCallback(async (nextLayerState) => {
       const normalizedLayerState = normalizeBuiltinLessonLayerState(nextLayerState);
       const client = ensureSupabaseClientRef.current();
@@ -19062,8 +19176,11 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       enabled: lessonEditMode,
       draft: lessonEditDraft,
       updateField: handleUpdateLessonEditField,
-      removeField: handleRemoveLessonEditField
-    }), [handleRemoveLessonEditField, handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
+      removeField: handleRemoveLessonEditField,
+      moveArrayItem: handleMoveLessonEditArrayItem,
+      removeArrayItem: handleRemoveLessonEditArrayItem,
+      getArrayItemMeta: (fieldPath) => getEditableArrayItemMeta(lessonEditDraft, fieldPath)
+    }), [handleMoveLessonEditArrayItem, handleRemoveLessonEditArrayItem, handleRemoveLessonEditField, handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
     useEffect(() => {
       setChapterSelectionMode(false);
       setSelectedChapterKeys([]);
@@ -28857,7 +28974,7 @@ ${error.message || error}`);
     )) : null, canExportContent ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleExportSelectedChapter }, renderLocalizedTextNode(joinLocalizedText("Export Chapter", "\u0633\u0628\u0642 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u06CC\u06BA", language), language)) : null, canUseLocalSourceTools ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: sourceFileAccessState.handle ? handleDisconnectSourceFiles : handleConnectSourceFiles, disabled: sourceFileAccessBusy || lessonEditBusy }, renderLocalizedTextNode(
       sourceFileAccessBusy ? joinLocalizedText("Connecting Source...", "\u0645\u0627\u062E\u0630 \u0645\u0646\u0633\u0644\u06A9 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : sourceFileAccessState.handle ? joinLocalizedText(`Source Linked: ${sourceFileAccessState.rootName || "Project"}`, `\u0645\u0627\u062E\u0630 \u0645\u0646\u0633\u0644\u06A9: ${sourceFileAccessState.rootName || "\u067E\u0631\u0648\u062C\u06CC\u06A9\u0679"}`, language) : joinLocalizedText("Connect Source Files", "\u0645\u0627\u062E\u0630 \u0641\u0627\u0626\u0644\u06CC\u06BA \u0645\u0646\u0633\u0644\u06A9 \u06A9\u0631\u06CC\u06BA", language),
       language
-    )) : null, canAdministerLessonLibrary && !lessonEditMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenLessonEditMode }, renderLocalizedTextNode(joinLocalizedText("Edit Lesson", "\u0633\u0628\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645", language), language)) : null, canAdministerLessonLibrary && lessonEditMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSaveLessonEdits, disabled: lessonEditBusy }, renderLocalizedTextNode(lessonEditBusy ? joinLocalizedText("Saving...", "\u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Save Edits", "\u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && lessonEditMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleCancelLessonEditMode, disabled: lessonEditBusy }, renderLocalizedTextNode(joinLocalizedText("Cancel Edit", "\u062A\u0631\u0645\u06CC\u0645 \u0645\u0646\u0633\u0648\u062E", language), language)) : null, canAdministerLessonLibrary && ((_w = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.activeVariant) == null ? void 0 : _w.sourceType) === "custom" ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteLocalChapter(selectedLessonChapterGroup) }, renderLocalizedTextNode(joinLocalizedText("Delete local", "\u0645\u0642\u0627\u0645\u06CC \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && (selectedLessonOpenedVariant == null ? void 0 : selectedLessonOpenedVariant.sourceType) === "published" && ((_x = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _x.some((variant) => variant.sourceType === "builtin")) ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant) }, renderLocalizedTextNode(joinLocalizedText("Replace Built-in Permanently", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0628\u0642 \u06A9\u0648 \u0645\u0633\u062A\u0642\u0644 \u0628\u062F\u0644\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && ((_y = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _y.some((variant) => variant.sourceType === "builtin")) ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleArchiveBuiltinLesson(selectedLessonChapterGroup) }, renderLocalizedTextNode(joinLocalizedText("Delete Built-in Permanently", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0628\u0642 \u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleArchiveLessonSlot(selectedLessonChapterGroup) }, renderLocalizedTextNode(joinLocalizedText("Remove Lesson Slot", "\u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null), canAdministerLessonLibrary && sourceFileAccessSupported && sourceFileAccessState.handle ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Lesson saves now also update js/data/source-edits.js in your connected project folder.", "\u0633\u0628\u0642 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u062A\u06D2 \u0648\u0642\u062A \u0627\u0628 \u0622\u067E \u06A9\u06D2 \u0645\u0646\u0633\u0644\u06A9 \u0645\u0646\u0635\u0648\u0628\u06D2 \u06A9\u06D2 \u0641\u0648\u0644\u0688\u0631 \u0645\u06CC\u06BA js/data/source-edits.js \u0628\u06BE\u06CC \u062A\u0627\u0632\u06C1 \u06C1\u0648 \u06AF\u06CC\u06D4", language), language)) : null, ((_z = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _z.length) > 1 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-source-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Chapter Source", "\u0633\u0628\u0642 \u0645\u0627\u062E\u0630", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This controls the active lesson copy for the current subject and grade library only. It changes what opens by default here, but it does not replace learner assignments by itself.", "\u06CC\u06C1 \u0635\u0631\u0641 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0645\u0636\u0645\u0648\u0646 \u0627\u0648\u0631 \u062C\u0645\u0627\u0639\u062A \u06A9\u06CC \u0644\u0627\u0626\u0628\u0631\u06CC\u0631\u06CC \u06A9\u06D2 \u0641\u0639\u0627\u0644 \u0633\u0628\u0642 \u06A9\u0648 \u06A9\u0646\u0679\u0631\u0648\u0644 \u06A9\u0631\u062A\u0627 \u06C1\u06D2\u06D4 \u0627\u0633 \u0633\u06D2 \u06CC\u06C1\u0627\u06BA \u0628\u0637\u0648\u0631\u0650 \u0637\u06D2 \u0634\u062F\u06C1 \u06A9\u06BE\u0644\u0646\u06D2 \u0648\u0627\u0644\u06CC \u06A9\u0627\u067E\u06CC \u0628\u062F\u0644\u062A\u06CC \u06C1\u06D2\u060C \u0645\u06AF\u0631 \u06CC\u06C1 \u062E\u0648\u062F \u0628\u062E\u0648\u062F \u0637\u0644\u0628\u06C1 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0646\u06C1\u06CC\u06BA \u0628\u062F\u0644\u062A\u0627\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-choice-row" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`, onClick: () => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null), disabled: !canChooseContentSource }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), selectedLessonChapterGroup.variants.map((variant) => {
+    )) : null, canEditLessonLocally && !lessonEditMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleOpenLessonEditMode }, renderLocalizedTextNode(joinLocalizedText("Edit Lesson", "\u0633\u0628\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645", language), language)) : null, canEditLessonLocally && lessonEditMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleSaveLessonEdits, disabled: lessonEditBusy }, renderLocalizedTextNode(lessonEditBusy ? joinLocalizedText("Saving...", "\u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u0631\u06C1\u0627 \u06C1\u06D2...", language) : joinLocalizedText("Save Edits", "\u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canEditLessonLocally && lessonEditMode ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: handleCancelLessonEditMode, disabled: lessonEditBusy }, renderLocalizedTextNode(joinLocalizedText("Cancel Edit", "\u062A\u0631\u0645\u06CC\u0645 \u0645\u0646\u0633\u0648\u062E", language), language)) : null, canAdministerLessonLibrary && ((_w = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.activeVariant) == null ? void 0 : _w.sourceType) === "custom" ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleDeleteLocalChapter(selectedLessonChapterGroup) }, renderLocalizedTextNode(joinLocalizedText("Delete local", "\u0645\u0642\u0627\u0645\u06CC \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && (selectedLessonOpenedVariant == null ? void 0 : selectedLessonOpenedVariant.sourceType) === "published" && ((_x = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _x.some((variant) => variant.sourceType === "builtin")) ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handlePromotePublishedLessonToBuiltin(selectedLessonChapterGroup, selectedLessonOpenedVariant) }, renderLocalizedTextNode(joinLocalizedText("Replace Built-in Permanently", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0628\u0642 \u06A9\u0648 \u0645\u0633\u062A\u0642\u0644 \u0628\u062F\u0644\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary && ((_y = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _y.some((variant) => variant.sourceType === "builtin")) ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleArchiveBuiltinLesson(selectedLessonChapterGroup) }, renderLocalizedTextNode(joinLocalizedText("Delete Built-in Permanently", "\u0628\u0646\u06CC\u0627\u062F\u06CC \u0633\u0628\u0642 \u0645\u0633\u062A\u0642\u0644 \u062D\u0630\u0641 \u06A9\u0631\u06CC\u06BA", language), language)) : null, canAdministerLessonLibrary ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => handleArchiveLessonSlot(selectedLessonChapterGroup) }, renderLocalizedTextNode(joinLocalizedText("Remove Lesson Slot", "\u0633\u0628\u0642 \u062E\u0627\u0646\u06C1 \u06C1\u0679\u0627\u0626\u06CC\u06BA", language), language)) : null), canAdministerLessonLibrary && sourceFileAccessSupported && sourceFileAccessState.handle ? /* @__PURE__ */ React.createElement("div", { className: "goal-progress-meta", style: { marginTop: 8 } }, renderLocalizedTextNode(joinLocalizedText("Lesson saves now also update js/data/source-edits.js in your connected project folder.", "\u0633\u0628\u0642 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u062A\u06D2 \u0648\u0642\u062A \u0627\u0628 \u0622\u067E \u06A9\u06D2 \u0645\u0646\u0633\u0644\u06A9 \u0645\u0646\u0635\u0648\u0628\u06D2 \u06A9\u06D2 \u0641\u0648\u0644\u0688\u0631 \u0645\u06CC\u06BA js/data/source-edits.js \u0628\u06BE\u06CC \u062A\u0627\u0632\u06C1 \u06C1\u0648 \u06AF\u06CC\u06D4", language), language)) : null, ((_z = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.variants) == null ? void 0 : _z.length) > 1 ? /* @__PURE__ */ React.createElement("div", { className: "review-panel chapter-source-panel", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Chapter Source", "\u0633\u0628\u0642 \u0645\u0627\u062E\u0630", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This controls the active lesson copy for the current subject and grade library only. It changes what opens by default here, but it does not replace learner assignments by itself.", "\u06CC\u06C1 \u0635\u0631\u0641 \u0645\u0648\u062C\u0648\u062F\u06C1 \u0645\u0636\u0645\u0648\u0646 \u0627\u0648\u0631 \u062C\u0645\u0627\u0639\u062A \u06A9\u06CC \u0644\u0627\u0626\u0628\u0631\u06CC\u0631\u06CC \u06A9\u06D2 \u0641\u0639\u0627\u0644 \u0633\u0628\u0642 \u06A9\u0648 \u06A9\u0646\u0679\u0631\u0648\u0644 \u06A9\u0631\u062A\u0627 \u06C1\u06D2\u06D4 \u0627\u0633 \u0633\u06D2 \u06CC\u06C1\u0627\u06BA \u0628\u0637\u0648\u0631\u0650 \u0637\u06D2 \u0634\u062F\u06C1 \u06A9\u06BE\u0644\u0646\u06D2 \u0648\u0627\u0644\u06CC \u06A9\u0627\u067E\u06CC \u0628\u062F\u0644\u062A\u06CC \u06C1\u06D2\u060C \u0645\u06AF\u0631 \u06CC\u06C1 \u062E\u0648\u062F \u0628\u062E\u0648\u062F \u0637\u0644\u0628\u06C1 \u06A9\u06CC \u062A\u0641\u0648\u06CC\u0636 \u0646\u06C1\u06CC\u06BA \u0628\u062F\u0644\u062A\u0627\u06D4", language), language))), /* @__PURE__ */ React.createElement("span", { className: "goal-progress-badge" }, renderLocalizedTextNode(getChapterVariantDisplayLabel(selectedLessonChapterGroup.activeVariant), language))), /* @__PURE__ */ React.createElement("div", { className: "chapter-choice-row" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: `chapter-source-choice${!chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey] ? " active" : ""}`, onClick: () => updateChapterSourceSelection(selectedLessonChapterGroup.subjectId, selectedLessonChapterGroup.grade, selectedLessonChapterGroup.canonicalLessonKey, null), disabled: !canChooseContentSource }, renderLocalizedTextNode(joinLocalizedText("Auto", "\u062E\u0648\u062F\u06A9\u0627\u0631", language), language)), selectedLessonChapterGroup.variants.map((variant) => {
       var _a2, _b2, _c2;
       const selectionValue = variant.sourceType === "published" ? { mode: "published", contentId: variant.contentId } : { mode: variant.sourceType };
       const isActiveSelection = variant.sourceType === "published" ? ((_a2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _a2.mode) === "published" && String(((_b2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _b2.contentId) || "").trim() === String(variant.contentId || "").trim() : ((_c2 = chapterSourcePreferences[selectedLessonChapterGroup.preferenceKey]) == null ? void 0 : _c2.mode) === variant.sourceType;

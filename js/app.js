@@ -130,6 +130,55 @@ function removeEditableLessonField(source, descriptor) {
   return source;
 }
 
+function getEditablePathFromDescriptor(descriptor) {
+  if (Array.isArray(descriptor)) return descriptor;
+  if (descriptor && typeof descriptor === "object" && descriptor.type === "paragraphSentence") {
+    return Array.isArray(descriptor.path) ? descriptor.path : [];
+  }
+  return [];
+}
+
+function getEditableArrayItemMeta(source, descriptor) {
+  const path = getEditablePathFromDescriptor(descriptor);
+  if (!Array.isArray(path) || !path.length) return null;
+  let resolvedMeta = null;
+  for (let index = 0; index < path.length; index += 1) {
+    if (!Number.isInteger(path[index]) || index < 1) continue;
+    const collectionPath = path.slice(0, index);
+    const itemIndex = path[index];
+    const collection = getEditableValueAtPath(source, collectionPath);
+    if (!Array.isArray(collection)) continue;
+    resolvedMeta = {
+      collectionPath,
+      itemPath: path.slice(0, index + 1),
+      itemIndex,
+      length: collection.length,
+    };
+  }
+  return resolvedMeta;
+}
+
+function moveEditableArrayItem(source, descriptor, direction = 0) {
+  if (!source || !Number.isInteger(direction) || direction === 0) return source;
+  const meta = getEditableArrayItemMeta(source, descriptor);
+  if (!meta) return source;
+  const targetIndex = meta.itemIndex + direction;
+  if (targetIndex < 0 || targetIndex >= meta.length) return source;
+  const nextRoot = cloneSerializableValue(source);
+  const collection = getEditableValueAtPath(nextRoot, meta.collectionPath);
+  if (!Array.isArray(collection)) return source;
+  const [movedItem] = collection.splice(meta.itemIndex, 1);
+  collection.splice(targetIndex, 0, movedItem);
+  return nextRoot;
+}
+
+function removeEditableArrayItem(source, descriptor) {
+  if (!source) return source;
+  const meta = getEditableArrayItemMeta(source, descriptor);
+  if (!meta) return source;
+  return removeEditableValueAtPath(source, meta.itemPath);
+}
+
 function normalizeGradeOptionIds(list = []) {
   return (Array.isArray(list) ? list : [])
     .map((entry) => (typeof entry === "object" && entry !== null ? Number(entry.id ?? entry.value ?? entry.grade ?? entry.name) : Number(entry)))
@@ -153,6 +202,7 @@ function LessonEditableText({
   if (!editContext?.enabled || !fieldPath) {
     return React.createElement(as, { className, style, dir }, safeValue);
   }
+  const arrayItemMeta = editContext.getArrayItemMeta?.(fieldPath) || null;
   const commonInputStyle = {
     width: "100%",
     minWidth: 0,
@@ -186,22 +236,76 @@ function LessonEditableText({
     />
   );
   const removeLabel = dir === "rtl" ? "یہ حصہ حذف کریں" : "Remove this field";
+  const moveUpLabel = dir === "rtl" ? "اس اندراج کو اوپر کریں" : "Move this item up";
+  const moveDownLabel = dir === "rtl" ? "اس اندراج کو نیچے کریں" : "Move this item down";
+  const deleteItemLabel = dir === "rtl" ? "اس اندراج کو حذف کریں" : "Delete this item";
   return React.createElement(
     as,
     { className, style, dir },
-    <span className={`lesson-edit-field-shell${multiline ? " multiline" : ""}`}>
+    <span
+      className={`lesson-edit-field-shell${multiline ? " multiline" : ""}`}
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
       <span className="lesson-edit-field-main">
         {inputElement}
       </span>
-      <button
-        type="button"
-        className="lesson-edit-remove-btn"
-        onClick={() => editContext.removeField?.(fieldPath)}
-        title={removeLabel}
-        aria-label={removeLabel}
-      >
-        ×
-      </button>
+      <span className="lesson-edit-field-actions">
+        {arrayItemMeta ? (
+          <span className="lesson-edit-array-actions">
+            <button
+              type="button"
+              className="lesson-edit-action-btn"
+              onClick={(event) => {
+                event.stopPropagation();
+                editContext.moveArrayItem?.(fieldPath, -1);
+              }}
+              title={moveUpLabel}
+              aria-label={moveUpLabel}
+              disabled={arrayItemMeta.itemIndex <= 0}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="lesson-edit-action-btn"
+              onClick={(event) => {
+                event.stopPropagation();
+                editContext.moveArrayItem?.(fieldPath, 1);
+              }}
+              title={moveDownLabel}
+              aria-label={moveDownLabel}
+              disabled={arrayItemMeta.itemIndex >= arrayItemMeta.length - 1}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className="lesson-edit-action-btn lesson-edit-delete-item-btn"
+              onClick={(event) => {
+                event.stopPropagation();
+                editContext.removeArrayItem?.(fieldPath);
+              }}
+              title={deleteItemLabel}
+              aria-label={deleteItemLabel}
+            >
+              Del
+            </button>
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="lesson-edit-remove-btn"
+          onClick={(event) => {
+            event.stopPropagation();
+            editContext.removeField?.(fieldPath);
+          }}
+          title={removeLabel}
+          aria-label={removeLabel}
+        >
+          ×
+        </button>
+      </span>
     </span>,
   );
 }
@@ -16041,6 +16145,10 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
     () => canAdministerLessonLibrary || isLocalFileRuntime(),
     [canAdministerLessonLibrary],
   );
+  const canEditLessonLocally = useMemo(
+    () => canAdministerLessonLibrary || canUseLocalSourceTools,
+    [canAdministerLessonLibrary, canUseLocalSourceTools],
+  );
   const effectiveContentRoleCapabilities = useMemo(() => (
     canAdministerLessonLibrary
       ? getContentRoleCapabilities("admin", contentAccessState.rolePermissions)
@@ -21309,15 +21417,21 @@ const headerHideTimerRef = useRef(null);
   const handleRemoveLessonEditField = useCallback((fieldPath) => {
     setLessonEditDraft((current) => removeEditableLessonField(current, fieldPath));
   }, []);
+  const handleMoveLessonEditArrayItem = useCallback((fieldPath, direction) => {
+    setLessonEditDraft((current) => moveEditableArrayItem(current, fieldPath, direction));
+  }, []);
+  const handleRemoveLessonEditArrayItem = useCallback((fieldPath) => {
+    setLessonEditDraft((current) => removeEditableArrayItem(current, fieldPath));
+  }, []);
   const handleOpenLessonEditMode = useCallback(() => {
-    if (!canAdministerLessonLibrary) {
-      showAppToast(joinLocalizedText("Only admins can edit lessons.", "صرف ایڈمن اسباق میں ترمیم کر سکتے ہیں۔", language), "alert");
+    if (!canEditLessonLocally) {
+      showAppToast(joinLocalizedText("Lesson editing is not available here yet.", "یہاں سبق میں ترمیم ابھی دستیاب نہیں۔", language), "alert");
       return;
     }
     if (!selectedLesson) return;
     setLessonEditDraft(materializeEditableLessonData(selectedLesson, selectedSubject?.id, daySectionSettings));
     setLessonEditMode(true);
-  }, [canAdministerLessonLibrary, daySectionSettings, language, selectedLesson, selectedSubject?.id, showAppToast]);
+  }, [canEditLessonLocally, daySectionSettings, language, selectedLesson, selectedSubject?.id, showAppToast]);
   const handleCancelLessonEditMode = useCallback(() => {
     setLessonEditMode(false);
     setLessonEditDraft(null);
@@ -21500,8 +21614,8 @@ const headerHideTimerRef = useRef(null);
   writeLessonEditsToSourceFilesRef.current = writeLessonEditsToSourceFiles;
   writeLessonOrderToSourceFilesRef.current = writeLessonOrderToSourceFiles;
   const handleSaveLessonEdits = useCallback(async () => {
-    if (!canAdministerLessonLibrary) {
-      showAppToast(joinLocalizedText("Only admins can edit lessons.", "صرف ایڈمن اسباق میں ترمیم کر سکتے ہیں۔", language), "alert");
+    if (!canEditLessonLocally) {
+      showAppToast(joinLocalizedText("Lesson editing is not available here yet.", "یہاں سبق میں ترمیم ابھی دستیاب نہیں۔", language), "alert");
       return;
     }
     if (!selectedLesson || !selectedSubject || !grade || !lessonEditDraft) return;
@@ -21567,7 +21681,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setLessonEditBusy(false);
     }
-  }, [canAdministerLessonLibrary, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
+  }, [canEditLessonLocally, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
   const persistBuiltinLessonLayerState = useCallback(async (nextLayerState) => {
     const normalizedLayerState = normalizeBuiltinLessonLayerState(nextLayerState);
     const client = ensureSupabaseClientRef.current();
@@ -22058,7 +22172,10 @@ const headerHideTimerRef = useRef(null);
     draft: lessonEditDraft,
     updateField: handleUpdateLessonEditField,
     removeField: handleRemoveLessonEditField,
-  }), [handleRemoveLessonEditField, handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
+    moveArrayItem: handleMoveLessonEditArrayItem,
+    removeArrayItem: handleRemoveLessonEditArrayItem,
+    getArrayItemMeta: (fieldPath) => getEditableArrayItemMeta(lessonEditDraft, fieldPath),
+  }), [handleMoveLessonEditArrayItem, handleRemoveLessonEditArrayItem, handleRemoveLessonEditField, handleUpdateLessonEditField, lessonEditDraft, lessonEditMode]);
   useEffect(() => {
     setChapterSelectionMode(false);
     setSelectedChapterKeys([]);
@@ -34864,17 +34981,17 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 )}
               </button>
             ) : null}
-            {canAdministerLessonLibrary && !lessonEditMode ? (
+            {canEditLessonLocally && !lessonEditMode ? (
               <button type="button" className="ghost-cta" onClick={handleOpenLessonEditMode}>
                 {renderLocalizedTextNode(joinLocalizedText("Edit Lesson", "سبق میں ترمیم", language), language)}
               </button>
             ) : null}
-            {canAdministerLessonLibrary && lessonEditMode ? (
+            {canEditLessonLocally && lessonEditMode ? (
               <button type="button" className="ghost-cta" onClick={handleSaveLessonEdits} disabled={lessonEditBusy}>
                 {renderLocalizedTextNode(lessonEditBusy ? joinLocalizedText("Saving...", "محفوظ ہو رہا ہے...", language) : joinLocalizedText("Save Edits", "تبدیلیاں محفوظ کریں", language), language)}
               </button>
             ) : null}
-            {canAdministerLessonLibrary && lessonEditMode ? (
+            {canEditLessonLocally && lessonEditMode ? (
               <button type="button" className="ghost-cta" onClick={handleCancelLessonEditMode} disabled={lessonEditBusy}>
                 {renderLocalizedTextNode(joinLocalizedText("Cancel Edit", "ترمیم منسوخ", language), language)}
               </button>

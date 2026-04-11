@@ -643,7 +643,15 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .lesson-edit-field-shell{display:flex;align-items:center;gap:8px;width:100%;min-width:0}
 .lesson-edit-field-shell.multiline{align-items:flex-start}
 .lesson-edit-field-main{flex:1 1 auto;min-width:0}
-.lesson-edit-remove-btn{flex:0 0 auto;width:30px;height:30px;border-radius:999px;border:1px solid color-mix(in srgb,#ef4444 24%,var(--border));background:color-mix(in srgb,#ef4444 8%,var(--bg-elevated));color:#dc2626;font-family:var(--font);font-size:18px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:transform .16s ease,background .16s ease,border-color .16s ease,color .16s ease}
+.lesson-edit-field-actions{flex:0 0 auto;display:flex;align-items:flex-start;gap:6px}
+.lesson-edit-array-actions{display:flex;flex-direction:column;gap:6px}
+.lesson-edit-action-btn,
+.lesson-edit-remove-btn{flex:0 0 auto;min-width:30px;height:30px;border-radius:999px;font-family:var(--font);line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:transform .16s ease,background .16s ease,border-color .16s ease,color .16s ease}
+.lesson-edit-action-btn{border:1px solid color-mix(in srgb,var(--accent) 24%,var(--border));background:color-mix(in srgb,var(--bg-elevated) 88%,white 12%);color:var(--text-primary);font-size:13px;font-weight:800;padding:0 8px}
+.lesson-edit-action-btn:hover{transform:translateY(-1px);background:color-mix(in srgb,var(--accent) 14%,var(--bg-elevated));border-color:color-mix(in srgb,var(--accent) 36%,var(--border))}
+.lesson-edit-action-btn:disabled{opacity:.42;cursor:not-allowed;transform:none}
+.lesson-edit-delete-item-btn{border-color:color-mix(in srgb,#f59e0b 28%,var(--border));background:color-mix(in srgb,#f59e0b 12%,var(--bg-elevated));color:#b45309}
+.lesson-edit-remove-btn{width:30px;border:1px solid color-mix(in srgb,#ef4444 24%,var(--border));background:color-mix(in srgb,#ef4444 8%,var(--bg-elevated));color:#dc2626;font-size:18px;padding:0}
 .lesson-edit-remove-btn:hover{transform:translateY(-1px);background:color-mix(in srgb,#ef4444 14%,var(--bg-elevated));border-color:color-mix(in srgb,#ef4444 38%,var(--border))}
 .diary-detail-toggle{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;padding:2px 0;border:none;background:transparent;color:var(--text-secondary);font-family:var(--font);text-align:left;cursor:pointer;transition:color .16s ease,opacity .16s ease}
 .diary-detail-toggle:hover{color:var(--text-primary)}
