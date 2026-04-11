@@ -1149,6 +1149,7 @@
       return {
         subject: String(targetSubjectId || chapter.subject || normalized.subject).trim().toLowerCase(),
         grade: Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : Number(chapter.grade) || Number(normalized.grade) || 1,
+        orderIndex: index,
         lessonKey: chapter.lessonKey,
         lesson: {
           ...cloneSerializableValue(chapter.data) || {},
@@ -1160,6 +1161,62 @@
         },
         questions: Array.isArray(chapter.questions) ? cloneSerializableValue(chapter.questions) : []
       };
+    });
+  }
+  function reconcileSubjectSourceEntriesWithBuiltin(entries = [], {
+    subjectId = "",
+    targetGrade = null,
+    getLessonsFn = null,
+    getQuizFn = null,
+    enabled = true
+  } = {}) {
+    const safeEntries = Array.isArray(entries) ? entries : [];
+    const safeSubjectId = String(subjectId || "").trim().toLowerCase();
+    const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
+    if (!enabled || !safeSubjectId || numericGrade === null || typeof getLessonsFn !== "function") return safeEntries;
+    const builtinLessons = Array.isArray(getLessonsFn(safeSubjectId, numericGrade)) ? getLessonsFn(safeSubjectId, numericGrade) : [];
+    if (!builtinLessons.length) return safeEntries;
+    const existingLessonKeys = new Set(
+      safeEntries.map((entry) => {
+        var _a;
+        return resolveCustomChapterLessonKey({ lessonKey: (entry == null ? void 0 : entry.lessonKey) || ((_a = entry == null ? void 0 : entry.lesson) == null ? void 0 : _a.key) || "" });
+      }).filter(Boolean)
+    );
+    const combined = [...safeEntries];
+    builtinLessons.forEach((lesson, lessonIndex) => {
+      const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
+      if (!canonicalLessonKey || existingLessonKeys.has(canonicalLessonKey)) return;
+      const builtinQuestions = typeof getQuizFn === "function" ? getQuizFn(safeSubjectId, numericGrade, canonicalLessonKey) : [];
+      combined.push({
+        subject: safeSubjectId,
+        grade: numericGrade,
+        orderIndex: lessonIndex,
+        lessonKey: canonicalLessonKey,
+        lesson: cloneSerializableValue(lesson) || {},
+        questions: Array.isArray(builtinQuestions) ? cloneSerializableValue(builtinQuestions) : []
+      });
+      existingLessonKeys.add(canonicalLessonKey);
+    });
+    return combined.reduce((acc, entry) => {
+      var _a;
+      const canonicalLessonKey = resolveCustomChapterLessonKey({ lessonKey: (entry == null ? void 0 : entry.lessonKey) || ((_a = entry == null ? void 0 : entry.lesson) == null ? void 0 : _a.key) || "" });
+      if (!canonicalLessonKey || acc.some((current) => {
+        var _a2;
+        return resolveCustomChapterLessonKey({ lessonKey: (current == null ? void 0 : current.lessonKey) || ((_a2 = current == null ? void 0 : current.lesson) == null ? void 0 : _a2.key) || "" }) === canonicalLessonKey;
+      })) {
+        return acc;
+      }
+      acc.push({
+        ...entry,
+        subject: String((entry == null ? void 0 : entry.subject) || safeSubjectId).trim().toLowerCase(),
+        grade: Number.isFinite(Number(entry == null ? void 0 : entry.grade)) ? Number(entry.grade) : numericGrade,
+        lessonKey: canonicalLessonKey,
+        orderIndex: Number.isFinite(Number(entry == null ? void 0 : entry.orderIndex)) ? Number(entry.orderIndex) : Number.MAX_SAFE_INTEGER
+      });
+      return acc;
+    }, []).sort((left, right) => {
+      var _a, _b;
+      return (left.orderIndex || 0) - (right.orderIndex || 0) || String(((_a = left == null ? void 0 : left.lesson) == null ? void 0 : _a.title) || (left == null ? void 0 : left.lessonKey) || "").localeCompare(String(((_b = right == null ? void 0 : right.lesson) == null ? void 0 : _b.title) || (right == null ? void 0 : right.lessonKey) || ""));
     });
   }
   function resolveScopedActivation(records = [], {
@@ -14175,7 +14232,16 @@ ${marker} `);
       const useCurriculumPack = Boolean((_a2 = curriculumPackContext.assignment) == null ? void 0 : _a2.packId) && (curriculumPackContext.entries.length > 0 || !curriculumRuntimeSettings.allowBuiltinFallback);
       const subjectActivation = useCurriculumPack ? null : getEffectiveSubjectActivation(subjectId, targetGrade);
       const activeSubjectSource = (subjectActivation == null ? void 0 : subjectActivation.sourceKind) === "published_subject" ? publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null : null;
-      const sourceChapters = useCurriculumPack ? curriculumPackContext.entries : activeSubjectSource ? materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade) : [];
+      const sourceChapters = useCurriculumPack ? curriculumPackContext.entries : activeSubjectSource ? reconcileSubjectSourceEntriesWithBuiltin(
+        materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade),
+        {
+          subjectId,
+          targetGrade,
+          getLessonsFn: getLessons,
+          getQuizFn: getQuiz,
+          enabled: curriculumRuntimeSettings.allowBuiltinFallback
+        }
+      ) : [];
       const baseLessons = useCurriculumPack ? sourceChapters.map((entry) => entry.lesson).filter(Boolean) : activeSubjectSource ? sourceChapters.map((entry) => entry.lesson).filter(Boolean) : getLessons(subjectId, targetGrade) || [];
       const customLessons = ((_b2 = customContentState.lessonsBySubjectGrade) == null ? void 0 : _b2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
       const publishedLessons = ((_c2 = publishedContentState.lessonsBySubjectGrade) == null ? void 0 : _c2[`${String(subjectId || "").trim()}::${Number(targetGrade)}`]) || [];
@@ -14250,7 +14316,16 @@ ${marker} `);
       const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
       if ((subjectActivation == null ? void 0 : subjectActivation.sourceKind) === "published_subject" && subjectActivation.subjectSourceId) {
         const subjectSource = publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null;
-        const sourceChapter = materializeSubjectSourceChapters(subjectSource, subjectId, targetGrade).find((entry) => String(entry.lessonKey || "").trim() === normalizedLessonKey);
+        const sourceChapter = reconcileSubjectSourceEntriesWithBuiltin(
+          materializeSubjectSourceChapters(subjectSource, subjectId, targetGrade),
+          {
+            subjectId,
+            targetGrade,
+            getLessonsFn: getLessons,
+            getQuizFn: getQuiz,
+            enabled: curriculumRuntimeSettings.allowBuiltinFallback
+          }
+        ).find((entry) => String(entry.lessonKey || "").trim() === normalizedLessonKey);
         if (Array.isArray(sourceChapter == null ? void 0 : sourceChapter.questions) && sourceChapter.questions.length > 0) return sourceChapter.questions;
       }
       const lessonActivation = getEffectiveLessonActivation(subjectId, targetGrade, normalizedLessonKey);
@@ -17810,7 +17885,16 @@ ${marker} `);
         showAppToast(joinLocalizedText("Choose a published subject source first.", "\u067E\u06C1\u0644\u06D2 \u0627\u06CC\u06A9 \u0634\u0627\u0626\u0639 \u0634\u062F\u06C1 \u0645\u0636\u0645\u0648\u0646 \u06A9\u0627 \u0645\u0627\u062E\u0630 \u0645\u0646\u062A\u062E\u0628 \u06A9\u0631\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
-      const subjectEntries = selectedSource ? materializeSubjectSourceChapters(selectedSource, selectedSubject.id, grade).map((entry, index) => ({
+      const subjectEntries = selectedSource ? reconcileSubjectSourceEntriesWithBuiltin(
+        materializeSubjectSourceChapters(selectedSource, selectedSubject.id, grade),
+        {
+          subjectId: selectedSubject.id,
+          targetGrade: grade,
+          getLessonsFn: getLessons,
+          getQuizFn: getQuiz,
+          enabled: curriculumRuntimeSettings.allowBuiltinFallback
+        }
+      ).map((entry, index) => ({
         lesson: entry.lesson,
         questions: entry.questions,
         fallbackNumber: index + 1

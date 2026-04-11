@@ -1285,6 +1285,7 @@ function materializeSubjectSourceChapters(sourceRecord, targetSubjectId = "", ta
     return {
       subject: String(targetSubjectId || chapter.subject || normalized.subject).trim().toLowerCase(),
       grade: Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : Number(chapter.grade) || Number(normalized.grade) || 1,
+      orderIndex: index,
       lessonKey: chapter.lessonKey,
       lesson: {
         ...(cloneSerializableValue(chapter.data) || {}),
@@ -1297,6 +1298,57 @@ function materializeSubjectSourceChapters(sourceRecord, targetSubjectId = "", ta
       questions: Array.isArray(chapter.questions) ? cloneSerializableValue(chapter.questions) : [],
     };
   });
+}
+
+function reconcileSubjectSourceEntriesWithBuiltin(entries = [], {
+  subjectId = "",
+  targetGrade = null,
+  getLessonsFn = null,
+  getQuizFn = null,
+  enabled = true,
+} = {}) {
+  const safeEntries = Array.isArray(entries) ? entries : [];
+  const safeSubjectId = String(subjectId || "").trim().toLowerCase();
+  const numericGrade = Number.isFinite(Number(targetGrade)) ? Number(targetGrade) : null;
+  if (!enabled || !safeSubjectId || numericGrade === null || typeof getLessonsFn !== "function") return safeEntries;
+  const builtinLessons = Array.isArray(getLessonsFn(safeSubjectId, numericGrade)) ? getLessonsFn(safeSubjectId, numericGrade) : [];
+  if (!builtinLessons.length) return safeEntries;
+  const existingLessonKeys = new Set(
+    safeEntries
+      .map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry?.lessonKey || entry?.lesson?.key || "" }))
+      .filter(Boolean),
+  );
+  const combined = [...safeEntries];
+  builtinLessons.forEach((lesson, lessonIndex) => {
+    const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
+    if (!canonicalLessonKey || existingLessonKeys.has(canonicalLessonKey)) return;
+    const builtinQuestions = typeof getQuizFn === "function" ? getQuizFn(safeSubjectId, numericGrade, canonicalLessonKey) : [];
+    combined.push({
+      subject: safeSubjectId,
+      grade: numericGrade,
+      orderIndex: lessonIndex,
+      lessonKey: canonicalLessonKey,
+      lesson: cloneSerializableValue(lesson) || {},
+      questions: Array.isArray(builtinQuestions) ? cloneSerializableValue(builtinQuestions) : [],
+    });
+    existingLessonKeys.add(canonicalLessonKey);
+  });
+  return combined
+    .reduce((acc, entry) => {
+      const canonicalLessonKey = resolveCustomChapterLessonKey({ lessonKey: entry?.lessonKey || entry?.lesson?.key || "" });
+      if (!canonicalLessonKey || acc.some((current) => resolveCustomChapterLessonKey({ lessonKey: current?.lessonKey || current?.lesson?.key || "" }) === canonicalLessonKey)) {
+        return acc;
+      }
+      acc.push({
+        ...entry,
+        subject: String(entry?.subject || safeSubjectId).trim().toLowerCase(),
+        grade: Number.isFinite(Number(entry?.grade)) ? Number(entry.grade) : numericGrade,
+        lessonKey: canonicalLessonKey,
+        orderIndex: Number.isFinite(Number(entry?.orderIndex)) ? Number(entry.orderIndex) : Number.MAX_SAFE_INTEGER,
+      });
+      return acc;
+    }, [])
+    .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left?.lesson?.title || left?.lessonKey || "").localeCompare(String(right?.lesson?.title || right?.lessonKey || "")));
 }
 
 function resolveScopedActivation(records = [], {
@@ -16865,7 +16917,18 @@ const headerHideTimerRef = useRef(null);
       : null;
     const sourceChapters = useCurriculumPack
       ? curriculumPackContext.entries
-      : (activeSubjectSource ? materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade) : []);
+      : (activeSubjectSource
+        ? reconcileSubjectSourceEntriesWithBuiltin(
+            materializeSubjectSourceChapters(activeSubjectSource, subjectId, targetGrade),
+            {
+              subjectId,
+              targetGrade,
+              getLessonsFn: getLessons,
+              getQuizFn: getQuiz,
+              enabled: curriculumRuntimeSettings.allowBuiltinFallback,
+            },
+          )
+        : []);
     const baseLessons = useCurriculumPack
       ? sourceChapters.map((entry) => entry.lesson).filter(Boolean)
       : (activeSubjectSource
@@ -16947,7 +17010,16 @@ const headerHideTimerRef = useRef(null);
     const subjectActivation = getEffectiveSubjectActivation(subjectId, targetGrade);
     if (subjectActivation?.sourceKind === "published_subject" && subjectActivation.subjectSourceId) {
       const subjectSource = publishedSubjectSourceLookup.get(String(subjectActivation.subjectSourceId || "").trim()) || null;
-      const sourceChapter = materializeSubjectSourceChapters(subjectSource, subjectId, targetGrade)
+      const sourceChapter = reconcileSubjectSourceEntriesWithBuiltin(
+        materializeSubjectSourceChapters(subjectSource, subjectId, targetGrade),
+        {
+          subjectId,
+          targetGrade,
+          getLessonsFn: getLessons,
+          getQuizFn: getQuiz,
+          enabled: curriculumRuntimeSettings.allowBuiltinFallback,
+        },
+      )
         .find((entry) => String(entry.lessonKey || "").trim() === normalizedLessonKey);
       if (Array.isArray(sourceChapter?.questions) && sourceChapter.questions.length > 0) return sourceChapter.questions;
     }
@@ -20784,7 +20856,16 @@ const headerHideTimerRef = useRef(null);
       return;
     }
     const subjectEntries = selectedSource
-      ? materializeSubjectSourceChapters(selectedSource, selectedSubject.id, grade).map((entry, index) => ({
+      ? reconcileSubjectSourceEntriesWithBuiltin(
+          materializeSubjectSourceChapters(selectedSource, selectedSubject.id, grade),
+          {
+            subjectId: selectedSubject.id,
+            targetGrade: grade,
+            getLessonsFn: getLessons,
+            getQuizFn: getQuiz,
+            enabled: curriculumRuntimeSettings.allowBuiltinFallback,
+          },
+        ).map((entry, index) => ({
           lesson: entry.lesson,
           questions: entry.questions,
           fallbackNumber: index + 1,
