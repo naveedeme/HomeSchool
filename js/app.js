@@ -453,6 +453,7 @@ function normalizeSourceEditManifest(raw = null) {
       slotNumber: Math.max(1, Number(entry.slotNumber) || extractLessonOrdinal(entry.lessonKey, entry.lessonId, entry.title) || 1),
       title: String(entry.title || "").trim(),
       payloadBase64: String(entry.payloadBase64 || "").trim(),
+      questionsPayloadBase64: String(entry.questionsPayloadBase64 || "").trim(),
       updatedAt: Number(entry.updatedAt) || Date.now(),
     };
   });
@@ -479,15 +480,32 @@ function buildSourceEditRuntimeScript(manifest = null) {
       return null;
     }
   };
+  const ensureLessonBucket = (subject, grade) => {
+    window.HomeSchoolLessonModules = window.HomeSchoolLessonModules || {};
+    window.HomeSchoolLessonModules[subject] = window.HomeSchoolLessonModules[subject] || {};
+    if (!Array.isArray(window.HomeSchoolLessonModules[subject][grade])) {
+      window.HomeSchoolLessonModules[subject][grade] = [];
+    }
+    return window.HomeSchoolLessonModules[subject][grade];
+  };
+  const ensureQuizBucket = (subject, grade) => {
+    window.HomeSchoolQuizModules = window.HomeSchoolQuizModules || {};
+    window.HomeSchoolQuizModules[subject] = window.HomeSchoolQuizModules[subject] || {};
+    if (!window.HomeSchoolQuizModules[subject][grade] || typeof window.HomeSchoolQuizModules[subject][grade] !== "object") {
+      window.HomeSchoolQuizModules[subject][grade] = {};
+    }
+    return window.HomeSchoolQuizModules[subject][grade];
+  };
   const extractOrdinal = (value = "") => {
     const match = String(value || "").match(/\\b(?:lesson|chapter|سبق)\\s*[_\\-\\s]?(\\d+)\\b/i) || String(value || "").match(/\\b(\\d+)\\b/);
     return match ? Number(match[1]) : null;
   };
 
   Object.values(sourceEdits.lessonOverrides || {}).forEach((entry) => {
-    const lessons = window.HomeSchoolLessonModules?.[entry.subject]?.[entry.grade];
-    if (!Array.isArray(lessons)) return;
+    const lessons = ensureLessonBucket(entry.subject, entry.grade);
+    const quizBucket = ensureQuizBucket(entry.subject, entry.grade);
     const nextLesson = decodeLessonPayload(entry.payloadBase64);
+    const nextQuestions = decodeLessonPayload(entry.questionsPayloadBase64);
     if (!nextLesson || typeof nextLesson !== "object") return;
     const targetIndex = lessons.findIndex((lesson, index) => (
       String(lesson?.key || "").trim() === entry.lessonKey
@@ -496,13 +514,25 @@ function buildSourceEditRuntimeScript(manifest = null) {
       || (Number.isFinite(Number(entry.slotNumber)) && index === Number(entry.slotNumber) - 1)
       || extractOrdinal(lesson?.key || lesson?.id || lesson?.title || "") === Number(entry.slotNumber)
     ));
-    if (targetIndex < 0) return;
-    const previousLesson = lessons[targetIndex] || {};
-    lessons[targetIndex] = {
+    const previousLesson = targetIndex >= 0 ? (lessons[targetIndex] || {}) : {};
+    const resolvedLesson = {
       ...nextLesson,
       key: entry.lessonKey,
       id: String(entry.lessonId || previousLesson?.id || [entry.subject, entry.grade, entry.lessonKey].join("_")).trim(),
     };
+    if (targetIndex >= 0) {
+      lessons[targetIndex] = resolvedLesson;
+    } else {
+      const insertIndex = Math.max(0, Math.min(lessons.length, Number.isFinite(Number(entry.slotNumber)) ? Number(entry.slotNumber) - 1 : lessons.length));
+      lessons.splice(insertIndex, 0, resolvedLesson);
+    }
+    if (Array.isArray(nextQuestions)) {
+      const previousLessonKey = String(previousLesson?.key || "").trim();
+      if (previousLessonKey && previousLessonKey !== entry.lessonKey && Object.prototype.hasOwnProperty.call(quizBucket, previousLessonKey)) {
+        delete quizBucket[previousLessonKey];
+      }
+      quizBucket[entry.lessonKey] = nextQuestions;
+    }
   });
 })();
 `;
@@ -15617,8 +15647,9 @@ function HomeschoolApp() {
   const [studentName, setStudentName] = useState(initialActiveStudentProfile?.studentName || stored?.studentName || "");
   const [studentNameUr, setStudentNameUr] = useState(initialActiveStudentProfile?.studentNameUr || stored?.studentNameUr || "");
   const [tab, setTab] = useState("home");
-  const [sourceFileAccessState, setSourceFileAccessState] = useState(() => normalizeSourceFileAccessRecord());
-  const [sourceFileAccessBusy, setSourceFileAccessBusy] = useState(false);
+const [sourceFileAccessState, setSourceFileAccessState] = useState(() => normalizeSourceFileAccessRecord());
+const [sourceFileAccessBusy, setSourceFileAccessBusy] = useState(false);
+const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const sourceFileAccessSupported = isSourceFileAccessSupported();
   const [reviewSectionTab, setReviewSectionTab] = useState("queue");
   const [homeSectionTab, setHomeSectionTab] = useState("subjects");
@@ -16137,8 +16168,9 @@ function HomeschoolApp() {
   const chatEndRef = useRef(null);
   const chatTextareaRef = useRef(null);
   const chatFileInputRef = useRef(null);
-  const chapterImportInputRef = useRef(null);
-  const testTemplateImportInputRef = useRef(null);
+const chapterImportInputRef = useRef(null);
+const defaultBuiltinImportInputRef = useRef(null);
+const testTemplateImportInputRef = useRef(null);
   const speechRecognitionRef = useRef(null);
   const pronunciationRecognitionRef = useRef(null);
   const pronunciationSessionActiveRef = useRef(false);
@@ -20345,6 +20377,152 @@ const headerHideTimerRef = useRef(null);
       if (event?.target) event.target.value = "";
     }
   }, [allChapterGroups, allSubjects, canImportChapters, canImportSubjects, grade, language, refreshCustomContentState, selectedLesson, selectedSubject, selectedSubjectLessons.length, showAppToast]);
+  const handleOpenDefaultBuiltinImport = useCallback(() => {
+    if (!canAdministerLessonLibrary) {
+      showAppToast(joinLocalizedText("Only admins can add default built-in lessons.", "صرف ایڈمن بنیادی اسباق شامل کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!sourceFileAccessSupported) {
+      showAppToast(joinLocalizedText("This browser does not support direct source-file access.", "یہ براؤزر براہِ راست ماخذ فائل تک رسائی کی سہولت نہیں دیتا۔", language), "alert");
+      return;
+    }
+    if (!selectedSubject || !grade) {
+      showAppToast(joinLocalizedText("Open a subject and choose a grade first.", "پہلے ایک مضمون کھولیں اور جماعت منتخب کریں۔", language), "alert");
+      return;
+    }
+    if (defaultBuiltinImportInputRef.current) defaultBuiltinImportInputRef.current.value = "";
+    defaultBuiltinImportInputRef.current?.click?.();
+  }, [canAdministerLessonLibrary, grade, language, selectedSubject, showAppToast, sourceFileAccessSupported]);
+  const handleImportDefaultBuiltinChapter = useCallback(async (event) => {
+    const files = Array.from(event?.target?.files || []);
+    if (!files.length) return;
+    if (!canAdministerLessonLibrary) {
+      if (event?.target) event.target.value = "";
+      showAppToast(joinLocalizedText("Only admins can add default built-in lessons.", "صرف ایڈمن بنیادی اسباق شامل کر سکتے ہیں۔", language), "alert");
+      return;
+    }
+    if (!selectedSubject || !grade) {
+      if (event?.target) event.target.value = "";
+      showAppToast(joinLocalizedText("Open a subject and choose a grade first.", "پہلے ایک مضمون کھولیں اور جماعت منتخب کریں۔", language), "alert");
+      return;
+    }
+    const applyRuntimeDefaultLesson = (chapter, slotNumber) => {
+      const safeSubjectId = String(chapter?.subject || "").trim().toLowerCase();
+      const safeGrade = Number(chapter?.grade);
+      const safeLessonKey = resolveCustomChapterLessonKey({ lessonKey: chapter?.lessonKey || chapter?.data?.key || "" });
+      if (!safeSubjectId || !Number.isFinite(safeGrade) || !safeLessonKey) return;
+      window.HomeSchoolLessonModules = window.HomeSchoolLessonModules || {};
+      window.HomeSchoolLessonModules[safeSubjectId] = window.HomeSchoolLessonModules[safeSubjectId] || {};
+      const lessonBucket = Array.isArray(window.HomeSchoolLessonModules[safeSubjectId][safeGrade])
+        ? window.HomeSchoolLessonModules[safeSubjectId][safeGrade]
+        : [];
+      window.HomeSchoolLessonModules[safeSubjectId][safeGrade] = lessonBucket;
+      const targetIndex = lessonBucket.findIndex((lesson, index) => (
+        String(lesson?.key || "").trim() === safeLessonKey
+        || String(lesson?.id || "").trim() === String(chapter?.data?.id || "").trim()
+        || String(lesson?.title || "").trim() === String(chapter?.data?.title || "").trim()
+        || (Number.isFinite(Number(slotNumber)) && index === Number(slotNumber) - 1)
+      ));
+      const nextLesson = stripRuntimeLessonMarkers(cloneSerializableValue(chapter?.data) || {});
+      nextLesson.key = safeLessonKey;
+      nextLesson.id = String(nextLesson.id || `${safeSubjectId}_${safeGrade}_${safeLessonKey}`).trim();
+      if (targetIndex >= 0) {
+        lessonBucket[targetIndex] = nextLesson;
+      } else {
+        const insertIndex = Math.max(0, Math.min(lessonBucket.length, Number.isFinite(Number(slotNumber)) ? Number(slotNumber) - 1 : lessonBucket.length));
+        lessonBucket.splice(insertIndex, 0, nextLesson);
+      }
+      window.HomeSchoolQuizModules = window.HomeSchoolQuizModules || {};
+      window.HomeSchoolQuizModules[safeSubjectId] = window.HomeSchoolQuizModules[safeSubjectId] || {};
+      if (!window.HomeSchoolQuizModules[safeSubjectId][safeGrade] || typeof window.HomeSchoolQuizModules[safeSubjectId][safeGrade] !== "object") {
+        window.HomeSchoolQuizModules[safeSubjectId][safeGrade] = {};
+      }
+      window.HomeSchoolQuizModules[safeSubjectId][safeGrade][safeLessonKey] = Array.isArray(chapter?.questions) ? cloneSerializableValue(chapter.questions) : [];
+    };
+    setDefaultBuiltinImportBusy(true);
+    try {
+      const importedChapters = [];
+      const failures = [];
+      for (const file of files) {
+        try {
+          const parsed = JSON.parse(await file.text());
+          const normalized = normalizeCustomContentImportPayload(parsed, {
+            subject: selectedSubject.id,
+            grade,
+            nextLessonNumber: selectedSubjectChapterGroups.length + importedChapters.length + 1,
+          });
+          (normalized.chapters || []).forEach((chapter, index) => {
+            importedChapters.push({
+              chapter,
+              slotNumber: extractLessonOrdinal(chapter.lessonKey, chapter.data?.title, selectedSubjectChapterGroups.length + importedChapters.length + index + 1)
+                || (selectedSubjectChapterGroups.length + importedChapters.length + index + 1),
+            });
+          });
+        } catch (error) {
+          failures.push({
+            fileName: String(file?.name || "").trim() || joinLocalizedText("Unnamed file", "بے نام فائل", language),
+            error: error?.message || error,
+          });
+        }
+      }
+      if (!importedChapters.length) {
+        const firstFailure = failures[0];
+        throw new Error(firstFailure ? `${firstFailure.fileName}: ${firstFailure.error}` : "No importable default lessons were found.");
+      }
+      for (const entry of importedChapters) {
+        await writeLessonEditsToSourceFiles({
+          subjectId: entry.chapter.subject,
+          targetGrade: entry.chapter.grade,
+          canonicalLessonKey: entry.chapter.lessonKey,
+          lessonData: entry.chapter.data,
+          questions: entry.chapter.questions,
+          lessonId: entry.chapter.data?.id || `${entry.chapter.subject}_${entry.chapter.grade}_${entry.chapter.lessonKey}`,
+          lessonTitle: entry.chapter.data?.title || entry.chapter.lessonKey,
+          slotNumber: entry.slotNumber,
+        });
+        applyRuntimeDefaultLesson(entry.chapter, entry.slotNumber);
+      }
+      setSelectedSubject((current) => (current ? { ...current } : current));
+      if (selectedLesson) {
+        const matchingImported = importedChapters.find((entry) => (
+          entry.chapter.subject === selectedSubject.id
+          && Number(entry.chapter.grade) === Number(grade)
+          && entry.chapter.lessonKey === getCanonicalLessonKeyForLesson(selectedLesson)
+        ));
+        if (matchingImported?.chapter?.data) {
+          setSelectedLesson(cloneSerializableValue(matchingImported.chapter.data) || matchingImported.chapter.data);
+        }
+      }
+      const summaryParts = [
+        joinLocalizedText(
+          `${importedChapters.length} default lesson${importedChapters.length === 1 ? "" : "s"} added to source files`,
+          `${importedChapters.length} بنیادی اسباق ماخذ فائلوں میں شامل`,
+          language,
+        ),
+      ];
+      if (failures.length) {
+        summaryParts.push(joinLocalizedText(
+          `${failures.length} file${failures.length === 1 ? "" : "s"} skipped`,
+          `${failures.length} فائلیں نظر انداز`,
+          language,
+        ));
+      }
+      summaryParts.push(joinLocalizedText("Commit and publish the repo to make these defaults available everywhere.", "ان بنیادی اسباق کو ہر جگہ دستیاب کرنے کے لیے repo کو commit اور publish کریں۔", language));
+      showAppToast(summaryParts.join(" • "), "check");
+    } catch (error) {
+      showAppToast(
+        joinLocalizedText(
+          `Unable to add default lesson from JSON: ${error?.message || error}`,
+          `JSON سے بنیادی سبق شامل نہیں ہو سکا: ${error?.message || error}`,
+          language,
+        ),
+        "alert",
+      );
+    } finally {
+      setDefaultBuiltinImportBusy(false);
+      if (event?.target) event.target.value = "";
+    }
+  }, [canAdministerLessonLibrary, grade, language, selectedLesson, selectedSubject, selectedSubjectChapterGroups.length, showAppToast, writeLessonEditsToSourceFiles]);
   const handleExportSelectedChapter = useCallback(() => {
     if (!canExportContent) {
       showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "آپ کے مواد والے کردار کو ابواب برآمد کرنے کی اجازت نہیں۔", language), "alert");
@@ -21125,6 +21303,7 @@ const headerHideTimerRef = useRef(null);
     targetGrade,
     canonicalLessonKey,
     lessonData,
+    questions = [],
     lessonId = "",
     lessonTitle = "",
     slotNumber = null,
@@ -21165,6 +21344,7 @@ const headerHideTimerRef = useRef(null);
           slotNumber: Math.max(1, Number(slotNumber) || extractLessonOrdinal(canonicalLessonKey, lessonTitle, selectedLessonChapterGroup?.orderHint + 1) || 1),
           title: String(lessonTitle || lessonData?.title || canonicalLessonKey).trim(),
           payloadBase64: encodeJsonBase64(stripRuntimeLessonMarkers(cloneSerializableValue(lessonData) || {})),
+          questionsPayloadBase64: encodeJsonBase64(Array.isArray(questions) ? cloneSerializableValue(questions) : []),
           updatedAt: Date.now(),
         },
       },
@@ -21217,6 +21397,7 @@ const headerHideTimerRef = useRef(null);
           targetGrade: grade,
           canonicalLessonKey,
           lessonData: nextLessonData,
+          questions: getMergedQuiz(selectedSubject.id, grade, canonicalLessonKey),
           lessonId: nextLessonData.id,
           lessonTitle: nextLessonData.title || selectedLesson?.title || canonicalLessonKey,
           slotNumber: (selectedLessonChapterGroup?.orderHint ?? 0) + 1,
@@ -33893,6 +34074,16 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               )}
             </button>
           ) : null}
+          {canAdministerLessonLibrary && sourceFileAccessSupported ? (
+            <button type="button" className="ghost-cta" onClick={handleOpenDefaultBuiltinImport} disabled={defaultBuiltinImportBusy || sourceFileAccessBusy}>
+              {renderLocalizedTextNode(
+                defaultBuiltinImportBusy
+                  ? joinLocalizedText("Adding default...", "بنیادی سبق شامل ہو رہا ہے...", language)
+                  : joinLocalizedText("Add Default from JSON", "JSON سے بنیادی سبق شامل کریں", language),
+                language,
+              )}
+            </button>
+          ) : null}
           <button type="button" className="ghost-cta" onClick={handleRefreshCurriculumContent} disabled={contentRelationshipBusy}>
             {renderLocalizedTextNode(joinLocalizedText("Refresh Content", "مواد تازہ کریں", language), language)}
           </button>
@@ -33965,6 +34156,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 ? joinLocalizedText("Tap the delete icon on a lesson card to remove the built-in copy, delete the local copy, or remove the whole slot when only a published copy is active.", "سبق کارڈ پر حذف کے نشان کو دبائیں تاکہ بنیادی کاپی ہٹ جائے، مقامی کاپی حذف ہو جائے، یا جب صرف شائع شدہ کاپی فعال ہو تو پورا سبق خانہ ہٹ جائے۔", language)
                 : subjectLessonPermanentDeleteMode
                 ? joinLocalizedText("Tap the delete icon on a lesson card to permanently delete that whole lesson slot from the active built-in layer.", "سبق کارڈ پر حذف کے نشان کو دبائیں تاکہ وہ پورا سبق خانہ فعال بنیادی سطح سے مستقل طور پر حذف ہو جائے۔", language)
+                : (canAdministerLessonLibrary && sourceFileAccessSupported)
+                ? joinLocalizedText("Import many chapter JSON files, add a JSON as a real default built-in lesson, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، JSON سے ایک حقیقی بنیادی سبق شامل کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language)
                 : joinLocalizedText("Import many chapter JSON files, a chapter pack, or export this whole subject as one pack.", "کئی باب JSON فائلیں درآمد کریں، باب پیک درآمد کریں، یا پورا مضمون ایک پیک کے طور پر برآمد کریں۔", language))
                 : joinLocalizedText("Content import and publish tools are managed by admins. This subject stays view-only for your current role.", "مواد درآمد اور اشاعت کے اوزار ایڈمن سنبھالتے ہیں۔ آپ کے موجودہ کردار کے لیے یہ مضمون صرف دیکھنے کے قابل ہے۔", language),
               language,
@@ -38027,6 +38220,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       multiple
       style={{ display: "none" }}
       onChange={handleImportCustomChapter}
+    />
+    <input
+      ref={defaultBuiltinImportInputRef}
+      type="file"
+      accept="application/json,.json"
+      multiple
+      style={{ display: "none" }}
+      onChange={handleImportDefaultBuiltinChapter}
     />
     <input
       ref={testTemplateImportInputRef}
