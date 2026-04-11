@@ -49,6 +49,9 @@ jobs:
           if [ -d typing-tutor ]; then
             cp -R typing-tutor .deploy/typing-tutor
           fi
+          if [ -d table-tutor ]; then
+            cp -R table-tutor .deploy/table-tutor
+          fi
           touch .deploy/.nojekyll
 
       - name: Publish to gh-pages
