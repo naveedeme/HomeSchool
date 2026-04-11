@@ -18178,6 +18178,9 @@ const headerHideTimerRef = useRef(null);
   const ensureSupabaseClientRef = useRef(() => {
     throw new Error("Supabase client not ready");
   });
+  const writeLessonEditsToSourceFilesRef = useRef(async () => {
+    throw new Error("Source-file lesson writer not ready");
+  });
   const requestCurriculumSelectionReconcile = useCallback(() => {
     curriculumSelectionReconcileModeRef.current = "apply";
   }, []);
@@ -20470,7 +20473,7 @@ const headerHideTimerRef = useRef(null);
         throw new Error(firstFailure ? `${firstFailure.fileName}: ${firstFailure.error}` : "No importable default lessons were found.");
       }
       for (const entry of importedChapters) {
-        await writeLessonEditsToSourceFiles({
+        await writeLessonEditsToSourceFilesRef.current({
           subjectId: entry.chapter.subject,
           targetGrade: entry.chapter.grade,
           canonicalLessonKey: entry.chapter.lessonKey,
@@ -20522,7 +20525,7 @@ const headerHideTimerRef = useRef(null);
       setDefaultBuiltinImportBusy(false);
       if (event?.target) event.target.value = "";
     }
-  }, [canAdministerLessonLibrary, grade, language, selectedLesson, selectedSubject, selectedSubjectChapterGroups.length, showAppToast, writeLessonEditsToSourceFiles]);
+  }, [canAdministerLessonLibrary, grade, language, selectedLesson, selectedSubject, selectedSubjectChapterGroups.length, showAppToast]);
   const handleExportSelectedChapter = useCallback(() => {
     if (!canExportContent) {
       showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "آپ کے مواد والے کردار کو ابواب برآمد کرنے کی اجازت نہیں۔", language), "alert");
@@ -21364,6 +21367,7 @@ const headerHideTimerRef = useRef(null);
     }
     return nextManifest;
   }, [handleConnectSourceFiles, selectedLessonChapterGroup?.orderHint, sourceFileAccessSupported]);
+  writeLessonEditsToSourceFilesRef.current = writeLessonEditsToSourceFiles;
   const handleSaveLessonEdits = useCallback(async () => {
     if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can edit lessons.", "صرف ایڈمن اسباق میں ترمیم کر سکتے ہیں۔", language), "alert");

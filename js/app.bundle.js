@@ -15371,6 +15371,9 @@ ${marker} `);
     const ensureSupabaseClientRef = useRef(() => {
       throw new Error("Supabase client not ready");
     });
+    const writeLessonEditsToSourceFilesRef = useRef(async () => {
+      throw new Error("Source-file lesson writer not ready");
+    });
     const requestCurriculumSelectionReconcile = useCallback(() => {
       curriculumSelectionReconcileModeRef.current = "apply";
     }, []);
@@ -17522,7 +17525,7 @@ ${marker} `);
           throw new Error(firstFailure ? `${firstFailure.fileName}: ${firstFailure.error}` : "No importable default lessons were found.");
         }
         for (const entry of importedChapters) {
-          await writeLessonEditsToSourceFiles({
+          await writeLessonEditsToSourceFilesRef.current({
             subjectId: entry.chapter.subject,
             targetGrade: entry.chapter.grade,
             canonicalLessonKey: entry.chapter.lessonKey,
@@ -17570,7 +17573,7 @@ ${marker} `);
         setDefaultBuiltinImportBusy(false);
         if (event == null ? void 0 : event.target) event.target.value = "";
       }
-    }, [canAdministerLessonLibrary, grade, language, selectedLesson, selectedSubject, selectedSubjectChapterGroups.length, showAppToast, writeLessonEditsToSourceFiles]);
+    }, [canAdministerLessonLibrary, grade, language, selectedLesson, selectedSubject, selectedSubjectChapterGroups.length, showAppToast]);
     const handleExportSelectedChapter = useCallback(() => {
       if (!canExportContent) {
         showAppToast(joinLocalizedText("Your content role does not allow exporting chapters.", "\u0622\u067E \u06A9\u06D2 \u0645\u0648\u0627\u062F \u0648\u0627\u0644\u06D2 \u06A9\u0631\u062F\u0627\u0631 \u06A9\u0648 \u0627\u0628\u0648\u0627\u0628 \u0628\u0631\u0622\u0645\u062F \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0627\u062C\u0627\u0632\u062A \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
@@ -18382,6 +18385,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }
       return nextManifest;
     }, [handleConnectSourceFiles, selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.orderHint, sourceFileAccessSupported]);
+    writeLessonEditsToSourceFilesRef.current = writeLessonEditsToSourceFiles;
     const handleSaveLessonEdits = useCallback(async () => {
       var _a2, _b2, _c2;
       if (!canAdministerLessonLibrary) {
