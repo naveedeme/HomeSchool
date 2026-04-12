@@ -10,7 +10,7 @@
 !/.github/**
 !/js/
 !/js/**
-!/articulation-cards/**
+!/articulation-cards/index.html
 !/css/
 !/css/**
 !/vendor/
