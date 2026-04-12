@@ -23309,17 +23309,23 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         setDbLoaded(true);
         return;
       }
+      let cancelled = false;
       (async () => {
         var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2, _v2, _w2, _x2, _y2, _z2;
         try {
           await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
+          if (cancelled) return;
           const pos = await window.HomeSchoolDB.getAllPosTypes();
+          if (cancelled) return;
           if (Object.keys(pos).length > 0) setDbPos(pos);
           const tens = await window.HomeSchoolDB.getAllTenses();
+          if (cancelled) return;
           if (Object.keys(tens).length > 0) setDbTenses(tens);
           const voc = await window.HomeSchoolDB.getVocab();
+          if (cancelled) return;
           if (voc.length > 0) setDbVocab(voc);
           const customizations = await window.HomeSchoolDB.getCustomizationsMap();
+          if (cancelled) return;
           const storedPreferences = ((_a2 = customizations.preferences) == null ? void 0 : _a2.data) || null;
           const storedAudioPreferences = ((_b2 = customizations.audioPreferences) == null ? void 0 : _b2.data) || null;
           const storedReviewPreferences = ((_c2 = customizations.reviewPreferences) == null ? void 0 : _c2.data) || null;
@@ -23510,33 +23516,50 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           } else {
             setCustomContentState((current) => ({ ...current, loaded: true }));
           }
-          const progressMap = await window.HomeSchoolDB.getProgressMap();
-          if (Object.keys(progressMap).length > 0 && (!(stored == null ? void 0 : stored.completedQuizzes) || Object.keys(stored.completedQuizzes).length === 0)) {
-            setCompletedQuizzes(progressMap);
-          }
-          const persistedStats = await window.HomeSchoolDB.getUserStats();
-          if (persistedStats) {
-            setTotalQuizzesDone((current) => Math.max(current || 0, persistedStats.totalQuizzes || 0));
-            setTotalScore((current) => Math.max(current || 0, persistedStats.totalScore || 0));
-            setStreak((current) => Math.max(current || 0, persistedStats.streak || 0));
-            setLastQuizDate((current) => current || persistedStats.lastQuizDate || null);
-            setEarnedBadges((current) => Array.from(/* @__PURE__ */ new Set([...current || [], ...persistedStats.badges || []])));
-            setXp((current) => Math.max(current || 0, persistedStats.xp || 0));
-          }
-          await refreshStorageLabel();
-          if (versionManagerRef.current) {
-            const versionState = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION, window.HomeSchoolData);
-            setCurrentVersion(versionState.newVersion || window.HomeSchoolData.VERSION);
-            setUpdateAvailable(versionState.needsUpdate);
-          }
-          await refreshReviewWorkspace();
+          if (cancelled) return;
+          setDbLoaded(true);
+          setTimeout(() => {
+            (async () => {
+              try {
+                const progressMap = await window.HomeSchoolDB.getProgressMap();
+                if (!cancelled && Object.keys(progressMap).length > 0 && (!(stored == null ? void 0 : stored.completedQuizzes) || Object.keys(stored.completedQuizzes).length === 0)) {
+                  setCompletedQuizzes(progressMap);
+                }
+                const persistedStats = await window.HomeSchoolDB.getUserStats();
+                if (!cancelled && persistedStats) {
+                  setTotalQuizzesDone((current) => Math.max(current || 0, persistedStats.totalQuizzes || 0));
+                  setTotalScore((current) => Math.max(current || 0, persistedStats.totalScore || 0));
+                  setStreak((current) => Math.max(current || 0, persistedStats.streak || 0));
+                  setLastQuizDate((current) => current || persistedStats.lastQuizDate || null);
+                  setEarnedBadges((current) => Array.from(/* @__PURE__ */ new Set([...current || [], ...persistedStats.badges || []])));
+                  setXp((current) => Math.max(current || 0, persistedStats.xp || 0));
+                }
+                await refreshStorageLabel();
+                if (!cancelled && versionManagerRef.current) {
+                  const versionState = await versionManagerRef.current.checkForUpdates(window.HomeSchoolData.VERSION, window.HomeSchoolData);
+                  if (!cancelled) {
+                    setCurrentVersion(versionState.newVersion || window.HomeSchoolData.VERSION);
+                    setUpdateAvailable(versionState.needsUpdate);
+                  }
+                }
+                if (!cancelled) {
+                  await refreshReviewWorkspace();
+                }
+              } catch (backgroundError) {
+                console.log("Background startup hydration fallback:", backgroundError);
+              }
+            })();
+          }, 0);
         } catch (e) {
           customizationDbEnabledRef.current = false;
           setCustomContentState((current) => ({ ...current, loaded: true }));
           console.log("DB load fallback to inline:", e);
+          if (!cancelled) setDbLoaded(true);
         }
-        setDbLoaded(true);
       })();
+      return () => {
+        cancelled = true;
+      };
     }, []);
     const POS = {
       adverbs: dbPos.adverbs || ADVERBS_DATA,
