@@ -26726,7 +26726,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     }, 250);
   }
 
-  // Load from IndexedDB on mount
+  // Load from IndexedDB on mount, but keep this work off the critical first-paint path.
   useEffect(() => {
     if (!window.HomeSchoolDB) {
       const fallbackAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
@@ -26741,7 +26741,8 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       return;
     }
     let cancelled = false;
-    (async () => {
+    setCustomContentState((current) => ({ ...current, loaded: true }));
+    const runStartupHydration = async () => {
       try {
         await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
         if (cancelled) return;
@@ -26987,9 +26988,26 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         console.log("DB load fallback to inline:", e);
         if (!cancelled) setDbLoaded(true);
       }
-    })();
+    };
+    let idleHandle = null;
+    let timeoutHandle = null;
+    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+      idleHandle = window.requestIdleCallback(() => {
+        runStartupHydration();
+      }, { timeout: 1500 });
+    } else {
+      timeoutHandle = window.setTimeout(() => {
+        runStartupHydration();
+      }, 0);
+    }
     return () => {
       cancelled = true;
+      if (typeof window !== "undefined" && typeof window.cancelIdleCallback === "function" && idleHandle !== null) {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle !== null) {
+        clearTimeout(timeoutHandle);
+      }
     };
   }, []);
 
@@ -27344,8 +27362,8 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     if (dbLoaded) refreshStorageLabel();
   }, [dbLoaded, language]);
   useEffect(() => {
-    if (dbLoaded) hideLaunchSplash();
-  }, [dbLoaded]);
+    hideLaunchSplash();
+  }, []);
   useEffect(() => {
     const applyTheme = () => {
       const nextResolvedTheme = applyThemeMode(themeMode);
@@ -31468,7 +31486,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
   }, [wordMeaningPopover]);
 
   // Show loading while DB initializes
-  if (!dbLoaded) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}><div style={{ fontSize: 56, marginBottom: 16 }}>📚</div><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{ui.loadingHome}</h2><p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ui.loadingDb}</p><div style={{ width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" }}><div style={{ width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" }} /></div></div></div></>);
 
   if (!grade) return (<><div className="app-container"><div className="content" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: isUrduUi(language) ? "rtl" : "ltr" }}><div style={{ textAlign: "center", marginBottom: 32 }}><div style={{ fontSize: 56, marginBottom: 12 }}>📚</div><h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>HomeSchool</h1><p style={{ color: "var(--text-secondary)", fontSize: 14 }}>{renderLocalizedTextNode(ui.tagline, language)}</p>{language === "en" ? <p style={{ fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 }}>آپ کا ذاتی تعلیمی ساتھی</p> : null}</div><div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{renderLocalizedTextNode(ui.yourName, language)}</label><input value={studentName} onChange={e => setStudentName(e.target.value)} placeholder={ui.enterName} style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" }} /></div>{language !== "en" && <div style={{ marginBottom: 20 }}><label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" }}>{renderLocalizedTextNode(ui.yourNameUr, language)}</label><input value={studentNameUr} onChange={e => setStudentNameUr(sanitizeUrduInput(e.target.value))} placeholder="اپنا نام درج کریں" style={{ width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font-ur)", fontSize: 15, outline: "none", direction: "rtl" }} /></div>}<label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" }}>{renderLocalizedTextNode(ui.selectGrade, language)}</label><div className="grade-grid">{GRADES.map(g => <button key={g.id} className="grade-btn" onClick={() => setGrade(g.id)}>{g.id}</button>)}</div></div></div></>);
 

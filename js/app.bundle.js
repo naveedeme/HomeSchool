@@ -23310,7 +23310,8 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         return;
       }
       let cancelled = false;
-      (async () => {
+      setCustomContentState((current) => ({ ...current, loaded: true }));
+      const runStartupHydration = async () => {
         var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2, _v2, _w2, _x2, _y2, _z2;
         try {
           await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
@@ -23556,9 +23557,26 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           console.log("DB load fallback to inline:", e);
           if (!cancelled) setDbLoaded(true);
         }
-      })();
+      };
+      let idleHandle = null;
+      let timeoutHandle = null;
+      if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+        idleHandle = window.requestIdleCallback(() => {
+          runStartupHydration();
+        }, { timeout: 1500 });
+      } else {
+        timeoutHandle = window.setTimeout(() => {
+          runStartupHydration();
+        }, 0);
+      }
       return () => {
         cancelled = true;
+        if (typeof window !== "undefined" && typeof window.cancelIdleCallback === "function" && idleHandle !== null) {
+          window.cancelIdleCallback(idleHandle);
+        }
+        if (timeoutHandle !== null) {
+          clearTimeout(timeoutHandle);
+        }
       };
     }, []);
     const POS = {
@@ -23891,8 +23909,8 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       if (dbLoaded) refreshStorageLabel();
     }, [dbLoaded, language]);
     useEffect(() => {
-      if (dbLoaded) hideLaunchSplash();
-    }, [dbLoaded]);
+      hideLaunchSplash();
+    }, []);
     useEffect(() => {
       const applyTheme = () => {
         const nextResolvedTheme = applyThemeMode(themeMode);
@@ -27721,7 +27739,6 @@ ${error.message || error}`);
         window.removeEventListener("pointerdown", handleDismiss);
       };
     }, [wordMeaningPopover]);
-    if (!dbLoaded) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "100vh" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 16 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h2", { style: { fontSize: 20, fontWeight: 700, marginBottom: 8 } }, ui.loadingHome), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 13 } }, ui.loadingDb), /* @__PURE__ */ React.createElement("div", { style: { width: 200, height: 4, background: "var(--bg-elevated)", borderRadius: 4, marginTop: 16, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { width: "60%", height: "100%", background: "var(--accent)", borderRadius: 4, animation: "pulse 1s infinite" } })))));
     if (!grade) return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "app-container" }, /* @__PURE__ */ React.createElement("div", { className: "content", style: { display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px", direction: isUrduUi(language) ? "rtl" : "ltr" } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 32 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 56, marginBottom: 12 } }, "\u{1F4DA}"), /* @__PURE__ */ React.createElement("h1", { style: { fontSize: 28, fontWeight: 800, marginBottom: 4 } }, "HomeSchool"), /* @__PURE__ */ React.createElement("p", { style: { color: "var(--text-secondary)", fontSize: 14 } }, renderLocalizedTextNode(ui.tagline, language)), language === "en" ? /* @__PURE__ */ React.createElement("p", { style: { fontFamily: "var(--font-ur)", color: "var(--text-muted)", fontSize: 14, marginTop: 4 } }, "\u0622\u067E \u06A9\u0627 \u0630\u0627\u062A\u06CC \u062A\u0639\u0644\u06CC\u0645\u06CC \u0633\u0627\u062A\u06BE\u06CC") : null), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, renderLocalizedTextNode(ui.yourName, language)), /* @__PURE__ */ React.createElement("input", { value: studentName, onChange: (e) => setStudentName(e.target.value), placeholder: ui.enterName, style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: isUrduUi(language) ? "'Noto Nastaliq Urdu',serif" : "var(--font)", fontSize: 15, outline: "none" } })), language !== "en" && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 20 } }, /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 8, display: "block" } }, renderLocalizedTextNode(ui.yourNameUr, language)), /* @__PURE__ */ React.createElement("input", { value: studentNameUr, onChange: (e) => setStudentNameUr(sanitizeUrduInput(e.target.value)), placeholder: "\u0627\u067E\u0646\u0627 \u0646\u0627\u0645 \u062F\u0631\u062C \u06A9\u0631\u06CC\u06BA", style: { width: "100%", padding: "14px 18px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontFamily: "var(--font-ur)", fontSize: 15, outline: "none", direction: "rtl" } })), /* @__PURE__ */ React.createElement("label", { style: { fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, display: "block" } }, renderLocalizedTextNode(ui.selectGrade, language)), /* @__PURE__ */ React.createElement("div", { className: "grade-grid" }, GRADES.map((g) => /* @__PURE__ */ React.createElement("button", { key: g.id, className: "grade-btn", onClick: () => setGrade(g.id) }, g.id))))));
     const goHome = () => {
       window.speechSynthesis.cancel();
