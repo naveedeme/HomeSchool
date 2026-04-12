@@ -25713,6 +25713,9 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       existingChannel.unsubscribe();
       supabaseRealtimeChannelRef.current = null;
     }
+    if (MANUAL_CURRICULUM_REFRESH_ONLY) {
+      return undefined;
+    }
     if (!supabaseDictionarySync.enabled || !supabaseDictionarySync.realtimeEnabled || !supabaseAuthState.userId) {
       return undefined;
     }
@@ -26002,6 +26005,9 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       existingChannel.unsubscribe();
       supabaseCloudRealtimeChannelRef.current = null;
     }
+    if (MANUAL_CURRICULUM_REFRESH_ONLY) {
+      return undefined;
+    }
     if (!supabaseDictionarySync.enabled || !supabaseDictionarySync.realtimeEnabled || !supabaseAuthState.userId) {
       return undefined;
     }
@@ -26047,6 +26053,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   }, [applyIncomingCloudSyncRows, ensureSupabaseClient, supabaseAuthState.userId, supabaseDictionarySync.enabled, supabaseDictionarySync.realtimeEnabled]);
 
   useEffect(() => {
+    if (MANUAL_CURRICULUM_REFRESH_ONLY) return undefined;
     if (!dbLoaded || !supabaseDictionarySync.enabled || !supabaseDictionarySync.autoSync || !supabaseAuthState.userId) return undefined;
     if (!supabaseSyncPulse) return undefined;
     if (dictionarySyncTimerRef.current) clearTimeout(dictionarySyncTimerRef.current);

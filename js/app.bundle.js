@@ -22348,6 +22348,9 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         existingChannel.unsubscribe();
         supabaseRealtimeChannelRef.current = null;
       }
+      if (MANUAL_CURRICULUM_REFRESH_ONLY) {
+        return void 0;
+      }
       if (!supabaseDictionarySync.enabled || !supabaseDictionarySync.realtimeEnabled || !supabaseAuthState.userId) {
         return void 0;
       }
@@ -22609,6 +22612,9 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         existingChannel.unsubscribe();
         supabaseCloudRealtimeChannelRef.current = null;
       }
+      if (MANUAL_CURRICULUM_REFRESH_ONLY) {
+        return void 0;
+      }
       if (!supabaseDictionarySync.enabled || !supabaseDictionarySync.realtimeEnabled || !supabaseAuthState.userId) {
         return void 0;
       }
@@ -22650,6 +22656,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       };
     }, [applyIncomingCloudSyncRows, ensureSupabaseClient, supabaseAuthState.userId, supabaseDictionarySync.enabled, supabaseDictionarySync.realtimeEnabled]);
     useEffect(() => {
+      if (MANUAL_CURRICULUM_REFRESH_ONLY) return void 0;
       if (!dbLoaded || !supabaseDictionarySync.enabled || !supabaseDictionarySync.autoSync || !supabaseAuthState.userId) return void 0;
       if (!supabaseSyncPulse) return void 0;
       if (dictionarySyncTimerRef.current) clearTimeout(dictionarySyncTimerRef.current);
