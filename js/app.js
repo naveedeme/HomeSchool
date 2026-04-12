@@ -25,6 +25,7 @@ const AppContext = React.createContext(null);
 const LessonEditContext = React.createContext(null);
 const TYPING_TUTOR_EMBED_PATH = "./typing-tutor/index.html";
 const TABLE_TUTOR_EMBED_PATH = "./table-tutor/index.html";
+const ARTICULATION_CARDS_EMBED_PATH = "./articulation-cards/index.html";
 
 function splitEditableSentenceParts(text) {
   return String(text || "").split(/(?<=[.!?۔؟])\s+/).filter(Boolean);
@@ -16034,6 +16035,7 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [practiceLabReturnPending, setPracticeLabReturnPending] = useState(false);
   const [typingTutorOpen, setTypingTutorOpen] = useState(false);
   const [tableTutorOpen, setTableTutorOpen] = useState(false);
+  const [articulationCardsOpen, setArticulationCardsOpen] = useState(false);
   const [pronunciationLabOpen, setPronunciationLabOpen] = useState(false);
   const [pronunciationLabIdx, setPronunciationLabIdx] = useState(0);
   const [pronunciationLabTranscript, setPronunciationLabTranscript] = useState("");
@@ -26239,10 +26241,12 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         return;
       }
       if (typingTutorOpen) setTypingTutorOpen(false);
+      if (tableTutorOpen) setTableTutorOpen(false);
+      if (articulationCardsOpen) setArticulationCardsOpen(false);
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [handleClosePronunciationLab, pronunciationLabOpen, typingTutorOpen]);
+  }, [handleClosePronunciationLab, pronunciationLabOpen, typingTutorOpen, tableTutorOpen, articulationCardsOpen]);
 
   const refreshStorageLabel = useCallback(async () => {
     if (!window.HomeSchoolDB) {
@@ -36864,6 +36868,15 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <strong>{renderLocalizedTextNode(joinLocalizedText("Table Tutor", "ٹیبل ٹیوٹر", language), language)}</strong>
                   <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the Table Tutor in a popup.", "ٹیبل ٹیوٹر کو پاپ اپ میں کھولیں۔", language), language)}</span>
                 </button>
+                <button
+                  type="button"
+                  className="practice-mode-card practice-tool-card"
+                  onClick={() => setArticulationCardsOpen(true)}
+                >
+                  <span className="practice-mode-icon">🗣️</span>
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Articulation Cards", "ارتیکولیشن کارڈز", language), language)}</strong>
+                  <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the Articulation Cards in a popup.", "ارتیکولیشن کارڈز کو پاپ اپ میں کھولیں۔", language), language)}</span>
+                </button>
               </div>
             </div>
           )}
@@ -38699,6 +38712,39 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               className="typing-tutor-frame"
               src={TABLE_TUTOR_EMBED_PATH}
               title="Table Tutor"
+            />
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    {articulationCardsOpen ? (
+      <div className="typing-tutor-overlay" onClick={() => setArticulationCardsOpen(false)}>
+        <div className="typing-tutor-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="typing-tutor-modal-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Articulation Cards", "ارتیکولیشن کارڈز", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("This opens the Articulation Cards build inside a popup.", "یہ ارتیکولیشن کارڈز بلڈ کو پاپ اپ میں کھولتا ہے۔", language), language)}</p>
+            </div>
+            <div className="typing-tutor-modal-actions">
+              <a
+                className="ghost-cta"
+                href={ARTICULATION_CARDS_EMBED_PATH}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Open in new tab", "نئے ٹیب میں کھولیں", language), language)}
+              </a>
+              <button type="button" className="ghost-cta" onClick={() => setArticulationCardsOpen(false)}>
+                {renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          <div className="typing-tutor-frame-shell">
+            <iframe
+              className="typing-tutor-frame"
+              src={ARTICULATION_CARDS_EMBED_PATH}
+              title="Articulation Cards"
             />
           </div>
         </div>
