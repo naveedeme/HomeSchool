@@ -24940,8 +24940,18 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     requestCurriculumSelectionReconcile();
     setContentRelationshipBusy(true);
     try {
+      const client = ensureSupabaseClient();
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError) throw sessionError;
+      const session = sessionData?.session || null;
+      applySupabaseSessionState(session, {
+        status: session?.user?.id ? "ready" : "idle",
+        message: session?.user?.id
+          ? joinLocalizedText("Curriculum connection refreshed.", "نصابی کنکشن تازہ ہو گیا۔", language)
+          : "",
+      });
       await refreshPublishedContentState();
-      await refreshContentRelationshipStateRef.current();
+      await refreshContentRelationshipStateRef.current(session);
       showAppToast(joinLocalizedText("Curriculum refreshed.", "نصاب تازہ کر دیا گیا۔", language), "check");
     } catch (error) {
       showAppToast(
@@ -24951,7 +24961,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     } finally {
       setContentRelationshipBusy(false);
     }
-  }, [language, refreshPublishedContentState, requestCurriculumSelectionReconcile, showAppToast, supabaseDictionarySync]);
+  }, [applySupabaseSessionState, ensureSupabaseClient, language, refreshPublishedContentState, requestCurriculumSelectionReconcile, showAppToast, supabaseDictionarySync]);
   const handleSaveTeacherStudentLink = useCallback(async () => {
     if (!canManageStudentLinks) {
       showAppToast(joinLocalizedText("Your content role cannot manage teacher-student links.", "آپ کے مواد والے کردار کو استاد اور طالب علم کے روابط سنبھالنے کی اجازت نہیں۔", language), "alert");
@@ -25513,6 +25523,9 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       }));
       return undefined;
     }
+    if (MANUAL_CURRICULUM_REFRESH_ONLY) {
+      return undefined;
+    }
     let active = true;
     try {
       const client = ensureSupabaseClient();
@@ -25600,6 +25613,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
 
   useEffect(() => {
     if (!dbLoaded) return undefined;
+    if (MANUAL_CURRICULUM_REFRESH_ONLY) return undefined;
     const settings = sanitizeSupabaseDictionarySyncSettings(supabaseDictionarySync);
     if (!settings.url || !settings.anonKey) return undefined;
     const refreshKey = `${String(supabaseAuthState.userId || "").trim().toLowerCase() || "anon"}::${Number(Boolean(dbLoaded))}`;
