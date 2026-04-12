@@ -55,6 +55,9 @@ jobs:
           if [ -d articulation-cards ]; then
             cp -R articulation-cards .deploy/articulation-cards
           fi
+          if [ -d tutor-lab ]; then
+            cp -R tutor-lab .deploy/tutor-lab
+          fi
           touch .deploy/.nojekyll
 
       - name: Publish to gh-pages
