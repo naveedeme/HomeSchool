@@ -13173,6 +13173,7 @@ ${marker} `);
     const initialActiveStudentProfile = initialStudentProfiles.find((profile) => profile.id === initialActiveStudentProfileId) || initialStudentProfiles[0];
     const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
     const persistCustomizationRef = useRef(null);
+    const startupHydrationActiveRef = useRef(Boolean(window.HomeSchoolDB));
     const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
     const publishedContentSnapshotPersistTimerRef = useRef(null);
     const curriculumRelationshipSnapshotPersistTimerRef = useRef(null);
@@ -23305,6 +23306,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
     }
     useEffect(() => {
       if (!window.HomeSchoolDB) {
+        startupHydrationActiveRef.current = false;
         const fallbackAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
         const fallbackAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
         const fallbackSupabaseSync = sanitizeSupabaseDictionarySyncSettings(localStorageFallback(SUPABASE_SYNC_STORAGE_KEY) || {});
@@ -23320,6 +23322,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       setCustomContentState((current) => ({ ...current, loaded: true }));
       const runStartupHydration = async () => {
         var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2, _l2, _m2, _n2, _o2, _p2, _q2, _r2, _s2, _t2, _u2, _v2, _w2, _x2, _y2, _z2;
+        const shouldHydrateCustomizationStateFromDb = !stored || Object.keys(stored).length === 0;
         try {
           await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
           if (cancelled) return;
@@ -23332,7 +23335,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           const voc = await window.HomeSchoolDB.getVocab();
           if (cancelled) return;
           if (voc.length > 0) setDbVocab(voc);
-          const customizations = await window.HomeSchoolDB.getCustomizationsMap();
+          const customizations = shouldHydrateCustomizationStateFromDb ? await window.HomeSchoolDB.getCustomizationsMap() : {};
           if (cancelled) return;
           const storedPreferences = ((_a2 = customizations.preferences) == null ? void 0 : _a2.data) || null;
           const storedAudioPreferences = ((_b2 = customizations.audioPreferences) == null ? void 0 : _b2.data) || null;
@@ -23357,167 +23360,169 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           const storedPracticeProgress = ((_u2 = customizations.practiceProgress) == null ? void 0 : _u2.data) || null;
           const storedAiProviders = sanitizeAiProviderConfigs(((_v2 = customizations.aiProviderConfigs) == null ? void 0 : _v2.data) || {});
           const storedAiTutor = ((_w2 = customizations.aiTutorPreferences) == null ? void 0 : _w2.data) || null;
-          if (storedPreferences) {
-            if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
-            if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
-            if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
-            if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
-            if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
-            if (typeof storedPreferences.autoMoveNext !== "undefined") setAutoMoveNext(Boolean(storedPreferences.autoMoveNext));
-            if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
-            if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
-            if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
-            if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
-            if (typeof storedPreferences.focusMode !== "undefined") setFocusMode(Boolean(storedPreferences.focusMode));
-            if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
-            if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
-            if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
-            if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
-            if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
-            if (typeof storedPreferences.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(storedPreferences.transitionMode)) setTransitionMode(storedPreferences.transitionMode);
-          }
-          if (storedAudioPreferences) {
-            if (typeof storedAudioPreferences.ttsRate !== "undefined") {
-              setTtsRate(Math.max(0.6, Math.min(1.3, Number(storedAudioPreferences.ttsRate) || 0.85)));
+          if (shouldHydrateCustomizationStateFromDb) {
+            if (storedPreferences) {
+              if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
+              if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
+              if (typeof storedPreferences.themeMode !== "undefined") setThemeMode(storedPreferences.themeMode);
+              if (typeof storedPreferences.audioMuted !== "undefined") setAudioMuted(Boolean(storedPreferences.audioMuted));
+              if (typeof storedPreferences.autoPlayNext !== "undefined") setAutoPlayNext(Boolean(storedPreferences.autoPlayNext));
+              if (typeof storedPreferences.autoMoveNext !== "undefined") setAutoMoveNext(Boolean(storedPreferences.autoMoveNext));
+              if (typeof storedPreferences.wordMeaningPriority !== "undefined") setWordMeaningPriority(normalizeWordMeaningPriority(storedPreferences.wordMeaningPriority));
+              if (typeof storedPreferences.fontSizeMode !== "undefined" && ["small", "normal", "large", "xlarge"].includes(storedPreferences.fontSizeMode)) setFontSizeMode(storedPreferences.fontSizeMode);
+              if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
+              if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
+              if (typeof storedPreferences.focusMode !== "undefined") setFocusMode(Boolean(storedPreferences.focusMode));
+              if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
+              if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
+              if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
+              if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
+              if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
+              if (typeof storedPreferences.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(storedPreferences.transitionMode)) setTransitionMode(storedPreferences.transitionMode);
             }
-            if (storedAudioPreferences.ttsVoiceSelections && typeof storedAudioPreferences.ttsVoiceSelections === "object") {
-              setTtsVoiceSelections({
-                en: storedAudioPreferences.ttsVoiceSelections.en || "",
-                ur: storedAudioPreferences.ttsVoiceSelections.ur || ""
+            if (storedAudioPreferences) {
+              if (typeof storedAudioPreferences.ttsRate !== "undefined") {
+                setTtsRate(Math.max(0.6, Math.min(1.3, Number(storedAudioPreferences.ttsRate) || 0.85)));
+              }
+              if (storedAudioPreferences.ttsVoiceSelections && typeof storedAudioPreferences.ttsVoiceSelections === "object") {
+                setTtsVoiceSelections({
+                  en: storedAudioPreferences.ttsVoiceSelections.en || "",
+                  ur: storedAudioPreferences.ttsVoiceSelections.ur || ""
+                });
+              }
+            }
+            if (storedReviewPreferences) {
+              if (typeof storedReviewPreferences.dailyReviewCap !== "undefined") {
+                setDailyReviewCap(Math.max(5, Math.min(50, Number(storedReviewPreferences.dailyReviewCap) || 20)));
+              }
+              if (typeof storedReviewPreferences.practiceSubjectId !== "undefined") {
+                setPracticeSubjectId(storedReviewPreferences.practiceSubjectId || "english");
+              }
+              if (storedReviewPreferences.practiceFiltersBySubject && typeof storedReviewPreferences.practiceFiltersBySubject === "object") {
+                setPracticeFiltersBySubject(storedReviewPreferences.practiceFiltersBySubject);
+              }
+              if (storedReviewPreferences.practiceTimedSettings && typeof storedReviewPreferences.practiceTimedSettings === "object") {
+                setPracticeTimedSettings((current) => ({ ...current, ...storedReviewPreferences.practiceTimedSettings }));
+              }
+              if (storedReviewPreferences.reviewSrsSettings && typeof storedReviewPreferences.reviewSrsSettings === "object") {
+                setReviewSrsSettings({
+                  masteryThreshold: Math.max(3, Math.min(7, Number(storedReviewPreferences.reviewSrsSettings.masteryThreshold) || 5)),
+                  intervalScale: Math.max(0.5, Math.min(2.5, Number(storedReviewPreferences.reviewSrsSettings.intervalScale) || 1)),
+                  againMinutes: Math.max(5, Math.min(180, Number(storedReviewPreferences.reviewSrsSettings.againMinutes) || 10))
+                });
+              }
+            }
+            if (storedPacing && typeof storedPacing === "object") {
+              setDaySectionOverrides(storedPacing);
+            }
+            if (storedPracticeProgress && typeof storedPracticeProgress === "object") {
+              setPracticeLessonProgress(storedPracticeProgress);
+            }
+            if (storedGoals && typeof storedGoals === "object") {
+              setStudyGoals({
+                dailyReviews: Math.max(5, Math.min(60, Number(storedGoals.dailyReviews) || 20)),
+                weeklyWords: Math.max(10, Math.min(140, Number(storedGoals.weeklyWords) || 40))
               });
             }
-          }
-          if (storedReviewPreferences) {
-            if (typeof storedReviewPreferences.dailyReviewCap !== "undefined") {
-              setDailyReviewCap(Math.max(5, Math.min(50, Number(storedReviewPreferences.dailyReviewCap) || 20)));
+            if (storedFocusTimer && typeof storedFocusTimer === "object") {
+              const nextMinutes = Math.max(5, Math.min(60, Number(storedFocusTimer.durationMinutes) || 20));
+              setFocusTimerSettings({
+                durationMinutes: nextMinutes,
+                autoStartBreak: Boolean(storedFocusTimer.autoStartBreak)
+              });
+              setFocusTimerState((current) => ({
+                ...current,
+                remainingSeconds: nextMinutes * 60
+              }));
             }
-            if (typeof storedReviewPreferences.practiceSubjectId !== "undefined") {
-              setPracticeSubjectId(storedReviewPreferences.practiceSubjectId || "english");
-            }
-            if (storedReviewPreferences.practiceFiltersBySubject && typeof storedReviewPreferences.practiceFiltersBySubject === "object") {
-              setPracticeFiltersBySubject(storedReviewPreferences.practiceFiltersBySubject);
-            }
-            if (storedReviewPreferences.practiceTimedSettings && typeof storedReviewPreferences.practiceTimedSettings === "object") {
-              setPracticeTimedSettings((current) => ({ ...current, ...storedReviewPreferences.practiceTimedSettings }));
-            }
-            if (storedReviewPreferences.reviewSrsSettings && typeof storedReviewPreferences.reviewSrsSettings === "object") {
-              setReviewSrsSettings({
-                masteryThreshold: Math.max(3, Math.min(7, Number(storedReviewPreferences.reviewSrsSettings.masteryThreshold) || 5)),
-                intervalScale: Math.max(0.5, Math.min(2.5, Number(storedReviewPreferences.reviewSrsSettings.intervalScale) || 1)),
-                againMinutes: Math.max(5, Math.min(180, Number(storedReviewPreferences.reviewSrsSettings.againMinutes) || 10))
+            if (storedReminderSettings && typeof storedReminderSettings === "object") {
+              setReminderSettings({
+                enabled: Boolean(storedReminderSettings.enabled),
+                time: storedReminderSettings.time || "18:00",
+                notifications: Boolean(storedReminderSettings.notifications),
+                lastShownDay: storedReminderSettings.lastShownDay || null
               });
             }
-          }
-          if (storedPacing && typeof storedPacing === "object") {
-            setDaySectionOverrides(storedPacing);
-          }
-          if (storedPracticeProgress && typeof storedPracticeProgress === "object") {
-            setPracticeLessonProgress(storedPracticeProgress);
-          }
-          if (storedGoals && typeof storedGoals === "object") {
-            setStudyGoals({
-              dailyReviews: Math.max(5, Math.min(60, Number(storedGoals.dailyReviews) || 20)),
-              weeklyWords: Math.max(10, Math.min(140, Number(storedGoals.weeklyWords) || 40))
-            });
-          }
-          if (storedFocusTimer && typeof storedFocusTimer === "object") {
-            const nextMinutes = Math.max(5, Math.min(60, Number(storedFocusTimer.durationMinutes) || 20));
-            setFocusTimerSettings({
-              durationMinutes: nextMinutes,
-              autoStartBreak: Boolean(storedFocusTimer.autoStartBreak)
-            });
-            setFocusTimerState((current) => ({
-              ...current,
-              remainingSeconds: nextMinutes * 60
-            }));
-          }
-          if (storedReminderSettings && typeof storedReminderSettings === "object") {
-            setReminderSettings({
-              enabled: Boolean(storedReminderSettings.enabled),
-              time: storedReminderSettings.time || "18:00",
-              notifications: Boolean(storedReminderSettings.notifications),
-              lastShownDay: storedReminderSettings.lastShownDay || null
-            });
-          }
-          if (storedBackupReminderSettings && typeof storedBackupReminderSettings === "object") {
-            setBackupReminderSettings(normalizeBackupReminderSettings(storedBackupReminderSettings));
-          }
-          if (storedClassSchedule && typeof storedClassSchedule === "object") {
-            setClassScheduleSettings({
-              enabled: Boolean(storedClassSchedule.enabled),
-              startTime: storedClassSchedule.startTime || "08:00",
-              endTime: storedClassSchedule.endTime || "13:00"
-            });
-          }
-          if (storedTimeTracking && typeof storedTimeTracking === "object") {
-            const normalizedTracking = normalizeTimeTrackingData(storedTimeTracking);
-            timeTrackingRef.current = normalizedTracking;
-            setTimeTrackingData(normalizedTracking);
-          }
-          if (Array.isArray(storedNotificationHistory)) {
-            setNotificationHistory(storedNotificationHistory.slice(0, 40));
-          }
-          if (storedGamification && typeof storedGamification === "object") {
-            const normalizedGamification = normalizeGamificationState(storedGamification);
-            gamificationStateRef.current = normalizedGamification;
-            setGamificationState(normalizedGamification);
-          }
-          if (storedWordMeaningCache && typeof storedWordMeaningCache === "object") {
-            setWordMeaningCache(normalizeWordMeaningCache(storedWordMeaningCache));
-          }
-          if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") {
-            if (typeof storedDictionaryPreferences.importUrl !== "undefined") {
-              setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || ""));
+            if (storedBackupReminderSettings && typeof storedBackupReminderSettings === "object") {
+              setBackupReminderSettings(normalizeBackupReminderSettings(storedBackupReminderSettings));
             }
-          }
-          if (storedContentPreferences && typeof storedContentPreferences === "object") {
-            setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
-            setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
-          }
-          if (storedSupabaseDictionarySync && typeof storedSupabaseDictionarySync === "object") {
-            setSupabaseDictionarySync(sanitizeSupabaseDictionarySyncSettings(storedSupabaseDictionarySync));
-          }
-          if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
-            setSupabaseRolePreference(storedAccountPreferences.rolePreference);
-            if (typeof storedAccountPreferences.username !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(storedAccountPreferences.username));
-            if (typeof storedAccountPreferences.pendingEmail !== "undefined") setSupabasePendingEmail(String(storedAccountPreferences.pendingEmail || ""));
-          }
-          if (storedDeletedProfiles) {
-            const normalizedDeletedProfileIds = normalizeDeletedStudentProfileIds(storedDeletedProfiles);
-            setDeletedStudentProfileIds(normalizedDeletedProfileIds);
-            localStorageFallback("hs_deleted_student_profile_ids", normalizedDeletedProfileIds);
-            if ((_x2 = window.HomeSchoolDB) == null ? void 0 : _x2.deleteProfileSnapshot) {
-              await Promise.all(normalizedDeletedProfileIds.map((profileId) => window.HomeSchoolDB.deleteProfileSnapshot(profileId).catch((error) => {
-                console.log("Unable to delete stored profile snapshot:", error);
-              })));
+            if (storedClassSchedule && typeof storedClassSchedule === "object") {
+              setClassScheduleSettings({
+                enabled: Boolean(storedClassSchedule.enabled),
+                startTime: storedClassSchedule.startTime || "08:00",
+                endTime: storedClassSchedule.endTime || "13:00"
+              });
             }
-          }
-          if (storedProfiles || storedDeletedProfiles) {
-            const normalizedProfiles = filterProfilesByDeletedIds(storedProfiles || studentProfilesRef.current, storedDeletedProfiles, storedProfile || {
-              grade: (stored == null ? void 0 : stored.grade) || null,
-              studentName: (stored == null ? void 0 : stored.studentName) || "",
-              studentNameUr: (stored == null ? void 0 : stored.studentNameUr) || ""
-            });
-            const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, initialActiveStudentProfileId);
-            studentProfilesRef.current = normalizedProfiles;
-            activeStudentProfileIdRef.current = nextActiveId;
-            setStudentProfiles(normalizedProfiles);
-            setActiveStudentProfileId(nextActiveId);
-            const nextActiveProfile = normalizedProfiles.find((profile) => profile.id === nextActiveId) || normalizedProfiles[0];
-            if (nextActiveProfile) {
-              if (typeof nextActiveProfile.grade !== "undefined") setGrade(nextActiveProfile.grade);
-              if (typeof nextActiveProfile.studentName !== "undefined") setStudentName(nextActiveProfile.studentName || "");
-              if (typeof nextActiveProfile.studentNameUr !== "undefined") setStudentNameUr(nextActiveProfile.studentNameUr || "");
+            if (storedTimeTracking && typeof storedTimeTracking === "object") {
+              const normalizedTracking = normalizeTimeTrackingData(storedTimeTracking);
+              timeTrackingRef.current = normalizedTracking;
+              setTimeTrackingData(normalizedTracking);
             }
+            if (Array.isArray(storedNotificationHistory)) {
+              setNotificationHistory(storedNotificationHistory.slice(0, 40));
+            }
+            if (storedGamification && typeof storedGamification === "object") {
+              const normalizedGamification = normalizeGamificationState(storedGamification);
+              gamificationStateRef.current = normalizedGamification;
+              setGamificationState(normalizedGamification);
+            }
+            if (storedWordMeaningCache && typeof storedWordMeaningCache === "object") {
+              setWordMeaningCache(normalizeWordMeaningCache(storedWordMeaningCache));
+            }
+            if (storedDictionaryPreferences && typeof storedDictionaryPreferences === "object") {
+              if (typeof storedDictionaryPreferences.importUrl !== "undefined") {
+                setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || ""));
+              }
+            }
+            if (storedContentPreferences && typeof storedContentPreferences === "object") {
+              setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
+              setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
+            }
+            if (storedSupabaseDictionarySync && typeof storedSupabaseDictionarySync === "object") {
+              setSupabaseDictionarySync(sanitizeSupabaseDictionarySyncSettings(storedSupabaseDictionarySync));
+            }
+            if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
+              setSupabaseRolePreference(storedAccountPreferences.rolePreference);
+              if (typeof storedAccountPreferences.username !== "undefined") setSupabaseAccountUsername(sanitizeAccountUsername(storedAccountPreferences.username));
+              if (typeof storedAccountPreferences.pendingEmail !== "undefined") setSupabasePendingEmail(String(storedAccountPreferences.pendingEmail || ""));
+            }
+            if (storedDeletedProfiles) {
+              const normalizedDeletedProfileIds = normalizeDeletedStudentProfileIds(storedDeletedProfiles);
+              setDeletedStudentProfileIds(normalizedDeletedProfileIds);
+              localStorageFallback("hs_deleted_student_profile_ids", normalizedDeletedProfileIds);
+              if ((_x2 = window.HomeSchoolDB) == null ? void 0 : _x2.deleteProfileSnapshot) {
+                await Promise.all(normalizedDeletedProfileIds.map((profileId) => window.HomeSchoolDB.deleteProfileSnapshot(profileId).catch((error) => {
+                  console.log("Unable to delete stored profile snapshot:", error);
+                })));
+              }
+            }
+            if (storedProfiles || storedDeletedProfiles) {
+              const normalizedProfiles = filterProfilesByDeletedIds(storedProfiles || studentProfilesRef.current, storedDeletedProfiles, storedProfile || {
+                grade: (stored == null ? void 0 : stored.grade) || null,
+                studentName: (stored == null ? void 0 : stored.studentName) || "",
+                studentNameUr: (stored == null ? void 0 : stored.studentNameUr) || ""
+              });
+              const nextActiveId = resolveActiveStudentProfileId(normalizedProfiles, initialActiveStudentProfileId);
+              studentProfilesRef.current = normalizedProfiles;
+              activeStudentProfileIdRef.current = nextActiveId;
+              setStudentProfiles(normalizedProfiles);
+              setActiveStudentProfileId(nextActiveId);
+              const nextActiveProfile = normalizedProfiles.find((profile) => profile.id === nextActiveId) || normalizedProfiles[0];
+              if (nextActiveProfile) {
+                if (typeof nextActiveProfile.grade !== "undefined") setGrade(nextActiveProfile.grade);
+                if (typeof nextActiveProfile.studentName !== "undefined") setStudentName(nextActiveProfile.studentName || "");
+                if (typeof nextActiveProfile.studentNameUr !== "undefined") setStudentNameUr(nextActiveProfile.studentNameUr || "");
+              }
+            }
+            if (storedProfile) {
+              if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
+              if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
+              if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
+            }
+            setAiProviderConfigs(storedAiProviders);
+            setAiProviderDrafts(storedAiProviders);
+            if (storedAiTutor == null ? void 0 : storedAiTutor.providerId) setSelectedAiProvider(storedAiTutor.providerId);
           }
-          if (storedProfile) {
-            if (typeof storedProfile.grade !== "undefined") setGrade(storedProfile.grade);
-            if (typeof storedProfile.studentName !== "undefined") setStudentName(storedProfile.studentName || "");
-            if (typeof storedProfile.studentNameUr !== "undefined") setStudentNameUr(storedProfile.studentNameUr || "");
-          }
-          setAiProviderConfigs(storedAiProviders);
-          setAiProviderDrafts(storedAiProviders);
-          if (storedAiTutor == null ? void 0 : storedAiTutor.providerId) setSelectedAiProvider(storedAiTutor.providerId);
           const customContentSnapshot = await ((_z2 = (_y2 = window.HomeSchoolDB).getCustomContentSnapshot) == null ? void 0 : _z2.call(_y2));
           if (customContentSnapshot) {
             setCustomContentState(normalizeCustomContentSnapshot(customContentSnapshot));
@@ -23563,6 +23568,8 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           setCustomContentState((current) => ({ ...current, loaded: true }));
           console.log("DB load fallback to inline:", e);
           if (!cancelled) setDbLoaded(true);
+        } finally {
+          startupHydrationActiveRef.current = false;
         }
       };
       let idleHandle = null;
@@ -23578,6 +23585,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }
       return () => {
         cancelled = true;
+        startupHydrationActiveRef.current = false;
         if (typeof window !== "undefined" && typeof window.cancelIdleCallback === "function" && idleHandle !== null) {
           window.cancelIdleCallback(idleHandle);
         }
@@ -23946,7 +23954,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
     }, [highContrast, reducedMotion]);
     useEffect(() => {
       var _a2;
-      if (!dbLoaded) return;
+      if (!dbLoaded || startupHydrationActiveRef.current) return;
       (_a2 = persistCustomizationRef.current) == null ? void 0 : _a2.call(persistCustomizationRef, {
         ttsEnabled,
         audioMuted,
@@ -24002,6 +24010,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       });
     }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
     useEffect(() => {
+      if (startupHydrationActiveRef.current) return;
       if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
     }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
     useEffect(() => {

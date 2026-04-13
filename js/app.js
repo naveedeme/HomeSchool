@@ -15771,6 +15771,7 @@ function HomeschoolApp() {
   const initialActiveStudentProfile = initialStudentProfiles.find((profile) => profile.id === initialActiveStudentProfileId) || initialStudentProfiles[0];
   const versionManagerRef = useRef(window.DataVersionManager ? new window.DataVersionManager(window.HomeSchoolDB) : null);
   const persistCustomizationRef = useRef(null);
+  const startupHydrationActiveRef = useRef(Boolean(window.HomeSchoolDB));
   const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
   const publishedContentSnapshotPersistTimerRef = useRef(null);
   const curriculumRelationshipSnapshotPersistTimerRef = useRef(null);
@@ -26736,6 +26737,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
   // Load from IndexedDB on mount, but keep this work off the critical first-paint path.
   useEffect(() => {
     if (!window.HomeSchoolDB) {
+      startupHydrationActiveRef.current = false;
       const fallbackAiConfigs = sanitizeAiProviderConfigs(localStorageFallback("hs_ai_provider_configs") || {});
       const fallbackAiTutorPreferences = localStorageFallback("hs_ai_tutor_preferences") || {};
       const fallbackSupabaseSync = sanitizeSupabaseDictionarySyncSettings(localStorageFallback(SUPABASE_SYNC_STORAGE_KEY) || {});
@@ -26750,6 +26752,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     let cancelled = false;
     setCustomContentState((current) => ({ ...current, loaded: true }));
     const runStartupHydration = async () => {
+      const shouldHydrateCustomizationStateFromDb = !stored || Object.keys(stored).length === 0;
       try {
         await window.HomeSchoolDB.ensureSeeded(window.HomeSchoolData);
         if (cancelled) return;
@@ -26762,7 +26765,9 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         const voc = await window.HomeSchoolDB.getVocab();
         if (cancelled) return;
         if (voc.length > 0) setDbVocab(voc);
-        const customizations = await window.HomeSchoolDB.getCustomizationsMap();
+        const customizations = shouldHydrateCustomizationStateFromDb
+          ? await window.HomeSchoolDB.getCustomizationsMap()
+          : {};
         if (cancelled) return;
         const storedPreferences = customizations.preferences?.data || null;
         const storedAudioPreferences = customizations.audioPreferences?.data || null;
@@ -26787,6 +26792,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         const storedPracticeProgress = customizations.practiceProgress?.data || null;
         const storedAiProviders = sanitizeAiProviderConfigs(customizations.aiProviderConfigs?.data || {});
         const storedAiTutor = customizations.aiTutorPreferences?.data || null;
+        if (shouldHydrateCustomizationStateFromDb) {
         if (storedPreferences) {
           if (typeof storedPreferences.language !== "undefined") setLanguage(storedPreferences.language);
           if (typeof storedPreferences.ttsEnabled !== "undefined") setTtsEnabled(storedPreferences.ttsEnabled);
@@ -26949,6 +26955,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         setAiProviderConfigs(storedAiProviders);
         setAiProviderDrafts(storedAiProviders);
         if (storedAiTutor?.providerId) setSelectedAiProvider(storedAiTutor.providerId);
+        }
         const customContentSnapshot = await window.HomeSchoolDB.getCustomContentSnapshot?.();
         if (customContentSnapshot) {
           setCustomContentState(normalizeCustomContentSnapshot(customContentSnapshot));
@@ -26994,6 +27001,8 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         setCustomContentState((current) => ({ ...current, loaded: true }));
         console.log("DB load fallback to inline:", e);
         if (!cancelled) setDbLoaded(true);
+      } finally {
+        startupHydrationActiveRef.current = false;
       }
     };
     let idleHandle = null;
@@ -27009,6 +27018,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     }
     return () => {
       cancelled = true;
+      startupHydrationActiveRef.current = false;
       if (typeof window !== "undefined" && typeof window.cancelIdleCallback === "function" && idleHandle !== null) {
         window.cancelIdleCallback(idleHandle);
       }
@@ -27398,7 +27408,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     root.dataset.contrast = highContrast ? "high" : "normal";
   }, [highContrast, reducedMotion]);
   useEffect(() => {
-    if (!dbLoaded) return;
+    if (!dbLoaded || startupHydrationActiveRef.current) return;
     persistCustomizationRef.current?.({
       ttsEnabled,
       audioMuted,
@@ -27454,6 +27464,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
     });
 }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
+  if (startupHydrationActiveRef.current) return;
   if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
 }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
   useEffect(() => {
