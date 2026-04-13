@@ -15866,6 +15866,7 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [profilesSectionTab, setProfilesSectionTab] = useState("profiles");
   const [diarySectionTab, setDiarySectionTab] = useState("daily");
   const [diaryTaskNavigator, setDiaryTaskNavigator] = useState(null);
+  const [autoWeeklyDiaryEnabled, setAutoWeeklyDiaryEnabled] = useState(Boolean(stored?.autoWeeklyDiaryEnabled));
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [lessonEditMode, setLessonEditMode] = useState(false);
@@ -16095,6 +16096,7 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [pageSectionShutterOpen, setPageSectionShutterOpen] = useState(false);
   const institutionSectionActive = tab === "profiles" && profilesSectionTab === "institution";
   const diaryDataActive = tab === "diary" || Boolean(diaryTaskNavigator?.activeTaskKey) || Boolean(activeWeeklyTestSession) || institutionSectionActive;
+  const autoWeeklyDiaryComputeActive = diaryDataActive && autoWeeklyDiaryEnabled;
   const diaryWeeklyTestDataActive = diaryDataActive && (diarySectionTab === "saturday" || diarySectionTab === "templates" || diarySectionTab === "dashboard" || Boolean(activeWeeklyTestSession));
   const diaryPerformanceDataActive = diaryDataActive && diarySectionTab === "dashboard";
   const reviewDataActive = tab === "review";
@@ -17822,7 +17824,7 @@ const headerHideTimerRef = useRef(null);
       schoolId: activeInstitutionSchoolIdResolved,
       overrides: contentRelationshipState.autoDiaryOverrides,
     };
-    if (!diaryDataActive) return diarySectionCacheRef.current.visibleAutoDiaryOverrides.value;
+    if (!autoWeeklyDiaryComputeActive) return diarySectionCacheRef.current.visibleAutoDiaryOverrides.value;
     if (haveSameMemoInputs(diarySectionCacheRef.current.visibleAutoDiaryOverrides.inputs, memoInputs)) {
       return diarySectionCacheRef.current.visibleAutoDiaryOverrides.value;
     }
@@ -17834,7 +17836,7 @@ const headerHideTimerRef = useRef(null);
       .filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
     diarySectionCacheRef.current.visibleAutoDiaryOverrides = { value: result, inputs: memoInputs };
     return result;
-  }, [activeInstitutionSchoolIdResolved, contentRelationshipState.autoDiaryOverrides]);
+  }, [activeInstitutionSchoolIdResolved, autoWeeklyDiaryComputeActive, contentRelationshipState.autoDiaryOverrides]);
   const rawAutoDiaryTasks = useMemo(() => {
     const memoInputs = {
       settings: activeAutoDiarySettings,
@@ -17850,7 +17852,7 @@ const headerHideTimerRef = useRef(null);
       grade,
       practiceLessonProgress,
     };
-    if (!diaryDataActive) return diarySectionCacheRef.current.rawAutoDiaryTasks.value;
+    if (!autoWeeklyDiaryComputeActive) return diarySectionCacheRef.current.rawAutoDiaryTasks.value;
     if (haveSameMemoInputs(diarySectionCacheRef.current.rawAutoDiaryTasks.inputs, memoInputs)) {
       return diarySectionCacheRef.current.rawAutoDiaryTasks.value;
     }
@@ -17870,7 +17872,7 @@ const headerHideTimerRef = useRef(null);
     });
     diarySectionCacheRef.current.rawAutoDiaryTasks = { value: result, inputs: memoInputs };
     return result;
-  }, [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
+  }, [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, autoWeeklyDiaryComputeActive, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
   const autoDiaryTasks = useMemo(() => {
     const memoInputs = {
       schoolId: activeInstitutionSchoolIdResolved,
@@ -17884,7 +17886,7 @@ const headerHideTimerRef = useRef(null);
       rawTasks: rawAutoDiaryTasks,
       overrides: visibleAutoDiaryOverrides,
     };
-    if (!diaryDataActive) return diarySectionCacheRef.current.autoDiaryTasks.value;
+    if (!autoWeeklyDiaryComputeActive) return diarySectionCacheRef.current.autoDiaryTasks.value;
     if (haveSameMemoInputs(diarySectionCacheRef.current.autoDiaryTasks.inputs, memoInputs)) {
       return diarySectionCacheRef.current.autoDiaryTasks.value;
     }
@@ -17902,7 +17904,7 @@ const headerHideTimerRef = useRef(null);
     });
     diarySectionCacheRef.current.autoDiaryTasks = { value: result, inputs: memoInputs };
     return result;
-  }, [activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, rawAutoDiaryTasks, visibleAutoDiaryOverrides]);
+  }, [activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, autoWeeklyDiaryComputeActive, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, rawAutoDiaryTasks, visibleAutoDiaryOverrides]);
   const hydrateAutoDiaryOverrideTasks = useCallback(
     (tasks = []) => (Array.isArray(tasks) ? tasks : []).map((task) => {
       const overrideRecord = normalizeAutoDiaryOverrideRecord(task?.overrideRecord || task);
@@ -18201,7 +18203,7 @@ const headerHideTimerRef = useRef(null);
       visibleDiaryEntries,
       weeklyDiaryTasks,
     };
-    if (!diaryWeeklyTestDataActive) return diarySectionCacheRef.current.priorWeekAccumulatedTasks.value;
+    if (!diaryWeeklyTestDataActive || !autoWeeklyDiaryEnabled) return diarySectionCacheRef.current.priorWeekAccumulatedTasks.value;
     if (haveSameMemoInputs(diarySectionCacheRef.current.priorWeekAccumulatedTasks.inputs, memoInputs)) {
       return diarySectionCacheRef.current.priorWeekAccumulatedTasks.value;
     }
@@ -18229,7 +18231,7 @@ const headerHideTimerRef = useRef(null);
       console.log("Unable to calculate prior-week accumulated diary tasks:", error);
       return [];
     }
-  }, [activeAutoDiarySettings, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, diaryWeeklyTestDataActive, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
+  }, [activeAutoDiarySettings, activeSchoolYearStartDate, allSubjects, autoWeeklyDiaryEnabled, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, diaryWeeklyTestDataActive, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
   const generatedWeeklyTestTemplate = useMemo(() => {
     const memoInputs = {
       settings: activeAutoDiarySettings,
@@ -18240,7 +18242,7 @@ const headerHideTimerRef = useRef(null);
       subjectLookup,
       weeklyDiaryTasks,
     };
-    if (!diaryWeeklyTestDataActive) return diarySectionCacheRef.current.generatedWeeklyTestTemplate.value;
+    if (!diaryWeeklyTestDataActive || !autoWeeklyDiaryEnabled) return diarySectionCacheRef.current.generatedWeeklyTestTemplate.value;
     if (haveSameMemoInputs(diarySectionCacheRef.current.generatedWeeklyTestTemplate.inputs, memoInputs)) {
       return diarySectionCacheRef.current.generatedWeeklyTestTemplate.value;
     }
@@ -18260,7 +18262,7 @@ const headerHideTimerRef = useRef(null);
       console.log("Unable to build generated weekly test template:", error);
       return null;
     }
-  }, [activeAutoDiarySettings, currentDiaryWeekStartDate, diaryWeeklyTestDataActive, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
+  }, [activeAutoDiarySettings, autoWeeklyDiaryEnabled, currentDiaryWeekStartDate, diaryWeeklyTestDataActive, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
   const visibleWeeklyTestAssignments = useMemo(() => {
     const memoInputs = {
       schoolId: activeInstitutionSchoolIdResolved,
@@ -23365,9 +23367,10 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
       if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
       if (typeof storedPreferences.focusMode !== "undefined") setFocusMode(Boolean(storedPreferences.focusMode));
-      if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
-      if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
-      if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
+if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
+if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
+if (typeof storedPreferences.autoWeeklyDiaryEnabled !== "undefined") setAutoWeeklyDiaryEnabled(Boolean(storedPreferences.autoWeeklyDiaryEnabled));
+if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
       if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
       if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
       if (typeof storedPreferences.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(storedPreferences.transitionMode)) setTransitionMode(storedPreferences.transitionMode);
@@ -26821,6 +26824,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
             focusMode: nextPayload.focusMode,
             readingMode: nextPayload.readingMode,
             keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
+            autoWeeklyDiaryEnabled: Boolean(nextPayload.autoWeeklyDiaryEnabled),
             navPosition: nextPayload.navPosition,
             navAutoHide: nextPayload.navAutoHide,
             navBarAutoHide: nextPayload.navBarAutoHide,
@@ -26892,6 +26896,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
               focusMode: nextPayload.focusMode,
               readingMode: nextPayload.readingMode,
               keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
+              autoWeeklyDiaryEnabled: Boolean(nextPayload.autoWeeklyDiaryEnabled),
               navPosition: nextPayload.navPosition,
               navAutoHide: nextPayload.navAutoHide,
               navBarAutoHide: nextPayload.navBarAutoHide,
@@ -26966,6 +26971,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
             focusMode: nextPayload.focusMode,
             readingMode: nextPayload.readingMode,
             keyboardShortcutsEnabled: nextPayload.keyboardShortcutsEnabled,
+            autoWeeklyDiaryEnabled: Boolean(nextPayload.autoWeeklyDiaryEnabled),
             navPosition: nextPayload.navPosition,
             navAutoHide: nextPayload.navAutoHide,
             navBarAutoHide: nextPayload.navBarAutoHide,
@@ -27097,9 +27103,10 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
         if (typeof storedPreferences.reducedMotion !== "undefined") setReducedMotion(Boolean(storedPreferences.reducedMotion));
         if (typeof storedPreferences.highContrast !== "undefined") setHighContrast(Boolean(storedPreferences.highContrast));
         if (typeof storedPreferences.focusMode !== "undefined") setFocusMode(Boolean(storedPreferences.focusMode));
-        if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
-        if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
-          if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
+if (typeof storedPreferences.readingMode !== "undefined") setReadingMode(Boolean(storedPreferences.readingMode));
+if (typeof storedPreferences.keyboardShortcutsEnabled !== "undefined") setKeyboardShortcutsEnabled(Boolean(storedPreferences.keyboardShortcutsEnabled));
+if (typeof storedPreferences.autoWeeklyDiaryEnabled !== "undefined") setAutoWeeklyDiaryEnabled(Boolean(storedPreferences.autoWeeklyDiaryEnabled));
+if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", "left", "top"].includes(storedPreferences.navPosition)) setNavPosition(storedPreferences.navPosition);
           if (typeof storedPreferences.navAutoHide !== "undefined") setNavAutoHide(Boolean(storedPreferences.navAutoHide));
           if (typeof storedPreferences.navBarAutoHide !== "undefined") setNavBarAutoHide(Boolean(storedPreferences.navBarAutoHide));
           if (typeof storedPreferences.transitionMode !== "undefined" && ["none", "fade", "slide", "zoom"].includes(storedPreferences.transitionMode)) setTransitionMode(storedPreferences.transitionMode);
@@ -27716,6 +27723,7 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       focusMode,
       readingMode,
       keyboardShortcutsEnabled,
+      autoWeeklyDiaryEnabled,
       navPosition,
       navAutoHide,
       navBarAutoHide,
@@ -27754,11 +27762,11 @@ return getMergedLessons(dictionarySubjectFilter, grade).map((lesson) => ({
       aiProviderConfigs,
       selectedAiProvider,
     });
-}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
   if (startupHydrationActiveRef.current) return;
-  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
+  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -36651,6 +36659,19 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 <div className="diary-daily-toolbar">
                   <CalendarDateField value={diaryWeekAnchorDate} onChange={handleDiaryWeekAnchorDateChange} language={language} />
                   {diaryViewerStudentOptions.length > 1 ? <select className="settings-select diary-viewer-select" value={activeDiaryViewerStudentEmail} onChange={(event) => setPerformanceStudentEmail(event.target.value)}>{diaryViewerStudentOptions.map((entry) => <option key={`diary_viewer_${entry.email}`} value={entry.email}>{entry.label}</option>)}</select> : null}
+                  <button
+                    type="button"
+                    className={`diary-detail-toggle${autoWeeklyDiaryEnabled ? " active" : ""}`}
+                    aria-pressed={autoWeeklyDiaryEnabled}
+                    onClick={() => setAutoWeeklyDiaryEnabled((current) => !current)}
+                  >
+                    <span className="diary-detail-toggle-label">
+                      {renderLocalizedTextNode(joinLocalizedText("Auto weekly diary", "خودکار ہفتہ وار ڈائری", language), language)}
+                    </span>
+                    <span className="diary-detail-toggle-switch" aria-hidden="true">
+                      <span />
+                    </span>
+                  </button>
                   <button
                     type="button"
                     className={`diary-detail-toggle${showDetailedDiary ? " active" : ""}`}
