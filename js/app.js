@@ -15788,8 +15788,13 @@ function HomeschoolApp() {
     visibleDiaryEntries: { value: [], inputs: null },
     visibleDiaryCompletions: { value: [], inputs: null },
     visibleTestTemplates: { value: [], inputs: null },
+    availableTestTemplates: { value: [], inputs: null },
     priorWeekAccumulatedTasks: { value: [], inputs: null },
     generatedWeeklyTestTemplate: { value: null, inputs: null },
+    visibleWeeklyTestAssignments: { value: [], inputs: null },
+    visibleWeeklyTestResults: { value: [], inputs: null },
+    currentWeeklyStudentTestResult: { value: null, inputs: null },
+    performanceSummaryByStudent: { value: {}, inputs: null },
   });
   const discoveryDictionaryCacheRef = useRef({
     gradePracticeItems: { value: [], inputs: null },
@@ -16090,6 +16095,8 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [pageSectionShutterOpen, setPageSectionShutterOpen] = useState(false);
   const institutionSectionActive = tab === "profiles" && profilesSectionTab === "institution";
   const diaryDataActive = tab === "diary" || Boolean(diaryTaskNavigator?.activeTaskKey) || Boolean(activeWeeklyTestSession) || institutionSectionActive;
+  const diaryWeeklyTestDataActive = diaryDataActive && (diarySectionTab === "saturday" || diarySectionTab === "templates" || diarySectionTab === "dashboard" || Boolean(activeWeeklyTestSession));
+  const diaryPerformanceDataActive = diaryDataActive && diarySectionTab === "dashboard";
   const reviewDataActive = tab === "review";
   const discoveryDataActive = tab === "home" && homeSectionTab === "discovery";
   const dictionaryDataActive = tab === "dictionary";
@@ -18158,6 +18165,14 @@ const headerHideTimerRef = useRef(null);
     return result;
   }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.testTemplates, diaryDataActive, grade, isGradeInScope, schoolEffectivePermission]);
   const availableTestTemplates = useMemo(() => {
+    const memoInputs = {
+      localTestTemplateLibrary,
+      visibleTestTemplates,
+    };
+    if (!diaryWeeklyTestDataActive) return diarySectionCacheRef.current.availableTestTemplates.value;
+    if (haveSameMemoInputs(diarySectionCacheRef.current.availableTestTemplates.inputs, memoInputs)) {
+      return diarySectionCacheRef.current.availableTestTemplates.value;
+    }
     const map = new Map();
     normalizeLocalTestTemplateLibrary(localTestTemplateLibrary).forEach((entry) => {
       map.set(entry.templateId, { ...entry, source: entry.source || "local" });
@@ -18168,8 +18183,10 @@ const headerHideTimerRef = useRef(null);
         map.set(entry.templateId, { ...entry, source: entry.isPublished ? "published" : "cloud" });
       }
     });
-    return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
-  }, [localTestTemplateLibrary, visibleTestTemplates]);
+    const result = Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+    diarySectionCacheRef.current.availableTestTemplates = { value: result, inputs: memoInputs };
+    return result;
+  }, [diaryWeeklyTestDataActive, localTestTemplateLibrary, visibleTestTemplates]);
   const priorWeekAccumulatedTasks = useMemo(() => {
     const memoInputs = {
       settings: activeAutoDiarySettings,
@@ -18184,7 +18201,7 @@ const headerHideTimerRef = useRef(null);
       visibleDiaryEntries,
       weeklyDiaryTasks,
     };
-    if (!diaryDataActive) return diarySectionCacheRef.current.priorWeekAccumulatedTasks.value;
+    if (!diaryWeeklyTestDataActive) return diarySectionCacheRef.current.priorWeekAccumulatedTasks.value;
     if (haveSameMemoInputs(diarySectionCacheRef.current.priorWeekAccumulatedTasks.inputs, memoInputs)) {
       return diarySectionCacheRef.current.priorWeekAccumulatedTasks.value;
     }
@@ -18212,7 +18229,7 @@ const headerHideTimerRef = useRef(null);
       console.log("Unable to calculate prior-week accumulated diary tasks:", error);
       return [];
     }
-  }, [activeAutoDiarySettings, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
+  }, [activeAutoDiarySettings, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryViewerStudentEmailSeed, diaryWeeklyTestDataActive, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
   const generatedWeeklyTestTemplate = useMemo(() => {
     const memoInputs = {
       settings: activeAutoDiarySettings,
@@ -18223,7 +18240,7 @@ const headerHideTimerRef = useRef(null);
       subjectLookup,
       weeklyDiaryTasks,
     };
-    if (!diaryDataActive) return diarySectionCacheRef.current.generatedWeeklyTestTemplate.value;
+    if (!diaryWeeklyTestDataActive) return diarySectionCacheRef.current.generatedWeeklyTestTemplate.value;
     if (haveSameMemoInputs(diarySectionCacheRef.current.generatedWeeklyTestTemplate.inputs, memoInputs)) {
       return diarySectionCacheRef.current.generatedWeeklyTestTemplate.value;
     }
@@ -18243,8 +18260,23 @@ const headerHideTimerRef = useRef(null);
       console.log("Unable to build generated weekly test template:", error);
       return null;
     }
-  }, [activeAutoDiarySettings, currentDiaryWeekStartDate, diaryDataActive, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
+  }, [activeAutoDiarySettings, currentDiaryWeekStartDate, diaryWeeklyTestDataActive, getMergedQuiz, grade, priorWeekAccumulatedTasks, subjectLookup, weeklyDiaryTasks]);
   const visibleWeeklyTestAssignments = useMemo(() => {
+    const memoInputs = {
+      schoolId: activeInstitutionSchoolIdResolved,
+      canManageContentAccess,
+      contentIdentityEmail,
+      weeklyTestAssignments: contentRelationshipState.weeklyTestAssignments,
+      weekStartDate: currentDiaryWeekStartDate,
+      grade,
+      isGradeInScope,
+      linkedChildOptions,
+      schoolEffectivePermission,
+    };
+    if (!diaryWeeklyTestDataActive) return diarySectionCacheRef.current.visibleWeeklyTestAssignments.value;
+    if (haveSameMemoInputs(diarySectionCacheRef.current.visibleWeeklyTestAssignments.inputs, memoInputs)) {
+      return diarySectionCacheRef.current.visibleWeeklyTestAssignments.value;
+    }
     const safeAssignments = (Array.isArray(contentRelationshipState.weeklyTestAssignments) ? contentRelationshipState.weeklyTestAssignments : [])
       .map((entry) => normalizeWeeklyTestAssignmentRecord(entry))
       .filter(Boolean)
@@ -18255,13 +18287,15 @@ const headerHideTimerRef = useRef(null);
       ? safeAssignments.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
       : safeAssignments;
     const scoped = filteredBySchool.filter((entry) => isGradeInScope(entry.targetGrade));
-    return scoped.filter((entry) => {
+    const result = scoped.filter((entry) => {
       if (canManageContentAccess || schoolEffectivePermission("manageTests") || schoolEffectivePermission("manageInstitution")) return true;
       if (entry.assignedByEmail === contentIdentityEmail) return true;
       if (entry.targetType === "student" && (entry.targetStudentEmail === contentIdentityEmail || childEmails.has(entry.targetStudentEmail))) return true;
       return entry.targetType === "grade" && Number(entry.targetGrade) === Number(grade);
     });
-  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.weeklyTestAssignments, currentDiaryWeekStartDate, grade, isGradeInScope, linkedChildOptions, schoolEffectivePermission]);
+    diarySectionCacheRef.current.visibleWeeklyTestAssignments = { value: result, inputs: memoInputs };
+    return result;
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.weeklyTestAssignments, currentDiaryWeekStartDate, diaryWeeklyTestDataActive, grade, isGradeInScope, linkedChildOptions, schoolEffectivePermission]);
   const currentWeeklyAssignedTemplate = useMemo(() => {
     const latestAssignment = [...visibleWeeklyTestAssignments].sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0] || null;
     if (!latestAssignment) return null;
@@ -18269,6 +18303,21 @@ const headerHideTimerRef = useRef(null);
   }, [visibleTestTemplates, visibleWeeklyTestAssignments]);
   const currentWeeklyTestTemplate = currentWeeklyAssignedTemplate || generatedWeeklyTestTemplate;
   const visibleWeeklyTestResults = useMemo(() => {
+    const memoInputs = {
+      schoolId: activeInstitutionSchoolIdResolved,
+      canManageContentAccess,
+      contentIdentityEmail,
+      weeklyTestResults: contentRelationshipState.weeklyTestResults,
+      isGradeInScope,
+      linkedChildOptions,
+      schoolEffectivePermission,
+      studentGradeLookup,
+      visibleTeacherStudentLinks,
+    };
+    if (!diaryWeeklyTestDataActive) return diarySectionCacheRef.current.visibleWeeklyTestResults.value;
+    if (haveSameMemoInputs(diarySectionCacheRef.current.visibleWeeklyTestResults.inputs, memoInputs)) {
+      return diarySectionCacheRef.current.visibleWeeklyTestResults.value;
+    }
     const safeResults = (Array.isArray(contentRelationshipState.weeklyTestResults) ? contentRelationshipState.weeklyTestResults : [])
       .map((entry) => normalizeWeeklyTestResultRecord(entry))
       .filter(Boolean);
@@ -18280,13 +18329,15 @@ const headerHideTimerRef = useRef(null);
       const studentGradeValue = studentGradeLookup.get(String(entry.studentEmail || "").trim().toLowerCase());
       return isGradeInScope(studentGradeValue === undefined ? null : studentGradeValue);
     });
-    return scoped.filter((entry) => {
+    const result = scoped.filter((entry) => {
       if (canManageContentAccess || schoolEffectivePermission("manageTests") || schoolEffectivePermission("manageInstitution")) return true;
       if (entry.studentEmail === contentIdentityEmail) return true;
       if (childEmails.has(entry.studentEmail)) return true;
       return visibleTeacherStudentLinks.some((link) => link.studentEmail === entry.studentEmail && link.teacherEmail === contentIdentityEmail);
     });
-  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.weeklyTestResults, isGradeInScope, linkedChildOptions, schoolEffectivePermission, studentGradeLookup, visibleTeacherStudentLinks]);
+    diarySectionCacheRef.current.visibleWeeklyTestResults = { value: result, inputs: memoInputs };
+    return result;
+  }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.weeklyTestResults, diaryWeeklyTestDataActive, isGradeInScope, linkedChildOptions, schoolEffectivePermission, studentGradeLookup, visibleTeacherStudentLinks]);
   const diaryViewerStudentOptions = useMemo(() => {
     if (accessibleStudentOptions.length) return accessibleStudentOptions;
     if (contentIdentityEmail) {
@@ -18418,12 +18469,36 @@ const headerHideTimerRef = useRef(null);
     [autoDiaryOverrideAnchorTaskLookup, autoDiaryOverrideEditingAnchorKey],
   );
   const currentWeeklyStudentTestResult = useMemo(
-    () => visibleWeeklyTestResults
-      .filter((entry) => entry.studentEmail === activeDiaryViewerStudentEmail && entry.weekStartDate === currentDiaryWeekStartDate)
-      .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0] || null,
-    [activeDiaryViewerStudentEmail, currentDiaryWeekStartDate, visibleWeeklyTestResults],
+    () => {
+      const memoInputs = {
+        studentEmail: activeDiaryViewerStudentEmail,
+        weekStartDate: currentDiaryWeekStartDate,
+        visibleWeeklyTestResults,
+      };
+      if (!diaryWeeklyTestDataActive) return diarySectionCacheRef.current.currentWeeklyStudentTestResult.value;
+      if (haveSameMemoInputs(diarySectionCacheRef.current.currentWeeklyStudentTestResult.inputs, memoInputs)) {
+        return diarySectionCacheRef.current.currentWeeklyStudentTestResult.value;
+      }
+      const result = visibleWeeklyTestResults
+        .filter((entry) => entry.studentEmail === activeDiaryViewerStudentEmail && entry.weekStartDate === currentDiaryWeekStartDate)
+        .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0))[0] || null;
+      diarySectionCacheRef.current.currentWeeklyStudentTestResult = { value: result, inputs: memoInputs };
+      return result;
+    },
+    [activeDiaryViewerStudentEmail, currentDiaryWeekStartDate, diaryWeeklyTestDataActive, visibleWeeklyTestResults],
   );
   const performanceSummaryByStudent = useMemo(() => {
+    const memoInputs = {
+      currentDiaryWeekDates,
+      diaryViewerStudentOptions,
+      visibleDiaryCompletions,
+      visibleWeeklyTestResults,
+      weeklyDiaryTasksLength: weeklyDiaryTasks.length,
+    };
+    if (!diaryPerformanceDataActive) return diarySectionCacheRef.current.performanceSummaryByStudent.value;
+    if (haveSameMemoInputs(diarySectionCacheRef.current.performanceSummaryByStudent.inputs, memoInputs)) {
+      return diarySectionCacheRef.current.performanceSummaryByStudent.value;
+    }
     const diaryTasksByStudent = {};
     diaryViewerStudentOptions.forEach((entry) => {
       const email = entry.email;
@@ -18440,8 +18515,9 @@ const headerHideTimerRef = useRef(null);
         weakTopics: weeklyResults.flatMap((row) => Array.isArray(row.weakTopics) ? row.weakTopics : []).slice(0, 6),
       };
     });
+    diarySectionCacheRef.current.performanceSummaryByStudent = { value: diaryTasksByStudent, inputs: memoInputs };
     return diaryTasksByStudent;
-  }, [currentDiaryWeekDates, diaryViewerStudentOptions, visibleDiaryCompletions, visibleWeeklyTestResults, weeklyDiaryTasks.length]);
+  }, [currentDiaryWeekDates, diaryPerformanceDataActive, diaryViewerStudentOptions, visibleDiaryCompletions, visibleWeeklyTestResults, weeklyDiaryTasks.length]);
   useEffect(() => {
     if (!accessibleSchools.length) {
       if (activeInstitutionSchoolId) setActiveInstitutionSchoolId("");
