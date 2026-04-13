@@ -15773,6 +15773,22 @@ function HomeschoolApp() {
   const persistCustomizationRef = useRef(null);
   const startupHydrationActiveRef = useRef(Boolean(window.HomeSchoolDB));
   const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
+  const diarySectionCacheRef = useRef({
+    visibleAutoDiaryOverrides: [],
+    rawAutoDiaryTasks: [],
+    autoDiaryTasks: [],
+    visibleDiaryEntries: [],
+    visibleDiaryCompletions: [],
+    visibleTestTemplates: [],
+    priorWeekAccumulatedTasks: [],
+    generatedWeeklyTestTemplate: null,
+  });
+  const discoveryDictionaryCacheRef = useRef({
+    gradePracticeItems: [],
+    discoveryLessonIndex: [],
+    discoveryWordPool: [],
+    wordBankIndex: [],
+  });
   const publishedContentSnapshotPersistTimerRef = useRef(null);
   const curriculumRelationshipSnapshotPersistTimerRef = useRef(null);
   const sourceFileAccessHandleRef = useRef(null);
@@ -17787,17 +17803,19 @@ const headerHideTimerRef = useRef(null);
     return accessibleStudentOptions[0]?.email || contentIdentityEmail || "";
   }, [accessibleStudentOptions, contentIdentityEmail, contentManagerRole, linkedChildOptions, performanceStudentEmail]);
   const visibleAutoDiaryOverrides = useMemo(() => {
-    if (!diaryDataActive) return [];
+    if (!diaryDataActive) return diarySectionCacheRef.current.visibleAutoDiaryOverrides;
     const safeOverrides = Array.isArray(contentRelationshipState.autoDiaryOverrides) ? contentRelationshipState.autoDiaryOverrides : [];
-    return safeOverrides
+    const result = safeOverrides
       .map((entry) => normalizeAutoDiaryOverrideRecord(entry))
       .filter(Boolean)
       .filter((entry) => entry.status === "active")
       .filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
+    diarySectionCacheRef.current.visibleAutoDiaryOverrides = result;
+    return result;
   }, [activeInstitutionSchoolIdResolved, contentRelationshipState.autoDiaryOverrides]);
   const rawAutoDiaryTasks = useMemo(() => {
-    if (!diaryDataActive) return [];
-    return buildAutoDiaryWeekPlan({
+    if (!diaryDataActive) return diarySectionCacheRef.current.rawAutoDiaryTasks;
+    const result = buildAutoDiaryWeekPlan({
     subjects: allSubjects,
     grade,
     weekDates: currentDiaryWeekDates,
@@ -17811,10 +17829,12 @@ const headerHideTimerRef = useRef(null);
     diaryCompletions: contentRelationshipState.diaryCompletions,
     studentEmail: diaryViewerStudentEmailSeed,
     });
+    diarySectionCacheRef.current.rawAutoDiaryTasks = result;
+    return result;
   }, [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
   const autoDiaryTasks = useMemo(() => {
-    if (!diaryDataActive) return [];
-    return applyAutoDiaryOverrides({
+    if (!diaryDataActive) return diarySectionCacheRef.current.autoDiaryTasks;
+    const result = applyAutoDiaryOverrides({
     autoTasks: rawAutoDiaryTasks,
     overrides: visibleAutoDiaryOverrides,
     schoolId: activeInstitutionSchoolIdResolved,
@@ -17826,6 +17846,8 @@ const headerHideTimerRef = useRef(null);
     getQuiz: getMergedQuiz,
     yearStartDate: activeSchoolYearStartDate,
     });
+    diarySectionCacheRef.current.autoDiaryTasks = result;
+    return result;
   }, [activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, rawAutoDiaryTasks, visibleAutoDiaryOverrides]);
   const hydrateAutoDiaryOverrideTasks = useCallback(
     (tasks = []) => (Array.isArray(tasks) ? tasks : []).map((task) => {
@@ -17857,7 +17879,7 @@ const headerHideTimerRef = useRef(null);
     [autoDiaryTasks, hydrateAutoDiaryOverrideTasks],
   );
   const visibleDiaryEntries = useMemo(() => {
-    if (!diaryDataActive) return [];
+    if (!diaryDataActive) return diarySectionCacheRef.current.visibleDiaryEntries;
     const safeEntries = (Array.isArray(contentRelationshipState.diaryEntries) ? contentRelationshipState.diaryEntries : [])
       .map((entry) => normalizeDiaryEntryRecord(entry))
       .filter(Boolean)
@@ -17866,13 +17888,15 @@ const headerHideTimerRef = useRef(null);
       ? safeEntries.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
       : safeEntries;
     const scoped = filteredBySchool.filter((entry) => isGradeInScope(entry.targetGrade));
-    return scoped.filter((entry) => {
+    const result = scoped.filter((entry) => {
       if (canManageContentAccess || schoolEffectivePermission("manageDiary") || schoolEffectivePermission("manageInstitution")) return true;
       if (entry.teacherEmail && entry.teacherEmail === contentIdentityEmail) return true;
       if (entry.targetType === "student" && entry.targetStudentEmail === contentIdentityEmail) return true;
       if (entry.targetType === "student" && linkedChildOptions.some((child) => child.email === entry.targetStudentEmail)) return true;
       return entry.targetType === "grade" && Number(entry.targetGrade) === Number(grade);
     });
+    diarySectionCacheRef.current.visibleDiaryEntries = result;
+    return result;
   }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.diaryEntries, diaryDataActive, grade, isGradeInScope, linkedChildOptions, schoolEffectivePermission]);
   const currentWeekDiaryEntries = useMemo(
     () => visibleDiaryEntries
@@ -17909,7 +17933,7 @@ const headerHideTimerRef = useRef(null);
     }
   }, [activeSchoolYearStartDate, chapterGroupLookup, currentWeekDiaryEntries, renderedAutoDiaryTasks, subjectLookup]);
   const visibleDiaryCompletions = useMemo(() => {
-    if (!diaryDataActive) return [];
+    if (!diaryDataActive) return diarySectionCacheRef.current.visibleDiaryCompletions;
     const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : [])
       .map((entry) => normalizeDiaryCompletionRecord(entry))
       .filter(Boolean);
@@ -17921,12 +17945,14 @@ const headerHideTimerRef = useRef(null);
       return isGradeInScope(studentGradeValue === undefined ? null : studentGradeValue);
     });
     const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
-    return scoped.filter((entry) => {
+    const result = scoped.filter((entry) => {
       if (canManageContentAccess || schoolEffectivePermission("manageDiary") || schoolEffectivePermission("manageInstitution")) return true;
       if (entry.studentEmail === contentIdentityEmail) return true;
       if (childEmails.has(entry.studentEmail)) return true;
       return visibleTeacherStudentLinks.some((link) => link.studentEmail === entry.studentEmail && link.teacherEmail === contentIdentityEmail);
     });
+    diarySectionCacheRef.current.visibleDiaryCompletions = result;
+    return result;
   }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.diaryCompletions, diaryDataActive, isGradeInScope, linkedChildOptions, schoolEffectivePermission, studentGradeLookup, visibleTeacherStudentLinks]);
   const diaryCompletionLookup = useMemo(() => visibleDiaryCompletions.reduce((acc, entry) => {
     acc[`${entry.taskKind}::${entry.taskKey}`] = entry;
@@ -18027,7 +18053,7 @@ const headerHideTimerRef = useRef(null);
     setDiaryTaskNavigator(null);
   }, [activeDiaryTask, diaryTaskNavigator?.activeTaskKey, selectedLesson, selectedSubject, tab]);
   const visibleTestTemplates = useMemo(() => {
-    if (!diaryDataActive) return [];
+    if (!diaryDataActive) return diarySectionCacheRef.current.visibleTestTemplates;
     const safeTemplates = (Array.isArray(contentRelationshipState.testTemplates) ? contentRelationshipState.testTemplates : [])
       .map((entry) => normalizeTestTemplateRecord(entry))
       .filter(Boolean)
@@ -18036,12 +18062,14 @@ const headerHideTimerRef = useRef(null);
       ? safeTemplates.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved)
       : safeTemplates;
     const scoped = filteredBySchool.filter((entry) => isGradeInScope(entry.grade));
-    return scoped.filter((entry) => {
+    const result = scoped.filter((entry) => {
       if (canManageContentAccess || schoolEffectivePermission("manageTests") || schoolEffectivePermission("manageInstitution")) return true;
       if (entry.authorEmail && entry.authorEmail === contentIdentityEmail) return true;
       if (!entry.grade || Number(entry.grade) === Number(grade)) return true;
       return false;
     });
+    diarySectionCacheRef.current.visibleTestTemplates = result;
+    return result;
   }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.testTemplates, diaryDataActive, grade, isGradeInScope, schoolEffectivePermission]);
   const availableTestTemplates = useMemo(() => {
     const map = new Map();
@@ -18057,12 +18085,12 @@ const headerHideTimerRef = useRef(null);
     return Array.from(map.values()).sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
   }, [localTestTemplateLibrary, visibleTestTemplates]);
   const priorWeekAccumulatedTasks = useMemo(() => {
-    if (!diaryDataActive) return [];
+    if (!diaryDataActive) return diarySectionCacheRef.current.priorWeekAccumulatedTasks;
     try {
       const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : [])
         .filter((task) => task?.subject && task?.lessonKey)
         .map((task) => `${task.subject}::${task.lessonKey}`));
-      return buildPriorWeeksCoveredTasks({
+      const result = buildPriorWeeksCoveredTasks({
         currentWeekStartDate: currentDiaryWeekStartDate,
         accumulationMode: activeAutoDiarySettings?.saturdayTest?.accumulationMode || "rolling",
         accumulationValue: activeAutoDiarySettings?.saturdayTest?.accumulationValue || 8,
@@ -18076,15 +18104,17 @@ const headerHideTimerRef = useRef(null);
         diaryCompletions: visibleDiaryCompletions,
         studentEmail: diaryViewerStudentEmailSeed,
       });
+      diarySectionCacheRef.current.priorWeekAccumulatedTasks = result;
+      return result;
     } catch (error) {
       console.log("Unable to calculate prior-week accumulated diary tasks:", error);
       return [];
     }
   }, [activeAutoDiarySettings, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
   const generatedWeeklyTestTemplate = useMemo(() => {
-    if (!diaryDataActive) return null;
+    if (!diaryDataActive) return diarySectionCacheRef.current.generatedWeeklyTestTemplate;
     try {
-      return buildGeneratedWeeklyTestTemplate({
+      const result = buildGeneratedWeeklyTestTemplate({
         weekStartDate: currentDiaryWeekStartDate,
         grade,
         coveredTasks: weeklyDiaryTasks,
@@ -18093,6 +18123,8 @@ const headerHideTimerRef = useRef(null);
         subjectsById: subjectLookup,
         saturdayTestSettings: activeAutoDiarySettings?.saturdayTest,
       });
+      diarySectionCacheRef.current.generatedWeeklyTestTemplate = result;
+      return result;
     } catch (error) {
       console.log("Unable to build generated weekly test template:", error);
       return null;
@@ -20317,7 +20349,13 @@ const headerHideTimerRef = useRef(null);
     );
   }, [language]);
   const gradePracticeItems = useMemo(
-    () => (practiceDataActive && dbLoaded && grade ? buildGradePracticeItems(contentDataLoader, grade) : []),
+    () => {
+      if (!dbLoaded) return [];
+      if (!practiceDataActive) return discoveryDictionaryCacheRef.current.gradePracticeItems;
+      const result = grade ? buildGradePracticeItems(contentDataLoader, grade) : [];
+      discoveryDictionaryCacheRef.current.gradePracticeItems = result;
+      return result;
+    },
     [contentDataLoader, dbLoaded, grade, practiceDataActive],
   );
   const availablePracticeSubjects = useMemo(() => allSubjects.filter((subject) => {
@@ -22725,9 +22763,9 @@ const headerHideTimerRef = useRef(null);
     [backupReminderSettings, hasBackupWorthData, language],
   );
   const discoveryLessonIndex = useMemo(() => {
-    if (!discoveryDataActive) return [];
+    if (!discoveryDataActive) return discoveryDictionaryCacheRef.current.discoveryLessonIndex;
     if (!dbLoaded || !grade) return [];
-    return allSubjects.flatMap((subject) => {
+    const result = allSubjects.flatMap((subject) => {
 const lessons = getMergedLessons(subject.id, grade) || [];
       return lessons.map((lesson, lessonIndex) => ({
         id: `discover_${subject.id}_${lesson.key || lesson.id || lessonIndex}`,
@@ -22744,6 +22782,8 @@ const lessons = getMergedLessons(subject.id, grade) || [];
         completed: Boolean(completedQuizzes[lesson.id]),
       }));
     });
+    discoveryDictionaryCacheRef.current.discoveryLessonIndex = result;
+    return result;
   }, [allSubjects, completedQuizzes, dbLoaded, discoveryDataActive, getMergedLessons, grade]);
   const filteredDiscoveryLessons = useMemo(() => {
     const searchNeedle = normalizeText(contentSearch).toLowerCase();
@@ -22759,16 +22799,17 @@ const lessons = getMergedLessons(subject.id, grade) || [];
     }).slice(0, 8);
   }, [contentSearch, discoveryDifficultyFilter, discoveryLessonIndex, discoverySubjectFilter, discoveryTypeFilter]);
   const discoveryWordPool = useMemo(() => {
-    if (!discoveryDataActive) return [];
+    if (!discoveryDataActive) return discoveryDictionaryCacheRef.current.discoveryWordPool;
     const reviewPool = reviewLibrary.filter((card) => {
       const prompt = normalizeText(card?.prompt || "");
       return prompt && prompt.split(/\s+/).length <= 4 && normalizeText(card?.answer || "");
     });
-    if (reviewPool.length > 0) return reviewPool;
-    return gradePracticeItems.filter((item) => {
+    const result = reviewPool.length > 0 ? reviewPool : gradePracticeItems.filter((item) => {
       const prompt = normalizeText(item?.prompt || "");
       return prompt && prompt.split(/\s+/).length <= 4 && normalizeText(item?.answer || item?.meaning || "");
     });
+    discoveryDictionaryCacheRef.current.discoveryWordPool = result;
+    return result;
   }, [discoveryDataActive, gradePracticeItems, reviewLibrary]);
   const wordOfDayCard = useMemo(() => {
     if (!discoveryWordPool.length) return null;
@@ -22777,10 +22818,11 @@ const lessons = getMergedLessons(subject.id, grade) || [];
     return discoveryWordPool[seed % discoveryWordPool.length];
   }, [discoveryWordPool]);
   const wordBankIndex = useMemo(() => {
-    if (!dbLoaded || !wordBankDataActive) return [];
+    if (!dbLoaded) return [];
+    if (!wordBankDataActive) return discoveryDictionaryCacheRef.current.wordBankIndex;
     const seen = new Set();
     const items = [...(reviewLibrary || []), ...(gradePracticeItems || [])];
-    return items.reduce((acc, item, index) => {
+    const result = items.reduce((acc, item, index) => {
       const prompt = normalizeText(item?.prompt || item?.practiceFront || "");
       const answer = normalizeText(item?.answer || item?.meaning || item?.practiceBack || "");
       if (!prompt || !answer) return acc;
@@ -22810,6 +22852,8 @@ const lessons = getMergedLessons(subject.id, grade) || [];
       });
       return acc;
     }, []);
+    discoveryDictionaryCacheRef.current.wordBankIndex = result;
+    return result;
   }, [dbLoaded, gradePracticeItems, reviewLibrary, subjectLookup, wordBankDataActive]);
   const filteredWordBank = useMemo(() => {
     const searchNeedle = normalizeText(wordSearch).toLowerCase();

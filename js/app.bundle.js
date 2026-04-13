@@ -13175,6 +13175,22 @@ ${marker} `);
     const persistCustomizationRef = useRef(null);
     const startupHydrationActiveRef = useRef(Boolean(window.HomeSchoolDB));
     const customizationDbEnabledRef = useRef(Boolean(window.HomeSchoolDB));
+    const diarySectionCacheRef = useRef({
+      visibleAutoDiaryOverrides: [],
+      rawAutoDiaryTasks: [],
+      autoDiaryTasks: [],
+      visibleDiaryEntries: [],
+      visibleDiaryCompletions: [],
+      visibleTestTemplates: [],
+      priorWeekAccumulatedTasks: [],
+      generatedWeeklyTestTemplate: null
+    });
+    const discoveryDictionaryCacheRef = useRef({
+      gradePracticeItems: [],
+      discoveryLessonIndex: [],
+      discoveryWordPool: [],
+      wordBankIndex: []
+    });
     const publishedContentSnapshotPersistTimerRef = useRef(null);
     const curriculumRelationshipSnapshotPersistTimerRef = useRef(null);
     const sourceFileAccessHandleRef = useRef(null);
@@ -15027,13 +15043,15 @@ ${marker} `);
       return ((_b2 = accessibleStudentOptions[0]) == null ? void 0 : _b2.email) || contentIdentityEmail || "";
     }, [accessibleStudentOptions, contentIdentityEmail, contentManagerRole, linkedChildOptions, performanceStudentEmail]);
     const visibleAutoDiaryOverrides = useMemo(() => {
-      if (!diaryDataActive) return [];
+      if (!diaryDataActive) return diarySectionCacheRef.current.visibleAutoDiaryOverrides;
       const safeOverrides = Array.isArray(contentRelationshipState.autoDiaryOverrides) ? contentRelationshipState.autoDiaryOverrides : [];
-      return safeOverrides.map((entry) => normalizeAutoDiaryOverrideRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
+      const result = safeOverrides.map((entry) => normalizeAutoDiaryOverrideRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active").filter((entry) => !activeInstitutionSchoolIdResolved || entry.schoolId === activeInstitutionSchoolIdResolved);
+      diarySectionCacheRef.current.visibleAutoDiaryOverrides = result;
+      return result;
     }, [activeInstitutionSchoolIdResolved, contentRelationshipState.autoDiaryOverrides]);
     const rawAutoDiaryTasks = useMemo(() => {
-      if (!diaryDataActive) return [];
-      return buildAutoDiaryWeekPlan({
+      if (!diaryDataActive) return diarySectionCacheRef.current.rawAutoDiaryTasks;
+      const result = buildAutoDiaryWeekPlan({
         subjects: allSubjects,
         grade,
         weekDates: currentDiaryWeekDates,
@@ -15047,10 +15065,12 @@ ${marker} `);
         diaryCompletions: contentRelationshipState.diaryCompletions,
         studentEmail: diaryViewerStudentEmailSeed
       });
+      diarySectionCacheRef.current.rawAutoDiaryTasks = result;
+      return result;
     }, [activeAutoDiarySettings, activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, completedQuizzes, contentRelationshipState.diaryCompletions, currentDiaryWeekDates, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, practiceLessonProgress]);
     const autoDiaryTasks = useMemo(() => {
-      if (!diaryDataActive) return [];
-      return applyAutoDiaryOverrides({
+      if (!diaryDataActive) return diarySectionCacheRef.current.autoDiaryTasks;
+      const result = applyAutoDiaryOverrides({
         autoTasks: rawAutoDiaryTasks,
         overrides: visibleAutoDiaryOverrides,
         schoolId: activeInstitutionSchoolIdResolved,
@@ -15062,6 +15082,8 @@ ${marker} `);
         getQuiz: getMergedQuiz,
         yearStartDate: activeSchoolYearStartDate
       });
+      diarySectionCacheRef.current.autoDiaryTasks = result;
+      return result;
     }, [activeInstitutionSchoolIdResolved, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, rawAutoDiaryTasks, visibleAutoDiaryOverrides]);
     const hydrateAutoDiaryOverrideTasks = useCallback(
       (tasks = []) => (Array.isArray(tasks) ? tasks : []).map((task) => {
@@ -15092,17 +15114,19 @@ ${marker} `);
       [autoDiaryTasks, hydrateAutoDiaryOverrideTasks]
     );
     const visibleDiaryEntries = useMemo(() => {
-      if (!diaryDataActive) return [];
+      if (!diaryDataActive) return diarySectionCacheRef.current.visibleDiaryEntries;
       const safeEntries = (Array.isArray(contentRelationshipState.diaryEntries) ? contentRelationshipState.diaryEntries : []).map((entry) => normalizeDiaryEntryRecord(entry)).filter(Boolean).filter((entry) => entry.status === "active");
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeEntries.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeEntries;
       const scoped = filteredBySchool.filter((entry) => isGradeInScope(entry.targetGrade));
-      return scoped.filter((entry) => {
+      const result = scoped.filter((entry) => {
         if (canManageContentAccess || schoolEffectivePermission("manageDiary") || schoolEffectivePermission("manageInstitution")) return true;
         if (entry.teacherEmail && entry.teacherEmail === contentIdentityEmail) return true;
         if (entry.targetType === "student" && entry.targetStudentEmail === contentIdentityEmail) return true;
         if (entry.targetType === "student" && linkedChildOptions.some((child) => child.email === entry.targetStudentEmail)) return true;
         return entry.targetType === "grade" && Number(entry.targetGrade) === Number(grade);
       });
+      diarySectionCacheRef.current.visibleDiaryEntries = result;
+      return result;
     }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.diaryEntries, diaryDataActive, grade, isGradeInScope, linkedChildOptions, schoolEffectivePermission]);
     const currentWeekDiaryEntries = useMemo(
       () => visibleDiaryEntries.filter((entry) => entry.targetDate >= currentDiaryWeekDates[0] && entry.targetDate <= currentDiaryWeekDates[6]).filter((entry) => {
@@ -15138,7 +15162,7 @@ ${marker} `);
       }
     }, [activeSchoolYearStartDate, chapterGroupLookup, currentWeekDiaryEntries, renderedAutoDiaryTasks, subjectLookup]);
     const visibleDiaryCompletions = useMemo(() => {
-      if (!diaryDataActive) return [];
+      if (!diaryDataActive) return diarySectionCacheRef.current.visibleDiaryCompletions;
       const safeRows = (Array.isArray(contentRelationshipState.diaryCompletions) ? contentRelationshipState.diaryCompletions : []).map((entry) => normalizeDiaryCompletionRecord(entry)).filter(Boolean);
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeRows.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeRows;
       const scoped = filteredBySchool.filter((entry) => {
@@ -15146,12 +15170,14 @@ ${marker} `);
         return isGradeInScope(studentGradeValue === void 0 ? null : studentGradeValue);
       });
       const childEmails = new Set(linkedChildOptions.map((entry) => entry.email));
-      return scoped.filter((entry) => {
+      const result = scoped.filter((entry) => {
         if (canManageContentAccess || schoolEffectivePermission("manageDiary") || schoolEffectivePermission("manageInstitution")) return true;
         if (entry.studentEmail === contentIdentityEmail) return true;
         if (childEmails.has(entry.studentEmail)) return true;
         return visibleTeacherStudentLinks.some((link) => link.studentEmail === entry.studentEmail && link.teacherEmail === contentIdentityEmail);
       });
+      diarySectionCacheRef.current.visibleDiaryCompletions = result;
+      return result;
     }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.diaryCompletions, diaryDataActive, isGradeInScope, linkedChildOptions, schoolEffectivePermission, studentGradeLookup, visibleTeacherStudentLinks]);
     const diaryCompletionLookup = useMemo(() => visibleDiaryCompletions.reduce((acc, entry) => {
       acc[`${entry.taskKind}::${entry.taskKey}`] = entry;
@@ -15246,16 +15272,18 @@ ${marker} `);
       setDiaryTaskNavigator(null);
     }, [activeDiaryTask, diaryTaskNavigator == null ? void 0 : diaryTaskNavigator.activeTaskKey, selectedLesson, selectedSubject, tab]);
     const visibleTestTemplates = useMemo(() => {
-      if (!diaryDataActive) return [];
+      if (!diaryDataActive) return diarySectionCacheRef.current.visibleTestTemplates;
       const safeTemplates = (Array.isArray(contentRelationshipState.testTemplates) ? contentRelationshipState.testTemplates : []).map((entry) => normalizeTestTemplateRecord(entry)).filter(Boolean).filter((entry) => !entry.deletedAt);
       const filteredBySchool = activeInstitutionSchoolIdResolved ? safeTemplates.filter((entry) => entry.schoolId === activeInstitutionSchoolIdResolved) : safeTemplates;
       const scoped = filteredBySchool.filter((entry) => isGradeInScope(entry.grade));
-      return scoped.filter((entry) => {
+      const result = scoped.filter((entry) => {
         if (canManageContentAccess || schoolEffectivePermission("manageTests") || schoolEffectivePermission("manageInstitution")) return true;
         if (entry.authorEmail && entry.authorEmail === contentIdentityEmail) return true;
         if (!entry.grade || Number(entry.grade) === Number(grade)) return true;
         return false;
       });
+      diarySectionCacheRef.current.visibleTestTemplates = result;
+      return result;
     }, [activeInstitutionSchoolIdResolved, canManageContentAccess, contentIdentityEmail, contentRelationshipState.testTemplates, diaryDataActive, grade, isGradeInScope, schoolEffectivePermission]);
     const availableTestTemplates = useMemo(() => {
       const map = /* @__PURE__ */ new Map();
@@ -15272,10 +15300,10 @@ ${marker} `);
     }, [localTestTemplateLibrary, visibleTestTemplates]);
     const priorWeekAccumulatedTasks = useMemo(() => {
       var _a2, _b2;
-      if (!diaryDataActive) return [];
+      if (!diaryDataActive) return diarySectionCacheRef.current.priorWeekAccumulatedTasks;
       try {
         const currentKeys = new Set((Array.isArray(weeklyDiaryTasks) ? weeklyDiaryTasks : []).filter((task) => (task == null ? void 0 : task.subject) && (task == null ? void 0 : task.lessonKey)).map((task) => `${task.subject}::${task.lessonKey}`));
-        return buildPriorWeeksCoveredTasks({
+        const result = buildPriorWeeksCoveredTasks({
           currentWeekStartDate: currentDiaryWeekStartDate,
           accumulationMode: ((_a2 = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest) == null ? void 0 : _a2.accumulationMode) || "rolling",
           accumulationValue: ((_b2 = activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest) == null ? void 0 : _b2.accumulationValue) || 8,
@@ -15289,15 +15317,17 @@ ${marker} `);
           diaryCompletions: visibleDiaryCompletions,
           studentEmail: diaryViewerStudentEmailSeed
         });
+        diarySectionCacheRef.current.priorWeekAccumulatedTasks = result;
+        return result;
       } catch (error) {
         console.log("Unable to calculate prior-week accumulated diary tasks:", error);
         return [];
       }
     }, [activeAutoDiarySettings, activeSchoolYearStartDate, allSubjects, currentDiaryWeekStartDate, diaryDataActive, diaryViewerStudentEmailSeed, getMergedLessonGroups, getMergedQuiz, grade, visibleDiaryCompletions, visibleDiaryEntries, weeklyDiaryTasks]);
     const generatedWeeklyTestTemplate = useMemo(() => {
-      if (!diaryDataActive) return null;
+      if (!diaryDataActive) return diarySectionCacheRef.current.generatedWeeklyTestTemplate;
       try {
-        return buildGeneratedWeeklyTestTemplate({
+        const result = buildGeneratedWeeklyTestTemplate({
           weekStartDate: currentDiaryWeekStartDate,
           grade,
           coveredTasks: weeklyDiaryTasks,
@@ -15306,6 +15336,8 @@ ${marker} `);
           subjectsById: subjectLookup,
           saturdayTestSettings: activeAutoDiarySettings == null ? void 0 : activeAutoDiarySettings.saturdayTest
         });
+        diarySectionCacheRef.current.generatedWeeklyTestTemplate = result;
+        return result;
       } catch (error) {
         console.log("Unable to build generated weekly test template:", error);
         return null;
@@ -17371,7 +17403,13 @@ ${marker} `);
       );
     }, [language]);
     const gradePracticeItems = useMemo(
-      () => practiceDataActive && dbLoaded && grade ? buildGradePracticeItems(contentDataLoader, grade) : [],
+      () => {
+        if (!dbLoaded) return [];
+        if (!practiceDataActive) return discoveryDictionaryCacheRef.current.gradePracticeItems;
+        const result = grade ? buildGradePracticeItems(contentDataLoader, grade) : [];
+        discoveryDictionaryCacheRef.current.gradePracticeItems = result;
+        return result;
+      },
       [contentDataLoader, dbLoaded, grade, practiceDataActive]
     );
     const availablePracticeSubjects = useMemo(() => allSubjects.filter((subject) => {
@@ -19712,9 +19750,9 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       [backupReminderSettings, hasBackupWorthData, language]
     );
     const discoveryLessonIndex = useMemo(() => {
-      if (!discoveryDataActive) return [];
+      if (!discoveryDataActive) return discoveryDictionaryCacheRef.current.discoveryLessonIndex;
       if (!dbLoaded || !grade) return [];
-      return allSubjects.flatMap((subject) => {
+      const result = allSubjects.flatMap((subject) => {
         const lessons = getMergedLessons(subject.id, grade) || [];
         return lessons.map((lesson, lessonIndex) => ({
           id: `discover_${subject.id}_${lesson.key || lesson.id || lessonIndex}`,
@@ -19731,6 +19769,8 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           completed: Boolean(completedQuizzes[lesson.id])
         }));
       });
+      discoveryDictionaryCacheRef.current.discoveryLessonIndex = result;
+      return result;
     }, [allSubjects, completedQuizzes, dbLoaded, discoveryDataActive, getMergedLessons, grade]);
     const filteredDiscoveryLessons = useMemo(() => {
       const searchNeedle = normalizeText(contentSearch).toLowerCase();
@@ -19744,16 +19784,17 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }).slice(0, 8);
     }, [contentSearch, discoveryDifficultyFilter, discoveryLessonIndex, discoverySubjectFilter, discoveryTypeFilter]);
     const discoveryWordPool = useMemo(() => {
-      if (!discoveryDataActive) return [];
+      if (!discoveryDataActive) return discoveryDictionaryCacheRef.current.discoveryWordPool;
       const reviewPool = reviewLibrary.filter((card) => {
         const prompt2 = normalizeText((card == null ? void 0 : card.prompt) || "");
         return prompt2 && prompt2.split(/\s+/).length <= 4 && normalizeText((card == null ? void 0 : card.answer) || "");
       });
-      if (reviewPool.length > 0) return reviewPool;
-      return gradePracticeItems.filter((item) => {
+      const result = reviewPool.length > 0 ? reviewPool : gradePracticeItems.filter((item) => {
         const prompt2 = normalizeText((item == null ? void 0 : item.prompt) || "");
         return prompt2 && prompt2.split(/\s+/).length <= 4 && normalizeText((item == null ? void 0 : item.answer) || (item == null ? void 0 : item.meaning) || "");
       });
+      discoveryDictionaryCacheRef.current.discoveryWordPool = result;
+      return result;
     }, [discoveryDataActive, gradePracticeItems, reviewLibrary]);
     const wordOfDayCard = useMemo(() => {
       if (!discoveryWordPool.length) return null;
@@ -19762,10 +19803,11 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       return discoveryWordPool[seed % discoveryWordPool.length];
     }, [discoveryWordPool]);
     const wordBankIndex = useMemo(() => {
-      if (!dbLoaded || !wordBankDataActive) return [];
+      if (!dbLoaded) return [];
+      if (!wordBankDataActive) return discoveryDictionaryCacheRef.current.wordBankIndex;
       const seen = /* @__PURE__ */ new Set();
       const items = [...reviewLibrary || [], ...gradePracticeItems || []];
-      return items.reduce((acc, item, index) => {
+      const result = items.reduce((acc, item, index) => {
         var _a2, _b2;
         const prompt2 = normalizeText((item == null ? void 0 : item.prompt) || (item == null ? void 0 : item.practiceFront) || "");
         const answer = normalizeText((item == null ? void 0 : item.answer) || (item == null ? void 0 : item.meaning) || (item == null ? void 0 : item.practiceBack) || "");
@@ -19796,6 +19838,8 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         });
         return acc;
       }, []);
+      discoveryDictionaryCacheRef.current.wordBankIndex = result;
+      return result;
     }, [dbLoaded, gradePracticeItems, reviewLibrary, subjectLookup, wordBankDataActive]);
     const filteredWordBank = useMemo(() => {
       const searchNeedle = normalizeText(wordSearch).toLowerCase();
