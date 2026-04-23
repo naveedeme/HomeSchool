@@ -17,3 +17,5 @@
 !/vendor/**
 !/manifest.webmanifest
 !/sw.js
+!/tutor-lab/
+!/tutor-lab/**

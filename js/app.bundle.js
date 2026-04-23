@@ -23,10 +23,12 @@
   } = POS_DATA;
   const AppContext = React.createContext(null);
   const LessonEditContext = React.createContext(null);
-  const TYPING_TUTOR_EMBED_PATH = "./typing-tutor/index.html";
-  const TABLE_TUTOR_EMBED_PATH = "./table-tutor/index.html";
+  const TYPING_TUTOR_EMBED_PATH = "./tutor-lab/typing-tutor/index.html";
+  const TABLE_TUTOR_EMBED_PATH = "./tutor-lab/table-tutor/index.html";
   const ARTICULATION_CARDS_EMBED_PATH = "./articulation-cards/index.html";
   const SENTENCE_BUILDER_EMBED_PATH = "./tutor-lab/sentence-builder/index.html";
+  const WORD_SEARCH_EMBED_PATH = "./tutor-lab/word-search/index.html";
+  const PUZZLE_TOY_EMBED_PATH = "./tutor-lab/puzzle-toy/index.html";
   function splitEditableSentenceParts(text) {
     return String(text || "").split(/(?<=[.!?۔؟])\s+/).filter(Boolean);
   }
@@ -13471,6 +13473,8 @@ ${marker} `);
     const [tableTutorOpen, setTableTutorOpen] = useState(false);
     const [articulationCardsOpen, setArticulationCardsOpen] = useState(false);
     const [sentenceBuilderOpen, setSentenceBuilderOpen] = useState(false);
+    const [wordSearchOpen, setWordSearchOpen] = useState(false);
+    const [puzzleToyOpen, setPuzzleToyOpen] = useState(false);
     const [pronunciationLabOpen, setPronunciationLabOpen] = useState(false);
     const [pronunciationLabIdx, setPronunciationLabIdx] = useState(0);
     const [pronunciationLabTranscript, setPronunciationLabTranscript] = useState("");
@@ -23125,10 +23129,12 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         if (tableTutorOpen) setTableTutorOpen(false);
         if (articulationCardsOpen) setArticulationCardsOpen(false);
         if (sentenceBuilderOpen) setSentenceBuilderOpen(false);
+        if (wordSearchOpen) setWordSearchOpen(false);
+        if (puzzleToyOpen) setPuzzleToyOpen(false);
       };
       document.addEventListener("keydown", handleEscape);
       return () => document.removeEventListener("keydown", handleEscape);
-    }, [handleClosePronunciationLab, pronunciationLabOpen, typingTutorOpen, tableTutorOpen, articulationCardsOpen, sentenceBuilderOpen]);
+    }, [handleClosePronunciationLab, pronunciationLabOpen, typingTutorOpen, tableTutorOpen, articulationCardsOpen, sentenceBuilderOpen, wordSearchOpen, puzzleToyOpen]);
     const refreshStorageLabel = useCallback(async () => {
       if (!window.HomeSchoolDB) {
         setStorageLabel(await getStorageEstimateLabel("localStorage"));
@@ -30059,6 +30065,26 @@ ${error.message || error}`);
         /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u270D\uFE0F"),
         /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Sentence Builder", "\u0633\u06CC\u0646\u0679\u06CC\u0646\u0633 \u0628\u0644\u0688\u0631", language), language)),
         /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(joinLocalizedText("Open the Sentence Builder Studio in a popup.", "\u0633\u06CC\u0646\u0679\u06CC\u0646\u0633 \u0628\u0644\u0688\u0631 \u0627\u0633\u0679\u0648\u0688\u06CC\u0648 \u06A9\u0648 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "practice-mode-card practice-tool-card",
+          onClick: () => setWordSearchOpen(true)
+        },
+        /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F50D}"),
+        /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Word Search", "\u0648\u0631\u0688 \u0633\u0631\u0686", language), language)),
+        /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(joinLocalizedText("Open the Word Search puzzle in a popup.", "\u0648\u0631\u0688 \u0633\u0631\u0686 \u067E\u0632\u0644 \u06A9\u0648 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "practice-mode-card practice-tool-card",
+          onClick: () => setPuzzleToyOpen(true)
+        },
+        /* @__PURE__ */ React.createElement("span", { className: "practice-mode-icon" }, "\u{1F9E9}"),
+        /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Puzzle Toy", "\u067E\u0632\u0644 \u0679\u0627\u0626\u06CC", language), language)),
+        /* @__PURE__ */ React.createElement("span", { className: "practice-mode-meta" }, renderLocalizedTextNode(joinLocalizedText("Open the Puzzle Toy in a popup.", "\u067E\u0632\u0644 \u0679\u0627\u0626\u06CC \u06A9\u0648 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u06CC\u06BA\u06D4", language), language))
       ))),
       reviewSectionTab === "practice" && /* @__PURE__ */ React.createElement("div", { className: "review-panel", id: "practice-lab-panel" }, /* @__PURE__ */ React.createElement("div", { className: "review-panel-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Practice Lab", "\u067E\u0631\u06CC\u06A9\u0679\u0633 \u0644\u06CC\u0628", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Choose a subject to open its own practice lab: flashcards, typing, matching, dictation, and fill in blanks.", "\u06A9\u0633\u06CC \u0645\u0636\u0645\u0648\u0646 \u06A9\u0627 \u0627\u0646\u062A\u062E\u0627\u0628 \u06A9\u0631\u06CC\u06BA \u0627\u0648\u0631 \u0627\u0633 \u06A9\u06CC \u0627\u0644\u06AF \u067E\u0631\u06CC\u06A9\u0679\u0633 \u0644\u06CC\u0628 \u06A9\u06BE\u0648\u0644\u06CC\u06BA: \u0641\u0644\u06CC\u0634 \u06A9\u0627\u0631\u0688\u0632\u060C \u0679\u0627\u0626\u067E\u0646\u06AF\u060C \u062C\u0648\u0691\u06CC\u0627\u06BA \u0645\u0644\u0627\u0646\u0627\u060C \u0627\u0645\u0644\u0627\u060C \u0627\u0648\u0631 \u062E\u0627\u0644\u06CC \u062C\u06AF\u06C1 \u067E\u064F\u0631 \u06A9\u0631\u0646\u0627\u06D4", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "practice-subject-row" }, availablePracticeSubjects.map((subject) => {
         const isActive = subject.id === activePracticeSubjectId;
@@ -30844,6 +30870,38 @@ ${error.message || error}`);
         className: "typing-tutor-frame",
         src: SENTENCE_BUILDER_EMBED_PATH,
         title: "Sentence Builder"
+      }
+    )))) : null, wordSearchOpen ? /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-overlay", onClick: () => setWordSearchOpen(false) }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Word Search", "\u0648\u0631\u0688 \u0633\u0631\u0686", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This opens the Word Search puzzle inside a popup.", "\u06CC\u06C1 \u0648\u0631\u0688 \u0633\u0631\u0686 \u067E\u0632\u0644 \u06A9\u0648 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-actions" }, /* @__PURE__ */ React.createElement(
+      "a",
+      {
+        className: "ghost-cta",
+        href: WORD_SEARCH_EMBED_PATH,
+        target: "_blank",
+        rel: "noopener noreferrer"
+      },
+      renderLocalizedTextNode(joinLocalizedText("Open in new tab", "\u0646\u0626\u06D2 \u0679\u06CC\u0628 \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)
+    ), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => setWordSearchOpen(false) }, renderLocalizedTextNode(joinLocalizedText("Close", "\u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-frame-shell" }, /* @__PURE__ */ React.createElement(
+      "iframe",
+      {
+        className: "typing-tutor-frame",
+        src: WORD_SEARCH_EMBED_PATH,
+        title: "Word Search"
+      }
+    )))) : null, puzzleToyOpen ? /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-overlay", onClick: () => setPuzzleToyOpen(false) }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal", onClick: (event) => event.stopPropagation() }, /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-head" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", null, renderLocalizedTextNode(joinLocalizedText("Puzzle Toy", "\u067E\u0632\u0644 \u0679\u0627\u0626\u06CC", language), language)), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("This opens the Puzzle Toy inside a popup.", "\u06CC\u06C1 \u067E\u0632\u0644 \u0679\u0627\u0626\u06CC \u06A9\u0648 \u067E\u0627\u067E \u0627\u067E \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u062A\u0627 \u06C1\u06D2\u06D4", language), language))), /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-modal-actions" }, /* @__PURE__ */ React.createElement(
+      "a",
+      {
+        className: "ghost-cta",
+        href: PUZZLE_TOY_EMBED_PATH,
+        target: "_blank",
+        rel: "noopener noreferrer"
+      },
+      renderLocalizedTextNode(joinLocalizedText("Open in new tab", "\u0646\u0626\u06D2 \u0679\u06CC\u0628 \u0645\u06CC\u06BA \u06A9\u06BE\u0648\u0644\u06CC\u06BA", language), language)
+    ), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: () => setPuzzleToyOpen(false) }, renderLocalizedTextNode(joinLocalizedText("Close", "\u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language), language)))), /* @__PURE__ */ React.createElement("div", { className: "typing-tutor-frame-shell" }, /* @__PURE__ */ React.createElement(
+      "iframe",
+      {
+        className: "typing-tutor-frame",
+        src: PUZZLE_TOY_EMBED_PATH,
+        title: "Puzzle Toy"
       }
     )))) : null, wordMeaningPopover ? /* @__PURE__ */ React.createElement(
       "div",

@@ -23,10 +23,12 @@ const {
 } = POS_DATA;
 const AppContext = React.createContext(null);
 const LessonEditContext = React.createContext(null);
-const TYPING_TUTOR_EMBED_PATH = "./typing-tutor/index.html";
-const TABLE_TUTOR_EMBED_PATH = "./table-tutor/index.html";
+const TYPING_TUTOR_EMBED_PATH = "./tutor-lab/typing-tutor/index.html";
+const TABLE_TUTOR_EMBED_PATH = "./tutor-lab/table-tutor/index.html";
 const ARTICULATION_CARDS_EMBED_PATH = "./articulation-cards/index.html";
 const SENTENCE_BUILDER_EMBED_PATH = "./tutor-lab/sentence-builder/index.html";
+const WORD_SEARCH_EMBED_PATH = "./tutor-lab/word-search/index.html";
+const PUZZLE_TOY_EMBED_PATH = "./tutor-lab/puzzle-toy/index.html";
 
 function splitEditableSentenceParts(text) {
   return String(text || "").split(/(?<=[.!?۔؟])\s+/).filter(Boolean);
@@ -16069,6 +16071,8 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [tableTutorOpen, setTableTutorOpen] = useState(false);
   const [articulationCardsOpen, setArticulationCardsOpen] = useState(false);
   const [sentenceBuilderOpen, setSentenceBuilderOpen] = useState(false);
+  const [wordSearchOpen, setWordSearchOpen] = useState(false);
+  const [puzzleToyOpen, setPuzzleToyOpen] = useState(false);
   const [pronunciationLabOpen, setPronunciationLabOpen] = useState(false);
   const [pronunciationLabIdx, setPronunciationLabIdx] = useState(0);
   const [pronunciationLabTranscript, setPronunciationLabTranscript] = useState("");
@@ -26542,10 +26546,12 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
       if (tableTutorOpen) setTableTutorOpen(false);
       if (articulationCardsOpen) setArticulationCardsOpen(false);
       if (sentenceBuilderOpen) setSentenceBuilderOpen(false);
+      if (wordSearchOpen) setWordSearchOpen(false);
+      if (puzzleToyOpen) setPuzzleToyOpen(false);
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [handleClosePronunciationLab, pronunciationLabOpen, typingTutorOpen, tableTutorOpen, articulationCardsOpen, sentenceBuilderOpen]);
+  }, [handleClosePronunciationLab, pronunciationLabOpen, typingTutorOpen, tableTutorOpen, articulationCardsOpen, sentenceBuilderOpen, wordSearchOpen, puzzleToyOpen]);
 
   const refreshStorageLabel = useCallback(async () => {
     if (!window.HomeSchoolDB) {
@@ -37213,6 +37219,24 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                   <strong>{renderLocalizedTextNode(joinLocalizedText("Sentence Builder", "سینٹینس بلڈر", language), language)}</strong>
                   <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the Sentence Builder Studio in a popup.", "سینٹینس بلڈر اسٹوڈیو کو پاپ اپ میں کھولیں۔", language), language)}</span>
                 </button>
+                <button
+                  type="button"
+                  className="practice-mode-card practice-tool-card"
+                  onClick={() => setWordSearchOpen(true)}
+                >
+                  <span className="practice-mode-icon">🔍</span>
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Word Search", "ورڈ سرچ", language), language)}</strong>
+                  <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the Word Search puzzle in a popup.", "ورڈ سرچ پزل کو پاپ اپ میں کھولیں۔", language), language)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="practice-mode-card practice-tool-card"
+                  onClick={() => setPuzzleToyOpen(true)}
+                >
+                  <span className="practice-mode-icon">🧩</span>
+                  <strong>{renderLocalizedTextNode(joinLocalizedText("Puzzle Toy", "پزل ٹائی", language), language)}</strong>
+                  <span className="practice-mode-meta">{renderLocalizedTextNode(joinLocalizedText("Open the Puzzle Toy in a popup.", "پزل ٹائی کو پاپ اپ میں کھولیں۔", language), language)}</span>
+                </button>
               </div>
             </div>
           )}
@@ -39114,6 +39138,72 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               className="typing-tutor-frame"
               src={SENTENCE_BUILDER_EMBED_PATH}
               title="Sentence Builder"
+            />
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    {wordSearchOpen ? (
+      <div className="typing-tutor-overlay" onClick={() => setWordSearchOpen(false)}>
+        <div className="typing-tutor-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="typing-tutor-modal-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Word Search", "ورڈ سرچ", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("This opens the Word Search puzzle inside a popup.", "یہ ورڈ سرچ پزل کو پاپ اپ میں کھولتا ہے۔", language), language)}</p>
+            </div>
+            <div className="typing-tutor-modal-actions">
+              <a
+                className="ghost-cta"
+                href={WORD_SEARCH_EMBED_PATH}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Open in new tab", "نئے ٹیب میں کھولیں", language), language)}
+              </a>
+              <button type="button" className="ghost-cta" onClick={() => setWordSearchOpen(false)}>
+                {renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          <div className="typing-tutor-frame-shell">
+            <iframe
+              className="typing-tutor-frame"
+              src={WORD_SEARCH_EMBED_PATH}
+              title="Word Search"
+            />
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    {puzzleToyOpen ? (
+      <div className="typing-tutor-overlay" onClick={() => setPuzzleToyOpen(false)}>
+        <div className="typing-tutor-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="typing-tutor-modal-head">
+            <div>
+              <h3>{renderLocalizedTextNode(joinLocalizedText("Puzzle Toy", "پزل ٹائی", language), language)}</h3>
+              <p>{renderLocalizedTextNode(joinLocalizedText("This opens the Puzzle Toy inside a popup.", "یہ پزل ٹائی کو پاپ اپ میں کھولتا ہے۔", language), language)}</p>
+            </div>
+            <div className="typing-tutor-modal-actions">
+              <a
+                className="ghost-cta"
+                href={PUZZLE_TOY_EMBED_PATH}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Open in new tab", "نئے ٹیب میں کھولیں", language), language)}
+              </a>
+              <button type="button" className="ghost-cta" onClick={() => setPuzzleToyOpen(false)}>
+                {renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language)}
+              </button>
+            </div>
+          </div>
+          <div className="typing-tutor-frame-shell">
+            <iframe
+              className="typing-tutor-frame"
+              src={PUZZLE_TOY_EMBED_PATH}
+              title="Puzzle Toy"
             />
           </div>
         </div>

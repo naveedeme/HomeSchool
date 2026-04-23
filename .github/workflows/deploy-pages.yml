@@ -46,12 +46,6 @@ jobs:
           if [ -d vendor ]; then
             cp -R vendor .deploy/vendor
           fi
-          if [ -d typing-tutor ]; then
-            cp -R typing-tutor .deploy/typing-tutor
-          fi
-          if [ -d table-tutor ]; then
-            cp -R table-tutor .deploy/table-tutor
-          fi
           if [ -d articulation-cards ]; then
             cp -R articulation-cards .deploy/articulation-cards
           fi
