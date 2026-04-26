@@ -101,7 +101,9 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle
 @media(max-width:760px){.game-layout{grid-template-columns:1fr;}}
 
 /* GRID CARD */
-.grid-card{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius);padding:13px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;overflow:auto;position:relative;}
+.grid-card{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius);padding:13px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;overflow:auto;position:relative;transition:border-color .4s,box-shadow .4s;}
+.grid-card.grid-idle{border-color:rgba(139,92,246,.35);box-shadow:var(--shadow),0 0 30px rgba(139,92,246,.12),0 0 60px rgba(139,92,246,.06);animation:cardIdleGlow 3s ease-in-out infinite;}
+@keyframes cardIdleGlow{0%,100%{box-shadow:var(--shadow),0 0 20px rgba(139,92,246,.12);}50%{box-shadow:var(--shadow),0 0 40px rgba(139,92,246,.22),0 0 70px rgba(236,72,153,.08);}}
 
 /* IDLE GRID OVERLAY */
 .idle-overlay{
@@ -1039,21 +1041,21 @@ function App(){
         h("span",{className:"wcv"},wordCount)
       ),
 
-      // New Game
-      h("button",{className:"btn btn-new",
-        onClick:function(){prepareGame(null,diff,sz,wordCount);}},
-        "🎮 New Game"),
-
-      // START / PAUSE
+      // START / PAUSE — always visible, first action button
       isIdle
-        ? h("button",{className:"btn btn-start",onClick:startGame},"▶ Start Game")
+        ? h("button",{className:"btn btn-start",onClick:startGame},"▶ Start")
         : h("button",{
             className:"btn "+(isPaused?"btn-start":"btn-pause"),
             onClick:togglePause
           }, isPaused?"▶ Resume":"⏸ Pause"),
 
-      // Hint (only when playing)
+      // Hint (only when playing / paused)
       (isPlaying||isPaused)&&h("button",{className:"btn btn-purple",onClick:hint},"💡 Hint"),
+
+      // New Game — last, so it's not accidentally clicked
+      h("button",{className:"btn btn-new",
+        onClick:function(){prepareGame(null,diff,sz,wordCount);}},
+        "🎮 New Game"),
     ),
 
     // Grid size pills
@@ -1081,12 +1083,26 @@ function App(){
     // GAME LAYOUT
     h("div",{className:"game-layout"},
       // Grid card
-      h("div",{className:"grid-card"},
+      h("div",{className:"grid-card"+(isIdle?" grid-idle":"")},
         // Paused overlay
         isPaused&&h("div",{className:"paused-banner"},
           h("h2",null,"⏸ Paused"),
           h("p",null,"Click Resume or focus this window"),
           h("button",{className:"btn btn-start",onClick:resumeGame},"▶ Resume"),
+        ),
+        // Idle overlay — attractive invite card on top of mosaic grid
+        isIdle&&h("div",{className:"idle-overlay"},
+          h("div",{className:"idle-overlay-inner"},
+            h("span",{className:"idle-icon"},"🔍"),
+            h("div",{className:"idle-title"},"Ready to Play?"),
+            h("div",{className:"idle-sub"},"Find all hidden words by dragging or tapping letters"),
+            h("div",{className:"idle-meta"},
+              h("div",{className:"idle-meta-chip"},"📝 Words: ",h("b",null,wordCount)),
+              h("div",{className:"idle-meta-chip"},"📏 Grid: ",h("b",null,sz+"×"+sz)),
+              h("div",{className:"idle-meta-chip"},"📐 ",h("b",null,diff[0].toUpperCase()+diff.slice(1))),
+            ),
+            h("button",{className:"idle-start-btn",onClick:startGame},"▶  Start Game"),
+          )
         ),
         grid.length>0&&h(Grid,{
           grid:grid,sz:sz,
