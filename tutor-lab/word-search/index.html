@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>🔍 Word Search Puzzle</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&family=Noto+Nastaliq+Urdu&display=swap');
+:root{
+  --border:rgba(255,255,255,0.08);--text:#f1f5f9;--muted:#94a3b8;
+  --radius:16px;--shadow:0 8px 32px rgba(0,0,0,0.5);
+  --a1:#f59e0b;--a2:#10b981;--a3:#ef4444;--a4:#8b5cf6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Nunito',sans-serif;background:linear-gradient(135deg,#0f0c29 0%,#302b63 50%,#24243e 100%);min-height:100vh;color:var(--text);overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(circle at 20% 20%,rgba(139,92,246,.15) 0%,transparent 50%),radial-gradient(circle at 80% 80%,rgba(16,185,129,.10) 0%,transparent 50%),radial-gradient(circle at 50% 10%,rgba(245,158,11,.08) 0%,transparent 40%);pointer-events:none;z-index:0;}
+#root{position:relative;z-index:1;}
+.app{max-width:1150px;margin:0 auto;padding:12px 14px 56px;}
+
+/* HEADER */
+.hdr{text-align:center;padding:16px 0 6px;position:relative;}
+.hdr h1{font-family:'Fredoka One',cursive;font-size:clamp(1.8rem,6vw,3.2rem);background:linear-gradient(135deg,#f59e0b 0%,#ef4444 35%,#8b5cf6 65%,#10b981 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;background-size:300%;animation:shimmer 4s ease infinite;letter-spacing:2px;}
+@keyframes shimmer{0%{background-position:0%}50%{background-position:100%}100%{background-position:0%}}
+.hdr p{color:var(--muted);font-size:.84rem;margin-top:2px;}
+.settings-btn{position:absolute;right:0;top:18px;background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:50%;width:38px;height:38px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;transition:all .2s;color:var(--text);}
+.settings-btn:hover{background:rgba(255,255,255,.15);transform:rotate(40deg);}
+
+/* SETTINGS OVERLAY */
+.settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:400;display:flex;align-items:center;justify-content:center;animation:fadein .22s ease;}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes popin{from{opacity:0;transform:scale(.65)}to{opacity:1;transform:scale(1)}}
+.settings-card{background:linear-gradient(145deg,#1e1b4b,#2a2060);border:1px solid rgba(139,92,246,.3);border-radius:20px;padding:22px 24px;width:min(92vw,420px);box-shadow:0 20px 60px rgba(0,0,0,.6);animation:popin .3s cubic-bezier(.34,1.56,.64,1);}
+.settings-card h2{font-family:'Fredoka One',cursive;font-size:1.3rem;color:var(--a1);margin-bottom:16px;}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
+.setting-row:last-of-type{border-bottom:none;}
+.setting-label{font-weight:700;font-size:.86rem;}
+.setting-sub{font-size:.72rem;color:var(--muted);margin-top:1px;}
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;position:absolute;}
+.toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:24px;cursor:pointer;transition:background .3s;}
+.toggle-slider::before{content:'';position:absolute;height:18px;width:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .3s;}
+.toggle input:checked+.toggle-slider{background:linear-gradient(135deg,#10b981,#059669);}
+.toggle input:checked+.toggle-slider::before{transform:translateX(20px);}
+.wcount-wrap{display:flex;align-items:center;gap:8px;}
+.wcount-wrap input[type=range]{-webkit-appearance:none;appearance:none;width:110px;height:5px;border-radius:3px;background:rgba(255,255,255,.15);outline:none;cursor:pointer;}
+.wcount-wrap input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:linear-gradient(135deg,#8b5cf6,#6d28d9);cursor:pointer;}
+.wcount-val{font-weight:900;color:var(--a4);font-size:1rem;min-width:22px;text-align:center;}
+.settings-close{margin-top:14px;width:100%;}
+
+/* CONTROLS BAR */
+.controls{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;align-items:center;margin:8px 0 5px;}
+.diff-tabs{display:flex;gap:3px;background:rgba(255,255,255,.05);border-radius:50px;padding:3px;border:1px solid var(--border);}
+.diff-tab{font-family:'Nunito',sans-serif;font-weight:800;font-size:.78rem;border:none;border-radius:50px;padding:5px 12px;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s;}
+.diff-tab.active{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;box-shadow:0 3px 10px rgba(139,92,246,.4);}
+
+/* WORD COUNT QUICK PICKER (in controls bar) */
+.wc-picker{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:50px;padding:3px 10px;}
+.wc-picker label{font-size:.72rem;font-weight:700;color:var(--muted);white-space:nowrap;}
+.wc-picker input[type=range]{-webkit-appearance:none;appearance:none;width:80px;height:4px;border-radius:3px;background:rgba(255,255,255,.2);outline:none;cursor:pointer;}
+.wc-picker input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#ef4444);cursor:pointer;}
+.wc-picker .wcv{font-weight:900;color:var(--a1);font-size:.85rem;min-width:18px;}
+
+.btn{font-family:'Nunito',sans-serif;font-weight:800;font-size:.82rem;border:none;border-radius:50px;padding:7px 16px;cursor:pointer;transition:transform .14s,filter .14s,box-shadow .2s;letter-spacing:.3px;display:inline-flex;align-items:center;gap:5px;}
+.btn:hover{transform:translateY(-2px);filter:brightness(1.12);}
+.btn:active{transform:translateY(0);}
+.btn-new{background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;box-shadow:0 4px 14px rgba(239,68,68,.35);}
+.btn-start{background:linear-gradient(135deg,#10b981,#0ea572);color:#fff;box-shadow:0 4px 14px rgba(16,185,129,.4);}
+.btn-pause{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;box-shadow:0 4px 14px rgba(245,158,11,.4);}
+.btn-purple{background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;box-shadow:0 4px 14px rgba(139,92,246,.35);}
+.btn-outline{background:transparent;border:2px solid rgba(255,255,255,.18);color:var(--text);}
+.btn-outline:hover{background:rgba(255,255,255,.07);}
+.btn-teal{background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;box-shadow:0 4px 14px rgba(20,184,166,.35);}
+.btn-success{background:linear-gradient(135deg,#10b981,#059669);color:#fff;}
+.btn-sm{padding:4px 11px;font-size:.74rem;}
+
+/* GRID SIZE PILLS */
+.size-row{display:flex;gap:4px;justify-content:center;margin:3px 0 6px;}
+.size-btn{font-family:'Nunito',sans-serif;font-weight:700;font-size:.76rem;border:1px solid rgba(255,255,255,.13);border-radius:50px;padding:3px 11px;cursor:pointer;background:transparent;color:var(--muted);transition:all .17s;}
+.size-btn.active{background:rgba(139,92,246,.25);color:#fff;border-color:#8b5cf6;}
+
+/* PAUSED BANNER */
+.paused-banner{position:absolute;inset:0;background:rgba(10,8,40,.82);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;z-index:10;backdrop-filter:blur(3px);}
+.paused-banner h2{font-family:'Fredoka One',cursive;font-size:1.8rem;color:var(--a1);}
+.paused-banner p{color:var(--muted);font-size:.88rem;}
+
+/* STATS */
+.stats{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:5px 0 7px;}
+.chip{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:50px;padding:5px 13px;font-size:.81rem;font-weight:700;display:flex;align-items:center;gap:4px;}
+.chip-v{color:var(--a1);}
+
+/* PROGRESS */
+.prog-wrap{width:100%;max-width:360px;margin:0 auto 9px;}
+.prog-lbl{display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted);margin-bottom:3px;}
+.prog-bar{height:7px;background:rgba(255,255,255,.08);border-radius:50px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:50px;background:linear-gradient(90deg,#10b981,#f59e0b,#ef4444);transition:width .5s cubic-bezier(.4,0,.2,1);}
+
+/* LAYOUT */
+.game-layout{display:grid;grid-template-columns:1fr 268px;gap:13px;align-items:start;}
+@media(max-width:760px){.game-layout{grid-template-columns:1fr;}}
+
+/* GRID CARD */
+.grid-card{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius);padding:13px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;overflow:auto;position:relative;transition:border-color .4s,box-shadow .4s;}
+.grid-card.grid-idle{border-color:rgba(139,92,246,.35);box-shadow:var(--shadow),0 0 30px rgba(139,92,246,.12),0 0 60px rgba(139,92,246,.06);animation:cardIdleGlow 3s ease-in-out infinite;}
+@keyframes cardIdleGlow{0%,100%{box-shadow:var(--shadow),0 0 20px rgba(139,92,246,.12);}50%{box-shadow:var(--shadow),0 0 40px rgba(139,92,246,.22),0 0 70px rgba(236,72,153,.08);}}
+
+/* IDLE GRID OVERLAY */
+.idle-overlay{
+  position:absolute;inset:0;border-radius:var(--radius);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;z-index:5;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%,rgba(10,8,40,.5) 0%,rgba(10,8,40,.15) 100%);
+}
+.idle-overlay-inner{
+  pointer-events:all;
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+  background:rgba(15,12,41,.82);
+  border:1px solid rgba(139,92,246,.4);
+  border-radius:20px;
+  padding:20px 30px;
+  backdrop-filter:blur(6px);
+  box-shadow:0 10px 40px rgba(0,0,0,.55),0 0 50px rgba(139,92,246,.15);
+  text-align:center;
+}
+.idle-icon{font-size:2.6rem;animation:idleIconBounce 1.7s ease infinite;}
+@keyframes idleIconBounce{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-7px) scale(1.1);}}
+.idle-title{font-family:'Fredoka One',cursive;font-size:1.35rem;color:var(--a1);letter-spacing:1px;}
+.idle-sub{font-size:.76rem;color:var(--muted);max-width:190px;line-height:1.45;}
+.idle-meta{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
+.idle-meta-chip{font-size:.7rem;font-weight:700;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:3px 9px;color:var(--muted);}
+.idle-meta-chip b{color:var(--a1);}
+.idle-start-btn{
+  margin-top:6px;
+  font-family:'Nunito',sans-serif;font-weight:900;font-size:.9rem;
+  border:none;border-radius:50px;padding:9px 26px;cursor:pointer;
+  background:linear-gradient(135deg,#10b981,#0ea572);color:#fff;
+  box-shadow:0 4px 20px rgba(16,185,129,.5);
+  animation:idleStartPulse 2s ease infinite;
+  transition:transform .14s,filter .14s;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.idle-start-btn:hover{transform:translateY(-2px) scale(1.04);filter:brightness(1.12);}
+@keyframes idleStartPulse{0%,100%{box-shadow:0 4px 18px rgba(16,185,129,.5);}50%{box-shadow:0 4px 30px rgba(16,185,129,.85),0 0 38px rgba(16,185,129,.28);}}
+
+/* GRID */
+.ws-grid{display:grid;gap:2px;user-select:none;touch-action:none;-webkit-user-select:none;}
+
+/* IDLE CELL — beautiful orange/amber empty tile */
+.cell{
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Fredoka One',cursive;font-size:1rem;border-radius:7px;cursor:pointer;
+  background:rgba(255,255,255,.04);color:#9db4cc;
+  border:1px solid rgba(255,255,255,.05);
+  transition:background .1s,transform .1s,color .1s,box-shadow .1s;
+  -webkit-tap-highlight-color:transparent;
+  position:relative;overflow:hidden;
+}
+@media(max-width:500px){.cell{width:26px!important;height:26px!important;font-size:.78rem;border-radius:5px;}}
+.cell:hover:not(.idle-cell){background:rgba(255,255,255,.12);color:#fff;}
+
+/* Idle (pre-start) cells — glowing mosaic */
+.cell.idle-cell{
+  color:transparent;
+  cursor:default;
+  background:var(--idle-bg,linear-gradient(135deg,rgba(139,92,246,.22),rgba(99,59,220,.12)));
+  border-color:var(--idle-border,rgba(139,92,246,.4));
+  box-shadow:inset 0 0 6px rgba(139,92,246,.1);
+  animation:idleShimmer 3s ease-in-out infinite;
+  animation-delay:var(--idle-delay,0s);
+}
+.cell.idle-cell:hover{transform:scale(1.08)!important;filter:brightness(1.4);box-shadow:0 0 10px var(--idle-border,rgba(139,92,246,.5)),inset 0 0 6px rgba(255,255,255,.08);}
+/* Each cell gets a unique color via nth-child banding */
+.cell.idle-cell:nth-child(7n+1){--idle-bg:linear-gradient(135deg,rgba(139,92,246,.28),rgba(109,40,217,.15));--idle-border:rgba(139,92,246,.5);}
+.cell.idle-cell:nth-child(7n+2){--idle-bg:linear-gradient(135deg,rgba(236,72,153,.25),rgba(190,24,93,.12));--idle-border:rgba(236,72,153,.45);}
+.cell.idle-cell:nth-child(7n+3){--idle-bg:linear-gradient(135deg,rgba(16,185,129,.24),rgba(5,150,105,.12));--idle-border:rgba(16,185,129,.44);}
+.cell.idle-cell:nth-child(7n+4){--idle-bg:linear-gradient(135deg,rgba(59,130,246,.26),rgba(29,78,216,.13));--idle-border:rgba(59,130,246,.46);}
+.cell.idle-cell:nth-child(7n+5){--idle-bg:linear-gradient(135deg,rgba(245,158,11,.26),rgba(180,83,9,.13));--idle-border:rgba(245,158,11,.46);}
+.cell.idle-cell:nth-child(7n+6){--idle-bg:linear-gradient(135deg,rgba(20,184,166,.25),rgba(13,148,136,.12));--idle-border:rgba(20,184,166,.45);}
+.cell.idle-cell:nth-child(7n+0){--idle-bg:linear-gradient(135deg,rgba(249,115,22,.26),rgba(194,65,12,.13));--idle-border:rgba(249,115,22,.46);}
+@keyframes idleShimmer{
+  0%,100%{opacity:.75;transform:scale(1);}
+  50%{opacity:1;transform:scale(1.03);}
+}
+
+/* Letter flip-in animation */
+.cell.flip-in{animation:flipIn var(--flip-dur,0.45s) ease var(--flip-delay,0s) both;}
+@keyframes flipIn{
+  0%{transform:rotateY(90deg) scale(.8);opacity:0;background:rgba(245,158,11,.4);}
+  60%{transform:rotateY(-10deg) scale(1.08);opacity:1;}
+  100%{transform:rotateY(0) scale(1);opacity:1;}
+}
+
+/* Selected */
+.cell.sel{background:rgba(255,255,255,.28)!important;color:#fff!important;transform:scale(1.08)!important;border-color:rgba(255,255,255,.45)!important;z-index:2;position:relative;box-shadow:0 0 10px rgba(255,255,255,.2)!important;}
+/* Click-select mode: dot on selected but not in drag-line */
+.cell.tap-sel{background:rgba(139,92,246,.35)!important;color:#fff!important;border-color:#8b5cf6!important;box-shadow:0 0 8px rgba(139,92,246,.5)!important;}
+.cell.found-c{font-weight:700;}
+.cell.hint-c{animation:hpulse .7s ease 4!important;}
+@keyframes hpulse{0%,100%{background:rgba(245,158,11,.15);transform:scale(1);}50%{background:rgba(245,158,11,.55);transform:scale(1.18);box-shadow:0 0 16px #f59e0b;}}
+
+/* WORD PANEL */
+.word-panel{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:var(--radius);padding:11px;box-shadow:var(--shadow);}
+.word-panel h3{font-family:'Fredoka One',cursive;font-size:1rem;color:var(--a1);margin-bottom:8px;text-align:center;}
+.word-list{display:flex;flex-direction:column;gap:5px;max-height:380px;overflow-y:auto;padding-right:2px;}
+.word-list::-webkit-scrollbar{width:3px;}
+.word-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px;}
+.word-item{border-radius:10px;padding:6px 9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);transition:all .3s cubic-bezier(.4,0,.2,1);position:relative;}
+.word-item.found{opacity:.92;}
+.word-check{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-weight:900;font-size:.82rem;}
+.word-en-row{display:flex;align-items:center;gap:4px;}
+.word-en{font-weight:800;font-size:.85rem;letter-spacing:.5px;color:#e2e8f0;transition:color .3s;flex:1;}
+.word-item.found .word-en{text-decoration:line-through;}
+.word-ur-row{display:flex;align-items:center;gap:4px;margin-top:1px;flex-direction:row-reverse;justify-content:flex-end;}
+.word-ur{font-size:.78rem;color:rgba(255,255,255,.5);direction:rtl;font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq','Urdu Typesetting',serif;line-height:1.8;flex:1;text-align:right;}
+.spk{background:none;border:none;cursor:pointer;padding:2px 3px;border-radius:5px;font-size:.8rem;transition:transform .14s,background .14s;flex-shrink:0;line-height:1;opacity:.65;}
+.spk:hover{background:rgba(255,255,255,.12);transform:scale(1.2);opacity:1;}
+.spk.speaking{animation:spkpulse .5s ease infinite;opacity:1;}
+@keyframes spkpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.28)}}
+
+/* SIDE PANEL */
+.side-panel{display:flex;flex-direction:column;gap:11px;}
+
+/* IO PANEL */
+.io-panel{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--radius);padding:11px;}
+.io-panel h3{font-family:'Fredoka One',cursive;font-size:.95rem;color:var(--a2);margin-bottom:8px;}
+.io-tabs{display:flex;gap:4px;margin-bottom:9px;}
+.io-tab{flex:1;font-family:'Nunito',sans-serif;font-weight:700;font-size:.73rem;border:1px solid var(--border);border-radius:7px;padding:4px;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s;text-align:center;}
+.io-tab.active{background:rgba(16,185,129,.18);color:var(--a2);border-color:var(--a2);}
+.io-panel textarea{width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--text);font-family:'Courier New',monospace;font-size:.71rem;padding:6px 8px;resize:vertical;min-height:72px;outline:none;transition:border-color .2s;line-height:1.5;}
+.io-panel textarea:focus{border-color:var(--a4);}
+.io-row{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;}
+.fmt-hint{font-size:.68rem;color:var(--muted);margin-top:4px;line-height:1.5;}
+.err-txt{color:#ef4444;font-size:.71rem;margin-top:3px;}
+.ok-txt{color:#10b981;font-size:.71rem;margin-top:3px;}
+.file-input{display:none;}
+.db-info{font-size:.72rem;color:var(--muted);margin-top:4px;}
+.db-info b{color:#a78bfa;}
+
+/* VICTORY */
+.vict-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:500;animation:fadein .4s ease;}
+.vict-card{background:linear-gradient(145deg,#1e1b4b,#2d1b6b 60%,#1a1740);border:2px solid rgba(245,158,11,.35);border-radius:24px;padding:32px 36px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.7),0 0 60px rgba(139,92,246,.2);animation:popin .45s cubic-bezier(.34,1.56,.64,1);max-width:340px;width:90%;}
+.trophy{font-size:4rem;display:block;animation:tbounce 1s ease infinite;margin-bottom:7px;}
+@keyframes tbounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-13px)}}
+.vict-card h2{font-family:'Fredoka One',cursive;font-size:1.9rem;color:var(--a1);margin-bottom:3px;}
+.vict-time{font-size:2rem;font-weight:900;color:var(--a2);margin:7px 0 5px;}
+.vict-card p{color:var(--muted);font-size:.88rem;margin-bottom:18px;}
+.vict-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+
+/* CONFETTI */
+.cp{position:fixed;animation:fall linear forwards;pointer-events:none;z-index:600;}
+@keyframes fall{0%{transform:translateY(-20px) rotate(0deg);opacity:1;}100%{transform:translateY(110vh) rotate(720deg);opacity:0;}}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;font-size:.86rem;border-radius:50px;padding:9px 22px;box-shadow:0 6px 20px rgba(16,185,129,.4);opacity:0;transition:all .28s cubic-bezier(.4,0,.2,1);z-index:700;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div id="root"><div style="display:flex;height:100vh;align-items:center;justify-content:center;color:#94a3b8;flex-direction:column;gap:10px"><div style="font-size:2.5rem">🔍</div><div style="font-family:sans-serif">Loading…</div></div></div>
+<script>
+(function(){
+"use strict";
+if(typeof React==="undefined"||typeof ReactDOM==="undefined"){
+  document.getElementById("root").innerHTML='<div style="display:flex;height:100vh;align-items:center;justify-content:center;font-family:sans-serif;color:#f1f5f9;flex-direction:column;gap:14px;text-align:center;padding:20px"><div style="font-size:3rem">⚠️</div><div style="font-size:1.1rem;font-weight:700">React failed to load</div><div style="color:#94a3b8;max-width:320px">Needs internet for React (unpkg.com). Please check your connection and refresh.</div><button onclick="location.reload()" style="padding:9px 22px;border-radius:50px;border:none;background:#8b5cf6;color:#fff;font-weight:800;cursor:pointer">🔄 Retry</button></div>';
+  return;
+}
+
+var h=React.createElement;
+var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useMemo=React.useMemo;
+
+/* ══════════════════════════════════════
+   WORD DATABASE (530+ entries)
+══════════════════════════════════════ */
+var BUILTIN=[
+  {w:"APPLE",u:"سیب"},{w:"BANANA",u:"کیلا"},{w:"CHERRY",u:"چیری"},{w:"DRAGON",u:"ڈریگن"},
+  {w:"EAGLE",u:"عقاب"},{w:"FLOWER",u:"پھول"},{w:"GARDEN",u:"باغ"},{w:"HORSE",u:"گھوڑا"},
+  {w:"ISLAND",u:"جزیرہ"},{w:"JUNGLE",u:"جنگل"},{w:"KITE",u:"پتنگ"},{w:"LEMON",u:"لیموں"},
+  {w:"MANGO",u:"آم"},{w:"NIGHT",u:"رات"},{w:"OCEAN",u:"سمندر"},{w:"PARROT",u:"طوطا"},
+  {w:"QUEEN",u:"ملکہ"},{w:"RIVER",u:"دریا"},{w:"STAR",u:"ستارہ"},{w:"TIGER",u:"شیر"},
+  {w:"VILLAGE",u:"گاؤں"},{w:"WATER",u:"پانی"},{w:"YELLOW",u:"پیلا"},{w:"ZEBRA",u:"زیبرا"},
+  {w:"CLOUD",u:"بادل"},{w:"BOOK",u:"کتاب"},{w:"BREAD",u:"روٹی"},{w:"BRIDGE",u:"پل"},
+  {w:"BUTTER",u:"مکھن"},{w:"CANDLE",u:"موم بتی"},{w:"CASTLE",u:"قلعہ"},{w:"CHAIR",u:"کرسی"},
+  {w:"CHEESE",u:"پنیر"},{w:"CITY",u:"شہر"},{w:"CLOCK",u:"گھڑی"},{w:"COAT",u:"کوٹ"},
+  {w:"COFFEE",u:"کافی"},{w:"COIN",u:"سکہ"},{w:"COMB",u:"کنگھی"},{w:"CORN",u:"مکئی"},
+  {w:"CROWN",u:"تاج"},{w:"CUP",u:"پیالہ"},{w:"DOOR",u:"دروازہ"},{w:"DREAM",u:"خواب"},
+  {w:"DRUM",u:"ڈھول"},{w:"DUCK",u:"بطخ"},{w:"EARTH",u:"زمین"},{w:"FIRE",u:"آگ"},
+  {w:"FISH",u:"مچھلی"},{w:"FLAG",u:"جھنڈا"},{w:"FROG",u:"مینڈک"},{w:"FRUIT",u:"پھل"},
+  {w:"GIFT",u:"تحفہ"},{w:"GLASS",u:"گلاس"},{w:"GOLD",u:"سونا"},{w:"GRAPE",u:"انگور"},
+  {w:"GRASS",u:"گھاس"},{w:"HEART",u:"دل"},{w:"HILL",u:"پہاڑی"},{w:"HONEY",u:"شہد"},
+  {w:"HOUSE",u:"گھر"},{w:"IRON",u:"لوہا"},{w:"JACKET",u:"جیکٹ"},{w:"JEWEL",u:"جواہر"},
+  {w:"JUICE",u:"رس"},{w:"KING",u:"بادشاہ"},{w:"KNIFE",u:"چاقو"},{w:"LAKE",u:"جھیل"},
+  {w:"LAMP",u:"چراغ"},{w:"LAND",u:"زمین"},{w:"LEAF",u:"پتہ"},{w:"LION",u:"شیر"},
+  {w:"MILK",u:"دودھ"},{w:"MIRROR",u:"آئینہ"},{w:"MOON",u:"چاند"},{w:"MOUSE",u:"چوہا"},
+  {w:"MUSIC",u:"موسیقی"},{w:"NEST",u:"گھونسلہ"},{w:"NOSE",u:"ناک"},{w:"ONION",u:"پیاز"},
+  {w:"ORANGE",u:"نارنجی"},{w:"OWL",u:"الو"},{w:"PAPER",u:"کاغذ"},{w:"PEACH",u:"آڑو"},
+  {w:"PEARL",u:"موتی"},{w:"PEN",u:"قلم"},{w:"PENCIL",u:"پنسل"},{w:"PEPPER",u:"مرچ"},
+  {w:"PIANO",u:"پیانو"},{w:"PILLOW",u:"تکیہ"},{w:"PLATE",u:"پلیٹ"},{w:"PLUM",u:"آلوبخارا"},
+  {w:"POTATO",u:"آلو"},{w:"PRINCE",u:"شہزادہ"},{w:"PRIZE",u:"انعام"},{w:"RABBIT",u:"خرگوش"},
+  {w:"RAIN",u:"بارش"},{w:"RING",u:"انگوٹھی"},{w:"ROAD",u:"سڑک"},{w:"ROCK",u:"چٹان"},
+  {w:"ROOF",u:"چھت"},{w:"ROOT",u:"جڑ"},{w:"ROSE",u:"گلاب"},{w:"SALT",u:"نمک"},
+  {w:"SAND",u:"ریت"},{w:"SCHOOL",u:"مدرسہ"},{w:"SEED",u:"بیج"},{w:"SHEEP",u:"بھیڑ"},
+  {w:"SHELL",u:"سیپ"},{w:"SHIP",u:"جہاز"},{w:"SHIRT",u:"قمیص"},{w:"SHOE",u:"جوتا"},
+  {w:"SILVER",u:"چاندی"},{w:"SKY",u:"آسمان"},{w:"SNAKE",u:"سانپ"},{w:"SNOW",u:"برف"},
+  {w:"SOAP",u:"صابن"},{w:"SOIL",u:"مٹی"},{w:"SONG",u:"گانا"},{w:"SOUP",u:"یخنی"},
+  {w:"SPOON",u:"چمچ"},{w:"STONE",u:"پتھر"},{w:"STORM",u:"طوفان"},{w:"STREET",u:"گلی"},
+  {w:"SUN",u:"سورج"},{w:"SWAN",u:"ہنس"},{w:"SWORD",u:"تلوار"},{w:"TABLE",u:"میز"},
+  {w:"TAIL",u:"دم"},{w:"TEETH",u:"دانت"},{w:"TENT",u:"خیمہ"},{w:"TONGUE",u:"زبان"},
+  {w:"TOWER",u:"مینار"},{w:"TRAIN",u:"ریل گاڑی"},{w:"TREE",u:"درخت"},{w:"TRUCK",u:"ٹرک"},
+  {w:"TULIP",u:"ٹیولپ"},{w:"TURTLE",u:"کچھوا"},{w:"VALLEY",u:"وادی"},{w:"VIOLIN",u:"وائلن"},
+  {w:"WALL",u:"دیوار"},{w:"WAVE",u:"لہر"},{w:"WELL",u:"کنواں"},{w:"WHEAT",u:"گندم"},
+  {w:"WHEEL",u:"پہیہ"},{w:"WIND",u:"ہوا"},{w:"WINDOW",u:"کھڑکی"},{w:"WING",u:"پر"},
+  {w:"WOLF",u:"بھیڑیا"},{w:"WOOD",u:"لکڑی"},{w:"WOOL",u:"اون"},{w:"WORLD",u:"دنیا"},
+  {w:"YARD",u:"صحن"},{w:"ANGEL",u:"فرشتہ"},{w:"ARROW",u:"تیر"},{w:"BALL",u:"گیند"},
+  {w:"BALLOON",u:"غبارہ"},{w:"BASKET",u:"ٹوکری"},{w:"BEAR",u:"ریچھ"},{w:"BED",u:"بستر"},
+  {w:"BELL",u:"گھنٹی"},{w:"BELT",u:"بیلٹ"},{w:"BIRD",u:"پرندہ"},{w:"BOAT",u:"کشتی"},
+  {w:"BONE",u:"ہڈی"},{w:"BOTTLE",u:"بوتل"},{w:"BOX",u:"ڈبہ"},{w:"BRANCH",u:"شاخ"},
+  {w:"BROOK",u:"ندی"},{w:"BRUSH",u:"برش"},{w:"BUBBLE",u:"بلبلہ"},{w:"BULL",u:"سانڈ"},
+  {w:"CAGE",u:"پنجرہ"},{w:"CAKE",u:"کیک"},{w:"CAMP",u:"کیمپ"},{w:"CANAL",u:"نہر"},
+  {w:"CAP",u:"ٹوپی"},{w:"CARD",u:"کارڈ"},{w:"CART",u:"گاڑی"},{w:"CAVE",u:"غار"},
+  {w:"CHAIN",u:"زنجیر"},{w:"CHALK",u:"چاک"},{w:"CHARM",u:"سحر"},{w:"CHEST",u:"سینہ"},
+  {w:"CIRCLE",u:"دائرہ"},{w:"CLIFF",u:"چٹان"},{w:"CLUE",u:"اشارہ"},{w:"COMET",u:"دمدار ستارہ"},
+  {w:"COPPER",u:"تانبہ"},{w:"CORAL",u:"مرجان"},{w:"COTTON",u:"روئی"},{w:"CRAB",u:"کیکڑا"},
+  {w:"CRANE",u:"کرین"},{w:"CROP",u:"فصل"},{w:"CROSS",u:"صلیب"},{w:"CRYSTAL",u:"بلور"},
+  {w:"DAGGER",u:"خنجر"},{w:"DAISY",u:"گلبہار"},{w:"DARK",u:"اندھیرا"},{w:"DAWN",u:"فجر"},
+  {w:"DEER",u:"ہرن"},{w:"DESERT",u:"صحرا"},{w:"DEW",u:"اوس"},{w:"DIAMOND",u:"ہیرا"},
+  {w:"DOME",u:"گنبد"},{w:"DOVE",u:"کبوتر"},{w:"DUSK",u:"شفق"},{w:"DUST",u:"گرد"},
+  {w:"ECHO",u:"گونج"},{w:"EMBER",u:"انگارہ"},{w:"EMPIRE",u:"سلطنت"},{w:"FABLE",u:"افسانہ"},
+  {w:"FALCON",u:"باز"},{w:"FARM",u:"کھیت"},{w:"FEATHER",u:"پر"},{w:"FENCE",u:"باڑ"},
+  {w:"FIELD",u:"میدان"},{w:"FLOOD",u:"سیلاب"},{w:"FLOOR",u:"فرش"},{w:"FOAM",u:"جھاگ"},
+  {w:"FOREST",u:"جنگل"},{w:"FORT",u:"قلعہ"},{w:"FOUNTAIN",u:"چشمہ"},{w:"FOX",u:"لومڑی"},
+  {w:"FROST",u:"پالا"},{w:"GALAXY",u:"کہکشاں"},{w:"GATE",u:"دروازہ"},{w:"GEM",u:"جوہر"},
+  {w:"GIANT",u:"دیو"},{w:"GLOBE",u:"کرہ"},{w:"GLORY",u:"شان"},{w:"GLOW",u:"چمک"},
+  {w:"GORGE",u:"گھاٹی"},{w:"GROVE",u:"باغیچہ"},{w:"GULF",u:"خلیج"},{w:"HARBOR",u:"بندرگاہ"},
+  {w:"HARE",u:"خرگوش"},{w:"HARP",u:"ہارپ"},{w:"HARVEST",u:"فصل"},{w:"HAWK",u:"باز"},
+  {w:"HAZE",u:"دھند"},{w:"HEDGE",u:"باڑ"},{w:"HERO",u:"ہیرو"},{w:"HERON",u:"بگلا"},
+  {w:"HOLLOW",u:"کھوکھلا"},{w:"HORIZON",u:"افق"},{w:"HORN",u:"سینگ"},{w:"HYMN",u:"حمد"},
+  {w:"IDOL",u:"بت"},{w:"IMAGE",u:"تصویر"},{w:"INK",u:"روشنائی"},{w:"IVY",u:"بیل"},
+  {w:"JADE",u:"جیڈ"},{w:"JAR",u:"مرتبان"},{w:"JASMINE",u:"چمیلی"},{w:"JOY",u:"خوشی"},
+  {w:"KNOT",u:"گرہ"},{w:"LAGOON",u:"جھیل"},{w:"LARK",u:"لوا"},{w:"LAVA",u:"لاوا"},
+  {w:"LAWN",u:"گھاس"},{w:"LIGHT",u:"روشنی"},{w:"LILY",u:"للی"},{w:"LIME",u:"چونا"},
+  {w:"LINK",u:"کڑی"},{w:"LOTUS",u:"کنول"},{w:"MAPLE",u:"میپل"},{w:"MARSH",u:"دلدل"},
+  {w:"MAZE",u:"بھول بھلیاں"},{w:"MEADOW",u:"چراگاہ"},{w:"METEOR",u:"شہاب"},{w:"MIST",u:"دھند"},
+  {w:"MOOSE",u:"موز"},{w:"MOSS",u:"کائی"},{w:"MOTH",u:"پتنگا"},{w:"MOUND",u:"ٹیلہ"},
+  {w:"MYTH",u:"افسانہ"},{w:"NEBULA",u:"سحابیہ"},{w:"NEEDLE",u:"سوئی"},{w:"NORTH",u:"شمال"},
+  {w:"NUT",u:"اخروٹ"},{w:"OASIS",u:"نخلستان"},{w:"OAK",u:"بلوط"},{w:"ORBIT",u:"مدار"},
+  {w:"PANDA",u:"پانڈا"},{w:"PATH",u:"راستہ"},{w:"PEBBLE",u:"کنکر"},{w:"PINE",u:"چیڑ"},
+  {w:"PLANET",u:"سیارہ"},{w:"PLANK",u:"تختہ"},{w:"POND",u:"تالاب"},{w:"PRISM",u:"منشور"},
+  {w:"QUAIL",u:"بٹیر"},{w:"QUARRY",u:"کان"},{w:"QUEST",u:"تلاش"},{w:"QUILL",u:"قلم"},
+  {w:"RAINBOW",u:"قوس قزح"},{w:"RAVEN",u:"کوا"},{w:"REEF",u:"چٹان"},{w:"RIDGE",u:"ڈھلوان"},
+  {w:"RIPPLE",u:"لہر"},{w:"ROBIN",u:"رابن"},{w:"RUBY",u:"یاقوت"},{w:"RUIN",u:"کھنڈر"},
+  {w:"SAGE",u:"حکیم"},{w:"SALMON",u:"سامن"},{w:"SCALE",u:"ترازو"},{w:"SHORE",u:"کنارہ"},
+  {w:"SHRINE",u:"درگاہ"},{w:"SILK",u:"ریشم"},{w:"SLOPE",u:"ڈھلوان"},{w:"SNAIL",u:"گھونگا"},
+  {w:"SOLAR",u:"شمسی"},{w:"SPARK",u:"چنگاری"},{w:"SPIRE",u:"مینار"},{w:"SPLASH",u:"چھینٹا"},
+  {w:"SPRING",u:"بہار"},{w:"SQUIRREL",u:"گلہری"},{w:"SUMMIT",u:"چوٹی"},{w:"SWAMP",u:"دلدل"},
+  {w:"THORN",u:"کانٹا"},{w:"TIDE",u:"لہر"},{w:"TIMBER",u:"لکڑی"},{w:"TOAD",u:"مینڈک"},
+  {w:"TOPAZ",u:"توپاز"},{w:"TORCH",u:"مشعل"},{w:"TRAIL",u:"راستہ"},{w:"TRUNK",u:"تنا"},
+  {w:"TWIG",u:"ٹہنی"},{w:"VALE",u:"وادی"},{w:"VAPOR",u:"بخار"},{w:"VAULT",u:"تجوری"},
+  {w:"VINE",u:"انگور کی بیل"},{w:"VISTA",u:"منظر"},{w:"VULTURE",u:"گدھ"},{w:"WAND",u:"چھڑی"},
+  {w:"ZENITH",u:"عروج"},{w:"AMBER",u:"عنبر"},{w:"ARCH",u:"محراب"},{w:"BARK",u:"چھال"},
+  {w:"BASIN",u:"طاس"},{w:"BENCH",u:"بنچ"},{w:"BERRY",u:"بیر"},{w:"BLISS",u:"آنند"},
+  {w:"BOAR",u:"خنزیر"},{w:"BRAID",u:"چوٹی"},{w:"BRINE",u:"نمکین پانی"},{w:"BUCK",u:"ہرن"},
+  {w:"BURROW",u:"سرنگ"},{w:"CALM",u:"سکون"},{w:"CARP",u:"مچھلی"},{w:"CLAM",u:"سیپ"},
+  {w:"CLAY",u:"مٹی"},{w:"CLAW",u:"پنجہ"},{w:"COAST",u:"ساحل"},{w:"COAL",u:"کوئلہ"},
+  {w:"COIL",u:"کنڈلی"},{w:"COLD",u:"ٹھنڈا"},{w:"COVE",u:"خلیج"},{w:"CRACK",u:"دراڑ"},
+  {w:"CRUST",u:"پرت"},{w:"CUB",u:"بچہ"},{w:"DALE",u:"وادی"},{w:"DAMP",u:"نم"},
+  {w:"DEEP",u:"گہرا"},{w:"DUNE",u:"ریت کا ٹیلہ"},{w:"EAST",u:"مشرق"},{w:"ELK",u:"ایلک"},
+  {w:"FAWN",u:"ہرن کا بچہ"},{w:"FIG",u:"انجیر"},{w:"FLOCK",u:"ریوڑ"},{w:"FLOW",u:"بہنا"},
+  {w:"FOWL",u:"مرغ"},{w:"FROND",u:"پتہ"},{w:"GALE",u:"آندھی"},{w:"GAP",u:"خلا"},
+  {w:"GLEN",u:"وادی"},{w:"GRAIN",u:"اناج"},{w:"GRAVEL",u:"بجری"},{w:"GROUND",u:"زمین"},
+  {w:"GUST",u:"جھونکا"},{w:"HAVEN",u:"پناہ"},{w:"HEMP",u:"سن"},{w:"HERB",u:"جڑی بوٹی"},
+  {w:"HIVE",u:"چھتہ"},{w:"HOOD",u:"ٹوپی"},{w:"HOOF",u:"کھر"},{w:"HULL",u:"چھلکا"},
+  {w:"HUMP",u:"کوہان"},{w:"HUNT",u:"شکار"},{w:"INLET",u:"خلیج"},{w:"IVORY",u:"ہاتھی دانت"},
+  {w:"LATCH",u:"کنڈی"},{w:"LEAP",u:"چھلانگ"},{w:"MANE",u:"گردن کے بال"},{w:"MAST",u:"مستول"},
+  {w:"MELT",u:"پگھلنا"},{w:"MESH",u:"جال"},{w:"MOAT",u:"خندق"},{w:"MOLE",u:"چھچھوندر"},
+  {w:"MONK",u:"راہب"},{w:"NOTCH",u:"نشان"},{w:"NOOK",u:"کونہ"},{w:"OPAL",u:"دودھیا پتھر"},
+  {w:"OTTER",u:"اودبلاؤ"},{w:"PARK",u:"پارک"},{w:"PEAT",u:"گھاس"},{w:"PELT",u:"کھال"},
+  {w:"PERCH",u:"مچھلی"},{w:"PIKE",u:"نیزہ"},{w:"PLAIN",u:"میدان"},{w:"POINT",u:"نقطہ"},
+  {w:"POLAR",u:"قطبی"},{w:"PORCH",u:"برآمدہ"},{w:"PRAWN",u:"چنگڑ"},{w:"PRIDE",u:"فخر"},
+  {w:"PROOF",u:"ثبوت"},{w:"PULP",u:"گودا"},{w:"PUMP",u:"پمپ"},{w:"QUARTZ",u:"کوارٹز"},
+  {w:"RACK",u:"ریک"},{w:"RAFT",u:"تختہ"},{w:"RAMP",u:"ڈھلوان"},{w:"RANCH",u:"فارم"},
+  {w:"RANGE",u:"پہاڑی سلسلہ"},{w:"RAPID",u:"تیز"},{w:"RAVINE",u:"گھاٹی"},{w:"REALM",u:"دائرہ"},
+  {w:"RESIN",u:"گوند"},{w:"RIME",u:"پالا"},{w:"RIND",u:"چھلکا"},{w:"ROBE",u:"چوغہ"},
+  {w:"ROOK",u:"قلعہ"},{w:"ROOST",u:"آرام گاہ"},{w:"RUSH",u:"جلدی"},{w:"SCENT",u:"خوشبو"},
+  {w:"SCOUT",u:"جاسوس"},{w:"SHAFT",u:"شافٹ"},{w:"SHALE",u:"سلیٹ"},{w:"SHOAL",u:"کم گہرا"},
+  {w:"SHRUB",u:"جھاڑی"},{w:"SILT",u:"گاد"},{w:"SINEW",u:"پٹھا"},{w:"SLATE",u:"سلیٹ"},
+  {w:"SLOTH",u:"سستی"},{w:"SOLID",u:"ٹھوس"},{w:"SPAWN",u:"انڈے"},{w:"SPRAY",u:"چھڑکاؤ"},
+  {w:"SPRIG",u:"ٹہنی"},{w:"STAG",u:"ہرن"},{w:"STALK",u:"ڈنٹھل"},{w:"STEEP",u:"کھڑی چٹان"},
+  {w:"STEM",u:"تنا"},{w:"STOAT",u:"نیولا"},{w:"STOCK",u:"ذخیرہ"},{w:"STORK",u:"سارس"},
+  {w:"STRAND",u:"ساحل"},{w:"STRIP",u:"پٹی"},{w:"STUMP",u:"ٹھونٹھ"},{w:"SURGE",u:"لہر"},
+  {w:"SWARD",u:"گھاس"},{w:"SWIFT",u:"تیز"},{w:"SWIRL",u:"چکر"},{w:"THATCH",u:"چھپر"},
+  {w:"THRUSH",u:"پرندہ"},{w:"TUFT",u:"گچھا"},{w:"TURF",u:"گھاس"},{w:"TWIST",u:"مروڑ"},
+  {w:"UMBER",u:"بھورا"},{w:"UPLAND",u:"اونچی زمین"},{w:"VIPER",u:"سانپ"},{w:"WAFT",u:"خوشبو"},
+  {w:"WAKE",u:"جاگنا"},{w:"WEASEL",u:"نیولا"},{w:"WEIR",u:"بند"},{w:"WHIRL",u:"چکر"},
+  {w:"WILDER",u:"بنجر"},{w:"WITCH",u:"چڑیل"},{w:"WREN",u:"رین"},{w:"NYMPH",u:"پری"},
+  {w:"PETAL",u:"پنکھڑی"},{w:"PILOT",u:"پائلٹ"},{w:"PORTAL",u:"دروازہ"},{w:"RAPTOR",u:"شکاری پرندہ"},
+  {w:"RUSTLE",u:"سرسراہٹ"},{w:"SIREN",u:"سائرن"},{w:"SNIPE",u:"پرندہ"},{w:"SQUALL",u:"آندھی"},
+  {w:"STEPPE",u:"میدان"},{w:"SYMBOL",u:"علامت"},{w:"TANGLE",u:"الجھاؤ"},{w:"TORRENT",u:"تیز بہاؤ"},
+  {w:"TUNDRA",u:"ٹنڈرا"},{w:"WARBLER",u:"بلبل"},{w:"WARREN",u:"خرگوش گھر"},{w:"WHORL",u:"گھونگھا"},
+  {w:"MARVEL",u:"عجوبہ"},{w:"NECTAR",u:"شہد"},{w:"THRONE",u:"تخت"},{w:"CLOVER",u:"شبدر"},
+  {w:"GOBLIN",u:"بھوت"},{w:"GROTTO",u:"غار"},{w:"FALCON",u:"باز"}
+];
+
+/* ══════════════════════════════════════
+   WORD COLORS
+══════════════════════════════════════ */
+var COLS=[
+  {bg:"rgba(239,68,68,.72)",  border:"#ef4444",light:"rgba(239,68,68,.18)"},
+  {bg:"rgba(245,158,11,.72)", border:"#f59e0b",light:"rgba(245,158,11,.18)"},
+  {bg:"rgba(16,185,129,.72)", border:"#10b981",light:"rgba(16,185,129,.18)"},
+  {bg:"rgba(59,130,246,.72)", border:"#3b82f6",light:"rgba(59,130,246,.18)"},
+  {bg:"rgba(139,92,246,.72)", border:"#8b5cf6",light:"rgba(139,92,246,.18)"},
+  {bg:"rgba(236,72,153,.72)", border:"#ec4899",light:"rgba(236,72,153,.18)"},
+  {bg:"rgba(20,184,166,.72)", border:"#14b8a6",light:"rgba(20,184,166,.18)"},
+  {bg:"rgba(249,115,22,.72)", border:"#f97316",light:"rgba(249,115,22,.18)"},
+];
+
+/* ══════════════════════════════════════
+   STORAGE
+══════════════════════════════════════ */
+var SK_WORDS="ws_extra_words", SK_SETTINGS="ws_settings";
+function loadExtra(){try{var s=localStorage.getItem(SK_WORDS);return s?JSON.parse(s):[];}catch(e){return[];}}
+function saveExtra(a){try{localStorage.setItem(SK_WORDS,JSON.stringify(a));}catch(e){}}
+var DEF_SETTINGS={ttsEn:true,ttsUr:false,soundFx:true,wordCount:5};
+function loadSettings(){try{var s=localStorage.getItem(SK_SETTINGS);return s?Object.assign({},DEF_SETTINGS,JSON.parse(s)):DEF_SETTINGS;}catch(e){return DEF_SETTINGS;}}
+function saveSettings(s){try{localStorage.setItem(SK_SETTINGS,JSON.stringify(s));}catch(e){}}
+
+/* ══════════════════════════════════════
+   TTS
+══════════════════════════════════════ */
+var synth=window.speechSynthesis;
+function speak(text,lang,cb){
+  if(!synth)return;
+  synth.cancel();
+  var u=new SpeechSynthesisUtterance(text);
+  u.lang=lang||"en-US"; u.rate=0.88;
+  if(cb) u.onend=cb;
+  synth.speak(u);
+}
+
+/* ══════════════════════════════════════
+   SOUND FX
+══════════════════════════════════════ */
+function playFoundSound(){
+  try{
+    var ctx=new(window.AudioContext||window.webkitAudioContext)();
+    var o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);
+    o.frequency.setValueAtTime(523,ctx.currentTime);
+    o.frequency.setValueAtTime(659,ctx.currentTime+0.1);
+    o.frequency.setValueAtTime(784,ctx.currentTime+0.2);
+    g.gain.setValueAtTime(0.28,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.5);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime+0.5);
+  }catch(e){}
+}
+
+/* ══════════════════════════════════════
+   UTILITIES
+══════════════════════════════════════ */
+function shuffle(a){var b=[].concat(a);for(var i=b.length-1;i>0;i--){var j=0|Math.random()*(i+1);var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function fmtTime(s){return String(0|s/60).padStart(2,"0")+":"+String(s%60).padStart(2,"0");}
+function getDirs(d){
+  if(d==="easy") return [[0,1],[0,-1]];
+  if(d==="medium") return [[0,1],[0,-1],[1,0],[-1,0]];
+  return [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+}
+function buildGrid(words,sz,diff){
+  var grid=[];for(var i=0;i<sz;i++) grid.push(new Array(sz).fill(""));
+  var placed=[]; var dList=getDirs(diff); var ABC="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for(var wi=0;wi<words.length;wi++){
+    var word=words[wi],done=false,sdirs=shuffle(dList);
+    for(var t=0;t<350&&!done;t++){
+      var d=sdirs[t%sdirs.length],r=0|Math.random()*sz,c=0|Math.random()*sz;
+      var cells=[],ok=true;
+      for(var li=0;li<word.length;li++){
+        var rr=r+d[0]*li,cc=c+d[1]*li;
+        if(rr<0||rr>=sz||cc<0||cc>=sz){ok=false;break;}
+        if(grid[rr][cc]!==""&&grid[rr][cc]!==word[li]){ok=false;break;}
+        cells.push([rr,cc]);
+      }
+      if(ok){for(var ci=0;ci<cells.length;ci++) grid[cells[ci][0]][cells[ci][1]]=word[ci];placed.push({word:word,cells:cells});done=true;}
+    }
+  }
+  for(var r2=0;r2<sz;r2++) for(var c2=0;c2<sz;c2++) if(!grid[r2][c2]) grid[r2][c2]=ABC[0|Math.random()*26];
+  return {grid:grid,placed:placed};
+}
+function lineKeys(r1,c1,r2,c2){
+  if(r1===r2&&c1===c2) return [r1+","+c1];
+  var dr=r2-r1,dc=c2-c1,len=Math.max(Math.abs(dr),Math.abs(dc));
+  if(dr!==0&&dc!==0&&Math.abs(dr)!==Math.abs(dc)) return [];
+  var sr=dr===0?0:(dr>0?1:-1),sc=dc===0?0:(dc>0?1:-1),keys=[];
+  for(var i=0;i<=len;i++) keys.push((r1+sr*i)+","+(c1+sc*i));
+  return keys;
+}
+function mergeDB(extra){
+  var map={};
+  for(var i=0;i<BUILTIN.length;i++) map[BUILTIN[i].w]=BUILTIN[i];
+  for(var j=0;j<extra.length;j++) map[extra[j].w]=extra[j];
+  return Object.values(map);
+}
+function parseWords(txt){
+  var words=[];
+  try{
+    var p=JSON.parse(txt.trim());
+    var arr=Array.isArray(p)?p:(p.words||[p]);
+    for(var i=0;i<arr.length;i++){
+      var item=arr[i];
+      if(typeof item==="string") words.push({w:item.toUpperCase().replace(/[^A-Z]/g,""),u:"—"});
+      else if(item.w||item.word) words.push({w:(item.w||item.word).toUpperCase().replace(/[^A-Z]/g,""),u:item.u||item.urdu||item.meaning||"—"});
+    }
+  }catch(e){
+    txt.trim().split(/[\n,]+/).forEach(function(l){l=l.trim();if(l)words.push({w:l.toUpperCase().replace(/[^A-Z]/g,""),u:"—"});});
+  }
+  return words.filter(function(x){return x.w&&x.w.length>=3&&x.w.length<=14;});
+}
+
+/* ══════════════════════════════════════
+   SMALL COMPONENTS
+══════════════════════════════════════ */
+function SpeakerBtn(p){
+  var s=useState(false),speaking=s[0],setSpeaking=s[1];
+  function click(e){e.stopPropagation();setSpeaking(true);speak(p.text,p.lang,function(){setSpeaking(false);});}
+  return h("button",{className:"spk"+(speaking?" speaking":""),onClick:click,title:"Listen"},p.emoji||"🔊");
+}
+
+function Confetti(){
+  var cc=["#f59e0b","#ef4444","#10b981","#8b5cf6","#ec4899","#3b82f6","#14b8a6","#f97316"],pieces=[];
+  for(var i=0;i<65;i++) pieces.push(h("div",{key:i,className:"cp",style:{
+    left:(Math.random()*100)+"%",top:"-20px",background:cc[i%cc.length],
+    width:6+Math.random()*9,height:6+Math.random()*9,
+    borderRadius:Math.random()>.5?"50%":"2px",
+    animationDuration:(1.8+Math.random()*2.4)+"s",animationDelay:(Math.random()*1.6)+"s"
+  }}));
+  return h("div",null,pieces);
+}
+
+function Toast(p){return h("div",{className:"toast "+(p.show?"show":"")},p.msg);}
+
+function Victory(p){
+  return h("div",{className:"vict-overlay"},
+    h(Confetti),
+    h("div",{className:"vict-card"},
+      h("span",{className:"trophy"},"🏆"),
+      h("h2",null,"Puzzle Complete!"),
+      h("div",{className:"vict-time"},fmtTime(p.time)),
+      h("p",null,"You found all the words!"),
+      h("div",{className:"vict-btns"},
+        h("button",{className:"btn btn-new",onClick:p.onNew},"🎮 New Game"),
+        h("button",{className:"btn btn-outline",onClick:p.onReplay},"🔄 Replay"),
+      )
+    )
+  );
+}
+
+/* ══════════════════════════════════════
+   SETTINGS PANEL
+══════════════════════════════════════ */
+function SettingsPanel(p){
+  var s=p.settings;
+  function tog(k){p.onChange(Object.assign({},s,{[k]:!s[k]}));}
+  return h("div",{className:"settings-overlay",onClick:function(e){if(e.target===e.currentTarget)p.onClose();}},
+    h("div",{className:"settings-card"},
+      h("h2",null,"⚙️ Settings"),
+      // TTS English
+      h("div",{className:"setting-row"},
+        h("div",null,h("div",{className:"setting-label"},"🔊 English TTS"),h("div",{className:"setting-sub"},"Speak word when found")),
+        h("label",{className:"toggle"},h("input",{type:"checkbox",checked:s.ttsEn,onChange:function(){tog("ttsEn");}}),h("span",{className:"toggle-slider"}))
+      ),
+      // TTS Urdu
+      h("div",{className:"setting-row"},
+        h("div",null,h("div",{className:"setting-label"},"🔉 Urdu TTS"),h("div",{className:"setting-sub"},"Speak Urdu meaning when found")),
+        h("label",{className:"toggle"},h("input",{type:"checkbox",checked:s.ttsUr,onChange:function(){tog("ttsUr");}}),h("span",{className:"toggle-slider"}))
+      ),
+      // Sound FX
+      h("div",{className:"setting-row"},
+        h("div",null,h("div",{className:"setting-label"},"🎵 Sound FX"),h("div",{className:"setting-sub"},"Chime on correct word")),
+        h("label",{className:"toggle"},h("input",{type:"checkbox",checked:s.soundFx,onChange:function(){tog("soundFx");}}),h("span",{className:"toggle-slider"}))
+      ),
+      // Default word count
+      h("div",{className:"setting-row"},
+        h("div",null,h("div",{className:"setting-label"},"📝 Default words / puzzle"),h("div",{className:"setting-sub"},"Overridable per game in toolbar")),
+        h("div",{className:"wcount-wrap"},
+          h("input",{type:"range",min:3,max:10,value:s.wordCount,onChange:function(e){p.onChange(Object.assign({},s,{wordCount:+e.target.value}));}}),
+          h("div",{className:"wcount-val"},s.wordCount)
+        )
+      ),
+      h("div",{className:"setting-row"},
+        h("div",null,h("div",{className:"setting-label"},"📚 Total words in DB"),null),
+        h("b",{style:{color:"#a78bfa"}},p.dbCount)
+      ),
+      h("button",{className:"btn btn-outline settings-close",onClick:p.onClose},"✕ Close")
+    )
+  );
+}
+
+/* ══════════════════════════════════════
+   WORD PANEL
+══════════════════════════════════════ */
+function WordPanel(p){
+  return h("div",{className:"word-panel"},
+    h("h3",null,"📝 Find These Words"),
+    h("div",{className:"word-list"},
+      p.words.map(function(item){
+        var f=null;for(var i=0;i<p.found.length;i++) if(p.found[i].word===item.w){f=p.found[i];break;}
+        var col=f?COLS[f.ci%COLS.length]:null;
+        return h("div",{key:item.w,className:"word-item"+(f?" found":""),
+          style:f?{background:col.light,borderColor:col.border}:{}},
+          h("div",{className:"word-en-row"},
+            h("div",{className:"word-en",style:f?{color:col.border}:{}},item.w),
+            h(SpeakerBtn,{text:item.w,lang:"en-US",emoji:"🔊"}),
+            f&&h("span",{className:"word-check",style:{color:col.border}},"✓")
+          ),
+          h("div",{className:"word-ur-row"},
+            h(SpeakerBtn,{text:item.u,lang:"ur-PK",emoji:"🔉"}),
+            h("div",{className:"word-ur"},item.u)
+          )
+        );
+      })
+    )
+  );
+}
+
+/* ══════════════════════════════════════
+   IO PANEL
+══════════════════════════════════════ */
+function IOPanel(p){
+  var ts=useState("import"),tab=ts[0],setTab=ts[1];
+  var txts=useState(""),txt=txts[0],setTxt=txts[1];
+  var ms=useState({err:"",ok:""}),msg=ms[0],setMsg=ms[1];
+  var fileRef=useRef(null);
+  function clr(){setMsg({err:"",ok:""});}
+
+  function doAdd(){
+    clr();var words=parseWords(txt);
+    if(!words.length){setMsg({err:"No valid words.",ok:""});return;}
+    p.onAdd(words);setTxt("");setMsg({err:"",ok:"✓ Added "+words.length+" words permanently!"});
+  }
+  function onFile(e){
+    clr();var file=e.target.files&&e.target.files[0];if(!file)return;
+    var r=new FileReader();
+    r.onload=function(ev){var words=parseWords(ev.target.result);
+      if(!words.length){setMsg({err:"No valid words in file.",ok:""});return;}
+      p.onAdd(words);setMsg({err:"",ok:"✓ Added "+words.length+" words from file!"});
+    };
+    r.readAsText(file);e.target.value="";
+  }
+  function expGame(){
+    var d={meta:{exportedAt:new Date().toISOString(),difficulty:p.diff,gridSize:p.sz,format:"word-search-puzzle-v1"},words:p.words};
+    dl(JSON.stringify(d,null,2),"word-search-puzzle.json");
+  }
+  function expDB(){
+    var d={meta:{exportedAt:new Date().toISOString(),format:"word-search-database-v1",count:p.extra.length},words:p.extra};
+    dl(JSON.stringify(d,null,2),"word-search-database.json");
+  }
+  function dl(json,name){
+    var b=new Blob([json],{type:"application/json"});var u=URL.createObjectURL(b);
+    var a=document.createElement("a");a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);
+  }
+
+  return h("div",{className:"io-panel"},
+    h("h3",null,"📂 Import / Export"),
+    h("div",{className:"io-tabs"},
+      h("button",{className:"io-tab"+(tab==="import"?" active":""),onClick:function(){setTab("import");clr();}},"📥 Import"),
+      h("button",{className:"io-tab"+(tab==="export"?" active":""),onClick:function(){setTab("export");clr();}},"📤 Export"),
+    ),
+    tab==="import"&&h("div",null,
+      h("textarea",{value:txt,onChange:function(e){setTxt(e.target.value);clr();},
+        placeholder:'[{"w":"CAT","u":"بلی"},{"w":"DOG","u":"کتا"}]\nor {"words":[...]}\nor: CAT, DOG, BIRD'}),
+      h("div",{className:"fmt-hint"},"Words added permanently to your browser database."),
+      msg.err&&h("div",{className:"err-txt"},msg.err),
+      msg.ok&&h("div",{className:"ok-txt"},msg.ok),
+      h("div",{className:"io-row"},
+        h("button",{className:"btn btn-success btn-sm",onClick:doAdd},"✚ Add to DB"),
+        h("button",{className:"btn btn-teal btn-sm",onClick:function(){fileRef.current&&fileRef.current.click();}},"📁 From File"),
+        h("button",{className:"btn btn-outline btn-sm",onClick:function(){setTxt("");clr();}},"Clear"),
+      ),
+      h("input",{type:"file",accept:".json,.txt",className:"file-input",ref:fileRef,onChange:onFile}),
+    ),
+    tab==="export"&&h("div",null,
+      h("div",{className:"fmt-hint"},"Export current puzzle words, or your entire added word database."),
+      h("div",{className:"io-row"},
+        h("button",{className:"btn btn-success btn-sm",onClick:expGame},"🎮 Export Puzzle"),
+        h("button",{className:"btn btn-purple btn-sm",onClick:expDB},"💾 Export My DB"),
+      ),
+      h("div",{className:"db-info"},"Your DB: ",h("b",null,p.extra.length)," custom words"),
+    ),
+  );
+}
+
+/* ══════════════════════════════════════
+   GRID COMPONENT
+══════════════════════════════════════ */
+function Grid(p){
+  // p: {grid, sz, gameState, revealed, sel, tapSel, fMap, hSet, onStart, onEnter, onEnd, onTap}
+  var sz=p.sz, grid=p.grid, cw=sz<=10?36:30;
+  var cells=[];
+  for(var r=0;r<sz;r++){
+    for(var c=0;c<sz;c++){
+      var key=r+","+c;
+      var isSel=p.sel.indexOf(key)>=0;
+      var isTap=!isSel&&p.tapSel.indexOf(key)>=0;
+      var fnd=p.fMap[key]||null;
+      var isHint=p.hSet.has(key);
+      var isIdle=p.gameState==="idle";
+      var isRevealed=p.revealed&&p.revealed[key];
+      var style={width:cw,height:cw};
+      if(isIdle&&!isRevealed){
+        // staggered shimmer delay based on position
+        style["--idle-delay"]=((r+c)*0.07%2).toFixed(2)+"s";
+      } else if(fnd&&!isSel&&!isTap){
+        style.background=fnd.bg;style.color="#fff";style.borderColor=fnd.border;
+        style.boxShadow="0 0 7px "+fnd.border+"88";
+      }
+      var cls="cell";
+      if(isIdle&&!isRevealed) cls+=" idle-cell";
+      if(isRevealed) cls+=" flip-in";
+      if(isSel) cls+=" sel";
+      else if(isTap) cls+=" tap-sel";
+      if(fnd) cls+=" found-c";
+      if(isHint) cls+=" hint-c";
+
+      var letter=(isIdle&&!isRevealed)?" ":grid[r][c];
+      // flip-in delay
+      var flipDelay=isRevealed?((r*sz+c)*0.012)+"s":"0s";
+
+      cells.push(h("div",{
+        key:key,"data-r":r,"data-c":c,
+        className:cls,
+        style:Object.assign({},style,isRevealed?{"--flip-delay":flipDelay,"--flip-dur":"0.4s"}:{}),
+        onMouseDown:function(ev){ev.preventDefault();var t=ev.currentTarget;p.onStart(+t.dataset.r,+t.dataset.c);},
+        onMouseEnter:function(ev){var t=ev.currentTarget;p.onEnter(+t.dataset.r,+t.dataset.c);},
+        onMouseUp:p.onEnd,
+        onTouchStart:function(ev){ev.preventDefault();var t=ev.currentTarget;p.onStart(+t.dataset.r,+t.dataset.c);},
+        onTouchMove:function(ev){
+          ev.preventDefault();var touch=ev.touches[0];
+          var el=document.elementFromPoint(touch.clientX,touch.clientY);
+          if(el&&el.dataset&&el.dataset.r!==undefined) p.onEnter(+el.dataset.r,+el.dataset.c);
+        },
+        onTouchEnd:p.onEnd,
+        onClick:function(ev){var t=ev.currentTarget;p.onTap(+t.dataset.r,+t.dataset.c);}
+      }, letter));
+    }
+  }
+  return h("div",{
+    className:"ws-grid",
+    style:{gridTemplateColumns:"repeat("+sz+","+cw+"px)",gap:"2px"},
+    onMouseLeave:p.onEnd,
+  }, cells);
+}
+
+/* ══════════════════════════════════════
+   MAIN APP
+══════════════════════════════════════ */
+function App(){
+  // ─ Persisted settings ─
+  var ss_=useState(loadSettings),settings=ss_[0],setSettingsRaw=ss_[1];
+  function setSettings(s){setSettingsRaw(s);saveSettings(s);}
+
+  // ─ Game word count override (per-game, shown in toolbar) ─
+  var wcs=useState(loadSettings().wordCount),wordCount=wcs[0],setWordCount=wcs[1];
+
+  // ─ Extra words in localStorage ─
+  var ews=useState(loadExtra),extra=ews[0],setExtra=ews[1];
+  var fullDB=useMemo(function(){return mergeDB(extra);},[extra]);
+
+  // ─ Difficulty / grid size ─
+  var ds=useState("medium"),diff=ds[0],setDiff=ds[1];
+  var szs=useState(12),sz=szs[0],setSz=szs[1];
+
+  // ─ Game data ─
+  var wst=useState([]),words=wst[0],setWords=wst[1];
+  var gst=useState([]),grid=gst[0],setGrid=gst[1];
+  var pst=useState([]),placed=pst[0],setPlaced=pst[1];
+  var fst=useState([]),found=fst[0],setFound=fst[1];
+  var fmst=useState({}),fMap=fmst[0],setFMap=fmst[1];
+
+  // ─ Game state: "idle" | "playing" | "paused" | "victory" ─
+  var gss=useState("idle"),gameState=gss[0],setGameState=gss[1];
+
+  // ─ Revealed cells map (for flip animation) {key: true} ─
+  var revs=useState(null),revealed=revs[0],setRevealed=revs[1];
+
+  // ─ Drag selection ─
+  var sels=useState([]),sel=sels[0],setSel=sels[1];
+  var prs=useState(false),pressing=prs[0],setPressing=prs[1];
+  var srcS=useState(null),srcRC=srcS[0],setSrcRC=srcS[1];
+  var dragMovedRef=useRef(false); // distinguish click vs drag
+
+  // ─ Tap (click-to-select) state ─
+  var taps=useState([]),tapSel=taps[0],setTapSel=taps[1];
+  var tapStartRef=useRef(null); // first tapped cell
+
+  // ─ Hint ─
+  var hss=useState(new Set()),hSet=hss[0],setHSet=hss[1];
+
+  // ─ Timer ─
+  var tms=useState(0),timer=tms[0],setTimer=tms[1];
+  var timerRef=useRef(null);
+  var ciRef=useRef(0);
+
+  // ─ Settings panel ─
+  var svs=useState(false),showSettings=svs[0],setShowSettings=svs[1];
+
+  // ─ Toast ─
+  var toastRef=useRef(null);
+  var tmsg=useState(""),toastMsg=tmsg[0],setToastMsg=tmsg[1];
+  var tshow=useState(false),showToast=tshow[0],setShowToast=tshow[1];
+  function toast(msg){clearTimeout(toastRef.current);setToastMsg(msg);setShowToast(true);toastRef.current=setTimeout(function(){setShowToast(false);},2200);}
+
+  /* ── PREPARE GAME (build grid, go idle, no timer) ── */
+  function prepareGame(db,d,s,wc){
+    clearInterval(timerRef.current);
+    var database=db||fullDB;
+    var count=Math.min(wc||wordCount,database.length);
+    var picked=shuffle(database).slice(0,count);
+    var result=buildGrid(picked.map(function(x){return x.w;}),s,d);
+    setWords(picked);setGrid(result.grid);setPlaced(result.placed);
+    setFound([]);setFMap({});setSel([]);setSrcRC(null);setTapSel([]);
+    setHSet(new Set());setTimer(0);setGameState("idle");setRevealed(null);
+    ciRef.current=0;
+    setPressing(false);dragMovedRef.current=false;tapStartRef.current=null;
+  }
+
+  /* ── START GAME (animate flip, begin timer) ── */
+  function startGame(){
+    // Build revealed map with all keys -> staggered reveal
+    var rev={};
+    for(var r=0;r<sz;r++) for(var c=0;c<sz;c++) rev[r+","+c]=true;
+    setRevealed(rev);
+    setGameState("playing");
+    clearInterval(timerRef.current);
+    timerRef.current=setInterval(function(){setTimer(function(t){return t+1;});},1000);
+  }
+
+  /* ── PAUSE / RESUME ── */
+  function pauseGame(){clearInterval(timerRef.current);setGameState("paused");}
+  function resumeGame(){
+    setGameState("playing");
+    timerRef.current=setInterval(function(){setTimer(function(t){return t+1;});},1000);
+  }
+  function togglePause(){if(gameState==="playing")pauseGame();else if(gameState==="paused")resumeGame();}
+
+  /* ── Focus / blur auto-pause ── */
+  useEffect(function(){
+    function onBlur(){if(gameState==="playing") pauseGame();}
+    function onFocus(){if(gameState==="paused") resumeGame();}
+    window.addEventListener("blur",onBlur);
+    window.addEventListener("focus",onFocus);
+    return function(){window.removeEventListener("blur",onBlur);window.removeEventListener("focus",onFocus);};
+  },[gameState]);
+
+  /* ── Initial load ── */
+  useEffect(function(){prepareGame(null,"medium",12,5);},[]);
+
+  /* ── Victory detection ── */
+  useEffect(function(){
+    if((gameState==="playing")&&found.length>0&&found.length===words.length){
+      clearInterval(timerRef.current);setGameState("victory");
+    }
+  },[found.length,words.length,gameState]);
+
+  /* ── Add permanent words ── */
+  function addWords(newWords){
+    var map={};
+    for(var i=0;i<extra.length;i++) map[extra[i].w]=extra[i];
+    for(var j=0;j<newWords.length;j++) map[newWords[j].w]=newWords[j];
+    var merged=Object.values(map);
+    setExtra(merged);saveExtra(merged);
+  }
+
+  /* ══════════════════════════════════════
+     DRAG SELECTION
+  ══════════════════════════════════════ */
+  function onStart(r,c){
+    if(gameState!=="playing") return;
+    // Clear tap selection when starting drag
+    setTapSel([]);tapStartRef.current=null;
+    setPressing(true);setSrcRC([r,c]);setSel([r+","+c]);
+    dragMovedRef.current=false;
+  }
+  function onEnter(r,c){
+    if(!pressing||!srcRC) return;
+    var keys=lineKeys(srcRC[0],srcRC[1],r,c);
+    setSel(keys);
+    if(keys.length>1) dragMovedRef.current=true;
+  }
+  function onEnd(){
+    if(!pressing) return;
+    setPressing(false);
+    if(dragMovedRef.current){
+      // It was a real drag — check it
+      checkSel(sel,"drag");
+    }
+    // If it was a single tap (no drag), onTap handles it
+    setSel([]);setSrcRC(null);dragMovedRef.current=false;
+  }
+
+  /* ══════════════════════════════════════
+     TAP / CLICK SELECTION
+     Click first letter → select it, click more → extend path
+     Click same selected letter → deselect all
+     When selection spells a valid line → check word
+  ══════════════════════════════════════ */
+  function onTap(r,c){
+    if(gameState!=="playing") return;
+    if(dragMovedRef.current) return; // was a drag, not a tap
+    var key=r+","+c;
+
+    // If this cell is already in tapSel…
+    var idx=tapSel.indexOf(key);
+    if(idx>=0){
+      if(idx===0&&tapSel.length===1){
+        // Tapped the only selected cell → deselect
+        setTapSel([]);tapStartRef.current=null;
+      } else if(idx===tapSel.length-1){
+        // Tapped last cell again → deselect it
+        var ns=tapSel.slice(0,tapSel.length-1);
+        setTapSel(ns);
+        tapStartRef.current=ns.length>0?ns[0].split(",").map(Number):null;
+      } else {
+        // Tapped a middle cell → trim to that cell
+        setTapSel(tapSel.slice(0,idx+1));
+      }
+      return;
+    }
+
+    if(!tapStartRef.current){
+      // First tap — start selection
+      tapStartRef.current=[r,c];
+      setTapSel([key]);
+    } else {
+      // Subsequent tap — try to extend line from start
+      var start=tapStartRef.current;
+      var line=lineKeys(start[0],start[1],r,c);
+      if(line.length>1){
+        setTapSel(line);
+        // Auto-check when tapping: check if word is done
+        // We check after state update via a small trick — use the line directly
+        checkSel(line,"tap");
+        // Reset after check attempt (whether found or not, clear after delay)
+        setTimeout(function(){setTapSel([]);tapStartRef.current=null;},300);
+      } else {
+        // Not a valid line — start fresh from new cell
+        tapStartRef.current=[r,c];
+        setTapSel([key]);
+      }
+    }
+  }
+
+  /* ══════════════════════════════════════
+     CHECK SELECTION
+  ══════════════════════════════════════ */
+  function checkSel(cells,mode){
+    if(!cells||cells.length<2) return;
+    var word="";
+    for(var i=0;i<cells.length;i++){
+      var parts=cells[i].split(",");
+      word+=(grid[+parts[0]]&&grid[+parts[0]][+parts[1]])||"";
+    }
+    var rev=word.split("").reverse().join("");
+    for(var pi=0;pi<placed.length;pi++){
+      var pl=placed[pi];
+      var alreadyFound=false;
+      for(var fi=0;fi<found.length;fi++) if(found[fi].word===pl.word){alreadyFound=true;break;}
+      if(alreadyFound) continue;
+      if(pl.word===word||pl.word===rev){
+        var ci2=ciRef.current++;
+        var col=COLS[ci2%COLS.length];
+        var entry={word:pl.word,ci:ci2};
+        setFound(function(f){return f.concat([entry]);});
+        setFMap(function(m){
+          var nm=Object.assign({},m);
+          for(var ki=0;ki<pl.cells.length;ki++) nm[pl.cells[ki][0]+","+pl.cells[ki][1]]=col;
+          return nm;
+        });
+        toast("✨ Found \""+pl.word+"\"!");
+        if(settings.soundFx) playFoundSound();
+        // TTS
+        var wi2=null;for(var wii=0;wii<words.length;wii++) if(words[wii].w===pl.word){wi2=words[wii];break;}
+        if(wi2){
+          if(settings.ttsEn&&settings.ttsUr) speak(pl.word,"en-US",function(){if(wi2)speak(wi2.u,"ur-PK",null);});
+          else if(settings.ttsEn) speak(pl.word,"en-US",null);
+          else if(settings.ttsUr) speak(wi2.u,"ur-PK",null);
+        }
+        // Clear tap selection on success
+        if(mode==="tap"){setTapSel([]);tapStartRef.current=null;}
+        return;
+      }
+    }
+  }
+
+  function hint(){
+    if(gameState!=="playing") return;
+    var unfound=[];
+    for(var i=0;i<placed.length;i++){
+      var f=false;for(var j=0;j<found.length;j++) if(found[j].word===placed[i].word){f=true;break;}
+      if(!f) unfound.push(placed[i]);
+    }
+    if(!unfound.length) return;
+    var tgt=unfound[0|Math.random()*unfound.length];
+    var hk=new Set([tgt.cells[0][0]+","+tgt.cells[0][1]]);
+    setHSet(hk);
+    setTimeout(function(){setHSet(new Set());},3500);
+  }
+
+  var pct=words.length?Math.round(found.length/words.length*100):0;
+  var isPlaying=gameState==="playing";
+  var isPaused=gameState==="paused";
+  var isIdle=gameState==="idle";
+
+  return h("div",{className:"app"},
+
+    // HEADER
+    h("div",{className:"hdr"},
+      h("h1",null,"🔍 Word Search"),
+      h("p",null,"Drag or tap letters to select · Find all hidden words!"),
+      h("button",{className:"settings-btn",onClick:function(){setShowSettings(true);},title:"Settings"},"⚙️"),
+    ),
+
+    // ── CONTROLS BAR ──
+    h("div",{className:"controls"},
+      // Difficulty tabs
+      h("div",{className:"diff-tabs"},
+        ["easy","medium","hard"].map(function(d){
+          return h("button",{key:d,className:"diff-tab"+(diff===d?" active":""),
+            onClick:function(){setDiff(d);prepareGame(null,d,sz,wordCount);}},
+            d[0].toUpperCase()+d.slice(1));
+        })
+      ),
+
+      // Word count quick picker (per-game override, max 10)
+      h("div",{className:"wc-picker",title:"Words per puzzle (overrides setting)"},
+        h("label",null,"Words:"),
+        h("input",{type:"range",min:3,max:10,value:wordCount,
+          onChange:function(e){
+            var v=+e.target.value;
+            setWordCount(v);
+            if(isIdle) prepareGame(null,diff,sz,v);
+          }}),
+        h("span",{className:"wcv"},wordCount)
+      ),
+
+      // START / PAUSE — always visible, first action button
+      isIdle
+        ? h("button",{className:"btn btn-start",onClick:startGame},"▶ Start")
+        : h("button",{
+            className:"btn "+(isPaused?"btn-start":"btn-pause"),
+            onClick:togglePause
+          }, isPaused?"▶ Resume":"⏸ Pause"),
+
+      // Hint (only when playing / paused)
+      (isPlaying||isPaused)&&h("button",{className:"btn btn-purple",onClick:hint},"💡 Hint"),
+
+      // New Game — last, so it's not accidentally clicked
+      h("button",{className:"btn btn-new",
+        onClick:function(){prepareGame(null,diff,sz,wordCount);}},
+        "🎮 New Game"),
+    ),
+
+    // Grid size pills
+    h("div",{className:"size-row"},
+      [10,12].map(function(s){
+        return h("button",{key:s,className:"size-btn"+(sz===s?" active":""),
+          onClick:function(){setSz(s);prepareGame(null,diff,s,wordCount);}},s+"×"+s);
+      })
+    ),
+
+    // Stats (shown once started)
+    !isIdle&&h("div",{className:"stats"},
+      h("div",{className:"chip"},"⏱ ",h("span",{className:"chip-v"},fmtTime(timer)),
+        isPaused&&h("span",{style:{color:"#f59e0b",marginLeft:4}},"⏸")),
+      h("div",{className:"chip"},"🎯 ",h("span",{className:"chip-v"},found.length+"/"+words.length)," found"),
+      h("div",{className:"chip"},"📐 ",h("span",{className:"chip-v"},diff[0].toUpperCase()+diff.slice(1))),
+    ),
+
+    // Progress bar
+    !isIdle&&h("div",{className:"prog-wrap"},
+      h("div",{className:"prog-lbl"},h("span",null,"Progress"),h("span",null,pct+"%")),
+      h("div",{className:"prog-bar"},h("div",{className:"prog-fill",style:{width:pct+"%"}}))
+    ),
+
+    // GAME LAYOUT
+    h("div",{className:"game-layout"},
+      // Grid card
+      h("div",{className:"grid-card"+(isIdle?" grid-idle":"")},
+        // Paused overlay
+        isPaused&&h("div",{className:"paused-banner"},
+          h("h2",null,"⏸ Paused"),
+          h("p",null,"Click Resume or focus this window"),
+          h("button",{className:"btn btn-start",onClick:resumeGame},"▶ Resume"),
+        ),
+        // Idle overlay — attractive invite card on top of mosaic grid
+        isIdle&&h("div",{className:"idle-overlay"},
+          h("div",{className:"idle-overlay-inner"},
+            h("span",{className:"idle-icon"},"🔍"),
+            h("div",{className:"idle-title"},"Ready to Play?"),
+            h("div",{className:"idle-sub"},"Find all hidden words by dragging or tapping letters"),
+            h("div",{className:"idle-meta"},
+              h("div",{className:"idle-meta-chip"},"📝 Words: ",h("b",null,wordCount)),
+              h("div",{className:"idle-meta-chip"},"📏 Grid: ",h("b",null,sz+"×"+sz)),
+              h("div",{className:"idle-meta-chip"},"📐 ",h("b",null,diff[0].toUpperCase()+diff.slice(1))),
+            ),
+            h("button",{className:"idle-start-btn",onClick:startGame},"▶  Start Game"),
+          )
+        ),
+        grid.length>0&&h(Grid,{
+          grid:grid,sz:sz,
+          gameState:gameState,
+          revealed:revealed,
+          sel:isPlaying?sel:[],
+          tapSel:isPlaying?tapSel:[],
+          fMap:fMap,hSet:hSet,
+          onStart:onStart,onEnter:onEnter,onEnd:onEnd,onTap:onTap,
+        })
+      ),
+      // Side panel
+      h("div",{className:"side-panel"},
+        h(WordPanel,{words:words,found:found}),
+        h(IOPanel,{words:words,placed:placed,diff:diff,sz:sz,extra:extra,onAdd:addWords}),
+      )
+    ),
+
+    // Victory overlay
+    gameState==="victory"&&h(Victory,{
+      time:timer,
+      onNew:function(){prepareGame(null,diff,sz,wordCount);},
+      onReplay:function(){prepareGame(null,diff,sz,wordCount);}
+    }),
+
+    // Settings overlay
+    showSettings&&h(SettingsPanel,{
+      settings:settings,
+      onChange:setSettings,
+      onClose:function(){setShowSettings(false);},
+      dbCount:fullDB.length,
+    }),
+
+    h(Toast,{msg:toastMsg,show:showToast}),
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+})();
+</script>
+</body>
+</html>
