@@ -12297,6 +12297,28 @@ ${marker} `);
     if (seconds > 0 || !parts.length) parts.push(joinLocalizedText(`${seconds}s`, `${seconds} \u0633\u06CC\u06A9\u0646\u0688`, language));
     return parts.join(language === "ur" ? " " : " ");
   }
+  function normalizeFocusTimerClockParts(rawParts = {}) {
+    return {
+      hours: Math.max(0, Math.min(23, Number(rawParts == null ? void 0 : rawParts.hours) || 0)),
+      minutes: Math.max(0, Math.min(59, Number(rawParts == null ? void 0 : rawParts.minutes) || 0)),
+      seconds: Math.max(0, Math.min(59, Number(rawParts == null ? void 0 : rawParts.seconds) || 0))
+    };
+  }
+  function formatFocusTimerClockTargetLabel(parts = {}, language = "en") {
+    const safeParts = normalizeFocusTimerClockParts(parts);
+    const formatted = `${String(safeParts.hours).padStart(2, "0")}:${String(safeParts.minutes).padStart(2, "0")}:${String(safeParts.seconds).padStart(2, "0")}`;
+    return joinLocalizedText(`Rings at ${formatted}`, `${formatted} \u067E\u0631 \u0628\u062C\u06D2 \u06AF\u0627`, language);
+  }
+  function buildNextFocusTimerAlarmTimestamp(parts = {}, fromTime = Date.now()) {
+    const safeParts = normalizeFocusTimerClockParts(parts);
+    const baseDate = new Date(fromTime);
+    const targetDate = new Date(baseDate);
+    targetDate.setHours(safeParts.hours, safeParts.minutes, safeParts.seconds, 0);
+    if (targetDate.getTime() <= fromTime) {
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+    return targetDate.getTime();
+  }
   function normalizeFocusTimerSettings(rawSettings = {}) {
     const durationSeconds = clampFocusTimerSeconds(
       rawSettings == null ? void 0 : rawSettings.durationSeconds,
@@ -12306,7 +12328,9 @@ ${marker} `);
       durationMinutes: Math.max(1, Math.min(720, Math.round(durationSeconds / 60))),
       durationSeconds,
       autoStartBreak: Boolean(rawSettings == null ? void 0 : rawSettings.autoStartBreak),
-      defaultExtendSeconds: clampFocusTimerSeconds(rawSettings == null ? void 0 : rawSettings.defaultExtendSeconds, 5 * 60)
+      defaultExtendSeconds: clampFocusTimerSeconds(rawSettings == null ? void 0 : rawSettings.defaultExtendSeconds, 5 * 60),
+      mode: (rawSettings == null ? void 0 : rawSettings.mode) === "alarm" ? "alarm" : "countdown",
+      alarmClock: normalizeFocusTimerClockParts(rawSettings == null ? void 0 : rawSettings.alarmClock)
     };
   }
   function normalizeFocusTimerState(rawState = {}, settings = {}) {
@@ -12330,7 +12354,9 @@ ${marker} `);
       completedSessions: Math.max(0, Number(rawState == null ? void 0 : rawState.completedSessions) || 0),
       completionPromptVisible: Boolean(rawState == null ? void 0 : rawState.completionPromptVisible) && !isActive,
       completionAlerted: Boolean(rawState == null ? void 0 : rawState.completionAlerted) && !isActive,
-      minimized: Boolean(rawState == null ? void 0 : rawState.minimized)
+      minimized: Boolean(rawState == null ? void 0 : rawState.minimized),
+      sessionMode: (rawState == null ? void 0 : rawState.sessionMode) === "alarm" ? "alarm" : "countdown",
+      alarmTargetAt: Number(rawState == null ? void 0 : rawState.alarmTargetAt) > now ? Number(rawState == null ? void 0 : rawState.alarmTargetAt) : null
     };
   }
   function formatProjectedDateLabel(value, language = "en") {
@@ -13559,6 +13585,8 @@ ${marker} `);
     const [focusTimerPopupPosition, setFocusTimerPopupPosition] = useState(null);
     const [focusTimerExtendPopupOpen, setFocusTimerExtendPopupOpen] = useState(false);
     const [focusTimerDraftDuration, setFocusTimerDraftDuration] = useState(() => {
+      const normalizedSettings = normalizeFocusTimerSettings((stored == null ? void 0 : stored.focusTimerSettings) || {});
+      if (normalizedSettings.mode === "alarm") return normalizeFocusTimerClockParts(normalizedSettings.alarmClock);
       const initialSeconds = normalizeFocusTimerState((stored == null ? void 0 : stored.focusTimerState) || {}, (stored == null ? void 0 : stored.focusTimerSettings) || {}).selectedDurationSeconds;
       return splitDurationToClockParts(initialSeconds);
     });
@@ -20467,13 +20495,18 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }
       if (storedFocusTimer && typeof storedFocusTimer === "object") {
         const normalizedTimerSettings = normalizeFocusTimerSettings(storedFocusTimer);
+        const alarmSeconds = normalizedTimerSettings.mode === "alarm" ? clampFocusTimerSeconds(Math.ceil((buildNextFocusTimerAlarmTimestamp(normalizedTimerSettings.alarmClock) - Date.now()) / 1e3), normalizedTimerSettings.durationSeconds) : normalizedTimerSettings.durationSeconds;
         setFocusTimerSettings(normalizedTimerSettings);
         setFocusTimerState((current) => ({
           ...current,
-          selectedDurationSeconds: normalizedTimerSettings.durationSeconds,
-          remainingSeconds: current.active || current.paused || current.completionPromptVisible ? current.remainingSeconds : normalizedTimerSettings.durationSeconds
+          sessionMode: normalizedTimerSettings.mode === "alarm" ? "alarm" : current.sessionMode,
+          selectedDurationSeconds: alarmSeconds,
+          remainingSeconds: current.active || current.paused || current.completionPromptVisible ? current.remainingSeconds : alarmSeconds,
+          alarmTargetAt: normalizedTimerSettings.mode === "alarm" ? buildNextFocusTimerAlarmTimestamp(normalizedTimerSettings.alarmClock) : current.alarmTargetAt
         }));
-        setFocusTimerDraftDuration(splitDurationToClockParts(normalizedTimerSettings.durationSeconds));
+        setFocusTimerDraftDuration(
+          normalizedTimerSettings.mode === "alarm" ? normalizeFocusTimerClockParts(normalizedTimerSettings.alarmClock) : splitDurationToClockParts(normalizedTimerSettings.durationSeconds)
+        );
       }
       if (storedReminderSettings && typeof storedReminderSettings === "object") {
         setReminderSettings({
@@ -23810,13 +23843,18 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
             }
             if (storedFocusTimer && typeof storedFocusTimer === "object") {
               const normalizedTimerSettings = normalizeFocusTimerSettings(storedFocusTimer);
+              const alarmSeconds = normalizedTimerSettings.mode === "alarm" ? clampFocusTimerSeconds(Math.ceil((buildNextFocusTimerAlarmTimestamp(normalizedTimerSettings.alarmClock) - Date.now()) / 1e3), normalizedTimerSettings.durationSeconds) : normalizedTimerSettings.durationSeconds;
               setFocusTimerSettings(normalizedTimerSettings);
               setFocusTimerState((current) => ({
                 ...current,
-                selectedDurationSeconds: normalizedTimerSettings.durationSeconds,
-                remainingSeconds: current.active || current.paused || current.completionPromptVisible ? current.remainingSeconds : normalizedTimerSettings.durationSeconds
+                sessionMode: normalizedTimerSettings.mode === "alarm" ? "alarm" : current.sessionMode,
+                selectedDurationSeconds: alarmSeconds,
+                remainingSeconds: current.active || current.paused || current.completionPromptVisible ? current.remainingSeconds : alarmSeconds,
+                alarmTargetAt: normalizedTimerSettings.mode === "alarm" ? buildNextFocusTimerAlarmTimestamp(normalizedTimerSettings.alarmClock) : current.alarmTargetAt
               }));
-              setFocusTimerDraftDuration(splitDurationToClockParts(normalizedTimerSettings.durationSeconds));
+              setFocusTimerDraftDuration(
+                normalizedTimerSettings.mode === "alarm" ? normalizeFocusTimerClockParts(normalizedTimerSettings.alarmClock) : splitDurationToClockParts(normalizedTimerSettings.durationSeconds)
+              );
             }
             if (storedReminderSettings && typeof storedReminderSettings === "object") {
               setReminderSettings({
@@ -24550,6 +24588,8 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       focusTimerSettings == null ? void 0 : focusTimerSettings.durationSeconds,
       (Number(focusTimerSettings == null ? void 0 : focusTimerSettings.durationMinutes) || 20) * 60
     );
+    const focusTimerMode = (focusTimerSettings == null ? void 0 : focusTimerSettings.mode) === "alarm" ? "alarm" : "countdown";
+    const focusTimerAlarmClock = normalizeFocusTimerClockParts(focusTimerSettings == null ? void 0 : focusTimerSettings.alarmClock);
     const focusTimerRemainingLabel = formatDetailedClockTime(focusTimerState.remainingSeconds);
     const focusTimerIsComplete = !focusTimerState.active && Boolean(focusTimerState.completionPromptVisible);
     const focusTimerFloatingVisible = Boolean(focusTimerState.minimized) && (focusTimerState.active || focusTimerState.paused || focusTimerState.completionPromptVisible);
@@ -24599,17 +24639,23 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
     const syncFocusTimerDraftFromSeconds = useCallback((totalSeconds) => {
       setFocusTimerDraftDuration(splitDurationToClockParts(clampFocusTimerSeconds(totalSeconds, focusTimerDurationSeconds)));
     }, [focusTimerDurationSeconds]);
+    const syncFocusTimerDraftFromAlarmClock = useCallback((nextClock = focusTimerAlarmClock) => {
+      setFocusTimerDraftDuration(normalizeFocusTimerClockParts(nextClock));
+    }, [focusTimerAlarmClock]);
     const applyFocusTimerDurationSeconds = useCallback((nextSeconds, { start = false, closePopup = false } = {}) => {
       const safeSeconds = clampFocusTimerSeconds(nextSeconds, focusTimerDurationSeconds);
       const now = Date.now();
       setFocusTimerSettings((current) => ({
         ...normalizeFocusTimerSettings(current),
+        mode: "countdown",
         durationSeconds: safeSeconds,
         durationMinutes: Math.max(1, Math.min(720, Math.round(safeSeconds / 60)))
       }));
       setFocusTimerState((current) => {
         const nextState = {
           ...current,
+          sessionMode: "countdown",
+          alarmTargetAt: null,
           selectedDurationSeconds: safeSeconds
         };
         if (!current.active && !current.paused && !current.completionPromptVisible) {
@@ -24630,6 +24676,41 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       syncFocusTimerDraftFromSeconds(safeSeconds);
       if (closePopup) setFocusTimerPopupOpen(false);
     }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
+    const applyFocusTimerAlarmClock = useCallback((nextClockParts, { start = false, closePopup = false } = {}) => {
+      const safeClock = normalizeFocusTimerClockParts(nextClockParts);
+      const now = Date.now();
+      const targetAt = buildNextFocusTimerAlarmTimestamp(safeClock, now);
+      const secondsUntilTarget = clampFocusTimerSeconds(Math.ceil((targetAt - now) / 1e3), focusTimerDurationSeconds);
+      setFocusTimerSettings((current) => ({
+        ...normalizeFocusTimerSettings(current),
+        mode: "alarm",
+        alarmClock: safeClock
+      }));
+      setFocusTimerState((current) => {
+        const nextState = {
+          ...current,
+          sessionMode: "alarm",
+          alarmTargetAt: targetAt,
+          selectedDurationSeconds: secondsUntilTarget
+        };
+        if (!current.active && !current.paused && !current.completionPromptVisible) {
+          nextState.remainingSeconds = secondsUntilTarget;
+        }
+        if (start) {
+          nextState.active = true;
+          nextState.paused = false;
+          nextState.remainingSeconds = secondsUntilTarget;
+          nextState.expectedEndAt = targetAt;
+          nextState.startedAt = now;
+          nextState.completionPromptVisible = false;
+          nextState.completionAlerted = false;
+          nextState.minimized = false;
+        }
+        return nextState;
+      });
+      syncFocusTimerDraftFromAlarmClock(safeClock);
+      if (closePopup) setFocusTimerPopupOpen(false);
+    }, [focusTimerAlarmClock, focusTimerDurationSeconds, syncFocusTimerDraftFromAlarmClock]);
     const startFocusTimerSession = useCallback(({ restart = false } = {}) => {
       const now = Date.now();
       setFocusTimerState((current) => {
@@ -24662,7 +24743,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
     }, []);
     const resetFocusTimerSession = useCallback(() => {
       setFocusTimerState((current) => {
-        const baseSeconds = clampFocusTimerSeconds(current.selectedDurationSeconds, focusTimerDurationSeconds);
+        const baseSeconds = current.sessionMode === "alarm" ? clampFocusTimerSeconds(Math.ceil((buildNextFocusTimerAlarmTimestamp(focusTimerAlarmClock) - Date.now()) / 1e3), current.selectedDurationSeconds || focusTimerDurationSeconds) : clampFocusTimerSeconds(current.selectedDurationSeconds, focusTimerDurationSeconds);
         return {
           ...current,
           active: false,
@@ -24670,13 +24751,14 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           remainingSeconds: baseSeconds,
           expectedEndAt: null,
           completionPromptVisible: false,
-          completionAlerted: false
+          completionAlerted: false,
+          alarmTargetAt: current.sessionMode === "alarm" ? buildNextFocusTimerAlarmTimestamp(focusTimerAlarmClock) : null
         };
       });
-    }, [focusTimerDurationSeconds]);
+    }, [focusTimerAlarmClock, focusTimerDurationSeconds]);
     const endFocusTimerSession = useCallback(() => {
       setFocusTimerState((current) => {
-        const baseSeconds = clampFocusTimerSeconds(current.selectedDurationSeconds, focusTimerDurationSeconds);
+        const baseSeconds = current.sessionMode === "alarm" ? clampFocusTimerSeconds(Math.ceil((buildNextFocusTimerAlarmTimestamp(focusTimerAlarmClock) - Date.now()) / 1e3), current.selectedDurationSeconds || focusTimerDurationSeconds) : clampFocusTimerSeconds(current.selectedDurationSeconds, focusTimerDurationSeconds);
         return {
           ...current,
           active: false,
@@ -24684,10 +24766,11 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           remainingSeconds: baseSeconds,
           expectedEndAt: null,
           completionPromptVisible: false,
-          completionAlerted: false
+          completionAlerted: false,
+          alarmTargetAt: current.sessionMode === "alarm" ? buildNextFocusTimerAlarmTimestamp(focusTimerAlarmClock) : null
         };
       });
-    }, [focusTimerDurationSeconds]);
+    }, [focusTimerAlarmClock, focusTimerDurationSeconds]);
     const extendFocusTimerSession = useCallback((extraSeconds, { startIfComplete = false } = {}) => {
       const safeExtraSeconds = clampFocusTimerSeconds(extraSeconds, focusTimerSettings.defaultExtendSeconds || 300);
       const now = Date.now();
@@ -24762,6 +24845,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       const safeSeconds = clampFocusTimerSeconds(nextSeconds, focusTimerDurationSeconds);
       setFocusTimerSettings((current) => ({
         ...normalizeFocusTimerSettings(current),
+        mode: "countdown",
         durationSeconds: safeSeconds,
         durationMinutes: Math.max(1, Math.min(720, Math.round(safeSeconds / 60)))
       }));
@@ -24770,11 +24854,13 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         ...current,
         active: false,
         paused: false,
+        sessionMode: "countdown",
         selectedDurationSeconds: safeSeconds,
         remainingSeconds: safeSeconds,
         expectedEndAt: null,
         completionPromptVisible: false,
-        completionAlerted: false
+        completionAlerted: false,
+        alarmTargetAt: null
       }));
     }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
     const restartFocusTimerSessionWithDuration = useCallback((nextSeconds = focusTimerDurationSeconds) => {
@@ -24782,6 +24868,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       const now = Date.now();
       setFocusTimerSettings((current) => ({
         ...normalizeFocusTimerSettings(current),
+        mode: "countdown",
         durationSeconds: safeSeconds,
         durationMinutes: Math.max(1, Math.min(720, Math.round(safeSeconds / 60)))
       }));
@@ -24790,17 +24877,68 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         ...current,
         active: true,
         paused: false,
+        sessionMode: "countdown",
         selectedDurationSeconds: safeSeconds,
         remainingSeconds: safeSeconds,
         expectedEndAt: now + safeSeconds * 1e3,
         startedAt: now,
         completionPromptVisible: false,
-        completionAlerted: false
+        completionAlerted: false,
+        alarmTargetAt: null
       }));
     }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
+    const resetFocusTimerSessionToAlarmClock = useCallback((nextClockParts = focusTimerAlarmClock) => {
+      const safeClock = normalizeFocusTimerClockParts(nextClockParts);
+      const targetAt = buildNextFocusTimerAlarmTimestamp(safeClock);
+      const safeSeconds = clampFocusTimerSeconds(Math.ceil((targetAt - Date.now()) / 1e3), focusTimerDurationSeconds);
+      setFocusTimerSettings((current) => ({
+        ...normalizeFocusTimerSettings(current),
+        mode: "alarm",
+        alarmClock: safeClock
+      }));
+      syncFocusTimerDraftFromAlarmClock(safeClock);
+      setFocusTimerState((current) => ({
+        ...current,
+        active: false,
+        paused: false,
+        sessionMode: "alarm",
+        selectedDurationSeconds: safeSeconds,
+        remainingSeconds: safeSeconds,
+        expectedEndAt: null,
+        completionPromptVisible: false,
+        completionAlerted: false,
+        alarmTargetAt: targetAt
+      }));
+    }, [focusTimerAlarmClock, focusTimerDurationSeconds, syncFocusTimerDraftFromAlarmClock]);
+    const restartFocusTimerSessionWithAlarmClock = useCallback((nextClockParts = focusTimerAlarmClock) => {
+      const safeClock = normalizeFocusTimerClockParts(nextClockParts);
+      const now = Date.now();
+      const targetAt = buildNextFocusTimerAlarmTimestamp(safeClock, now);
+      const safeSeconds = clampFocusTimerSeconds(Math.ceil((targetAt - now) / 1e3), focusTimerDurationSeconds);
+      setFocusTimerSettings((current) => ({
+        ...normalizeFocusTimerSettings(current),
+        mode: "alarm",
+        alarmClock: safeClock
+      }));
+      syncFocusTimerDraftFromAlarmClock(safeClock);
+      setFocusTimerState((current) => ({
+        ...current,
+        active: true,
+        paused: false,
+        sessionMode: "alarm",
+        selectedDurationSeconds: safeSeconds,
+        remainingSeconds: safeSeconds,
+        expectedEndAt: targetAt,
+        startedAt: now,
+        completionPromptVisible: false,
+        completionAlerted: false,
+        alarmTargetAt: targetAt
+      }));
+    }, [focusTimerAlarmClock, focusTimerDurationSeconds, syncFocusTimerDraftFromAlarmClock]);
     const handleStartFocusTimerPopupDrag = useCallback((event) => {
       var _a2, _b2, _c2;
-      if (!(event == null ? void 0 : event.ctrlKey)) return;
+      const isSecondaryPress = (event == null ? void 0 : event.button) === 2 || ((Number(event == null ? void 0 : event.buttons) || 0) & 2) === 2;
+      if (!isSecondaryPress) return;
       if ((_b2 = (_a2 = event.target) == null ? void 0 : _a2.closest) == null ? void 0 : _b2.call(_a2, ".header-focus-timer-head-actions")) return;
       const popupNode = focusTimerPopupRef.current;
       if (!popupNode) return;
@@ -24823,9 +24961,6 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       setFocusTimerPopupPosition({ x: rect.left, y: rect.top });
       event.preventDefault();
     }, []);
-    const handleStartFocusTimerPopupMouseDrag = useCallback((event) => {
-      handleStartFocusTimerPopupDrag(event);
-    }, [handleStartFocusTimerPopupDrag]);
     useEffect(() => {
       const handlePointerMove = (event) => {
         var _a2;
@@ -25869,7 +26004,9 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
         if (nextState.focusTimerSettings) {
           const normalizedTimerSettings = normalizeFocusTimerSettings(nextState.focusTimerSettings);
           setFocusTimerSettings(normalizedTimerSettings);
-          setFocusTimerDraftDuration(splitDurationToClockParts(normalizedTimerSettings.durationSeconds));
+          setFocusTimerDraftDuration(
+            normalizedTimerSettings.mode === "alarm" ? normalizeFocusTimerClockParts(normalizedTimerSettings.alarmClock) : splitDurationToClockParts(normalizedTimerSettings.durationSeconds)
+          );
         }
         if (nextState.focusTimerState) {
           setFocusTimerState(normalizeFocusTimerState(nextState.focusTimerState, nextState.focusTimerSettings || focusTimerSettings));
@@ -25968,7 +26105,9 @@ ${ui.changedSubjects}: ${result.changedSubjects.join(", ")}` : ""}` : ui.refresh
           ...focusTimerSettings,
           ...nextState.focusTimerSettings
         });
-        setFocusTimerDraftDuration(splitDurationToClockParts(normalizedTimerSettings.durationSeconds));
+        setFocusTimerDraftDuration(
+          normalizedTimerSettings.mode === "alarm" ? normalizeFocusTimerClockParts(normalizedTimerSettings.alarmClock) : splitDurationToClockParts(normalizedTimerSettings.durationSeconds)
+        );
       }
       if (nextState.focusTimerState) {
         setFocusTimerState((current) => normalizeFocusTimerState({
@@ -29119,8 +29258,8 @@ ${error.message || error}`);
         ref: focusTimerButtonRef,
         type: "button",
         className: `header-pin-btn header-timer-btn${focusTimerState.active ? " active" : ""}${focusTimerIsComplete ? " alert" : ""}`,
-        title: language === "ur" ? "\u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627\u0624\u0646\u0679 \u0688\u0627\u0624\u0646 \u0679\u0627\u0626\u0645\u0631" : "Study countdown timer",
-        "aria-label": language === "ur" ? "\u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627\u0624\u0646\u0679 \u0688\u0627\u0624\u0646 \u0679\u0627\u0626\u0645\u0631" : "Study countdown timer",
+        title: language === "ur" ? "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0679\u0627\u0626\u0645\u0631" : "Study timer",
+        "aria-label": language === "ur" ? "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0679\u0627\u0626\u0645\u0631" : "Study timer",
         "aria-expanded": focusTimerPopupOpen ? "true" : "false",
         onClick: (event) => {
           event.stopPropagation();
@@ -29129,7 +29268,10 @@ ${error.message || error}`);
             setFocusTimerPopupOpen(false);
             return;
           }
-          if (!focusTimerPopupOpen) syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+          if (!focusTimerPopupOpen) {
+            if (focusTimerMode === "alarm") syncFocusTimerDraftFromAlarmClock(focusTimerAlarmClock);
+            else syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+          }
           setFocusTimerPopupOpen((current) => !current);
           setFocusTimerState((current) => ({ ...current, minimized: false }));
         }
@@ -29181,10 +29323,10 @@ ${error.message || error}`);
         {
           className: "header-focus-timer-head",
           onPointerDown: handleStartFocusTimerPopupDrag,
-          onMouseDown: handleStartFocusTimerPopupMouseDrag,
-          title: language === "ur" ? "Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u0688\u0631\u06CC\u06AF \u06A9\u0631\u06CC\u06BA" : "Hold Ctrl to drag"
+          onContextMenu: (event) => event.preventDefault(),
+          title: language === "ur" ? "\u0631\u0627\u0626\u0679 \u06A9\u0644\u06A9 \u062F\u0628\u0627 \u06A9\u0631 \u0688\u0631\u06CC\u06AF \u06A9\u0631\u06CC\u06BA" : "Right-click and drag"
         },
-        /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Study Countdown", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627\u0624\u0646\u0679 \u0688\u0627\u0624\u0646", language), language))),
+        /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Study Timer", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0679\u0627\u0626\u0645\u0631", language), language))),
         /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-actions" }, /* @__PURE__ */ React.createElement(
           "button",
           {
@@ -29210,8 +29352,39 @@ ${error.message || error}`);
           /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { d: "M7 7l10 10M17 7 7 17", fill: "none", stroke: "currentColor", strokeWidth: "2.1", strokeLinecap: "round" }))
         ))
       ),
-      /* @__PURE__ */ React.createElement("div", { className: `header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-clock" }, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-status-row" }, /* @__PURE__ */ React.createElement("span", { className: `header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}` }, renderLocalizedTextNode(focusTimerStatusLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-duration" }, renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)))),
-      /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-config" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-grid" }, [
+      /* @__PURE__ */ React.createElement("div", { className: `header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-clock" }, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-status-row" }, /* @__PURE__ */ React.createElement("span", { className: `header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}` }, renderLocalizedTextNode(focusTimerStatusLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-duration" }, renderLocalizedTextNode(
+        focusTimerMode === "alarm" ? formatFocusTimerClockTargetLabel(focusTimerDraftDuration, language) : formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language),
+        language
+      )))),
+      /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-config" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-mode-row" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: `header-focus-timer-chip${focusTimerMode === "countdown" ? " active" : ""}`,
+          onClick: () => {
+            setFocusTimerSettings((current) => ({
+              ...normalizeFocusTimerSettings(current),
+              mode: "countdown"
+            }));
+            syncFocusTimerDraftFromSeconds(focusTimerDurationSeconds);
+          }
+        },
+        renderLocalizedTextNode(joinLocalizedText("Countdown", "\u06A9\u0627\u0624\u0646\u0679 \u0688\u0627\u0624\u0646", language), language)
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: `header-focus-timer-chip${focusTimerMode === "alarm" ? " active" : ""}`,
+          onClick: () => {
+            setFocusTimerSettings((current) => ({
+              ...normalizeFocusTimerSettings(current),
+              mode: "alarm"
+            }));
+            syncFocusTimerDraftFromAlarmClock(focusTimerAlarmClock);
+          }
+        },
+        renderLocalizedTextNode(joinLocalizedText("Ring At Time", "\u0645\u062E\u0635\u0648\u0635 \u0648\u0642\u062A \u067E\u0631", language), language)
+      )), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-grid" }, [
         { key: "hours", label: joinLocalizedText("Hours", "\u06AF\u06BE\u0646\u0679\u06D2", language) },
         { key: "minutes", label: joinLocalizedText("Minutes", "\u0645\u0646\u0679", language) },
         { key: "seconds", label: joinLocalizedText("Seconds", "\u0633\u06CC\u06A9\u0646\u0688", language) }
@@ -29240,7 +29413,7 @@ ${error.message || error}`);
           );
         }),
         /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-spacer", "aria-hidden": "true" })
-      ))))), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-presets" }, focusTimerPresetOptions.map((seconds) => /* @__PURE__ */ React.createElement(
+      ))))), focusTimerMode === "countdown" ? /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-presets" }, focusTimerPresetOptions.map((seconds) => /* @__PURE__ */ React.createElement(
         "button",
         {
           key: `focus_timer_preset_${seconds}`,
@@ -29249,13 +29422,16 @@ ${error.message || error}`);
           onClick: () => syncFocusTimerDraftFromSeconds(seconds)
         },
         renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)
-      )))),
+      ))) : /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-alarm-note" }, renderLocalizedTextNode(joinLocalizedText("The timer will ring at the selected clock time today or tomorrow if that time has already passed.", "\u0645\u0646\u062A\u062E\u0628 \u0648\u0642\u062A \u06AF\u0632\u0631 \u0686\u06A9\u0627 \u06C1\u0648 \u062A\u0648 \u0679\u0627\u0626\u0645\u0631 \u0627\u06AF\u0644\u06D2 \u062F\u0646 \u0627\u0633\u06CC \u0648\u0642\u062A \u0628\u062C\u06D2 \u06AF\u0627\u06D4", language), language))),
       /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-actions" }, /* @__PURE__ */ React.createElement(
         "button",
         {
           type: "button",
           className: "header-focus-timer-action secondary",
-          onClick: () => applyFocusTimerDurationSeconds(focusTimerDraftSeconds)
+          onClick: () => {
+            if (focusTimerMode === "alarm") applyFocusTimerAlarmClock(focusTimerDraftDuration);
+            else applyFocusTimerDurationSeconds(focusTimerDraftSeconds);
+          }
         },
         renderLocalizedTextNode(joinLocalizedText("Apply", "\u0644\u0627\u06AF\u0648 \u06A9\u0631\u06CC\u06BA", language), language)
       ), /* @__PURE__ */ React.createElement(
@@ -29266,6 +29442,7 @@ ${error.message || error}`);
           onClick: () => {
             if (focusTimerState.active) pauseFocusTimerSession();
             else if (focusTimerState.paused) startFocusTimerSession();
+            else if (focusTimerMode === "alarm") restartFocusTimerSessionWithAlarmClock(focusTimerDraftDuration);
             else restartFocusTimerSessionWithDuration(focusTimerDraftSeconds);
           }
         },
@@ -29278,7 +29455,10 @@ ${error.message || error}`);
         {
           type: "button",
           className: "header-focus-timer-action primary alt",
-          onClick: () => restartFocusTimerSessionWithDuration(focusTimerDraftSeconds)
+          onClick: () => {
+            if (focusTimerMode === "alarm") restartFocusTimerSessionWithAlarmClock(focusTimerDraftDuration);
+            else restartFocusTimerSessionWithDuration(focusTimerDraftSeconds);
+          }
         },
         renderLocalizedTextNode(joinLocalizedText("Restart", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0634\u0631\u0648\u0639", language), language)
       ), /* @__PURE__ */ React.createElement(
@@ -29286,7 +29466,10 @@ ${error.message || error}`);
         {
           type: "button",
           className: "header-focus-timer-action secondary",
-          onClick: () => resetFocusTimerSessionToDuration(focusTimerDraftSeconds)
+          onClick: () => {
+            if (focusTimerMode === "alarm") resetFocusTimerSessionToAlarmClock(focusTimerDraftDuration);
+            else resetFocusTimerSessionToDuration(focusTimerDraftSeconds);
+          }
         },
         renderLocalizedTextNode(joinLocalizedText("Reset", "\u0631\u06CC \u0633\u06CC\u0679", language), language)
       ), /* @__PURE__ */ React.createElement(
