@@ -16164,6 +16164,7 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [focusTimerState, setFocusTimerState] = useState(() => normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}));
   const [focusTimerPopupOpen, setFocusTimerPopupOpen] = useState(false);
   const [focusTimerPopupPosition, setFocusTimerPopupPosition] = useState(null);
+  const [focusTimerExtendPopupOpen, setFocusTimerExtendPopupOpen] = useState(false);
   const [focusTimerDraftDuration, setFocusTimerDraftDuration] = useState(() => {
     const initialSeconds = normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}).selectedDurationSeconds;
     return splitDurationToClockParts(initialSeconds);
@@ -28293,14 +28294,17 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
   }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
 
   const handleStartFocusTimerPopupDrag = useCallback((event) => {
-    if (!event?.ctrlKey || event.button !== 0) return;
+    if (!event?.ctrlKey) return;
     if (event.target?.closest?.(".header-focus-timer-head-actions")) return;
     const popupNode = focusTimerPopupRef.current;
     if (!popupNode) return;
     const rect = popupNode.getBoundingClientRect();
+    const startX = Number(event.clientX);
+    const startY = Number(event.clientY);
+    if (!Number.isFinite(startX) || !Number.isFinite(startY)) return;
     focusTimerPopupDragRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
+      startX,
+      startY,
       originX: rect.left,
       originY: rect.top,
     };
@@ -28312,6 +28316,7 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
     const handlePointerMove = (event) => {
       const dragState = focusTimerPopupDragRef.current;
       if (!dragState) return;
+      event.preventDefault?.();
       setFocusTimerPopupPosition({
         x: Math.max(12, dragState.originX + (event.clientX - dragState.startX)),
         y: Math.max(12, dragState.originY + (event.clientY - dragState.startY)),
@@ -28327,6 +28332,12 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
       window.removeEventListener("pointerup", handlePointerUp);
     };
   }, []);
+
+  useEffect(() => {
+    if (!focusTimerPopupOpen) {
+      setFocusTimerExtendPopupOpen(false);
+    }
+  }, [focusTimerPopupOpen]);
 
   useEffect(() => {
     if (!focusTimerPopupOpen) return undefined;
@@ -33057,14 +33068,15 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           >
             {renderLocalizedTextNode(joinLocalizedText("Reset", "ری سیٹ", language), language)}
           </button>
-          <button
-            type="button"
-            className="header-focus-timer-action danger"
-            onClick={endFocusTimerSession}
-          >
-            {renderLocalizedTextNode(joinLocalizedText("Stop", "روک دیں", language), language)}
-          </button>
-        </div>
+              <button
+                type="button"
+                className="header-focus-timer-action danger"
+                onClick={endFocusTimerSession}
+              >
+                <span aria-hidden="true">■</span>
+                <span>{renderLocalizedTextNode(joinLocalizedText("Stop", "روک دیں", language), language)}</span>
+              </button>
+            </div>
         <div className="header-focus-timer-extend-row">
           <span>{renderLocalizedTextNode(joinLocalizedText("Extend time", "وقت بڑھائیں", language), language)}</span>
           <div className="header-focus-timer-extend-actions">
@@ -33091,8 +33103,8 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           <div className="header-focus-timer-complete-row">
             <strong>{renderLocalizedTextNode(joinLocalizedText("Time is up", "وقت مکمل ہو گیا", language), language)}</strong>
             <div className="header-focus-timer-complete-actions">
-              <button type="button" className="header-focus-timer-action primary" onClick={() => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: true })}>
-                {renderLocalizedTextNode(joinLocalizedText("Extend by Selected Time", "منتخب وقت سے بڑھائیں", language), language)}
+              <button type="button" className="header-focus-timer-action primary" onClick={() => setFocusTimerExtendPopupOpen(true)}>
+                {renderLocalizedTextNode(joinLocalizedText("Extend Timer", "ٹائمر بڑھائیں", language), language)}
               </button>
               <button type="button" className="header-focus-timer-action secondary" onClick={() => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || (5 * 60), { startIfComplete: true })}>
                 +{renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerSettings.defaultExtendSeconds || (5 * 60), language), language)}
@@ -33100,6 +33112,54 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <button type="button" className="header-focus-timer-action danger" onClick={endFocusTimerSession}>
                 {renderLocalizedTextNode(joinLocalizedText("End Session", "سیشن ختم کریں", language), language)}
               </button>
+            </div>
+          </div>
+        ) : null}
+        {focusTimerExtendPopupOpen ? (
+          <div className="header-focus-timer-overlay">
+            <div className="header-focus-timer-overlay-card" data-ui-language={language}>
+              <div className="header-focus-timer-overlay-head">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Extend Timer", "ٹائمر بڑھائیں", language), language)}</strong>
+                <button
+                  type="button"
+                  className="header-focus-timer-head-icon"
+                  title={language === "ur" ? "بند کریں" : "Close"}
+                  aria-label={language === "ur" ? "بند کریں" : "Close"}
+                  onClick={() => setFocusTimerExtendPopupOpen(false)}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <div className="header-focus-timer-overlay-copy">
+                {renderLocalizedTextNode(joinLocalizedText("Choose how much more time you want to add.", "منتخب کریں کہ آپ کتنا مزید وقت شامل کرنا چاہتے ہیں۔", language), language)}
+              </div>
+              <div className="header-focus-timer-extend-actions">
+                <button
+                  type="button"
+                  className="header-focus-timer-chip active"
+                  onClick={() => {
+                    extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: true });
+                    setFocusTimerExtendPopupOpen(false);
+                  }}
+                >
+                  +{renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerDraftSeconds, language), language)}
+                </button>
+                {focusTimerExtendOptions.map((seconds) => (
+                  <button
+                    key={`focus_timer_extend_overlay_${seconds}`}
+                    type="button"
+                    className="header-focus-timer-chip"
+                    onClick={() => {
+                      extendFocusTimerSession(seconds, { startIfComplete: true });
+                      setFocusTimerExtendPopupOpen(false);
+                    }}
+                  >
+                    +{renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : null}
