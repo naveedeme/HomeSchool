@@ -16163,6 +16163,7 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [focusTimerSettings, setFocusTimerSettings] = useState(() => normalizeFocusTimerSettings(stored?.focusTimerSettings || {}));
   const [focusTimerState, setFocusTimerState] = useState(() => normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}));
   const [focusTimerPopupOpen, setFocusTimerPopupOpen] = useState(false);
+  const [focusTimerPickerOpenField, setFocusTimerPickerOpenField] = useState(null);
   const [focusTimerDraftDuration, setFocusTimerDraftDuration] = useState(() => {
     const initialSeconds = normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}).selectedDurationSeconds;
     return splitDurationToClockParts(initialSeconds);
@@ -28192,6 +28193,11 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
     }));
   }, []);
 
+  const handleFocusTimerPickerSelect = useCallback((part, value) => {
+    handleFocusTimerDraftPartChange(part, value);
+    setFocusTimerPickerOpenField(null);
+  }, [handleFocusTimerDraftPartChange]);
+
   const handleFocusTimerSettingChange = useCallback((durationMinutes) => {
     const nextSeconds = clampFocusTimerSeconds((Number(durationMinutes) || 20) * 60, focusTimerDurationSeconds);
     applyFocusTimerDurationSeconds(nextSeconds);
@@ -28240,7 +28246,10 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
   }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
 
   useEffect(() => {
-    if (!focusTimerPopupOpen) return undefined;
+    if (!focusTimerPopupOpen) {
+      setFocusTimerPickerOpenField(null);
+      return undefined;
+    }
     const handlePointerDown = (event) => {
       const target = event?.target;
       if (!target) return;
@@ -31624,6 +31633,11 @@ const lessons = getMergedLessons(subjectId, grade);
   const reminderDueNow = Boolean(reminderSettings?.enabled && reminderSettings?.lastShownDay === window.HomeSchoolUtils.getDayKey(Date.now()));
   const focusTimerPresetOptions = [5 * 60, 10 * 60, 15 * 60, 25 * 60, 45 * 60, 60 * 60];
   const focusTimerExtendOptions = [5 * 60, 10 * 60, 15 * 60];
+  const focusTimerPickerOptions = {
+    hours: Array.from({ length: 24 }, (_, index) => index),
+    minutes: Array.from({ length: 60 }, (_, index) => index),
+    seconds: Array.from({ length: 60 }, (_, index) => index),
+  };
   const focusTimerDraftSeconds = clampFocusTimerSeconds(
     (Number(focusTimerDraftDuration.hours) || 0) * 3600
       + (Number(focusTimerDraftDuration.minutes) || 0) * 60
@@ -32774,22 +32788,39 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
             </div>
             <div className="header-focus-timer-config">
-              <div className="header-focus-timer-input-grid">
+              <div className="header-focus-timer-picker-grid">
                 {[
                   { key: "hours", label: joinLocalizedText("Hours", "گھنٹے", language), max: 23 },
                   { key: "minutes", label: joinLocalizedText("Minutes", "منٹ", language), max: 59 },
                   { key: "seconds", label: joinLocalizedText("Seconds", "سیکنڈ", language), max: 59 },
                 ].map((entry) => (
-                  <label key={`focus_timer_${entry.key}`} className="header-focus-timer-input">
-                    <span>{renderLocalizedTextNode(entry.label, language)}</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max={entry.max}
-                      value={focusTimerDraftDuration?.[entry.key] ?? 0}
-                      onChange={(event) => handleFocusTimerDraftPartChange(entry.key, event.target.value)}
-                    />
-                  </label>
+                  <div key={`focus_timer_${entry.key}`} className={`header-focus-timer-picker${focusTimerPickerOpenField === entry.key ? " open" : ""}`}>
+                    <button
+                      type="button"
+                      className="header-focus-timer-picker-trigger"
+                      onClick={() => setFocusTimerPickerOpenField((current) => current === entry.key ? null : entry.key)}
+                      aria-expanded={focusTimerPickerOpenField === entry.key ? "true" : "false"}
+                    >
+                      <span className="header-focus-timer-picker-label">{renderLocalizedTextNode(entry.label, language)}</span>
+                      <strong>{String(focusTimerDraftDuration?.[entry.key] ?? 0).padStart(2, "0")}</strong>
+                    </button>
+                    {focusTimerPickerOpenField === entry.key ? (
+                      <div className="header-focus-timer-picker-menu">
+                        <div className="header-focus-timer-picker-scroll">
+                          {focusTimerPickerOptions[entry.key].map((optionValue) => (
+                            <button
+                              key={`focus_timer_${entry.key}_${optionValue}`}
+                              type="button"
+                              className={`header-focus-timer-picker-option${Number(focusTimerDraftDuration?.[entry.key] ?? 0) === optionValue ? " active" : ""}`}
+                              onClick={() => handleFocusTimerPickerSelect(entry.key, optionValue)}
+                            >
+                              {String(optionValue).padStart(2, "0")}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 ))}
               </div>
               <div className="header-focus-timer-presets">
@@ -32808,14 +32839,14 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             <div className="header-focus-timer-actions">
               <button
                 type="button"
-                className="ghost-cta"
+                className="header-focus-timer-action secondary"
                 onClick={() => applyFocusTimerDurationSeconds(focusTimerDraftSeconds)}
               >
                 {renderLocalizedTextNode(joinLocalizedText("Apply", "لاگو کریں", language), language)}
               </button>
               <button
                 type="button"
-                className="retry-btn"
+                className="header-focus-timer-action primary"
                 onClick={() => {
                   if (focusTimerState.active) pauseFocusTimerSession();
                   else if (focusTimerState.paused) startFocusTimerSession();
@@ -32833,22 +32864,36 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </button>
               <button
                 type="button"
-                className="next-btn"
+                className="header-focus-timer-action primary alt"
                 onClick={() => restartFocusTimerSessionWithDuration(focusTimerDraftSeconds)}
               >
                 {renderLocalizedTextNode(joinLocalizedText("Restart", "دوبارہ شروع", language), language)}
               </button>
               <button
                 type="button"
-                className="ghost-cta"
+                className="header-focus-timer-action secondary"
                 onClick={() => resetFocusTimerSessionToDuration(focusTimerDraftSeconds)}
               >
                 {renderLocalizedTextNode(joinLocalizedText("Reset", "ری سیٹ", language), language)}
+              </button>
+              <button
+                type="button"
+                className="header-focus-timer-action danger"
+                onClick={endFocusTimerSession}
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Stop", "روک دیں", language), language)}
               </button>
             </div>
             <div className="header-focus-timer-extend-row">
               <span>{renderLocalizedTextNode(joinLocalizedText("Extend time", "وقت بڑھائیں", language), language)}</span>
               <div className="header-focus-timer-extend-actions">
+                <button
+                  type="button"
+                  className="header-focus-timer-chip active"
+                  onClick={() => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: focusTimerIsComplete })}
+                >
+                  +{renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerDraftSeconds, language), language)}
+                </button>
                 {focusTimerExtendOptions.map((seconds) => (
                   <button
                     key={`focus_timer_extend_${seconds}`}
@@ -32865,10 +32910,13 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               <div className="header-focus-timer-complete-row">
                 <strong>{renderLocalizedTextNode(joinLocalizedText("Time is up", "وقت مکمل ہو گیا", language), language)}</strong>
                 <div className="header-focus-timer-complete-actions">
-                  <button type="button" className="retry-btn" onClick={() => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || (5 * 60), { startIfComplete: true })}>
-                    {renderLocalizedTextNode(joinLocalizedText("Extend & Continue", "وقت بڑھا کر جاری رکھیں", language), language)}
+                  <button type="button" className="header-focus-timer-action primary" onClick={() => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: true })}>
+                    {renderLocalizedTextNode(joinLocalizedText("Extend by Selected Time", "منتخب وقت سے بڑھائیں", language), language)}
                   </button>
-                  <button type="button" className="ghost-cta" onClick={endFocusTimerSession}>
+                  <button type="button" className="header-focus-timer-action secondary" onClick={() => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || (5 * 60), { startIfComplete: true })}>
+                    +{renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerSettings.defaultExtendSeconds || (5 * 60), language), language)}
+                  </button>
+                  <button type="button" className="header-focus-timer-action danger" onClick={endFocusTimerSession}>
                     {renderLocalizedTextNode(joinLocalizedText("End Session", "سیشن ختم کریں", language), language)}
                   </button>
                 </div>
@@ -32919,21 +32967,65 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
       </div>
     ) : null}
     {focusTimerFloatingVisible ? (
-      <button
-        type="button"
+      <div
         className={`header-focus-timer-floating${focusTimerIsComplete ? " alert" : ""}`}
-        onClick={() => {
-          syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
-          setFocusTimerPopupOpen(true);
-          setFocusTimerState((current) => ({ ...current, minimized: false }));
-        }}
       >
-        <span className="header-focus-timer-floating-icon" aria-hidden="true">⏱</span>
-        <span className="header-focus-timer-floating-copy">
-          <strong>{focusTimerRemainingLabel}</strong>
-          <span>{renderLocalizedTextNode(focusTimerStatusLabel, language)}</span>
-        </span>
-      </button>
+        <button
+          type="button"
+          className="header-focus-timer-floating-main"
+          onClick={() => {
+            syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+            setFocusTimerPopupOpen(true);
+            setFocusTimerState((current) => ({ ...current, minimized: false }));
+          }}
+        >
+          <span className="header-focus-timer-floating-icon" aria-hidden="true">⏱</span>
+          <span className="header-focus-timer-floating-copy">
+            <strong>{focusTimerRemainingLabel}</strong>
+            <span>{renderLocalizedTextNode(focusTimerStatusLabel, language)}</span>
+          </span>
+        </button>
+        <div className="header-focus-timer-floating-controls">
+          <button
+            type="button"
+            className="header-focus-timer-floating-control"
+            title={focusTimerState.active ? (language === "ur" ? "روکیں" : "Pause") : (language === "ur" ? "جاری کریں" : "Resume")}
+            aria-label={focusTimerState.active ? (language === "ur" ? "روکیں" : "Pause") : (language === "ur" ? "جاری کریں" : "Resume")}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (focusTimerState.active) pauseFocusTimerSession();
+              else if (focusTimerState.paused) startFocusTimerSession();
+              else restartFocusTimerSessionWithDuration(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+            }}
+          >
+            {focusTimerState.active ? "❚❚" : "▶"}
+          </button>
+          <button
+            type="button"
+            className="header-focus-timer-floating-control"
+            title={language === "ur" ? "ری سیٹ" : "Reset"}
+            aria-label={language === "ur" ? "ری سیٹ" : "Reset"}
+            onClick={(event) => {
+              event.stopPropagation();
+              resetFocusTimerSessionToDuration(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+            }}
+          >
+            ↺
+          </button>
+          <button
+            type="button"
+            className="header-focus-timer-floating-control danger"
+            title={language === "ur" ? "سیشن ختم کریں" : "End session"}
+            aria-label={language === "ur" ? "سیشن ختم کریں" : "End session"}
+            onClick={(event) => {
+              event.stopPropagation();
+              endFocusTimerSession();
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
     ) : null}
     <div className="app-body">
       {!isMobileNavViewport && navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}

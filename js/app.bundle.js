@@ -13556,6 +13556,7 @@ ${marker} `);
     const [focusTimerSettings, setFocusTimerSettings] = useState(() => normalizeFocusTimerSettings((stored == null ? void 0 : stored.focusTimerSettings) || {}));
     const [focusTimerState, setFocusTimerState] = useState(() => normalizeFocusTimerState((stored == null ? void 0 : stored.focusTimerState) || {}, (stored == null ? void 0 : stored.focusTimerSettings) || {}));
     const [focusTimerPopupOpen, setFocusTimerPopupOpen] = useState(false);
+    const [focusTimerPickerOpenField, setFocusTimerPickerOpenField] = useState(null);
     const [focusTimerDraftDuration, setFocusTimerDraftDuration] = useState(() => {
       const initialSeconds = normalizeFocusTimerState((stored == null ? void 0 : stored.focusTimerState) || {}, (stored == null ? void 0 : stored.focusTimerSettings) || {}).selectedDurationSeconds;
       return splitDurationToClockParts(initialSeconds);
@@ -24704,6 +24705,10 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         [part]: numeric
       }));
     }, []);
+    const handleFocusTimerPickerSelect = useCallback((part, value) => {
+      handleFocusTimerDraftPartChange(part, value);
+      setFocusTimerPickerOpenField(null);
+    }, [handleFocusTimerDraftPartChange]);
     const handleFocusTimerSettingChange = useCallback((durationMinutes) => {
       const nextSeconds = clampFocusTimerSeconds((Number(durationMinutes) || 20) * 60, focusTimerDurationSeconds);
       applyFocusTimerDurationSeconds(nextSeconds);
@@ -24749,7 +24754,10 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }));
     }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
     useEffect(() => {
-      if (!focusTimerPopupOpen) return void 0;
+      if (!focusTimerPopupOpen) {
+        setFocusTimerPickerOpenField(null);
+        return void 0;
+      }
       const handlePointerDown = (event) => {
         var _a2, _b2, _c2, _d2;
         const target = event == null ? void 0 : event.target;
@@ -27900,6 +27908,11 @@ ${error.message || error}`);
     const reminderDueNow = Boolean((reminderSettings == null ? void 0 : reminderSettings.enabled) && (reminderSettings == null ? void 0 : reminderSettings.lastShownDay) === window.HomeSchoolUtils.getDayKey(Date.now()));
     const focusTimerPresetOptions = [5 * 60, 10 * 60, 15 * 60, 25 * 60, 45 * 60, 60 * 60];
     const focusTimerExtendOptions = [5 * 60, 10 * 60, 15 * 60];
+    const focusTimerPickerOptions = {
+      hours: Array.from({ length: 24 }, (_, index) => index),
+      minutes: Array.from({ length: 60 }, (_, index) => index),
+      seconds: Array.from({ length: 60 }, (_, index) => index)
+    };
     const focusTimerDraftSeconds = clampFocusTimerSeconds(
       (Number(focusTimerDraftDuration.hours) || 0) * 3600 + (Number(focusTimerDraftDuration.minutes) || 0) * 60 + (Number(focusTimerDraftDuration.seconds) || 0),
       focusTimerDurationSeconds
@@ -28979,22 +28992,35 @@ ${error.message || error}`);
         onClick: () => setFocusTimerPopupOpen(false)
       },
       renderLocalizedTextNode(joinLocalizedText("Close", "\u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language), language)
-    ))), /* @__PURE__ */ React.createElement("div", { className: `header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-clock" }, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-status-row" }, /* @__PURE__ */ React.createElement("span", { className: `header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}` }, renderLocalizedTextNode(focusTimerStatusLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-duration" }, renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-config" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-input-grid" }, [
+    ))), /* @__PURE__ */ React.createElement("div", { className: `header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-clock" }, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-status-row" }, /* @__PURE__ */ React.createElement("span", { className: `header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}` }, renderLocalizedTextNode(focusTimerStatusLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-duration" }, renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-config" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-picker-grid" }, [
       { key: "hours", label: joinLocalizedText("Hours", "\u06AF\u06BE\u0646\u0679\u06D2", language), max: 23 },
       { key: "minutes", label: joinLocalizedText("Minutes", "\u0645\u0646\u0679", language), max: 59 },
       { key: "seconds", label: joinLocalizedText("Seconds", "\u0633\u06CC\u06A9\u0646\u0688", language), max: 59 }
     ].map((entry) => {
       var _a2;
-      return /* @__PURE__ */ React.createElement("label", { key: `focus_timer_${entry.key}`, className: "header-focus-timer-input" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(entry.label, language)), /* @__PURE__ */ React.createElement(
-        "input",
+      return /* @__PURE__ */ React.createElement("div", { key: `focus_timer_${entry.key}`, className: `header-focus-timer-picker${focusTimerPickerOpenField === entry.key ? " open" : ""}` }, /* @__PURE__ */ React.createElement(
+        "button",
         {
-          type: "number",
-          min: "0",
-          max: entry.max,
-          value: (_a2 = focusTimerDraftDuration == null ? void 0 : focusTimerDraftDuration[entry.key]) != null ? _a2 : 0,
-          onChange: (event) => handleFocusTimerDraftPartChange(entry.key, event.target.value)
-        }
-      ));
+          type: "button",
+          className: "header-focus-timer-picker-trigger",
+          onClick: () => setFocusTimerPickerOpenField((current) => current === entry.key ? null : entry.key),
+          "aria-expanded": focusTimerPickerOpenField === entry.key ? "true" : "false"
+        },
+        /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-picker-label" }, renderLocalizedTextNode(entry.label, language)),
+        /* @__PURE__ */ React.createElement("strong", null, String((_a2 = focusTimerDraftDuration == null ? void 0 : focusTimerDraftDuration[entry.key]) != null ? _a2 : 0).padStart(2, "0"))
+      ), focusTimerPickerOpenField === entry.key ? /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-picker-menu" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-picker-scroll" }, focusTimerPickerOptions[entry.key].map((optionValue) => {
+        var _a3;
+        return /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            key: `focus_timer_${entry.key}_${optionValue}`,
+            type: "button",
+            className: `header-focus-timer-picker-option${Number((_a3 = focusTimerDraftDuration == null ? void 0 : focusTimerDraftDuration[entry.key]) != null ? _a3 : 0) === optionValue ? " active" : ""}`,
+            onClick: () => handleFocusTimerPickerSelect(entry.key, optionValue)
+          },
+          String(optionValue).padStart(2, "0")
+        );
+      }))) : null);
     })), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-presets" }, focusTimerPresetOptions.map((seconds) => /* @__PURE__ */ React.createElement(
       "button",
       {
@@ -29008,7 +29034,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "ghost-cta",
+        className: "header-focus-timer-action secondary",
         onClick: () => applyFocusTimerDurationSeconds(focusTimerDraftSeconds)
       },
       renderLocalizedTextNode(joinLocalizedText("Apply", "\u0644\u0627\u06AF\u0648 \u06A9\u0631\u06CC\u06BA", language), language)
@@ -29016,7 +29042,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "retry-btn",
+        className: "header-focus-timer-action primary",
         onClick: () => {
           if (focusTimerState.active) pauseFocusTimerSession();
           else if (focusTimerState.paused) startFocusTimerSession();
@@ -29031,7 +29057,7 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "next-btn",
+        className: "header-focus-timer-action primary alt",
         onClick: () => restartFocusTimerSessionWithDuration(focusTimerDraftSeconds)
       },
       renderLocalizedTextNode(joinLocalizedText("Restart", "\u062F\u0648\u0628\u0627\u0631\u06C1 \u0634\u0631\u0648\u0639", language), language)
@@ -29039,11 +29065,28 @@ ${error.message || error}`);
       "button",
       {
         type: "button",
-        className: "ghost-cta",
+        className: "header-focus-timer-action secondary",
         onClick: () => resetFocusTimerSessionToDuration(focusTimerDraftSeconds)
       },
       renderLocalizedTextNode(joinLocalizedText("Reset", "\u0631\u06CC \u0633\u06CC\u0679", language), language)
-    )), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-extend-row" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Extend time", "\u0648\u0642\u062A \u0628\u0691\u06BE\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-extend-actions" }, focusTimerExtendOptions.map((seconds) => /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        className: "header-focus-timer-action danger",
+        onClick: endFocusTimerSession
+      },
+      renderLocalizedTextNode(joinLocalizedText("Stop", "\u0631\u0648\u06A9 \u062F\u06CC\u06BA", language), language)
+    )), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-extend-row" }, /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(joinLocalizedText("Extend time", "\u0648\u0642\u062A \u0628\u0691\u06BE\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-extend-actions" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        className: "header-focus-timer-chip active",
+        onClick: () => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: focusTimerIsComplete })
+      },
+      "+",
+      renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerDraftSeconds, language), language)
+    ), focusTimerExtendOptions.map((seconds) => /* @__PURE__ */ React.createElement(
       "button",
       {
         key: `focus_timer_extend_${seconds}`,
@@ -29053,7 +29096,7 @@ ${error.message || error}`);
       },
       "+",
       renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)
-    )))), focusTimerIsComplete ? /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-complete-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Time is up", "\u0648\u0642\u062A \u0645\u06A9\u0645\u0644 \u06C1\u0648 \u06AF\u06CC\u0627", language), language)), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-complete-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "retry-btn", onClick: () => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || 5 * 60, { startIfComplete: true }) }, renderLocalizedTextNode(joinLocalizedText("Extend & Continue", "\u0648\u0642\u062A \u0628\u0691\u06BE\u0627 \u06A9\u0631 \u062C\u0627\u0631\u06CC \u0631\u06A9\u06BE\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "ghost-cta", onClick: endFocusTimerSession }, renderLocalizedTextNode(joinLocalizedText("End Session", "\u0633\u06CC\u0634\u0646 \u062E\u062A\u0645 \u06A9\u0631\u06CC\u06BA", language), language)))) : null) : null, /* @__PURE__ */ React.createElement(
+    )))), focusTimerIsComplete ? /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-complete-row" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Time is up", "\u0648\u0642\u062A \u0645\u06A9\u0645\u0644 \u06C1\u0648 \u06AF\u06CC\u0627", language), language)), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-complete-actions" }, /* @__PURE__ */ React.createElement("button", { type: "button", className: "header-focus-timer-action primary", onClick: () => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: true }) }, renderLocalizedTextNode(joinLocalizedText("Extend by Selected Time", "\u0645\u0646\u062A\u062E\u0628 \u0648\u0642\u062A \u0633\u06D2 \u0628\u0691\u06BE\u0627\u0626\u06CC\u06BA", language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "header-focus-timer-action secondary", onClick: () => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || 5 * 60, { startIfComplete: true }) }, "+", renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerSettings.defaultExtendSeconds || 5 * 60, language), language)), /* @__PURE__ */ React.createElement("button", { type: "button", className: "header-focus-timer-action danger", onClick: endFocusTimerSession }, renderLocalizedTextNode(joinLocalizedText("End Session", "\u0633\u06CC\u0634\u0646 \u062E\u062A\u0645 \u06A9\u0631\u06CC\u06BA", language), language)))) : null) : null, /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -29087,18 +29130,66 @@ ${error.message || error}`);
       },
       renderLocalizedTextNode(item.label, language)
     ))))) : null, focusTimerFloatingVisible ? /* @__PURE__ */ React.createElement(
-      "button",
+      "div",
       {
-        type: "button",
-        className: `header-focus-timer-floating${focusTimerIsComplete ? " alert" : ""}`,
-        onClick: () => {
-          syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
-          setFocusTimerPopupOpen(true);
-          setFocusTimerState((current) => ({ ...current, minimized: false }));
-        }
+        className: `header-focus-timer-floating${focusTimerIsComplete ? " alert" : ""}`
       },
-      /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-floating-icon", "aria-hidden": "true" }, "\u23F1"),
-      /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-floating-copy" }, /* @__PURE__ */ React.createElement("strong", null, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(focusTimerStatusLabel, language)))
+      /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "header-focus-timer-floating-main",
+          onClick: () => {
+            syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+            setFocusTimerPopupOpen(true);
+            setFocusTimerState((current) => ({ ...current, minimized: false }));
+          }
+        },
+        /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-floating-icon", "aria-hidden": "true" }, "\u23F1"),
+        /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-floating-copy" }, /* @__PURE__ */ React.createElement("strong", null, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("span", null, renderLocalizedTextNode(focusTimerStatusLabel, language)))
+      ),
+      /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-floating-controls" }, /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "header-focus-timer-floating-control",
+          title: focusTimerState.active ? language === "ur" ? "\u0631\u0648\u06A9\u06CC\u06BA" : "Pause" : language === "ur" ? "\u062C\u0627\u0631\u06CC \u06A9\u0631\u06CC\u06BA" : "Resume",
+          "aria-label": focusTimerState.active ? language === "ur" ? "\u0631\u0648\u06A9\u06CC\u06BA" : "Pause" : language === "ur" ? "\u062C\u0627\u0631\u06CC \u06A9\u0631\u06CC\u06BA" : "Resume",
+          onClick: (event) => {
+            event.stopPropagation();
+            if (focusTimerState.active) pauseFocusTimerSession();
+            else if (focusTimerState.paused) startFocusTimerSession();
+            else restartFocusTimerSessionWithDuration(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+          }
+        },
+        focusTimerState.active ? "\u275A\u275A" : "\u25B6"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "header-focus-timer-floating-control",
+          title: language === "ur" ? "\u0631\u06CC \u0633\u06CC\u0679" : "Reset",
+          "aria-label": language === "ur" ? "\u0631\u06CC \u0633\u06CC\u0679" : "Reset",
+          onClick: (event) => {
+            event.stopPropagation();
+            resetFocusTimerSessionToDuration(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+          }
+        },
+        "\u21BA"
+      ), /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          type: "button",
+          className: "header-focus-timer-floating-control danger",
+          title: language === "ur" ? "\u0633\u06CC\u0634\u0646 \u062E\u062A\u0645 \u06A9\u0631\u06CC\u06BA" : "End session",
+          "aria-label": language === "ur" ? "\u0633\u06CC\u0634\u0646 \u062E\u062A\u0645 \u06A9\u0631\u06CC\u06BA" : "End session",
+          onClick: (event) => {
+            event.stopPropagation();
+            endFocusTimerSession();
+          }
+        },
+        "\u2715"
+      ))
     ) : null, /* @__PURE__ */ React.createElement("div", { className: "app-body" }, !isMobileNavViewport && navBarAutoHide && navPosition === "left" ? /* @__PURE__ */ React.createElement("div", { className: "nav-reveal-hotspot nav-reveal-hotspot-left", onMouseEnter: revealAutoHideNavBar, onMouseMove: revealAutoHideNavBar, onPointerDown: revealAutoHideNavBar }) : null, !isMobileNavViewport && navPosition === "left" ? renderNavBar("left") : null, /* @__PURE__ */ React.createElement("div", { ref: contentRef, key: `${transitionMode}:${routeTransitionKey}`, className: `content${pageFlashActive ? " page-focus-flash" : ""}${transitionMode !== "none" ? " transition-enabled" : ""}${tab === "tutor" ? " tutor-tab-active" : ""}`, "data-transition-mode": transitionMode, "data-ui-language": language }, tab === "home" && !selectedSubject && !selectedLesson && !quizActive && !selectedAdverbDay && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "welcome-card", "data-ui-language": language }, /* @__PURE__ */ React.createElement("div", { className: "welcome-card-head" }, /* @__PURE__ */ React.createElement("div", { className: "welcome-copy" }, /* @__PURE__ */ React.createElement("h2", null, renderWelcomeGreeting(localizedNames, language), " \u{1F44B}"), /* @__PURE__ */ React.createElement("p", null, renderLocalizedTextNode(joinLocalizedText("Ready to learn something amazing today?", "\u0622\u062C \u06A9\u0686\u06BE \u0634\u0627\u0646\u062F\u0627\u0631 \u0633\u06CC\u06A9\u06BE\u0646\u06D2 \u06A9\u06D2 \u0644\u06CC\u06D2 \u062A\u06CC\u0627\u0631 \u06C1\u06CC\u06BA\u061F", language), language))), /* @__PURE__ */ React.createElement(
       "button",
       {
