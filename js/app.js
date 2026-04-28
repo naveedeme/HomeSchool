@@ -16163,6 +16163,7 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [focusTimerSettings, setFocusTimerSettings] = useState(() => normalizeFocusTimerSettings(stored?.focusTimerSettings || {}));
   const [focusTimerState, setFocusTimerState] = useState(() => normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}));
   const [focusTimerPopupOpen, setFocusTimerPopupOpen] = useState(false);
+  const [focusTimerPopupPosition, setFocusTimerPopupPosition] = useState(null);
   const [focusTimerDraftDuration, setFocusTimerDraftDuration] = useState(() => {
     const initialSeconds = normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}).selectedDurationSeconds;
     return splitDurationToClockParts(initialSeconds);
@@ -16491,6 +16492,7 @@ const headerHideTimerRef = useRef(null);
   const focusTimerButtonRef = useRef(null);
   const focusTimerPopupRef = useRef(null);
   const focusTimerWheelRefs = useRef({ hours: null, minutes: null, seconds: null });
+  const focusTimerPopupDragRef = useRef(null);
   const focusTimerAudioContextRef = useRef(null);
   const focusTimerLastTickRef = useRef(null);
   const focusTimerCompletionBuzzRef = useRef(null);
@@ -28290,6 +28292,22 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
     }));
   }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
 
+  const handleStartFocusTimerPopupDrag = useCallback((event) => {
+    if (!event?.ctrlKey || event.button !== 0) return;
+    if (event.target?.closest?.(".header-focus-timer-head-actions")) return;
+    const popupNode = focusTimerPopupRef.current;
+    if (!popupNode) return;
+    const rect = popupNode.getBoundingClientRect();
+    focusTimerPopupDragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: rect.left,
+      originY: rect.top,
+    };
+    setFocusTimerPopupPosition({ x: rect.left, y: rect.top });
+    event.preventDefault();
+  }, []);
+
   useEffect(() => {
     if (!focusTimerPopupOpen) return undefined;
     const handlePointerDown = (event) => {
@@ -28306,6 +28324,26 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
       document.removeEventListener("touchstart", handlePointerDown);
     };
   }, [focusTimerPopupOpen]);
+
+  useEffect(() => {
+    const handleMouseMove = (event) => {
+      const dragState = focusTimerPopupDragRef.current;
+      if (!dragState) return;
+      setFocusTimerPopupPosition({
+        x: Math.max(12, dragState.originX + (event.clientX - dragState.startX)),
+        y: Math.max(12, dragState.originY + (event.clientY - dragState.startY)),
+      });
+    };
+    const handleMouseUp = () => {
+      focusTimerPopupDragRef.current = null;
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     if (!focusTimerPopupOpen) return undefined;
@@ -28396,16 +28434,16 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
               duration: 0.08,
               delay: 0,
               harmonics: [
-                { frequency: 1760, gain: 0.032, type: "triangle" },
-                { frequency: 1320, gain: 0.022, type: "square" },
+                { frequency: 1760, gain: 0.055, type: "triangle" },
+                { frequency: 1320, gain: 0.038, type: "square" },
               ],
             }
           : {
               duration: 0.05,
               delay: 0,
               harmonics: [
-                { frequency: 1240, gain: 0.018, type: "triangle" },
-                { frequency: 860, gain: 0.012, type: "sine" },
+                { frequency: 1240, gain: 0.035, type: "triangle" },
+                { frequency: 860, gain: 0.022, type: "sine" },
               ],
             },
       ]);
@@ -28427,24 +28465,24 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
           duration: 0.28,
           delay: 0,
           harmonics: [
-            { frequency: 880, gain: 0.05, type: "triangle" },
-            { frequency: 1320, gain: 0.025, type: "sine" },
+            { frequency: 880, gain: 0.09, type: "triangle" },
+            { frequency: 1320, gain: 0.046, type: "sine" },
           ],
         },
         {
           duration: 0.28,
           delay: 0.3,
           harmonics: [
-            { frequency: 740, gain: 0.052, type: "triangle" },
-            { frequency: 1110, gain: 0.024, type: "sine" },
+            { frequency: 740, gain: 0.094, type: "triangle" },
+            { frequency: 1110, gain: 0.044, type: "sine" },
           ],
         },
         {
           duration: 0.36,
           delay: 0.64,
           harmonics: [
-            { frequency: 988, gain: 0.058, type: "triangle" },
-            { frequency: 1480, gain: 0.028, type: "square" },
+            { frequency: 988, gain: 0.1, type: "triangle" },
+            { frequency: 1480, gain: 0.05, type: "square" },
           ],
         },
       ]);
@@ -31740,6 +31778,13 @@ const lessons = getMergedLessons(subjectId, grade);
       + (Number(focusTimerDraftDuration.seconds) || 0),
     focusTimerDurationSeconds,
   );
+  const focusTimerPopupStyle = focusTimerPopupPosition
+    ? {
+        left: `${focusTimerPopupPosition.x}px`,
+        top: `${focusTimerPopupPosition.y}px`,
+        transform: "none",
+      }
+    : undefined;
   const fontSizeZoom = ({ small: 0.95, normal: 1, large: 1.08, xlarge: 1.14 })[fontSizeMode] || 1;
   const routeTransitionKey = [
     tab,
@@ -32850,179 +32895,6 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             <path fill="currentColor" d="M9 2h6a1 1 0 0 1 0 2h-1v1.09A8.001 8.001 0 1 1 10 5.09V4H9a1 1 0 1 1 0-2Zm3 5a1 1 0 0 1 1 1v4.59l2.7 2.7a1 1 0 0 1-1.4 1.42l-3-3A1 1 0 0 1 11 13V8a1 1 0 0 1 1-1Zm0 12a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"/>
           </svg>
         </button>
-        {focusTimerPopupOpen ? (
-          <div ref={focusTimerPopupRef} className={`header-focus-timer-popover${focusTimerIsComplete ? " alert" : ""}`} data-ui-language={language}>
-            <div className="header-focus-timer-head">
-              <div className="header-focus-timer-head-copy">
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Study Countdown", "مطالعہ کاؤنٹ ڈاؤن", language), language)}</strong>
-                <span>{renderLocalizedTextNode(joinLocalizedText("Set a focused sprint, extend it when needed, and keep it floating while you study.", "اپنا فوکس سیشن متعین کریں، ضرورت پر وقت بڑھائیں، اور مطالعہ کے دوران اسے ساتھ رکھیں۔", language), language)}</span>
-              </div>
-              <div className="header-focus-timer-head-actions">
-                <button
-                  type="button"
-                  className="ghost-cta"
-                  onClick={() => {
-                    setFocusTimerState((current) => ({ ...current, minimized: true }));
-                    setFocusTimerPopupOpen(false);
-                  }}
-                >
-                  {renderLocalizedTextNode(joinLocalizedText("Minimize", "سمیٹیں", language), language)}
-                </button>
-                <button
-                  type="button"
-                  className="ghost-cta"
-                  onClick={() => setFocusTimerPopupOpen(false)}
-                >
-                  {renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language)}
-                </button>
-              </div>
-            </div>
-            <div className={`header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}`}>
-              <div className="header-focus-timer-clock">{focusTimerRemainingLabel}</div>
-              <div className="header-focus-timer-status-row">
-                <span className={`header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}`}>
-                  {renderLocalizedTextNode(focusTimerStatusLabel, language)}
-                </span>
-                <span className="header-focus-timer-duration">
-                  {renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)}
-                </span>
-              </div>
-            </div>
-            <div className="header-focus-timer-config">
-              <div className="header-focus-timer-wheel-grid">
-                {[
-                  { key: "hours", label: joinLocalizedText("Hours", "گھنٹے", language) },
-                  { key: "minutes", label: joinLocalizedText("Minutes", "منٹ", language) },
-                  { key: "seconds", label: joinLocalizedText("Seconds", "سیکنڈ", language) },
-                ].map((entry) => (
-                  <div key={`focus_timer_${entry.key}`} className="header-focus-timer-wheel">
-                    <span className="header-focus-timer-wheel-label">{renderLocalizedTextNode(entry.label, language)}</span>
-                    <div className="header-focus-timer-wheel-shell">
-                      <div className="header-focus-timer-wheel-highlight" aria-hidden="true" />
-                      <div
-                        ref={(node) => { focusTimerWheelRefs.current[entry.key] = node; }}
-                        className="header-focus-timer-wheel-scroll"
-                        onScroll={(event) => handleFocusTimerWheelScroll(entry.key, event)}
-                      >
-                        <div className="header-focus-timer-wheel-spacer" aria-hidden="true" />
-                        {focusTimerPickerOptions[entry.key].map((optionValue) => (
-                          <button
-                            key={`focus_timer_${entry.key}_${optionValue}`}
-                            type="button"
-                            data-wheel-value={optionValue}
-                            className={`header-focus-timer-wheel-option${Number(focusTimerDraftDuration?.[entry.key] ?? 0) === optionValue ? " active" : ""}`}
-                            onClick={() => handleFocusTimerWheelSelect(entry.key, optionValue)}
-                          >
-                            {String(optionValue).padStart(2, "0")}
-                          </button>
-                        ))}
-                        <div className="header-focus-timer-wheel-spacer" aria-hidden="true" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="header-focus-timer-presets">
-                {focusTimerPresetOptions.map((seconds) => (
-                  <button
-                    key={`focus_timer_preset_${seconds}`}
-                    type="button"
-                    className={`header-focus-timer-chip${focusTimerDraftSeconds === seconds ? " active" : ""}`}
-                    onClick={() => syncFocusTimerDraftFromSeconds(seconds)}
-                  >
-                    {renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="header-focus-timer-actions">
-              <button
-                type="button"
-                className="header-focus-timer-action secondary"
-                onClick={() => applyFocusTimerDurationSeconds(focusTimerDraftSeconds)}
-              >
-                {renderLocalizedTextNode(joinLocalizedText("Apply", "لاگو کریں", language), language)}
-              </button>
-              <button
-                type="button"
-                className="header-focus-timer-action primary"
-                onClick={() => {
-                  if (focusTimerState.active) pauseFocusTimerSession();
-                  else if (focusTimerState.paused) startFocusTimerSession();
-                  else restartFocusTimerSessionWithDuration(focusTimerDraftSeconds);
-                }}
-              >
-                {renderLocalizedTextNode(
-                  focusTimerState.active
-                    ? joinLocalizedText("Pause", "روکیں", language)
-                    : focusTimerState.paused
-                      ? joinLocalizedText("Resume", "جاری کریں", language)
-                      : joinLocalizedText("Start", "شروع کریں", language),
-                  language,
-                )}
-              </button>
-              <button
-                type="button"
-                className="header-focus-timer-action primary alt"
-                onClick={() => restartFocusTimerSessionWithDuration(focusTimerDraftSeconds)}
-              >
-                {renderLocalizedTextNode(joinLocalizedText("Restart", "دوبارہ شروع", language), language)}
-              </button>
-              <button
-                type="button"
-                className="header-focus-timer-action secondary"
-                onClick={() => resetFocusTimerSessionToDuration(focusTimerDraftSeconds)}
-              >
-                {renderLocalizedTextNode(joinLocalizedText("Reset", "ری سیٹ", language), language)}
-              </button>
-              <button
-                type="button"
-                className="header-focus-timer-action danger"
-                onClick={endFocusTimerSession}
-              >
-                {renderLocalizedTextNode(joinLocalizedText("Stop", "روک دیں", language), language)}
-              </button>
-            </div>
-            <div className="header-focus-timer-extend-row">
-              <span>{renderLocalizedTextNode(joinLocalizedText("Extend time", "وقت بڑھائیں", language), language)}</span>
-              <div className="header-focus-timer-extend-actions">
-                <button
-                  type="button"
-                  className="header-focus-timer-chip active"
-                  onClick={() => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: focusTimerIsComplete })}
-                >
-                  +{renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerDraftSeconds, language), language)}
-                </button>
-                {focusTimerExtendOptions.map((seconds) => (
-                  <button
-                    key={`focus_timer_extend_${seconds}`}
-                    type="button"
-                    className="header-focus-timer-chip"
-                    onClick={() => extendFocusTimerSession(seconds, { startIfComplete: focusTimerIsComplete })}
-                  >
-                    +{renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {focusTimerIsComplete ? (
-              <div className="header-focus-timer-complete-row">
-                <strong>{renderLocalizedTextNode(joinLocalizedText("Time is up", "وقت مکمل ہو گیا", language), language)}</strong>
-                <div className="header-focus-timer-complete-actions">
-                  <button type="button" className="header-focus-timer-action primary" onClick={() => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: true })}>
-                    {renderLocalizedTextNode(joinLocalizedText("Extend by Selected Time", "منتخب وقت سے بڑھائیں", language), language)}
-                  </button>
-                  <button type="button" className="header-focus-timer-action secondary" onClick={() => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || (5 * 60), { startIfComplete: true })}>
-                    +{renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerSettings.defaultExtendSeconds || (5 * 60), language), language)}
-                  </button>
-                  <button type="button" className="header-focus-timer-action danger" onClick={endFocusTimerSession}>
-                    {renderLocalizedTextNode(joinLocalizedText("End Session", "سیشن ختم کریں", language), language)}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
         <button
           type="button"
           className="header-badge"
@@ -33063,6 +32935,187 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             ))}
           </div>
         </div>
+      </div>
+    ) : null}
+    {focusTimerPopupOpen ? (
+      <div
+        ref={focusTimerPopupRef}
+        className={`header-focus-timer-popover${focusTimerIsComplete ? " alert" : ""}`}
+        data-ui-language={language}
+        style={focusTimerPopupStyle}
+      >
+        <div className="header-focus-timer-head" onMouseDown={handleStartFocusTimerPopupDrag} title={language === "ur" ? "Ctrl دبا کر ڈریگ کریں" : "Hold Ctrl to drag"}>
+          <div className="header-focus-timer-head-copy">
+            <strong>{renderLocalizedTextNode(joinLocalizedText("Study Countdown", "مطالعہ کاؤنٹ ڈاؤن", language), language)}</strong>
+          </div>
+          <div className="header-focus-timer-head-actions">
+            <button
+              type="button"
+              className="header-focus-timer-head-icon"
+              title={language === "ur" ? "سمیٹیں" : "Minimize"}
+              aria-label={language === "ur" ? "سمیٹیں" : "Minimize"}
+              onClick={() => {
+                setFocusTimerState((current) => ({ ...current, minimized: true }));
+                setFocusTimerPopupOpen(false);
+              }}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="header-focus-timer-head-icon"
+              title={language === "ur" ? "بند کریں" : "Close"}
+              aria-label={language === "ur" ? "بند کریں" : "Close"}
+              onClick={() => setFocusTimerPopupOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+        <div className={`header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}`}>
+          <div className="header-focus-timer-clock">{focusTimerRemainingLabel}</div>
+          <div className="header-focus-timer-status-row">
+            <span className={`header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}`}>
+              {renderLocalizedTextNode(focusTimerStatusLabel, language)}
+            </span>
+            <span className="header-focus-timer-duration">
+              {renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)}
+            </span>
+          </div>
+        </div>
+        <div className="header-focus-timer-config">
+          <div className="header-focus-timer-wheel-grid">
+            {[
+              { key: "hours", label: joinLocalizedText("Hours", "گھنٹے", language) },
+              { key: "minutes", label: joinLocalizedText("Minutes", "منٹ", language) },
+              { key: "seconds", label: joinLocalizedText("Seconds", "سیکنڈ", language) },
+            ].map((entry) => (
+              <div key={`focus_timer_${entry.key}`} className="header-focus-timer-wheel">
+                <span className="header-focus-timer-wheel-label">{renderLocalizedTextNode(entry.label, language)}</span>
+                <div className="header-focus-timer-wheel-shell">
+                  <div className="header-focus-timer-wheel-highlight" aria-hidden="true" />
+                  <div
+                    ref={(node) => { focusTimerWheelRefs.current[entry.key] = node; }}
+                    className="header-focus-timer-wheel-scroll"
+                    onScroll={(event) => handleFocusTimerWheelScroll(entry.key, event)}
+                  >
+                    <div className="header-focus-timer-wheel-spacer" aria-hidden="true" />
+                    {focusTimerPickerOptions[entry.key].map((optionValue) => (
+                      <button
+                        key={`focus_timer_${entry.key}_${optionValue}`}
+                        type="button"
+                        data-wheel-value={optionValue}
+                        className={`header-focus-timer-wheel-option${Number(focusTimerDraftDuration?.[entry.key] ?? 0) === optionValue ? " active" : ""}`}
+                        onClick={() => handleFocusTimerWheelSelect(entry.key, optionValue)}
+                      >
+                        {String(optionValue).padStart(2, "0")}
+                      </button>
+                    ))}
+                    <div className="header-focus-timer-wheel-spacer" aria-hidden="true" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="header-focus-timer-presets">
+            {focusTimerPresetOptions.map((seconds) => (
+              <button
+                key={`focus_timer_preset_${seconds}`}
+                type="button"
+                className={`header-focus-timer-chip${focusTimerDraftSeconds === seconds ? " active" : ""}`}
+                onClick={() => syncFocusTimerDraftFromSeconds(seconds)}
+              >
+                {renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="header-focus-timer-actions">
+          <button
+            type="button"
+            className="header-focus-timer-action secondary"
+            onClick={() => applyFocusTimerDurationSeconds(focusTimerDraftSeconds)}
+          >
+            {renderLocalizedTextNode(joinLocalizedText("Apply", "لاگو کریں", language), language)}
+          </button>
+          <button
+            type="button"
+            className="header-focus-timer-action primary"
+            onClick={() => {
+              if (focusTimerState.active) pauseFocusTimerSession();
+              else if (focusTimerState.paused) startFocusTimerSession();
+              else restartFocusTimerSessionWithDuration(focusTimerDraftSeconds);
+            }}
+          >
+            {renderLocalizedTextNode(
+              focusTimerState.active
+                ? joinLocalizedText("Pause", "روکیں", language)
+                : focusTimerState.paused
+                  ? joinLocalizedText("Resume", "جاری کریں", language)
+                  : joinLocalizedText("Start", "شروع کریں", language),
+              language,
+            )}
+          </button>
+          <button
+            type="button"
+            className="header-focus-timer-action primary alt"
+            onClick={() => restartFocusTimerSessionWithDuration(focusTimerDraftSeconds)}
+          >
+            {renderLocalizedTextNode(joinLocalizedText("Restart", "دوبارہ شروع", language), language)}
+          </button>
+          <button
+            type="button"
+            className="header-focus-timer-action secondary"
+            onClick={() => resetFocusTimerSessionToDuration(focusTimerDraftSeconds)}
+          >
+            {renderLocalizedTextNode(joinLocalizedText("Reset", "ری سیٹ", language), language)}
+          </button>
+          <button
+            type="button"
+            className="header-focus-timer-action danger"
+            onClick={endFocusTimerSession}
+          >
+            {renderLocalizedTextNode(joinLocalizedText("Stop", "روک دیں", language), language)}
+          </button>
+        </div>
+        <div className="header-focus-timer-extend-row">
+          <span>{renderLocalizedTextNode(joinLocalizedText("Extend time", "وقت بڑھائیں", language), language)}</span>
+          <div className="header-focus-timer-extend-actions">
+            <button
+              type="button"
+              className="header-focus-timer-chip active"
+              onClick={() => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: focusTimerIsComplete })}
+            >
+              +{renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerDraftSeconds, language), language)}
+            </button>
+            {focusTimerExtendOptions.map((seconds) => (
+              <button
+                key={`focus_timer_extend_${seconds}`}
+                type="button"
+                className="header-focus-timer-chip"
+                onClick={() => extendFocusTimerSession(seconds, { startIfComplete: focusTimerIsComplete })}
+              >
+                +{renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)}
+              </button>
+            ))}
+          </div>
+        </div>
+        {focusTimerIsComplete ? (
+          <div className="header-focus-timer-complete-row">
+            <strong>{renderLocalizedTextNode(joinLocalizedText("Time is up", "وقت مکمل ہو گیا", language), language)}</strong>
+            <div className="header-focus-timer-complete-actions">
+              <button type="button" className="header-focus-timer-action primary" onClick={() => extendFocusTimerSession(focusTimerDraftSeconds, { startIfComplete: true })}>
+                {renderLocalizedTextNode(joinLocalizedText("Extend by Selected Time", "منتخب وقت سے بڑھائیں", language), language)}
+              </button>
+              <button type="button" className="header-focus-timer-action secondary" onClick={() => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || (5 * 60), { startIfComplete: true })}>
+                +{renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerSettings.defaultExtendSeconds || (5 * 60), language), language)}
+              </button>
+              <button type="button" className="header-focus-timer-action danger" onClick={endFocusTimerSession}>
+                {renderLocalizedTextNode(joinLocalizedText("End Session", "سیشن ختم کریں", language), language)}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     ) : null}
     {focusTimerFloatingVisible ? (
