@@ -28309,24 +28309,7 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
   }, []);
 
   useEffect(() => {
-    if (!focusTimerPopupOpen) return undefined;
-    const handlePointerDown = (event) => {
-      const target = event?.target;
-      if (!target) return;
-      if (focusTimerPopupRef.current?.contains?.(target)) return;
-      if (focusTimerButtonRef.current?.contains?.(target)) return;
-      setFocusTimerPopupOpen(false);
-    };
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("touchstart", handlePointerDown, { passive: true });
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("touchstart", handlePointerDown);
-    };
-  }, [focusTimerPopupOpen]);
-
-  useEffect(() => {
-    const handleMouseMove = (event) => {
+    const handlePointerMove = (event) => {
       const dragState = focusTimerPopupDragRef.current;
       if (!dragState) return;
       setFocusTimerPopupPosition({
@@ -28334,14 +28317,14 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
         y: Math.max(12, dragState.originY + (event.clientY - dragState.startY)),
       });
     };
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       focusTimerPopupDragRef.current = null;
     };
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
     };
   }, []);
 
@@ -32944,7 +32927,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         data-ui-language={language}
         style={focusTimerPopupStyle}
       >
-        <div className="header-focus-timer-head" onMouseDown={handleStartFocusTimerPopupDrag} title={language === "ur" ? "Ctrl دبا کر ڈریگ کریں" : "Hold Ctrl to drag"}>
+        <div className="header-focus-timer-head" onPointerDown={handleStartFocusTimerPopupDrag} title={language === "ur" ? "Ctrl دبا کر ڈریگ کریں" : "Hold Ctrl to drag"}>
           <div className="header-focus-timer-head-copy">
             <strong>{renderLocalizedTextNode(joinLocalizedText("Study Countdown", "مطالعہ کاؤنٹ ڈاؤن", language), language)}</strong>
           </div>
@@ -32959,7 +32942,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 setFocusTimerPopupOpen(false);
               }}
             >
-              −
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 12h12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
             </button>
             <button
               type="button"
@@ -32968,7 +32953,9 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               aria-label={language === "ur" ? "بند کریں" : "Close"}
               onClick={() => setFocusTimerPopupOpen(false)}
             >
-              ✕
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+              </svg>
             </button>
           </div>
         </div>

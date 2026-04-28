@@ -103,14 +103,16 @@ body,#root{font-family:var(--font);background:var(--bg-primary);color:var(--text
 .header-pin-btn:hover{transform:scale(1.1);color:var(--text-primary);border-color:color-mix(in srgb,var(--accent) 24%,var(--border));box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 12%,transparent)}
 .header-pin-btn.active{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--bg-card)),color-mix(in srgb,var(--accent) 10%,var(--bg-elevated)));border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--accent)}
 .header-timer-btn.alert{color:#dc2626;border-color:rgba(239,68,68,.36);background:linear-gradient(135deg,rgba(239,68,68,.16),rgba(255,255,255,.9));box-shadow:0 10px 24px rgba(239,68,68,.16)}
-.header-focus-timer-popover{position:fixed;top:92px;left:50%;transform:translateX(-50%);width:min(440px,calc(100vw - 28px));padding:16px;border-radius:22px;border:1px solid color-mix(in srgb,var(--border) 90%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 98%,white),color-mix(in srgb,var(--bg-elevated) 96%,var(--bg-card)));box-shadow:0 26px 64px rgba(15,23,42,.24);z-index:170;display:grid;gap:14px}
+.header-focus-timer-popover{position:fixed;top:72px;left:50%;transform:translateX(-50%);width:min(440px,calc(100vw - 28px));padding:16px;border-radius:22px;border:1px solid color-mix(in srgb,var(--border) 90%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--bg-card) 98%,white),color-mix(in srgb,var(--bg-elevated) 96%,var(--bg-card)));box-shadow:0 26px 64px rgba(15,23,42,.24);z-index:170;display:grid;gap:14px}
 .header-focus-timer-popover.alert{border-color:rgba(239,68,68,.28);box-shadow:0 26px 74px rgba(239,68,68,.18)}
-.header-focus-timer-head{display:flex;align-items:center;justify-content:space-between;gap:14px;user-select:none}
+.header-focus-timer-head{display:flex;align-items:center;justify-content:space-between;gap:14px;user-select:none;cursor:grab}
+.header-focus-timer-head:active{cursor:grabbing}
 .header-focus-timer-head-copy{display:grid;gap:4px;min-width:0}
 .header-focus-timer-head-copy strong{font-size:15px;font-weight:900;color:var(--text-primary)}
 .header-focus-timer-popover[data-ui-language="ur"],.header-focus-timer-popover[data-ui-language="ur"] .header-focus-timer-head-copy,.header-focus-timer-popover[data-ui-language="ur"] .header-focus-timer-extend-row{direction:rtl;text-align:right}
 .header-focus-timer-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.header-focus-timer-head-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;border:1px solid color-mix(in srgb,var(--border) 92%,transparent);background:color-mix(in srgb,var(--bg-elevated) 94%,white);color:var(--text-primary);font:inherit;font-size:18px;font-weight:900;cursor:pointer}
+.header-focus-timer-head-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;border-radius:50%;border:1px solid color-mix(in srgb,var(--border) 92%,transparent);background:color-mix(in srgb,var(--bg-elevated) 94%,white);color:var(--text-primary);font:inherit;font-size:18px;font-weight:900;line-height:1;cursor:pointer}
+.header-focus-timer-head-icon svg{width:16px;height:16px;display:block}
 .header-focus-timer-head-icon:hover{border-color:color-mix(in srgb,var(--accent) 30%,var(--border));box-shadow:0 8px 18px rgba(15,23,42,.1)}
 .header-focus-timer-stage{padding:18px;border-radius:20px;border:1px solid color-mix(in srgb,var(--accent) 18%,var(--border));background:
 radial-gradient(circle at top right,color-mix(in srgb,var(--accent) 12%,transparent),transparent 48%),

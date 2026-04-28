@@ -24814,24 +24814,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       event.preventDefault();
     }, []);
     useEffect(() => {
-      if (!focusTimerPopupOpen) return void 0;
-      const handlePointerDown = (event) => {
-        var _a2, _b2, _c2, _d2;
-        const target = event == null ? void 0 : event.target;
-        if (!target) return;
-        if ((_b2 = (_a2 = focusTimerPopupRef.current) == null ? void 0 : _a2.contains) == null ? void 0 : _b2.call(_a2, target)) return;
-        if ((_d2 = (_c2 = focusTimerButtonRef.current) == null ? void 0 : _c2.contains) == null ? void 0 : _d2.call(_c2, target)) return;
-        setFocusTimerPopupOpen(false);
-      };
-      document.addEventListener("mousedown", handlePointerDown);
-      document.addEventListener("touchstart", handlePointerDown, { passive: true });
-      return () => {
-        document.removeEventListener("mousedown", handlePointerDown);
-        document.removeEventListener("touchstart", handlePointerDown);
-      };
-    }, [focusTimerPopupOpen]);
-    useEffect(() => {
-      const handleMouseMove = (event) => {
+      const handlePointerMove = (event) => {
         const dragState = focusTimerPopupDragRef.current;
         if (!dragState) return;
         setFocusTimerPopupPosition({
@@ -24839,14 +24822,14 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
           y: Math.max(12, dragState.originY + (event.clientY - dragState.startY))
         });
       };
-      const handleMouseUp = () => {
+      const handlePointerUp = () => {
         focusTimerPopupDragRef.current = null;
       };
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
       return () => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
       };
     }, []);
     useEffect(() => {
@@ -29151,7 +29134,7 @@ ${error.message || error}`);
         "data-ui-language": language,
         style: focusTimerPopupStyle
       },
-      /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head", onMouseDown: handleStartFocusTimerPopupDrag, title: language === "ur" ? "Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u0688\u0631\u06CC\u06AF \u06A9\u0631\u06CC\u06BA" : "Hold Ctrl to drag" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Study Countdown", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627\u0624\u0646\u0679 \u0688\u0627\u0624\u0646", language), language))), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-actions" }, /* @__PURE__ */ React.createElement(
+      /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head", onPointerDown: handleStartFocusTimerPopupDrag, title: language === "ur" ? "Ctrl \u062F\u0628\u0627 \u06A9\u0631 \u0688\u0631\u06CC\u06AF \u06A9\u0631\u06CC\u06BA" : "Hold Ctrl to drag" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Study Countdown", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u06A9\u0627\u0624\u0646\u0679 \u0688\u0627\u0624\u0646", language), language))), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-actions" }, /* @__PURE__ */ React.createElement(
         "button",
         {
           type: "button",
@@ -29163,7 +29146,7 @@ ${error.message || error}`);
             setFocusTimerPopupOpen(false);
           }
         },
-        "\u2212"
+        /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { d: "M6 12h12", fill: "none", stroke: "currentColor", strokeWidth: "2.2", strokeLinecap: "round" }))
       ), /* @__PURE__ */ React.createElement(
         "button",
         {
@@ -29173,7 +29156,7 @@ ${error.message || error}`);
           "aria-label": language === "ur" ? "\u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA" : "Close",
           onClick: () => setFocusTimerPopupOpen(false)
         },
-        "\u2715"
+        /* @__PURE__ */ React.createElement("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, /* @__PURE__ */ React.createElement("path", { d: "M7 7l10 10M17 7 7 17", fill: "none", stroke: "currentColor", strokeWidth: "2.1", strokeLinecap: "round" }))
       ))),
       /* @__PURE__ */ React.createElement("div", { className: `header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-clock" }, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-status-row" }, /* @__PURE__ */ React.createElement("span", { className: `header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}` }, renderLocalizedTextNode(focusTimerStatusLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-duration" }, renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)))),
       /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-config" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-grid" }, [
