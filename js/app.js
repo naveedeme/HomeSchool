@@ -16163,7 +16163,6 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [focusTimerSettings, setFocusTimerSettings] = useState(() => normalizeFocusTimerSettings(stored?.focusTimerSettings || {}));
   const [focusTimerState, setFocusTimerState] = useState(() => normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}));
   const [focusTimerPopupOpen, setFocusTimerPopupOpen] = useState(false);
-  const [focusTimerPickerOpenField, setFocusTimerPickerOpenField] = useState(null);
   const [focusTimerDraftDuration, setFocusTimerDraftDuration] = useState(() => {
     const initialSeconds = normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}).selectedDurationSeconds;
     return splitDurationToClockParts(initialSeconds);
@@ -16491,6 +16490,7 @@ const contentRef = useRef(null);
 const headerHideTimerRef = useRef(null);
   const focusTimerButtonRef = useRef(null);
   const focusTimerPopupRef = useRef(null);
+  const focusTimerWheelRefs = useRef({ hours: null, minutes: null, seconds: null });
   const focusTimerAudioContextRef = useRef(null);
   const focusTimerLastTickRef = useRef(null);
   const focusTimerCompletionBuzzRef = useRef(null);
@@ -28046,18 +28046,27 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
     const ctx = ensureFocusTimerAudioContext();
     if (!ctx) return;
     const now = ctx.currentTime;
-    tones.forEach((tone, index) => {
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = tone?.type || "sine";
-      oscillator.frequency.value = Math.max(80, Number(tone?.frequency) || 440);
-      gain.gain.setValueAtTime(0.0001, now + (Number(tone?.delay) || 0));
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, Number(tone?.gain) || 0.04), now + (Number(tone?.delay) || 0) + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + (Number(tone?.delay) || 0) + Math.max(0.05, Number(tone?.duration) || 0.12));
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start(now + (Number(tone?.delay) || 0));
-      oscillator.stop(now + (Number(tone?.delay) || 0) + Math.max(0.06, Number(tone?.duration) || 0.14));
+    tones.forEach((tone) => {
+      const harmonics = Array.isArray(tone?.harmonics) && tone.harmonics.length
+        ? tone.harmonics
+        : [{ frequency: tone?.frequency, gain: tone?.gain, type: tone?.type }];
+      harmonics.forEach((harmonic, harmonicIndex) => {
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startAt = now + (Number(tone?.delay) || 0);
+        const duration = Math.max(0.05, Number(tone?.duration) || 0.14);
+        const peakGain = Math.max(0.0001, Number(harmonic?.gain ?? tone?.gain) || 0.04);
+        oscillator.type = harmonic?.type || tone?.type || "sine";
+        oscillator.frequency.value = Math.max(80, Number(harmonic?.frequency ?? tone?.frequency) || 440);
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(peakGain, startAt + Math.min(0.018, duration / 3));
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peakGain * 0.38), startAt + Math.min(0.06, duration / 1.8));
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start(startAt);
+        oscillator.stop(startAt + duration + 0.02);
+      });
     });
   }, [audioMuted, ensureFocusTimerAudioContext]);
 
@@ -28193,10 +28202,46 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
     }));
   }, []);
 
-  const handleFocusTimerPickerSelect = useCallback((part, value) => {
+  const scrollFocusTimerWheelToValue = useCallback((part, value, behavior = "smooth") => {
+    const container = focusTimerWheelRefs.current?.[part];
+    if (!container) return;
+    const target = container.querySelector(`[data-wheel-value="${Number(value) || 0}"]`);
+    if (!target) return;
+    const offset = target.offsetTop - ((container.clientHeight - target.offsetHeight) / 2);
+    container.scrollTo({ top: Math.max(0, offset), behavior });
+  }, []);
+
+  const handleFocusTimerWheelSelect = useCallback((part, value) => {
     handleFocusTimerDraftPartChange(part, value);
-    setFocusTimerPickerOpenField(null);
-  }, [handleFocusTimerDraftPartChange]);
+    window.requestAnimationFrame(() => {
+      scrollFocusTimerWheelToValue(part, value, "smooth");
+    });
+  }, [handleFocusTimerDraftPartChange, scrollFocusTimerWheelToValue]);
+
+  const handleFocusTimerWheelScroll = useCallback((part, event) => {
+    const container = event?.currentTarget;
+    if (!container) return;
+    const options = Array.from(container.querySelectorAll(".header-focus-timer-wheel-option"));
+    if (!options.length) return;
+    const containerMid = container.scrollTop + (container.clientHeight / 2);
+    let closest = null;
+    let minDistance = Infinity;
+    options.forEach((option) => {
+      const optionMid = option.offsetTop + (option.clientHeight / 2);
+      const distance = Math.abs(containerMid - optionMid);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = option;
+      }
+    });
+    if (!closest) return;
+    const nextValue = Number(closest.dataset.wheelValue || 0);
+    setFocusTimerDraftDuration((current) => (
+      Number(current?.[part] ?? 0) === nextValue
+        ? current
+        : { ...current, [part]: nextValue }
+    ));
+  }, []);
 
   const handleFocusTimerSettingChange = useCallback((durationMinutes) => {
     const nextSeconds = clampFocusTimerSeconds((Number(durationMinutes) || 20) * 60, focusTimerDurationSeconds);
@@ -28246,10 +28291,7 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
   }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
 
   useEffect(() => {
-    if (!focusTimerPopupOpen) {
-      setFocusTimerPickerOpenField(null);
-      return undefined;
-    }
+    if (!focusTimerPopupOpen) return undefined;
     const handlePointerDown = (event) => {
       const target = event?.target;
       if (!target) return;
@@ -28264,6 +28306,23 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
       document.removeEventListener("touchstart", handlePointerDown);
     };
   }, [focusTimerPopupOpen]);
+
+  useEffect(() => {
+    if (!focusTimerPopupOpen) return undefined;
+    const syncWheelPositions = () => {
+      scrollFocusTimerWheelToValue("hours", focusTimerDraftDuration.hours, "auto");
+      scrollFocusTimerWheelToValue("minutes", focusTimerDraftDuration.minutes, "auto");
+      scrollFocusTimerWheelToValue("seconds", focusTimerDraftDuration.seconds, "auto");
+    };
+    const timerId = window.setTimeout(syncWheelPositions, 0);
+    return () => window.clearTimeout(timerId);
+  }, [
+    focusTimerPopupOpen,
+    focusTimerDraftDuration.hours,
+    focusTimerDraftDuration.minutes,
+    focusTimerDraftDuration.seconds,
+    scrollFocusTimerWheelToValue,
+  ]);
 
   useEffect(() => {
     if (!focusTimerState.active) {
@@ -28332,7 +28391,23 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
     if (wholeSeconds !== focusTimerLastTickRef.current) {
       focusTimerLastTickRef.current = wholeSeconds;
       playFocusTimerTones([
-        { frequency: wholeSeconds <= 10 ? 1150 : 920, duration: 0.045, gain: wholeSeconds <= 10 ? 0.055 : 0.028, type: "square" },
+        wholeSeconds <= 10
+          ? {
+              duration: 0.08,
+              delay: 0,
+              harmonics: [
+                { frequency: 1760, gain: 0.032, type: "triangle" },
+                { frequency: 1320, gain: 0.022, type: "square" },
+              ],
+            }
+          : {
+              duration: 0.05,
+              delay: 0,
+              harmonics: [
+                { frequency: 1240, gain: 0.018, type: "triangle" },
+                { frequency: 860, gain: 0.012, type: "sine" },
+              ],
+            },
       ]);
     }
     return undefined;
@@ -28348,9 +28423,30 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
     }
     const playBuzz = () => {
       playFocusTimerTones([
-        { frequency: 420, duration: 0.12, gain: 0.08, type: "sawtooth" },
-        { frequency: 320, duration: 0.16, delay: 0.14, gain: 0.07, type: "square" },
-        { frequency: 520, duration: 0.14, delay: 0.34, gain: 0.08, type: "square" },
+        {
+          duration: 0.28,
+          delay: 0,
+          harmonics: [
+            { frequency: 880, gain: 0.05, type: "triangle" },
+            { frequency: 1320, gain: 0.025, type: "sine" },
+          ],
+        },
+        {
+          duration: 0.28,
+          delay: 0.3,
+          harmonics: [
+            { frequency: 740, gain: 0.052, type: "triangle" },
+            { frequency: 1110, gain: 0.024, type: "sine" },
+          ],
+        },
+        {
+          duration: 0.36,
+          delay: 0.64,
+          harmonics: [
+            { frequency: 988, gain: 0.058, type: "triangle" },
+            { frequency: 1480, gain: 0.028, type: "square" },
+          ],
+        },
       ]);
     };
     playBuzz();
@@ -32740,6 +32836,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           aria-expanded={focusTimerPopupOpen ? "true" : "false"}
           onClick={(event) => {
             event.stopPropagation();
+            if (focusTimerPopupOpen && (focusTimerState.active || focusTimerState.paused || focusTimerState.completionPromptVisible)) {
+              setFocusTimerState((current) => ({ ...current, minimized: true }));
+              setFocusTimerPopupOpen(false);
+              return;
+            }
             if (!focusTimerPopupOpen) syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
             setFocusTimerPopupOpen((current) => !current);
             setFocusTimerState((current) => ({ ...current, minimized: false }));
@@ -32788,38 +32889,36 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
               </div>
             </div>
             <div className="header-focus-timer-config">
-              <div className="header-focus-timer-picker-grid">
+              <div className="header-focus-timer-wheel-grid">
                 {[
-                  { key: "hours", label: joinLocalizedText("Hours", "گھنٹے", language), max: 23 },
-                  { key: "minutes", label: joinLocalizedText("Minutes", "منٹ", language), max: 59 },
-                  { key: "seconds", label: joinLocalizedText("Seconds", "سیکنڈ", language), max: 59 },
+                  { key: "hours", label: joinLocalizedText("Hours", "گھنٹے", language) },
+                  { key: "minutes", label: joinLocalizedText("Minutes", "منٹ", language) },
+                  { key: "seconds", label: joinLocalizedText("Seconds", "سیکنڈ", language) },
                 ].map((entry) => (
-                  <div key={`focus_timer_${entry.key}`} className={`header-focus-timer-picker${focusTimerPickerOpenField === entry.key ? " open" : ""}`}>
-                    <button
-                      type="button"
-                      className="header-focus-timer-picker-trigger"
-                      onClick={() => setFocusTimerPickerOpenField((current) => current === entry.key ? null : entry.key)}
-                      aria-expanded={focusTimerPickerOpenField === entry.key ? "true" : "false"}
-                    >
-                      <span className="header-focus-timer-picker-label">{renderLocalizedTextNode(entry.label, language)}</span>
-                      <strong>{String(focusTimerDraftDuration?.[entry.key] ?? 0).padStart(2, "0")}</strong>
-                    </button>
-                    {focusTimerPickerOpenField === entry.key ? (
-                      <div className="header-focus-timer-picker-menu">
-                        <div className="header-focus-timer-picker-scroll">
-                          {focusTimerPickerOptions[entry.key].map((optionValue) => (
-                            <button
-                              key={`focus_timer_${entry.key}_${optionValue}`}
-                              type="button"
-                              className={`header-focus-timer-picker-option${Number(focusTimerDraftDuration?.[entry.key] ?? 0) === optionValue ? " active" : ""}`}
-                              onClick={() => handleFocusTimerPickerSelect(entry.key, optionValue)}
-                            >
-                              {String(optionValue).padStart(2, "0")}
-                            </button>
-                          ))}
-                        </div>
+                  <div key={`focus_timer_${entry.key}`} className="header-focus-timer-wheel">
+                    <span className="header-focus-timer-wheel-label">{renderLocalizedTextNode(entry.label, language)}</span>
+                    <div className="header-focus-timer-wheel-shell">
+                      <div className="header-focus-timer-wheel-highlight" aria-hidden="true" />
+                      <div
+                        ref={(node) => { focusTimerWheelRefs.current[entry.key] = node; }}
+                        className="header-focus-timer-wheel-scroll"
+                        onScroll={(event) => handleFocusTimerWheelScroll(entry.key, event)}
+                      >
+                        <div className="header-focus-timer-wheel-spacer" aria-hidden="true" />
+                        {focusTimerPickerOptions[entry.key].map((optionValue) => (
+                          <button
+                            key={`focus_timer_${entry.key}_${optionValue}`}
+                            type="button"
+                            data-wheel-value={optionValue}
+                            className={`header-focus-timer-wheel-option${Number(focusTimerDraftDuration?.[entry.key] ?? 0) === optionValue ? " active" : ""}`}
+                            onClick={() => handleFocusTimerWheelSelect(entry.key, optionValue)}
+                          >
+                            {String(optionValue).padStart(2, "0")}
+                          </button>
+                        ))}
+                        <div className="header-focus-timer-wheel-spacer" aria-hidden="true" />
                       </div>
-                    ) : null}
+                    </div>
                   </div>
                 ))}
               </div>

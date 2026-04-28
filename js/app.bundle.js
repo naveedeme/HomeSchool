@@ -13556,7 +13556,6 @@ ${marker} `);
     const [focusTimerSettings, setFocusTimerSettings] = useState(() => normalizeFocusTimerSettings((stored == null ? void 0 : stored.focusTimerSettings) || {}));
     const [focusTimerState, setFocusTimerState] = useState(() => normalizeFocusTimerState((stored == null ? void 0 : stored.focusTimerState) || {}, (stored == null ? void 0 : stored.focusTimerSettings) || {}));
     const [focusTimerPopupOpen, setFocusTimerPopupOpen] = useState(false);
-    const [focusTimerPickerOpenField, setFocusTimerPickerOpenField] = useState(null);
     const [focusTimerDraftDuration, setFocusTimerDraftDuration] = useState(() => {
       const initialSeconds = normalizeFocusTimerState((stored == null ? void 0 : stored.focusTimerState) || {}, (stored == null ? void 0 : stored.focusTimerSettings) || {}).selectedDurationSeconds;
       return splitDurationToClockParts(initialSeconds);
@@ -13872,6 +13871,7 @@ ${marker} `);
     const headerHideTimerRef = useRef(null);
     const focusTimerButtonRef = useRef(null);
     const focusTimerPopupRef = useRef(null);
+    const focusTimerWheelRefs = useRef({ hours: null, minutes: null, seconds: null });
     const focusTimerAudioContextRef = useRef(null);
     const focusTimerLastTickRef = useRef(null);
     const focusTimerCompletionBuzzRef = useRef(null);
@@ -24571,18 +24571,26 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       const ctx = ensureFocusTimerAudioContext();
       if (!ctx) return;
       const now = ctx.currentTime;
-      tones.forEach((tone, index) => {
-        const oscillator = ctx.createOscillator();
-        const gain = ctx.createGain();
-        oscillator.type = (tone == null ? void 0 : tone.type) || "sine";
-        oscillator.frequency.value = Math.max(80, Number(tone == null ? void 0 : tone.frequency) || 440);
-        gain.gain.setValueAtTime(1e-4, now + (Number(tone == null ? void 0 : tone.delay) || 0));
-        gain.gain.exponentialRampToValueAtTime(Math.max(1e-4, Number(tone == null ? void 0 : tone.gain) || 0.04), now + (Number(tone == null ? void 0 : tone.delay) || 0) + 0.01);
-        gain.gain.exponentialRampToValueAtTime(1e-4, now + (Number(tone == null ? void 0 : tone.delay) || 0) + Math.max(0.05, Number(tone == null ? void 0 : tone.duration) || 0.12));
-        oscillator.connect(gain);
-        gain.connect(ctx.destination);
-        oscillator.start(now + (Number(tone == null ? void 0 : tone.delay) || 0));
-        oscillator.stop(now + (Number(tone == null ? void 0 : tone.delay) || 0) + Math.max(0.06, Number(tone == null ? void 0 : tone.duration) || 0.14));
+      tones.forEach((tone) => {
+        const harmonics = Array.isArray(tone == null ? void 0 : tone.harmonics) && tone.harmonics.length ? tone.harmonics : [{ frequency: tone == null ? void 0 : tone.frequency, gain: tone == null ? void 0 : tone.gain, type: tone == null ? void 0 : tone.type }];
+        harmonics.forEach((harmonic, harmonicIndex) => {
+          var _a2, _b2;
+          const oscillator = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const startAt = now + (Number(tone == null ? void 0 : tone.delay) || 0);
+          const duration = Math.max(0.05, Number(tone == null ? void 0 : tone.duration) || 0.14);
+          const peakGain = Math.max(1e-4, Number((_a2 = harmonic == null ? void 0 : harmonic.gain) != null ? _a2 : tone == null ? void 0 : tone.gain) || 0.04);
+          oscillator.type = (harmonic == null ? void 0 : harmonic.type) || (tone == null ? void 0 : tone.type) || "sine";
+          oscillator.frequency.value = Math.max(80, Number((_b2 = harmonic == null ? void 0 : harmonic.frequency) != null ? _b2 : tone == null ? void 0 : tone.frequency) || 440);
+          gain.gain.setValueAtTime(1e-4, startAt);
+          gain.gain.exponentialRampToValueAtTime(peakGain, startAt + Math.min(0.018, duration / 3));
+          gain.gain.exponentialRampToValueAtTime(Math.max(1e-4, peakGain * 0.38), startAt + Math.min(0.06, duration / 1.8));
+          gain.gain.exponentialRampToValueAtTime(1e-4, startAt + duration);
+          oscillator.connect(gain);
+          gain.connect(ctx.destination);
+          oscillator.start(startAt);
+          oscillator.stop(startAt + duration + 0.02);
+        });
       });
     }, [audioMuted, ensureFocusTimerAudioContext]);
     const syncFocusTimerDraftFromSeconds = useCallback((totalSeconds) => {
@@ -24705,10 +24713,44 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         [part]: numeric
       }));
     }, []);
-    const handleFocusTimerPickerSelect = useCallback((part, value) => {
+    const scrollFocusTimerWheelToValue = useCallback((part, value, behavior = "smooth") => {
+      var _a2;
+      const container = (_a2 = focusTimerWheelRefs.current) == null ? void 0 : _a2[part];
+      if (!container) return;
+      const target = container.querySelector(`[data-wheel-value="${Number(value) || 0}"]`);
+      if (!target) return;
+      const offset = target.offsetTop - (container.clientHeight - target.offsetHeight) / 2;
+      container.scrollTo({ top: Math.max(0, offset), behavior });
+    }, []);
+    const handleFocusTimerWheelSelect = useCallback((part, value) => {
       handleFocusTimerDraftPartChange(part, value);
-      setFocusTimerPickerOpenField(null);
-    }, [handleFocusTimerDraftPartChange]);
+      window.requestAnimationFrame(() => {
+        scrollFocusTimerWheelToValue(part, value, "smooth");
+      });
+    }, [handleFocusTimerDraftPartChange, scrollFocusTimerWheelToValue]);
+    const handleFocusTimerWheelScroll = useCallback((part, event) => {
+      const container = event == null ? void 0 : event.currentTarget;
+      if (!container) return;
+      const options = Array.from(container.querySelectorAll(".header-focus-timer-wheel-option"));
+      if (!options.length) return;
+      const containerMid = container.scrollTop + container.clientHeight / 2;
+      let closest = null;
+      let minDistance = Infinity;
+      options.forEach((option) => {
+        const optionMid = option.offsetTop + option.clientHeight / 2;
+        const distance = Math.abs(containerMid - optionMid);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closest = option;
+        }
+      });
+      if (!closest) return;
+      const nextValue = Number(closest.dataset.wheelValue || 0);
+      setFocusTimerDraftDuration((current) => {
+        var _a2;
+        return Number((_a2 = current == null ? void 0 : current[part]) != null ? _a2 : 0) === nextValue ? current : { ...current, [part]: nextValue };
+      });
+    }, []);
     const handleFocusTimerSettingChange = useCallback((durationMinutes) => {
       const nextSeconds = clampFocusTimerSeconds((Number(durationMinutes) || 20) * 60, focusTimerDurationSeconds);
       applyFocusTimerDurationSeconds(nextSeconds);
@@ -24754,10 +24796,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }));
     }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
     useEffect(() => {
-      if (!focusTimerPopupOpen) {
-        setFocusTimerPickerOpenField(null);
-        return void 0;
-      }
+      if (!focusTimerPopupOpen) return void 0;
       const handlePointerDown = (event) => {
         var _a2, _b2, _c2, _d2;
         const target = event == null ? void 0 : event.target;
@@ -24773,6 +24812,22 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         document.removeEventListener("touchstart", handlePointerDown);
       };
     }, [focusTimerPopupOpen]);
+    useEffect(() => {
+      if (!focusTimerPopupOpen) return void 0;
+      const syncWheelPositions = () => {
+        scrollFocusTimerWheelToValue("hours", focusTimerDraftDuration.hours, "auto");
+        scrollFocusTimerWheelToValue("minutes", focusTimerDraftDuration.minutes, "auto");
+        scrollFocusTimerWheelToValue("seconds", focusTimerDraftDuration.seconds, "auto");
+      };
+      const timerId = window.setTimeout(syncWheelPositions, 0);
+      return () => window.clearTimeout(timerId);
+    }, [
+      focusTimerPopupOpen,
+      focusTimerDraftDuration.hours,
+      focusTimerDraftDuration.minutes,
+      focusTimerDraftDuration.seconds,
+      scrollFocusTimerWheelToValue
+    ]);
     useEffect(() => {
       if (!focusTimerState.active) {
         focusTimerLastTickRef.current = null;
@@ -24838,7 +24893,21 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       if (wholeSeconds !== focusTimerLastTickRef.current) {
         focusTimerLastTickRef.current = wholeSeconds;
         playFocusTimerTones([
-          { frequency: wholeSeconds <= 10 ? 1150 : 920, duration: 0.045, gain: wholeSeconds <= 10 ? 0.055 : 0.028, type: "square" }
+          wholeSeconds <= 10 ? {
+            duration: 0.08,
+            delay: 0,
+            harmonics: [
+              { frequency: 1760, gain: 0.032, type: "triangle" },
+              { frequency: 1320, gain: 0.022, type: "square" }
+            ]
+          } : {
+            duration: 0.05,
+            delay: 0,
+            harmonics: [
+              { frequency: 1240, gain: 0.018, type: "triangle" },
+              { frequency: 860, gain: 0.012, type: "sine" }
+            ]
+          }
         ]);
       }
       return void 0;
@@ -24853,9 +24922,30 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       }
       const playBuzz = () => {
         playFocusTimerTones([
-          { frequency: 420, duration: 0.12, gain: 0.08, type: "sawtooth" },
-          { frequency: 320, duration: 0.16, delay: 0.14, gain: 0.07, type: "square" },
-          { frequency: 520, duration: 0.14, delay: 0.34, gain: 0.08, type: "square" }
+          {
+            duration: 0.28,
+            delay: 0,
+            harmonics: [
+              { frequency: 880, gain: 0.05, type: "triangle" },
+              { frequency: 1320, gain: 0.025, type: "sine" }
+            ]
+          },
+          {
+            duration: 0.28,
+            delay: 0.3,
+            harmonics: [
+              { frequency: 740, gain: 0.052, type: "triangle" },
+              { frequency: 1110, gain: 0.024, type: "sine" }
+            ]
+          },
+          {
+            duration: 0.36,
+            delay: 0.64,
+            harmonics: [
+              { frequency: 988, gain: 0.058, type: "triangle" },
+              { frequency: 1480, gain: 0.028, type: "square" }
+            ]
+          }
         ]);
       };
       playBuzz();
@@ -28967,6 +29057,11 @@ ${error.message || error}`);
         "aria-expanded": focusTimerPopupOpen ? "true" : "false",
         onClick: (event) => {
           event.stopPropagation();
+          if (focusTimerPopupOpen && (focusTimerState.active || focusTimerState.paused || focusTimerState.completionPromptVisible)) {
+            setFocusTimerState((current) => ({ ...current, minimized: true }));
+            setFocusTimerPopupOpen(false);
+            return;
+          }
           if (!focusTimerPopupOpen) syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
           setFocusTimerPopupOpen((current) => !current);
           setFocusTimerState((current) => ({ ...current, minimized: false }));
@@ -28992,36 +29087,36 @@ ${error.message || error}`);
         onClick: () => setFocusTimerPopupOpen(false)
       },
       renderLocalizedTextNode(joinLocalizedText("Close", "\u0628\u0646\u062F \u06A9\u0631\u06CC\u06BA", language), language)
-    ))), /* @__PURE__ */ React.createElement("div", { className: `header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-clock" }, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-status-row" }, /* @__PURE__ */ React.createElement("span", { className: `header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}` }, renderLocalizedTextNode(focusTimerStatusLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-duration" }, renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-config" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-picker-grid" }, [
-      { key: "hours", label: joinLocalizedText("Hours", "\u06AF\u06BE\u0646\u0679\u06D2", language), max: 23 },
-      { key: "minutes", label: joinLocalizedText("Minutes", "\u0645\u0646\u0679", language), max: 59 },
-      { key: "seconds", label: joinLocalizedText("Seconds", "\u0633\u06CC\u06A9\u0646\u0688", language), max: 59 }
-    ].map((entry) => {
-      var _a2;
-      return /* @__PURE__ */ React.createElement("div", { key: `focus_timer_${entry.key}`, className: `header-focus-timer-picker${focusTimerPickerOpenField === entry.key ? " open" : ""}` }, /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          type: "button",
-          className: "header-focus-timer-picker-trigger",
-          onClick: () => setFocusTimerPickerOpenField((current) => current === entry.key ? null : entry.key),
-          "aria-expanded": focusTimerPickerOpenField === entry.key ? "true" : "false"
+    ))), /* @__PURE__ */ React.createElement("div", { className: `header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-clock" }, focusTimerRemainingLabel), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-status-row" }, /* @__PURE__ */ React.createElement("span", { className: `header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}` }, renderLocalizedTextNode(focusTimerStatusLabel, language)), /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-duration" }, renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)))), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-config" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-grid" }, [
+      { key: "hours", label: joinLocalizedText("Hours", "\u06AF\u06BE\u0646\u0679\u06D2", language) },
+      { key: "minutes", label: joinLocalizedText("Minutes", "\u0645\u0646\u0679", language) },
+      { key: "seconds", label: joinLocalizedText("Seconds", "\u0633\u06CC\u06A9\u0646\u0688", language) }
+    ].map((entry) => /* @__PURE__ */ React.createElement("div", { key: `focus_timer_${entry.key}`, className: "header-focus-timer-wheel" }, /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-wheel-label" }, renderLocalizedTextNode(entry.label, language)), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-shell" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-highlight", "aria-hidden": "true" }), /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        ref: (node) => {
+          focusTimerWheelRefs.current[entry.key] = node;
         },
-        /* @__PURE__ */ React.createElement("span", { className: "header-focus-timer-picker-label" }, renderLocalizedTextNode(entry.label, language)),
-        /* @__PURE__ */ React.createElement("strong", null, String((_a2 = focusTimerDraftDuration == null ? void 0 : focusTimerDraftDuration[entry.key]) != null ? _a2 : 0).padStart(2, "0"))
-      ), focusTimerPickerOpenField === entry.key ? /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-picker-menu" }, /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-picker-scroll" }, focusTimerPickerOptions[entry.key].map((optionValue) => {
-        var _a3;
+        className: "header-focus-timer-wheel-scroll",
+        onScroll: (event) => handleFocusTimerWheelScroll(entry.key, event)
+      },
+      /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-spacer", "aria-hidden": "true" }),
+      focusTimerPickerOptions[entry.key].map((optionValue) => {
+        var _a2;
         return /* @__PURE__ */ React.createElement(
           "button",
           {
             key: `focus_timer_${entry.key}_${optionValue}`,
             type: "button",
-            className: `header-focus-timer-picker-option${Number((_a3 = focusTimerDraftDuration == null ? void 0 : focusTimerDraftDuration[entry.key]) != null ? _a3 : 0) === optionValue ? " active" : ""}`,
-            onClick: () => handleFocusTimerPickerSelect(entry.key, optionValue)
+            "data-wheel-value": optionValue,
+            className: `header-focus-timer-wheel-option${Number((_a2 = focusTimerDraftDuration == null ? void 0 : focusTimerDraftDuration[entry.key]) != null ? _a2 : 0) === optionValue ? " active" : ""}`,
+            onClick: () => handleFocusTimerWheelSelect(entry.key, optionValue)
           },
           String(optionValue).padStart(2, "0")
         );
-      }))) : null);
-    })), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-presets" }, focusTimerPresetOptions.map((seconds) => /* @__PURE__ */ React.createElement(
+      }),
+      /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-wheel-spacer", "aria-hidden": "true" })
+    ))))), /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-presets" }, focusTimerPresetOptions.map((seconds) => /* @__PURE__ */ React.createElement(
       "button",
       {
         key: `focus_timer_preset_${seconds}`,
