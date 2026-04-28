@@ -28308,9 +28308,20 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
       originX: rect.left,
       originY: rect.top,
     };
+    if (typeof event.pointerId === "number" && event.currentTarget?.setPointerCapture) {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch (error) {
+        // Ignore capture failures and keep window-level drag listeners as fallback.
+      }
+    }
     setFocusTimerPopupPosition({ x: rect.left, y: rect.top });
     event.preventDefault();
   }, []);
+
+  const handleStartFocusTimerPopupMouseDrag = useCallback((event) => {
+    handleStartFocusTimerPopupDrag(event);
+  }, [handleStartFocusTimerPopupDrag]);
 
   useEffect(() => {
     const handlePointerMove = (event) => {
@@ -28325,11 +28336,32 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
     const handlePointerUp = () => {
       focusTimerPopupDragRef.current = null;
     };
+    const handleMouseMove = (event) => {
+      const dragState = focusTimerPopupDragRef.current;
+      if (!dragState) return;
+      event.preventDefault?.();
+      setFocusTimerPopupPosition({
+        x: Math.max(12, dragState.originX + (event.clientX - dragState.startX)),
+        y: Math.max(12, dragState.originY + (event.clientY - dragState.startY)),
+      });
+    };
+    const handleMouseUp = () => {
+      focusTimerPopupDragRef.current = null;
+    };
+    const handleWindowBlur = () => {
+      focusTimerPopupDragRef.current = null;
+    };
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("blur", handleWindowBlur);
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("blur", handleWindowBlur);
     };
   }, []);
 
@@ -32938,7 +32970,12 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
         data-ui-language={language}
         style={focusTimerPopupStyle}
       >
-        <div className="header-focus-timer-head" onPointerDown={handleStartFocusTimerPopupDrag} title={language === "ur" ? "Ctrl دبا کر ڈریگ کریں" : "Hold Ctrl to drag"}>
+        <div
+          className="header-focus-timer-head"
+          onPointerDown={handleStartFocusTimerPopupDrag}
+          onMouseDown={handleStartFocusTimerPopupMouseDrag}
+          title={language === "ur" ? "Ctrl دبا کر ڈریگ کریں" : "Hold Ctrl to drag"}
+        >
           <div className="header-focus-timer-head-copy">
             <strong>{renderLocalizedTextNode(joinLocalizedText("Study Countdown", "مطالعہ کاؤنٹ ڈاؤن", language), language)}</strong>
           </div>
@@ -33073,7 +33110,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
                 className="header-focus-timer-action danger"
                 onClick={endFocusTimerSession}
               >
-                <span aria-hidden="true">■</span>
+                <span className="header-focus-timer-action-dot" aria-hidden="true" />
                 <span>{renderLocalizedTextNode(joinLocalizedText("Stop", "روک دیں", language), language)}</span>
               </button>
             </div>
