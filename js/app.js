@@ -14652,6 +14652,82 @@ function formatClockTime(totalSeconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+const FOCUS_TIMER_MIN_SECONDS = 5;
+const FOCUS_TIMER_MAX_SECONDS = 12 * 60 * 60;
+
+function clampFocusTimerSeconds(value, fallback = 20 * 60) {
+  const numeric = Math.round(Number(value) || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return Math.max(FOCUS_TIMER_MIN_SECONDS, Math.min(FOCUS_TIMER_MAX_SECONDS, Math.round(Number(fallback) || 20 * 60)));
+  }
+  return Math.max(FOCUS_TIMER_MIN_SECONDS, Math.min(FOCUS_TIMER_MAX_SECONDS, numeric));
+}
+
+function splitDurationToClockParts(totalSeconds) {
+  const safeSeconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  return { hours, minutes, seconds };
+}
+
+function formatDetailedClockTime(totalSeconds) {
+  const { hours, minutes, seconds } = splitDurationToClockParts(totalSeconds);
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatFocusTimerDurationLabel(totalSeconds, language = "en") {
+  const { hours, minutes, seconds } = splitDurationToClockParts(totalSeconds);
+  const parts = [];
+  if (hours > 0) parts.push(joinLocalizedText(`${hours}h`, `${hours} گھنٹے`, language));
+  if (minutes > 0) parts.push(joinLocalizedText(`${minutes}m`, `${minutes} منٹ`, language));
+  if (seconds > 0 || !parts.length) parts.push(joinLocalizedText(`${seconds}s`, `${seconds} سیکنڈ`, language));
+  return parts.join(language === "ur" ? " " : " ");
+}
+
+function normalizeFocusTimerSettings(rawSettings = {}) {
+  const durationSeconds = clampFocusTimerSeconds(
+    rawSettings?.durationSeconds,
+    (Number(rawSettings?.durationMinutes) || 20) * 60,
+  );
+  return {
+    durationMinutes: Math.max(1, Math.min(720, Math.round(durationSeconds / 60))),
+    durationSeconds,
+    autoStartBreak: Boolean(rawSettings?.autoStartBreak),
+    defaultExtendSeconds: clampFocusTimerSeconds(rawSettings?.defaultExtendSeconds, 5 * 60),
+  };
+}
+
+function normalizeFocusTimerState(rawState = {}, settings = {}) {
+  const normalizedSettings = normalizeFocusTimerSettings(settings);
+  const fallbackSeconds = clampFocusTimerSeconds(
+    rawState?.selectedDurationSeconds,
+    normalizedSettings.durationSeconds,
+  );
+  const now = Date.now();
+  const expectedEndAt = Number(rawState?.expectedEndAt) || null;
+  const rawRemaining = clampFocusTimerSeconds(rawState?.remainingSeconds, fallbackSeconds);
+  const isActive = Boolean(rawState?.active) && Number.isFinite(expectedEndAt) && expectedEndAt > now;
+  const computedRemaining = isActive
+    ? clampFocusTimerSeconds(Math.ceil((expectedEndAt - now) / 1000), fallbackSeconds)
+    : rawRemaining;
+  return {
+    active: isActive,
+    paused: Boolean(rawState?.paused) && !isActive,
+    remainingSeconds: Math.max(0, Number.isFinite(computedRemaining) ? computedRemaining : fallbackSeconds),
+    selectedDurationSeconds: fallbackSeconds,
+    expectedEndAt: isActive ? expectedEndAt : null,
+    startedAt: Number(rawState?.startedAt) || null,
+    completedSessions: Math.max(0, Number(rawState?.completedSessions) || 0),
+    completionPromptVisible: Boolean(rawState?.completionPromptVisible) && !isActive,
+    completionAlerted: Boolean(rawState?.completionAlerted) && !isActive,
+    minimized: Boolean(rawState?.minimized),
+  };
+}
+
 function formatProjectedDateLabel(value, language = "en") {
   if (!value) return joinLocalizedText("Not enough data yet", "ابھی کافی ڈیٹا نہیں", language);
   const date = new Date(value);
@@ -16084,8 +16160,13 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [heatmapExpanded, setHeatmapExpanded] = useState(false);
   const [customListDraft, setCustomListDraft] = useState("");
   const [studyGoals, setStudyGoals] = useState(stored?.studyGoals || { dailyReviews: 20, weeklyWords: 40 });
-  const [focusTimerSettings, setFocusTimerSettings] = useState(stored?.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false });
-  const [focusTimerState, setFocusTimerState] = useState({ active: false, remainingSeconds: (Number(stored?.focusTimerSettings?.durationMinutes) || 20) * 60, startedAt: null, completedSessions: 0 });
+  const [focusTimerSettings, setFocusTimerSettings] = useState(() => normalizeFocusTimerSettings(stored?.focusTimerSettings || {}));
+  const [focusTimerState, setFocusTimerState] = useState(() => normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}));
+  const [focusTimerPopupOpen, setFocusTimerPopupOpen] = useState(false);
+  const [focusTimerDraftDuration, setFocusTimerDraftDuration] = useState(() => {
+    const initialSeconds = normalizeFocusTimerState(stored?.focusTimerState || {}, stored?.focusTimerSettings || {}).selectedDurationSeconds;
+    return splitDurationToClockParts(initialSeconds);
+  });
   const [reminderSettings, setReminderSettings] = useState(stored?.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null });
   const [classScheduleSettings, setClassScheduleSettings] = useState(stored?.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" });
   const [timeTrackingData, setTimeTrackingData] = useState(normalizeTimeTrackingData(stored?.timeTrackingData || {}));
@@ -16407,6 +16488,11 @@ const profileSwitcherMenuRef = useRef(null);
 const headerRef = useRef(null);
 const contentRef = useRef(null);
 const headerHideTimerRef = useRef(null);
+  const focusTimerButtonRef = useRef(null);
+  const focusTimerPopupRef = useRef(null);
+  const focusTimerAudioContextRef = useRef(null);
+  const focusTimerLastTickRef = useRef(null);
+  const focusTimerCompletionBuzzRef = useRef(null);
   const navBarRef = useRef(null);
   const navBarHideTimerRef = useRef(null);
   const copyToastTimerRef = useRef(null);
@@ -23421,15 +23507,16 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
       });
     }
     if (storedFocusTimer && typeof storedFocusTimer === "object") {
-      const nextMinutes = Math.max(5, Math.min(60, Number(storedFocusTimer.durationMinutes) || 20));
-      setFocusTimerSettings({
-        durationMinutes: nextMinutes,
-        autoStartBreak: Boolean(storedFocusTimer.autoStartBreak),
-      });
+      const normalizedTimerSettings = normalizeFocusTimerSettings(storedFocusTimer);
+      setFocusTimerSettings(normalizedTimerSettings);
       setFocusTimerState((current) => ({
         ...current,
-        remainingSeconds: nextMinutes * 60,
+        selectedDurationSeconds: normalizedTimerSettings.durationSeconds,
+        remainingSeconds: current.active || current.paused || current.completionPromptVisible
+          ? current.remainingSeconds
+          : normalizedTimerSettings.durationSeconds,
       }));
+      setFocusTimerDraftDuration(splitDurationToClockParts(normalizedTimerSettings.durationSeconds));
     }
     if (storedReminderSettings && typeof storedReminderSettings === "object") {
       setReminderSettings({
@@ -26851,7 +26938,7 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
           await window.HomeSchoolDB.saveCustomization("practiceProgress", nextPayload.practiceLessonProgress || {}, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("daySectionPacing", nextPayload.daySectionOverrides || {}, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("studyGoals", nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 }, saveCustomizationOptions);
-          await window.HomeSchoolDB.saveCustomization("focusTimerSettings", nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false }, saveCustomizationOptions);
+          await window.HomeSchoolDB.saveCustomization("focusTimerSettings", normalizeFocusTimerSettings(nextPayload.focusTimerSettings || {}), saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("reminderSettings", nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("backupReminderSettings", normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}), saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("classScheduleSettings", nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" }, saveCustomizationOptions);
@@ -26923,7 +27010,7 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
             practiceProgress: nextPayload.practiceLessonProgress || {},
             daySectionPacing: nextPayload.daySectionOverrides || {},
             studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
-            focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
+            focusTimerSettings: normalizeFocusTimerSettings(nextPayload.focusTimerSettings || {}),
             reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
             backupReminderSettings: normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}),
             classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
@@ -26997,7 +27084,7 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
           practiceProgress: nextPayload.practiceLessonProgress || {},
           daySectionPacing: nextPayload.daySectionOverrides || {},
           studyGoals: nextPayload.studyGoals || { dailyReviews: 20, weeklyWords: 40 },
-          focusTimerSettings: nextPayload.focusTimerSettings || { durationMinutes: 20, autoStartBreak: false },
+          focusTimerSettings: normalizeFocusTimerSettings(nextPayload.focusTimerSettings || {}),
           reminderSettings: nextPayload.reminderSettings || { enabled: false, time: "18:00", notifications: false, lastShownDay: null },
           backupReminderSettings: normalizeBackupReminderSettings(nextPayload.backupReminderSettings || {}),
           classScheduleSettings: nextPayload.classScheduleSettings || { enabled: false, startTime: "08:00", endTime: "13:00" },
@@ -27162,15 +27249,16 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
           });
         }
         if (storedFocusTimer && typeof storedFocusTimer === "object") {
-          const nextMinutes = Math.max(5, Math.min(60, Number(storedFocusTimer.durationMinutes) || 20));
-          setFocusTimerSettings({
-            durationMinutes: nextMinutes,
-            autoStartBreak: Boolean(storedFocusTimer.autoStartBreak),
-          });
+          const normalizedTimerSettings = normalizeFocusTimerSettings(storedFocusTimer);
+          setFocusTimerSettings(normalizedTimerSettings);
           setFocusTimerState((current) => ({
             ...current,
-            remainingSeconds: nextMinutes * 60,
+            selectedDurationSeconds: normalizedTimerSettings.durationSeconds,
+            remainingSeconds: current.active || current.paused || current.completionPromptVisible
+              ? current.remainingSeconds
+              : normalizedTimerSettings.durationSeconds,
           }));
+          setFocusTimerDraftDuration(splitDurationToClockParts(normalizedTimerSettings.durationSeconds));
         }
         if (storedReminderSettings && typeof storedReminderSettings === "object") {
           setReminderSettings({
@@ -27771,7 +27859,7 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
 }, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
   if (startupHydrationActiveRef.current) return;
-  if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
 }, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
@@ -27919,34 +28007,283 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
       // Ignore speech recognition shutdown errors.
     }
   }, []);
-  useEffect(() => {
-    const nextMinutes = Math.max(5, Math.min(60, Number(focusTimerSettings?.durationMinutes) || 20));
-    if (!focusTimerState.active) {
-      setFocusTimerState((current) => ({
-        ...current,
-        remainingSeconds: nextMinutes * 60,
-      }));
+  const focusTimerDurationSeconds = clampFocusTimerSeconds(
+    focusTimerSettings?.durationSeconds,
+    (Number(focusTimerSettings?.durationMinutes) || 20) * 60,
+  );
+  const focusTimerRemainingLabel = formatDetailedClockTime(focusTimerState.remainingSeconds);
+  const focusTimerIsComplete = !focusTimerState.active && Boolean(focusTimerState.completionPromptVisible);
+  const focusTimerFloatingVisible = Boolean(focusTimerState.minimized) && (
+    focusTimerState.active
+    || focusTimerState.paused
+    || focusTimerState.completionPromptVisible
+  );
+  const focusTimerStatusLabel = focusTimerState.active
+    ? joinLocalizedText("Running", "جاری", language)
+    : focusTimerState.paused
+      ? joinLocalizedText("Paused", "رکی ہوئی", language)
+      : focusTimerState.completionPromptVisible
+        ? joinLocalizedText("Completed", "مکمل", language)
+        : joinLocalizedText("Ready", "تیار", language);
+
+  const ensureFocusTimerAudioContext = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    if (!focusTimerAudioContextRef.current) {
+      focusTimerAudioContextRef.current = new AudioContextCtor();
     }
-  }, [focusTimerSettings?.durationMinutes]);
+    const ctx = focusTimerAudioContextRef.current;
+    if (ctx?.state === "suspended") {
+      ctx.resume?.().catch(() => {});
+    }
+    return ctx;
+  }, []);
+
+  const playFocusTimerTones = useCallback((tones = []) => {
+    if (audioMuted) return;
+    const ctx = ensureFocusTimerAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    tones.forEach((tone, index) => {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = tone?.type || "sine";
+      oscillator.frequency.value = Math.max(80, Number(tone?.frequency) || 440);
+      gain.gain.setValueAtTime(0.0001, now + (Number(tone?.delay) || 0));
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, Number(tone?.gain) || 0.04), now + (Number(tone?.delay) || 0) + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + (Number(tone?.delay) || 0) + Math.max(0.05, Number(tone?.duration) || 0.12));
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(now + (Number(tone?.delay) || 0));
+      oscillator.stop(now + (Number(tone?.delay) || 0) + Math.max(0.06, Number(tone?.duration) || 0.14));
+    });
+  }, [audioMuted, ensureFocusTimerAudioContext]);
+
+  const syncFocusTimerDraftFromSeconds = useCallback((totalSeconds) => {
+    setFocusTimerDraftDuration(splitDurationToClockParts(clampFocusTimerSeconds(totalSeconds, focusTimerDurationSeconds)));
+  }, [focusTimerDurationSeconds]);
+
+  const applyFocusTimerDurationSeconds = useCallback((nextSeconds, { start = false, closePopup = false } = {}) => {
+    const safeSeconds = clampFocusTimerSeconds(nextSeconds, focusTimerDurationSeconds);
+    const now = Date.now();
+    setFocusTimerSettings((current) => ({
+      ...normalizeFocusTimerSettings(current),
+      durationSeconds: safeSeconds,
+      durationMinutes: Math.max(1, Math.min(720, Math.round(safeSeconds / 60))),
+    }));
+    setFocusTimerState((current) => {
+      const nextState = {
+        ...current,
+        selectedDurationSeconds: safeSeconds,
+      };
+      if (!current.active && !current.paused && !current.completionPromptVisible) {
+        nextState.remainingSeconds = safeSeconds;
+      }
+      if (start) {
+        nextState.active = true;
+        nextState.paused = false;
+        nextState.remainingSeconds = safeSeconds;
+        nextState.expectedEndAt = now + (safeSeconds * 1000);
+        nextState.startedAt = now;
+        nextState.completionPromptVisible = false;
+        nextState.completionAlerted = false;
+        nextState.minimized = false;
+      }
+      return nextState;
+    });
+    syncFocusTimerDraftFromSeconds(safeSeconds);
+    if (closePopup) setFocusTimerPopupOpen(false);
+  }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
+
+  const startFocusTimerSession = useCallback(({ restart = false } = {}) => {
+    const now = Date.now();
+    setFocusTimerState((current) => {
+      const baseSeconds = clampFocusTimerSeconds(current.selectedDurationSeconds, focusTimerDurationSeconds);
+      const nextRemaining = restart || current.completionPromptVisible || !current.remainingSeconds
+        ? baseSeconds
+        : clampFocusTimerSeconds(current.remainingSeconds, baseSeconds);
+      return {
+        ...current,
+        active: true,
+        paused: false,
+        remainingSeconds: nextRemaining,
+        expectedEndAt: now + (nextRemaining * 1000),
+        startedAt: restart || !current.startedAt ? now : current.startedAt,
+        completionPromptVisible: false,
+        completionAlerted: false,
+      };
+    });
+  }, [focusTimerDurationSeconds]);
+
+  const pauseFocusTimerSession = useCallback(() => {
+    setFocusTimerState((current) => {
+      if (!current.active) return current;
+      const nextRemaining = current.expectedEndAt
+        ? Math.max(0, Math.ceil((current.expectedEndAt - Date.now()) / 1000))
+        : Math.max(0, Number(current.remainingSeconds) || 0);
+      return {
+        ...current,
+        active: false,
+        paused: true,
+        remainingSeconds: nextRemaining,
+        expectedEndAt: null,
+      };
+    });
+  }, []);
+
+  const resetFocusTimerSession = useCallback(() => {
+    setFocusTimerState((current) => {
+      const baseSeconds = clampFocusTimerSeconds(current.selectedDurationSeconds, focusTimerDurationSeconds);
+      return {
+        ...current,
+        active: false,
+        paused: false,
+        remainingSeconds: baseSeconds,
+        expectedEndAt: null,
+        completionPromptVisible: false,
+        completionAlerted: false,
+      };
+    });
+  }, [focusTimerDurationSeconds]);
+
+  const endFocusTimerSession = useCallback(() => {
+    setFocusTimerState((current) => {
+      const baseSeconds = clampFocusTimerSeconds(current.selectedDurationSeconds, focusTimerDurationSeconds);
+      return {
+        ...current,
+        active: false,
+        paused: false,
+        remainingSeconds: baseSeconds,
+        expectedEndAt: null,
+        completionPromptVisible: false,
+        completionAlerted: false,
+      };
+    });
+  }, [focusTimerDurationSeconds]);
+
+  const extendFocusTimerSession = useCallback((extraSeconds, { startIfComplete = false } = {}) => {
+    const safeExtraSeconds = clampFocusTimerSeconds(extraSeconds, focusTimerSettings.defaultExtendSeconds || 300);
+    const now = Date.now();
+    setFocusTimerSettings((current) => ({
+      ...normalizeFocusTimerSettings(current),
+      defaultExtendSeconds: safeExtraSeconds,
+    }));
+    setFocusTimerState((current) => {
+      const nextRemaining = Math.max(0, Number(current.remainingSeconds) || 0) + safeExtraSeconds;
+      const nextActive = startIfComplete ? true : current.active;
+      return {
+        ...current,
+        active: nextActive,
+        paused: startIfComplete ? false : current.paused,
+        remainingSeconds: nextRemaining,
+        expectedEndAt: nextActive ? now + (nextRemaining * 1000) : (current.active && current.expectedEndAt ? current.expectedEndAt + (safeExtraSeconds * 1000) : null),
+        completionPromptVisible: false,
+        completionAlerted: false,
+      };
+    });
+  }, [focusTimerSettings.defaultExtendSeconds]);
+
+  const handleFocusTimerDraftPartChange = useCallback((part, value) => {
+    const numeric = Math.max(0, Math.min(part === "hours" ? 23 : 59, Number(value) || 0));
+    setFocusTimerDraftDuration((current) => ({
+      ...current,
+      [part]: numeric,
+    }));
+  }, []);
+
+  const handleFocusTimerSettingChange = useCallback((durationMinutes) => {
+    const nextSeconds = clampFocusTimerSeconds((Number(durationMinutes) || 20) * 60, focusTimerDurationSeconds);
+    applyFocusTimerDurationSeconds(nextSeconds);
+  }, [applyFocusTimerDurationSeconds, focusTimerDurationSeconds]);
+
+  const resetFocusTimerSessionToDuration = useCallback((nextSeconds = focusTimerDurationSeconds) => {
+    const safeSeconds = clampFocusTimerSeconds(nextSeconds, focusTimerDurationSeconds);
+    setFocusTimerSettings((current) => ({
+      ...normalizeFocusTimerSettings(current),
+      durationSeconds: safeSeconds,
+      durationMinutes: Math.max(1, Math.min(720, Math.round(safeSeconds / 60))),
+    }));
+    syncFocusTimerDraftFromSeconds(safeSeconds);
+    setFocusTimerState((current) => ({
+      ...current,
+      active: false,
+      paused: false,
+      selectedDurationSeconds: safeSeconds,
+      remainingSeconds: safeSeconds,
+      expectedEndAt: null,
+      completionPromptVisible: false,
+      completionAlerted: false,
+    }));
+  }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
+
+  const restartFocusTimerSessionWithDuration = useCallback((nextSeconds = focusTimerDurationSeconds) => {
+    const safeSeconds = clampFocusTimerSeconds(nextSeconds, focusTimerDurationSeconds);
+    const now = Date.now();
+    setFocusTimerSettings((current) => ({
+      ...normalizeFocusTimerSettings(current),
+      durationSeconds: safeSeconds,
+      durationMinutes: Math.max(1, Math.min(720, Math.round(safeSeconds / 60))),
+    }));
+    syncFocusTimerDraftFromSeconds(safeSeconds);
+    setFocusTimerState((current) => ({
+      ...current,
+      active: true,
+      paused: false,
+      selectedDurationSeconds: safeSeconds,
+      remainingSeconds: safeSeconds,
+      expectedEndAt: now + (safeSeconds * 1000),
+      startedAt: now,
+      completionPromptVisible: false,
+      completionAlerted: false,
+    }));
+  }, [focusTimerDurationSeconds, syncFocusTimerDraftFromSeconds]);
+
   useEffect(() => {
-    if (!focusTimerState.active) return undefined;
+    if (!focusTimerPopupOpen) return undefined;
+    const handlePointerDown = (event) => {
+      const target = event?.target;
+      if (!target) return;
+      if (focusTimerPopupRef.current?.contains?.(target)) return;
+      if (focusTimerButtonRef.current?.contains?.(target)) return;
+      setFocusTimerPopupOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [focusTimerPopupOpen]);
+
+  useEffect(() => {
+    if (!focusTimerState.active) {
+      focusTimerLastTickRef.current = null;
+      return undefined;
+    }
     const timerId = window.setInterval(() => {
       setFocusTimerState((current) => {
-        if (!current.active) return current;
-        if ((current.remainingSeconds || 0) <= 1) {
+        if (!current.active || !current.expectedEndAt) return current;
+        const secondsLeft = Math.max(0, Math.ceil((current.expectedEndAt - Date.now()) / 1000));
+        if (secondsLeft <= 0) {
           pushNotificationHistoryEntry({
             type: "timer",
             titleEn: "Focus session complete",
             titleUr: "فوکس سیشن مکمل",
-            bodyEn: "Your timer finished. Take a short break or start the next study sprint.",
-            bodyUr: "آپ کا ٹائمر مکمل ہو گیا۔ تھوڑا آرام کریں یا اگلا مطالعہ سیشن شروع کریں۔",
+            bodyEn: "Your timer finished. Extend your time or end the session.",
+            bodyUr: "آپ کا ٹائمر مکمل ہو گیا۔ وقت بڑھائیں یا سیشن ختم کریں۔",
           });
           try {
             if ("Notification" in window && Notification.permission === "granted") {
-              new Notification("HomeSchool", { body: "Your focus session is complete." });
+              new Notification("HomeSchool", { body: "Your focus timer is complete." });
             }
           } catch (error) {
             console.log("Unable to show focus timer notification:", error);
+          }
+          try {
+            if (navigator?.vibrate) navigator.vibrate([220, 100, 220, 100, 320]);
+          } catch (error) {
+            // Ignore vibration failures.
           }
           updateGamificationActivity((entry) => ({
             ...entry,
@@ -27955,18 +28292,67 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
           return {
             ...current,
             active: false,
+            paused: false,
             remainingSeconds: 0,
+            expectedEndAt: null,
             completedSessions: (current.completedSessions || 0) + 1,
+            completionPromptVisible: true,
+            completionAlerted: true,
           };
         }
+        if (secondsLeft === current.remainingSeconds) return current;
         return {
           ...current,
-          remainingSeconds: (current.remainingSeconds || 0) - 1,
+          remainingSeconds: secondsLeft,
         };
       });
-    }, 1000);
+    }, 250);
     return () => window.clearInterval(timerId);
   }, [focusTimerState.active, pushNotificationHistoryEntry, updateGamificationActivity]);
+
+  useEffect(() => {
+    if (!focusTimerState.active) {
+      focusTimerLastTickRef.current = null;
+      return undefined;
+    }
+    const wholeSeconds = Math.max(0, Math.ceil(Number(focusTimerState.remainingSeconds) || 0));
+    if (focusTimerLastTickRef.current === null) {
+      focusTimerLastTickRef.current = wholeSeconds;
+      return undefined;
+    }
+    if (wholeSeconds !== focusTimerLastTickRef.current) {
+      focusTimerLastTickRef.current = wholeSeconds;
+      playFocusTimerTones([
+        { frequency: wholeSeconds <= 10 ? 1150 : 920, duration: 0.045, gain: wholeSeconds <= 10 ? 0.055 : 0.028, type: "square" },
+      ]);
+    }
+    return undefined;
+  }, [focusTimerState.active, focusTimerState.remainingSeconds, playFocusTimerTones]);
+
+  useEffect(() => {
+    if (!focusTimerState.completionAlerted) {
+      if (focusTimerCompletionBuzzRef.current) {
+        window.clearInterval(focusTimerCompletionBuzzRef.current);
+        focusTimerCompletionBuzzRef.current = null;
+      }
+      return undefined;
+    }
+    const playBuzz = () => {
+      playFocusTimerTones([
+        { frequency: 420, duration: 0.12, gain: 0.08, type: "sawtooth" },
+        { frequency: 320, duration: 0.16, delay: 0.14, gain: 0.07, type: "square" },
+        { frequency: 520, duration: 0.14, delay: 0.34, gain: 0.08, type: "square" },
+      ]);
+    };
+    playBuzz();
+    focusTimerCompletionBuzzRef.current = window.setInterval(playBuzz, 1500);
+    return () => {
+      if (focusTimerCompletionBuzzRef.current) {
+        window.clearInterval(focusTimerCompletionBuzzRef.current);
+        focusTimerCompletionBuzzRef.current = null;
+      }
+    };
+  }, [focusTimerState.completionAlerted, playFocusTimerTones]);
   useEffect(() => {
     if (!reminderSettings?.enabled) return undefined;
     const checkReminder = () => {
@@ -28218,14 +28604,6 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
         : key === "intervalScale"
           ? Math.max(0.5, Math.min(2.5, Number(value) || current.intervalScale || 1))
           : Math.max(5, Math.min(180, Number(value) || current.againMinutes || 10)),
-    }));
-  }, []);
-
-  const handleFocusTimerSettingChange = useCallback((durationMinutes) => {
-    const nextMinutes = Math.max(5, Math.min(60, Number(durationMinutes) || 20));
-    setFocusTimerSettings((current) => ({
-      ...current,
-      durationMinutes: nextMinutes,
     }));
   }, []);
 
@@ -28846,10 +29224,14 @@ const lesson = (getMergedLessons(subject.id, grade) || []).find((entry) => (entr
         dailyReviews: Math.max(5, Math.min(60, Number(nextState.studyGoals.dailyReviews) || 20)),
         weeklyWords: Math.max(10, Math.min(140, Number(nextState.studyGoals.weeklyWords) || 40)),
       });
-      if (nextState.focusTimerSettings) setFocusTimerSettings({
-        durationMinutes: Math.max(5, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || 20)),
-        autoStartBreak: Boolean(nextState.focusTimerSettings.autoStartBreak),
-      });
+      if (nextState.focusTimerSettings) {
+        const normalizedTimerSettings = normalizeFocusTimerSettings(nextState.focusTimerSettings);
+        setFocusTimerSettings(normalizedTimerSettings);
+        setFocusTimerDraftDuration(splitDurationToClockParts(normalizedTimerSettings.durationSeconds));
+      }
+      if (nextState.focusTimerState) {
+        setFocusTimerState(normalizeFocusTimerState(nextState.focusTimerState, nextState.focusTimerSettings || focusTimerSettings));
+      }
       if (nextState.reminderSettings) setReminderSettings({
         enabled: Boolean(nextState.reminderSettings.enabled),
         time: nextState.reminderSettings.time || "18:00",
@@ -28936,10 +29318,26 @@ const lesson = (getMergedLessons(subject.id, grade) || []).find((entry) => (entr
       dailyReviews: Math.max(current.dailyReviews || 20, Math.min(60, Number(nextState.studyGoals.dailyReviews) || current.dailyReviews || 20)),
       weeklyWords: Math.max(current.weeklyWords || 40, Math.min(140, Number(nextState.studyGoals.weeklyWords) || current.weeklyWords || 40)),
     }));
-    if (nextState.focusTimerSettings) setFocusTimerSettings((current) => ({
-      durationMinutes: Math.max(current.durationMinutes || 20, Math.min(60, Number(nextState.focusTimerSettings.durationMinutes) || current.durationMinutes || 20)),
-      autoStartBreak: current.autoStartBreak || Boolean(nextState.focusTimerSettings.autoStartBreak),
-    }));
+    if (nextState.focusTimerSettings) {
+      setFocusTimerSettings((current) => normalizeFocusTimerSettings({
+        ...current,
+        ...nextState.focusTimerSettings,
+      }));
+      const normalizedTimerSettings = normalizeFocusTimerSettings({
+        ...focusTimerSettings,
+        ...nextState.focusTimerSettings,
+      });
+      setFocusTimerDraftDuration(splitDurationToClockParts(normalizedTimerSettings.durationSeconds));
+    }
+    if (nextState.focusTimerState) {
+      setFocusTimerState((current) => normalizeFocusTimerState({
+        ...current,
+        ...nextState.focusTimerState,
+      }, {
+        ...focusTimerSettings,
+        ...(nextState.focusTimerSettings || {}),
+      }));
+    }
     if (nextState.reminderSettings) setReminderSettings((current) => ({
       ...current,
       enabled: current.enabled || Boolean(nextState.reminderSettings.enabled),
@@ -28990,7 +29388,7 @@ const lesson = (getMergedLessons(subject.id, grade) || []).find((entry) => (entr
     if (typeof nextState.dictionaryImportUrl !== "undefined") {
       setDictionaryImportUrl((current) => current || String(nextState.dictionaryImportUrl || ""));
     }
-  }, [deletedStudentProfileIds]);
+  }, [deletedStudentProfileIds, focusTimerSettings]);
 
   const buildProfileAppStateSnapshot = useCallback(() => ({
     grade,
@@ -29035,13 +29433,14 @@ const lesson = (getMergedLessons(subject.id, grade) || []).find((entry) => (entr
     daySectionOverrides,
     studyGoals,
     focusTimerSettings,
+    focusTimerState,
     reminderSettings,
     backupReminderSettings,
     classScheduleSettings,
     timeTrackingData,
     notificationHistory,
     gamificationState,
-  }), [activeStudentProfileId, audioMuted, autoMoveNext, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, quizTimingSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
+  }), [activeStudentProfileId, audioMuted, autoMoveNext, autoPlayNext, backupReminderSettings, classScheduleSettings, completedQuizzes, dailyReviewCap, daySectionOverrides, deletedStudentProfileIds, focusMode, focusTimerSettings, focusTimerState, fontSizeMode, gamificationState, grade, earnedBadges, highContrast, keyboardShortcutsEnabled, language, lastQuizDate, navAutoHide, navBarAutoHide, navPosition, notificationHistory, practiceFiltersBySubject, practiceLessonProgress, practiceSubjectId, practiceTimedSettings, quizTimingSettings, readingMode, reducedMotion, reminderSettings, reviewSrsSettings, streak, studentName, studentNameUr, studentProfiles, studyGoals, themeMode, timeTrackingData, totalQuizzesDone, totalScore, transitionMode, ttsEnabled, ttsRate, ttsVoiceSelections, wordMeaningPriority, xp]);
 
   const buildBlankProfileAppState = useCallback((profile) => {
     const safeProfile = createStudentProfileDraft(profile);
@@ -29647,8 +30046,10 @@ const lesson = (getMergedLessons(subject.id, grade) || []).find((entry) => (entr
     if (!confirm(joinLocalizedText("Reset class time tracking, reminders, and planning tools?", "کیا کلاس وقت ٹریکنگ، یاد دہانیاں، اور منصوبہ بندی ٹولز ری سیٹ کرنے ہیں؟", language))) return;
     if (window.HomeSchoolDB) await window.HomeSchoolDB.resetPlanningData();
     setStudyGoals({ dailyReviews: 20, weeklyWords: 40 });
-    setFocusTimerSettings({ durationMinutes: 20, autoStartBreak: false });
-    setFocusTimerState({ active: false, remainingSeconds: 20 * 60, startedAt: null, completedSessions: 0 });
+    const resetTimerSettings = normalizeFocusTimerSettings({ durationSeconds: 20 * 60, autoStartBreak: false, defaultExtendSeconds: 5 * 60 });
+    setFocusTimerSettings(resetTimerSettings);
+    setFocusTimerState(normalizeFocusTimerState({}, resetTimerSettings));
+    setFocusTimerDraftDuration(splitDurationToClockParts(resetTimerSettings.durationSeconds));
     setReminderSettings({ enabled: false, time: "18:00", notifications: false, lastShownDay: null });
     setBackupReminderSettings(normalizeBackupReminderSettings({}));
     setClassScheduleSettings({ enabled: false, startTime: "08:00", endTime: "13:00" });
@@ -31221,6 +31622,14 @@ const lessons = getMergedLessons(subjectId, grade);
   const weeklyGoalProgress = Math.min(100, Math.round(((Number(reviewAnalytics.totals.uniqueReviewedLast7) || 0) / Math.max(1, Number(studyGoals.weeklyWords) || 40)) * 100));
   const currentReminderLabel = getReminderStatus(reminderSettings, language);
   const reminderDueNow = Boolean(reminderSettings?.enabled && reminderSettings?.lastShownDay === window.HomeSchoolUtils.getDayKey(Date.now()));
+  const focusTimerPresetOptions = [5 * 60, 10 * 60, 15 * 60, 25 * 60, 45 * 60, 60 * 60];
+  const focusTimerExtendOptions = [5 * 60, 10 * 60, 15 * 60];
+  const focusTimerDraftSeconds = clampFocusTimerSeconds(
+    (Number(focusTimerDraftDuration.hours) || 0) * 3600
+      + (Number(focusTimerDraftDuration.minutes) || 0) * 60
+      + (Number(focusTimerDraftDuration.seconds) || 0),
+    focusTimerDurationSeconds,
+  );
   const fontSizeZoom = ({ small: 0.95, normal: 1, large: 1.08, xlarge: 1.14 })[fontSizeMode] || 1;
   const routeTransitionKey = [
     tab,
@@ -32309,6 +32718,165 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </svg>
         </button>
         <button
+          ref={focusTimerButtonRef}
+          type="button"
+          className={`header-pin-btn header-timer-btn${focusTimerState.active ? " active" : ""}${focusTimerIsComplete ? " alert" : ""}`}
+          title={language === "ur" ? "مطالعہ کاؤنٹ ڈاؤن ٹائمر" : "Study countdown timer"}
+          aria-label={language === "ur" ? "مطالعہ کاؤنٹ ڈاؤن ٹائمر" : "Study countdown timer"}
+          aria-expanded={focusTimerPopupOpen ? "true" : "false"}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (!focusTimerPopupOpen) syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+            setFocusTimerPopupOpen((current) => !current);
+            setFocusTimerState((current) => ({ ...current, minimized: false }));
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M9 2h6a1 1 0 0 1 0 2h-1v1.09A8.001 8.001 0 1 1 10 5.09V4H9a1 1 0 1 1 0-2Zm3 5a1 1 0 0 1 1 1v4.59l2.7 2.7a1 1 0 0 1-1.4 1.42l-3-3A1 1 0 0 1 11 13V8a1 1 0 0 1 1-1Zm0 12a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"/>
+          </svg>
+        </button>
+        {focusTimerPopupOpen ? (
+          <div ref={focusTimerPopupRef} className={`header-focus-timer-popover${focusTimerIsComplete ? " alert" : ""}`} data-ui-language={language}>
+            <div className="header-focus-timer-head">
+              <div className="header-focus-timer-head-copy">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Study Countdown", "مطالعہ کاؤنٹ ڈاؤن", language), language)}</strong>
+                <span>{renderLocalizedTextNode(joinLocalizedText("Set a focused sprint, extend it when needed, and keep it floating while you study.", "اپنا فوکس سیشن متعین کریں، ضرورت پر وقت بڑھائیں، اور مطالعہ کے دوران اسے ساتھ رکھیں۔", language), language)}</span>
+              </div>
+              <div className="header-focus-timer-head-actions">
+                <button
+                  type="button"
+                  className="ghost-cta"
+                  onClick={() => {
+                    setFocusTimerState((current) => ({ ...current, minimized: true }));
+                    setFocusTimerPopupOpen(false);
+                  }}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Minimize", "سمیٹیں", language), language)}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-cta"
+                  onClick={() => setFocusTimerPopupOpen(false)}
+                >
+                  {renderLocalizedTextNode(joinLocalizedText("Close", "بند کریں", language), language)}
+                </button>
+              </div>
+            </div>
+            <div className={`header-focus-timer-stage${focusTimerIsComplete ? " buzzing" : ""}`}>
+              <div className="header-focus-timer-clock">{focusTimerRemainingLabel}</div>
+              <div className="header-focus-timer-status-row">
+                <span className={`header-focus-timer-status${focusTimerState.active ? " running" : ""}${focusTimerState.paused ? " paused" : ""}${focusTimerIsComplete ? " alert" : ""}`}>
+                  {renderLocalizedTextNode(focusTimerStatusLabel, language)}
+                </span>
+                <span className="header-focus-timer-duration">
+                  {renderLocalizedTextNode(formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language), language)}
+                </span>
+              </div>
+            </div>
+            <div className="header-focus-timer-config">
+              <div className="header-focus-timer-input-grid">
+                {[
+                  { key: "hours", label: joinLocalizedText("Hours", "گھنٹے", language), max: 23 },
+                  { key: "minutes", label: joinLocalizedText("Minutes", "منٹ", language), max: 59 },
+                  { key: "seconds", label: joinLocalizedText("Seconds", "سیکنڈ", language), max: 59 },
+                ].map((entry) => (
+                  <label key={`focus_timer_${entry.key}`} className="header-focus-timer-input">
+                    <span>{renderLocalizedTextNode(entry.label, language)}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={entry.max}
+                      value={focusTimerDraftDuration?.[entry.key] ?? 0}
+                      onChange={(event) => handleFocusTimerDraftPartChange(entry.key, event.target.value)}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="header-focus-timer-presets">
+                {focusTimerPresetOptions.map((seconds) => (
+                  <button
+                    key={`focus_timer_preset_${seconds}`}
+                    type="button"
+                    className={`header-focus-timer-chip${focusTimerDraftSeconds === seconds ? " active" : ""}`}
+                    onClick={() => syncFocusTimerDraftFromSeconds(seconds)}
+                  >
+                    {renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="header-focus-timer-actions">
+              <button
+                type="button"
+                className="ghost-cta"
+                onClick={() => applyFocusTimerDurationSeconds(focusTimerDraftSeconds)}
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Apply", "لاگو کریں", language), language)}
+              </button>
+              <button
+                type="button"
+                className="retry-btn"
+                onClick={() => {
+                  if (focusTimerState.active) pauseFocusTimerSession();
+                  else if (focusTimerState.paused) startFocusTimerSession();
+                  else restartFocusTimerSessionWithDuration(focusTimerDraftSeconds);
+                }}
+              >
+                {renderLocalizedTextNode(
+                  focusTimerState.active
+                    ? joinLocalizedText("Pause", "روکیں", language)
+                    : focusTimerState.paused
+                      ? joinLocalizedText("Resume", "جاری کریں", language)
+                      : joinLocalizedText("Start", "شروع کریں", language),
+                  language,
+                )}
+              </button>
+              <button
+                type="button"
+                className="next-btn"
+                onClick={() => restartFocusTimerSessionWithDuration(focusTimerDraftSeconds)}
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Restart", "دوبارہ شروع", language), language)}
+              </button>
+              <button
+                type="button"
+                className="ghost-cta"
+                onClick={() => resetFocusTimerSessionToDuration(focusTimerDraftSeconds)}
+              >
+                {renderLocalizedTextNode(joinLocalizedText("Reset", "ری سیٹ", language), language)}
+              </button>
+            </div>
+            <div className="header-focus-timer-extend-row">
+              <span>{renderLocalizedTextNode(joinLocalizedText("Extend time", "وقت بڑھائیں", language), language)}</span>
+              <div className="header-focus-timer-extend-actions">
+                {focusTimerExtendOptions.map((seconds) => (
+                  <button
+                    key={`focus_timer_extend_${seconds}`}
+                    type="button"
+                    className="header-focus-timer-chip"
+                    onClick={() => extendFocusTimerSession(seconds, { startIfComplete: focusTimerIsComplete })}
+                  >
+                    +{renderLocalizedTextNode(formatFocusTimerDurationLabel(seconds, language), language)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {focusTimerIsComplete ? (
+              <div className="header-focus-timer-complete-row">
+                <strong>{renderLocalizedTextNode(joinLocalizedText("Time is up", "وقت مکمل ہو گیا", language), language)}</strong>
+                <div className="header-focus-timer-complete-actions">
+                  <button type="button" className="retry-btn" onClick={() => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || (5 * 60), { startIfComplete: true })}>
+                    {renderLocalizedTextNode(joinLocalizedText("Extend & Continue", "وقت بڑھا کر جاری رکھیں", language), language)}
+                  </button>
+                  <button type="button" className="ghost-cta" onClick={endFocusTimerSession}>
+                    {renderLocalizedTextNode(joinLocalizedText("End Session", "سیشن ختم کریں", language), language)}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <button
           type="button"
           className="header-badge"
           title="Open progress"
@@ -32349,6 +32917,23 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           </div>
         </div>
       </div>
+    ) : null}
+    {focusTimerFloatingVisible ? (
+      <button
+        type="button"
+        className={`header-focus-timer-floating${focusTimerIsComplete ? " alert" : ""}`}
+        onClick={() => {
+          syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+          setFocusTimerPopupOpen(true);
+          setFocusTimerState((current) => ({ ...current, minimized: false }));
+        }}
+      >
+        <span className="header-focus-timer-floating-icon" aria-hidden="true">⏱</span>
+        <span className="header-focus-timer-floating-copy">
+          <strong>{focusTimerRemainingLabel}</strong>
+          <span>{renderLocalizedTextNode(focusTimerStatusLabel, language)}</span>
+        </span>
+      </button>
     ) : null}
     <div className="app-body">
       {!isMobileNavViewport && navBarAutoHide && navPosition === "left" ? <div className="nav-reveal-hotspot nav-reveal-hotspot-left" onMouseEnter={revealAutoHideNavBar} onMouseMove={revealAutoHideNavBar} onPointerDown={revealAutoHideNavBar} /> : null}
@@ -32595,18 +33180,45 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             </div>
           </div>
           <div className="timer-card">
-            <div className="timer-clock">{formatClockTime(focusTimerState.remainingSeconds)}</div>
+            <div className={`timer-clock${focusTimerIsComplete ? " alert" : ""}`}>{focusTimerRemainingLabel}</div>
             <div className="timer-meta">
-              {renderLocalizedTextNode(joinLocalizedText(`${focusTimerSettings.durationMinutes} min focus block`, `${focusTimerSettings.durationMinutes} منٹ فوکس وقت`, language), language)}
+              {renderLocalizedTextNode(joinLocalizedText(`${focusTimerStatusLabel} • ${formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language)}`, `${focusTimerStatusLabel} • ${formatFocusTimerDurationLabel(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds, language)}`, language), language)}
             </div>
             <div className="result-actions" style={{ marginTop: 12 }}>
-              <button className="retry-btn" onClick={() => setFocusTimerState((current) => ({ ...current, active: !current.active || (current.remainingSeconds || 0) === 0, remainingSeconds: (current.remainingSeconds || 0) === 0 ? (focusTimerSettings.durationMinutes || 20) * 60 : current.remainingSeconds, startedAt: Date.now() }))}>
-                {renderLocalizedTextNode(focusTimerState.active ? joinLocalizedText("Pause", "روکیں", language) : joinLocalizedText("Start", "شروع کریں", language), language)}
+              <button className="retry-btn" onClick={() => {
+                if (focusTimerState.active) pauseFocusTimerSession();
+                else if (focusTimerState.paused) startFocusTimerSession();
+                else startFocusTimerSession({ restart: true });
+              }}>
+                {renderLocalizedTextNode(
+                  focusTimerState.active
+                    ? joinLocalizedText("Pause", "روکیں", language)
+                    : focusTimerState.paused
+                      ? joinLocalizedText("Resume", "جاری کریں", language)
+                      : joinLocalizedText("Start", "شروع کریں", language),
+                  language,
+                )}
               </button>
-              <button className="next-btn" onClick={() => setFocusTimerState((current) => ({ ...current, active: false, remainingSeconds: (focusTimerSettings.durationMinutes || 20) * 60 }))}>
+              <button className="next-btn" onClick={() => resetFocusTimerSessionToDuration(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds)}>
                 {renderLocalizedTextNode(joinLocalizedText("Reset", "دوبارہ", language), language)}
               </button>
+              <button className="ghost-cta" onClick={() => {
+                syncFocusTimerDraftFromSeconds(focusTimerState.selectedDurationSeconds || focusTimerDurationSeconds);
+                setFocusTimerPopupOpen(true);
+              }}>
+                {renderLocalizedTextNode(joinLocalizedText("Open Timer", "ٹائمر کھولیں", language), language)}
+              </button>
             </div>
+            {focusTimerIsComplete ? (
+              <div className="result-actions" style={{ marginTop: 10 }}>
+                <button className="retry-btn" onClick={() => extendFocusTimerSession(focusTimerSettings.defaultExtendSeconds || (5 * 60), { startIfComplete: true })}>
+                  {renderLocalizedTextNode(joinLocalizedText("Extend Time", "وقت بڑھائیں", language), language)}
+                </button>
+                <button className="ghost-cta" onClick={endFocusTimerSession}>
+                  {renderLocalizedTextNode(joinLocalizedText("End Session", "سیشن ختم کریں", language), language)}
+                </button>
+              </div>
+            ) : null}
             <div className="timer-reminder-status">
               <span>{renderLocalizedTextNode(joinLocalizedText("Reminder", "یاد دہانی", language), language)}</span>
               <strong>{renderLocalizedTextNode(currentReminderLabel, language)}</strong>
