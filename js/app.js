@@ -28450,8 +28450,10 @@ if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, delet
   }, [focusTimerAlarmClock, focusTimerDurationSeconds, syncFocusTimerDraftFromAlarmClock]);
 
   const handleStartFocusTimerPopupDrag = useCallback((event) => {
-    const isSecondaryPress = event?.button === 2 || ((Number(event?.buttons) || 0) & 2) === 2;
-    if (!isSecondaryPress) return;
+    const button = Number(event?.button);
+    const buttons = Number(event?.buttons) || 0;
+    const isPrimaryOrSecondaryPress = button === 0 || button === 2 || (buttons & 1) === 1 || (buttons & 2) === 2;
+    if (!isPrimaryOrSecondaryPress) return;
     if (event.target?.closest?.(".header-focus-timer-head-actions")) return;
     const popupNode = focusTimerPopupRef.current;
     if (!popupNode) return;
@@ -33138,7 +33140,7 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
           className="header-focus-timer-head"
           onPointerDown={handleStartFocusTimerPopupDrag}
           onContextMenu={(event) => event.preventDefault()}
-          title={language === "ur" ? "رائٹ کلک دبا کر ڈریگ کریں" : "Right-click and drag"}
+          title={language === "ur" ? "بائیں یا دائیں کلک سے ڈریگ کریں" : "Drag with left or right click"}
         >
           <div className="header-focus-timer-head-copy">
             <strong>{renderLocalizedTextNode(joinLocalizedText("Study Timer", "مطالعہ ٹائمر", language), language)}</strong>

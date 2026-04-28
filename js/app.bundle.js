@@ -24937,8 +24937,10 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
     }, [focusTimerAlarmClock, focusTimerDurationSeconds, syncFocusTimerDraftFromAlarmClock]);
     const handleStartFocusTimerPopupDrag = useCallback((event) => {
       var _a2, _b2, _c2;
-      const isSecondaryPress = (event == null ? void 0 : event.button) === 2 || ((Number(event == null ? void 0 : event.buttons) || 0) & 2) === 2;
-      if (!isSecondaryPress) return;
+      const button = Number(event == null ? void 0 : event.button);
+      const buttons = Number(event == null ? void 0 : event.buttons) || 0;
+      const isPrimaryOrSecondaryPress = button === 0 || button === 2 || (buttons & 1) === 1 || (buttons & 2) === 2;
+      if (!isPrimaryOrSecondaryPress) return;
       if ((_b2 = (_a2 = event.target) == null ? void 0 : _a2.closest) == null ? void 0 : _b2.call(_a2, ".header-focus-timer-head-actions")) return;
       const popupNode = focusTimerPopupRef.current;
       if (!popupNode) return;
@@ -29324,7 +29326,7 @@ ${error.message || error}`);
           className: "header-focus-timer-head",
           onPointerDown: handleStartFocusTimerPopupDrag,
           onContextMenu: (event) => event.preventDefault(),
-          title: language === "ur" ? "\u0631\u0627\u0626\u0679 \u06A9\u0644\u06A9 \u062F\u0628\u0627 \u06A9\u0631 \u0688\u0631\u06CC\u06AF \u06A9\u0631\u06CC\u06BA" : "Right-click and drag"
+          title: language === "ur" ? "\u0628\u0627\u0626\u06CC\u06BA \u06CC\u0627 \u062F\u0627\u0626\u06CC\u06BA \u06A9\u0644\u06A9 \u0633\u06D2 \u0688\u0631\u06CC\u06AF \u06A9\u0631\u06CC\u06BA" : "Drag with left or right click"
         },
         /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-copy" }, /* @__PURE__ */ React.createElement("strong", null, renderLocalizedTextNode(joinLocalizedText("Study Timer", "\u0645\u0637\u0627\u0644\u0639\u06C1 \u0679\u0627\u0626\u0645\u0631", language), language))),
         /* @__PURE__ */ React.createElement("div", { className: "header-focus-timer-head-actions" }, /* @__PURE__ */ React.createElement(
