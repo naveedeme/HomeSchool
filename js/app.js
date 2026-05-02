@@ -1335,12 +1335,11 @@ function buildCurriculumPackLessonEntry(raw) {
     const builtinLessons = Array.isArray(getLessons(normalized.subjectKey, normalized.grade))
       ? getLessons(normalized.subjectKey, normalized.grade)
       : [];
-    const liveBuiltinLesson = builtinLessons.find((entry, index) => {
+    const liveBuiltinLesson = builtinLessons.find((entry) => {
       const canonicalKey = getCanonicalLessonKeyForLesson(entry);
       return canonicalKey === normalized.lessonKey
         || canonicalKey === normalized.sourceLessonId
-        || String(entry?.title || "").trim() === normalized.lessonTitle
-        || index === normalized.orderIndex;
+        || String(entry?.title || "").trim() === normalized.lessonTitle;
     }) || null;
     if (liveBuiltinLesson) {
       resolvedLessonKey = getCanonicalLessonKeyForLesson(liveBuiltinLesson) || normalized.lessonKey;
