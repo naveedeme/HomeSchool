@@ -4836,7 +4836,7 @@
         activeVariant = publishedVariants.find((variant) => variant.contentId === preference.contentId) || publishedVariants[0] || null;
       }
       if (!activeVariant) {
-        activeVariant = customVariant || publishedVariants.find((variant) => variant.ownedByCurrentUser) || builtinVariant || publishedVariants[0] || group.variants[0] || null;
+        activeVariant = builtinVariant || publishedVariants.find((variant) => variant.ownedByCurrentUser) || publishedVariants[0] || customVariant || group.variants[0] || null;
       }
       return {
         ...group,
@@ -19026,13 +19026,13 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
     writeLessonEditsToSourceFilesRef.current = writeLessonEditsToSourceFiles;
     writeLessonOrderToSourceFilesRef.current = writeLessonOrderToSourceFiles;
     const handleSaveLessonEdits = useCallback(async () => {
-      var _a2, _b2, _c2;
+      var _a2, _b2, _c2, _d2, _e2;
       if (!canEditLessonLocally) {
         showAppToast(joinLocalizedText("Lesson editing is not available here yet.", "\u06CC\u06C1\u0627\u06BA \u0633\u0628\u0642 \u0645\u06CC\u06BA \u062A\u0631\u0645\u06CC\u0645 \u0627\u0628\u06BE\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
       if (!selectedLesson || !selectedSubject || !grade || !lessonEditDraft) return;
-      if (!((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.saveCustomChapter)) {
+      if (!canAdministerLessonLibrary && !((_a2 = window.HomeSchoolDB) == null ? void 0 : _a2.saveCustomChapter)) {
         showAppToast(joinLocalizedText("Local chapter storage is not available yet.", "\u0645\u0642\u0627\u0645\u06CC \u0628\u0627\u0628 \u0645\u062D\u0641\u0648\u0638 \u06A9\u0631\u0646\u06D2 \u06A9\u06CC \u0633\u06C1\u0648\u0644\u062A \u0627\u0628\u06BE\u06CC \u062F\u0633\u062A\u06CC\u0627\u0628 \u0646\u06C1\u06CC\u06BA\u06D4", language), "alert");
         return;
       }
@@ -19040,18 +19040,23 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         setLessonEditBusy(true);
         const canonicalLessonKey = (selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.canonicalLessonKey) || getCanonicalLessonKeyForLesson(selectedLesson);
         const nextLessonData = stripRuntimeLessonMarkers(lessonEditDraft);
+        const nextLessonQuestions = getMergedQuiz(selectedSubject.id, grade, canonicalLessonKey);
         nextLessonData.key = canonicalLessonKey;
         nextLessonData.id = `${selectedSubject.id}_${grade}_${canonicalLessonKey}`;
         if (selectedLesson == null ? void 0 : selectedLesson.publication) {
           nextLessonData.publication = cloneSerializableValue(selectedLesson.publication);
         }
-        const savedCustomChapter = await window.HomeSchoolDB.saveCustomChapter({
-          subject: selectedSubject.id,
-          grade,
-          lessonKey: canonicalLessonKey,
-          data: nextLessonData,
-          questions: getMergedQuiz(selectedSubject.id, grade, canonicalLessonKey)
-        });
+        const adminGlobalMode = Boolean(canAdministerLessonLibrary);
+        let savedCustomChapter = null;
+        if (!adminGlobalMode) {
+          savedCustomChapter = await window.HomeSchoolDB.saveCustomChapter({
+            subject: selectedSubject.id,
+            grade,
+            lessonKey: canonicalLessonKey,
+            data: nextLessonData,
+            questions: nextLessonQuestions
+          });
+        }
         let sourceWriteError = null;
         try {
           await writeLessonEditsToSourceFiles({
@@ -19059,7 +19064,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
             targetGrade: grade,
             canonicalLessonKey,
             lessonData: nextLessonData,
-            questions: getMergedQuiz(selectedSubject.id, grade, canonicalLessonKey),
+            questions: nextLessonQuestions,
             lessonId: nextLessonData.id,
             lessonTitle: nextLessonData.title || (selectedLesson == null ? void 0 : selectedLesson.title) || canonicalLessonKey,
             slotNumber: ((_b2 = selectedLessonChapterGroup == null ? void 0 : selectedLessonChapterGroup.orderHint) != null ? _b2 : 0) + 1
@@ -19067,24 +19072,81 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
         } catch (error) {
           sourceWriteError = error;
         }
-        updateChapterSourceSelection(selectedSubject.id, grade, canonicalLessonKey, { mode: "custom" }, { silent: true, force: true });
-        await refreshCustomContentState();
-        const savedLessonData = cloneSerializableValue(((_c2 = savedCustomChapter == null ? void 0 : savedCustomChapter.lesson) == null ? void 0 : _c2.data) || nextLessonData) || {};
-        savedLessonData.key = canonicalLessonKey;
-        savedLessonData.id = `${selectedSubject.id}_${grade}_${canonicalLessonKey}`;
-        if ((selectedLesson == null ? void 0 : selectedLesson.publication) && !savedLessonData.publication) {
-          savedLessonData.publication = cloneSerializableValue(selectedLesson.publication);
+        if (adminGlobalMode) {
+          const nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
+          const slotKey = buildBuiltinLessonSlotKey(selectedSubject.id, grade, canonicalLessonKey);
+          nextLayerState.slots[slotKey] = {
+            action: "replace",
+            subject: selectedSubject.id,
+            grade: Number(grade),
+            lessonKey: canonicalLessonKey,
+            title: String(nextLessonData.title || (selectedLesson == null ? void 0 : selectedLesson.title) || canonicalLessonKey).trim(),
+            contentId: String(((_c2 = selectedLesson == null ? void 0 : selectedLesson.publication) == null ? void 0 : _c2.contentId) || "").trim(),
+            lesson: cloneSerializableValue(nextLessonData),
+            questions: Array.isArray(nextLessonQuestions) ? cloneSerializableValue(nextLessonQuestions) : [],
+            updatedByEmail: String(contentIdentityEmail || "").trim().toLowerCase(),
+            updatedAt: Date.now()
+          };
+          if (supabaseAuthState.userId && contentIdentityEmail) {
+            await persistBuiltinLessonLayerState(nextLayerState);
+          } else if (!sourceWriteError) {
+            const localLayerRow = normalizeSystemSettingRecord({
+              setting_key: "builtin_lesson_layer",
+              setting_value: nextLayerState,
+              updated_by_email: String(contentIdentityEmail || "local-admin").trim().toLowerCase(),
+              updated_at: (/* @__PURE__ */ new Date()).toISOString()
+            });
+            setContentRelationshipState((current) => {
+              const nextSettings = (Array.isArray(current == null ? void 0 : current.systemSettings) ? current.systemSettings : []).map((entry) => normalizeSystemSettingRecord(entry)).filter(Boolean).filter((entry) => entry.settingKey !== "builtin_lesson_layer");
+              if (localLayerRow) nextSettings.push(localLayerRow);
+              return {
+                ...current,
+                systemSettings: nextSettings,
+                lastUpdatedAt: Date.now()
+              };
+            });
+            setRuntimeBuiltinLessonLayerState(nextLayerState);
+          } else {
+            throw new Error("Admin edits could not be applied as a verified global chapter because neither Supabase nor source-file write completed.");
+          }
+          if ((_d2 = window.HomeSchoolDB) == null ? void 0 : _d2.deleteCustomChapter) {
+            await window.HomeSchoolDB.deleteCustomChapter(selectedSubject.id, grade, canonicalLessonKey).catch(() => {
+            });
+          }
+          updateChapterSourceSelection(selectedSubject.id, grade, canonicalLessonKey, null, { silent: true, force: true });
+          await refreshCustomContentState();
+          await refreshContentRelationshipStateRef.current();
+          setSelectedLesson({
+            ...cloneSerializableValue(nextLessonData),
+            key: canonicalLessonKey,
+            id: `${selectedSubject.id}_${grade}_${canonicalLessonKey}`
+          });
+        } else {
+          updateChapterSourceSelection(selectedSubject.id, grade, canonicalLessonKey, { mode: "custom" }, { silent: true, force: true });
+          await refreshCustomContentState();
+          const savedLessonData = cloneSerializableValue(((_e2 = savedCustomChapter == null ? void 0 : savedCustomChapter.lesson) == null ? void 0 : _e2.data) || nextLessonData) || {};
+          savedLessonData.key = canonicalLessonKey;
+          savedLessonData.id = `${selectedSubject.id}_${grade}_${canonicalLessonKey}`;
+          if ((selectedLesson == null ? void 0 : selectedLesson.publication) && !savedLessonData.publication) {
+            savedLessonData.publication = cloneSerializableValue(selectedLesson.publication);
+          }
+          setSelectedLesson({
+            ...savedLessonData,
+            __custom: true
+          });
         }
-        setSelectedLesson({
-          ...savedLessonData,
-          __custom: true
-        });
         setLessonEditMode(false);
         setLessonEditDraft(null);
         if (sourceWriteError) {
-          showAppToast(joinLocalizedText(`Lesson changes saved locally, but source files were not updated: ${(sourceWriteError == null ? void 0 : sourceWriteError.message) || sourceWriteError}`, `\u0633\u0628\u0642 \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC\u06BA\u060C \u0645\u06AF\u0631 \u0645\u0627\u062E\u0630 \u0641\u0627\u0626\u0644\u06CC\u06BA \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC\u06BA: ${(sourceWriteError == null ? void 0 : sourceWriteError.message) || sourceWriteError}`, language), "alert");
+          showAppToast(
+            adminGlobalMode ? joinLocalizedText(`Verified global chapter saved, but source files were not updated: ${(sourceWriteError == null ? void 0 : sourceWriteError.message) || sourceWriteError}`, `\u062A\u0635\u062F\u06CC\u0642 \u0634\u062F\u06C1 \u0639\u0627\u0644\u0645\u06CC \u0633\u0628\u0642 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u06CC\u0627\u060C \u0645\u06AF\u0631 \u0645\u0627\u062E\u0630 \u0641\u0627\u0626\u0644\u06CC\u06BA \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC\u06BA: ${(sourceWriteError == null ? void 0 : sourceWriteError.message) || sourceWriteError}`, language) : joinLocalizedText(`Lesson changes saved locally, but source files were not updated: ${(sourceWriteError == null ? void 0 : sourceWriteError.message) || sourceWriteError}`, `\u0633\u0628\u0642 \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u0642\u0627\u0645\u06CC \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC\u06BA\u060C \u0645\u06AF\u0631 \u0645\u0627\u062E\u0630 \u0641\u0627\u0626\u0644\u06CC\u06BA \u062A\u0627\u0632\u06C1 \u0646\u06C1\u06CC\u06BA \u06C1\u0648 \u0633\u06A9\u06CC\u06BA: ${(sourceWriteError == null ? void 0 : sourceWriteError.message) || sourceWriteError}`, language),
+            "alert"
+          );
         } else {
-          showAppToast(joinLocalizedText("Lesson changes saved to local copy and source files", "\u0633\u0628\u0642 \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u0642\u0627\u0645\u06CC \u06A9\u0627\u067E\u06CC \u0627\u0648\u0631 \u0645\u0627\u062E\u0630 \u0641\u0627\u0626\u0644\u0648\u06BA \u0645\u06CC\u06BA \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC\u06BA", language), "check");
+          showAppToast(
+            adminGlobalMode ? joinLocalizedText("Lesson changes saved as a verified global chapter", "\u0633\u0628\u0642 \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u062A\u0635\u062F\u06CC\u0642 \u0634\u062F\u06C1 \u0639\u0627\u0644\u0645\u06CC \u0633\u0628\u0642 \u06A9\u06D2 \u0637\u0648\u0631 \u067E\u0631 \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC\u06BA", language) : joinLocalizedText("Lesson changes saved to local copy and source files", "\u0633\u0628\u0642 \u06A9\u06CC \u062A\u0628\u062F\u06CC\u0644\u06CC\u0627\u06BA \u0645\u0642\u0627\u0645\u06CC \u06A9\u0627\u067E\u06CC \u0627\u0648\u0631 \u0645\u0627\u062E\u0630 \u0641\u0627\u0626\u0644\u0648\u06BA \u0645\u06CC\u06BA \u0645\u062D\u0641\u0648\u0638 \u06C1\u0648 \u06AF\u0626\u06CC\u06BA", language),
+            "check"
+          );
         }
       } catch (error) {
         showAppToast(
@@ -19094,7 +19156,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       } finally {
         setLessonEditBusy(false);
       }
-    }, [canEditLessonLocally, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
+    }, [builtinLessonLayerState, canAdministerLessonLibrary, canEditLessonLocally, contentIdentityEmail, getMergedQuiz, grade, language, lessonEditDraft, persistBuiltinLessonLayerState, refreshCustomContentState, refreshContentRelationshipStateRef, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
     const persistBuiltinLessonLayerState = useCallback(async (nextLayerState) => {
       const normalizedLayerState = normalizeBuiltinLessonLayerState(nextLayerState);
       const client = ensureSupabaseClientRef.current();
