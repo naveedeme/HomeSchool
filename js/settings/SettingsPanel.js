@@ -576,6 +576,11 @@
       ttsEnabled,
       audioMuted,
       onAudioMutedChange,
+      chapterVisibilitySubjects,
+      chapterVisibilityEntries,
+      onChapterVisibilityChange,
+      onChapterVariantVisibilityChange,
+      onResetChapterVisibility,
       autoPlayNext,
       onAutoPlayNextChange,
       autoMoveNext,
@@ -661,6 +666,7 @@
     const notificationItems = Array.isArray(notificationHistory) ? notificationHistory : [];
     const [settingsSearch, setSettingsSearch] = React.useState("");
     const [contentRolePreview, setContentRolePreview] = React.useState("student");
+    const [chapterVisibilitySubjectFilter, setChapterVisibilitySubjectFilter] = React.useState("all");
     const normalizedSettingsSearch = normalizeSettingsSearchValue(settingsSearch);
     const selectStyle = {
       padding: "10px 12px",
@@ -686,6 +692,17 @@
       const nextRole = normalizeContentPreviewRole(contentAccessState?.currentRole || contentAccessState?.defaultRole || "student");
       setContentRolePreview(nextRole);
     }, [contentAccessState?.currentRole, contentAccessState?.defaultRole]);
+    React.useEffect(() => {
+      const availableSubjects = Array.isArray(chapterVisibilitySubjects) ? chapterVisibilitySubjects : [];
+      if (!availableSubjects.length) {
+        if (chapterVisibilitySubjectFilter !== "all") setChapterVisibilitySubjectFilter("all");
+        return;
+      }
+      const exists = chapterVisibilitySubjectFilter === "all" || availableSubjects.some((entry) => entry.id === chapterVisibilitySubjectFilter);
+      if (!exists) {
+        setChapterVisibilitySubjectFilter(availableSubjects[0]?.id || "all");
+      }
+    }, [chapterVisibilitySubjectFilter, chapterVisibilitySubjects]);
     const voicePreviewButtonStyle = {
       width: 42,
       height: 42,
@@ -2178,6 +2195,135 @@
     } else {
       notificationChildren.push(React.createElement("p", { key: "notice-empty", className: "empty-state" }, renderLocalizedText(ui.noNotificationsYet || "No notifications yet.", language)));
     }
+    const filteredChapterVisibilityEntries = (Array.isArray(chapterVisibilityEntries) ? chapterVisibilityEntries : []).filter((entry) => (
+      chapterVisibilitySubjectFilter === "all" || entry.subjectId === chapterVisibilitySubjectFilter
+    ));
+    const chapterVisibilityChildren = [
+      React.createElement("div", {
+        key: "chapter-visibility-help",
+        style: {
+          padding: "12px 14px",
+          borderRadius: 12,
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border)",
+          marginBottom: 10,
+          color: "var(--text-secondary)",
+          fontSize: 12,
+          lineHeight: 1.6,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+          direction: language === "ur" ? "rtl" : "ltr",
+          textAlign: language === "ur" ? "right" : "left",
+        },
+      }, renderLocalizedText(language === "ur"
+        ? "یہ کنٹرول صرف اسی ڈیوائس پر طے کرتے ہیں کہ کون سے ابواب اور مقامی کاپیاں نظر آئیں۔ عالمی یا built-in مواد نہیں بدلے گا۔"
+        : "These controls decide which chapters and local copies stay visible on this device only. They do not change global or built-in content.", language)),
+    ];
+    if ((Array.isArray(chapterVisibilitySubjects) ? chapterVisibilitySubjects : []).length > 1) {
+      chapterVisibilityChildren.push(React.createElement("div", { key: "chapter-visibility-subject-filter", className: "settings-item", style: { display: "block" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 } },
+          React.createElement("span", { className: "si-label" }, renderLocalizedText(language === "ur" ? "مضمون فلٹر" : "Subject Filter", language)),
+          React.createElement("select", {
+            value: chapterVisibilitySubjectFilter,
+            onChange: (event) => setChapterVisibilitySubjectFilter(event.target.value),
+            style: selectStyle,
+          },
+            React.createElement("option", { value: "all" }, renderLocalizedText(language === "ur" ? "تمام مضامین" : "All Subjects", language)),
+            ...(chapterVisibilitySubjects || []).map((subject) => React.createElement("option", { key: `chapter-visibility-subject-${subject.id}`, value: subject.id }, renderLocalizedText(subject.label, language)))))));
+    }
+    chapterVisibilityChildren.push(React.createElement("div", { key: "chapter-visibility-actions", style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 } },
+      React.createElement("button", {
+        type: "button",
+        className: "ghost-cta",
+        onClick: () => onResetChapterVisibility && onResetChapterVisibility(),
+      }, renderLocalizedText(language === "ur" ? "سب دوبارہ دکھائیں" : "Show Everything Again", language))));
+    if (filteredChapterVisibilityEntries.length) {
+      chapterVisibilityChildren.push(React.createElement("div", {
+        key: "chapter-visibility-list",
+        className: "settings-compact-grid",
+        style: {
+          gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+          gap: 10,
+        },
+      },
+      ...filteredChapterVisibilityEntries.map((entry) => React.createElement("div", {
+        key: `chapter-visibility-entry-${entry.subjectId}-${entry.grade}-${entry.canonicalLessonKey}`,
+        className: "settings-compact-card",
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          borderColor: entry.isVisible ? "var(--border)" : "color-mix(in srgb, var(--danger) 35%, var(--border))",
+          opacity: entry.isVisible ? 1 : 0.78,
+        },
+      },
+      React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 } },
+        React.createElement("div", null,
+          React.createElement("strong", {
+            style: {
+              display: "block",
+              color: "var(--text-primary)",
+              fontSize: 13,
+              marginBottom: 4,
+              fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+            },
+          }, renderLocalizedText(entry.title, language)),
+          React.createElement("div", {
+            style: {
+              color: "var(--text-muted)",
+              fontSize: 12,
+              fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+            },
+          }, renderLocalizedText(entry.subjectLabel, language))),
+        React.createElement("button", {
+          type: "button",
+          className: entry.isVisible ? "study-tool-btn" : "ghost-cta",
+          onClick: () => onChapterVisibilityChange && onChapterVisibilityChange(entry.subjectId, entry.grade, entry.canonicalLessonKey, !entry.isVisible),
+        }, renderLocalizedText(entry.isVisible ? (language === "ur" ? "دکھ رہا ہے" : "Visible") : (language === "ur" ? "چھپا ہوا" : "Hidden"), language))),
+      entry.localVariants?.length ? React.createElement("div", {
+        style: {
+          borderTop: "1px solid var(--border)",
+          paddingTop: 10,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        },
+      },
+      React.createElement("div", {
+        style: {
+          color: "var(--text-secondary)",
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+        },
+      }, renderLocalizedText(language === "ur" ? "مقامی کاپیاں" : "Local Copies", language)),
+      ...entry.localVariants.map((variant) => React.createElement("div", {
+        key: `chapter-visibility-variant-${entry.subjectId}-${entry.canonicalLessonKey}-${variant.sourceKey}`,
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        },
+      },
+      React.createElement("span", {
+        style: {
+          color: "var(--text-muted)",
+          fontSize: 12,
+          fontFamily: language === "ur" ? "var(--font-ur)" : "var(--font)",
+        },
+      }, renderLocalizedText(variant.title, language)),
+      React.createElement("button", {
+        type: "button",
+        className: variant.isVisible ? "study-tool-btn" : "ghost-cta",
+        onClick: () => onChapterVariantVisibilityChange && onChapterVariantVisibilityChange(entry.subjectId, entry.grade, entry.canonicalLessonKey, variant.sourceKey, !variant.isVisible),
+      }, renderLocalizedText(variant.isVisible ? (language === "ur" ? "دکھ رہی ہے" : "Visible") : (language === "ur" ? "چھپی ہوئی" : "Hidden"), language))))) : null))));
+    } else {
+      chapterVisibilityChildren.push(React.createElement("p", {
+        key: "chapter-visibility-empty",
+        className: "empty-state",
+      }, renderLocalizedText(language === "ur" ? "اس فلٹر کے لیے کوئی ابواب دستیاب نہیں۔" : "No chapters are available for this filter.", language)));
+    }
     const sectionEntries = [
       {
         key: "settings-app",
@@ -2185,6 +2331,7 @@
         tags: ["app", "navigation", "display", "theme", "font", "language", "audio", "tts", "voice", "contrast", "focus", "reading", "keyboard", "transition", "offline", "install"],
         groups: [
           { key: "settings-group-experience", title: joinLocalizedText("App Status & Navigation", "ایپ حالت اور نیویگیشن", language), tags: ["status", "navigation", "install", "offline", "network"], children: experienceChildren },
+          { key: "settings-group-chapter-visibility", title: joinLocalizedText("Local Chapter Visibility", "مقامی ابواب کی نمائش", language), tags: ["chapters", "visibility", "hide", "show", "local copies", "content"], children: chapterVisibilityChildren },
           { key: "settings-group-preferences", title: joinLocalizedText("Audio, Language & Display", "آڈیو، زبان اور دکھائی", language), tags: ["audio", "language", "display", "voice", "tts", "theme", "font"], children: preferencesChildren },
           { key: "settings-group-accessibility", title: joinLocalizedText("Comfort & Accessibility", "آسانی اور رسائی", language), tags: ["motion", "contrast", "focus", "reading", "keyboard"], children: accessibilityChildren },
         ],

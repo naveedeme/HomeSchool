@@ -1086,12 +1086,40 @@ function normalizeLessonOrderPreferences(rawPreferences = {}) {
   }, {});
 }
 
+function normalizeChapterVisibilityPreferences(rawPreferences = {}) {
+  const source = rawPreferences && typeof rawPreferences === "object" ? rawPreferences : {};
+  return Object.entries(source).reduce((acc, [rawKey, rawValue]) => {
+    const key = String(rawKey || "").trim();
+    if (!key) return acc;
+    acc[key] = rawValue !== false;
+    return acc;
+  }, {});
+}
+
+function normalizeChapterVariantVisibilityPreferences(rawPreferences = {}) {
+  const source = rawPreferences && typeof rawPreferences === "object" ? rawPreferences : {};
+  return Object.entries(source).reduce((acc, [rawKey, rawValue]) => {
+    const key = String(rawKey || "").trim();
+    if (!key) return acc;
+    acc[key] = rawValue !== false;
+    return acc;
+  }, {});
+}
+
 function buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey) {
   return `${String(subject || "").trim()}::${Number(grade)}::${resolveCustomChapterLessonKey({ lessonKey: canonicalLessonKey })}`;
 }
 
 function buildLessonOrderPreferenceKey(subject, grade) {
   return `${String(subject || "").trim()}::${Number(grade)}`;
+}
+
+function buildChapterVisibilityPreferenceKey(subject, grade, canonicalLessonKey) {
+  return buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey);
+}
+
+function buildChapterVariantVisibilityPreferenceKey(subject, grade, canonicalLessonKey, sourceKey = "") {
+  return `${buildChapterSourcePreferenceKey(subject, grade, canonicalLessonKey)}::${String(sourceKey || "").trim()}`;
 }
 
 function buildLessonArchiveKey(subject, grade, canonicalLessonKey, sourceType = "builtin", contentId = "") {
@@ -5412,6 +5440,73 @@ function buildChapterVariantGroups({
       };
     })
     .sort((left, right) => left.orderHint - right.orderHint || String(left.title || "").localeCompare(String(right.title || "")));
+}
+
+function applyLocalChapterVisibilityPreferences(
+  groups = [],
+  chapterVisibilityPreferences = {},
+  chapterVariantVisibilityPreferences = {},
+  {
+    includeHiddenChapters = false,
+    includeHiddenVariants = false,
+  } = {},
+) {
+  return (Array.isArray(groups) ? groups : [])
+    .map((group) => {
+      const chapterVisibilityKey = buildChapterVisibilityPreferenceKey(group.subjectId, group.grade, group.canonicalLessonKey);
+      const chapterVisible = chapterVisibilityPreferences?.[chapterVisibilityKey] !== false;
+      const variantsWithVisibility = (Array.isArray(group.variants) ? group.variants : []).map((variant) => {
+        const variantVisibilityKey = buildChapterVariantVisibilityPreferenceKey(
+          group.subjectId,
+          group.grade,
+          group.canonicalLessonKey,
+          variant.sourceKey,
+        );
+        const isVisible = chapterVariantVisibilityPreferences?.[variantVisibilityKey] !== false;
+        return {
+          ...variant,
+          visibilityKey: variantVisibilityKey,
+          isLocallyHidden: !isVisible,
+        };
+      });
+      const visibleVariants = includeHiddenVariants
+        ? variantsWithVisibility
+        : variantsWithVisibility.filter((variant) => !variant.isLocallyHidden);
+      const publishedVariants = visibleVariants
+        .filter((variant) => variant.sourceType === "published")
+        .sort((left, right) => {
+          if (left.ownedByCurrentUser !== right.ownedByCurrentUser) return left.ownedByCurrentUser ? -1 : 1;
+          return (right.updatedAt || 0) - (left.updatedAt || 0);
+        });
+      const builtinVariant = visibleVariants.find((variant) => variant.sourceType === "builtin") || null;
+      const customVariant = visibleVariants.find((variant) => variant.sourceType === "custom") || null;
+      let activeVariant = null;
+      if (group.activeVariant) {
+        activeVariant = visibleVariants.find((variant) => variant.sourceKey === group.activeVariant.sourceKey) || null;
+      }
+      if (!activeVariant) {
+        activeVariant = builtinVariant
+          || publishedVariants.find((variant) => variant.ownedByCurrentUser)
+          || publishedVariants[0]
+          || customVariant
+          || visibleVariants[0]
+          || null;
+      }
+      return {
+        ...group,
+        visibilityKey: chapterVisibilityKey,
+        isLocallyHidden: !chapterVisible,
+        variants: visibleVariants,
+        allVariants: variantsWithVisibility,
+        activeVariant,
+        activeLesson: activeVariant?.lesson || null,
+      };
+    })
+    .filter((group) => {
+      if (!includeHiddenChapters && group.isLocallyHidden) return false;
+      if (!group.activeVariant) return includeHiddenChapters || includeHiddenVariants;
+      return true;
+    });
 }
 
 function getChapterVariantBadges(lesson, currentUserId, language) {
@@ -16030,6 +16125,8 @@ const [defaultBuiltinImportBusy, setDefaultBuiltinImportBusy] = useState(false);
   const [activeInstitutionSchoolId, setActiveInstitutionSchoolId] = useState(String(stored?.activeInstitutionSchoolId || "").trim());
   const [chapterSourcePreferences, setChapterSourcePreferences] = useState(normalizeChapterSourcePreferences(stored?.chapterSourcePreferences || {}));
   const [lessonOrderPreferences, setLessonOrderPreferences] = useState(normalizeLessonOrderPreferences(stored?.lessonOrderPreferences || {}));
+  const [chapterVisibilityPreferences, setChapterVisibilityPreferences] = useState(normalizeChapterVisibilityPreferences(stored?.chapterVisibilityPreferences || {}));
+  const [chapterVariantVisibilityPreferences, setChapterVariantVisibilityPreferences] = useState(normalizeChapterVariantVisibilityPreferences(stored?.chapterVariantVisibilityPreferences || {}));
   const [chapterImportBusy, setChapterImportBusy] = useState(false);
   const [chapterPublishBusy, setChapterPublishBusy] = useState(false);
   const [contentRelationshipBusy, setContentRelationshipBusy] = useState(false);
@@ -17283,7 +17380,9 @@ const headerHideTimerRef = useRef(null);
     targetGrade,
     targetStudentEmail: scopedContentActivationViewerEmail,
   }), [activeInstitutionSchoolId, scopedContentActivationViewerEmail, visibleContentActivations]);
-  const getMergedLessonGroups = useCallback((subjectId, targetGrade) => {
+  const getMergedLessonGroups = useCallback((subjectId, targetGrade, options = {}) => {
+    const includeHiddenChapters = Boolean(options?.includeHiddenChapters);
+    const includeHiddenVariants = Boolean(options?.includeHiddenVariants);
     const curriculumPackContext = getResolvedCurriculumPackContext(subjectId, targetGrade);
     const useCurriculumPack = Boolean(curriculumPackContext.assignment?.packId) && (curriculumPackContext.entries.length > 0 || !curriculumRuntimeSettings.allowBuiltinFallback);
     const subjectActivation = useCurriculumPack ? null : getEffectiveSubjectActivation(subjectId, targetGrade);
@@ -17312,7 +17411,7 @@ const headerHideTimerRef = useRef(null);
     const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
     const publishedLessons = publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
     const filteredCustomLessons = (() => {
-      if (!canAdministerLessonLibrary) return customLessons;
+      if (!canUseLocalSourceTools) return customLessons;
       const sharedLessonKeys = new Set((Array.isArray(baseLessons) ? baseLessons : []).map((lesson) => getCanonicalLessonKeyForLesson(lesson)).filter(Boolean));
       return (Array.isArray(customLessons) ? customLessons : []).filter((lesson) => {
         const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
@@ -17366,8 +17465,17 @@ const headerHideTimerRef = useRef(null);
       }
       return group;
     });
-    return applySavedLessonOrder(activationAdjustedGroups, lessonOrderPreferences, subjectId, targetGrade);
-  }, [archivedLessonVariantKeys, canAdministerLessonLibrary, chapterSourcePreferences, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
+    const visibilityAdjustedGroups = applyLocalChapterVisibilityPreferences(
+      activationAdjustedGroups,
+      chapterVisibilityPreferences,
+      chapterVariantVisibilityPreferences,
+      {
+        includeHiddenChapters,
+        includeHiddenVariants,
+      },
+    );
+    return applySavedLessonOrder(visibilityAdjustedGroups, lessonOrderPreferences, subjectId, targetGrade);
+  }, [archivedLessonVariantKeys, canUseLocalSourceTools, chapterSourcePreferences, chapterVariantVisibilityPreferences, chapterVisibilityPreferences, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
   const getMergedLessons = useCallback((subjectId, targetGrade) => (
     getMergedLessonGroups(subjectId, targetGrade)
       .map((group) => group.activeLesson)
@@ -20672,6 +20780,36 @@ const headerHideTimerRef = useRef(null);
       language,
     );
   }, [language]);
+  const settingsChapterVisibilitySubjects = useMemo(
+    () => allSubjects.map((subject) => ({
+      id: subject.id,
+      label: getSubjectDisplayName(subject, language),
+    })),
+    [allSubjects, language],
+  );
+  const settingsChapterVisibilityEntries = useMemo(() => (
+    grade
+      ? allSubjects.flatMap((subject) => getMergedLessonGroups(subject.id, grade, {
+        includeHiddenChapters: true,
+        includeHiddenVariants: true,
+      }).map((group) => ({
+        subjectId: subject.id,
+        subjectLabel: getSubjectDisplayName(subject, language),
+        grade: Number(grade),
+        canonicalLessonKey: group.canonicalLessonKey,
+        title: String(group.title || group.activeLesson?.title || group.canonicalLessonKey || "").trim(),
+        isVisible: !group.isLocallyHidden,
+        visibilityKey: group.visibilityKey,
+        localVariants: (Array.isArray(group.allVariants) ? group.allVariants : [])
+          .filter((variant) => variant.sourceType === "custom")
+          .map((variant) => ({
+            sourceKey: variant.sourceKey,
+            title: getChapterVariantDisplayLabel(variant),
+            isVisible: !variant.isLocallyHidden,
+          })),
+      })))
+      : []
+  ), [allSubjects, getChapterVariantDisplayLabel, getMergedLessonGroups, grade, language]);
   const gradePracticeItems = useMemo(
     () => {
       const memoInputs = {
@@ -21727,6 +21865,53 @@ const headerHideTimerRef = useRef(null);
       );
     }
   }, [canChooseContentSource, language, showAppToast]);
+  const updateChapterVisibilitySelection = useCallback((subjectId, targetGrade, canonicalLessonKey, isVisible = true, options = {}) => {
+    const preferenceKey = buildChapterVisibilityPreferenceKey(subjectId, targetGrade, canonicalLessonKey);
+    setChapterVisibilityPreferences((current) => {
+      const next = { ...normalizeChapterVisibilityPreferences(current) };
+      if (isVisible) {
+        delete next[preferenceKey];
+      } else {
+        next[preferenceKey] = false;
+      }
+      return next;
+    });
+    if (!options.silent) {
+      showAppToast(
+        isVisible
+          ? joinLocalizedText("Chapter is visible again", "سبق دوبارہ ظاہر ہو گیا", language)
+          : joinLocalizedText("Chapter hidden on this device", "یہ سبق اس ڈیوائس پر چھپا دیا گیا", language),
+        "check",
+      );
+    }
+  }, [language, showAppToast]);
+  const updateChapterVariantVisibilitySelection = useCallback((subjectId, targetGrade, canonicalLessonKey, sourceKey, isVisible = true, options = {}) => {
+    const preferenceKey = buildChapterVariantVisibilityPreferenceKey(subjectId, targetGrade, canonicalLessonKey, sourceKey);
+    setChapterVariantVisibilityPreferences((current) => {
+      const next = { ...normalizeChapterVariantVisibilityPreferences(current) };
+      if (isVisible) {
+        delete next[preferenceKey];
+      } else {
+        next[preferenceKey] = false;
+      }
+      return next;
+    });
+    if (!options.silent) {
+      showAppToast(
+        isVisible
+          ? joinLocalizedText("Local copy is visible again", "مقامی کاپی دوبارہ ظاہر ہو گئی", language)
+          : joinLocalizedText("Local copy hidden on this device", "مقامی کاپی اس ڈیوائس پر چھپا دی گئی", language),
+        "check",
+      );
+    }
+  }, [language, showAppToast]);
+  const resetLocalChapterVisibilitySelections = useCallback((options = {}) => {
+    setChapterVisibilityPreferences({});
+    setChapterVariantVisibilityPreferences({});
+    if (!options.silent) {
+      showAppToast(joinLocalizedText("Local chapter visibility reset", "مقامی اسباق کی نمائش بحال کر دی گئی", language), "check");
+    }
+  }, [language, showAppToast]);
   const handleActivateSelectedLessonVariant = useCallback(() => {
     if (!canAdministerLessonLibrary) {
       showAppToast(joinLocalizedText("Only admins can change the active lesson source.", "صرف ایڈمن فعال سبق ماخذ تبدیل کر سکتے ہیں۔", language), "alert");
@@ -22057,7 +22242,7 @@ const headerHideTimerRef = useRef(null);
       if (selectedLesson?.publication) {
         nextLessonData.publication = cloneSerializableValue(selectedLesson.publication);
       }
-      const adminGlobalMode = Boolean(canAdministerLessonLibrary);
+      const adminGlobalMode = Boolean(canAdministerLessonLibrary || canUseLocalSourceTools);
       let savedCustomChapter = null;
       if (!adminGlobalMode) {
         savedCustomChapter = await window.HomeSchoolDB.saveCustomChapter({
@@ -22173,7 +22358,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setLessonEditBusy(false);
     }
-  }, [builtinLessonLayerState, canAdministerLessonLibrary, canEditLessonLocally, contentIdentityEmail, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, refreshContentRelationshipStateRef, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
+  }, [builtinLessonLayerState, canAdministerLessonLibrary, canEditLessonLocally, canUseLocalSourceTools, contentIdentityEmail, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, refreshContentRelationshipStateRef, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
   const persistBuiltinLessonLayerState = useCallback(async (nextLayerState) => {
     const normalizedLayerState = normalizeBuiltinLessonLayerState(nextLayerState);
     const client = ensureSupabaseClientRef.current();
@@ -23668,6 +23853,8 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
       if (storedContentPreferences && typeof storedContentPreferences === "object") {
         setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
         setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
+        setChapterVisibilityPreferences(normalizeChapterVisibilityPreferences(storedContentPreferences.chapterVisibilitySelections || {}));
+        setChapterVariantVisibilityPreferences(normalizeChapterVariantVisibilityPreferences(storedContentPreferences.chapterVariantVisibilitySelections || {}));
       }
     if (storedAccountPreferences && typeof storedAccountPreferences === "object" && ["student", "parent", "teacher"].includes(storedAccountPreferences.rolePreference)) {
       setSupabaseRolePreference(storedAccountPreferences.rolePreference);
@@ -27075,6 +27262,8 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
           await window.HomeSchoolDB.saveCustomization("contentPreferences", {
             chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
             lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {}),
+            chapterVisibilitySelections: normalizeChapterVisibilityPreferences(nextPayload.chapterVisibilityPreferences || {}),
+            chapterVariantVisibilitySelections: normalizeChapterVariantVisibilityPreferences(nextPayload.chapterVariantVisibilityPreferences || {}),
           }, saveCustomizationOptions);
           await window.HomeSchoolDB.saveCustomization("supabaseDictionarySync", buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}));
           await window.HomeSchoolDB.saveCustomization("studentProfile", {
@@ -27147,6 +27336,8 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
             contentPreferences: {
               chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
               lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {}),
+              chapterVisibilitySelections: normalizeChapterVisibilityPreferences(nextPayload.chapterVisibilityPreferences || {}),
+              chapterVariantVisibilitySelections: normalizeChapterVariantVisibilityPreferences(nextPayload.chapterVariantVisibilityPreferences || {}),
             },
             supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}),
             studentProfile: {
@@ -27220,6 +27411,8 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
           contentPreferences: {
             chapterSourceSelections: normalizeChapterSourcePreferences(nextPayload.chapterSourcePreferences || {}),
             lessonOrderSelections: normalizeLessonOrderPreferences(nextPayload.lessonOrderPreferences || {}),
+            chapterVisibilitySelections: normalizeChapterVisibilityPreferences(nextPayload.chapterVisibilityPreferences || {}),
+            chapterVariantVisibilitySelections: normalizeChapterVariantVisibilityPreferences(nextPayload.chapterVariantVisibilityPreferences || {}),
           },
           supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(nextPayload.supabaseDictionarySync || {}),
           studentProfile: {
@@ -27431,10 +27624,12 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
             setDictionaryImportUrl(String(storedDictionaryPreferences.importUrl || ""));
           }
         }
-      if (storedContentPreferences && typeof storedContentPreferences === "object") {
-        setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
-        setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
-      }
+    if (storedContentPreferences && typeof storedContentPreferences === "object") {
+      setChapterSourcePreferences(normalizeChapterSourcePreferences(storedContentPreferences.chapterSourceSelections || {}));
+      setLessonOrderPreferences(normalizeLessonOrderPreferences(storedContentPreferences.lessonOrderSelections || {}));
+      setChapterVisibilityPreferences(normalizeChapterVisibilityPreferences(storedContentPreferences.chapterVisibilitySelections || {}));
+      setChapterVariantVisibilityPreferences(normalizeChapterVariantVisibilityPreferences(storedContentPreferences.chapterVariantVisibilitySelections || {}));
+    }
         if (storedSupabaseDictionarySync && typeof storedSupabaseDictionarySync === "object") {
           setSupabaseDictionarySync(sanitizeSupabaseDictionarySyncSettings(storedSupabaseDictionarySync));
         }
@@ -27974,6 +28169,8 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
       dictionaryImportUrl,
       chapterSourcePreferences,
       lessonOrderPreferences,
+      chapterVisibilityPreferences,
+      chapterVariantVisibilityPreferences,
       contentRoleTestMode,
       supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync),
       studentProfiles,
@@ -27988,11 +28185,11 @@ if (typeof storedPreferences.navPosition !== "undefined" && ["bottom", "right", 
       aiProviderConfigs,
       selectedAiProvider,
     });
-}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
+}, [dbLoaded, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, wordMeaningCache, dictionarySyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, chapterVisibilityPreferences, chapterVariantVisibilityPreferences, contentRoleTestMode, supabaseDictionarySync, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, grade, studentName, studentNameUr, aiProviderConfigs, selectedAiProvider]);
   useEffect(() => {
   if (startupHydrationActiveRef.current) return;
-if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
-}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
+if (grade) saveState({ grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache: buildCompactWordMeaningState(wordMeaningCache), dictionaryDeletedArchive: buildCompactWordMeaningState(dictionaryDeletedArchive), dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, chapterVisibilityPreferences, chapterVariantVisibilityPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync: buildCompactSupabaseDictionarySyncSettings(supabaseDictionarySync) });
+}, [grade, studentName, studentNameUr, studentProfiles, deletedStudentProfileIds, activeStudentProfileId, supabaseRolePreference, supabaseAccountUsername, supabasePendingEmail, completedQuizzes, totalScore, totalQuizzesDone, streak, lastQuizDate, earnedBadges, xp, ttsEnabled, audioMuted, autoPlayNext, autoMoveNext, wordMeaningPriority, ttsRate, ttsVoiceSelections, language, themeMode, fontSizeMode, reducedMotion, highContrast, focusMode, readingMode, keyboardShortcutsEnabled, autoWeeklyDiaryEnabled, navPosition, navAutoHide, navBarAutoHide, transitionMode, dailyReviewCap, reviewSrsSettings, practiceSubjectId, practiceFiltersBySubject, practiceTimedSettings, practiceLessonProgress, daySectionOverrides, studyGoals, focusTimerSettings, reminderSettings, backupReminderSettings, classScheduleSettings, timeTrackingData, notificationHistory, gamificationState, installBannerDismissed, wordMeaningCache, dictionaryDeletedArchive, dictionarySyncConflicts, cloudSyncConflicts, dictionaryImportUrl, chapterSourcePreferences, lessonOrderPreferences, chapterVisibilityPreferences, chapterVariantVisibilityPreferences, contentRoleTestMode, activeInstitutionSchoolId, diaryWeekAnchorDate, localTestTemplateLibrary, performanceStudentEmail, supabaseDictionarySync]);
   useEffect(() => {
     setNavHidden(Boolean(navAutoHide));
   }, [navPosition, navAutoHide]);
@@ -40057,6 +40254,11 @@ const lessons = grade ? (getMergedLessons(subject.id, grade) || []) : [];
             ttsEnabled={ttsEnabled}
             audioMuted={audioMuted}
             onAudioMutedChange={setAudioMuted}
+            chapterVisibilitySubjects={settingsChapterVisibilitySubjects}
+            chapterVisibilityEntries={settingsChapterVisibilityEntries}
+            onChapterVisibilityChange={updateChapterVisibilitySelection}
+            onChapterVariantVisibilityChange={updateChapterVariantVisibilitySelection}
+            onResetChapterVisibility={resetLocalChapterVisibilitySelections}
             autoPlayNext={autoPlayNext}
             onAutoPlayNextChange={setAutoPlayNext}
             autoMoveNext={autoMoveNext}
