@@ -637,17 +637,16 @@ function buildSourceEditRuntimeScript(manifest = null) {
     const match = String(value || "").match(/\\b(?:lesson|chapter|سبق)\\s*[_\\-\\s]?(\\d+)\\b/i) || String(value || "").match(/\\b(\\d+)\\b/);
     return match ? Number(match[1]) : null;
   };
+  const findExactLessonIndex = (lessons, entry) => lessons.findIndex((lesson) => (
+    String(lesson?.key || "").trim() === String(entry?.lessonKey || "").trim()
+    || String(lesson?.id || "").trim() === String(entry?.lessonId || "").trim()
+    || String(lesson?.title || "").trim() === String(entry?.title || "").trim()
+  ));
 
   Object.values(sourceEdits.lessonOverrides || {}).forEach((entry) => {
     const lessons = ensureLessonBucket(entry.subject, entry.grade);
     const quizBucket = ensureQuizBucket(entry.subject, entry.grade);
-    const targetIndex = lessons.findIndex((lesson, index) => (
-      String(lesson?.key || "").trim() === entry.lessonKey
-      || String(lesson?.id || "").trim() === entry.lessonId
-      || String(lesson?.title || "").trim() === entry.title
-      || (Number.isFinite(Number(entry.slotNumber)) && index === Number(entry.slotNumber) - 1)
-      || extractOrdinal(lesson?.key || lesson?.id || lesson?.title || "") === Number(entry.slotNumber)
-    ));
+    const targetIndex = findExactLessonIndex(lessons, entry);
     if (entry.action === "delete") {
       if (targetIndex >= 0) {
         const removedLesson = lessons[targetIndex] || {};
@@ -17312,11 +17311,19 @@ const headerHideTimerRef = useRef(null);
         : (getLessons(subjectId, targetGrade) || []));
     const customLessons = customContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
     const publishedLessons = publishedContentState.lessonsBySubjectGrade?.[`${String(subjectId || "").trim()}::${Number(targetGrade)}`] || [];
+    const filteredCustomLessons = (() => {
+      if (!canAdministerLessonLibrary) return customLessons;
+      const sharedLessonKeys = new Set((Array.isArray(baseLessons) ? baseLessons : []).map((lesson) => getCanonicalLessonKeyForLesson(lesson)).filter(Boolean));
+      return (Array.isArray(customLessons) ? customLessons : []).filter((lesson) => {
+        const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
+        return !canonicalLessonKey || !sharedLessonKeys.has(canonicalLessonKey);
+      });
+    })();
     const mergedGroups = buildChapterVariantGroups({
       subjectId,
       targetGrade,
       baseLessons,
-      customLessons,
+      customLessons: filteredCustomLessons,
       publishedLessons,
       preferences: chapterSourcePreferences,
       assignmentSelections: effectiveChapterAssignmentSelections,
@@ -17360,7 +17367,7 @@ const headerHideTimerRef = useRef(null);
       return group;
     });
     return applySavedLessonOrder(activationAdjustedGroups, lessonOrderPreferences, subjectId, targetGrade);
-  }, [archivedLessonVariantKeys, chapterSourcePreferences, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
+  }, [archivedLessonVariantKeys, canAdministerLessonLibrary, chapterSourcePreferences, curriculumRuntimeSettings.allowBuiltinFallback, customContentState.lessonsBySubjectGrade, effectiveChapterAssignmentSelections, getEffectiveLessonActivation, getEffectiveSubjectActivation, getResolvedCurriculumPackContext, lessonOrderPreferences, publishedContentState.lessonsBySubjectGrade, publishedLessonContentLookup, publishedSubjectSourceLookup, supabaseAuthState.userId]);
   const getMergedLessons = useCallback((subjectId, targetGrade) => (
     getMergedLessonGroups(subjectId, targetGrade)
       .map((group) => group.activeLesson)
