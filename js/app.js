@@ -22792,6 +22792,9 @@ const headerHideTimerRef = useRef(null);
       } else if (normalized.sourceType === "slot") {
         nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
         delete nextLayerState.tombstones[normalizedSlotKey];
+        if (nextLayerState.slots?.[normalizedSlotKey]?.action === "delete") {
+          delete nextLayerState.slots[normalizedSlotKey];
+        }
         await persistBuiltinLessonLayerState(nextLayerState);
       }
       const client = ensureSupabaseClientRef.current();
