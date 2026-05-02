@@ -14456,14 +14456,14 @@ ${marker} `);
       const subjectRows = (curriculumPackSubjectRowsByPack.get(assignment.packId) || []).filter((entry) => entry.subjectKey === safeSubjectId && (entry.grade === null || Number(entry.grade) === numericGrade));
       const lessonRows = curriculumPackLessonRowsByPackSubjectGrade.get(`${assignment.packId}::${safeSubjectId}::${numericGrade}`) || [];
       const entries = lessonRows.map((entry) => buildCurriculumPackLessonEntry(entry)).filter(Boolean).sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lesson?.title || left.lessonKey).localeCompare(String(right.lesson?.title || right.lessonKey)));
-      const usesBuiltinSeedSource = subjectRows.some((entry) => entry.sourceType === "builtin_seed") || lessonRows.some((entry) => entry?.sourceType === "builtin_seed" || String(entry?.source_type || "").trim().toLowerCase() === "builtin_seed");
       const augmentedEntries = (() => {
-        if (!usesBuiltinSeedSource) return entries;
+        if (!curriculumRuntimeSettings.allowBuiltinFallback) return entries;
         const existingLessonKeys = new Set((Array.isArray(entries) ? entries : []).map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry?.lessonKey || "" })).filter(Boolean));
+        const blockedLessonKeys = new Set((Array.isArray(lessonRows) ? lessonRows : []).map((entry) => normalizeCurriculumPackLessonRecord(entry)).filter(Boolean).filter((entry) => entry.isHidden || entry.slotAction === "removed").map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" })).filter(Boolean));
         const builtinLessons = Array.isArray(getLessons(safeSubjectId, numericGrade)) ? getLessons(safeSubjectId, numericGrade) : [];
         const missingEntries = builtinLessons.reduce((acc, lesson, lessonIndex) => {
           const canonicalLessonKey = getCanonicalLessonKeyForLesson(lesson);
-          if (!canonicalLessonKey || existingLessonKeys.has(canonicalLessonKey)) return acc;
+          if (!canonicalLessonKey || existingLessonKeys.has(canonicalLessonKey) || blockedLessonKeys.has(canonicalLessonKey)) return acc;
           const builtinQuestions = getQuiz(safeSubjectId, numericGrade, canonicalLessonKey);
           acc.push({
             packId: assignment.packId,
@@ -14497,7 +14497,7 @@ ${marker} `);
       })();
       const hasCoverage = subjectRows.some((entry) => !entry.isHidden) || augmentedEntries.length > 0;
       return { assignment, pack, subjectRows, lessonRows, entries: augmentedEntries, hasCoverage };
-    }, [activeInstitutionSchoolId, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
+    }, [activeInstitutionSchoolId, curriculumPackLessonRowsByPackSubjectGrade, curriculumPackLookup, curriculumPackSubjectRowsByPack, curriculumRuntimeSettings.allowBuiltinFallback, scopedContentActivationViewerEmail, visibleCurriculumScopeAssignments]);
     const getEffectiveSubjectActivation = useCallback((subjectId, targetGrade) => resolveScopedActivation(visibleContentActivations, {
       activationType: "subject",
       subject: subjectId,
