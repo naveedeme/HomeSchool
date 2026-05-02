@@ -22768,12 +22768,14 @@ const headerHideTimerRef = useRef(null);
     if (!normalized) return;
     try {
       let nextLayerState = builtinLessonLayerState;
+      const normalizedSlotKey = buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey);
       if (normalized.sourceType === "builtin" || normalized.sourceType === "builtin_history") {
         const archivedBuiltinPayload = builtinLessonLayerState.archives?.[normalized.archiveId] || null;
         nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
         delete nextLayerState.archives[normalized.archiveId];
+        delete nextLayerState.tombstones[normalizedSlotKey];
         if (archivedBuiltinPayload?.lesson) {
-          nextLayerState.slots[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)] = {
+          nextLayerState.slots[normalizedSlotKey] = {
             action: "replace",
             subject: normalized.subject,
             grade: Number(normalized.grade),
@@ -22785,20 +22787,35 @@ const headerHideTimerRef = useRef(null);
             updatedAt: Date.now(),
           };
         } else {
-          delete nextLayerState.slots[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)];
+          delete nextLayerState.slots[normalizedSlotKey];
         }
         await persistBuiltinLessonLayerState(nextLayerState);
       } else if (normalized.sourceType === "slot") {
         nextLayerState = normalizeBuiltinLessonLayerState(builtinLessonLayerState);
-        delete nextLayerState.tombstones[buildBuiltinLessonSlotKey(normalized.subject, normalized.grade, normalized.lessonKey)];
+        delete nextLayerState.tombstones[normalizedSlotKey];
         await persistBuiltinLessonLayerState(nextLayerState);
       }
       const client = ensureSupabaseClientRef.current();
-      const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().eq("archive_id", normalized.archiveId);
+      const archiveIdsToRemove = new Set([normalized.archiveId]);
+      if (normalized.sourceType === "builtin" || normalized.sourceType === "builtin_history") {
+        (visibleLessonArchives || []).forEach((entry) => {
+          if (!entry) return;
+          if (String(entry.subject || "").trim().toLowerCase() !== String(normalized.subject || "").trim().toLowerCase()) return;
+          if (Number(entry.grade) !== Number(normalized.grade)) return;
+          if (resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" }) !== resolveCustomChapterLessonKey({ lessonKey: normalized.lessonKey || "" })) return;
+          if (String(entry.sourceType || "").trim().toLowerCase() !== "slot") return;
+          archiveIdsToRemove.add(String(entry.archiveId || "").trim());
+        });
+      }
+      const archiveIds = Array.from(archiveIdsToRemove).filter(Boolean);
+      const { error } = await client.from(SUPABASE_LESSON_ARCHIVES_TABLE).delete().in("archive_id", archiveIds);
       if (error) throw error;
       setContentRelationshipState((current) => ({
         ...current,
-        lessonArchives: removeLessonArchiveEntry(current?.lessonArchives, normalized.archiveId),
+        lessonArchives: (Array.isArray(current?.lessonArchives) ? current.lessonArchives : []).filter((entry) => {
+          const archiveId = String(entry?.archive_id || entry?.archiveId || "").trim();
+          return archiveId && !archiveIdsToRemove.has(archiveId);
+        }),
         lastUpdatedAt: Date.now(),
       }));
       updateChapterSourceSelection(normalized.subject, normalized.grade, normalized.lessonKey, null, { silent: true, force: true });
@@ -22810,7 +22827,7 @@ const headerHideTimerRef = useRef(null);
         "alert",
       );
     }
-  }, [builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, updateChapterSourceSelection]);
+  }, [builtinLessonLayerState, canAdministerLessonLibrary, contentIdentityEmail, language, persistBuiltinLessonLayerState, showAppToast, updateChapterSourceSelection, visibleLessonArchives]);
   const handleDeleteLessonArchivePermanently = useCallback(async (archive) => {
     const normalized = normalizeLessonArchiveRecord(archive);
     if (!canAdministerLessonLibrary) {
