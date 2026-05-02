@@ -17318,7 +17318,6 @@ const headerHideTimerRef = useRef(null);
       .filter(Boolean)
       .sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lesson?.title || left.lessonKey).localeCompare(String(right.lesson?.title || right.lessonKey)));
     const augmentedEntries = (() => {
-      if (!curriculumRuntimeSettings.allowBuiltinFallback) return entries;
       const existingLessonKeys = new Set((Array.isArray(entries) ? entries : []).map((entry) => (
         resolveCustomChapterLessonKey({ lessonKey: entry?.lessonKey || "" })
       )).filter(Boolean));

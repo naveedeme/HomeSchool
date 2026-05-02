@@ -14457,7 +14457,6 @@ ${marker} `);
       const lessonRows = curriculumPackLessonRowsByPackSubjectGrade.get(`${assignment.packId}::${safeSubjectId}::${numericGrade}`) || [];
       const entries = lessonRows.map((entry) => buildCurriculumPackLessonEntry(entry)).filter(Boolean).sort((left, right) => (left.orderIndex || 0) - (right.orderIndex || 0) || String(left.lesson?.title || left.lessonKey).localeCompare(String(right.lesson?.title || right.lessonKey)));
       const augmentedEntries = (() => {
-        if (!curriculumRuntimeSettings.allowBuiltinFallback) return entries;
         const existingLessonKeys = new Set((Array.isArray(entries) ? entries : []).map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry?.lessonKey || "" })).filter(Boolean));
         const blockedLessonKeys = new Set((Array.isArray(lessonRows) ? lessonRows : []).map((entry) => normalizeCurriculumPackLessonRecord(entry)).filter(Boolean).filter((entry) => entry.isHidden || entry.slotAction === "removed").map((entry) => resolveCustomChapterLessonKey({ lessonKey: entry.lessonKey || "" })).filter(Boolean));
         const builtinLessons = Array.isArray(getLessons(safeSubjectId, numericGrade)) ? getLessons(safeSubjectId, numericGrade) : [];
