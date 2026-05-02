@@ -21868,6 +21868,9 @@ const headerHideTimerRef = useRef(null);
       await window.HomeSchoolDB.deleteSourceFileAccessRecord(SOURCE_FILE_ACCESS_RECORD_ID);
     }
   }, []);
+  const persistBuiltinLessonLayerStateRef = useRef(async () => {
+    throw new Error("Built-in lesson layer persistence is not ready yet.");
+  });
   const handleConnectSourceFiles = useCallback(async () => {
     if (!sourceFileAccessSupported) {
       showAppToast(joinLocalizedText("This browser does not support direct source-file access.", "یہ براؤزر براہِ راست ماخذ فائل تک رسائی کی سہولت نہیں دیتا۔", language), "alert");
@@ -22089,7 +22092,7 @@ const headerHideTimerRef = useRef(null);
           updatedAt: Date.now(),
         };
         if (supabaseAuthState.userId && contentIdentityEmail) {
-          await persistBuiltinLessonLayerState(nextLayerState);
+          await persistBuiltinLessonLayerStateRef.current(nextLayerState);
         } else if (!sourceWriteError) {
           const localLayerRow = normalizeSystemSettingRecord({
             setting_key: "builtin_lesson_layer",
@@ -22163,7 +22166,7 @@ const headerHideTimerRef = useRef(null);
     } finally {
       setLessonEditBusy(false);
     }
-  }, [builtinLessonLayerState, canAdministerLessonLibrary, canEditLessonLocally, contentIdentityEmail, getMergedQuiz, grade, language, lessonEditDraft, persistBuiltinLessonLayerState, refreshCustomContentState, refreshContentRelationshipStateRef, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
+  }, [builtinLessonLayerState, canAdministerLessonLibrary, canEditLessonLocally, contentIdentityEmail, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, refreshContentRelationshipStateRef, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
   const persistBuiltinLessonLayerState = useCallback(async (nextLayerState) => {
     const normalizedLayerState = normalizeBuiltinLessonLayerState(nextLayerState);
     const client = ensureSupabaseClientRef.current();
@@ -22192,6 +22195,7 @@ const headerHideTimerRef = useRef(null);
     setRuntimeBuiltinLessonLayerState(normalizedLayerState);
     return normalizedLayerState;
   }, [contentIdentityEmail]);
+  persistBuiltinLessonLayerStateRef.current = persistBuiltinLessonLayerState;
   const buildBuiltinLessonArchiveSnapshot = useCallback((group, builtinVariant) => {
     if (!group?.canonicalLessonKey || !builtinVariant?.lesson) return null;
     const builtinLesson = stripRuntimeLessonMarkers(cloneSerializableValue(builtinVariant.lesson) || {});

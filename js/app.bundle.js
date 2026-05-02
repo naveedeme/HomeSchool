@@ -18864,6 +18864,9 @@ ${marker} `);
         await window.HomeSchoolDB.deleteSourceFileAccessRecord(SOURCE_FILE_ACCESS_RECORD_ID);
       }
     }, []);
+    const persistBuiltinLessonLayerStateRef = useRef(async () => {
+      throw new Error("Built-in lesson layer persistence is not ready yet.");
+    });
     const handleConnectSourceFiles = useCallback(async () => {
       if (!sourceFileAccessSupported) {
         showAppToast(joinLocalizedText("This browser does not support direct source-file access.", "\u06CC\u06C1 \u0628\u0631\u0627\u0624\u0632\u0631 \u0628\u0631\u0627\u06C1\u0650 \u0631\u0627\u0633\u062A \u0645\u0627\u062E\u0630 \u0641\u0627\u0626\u0644 \u062A\u06A9 \u0631\u0633\u0627\u0626\u06CC \u06A9\u06CC \u0633\u06C1\u0648\u0644\u062A \u0646\u06C1\u06CC\u06BA \u062F\u06CC\u062A\u0627\u06D4", language), "alert");
@@ -19088,7 +19091,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
             updatedAt: Date.now()
           };
           if (supabaseAuthState.userId && contentIdentityEmail) {
-            await persistBuiltinLessonLayerState(nextLayerState);
+            await persistBuiltinLessonLayerStateRef.current(nextLayerState);
           } else if (!sourceWriteError) {
             const localLayerRow = normalizeSystemSettingRecord({
               setting_key: "builtin_lesson_layer",
@@ -19156,7 +19159,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       } finally {
         setLessonEditBusy(false);
       }
-    }, [builtinLessonLayerState, canAdministerLessonLibrary, canEditLessonLocally, contentIdentityEmail, getMergedQuiz, grade, language, lessonEditDraft, persistBuiltinLessonLayerState, refreshCustomContentState, refreshContentRelationshipStateRef, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
+    }, [builtinLessonLayerState, canAdministerLessonLibrary, canEditLessonLocally, contentIdentityEmail, getMergedQuiz, grade, language, lessonEditDraft, refreshCustomContentState, refreshContentRelationshipStateRef, selectedLesson, selectedLessonChapterGroup, selectedSubject, showAppToast, supabaseAuthState.userId, updateChapterSourceSelection, writeLessonEditsToSourceFiles]);
     const persistBuiltinLessonLayerState = useCallback(async (nextLayerState) => {
       const normalizedLayerState = normalizeBuiltinLessonLayerState(nextLayerState);
       const client = ensureSupabaseClientRef.current();
@@ -19182,6 +19185,7 @@ ${insertionTarget}`) : bootstrapText.replace(/\]\s*;\s*document\.write/s, `${SOU
       setRuntimeBuiltinLessonLayerState(normalizedLayerState);
       return normalizedLayerState;
     }, [contentIdentityEmail]);
+    persistBuiltinLessonLayerStateRef.current = persistBuiltinLessonLayerState;
     const buildBuiltinLessonArchiveSnapshot = useCallback((group, builtinVariant) => {
       if (!(group == null ? void 0 : group.canonicalLessonKey) || !(builtinVariant == null ? void 0 : builtinVariant.lesson)) return null;
       const builtinLesson = stripRuntimeLessonMarkers(cloneSerializableValue(builtinVariant.lesson) || {});
