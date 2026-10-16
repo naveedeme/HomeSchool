@@ -1,0 +1,6 @@
+/* Grade 5 Urdu reading, exercises, and quiz: scoped RTL Nastaliq */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;500;600;700&display=swap');
+.app-container:has(.urdu-grade5-reading), .urdu-grade5-reading { direction:rtl; }
+.urdu-grade5-reading, .urdu-grade5-reading :where(h1,h2,h3,h4,p,span,li,button,label,input,textarea,select,.lesson-detail,.exercise-card,.quiz-question){font-family:'Noto Nastaliq Urdu',var(--font-ur),serif!important;line-height:2.25;}
+.urdu-grade5-reading :where(input,textarea){text-align:right;direction:rtl;}
+.urdu-grade5-reading :where(.quiz-options,.exercise-options){text-align:right;}
