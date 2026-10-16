@@ -69,13 +69,13 @@
   "./js/data/urdu/grade-3.js",
   "./js/data/urdu/grade-4.js",
   "./js/data/urdu/grade-5.js",
-  "./js/data/urdu/grade-5-hamd.js",
   "./js/data/urdu/grade-6.js",
   "./js/data/urdu/grade-7.js",
   "./js/data/urdu/grade-8.js",
   "./js/data/urdu/grade-9.js",
   "./js/data/urdu/grade-10.js",
   "./js/data/urdu/quizzes.js",
+  "./js/data/urdu/grade-5-hamd.js",
   "./js/data/source-edits.js",
   "./js/data/index.js"
 ];
