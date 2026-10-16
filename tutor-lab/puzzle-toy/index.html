@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎉 Puzzle Adventure!</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap');
+
+:root {
+  --bg: #FFF8F0;
+  --primary: #FF6B6B;
+  --secondary: #4ECDC4;
+  --accent: #FFE66D;
+  --purple: #A855F7;
+  --green: #22C55E;
+  --blue: #3B82F6;
+  --orange: #F97316;
+  --card: #FFFFFF;
+  --shadow: 0 8px 32px rgba(0,0,0,0.12);
+  --radius: 20px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-image: radial-gradient(circle at 10% 20%, rgba(255,107,107,0.08) 0%, transparent 50%),
+    radial-gradient(circle at 90% 80%, rgba(78,205,196,0.08) 0%, transparent 50%);
+}
+
+h1, h2, h3, .game-title { font-family: 'Fredoka One', cursive; }
+
+/* ========== SCREENS ========== */
+.screen { display: none; min-height: 100vh; padding: 20px; }
+.screen.active { display: flex; flex-direction: column; align-items: center; }
+
+/* ========== HOME SCREEN ========== */
+#home {
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  position: relative;
+  overflow: hidden;
+}
+#home::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.floating-emoji {
+  position: absolute;
+  font-size: 2.5rem;
+  animation: float 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes float {
+  0%,100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(10deg); }
+}
+.home-card {
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(20px);
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 32px;
+  padding: 40px 50px;
+  text-align: center;
+  max-width: 480px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+.home-logo { font-size: 5rem; margin-bottom: 10px; }
+.home-title { font-family: 'Fredoka One', cursive; font-size: 2.8rem; color: #fff; margin-bottom: 6px; letter-spacing: 1px; }
+.home-sub { color: rgba(255,255,255,0.85); font-size: 1.1rem; font-weight: 600; margin-bottom: 32px; }
+
+.game-select-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.game-btn {
+  background: rgba(255,255,255,0.9);
+  border: 3px solid transparent;
+  border-radius: 18px;
+  padding: 18px 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.game-btn:hover, .game-btn.selected {
+  transform: scale(1.05) translateY(-3px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+}
+.game-btn.selected { border-color: var(--accent); background: #fff; }
+.game-btn .gb-icon { font-size: 2.4rem; display: block; margin-bottom: 6px; }
+.game-btn .gb-name { font-family: 'Fredoka One', cursive; font-size: 0.95rem; color: #4a4a6a; }
+.game-btn .gb-desc { font-size: 0.72rem; color: #888; margin-top: 2px; }
+
+.time-select-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.time-btn {
+  background: rgba(255,255,255,0.15);
+  border: 2px solid rgba(255,255,255,0.4);
+  color: #fff;
+  border-radius: 50px;
+  padding: 8px 18px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.time-btn:hover, .time-btn.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #333;
+  transform: scale(1.08);
+}
+.start-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #FFE66D, #F97316);
+  border: none;
+  border-radius: 50px;
+  padding: 18px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 1.4rem;
+  color: #fff;
+  cursor: pointer;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 24px rgba(249,115,22,0.4);
+  transition: all 0.3s;
+  letter-spacing: 1px;
+}
+.start-btn:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 14px 35px rgba(249,115,22,0.5); }
+.start-btn:active { transform: translateY(0) scale(0.98); }
+
+/* ========== GAME SCREEN ========== */
+#game {
+  background: var(--bg);
+  padding: 16px;
+}
+.game-header {
+  width: 100%;
+  max-width: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+.back-btn {
+  background: #fff;
+  border: 2px solid #e5e7eb;
+  border-radius: 50px;
+  padding: 8px 16px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.2s;
+}
+.back-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+.game-name-badge {
+  font-family: 'Fredoka One', cursive;
+  font-size: 1.2rem;
+  color: var(--purple);
+  flex: 1;
+  text-align: center;
+}
+.timer-display {
+  background: linear-gradient(135deg, var(--primary), var(--orange));
+  color: #fff;
+  border-radius: 50px;
+  padding: 8px 18px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 1.1rem;
+  min-width: 80px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(255,107,107,0.4);
+  transition: background 0.5s;
+}
+.timer-display.warning { background: linear-gradient(135deg, #f59e0b, #ef4444); animation: pulse-timer 0.8s infinite; }
+@keyframes pulse-timer { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+.score-badge {
+  background: var(--accent);
+  color: #333;
+  border-radius: 50px;
+  padding: 8px 16px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 1rem;
+}
+
+/* ========== TANGRAM ========== */
+.tangram-container {
+  width: 100%;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.tangram-top {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.tangram-board-wrap {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.tangram-board-label {
+  font-family: 'Fredoka One', cursive;
+  font-size: 0.85rem;
+  color: #888;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.tangram-board {
+  position: relative;
+  border: 2px dashed #ddd;
+  border-radius: 12px;
+  background: #f9fafb;
+  overflow: hidden;
+}
+.tangram-piece-tray {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+.tangram-piece-tray h3 { font-family: 'Fredoka One', cursive; color: var(--purple); margin-bottom: 10px; font-size: 0.95rem; }
+.tray-pieces { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.tray-piece-wrap {
+  cursor: grab;
+  transition: transform 0.2s;
+  filter: drop-shadow(2px 3px 4px rgba(0,0,0,0.2));
+}
+.tray-piece-wrap:hover { transform: scale(1.12); }
+.tray-piece-wrap.dragging { opacity: 0.4; cursor: grabbing; }
+.tray-piece-wrap.placed { opacity: 0.3; pointer-events: none; }
+
+/* ========== TIC TAC TOE ========== */
+.ttt-container {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.ttt-status {
+  font-family: 'Fredoka One', cursive;
+  font-size: 1.3rem;
+  color: var(--purple);
+  text-align: center;
+  background: #fff;
+  padding: 10px 24px;
+  border-radius: 50px;
+  box-shadow: var(--shadow);
+}
+.ttt-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  background: #e5e7eb;
+  padding: 10px;
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+.ttt-cell {
+  width: 100px;
+  height: 100px;
+  background: #fff;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 2.8rem;
+  position: relative;
+  overflow: hidden;
+}
+.ttt-cell:hover:not(.played) { background: #f3f4f6; transform: scale(1.05); }
+.ttt-cell.played { cursor: default; }
+.ttt-cell.x-cell { color: var(--primary); }
+.ttt-cell.o-cell { color: var(--blue); }
+.ttt-cell.winner-cell { background: linear-gradient(135deg, #FFE66D, #F97316); animation: winner-cell-pop 0.5s ease; }
+@keyframes winner-cell-pop { 0% { transform: scale(0.8); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+.ttt-score-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+.ttt-score-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 24px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  min-width: 90px;
+}
+.ttt-score-card .sc-label { font-size: 0.75rem; color: #888; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.ttt-score-card .sc-num { font-family: 'Fredoka One', cursive; font-size: 2rem; }
+.ttt-score-card.x-card .sc-num { color: var(--primary); }
+.ttt-score-card.o-card .sc-num { color: var(--blue); }
+.ttt-score-card.draw-card .sc-num { color: var(--orange); }
+.ttt-next-btn {
+  background: linear-gradient(135deg, var(--secondary), var(--blue));
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  padding: 14px 32px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.25s;
+  box-shadow: 0 6px 18px rgba(78,205,196,0.4);
+}
+.ttt-next-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(78,205,196,0.5); }
+.ttt-mode-row {
+  display: flex;
+  gap: 10px;
+}
+.ttt-mode-btn {
+  padding: 8px 18px;
+  border-radius: 50px;
+  border: 2px solid var(--purple);
+  background: #fff;
+  color: var(--purple);
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ttt-mode-btn.active { background: var(--purple); color: #fff; }
+
+/* ========== TETROMINO ========== */
+.tetro-container {
+  width: 100%;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.tetro-board {
+  display: grid;
+  background: #fff;
+  padding: 10px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  gap: 3px;
+}
+.tetro-cell {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  border: 2px solid #e5e7eb;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+.tetro-cell.filled { border-color: transparent; }
+.tetro-cell.drop-target { background: rgba(78,205,196,0.25); border-color: var(--secondary); border-style: dashed; }
+
+.tetro-pieces-area {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  width: 100%;
+}
+.tetro-pieces-area h3 { font-family: 'Fredoka One', cursive; color: var(--orange); margin-bottom: 12px; }
+.tetro-pieces-grid { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+
+.tetro-piece-svg-wrap {
+  cursor: grab;
+  filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.18));
+  transition: transform 0.2s, filter 0.2s;
+  border-radius: 10px;
+  padding: 6px;
+}
+.tetro-piece-svg-wrap:hover:not(.placed) { transform: scale(1.1) rotate(-3deg); filter: drop-shadow(4px 6px 10px rgba(0,0,0,0.25)); }
+.tetro-piece-svg-wrap.placed { opacity: 0.25; pointer-events: none; }
+.tetro-piece-svg-wrap.dragging { opacity: 0.4; cursor: grabbing; }
+
+/* ========== MEMORY MATCH ========== */
+.memory-container {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.memory-grid {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+.memory-card {
+  aspect-ratio: 1;
+  perspective: 600px;
+  cursor: pointer;
+}
+.memory-card-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 16px;
+}
+.memory-card.flipped .memory-card-inner { transform: rotateY(180deg); }
+.memory-card.matched .memory-card-inner { transform: rotateY(180deg); }
+.memory-card.matched .memory-card-front { background: linear-gradient(135deg, #22C55E, #16a34a) !important; }
+
+.memory-card-back, .memory-card-front {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  backface-visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.memory-card-back {
+  background: linear-gradient(135deg, var(--purple), #7c3aed);
+  font-size: 1.8rem;
+  color: rgba(255,255,255,0.3);
+}
+.memory-card-front {
+  background: #fff;
+  transform: rotateY(180deg);
+  font-size: 2rem;
+}
+.memory-stats-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.memory-stat {
+  background: #fff;
+  border-radius: 16px;
+  padding: 10px 20px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.memory-stat .ms-label { font-size: 0.72rem; color: #888; font-weight: 700; text-transform: uppercase; }
+.memory-stat .ms-val { font-family: 'Fredoka One', cursive; font-size: 1.6rem; color: var(--purple); }
+
+/* ========== BALLOON POP ========== */
+.balloon-container {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.balloon-question {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 20px 28px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  width: 100%;
+}
+.balloon-question .bq-label { font-size: 0.8rem; color: #888; font-weight: 700; text-transform: uppercase; margin-bottom: 6px; }
+.balloon-question .bq-math { font-family: 'Fredoka One', cursive; font-size: 2.5rem; color: var(--purple); }
+
+.balloons-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  width: 100%;
+  padding: 10px;
+}
+.balloon-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.balloon-btn:hover { transform: scale(1.08) translateY(-4px); }
+.balloon-btn svg { display: block; }
+.balloon-answer-text {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Fredoka One', cursive;
+  font-size: 1.3rem;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+.balloon-btn.pop { animation: balloonPop 0.4s ease forwards; }
+.balloon-btn.wrong { animation: baloonWrong 0.4s ease; }
+@keyframes balloonPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); opacity: 0.5; }
+  100% { transform: scale(0); opacity: 0; }
+}
+@keyframes baloonWrong {
+  0%,100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+.balloon-progress {
+  background: #fff;
+  border-radius: 50px;
+  padding: 8px 20px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 1rem;
+  color: var(--orange);
+  box-shadow: var(--shadow);
+}
+
+/* ========== CELEBRATION ========== */
+#celebration {
+  background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.confetti-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.celebration-card {
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(20px);
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 32px;
+  padding: 48px 40px;
+  max-width: 440px;
+  width: 90%;
+  position: relative;
+  z-index: 1;
+  animation: celebCardIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes celebCardIn {
+  0% { opacity: 0; transform: scale(0.4) translateY(100px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.celeb-emoji { font-size: 5rem; margin-bottom: 10px; animation: celebSpin 1s ease; }
+@keyframes celebSpin { 0% { transform: rotate(-20deg) scale(0); } 100% { transform: rotate(0) scale(1); } }
+.celeb-title { font-family: 'Fredoka One', cursive; font-size: 2.8rem; color: var(--accent); margin-bottom: 8px; }
+.celeb-subtitle { color: rgba(255,255,255,0.8); font-size: 1.1rem; font-weight: 700; margin-bottom: 28px; }
+.celeb-stats {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+.celeb-stat {
+  background: rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 14px 20px;
+  min-width: 100px;
+}
+.celeb-stat .cs-label { font-size: 0.72rem; color: rgba(255,255,255,0.6); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+.celeb-stat .cs-val { font-family: 'Fredoka One', cursive; font-size: 1.8rem; color: var(--accent); }
+.celeb-stars { font-size: 2rem; margin-bottom: 24px; letter-spacing: 4px; }
+.celeb-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.celeb-btn {
+  padding: 14px 28px;
+  border-radius: 50px;
+  border: none;
+  font-family: 'Fredoka One', cursive;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.celeb-btn.primary { background: linear-gradient(135deg, var(--accent), var(--orange)); color: #fff; box-shadow: 0 6px 20px rgba(249,115,22,0.4); }
+.celeb-btn.secondary { background: rgba(255,255,255,0.15); color: #fff; border: 2px solid rgba(255,255,255,0.3); }
+.celeb-btn:hover { transform: translateY(-3px); }
+
+/* ========== TIME UP SCREEN ========== */
+#timeup {
+  background: linear-gradient(135deg, #f97316, #ef4444, #ec4899);
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+.timeup-card {
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(20px);
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 32px;
+  padding: 48px 40px;
+  max-width: 400px;
+  width: 90%;
+  animation: shake 0.5s ease;
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%,60% { transform: translateX(-10px); }
+  40%,80% { transform: translateX(10px); }
+}
+.timeup-emoji { font-size: 5rem; margin-bottom: 12px; }
+.timeup-title { font-family: 'Fredoka One', cursive; font-size: 2.5rem; color: var(--accent); margin-bottom: 8px; }
+.timeup-sub { color: rgba(255,255,255,0.85); font-size: 1rem; font-weight: 600; margin-bottom: 28px; }
+
+/* ========== UTILS ========== */
+.action-btn {
+  background: linear-gradient(135deg, var(--primary), var(--orange));
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  padding: 12px 28px;
+  font-family: 'Fredoka One', cursive;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.25s;
+  box-shadow: 0 6px 20px rgba(255,107,107,0.3);
+}
+.action-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(255,107,107,0.4); }
+
+.progress-bar-wrap {
+  width: 100%;
+  max-width: 700px;
+  background: #e5e7eb;
+  border-radius: 50px;
+  height: 10px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--secondary), var(--blue));
+  border-radius: 50px;
+  transition: width 1s linear;
+}
+.progress-bar-fill.warning { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+
+/* ========== DRAG GHOST ========== */
+#drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.85;
+  transform: translate(-50%, -50%);
+  display: none;
+  filter: drop-shadow(4px 8px 16px rgba(0,0,0,0.35));
+}
+
+/* RESPONSIVE */
+@media (max-width: 500px) {
+  .ttt-cell { width: 80px; height: 80px; font-size: 2.2rem; }
+  .tetro-cell { width: 30px; height: 30px; }
+  .home-title { font-size: 2.2rem; }
+  .game-select-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 380px) {
+  .ttt-cell { width: 66px; height: 66px; font-size: 1.8rem; }
+  .tetro-cell { width: 26px; height: 26px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<div id="home" class="screen active">
+  <div class="floating-emoji" style="top:8%;left:5%;animation-delay:0s">🧩</div>
+  <div class="floating-emoji" style="top:15%;right:8%;animation-delay:0.7s">⭐</div>
+  <div class="floating-emoji" style="bottom:12%;left:7%;animation-delay:1.2s">🎈</div>
+  <div class="floating-emoji" style="bottom:18%;right:5%;animation-delay:0.4s">🎉</div>
+  <div class="floating-emoji" style="top:40%;left:2%;animation-delay:1.8s">🌈</div>
+
+  <div class="home-card">
+    <div class="home-logo">🎮</div>
+    <div class="home-title">Puzzle Adventure!</div>
+    <div class="home-sub">Pick a game & set your timer ✨</div>
+
+    <div class="game-select-grid">
+      <div class="game-btn selected" data-game="ttt" onclick="selectGame(this)">
+        <span class="gb-icon">❌⭕</span>
+        <span class="gb-name">Tic Tac Toe</span>
+        <span class="gb-desc">X vs O challenge</span>
+      </div>
+      <div class="game-btn" data-game="memory" onclick="selectGame(this)">
+        <span class="gb-icon">🃏</span>
+        <span class="gb-name">Memory Match</span>
+        <span class="gb-desc">Find the pairs!</span>
+      </div>
+      <div class="game-btn" data-game="tangram" onclick="selectGame(this)">
+        <span class="gb-icon">🔷</span>
+        <span class="gb-name">Tangram</span>
+        <span class="gb-desc">Shape puzzle</span>
+      </div>
+      <div class="game-btn" data-game="balloon" onclick="selectGame(this)">
+        <span class="gb-icon">🎈</span>
+        <span class="gb-name">Balloon Pop</span>
+        <span class="gb-desc">Math fun!</span>
+      </div>
+    </div>
+
+    <div style="color:rgba(255,255,255,0.8);font-size:0.85rem;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">⏱ Choose Your Time</div>
+    <div class="time-select-row">
+      <button class="time-btn" data-time="60" onclick="selectTime(this)">1 min</button>
+      <button class="time-btn selected" data-time="120" onclick="selectTime(this)">2 min</button>
+      <button class="time-btn" data-time="180" onclick="selectTime(this)">3 min</button>
+      <button class="time-btn" data-time="300" onclick="selectTime(this)">5 min</button>
+      <button class="time-btn" data-time="0" onclick="selectTime(this)">∞ Free</button>
+    </div>
+
+    <button class="start-btn" onclick="startGame()">🚀 Let's Play!</button>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game" class="screen">
+  <div class="game-header">
+    <button class="back-btn" onclick="goHome()">← Home</button>
+    <div class="game-name-badge" id="game-name-badge">Game</div>
+    <div class="timer-display" id="timer-display">2:00</div>
+    <div class="score-badge" id="score-badge">⭐ 0</div>
+  </div>
+  <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar" style="width:100%"></div></div>
+  <div id="game-area" style="width:100%;display:flex;justify-content:center;margin-top:16px;"></div>
+</div>
+
+<!-- CELEBRATION -->
+<div id="celebration" class="screen">
+  <canvas class="confetti-canvas" id="confetti-canvas"></canvas>
+  <div class="celebration-card">
+    <div class="celeb-emoji" id="celeb-emoji">🏆</div>
+    <div class="celeb-title" id="celeb-title">Amazing!</div>
+    <div class="celeb-subtitle" id="celeb-subtitle">You completed the puzzle!</div>
+    <div class="celeb-stars" id="celeb-stars">⭐⭐⭐</div>
+    <div class="celeb-stats">
+      <div class="celeb-stat"><div class="cs-label">Time Left</div><div class="cs-val" id="cs-time">1:23</div></div>
+      <div class="celeb-stat"><div class="cs-label">Score</div><div class="cs-val" id="cs-score">100</div></div>
+      <div class="celeb-stat"><div class="cs-label">Stars</div><div class="cs-val" id="cs-stars">⭐⭐⭐</div></div>
+    </div>
+    <div class="celeb-btns">
+      <button class="celeb-btn primary" onclick="restartGame()">🔄 Play Again</button>
+      <button class="celeb-btn secondary" onclick="goHome()">🏠 Home</button>
+    </div>
+  </div>
+</div>
+
+<!-- TIME UP -->
+<div id="timeup" class="screen">
+  <div class="timeup-card">
+    <div class="timeup-emoji">⏰</div>
+    <div class="timeup-title">Time's Up!</div>
+    <div class="timeup-sub">Don't worry – practice makes perfect! 💪</div>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <button class="celeb-btn primary" onclick="restartGame()">🔄 Try Again</button>
+      <button class="celeb-btn secondary" style="background:rgba(255,255,255,0.2);color:#fff;border:2px solid rgba(255,255,255,0.4);" onclick="goHome()">🏠 Home</button>
+    </div>
+  </div>
+</div>
+
+<div id="drag-ghost"></div>
+
+<script>
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+let selectedGame = 'ttt';
+let selectedTime = 120;
+let timerInterval = null;
+let timeLeft = 0;
+let totalTime = 0;
+let score = 0;
+let gameActive = false;
+
+function selectGame(el) {
+  document.querySelectorAll('.game-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedGame = el.dataset.game;
+}
+function selectTime(el) {
+  document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedTime = parseInt(el.dataset.time);
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goHome() {
+  stopTimer();
+  showScreen('home');
+  gameActive = false;
+}
+
+function startGame() {
+  score = 0;
+  timeLeft = selectedTime || 0;
+  totalTime = timeLeft;
+  gameActive = true;
+  showScreen('game');
+  updateTimerDisplay();
+  updateScore();
+  document.getElementById('progress-bar').style.width = '100%';
+  document.getElementById('progress-bar').classList.remove('warning');
+  document.querySelector('#timer-display').classList.remove('warning');
+  renderGame(selectedGame);
+  if (selectedTime > 0) startTimer();
+}
+
+function restartGame() {
+  startGame();
+}
+
+function startTimer() {
+  stopTimer();
+  timerInterval = setInterval(() => {
+    if (!gameActive) return;
+    timeLeft--;
+    updateTimerDisplay();
+    const pct = totalTime > 0 ? (timeLeft / totalTime) * 100 : 100;
+    document.getElementById('progress-bar').style.width = pct + '%';
+    if (pct < 30) {
+      document.getElementById('progress-bar').classList.add('warning');
+      document.querySelector('#timer-display').classList.add('warning');
+    }
+    if (timeLeft <= 0) {
+      stopTimer();
+      gameActive = false;
+      showScreen('timeup');
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+function updateTimerDisplay() {
+  if (selectedTime === 0) {
+    document.getElementById('timer-display').textContent = '∞';
+    return;
+  }
+  const m = Math.floor(timeLeft / 60);
+  const s = timeLeft % 60;
+  document.getElementById('timer-display').textContent = m + ':' + String(s).padStart(2, '0');
+}
+
+function updateScore() {
+  document.getElementById('score-badge').textContent = '⭐ ' + score;
+}
+
+function addScore(pts) {
+  score += pts;
+  updateScore();
+  const badge = document.getElementById('score-badge');
+  badge.style.transform = 'scale(1.3)';
+  setTimeout(() => badge.style.transform = 'scale(1)', 300);
+}
+
+function celebrate(msg) {
+  stopTimer();
+  gameActive = false;
+  const left = selectedTime > 0 ? timeLeft : 0;
+  const m = Math.floor(left / 60), s = left % 60;
+  const pct = totalTime > 0 ? left / totalTime : 0.5;
+  const stars = pct > 0.6 ? 3 : pct > 0.3 ? 2 : 1;
+  const starStr = '⭐'.repeat(stars);
+  const emojis = ['🏆','🎊','🥳','🌟','🎉'];
+  document.getElementById('celeb-emoji').textContent = emojis[Math.floor(Math.random()*emojis.length)];
+  document.getElementById('celeb-title').textContent = ['Amazing!','Fantastic!','Superstar!','Brilliant!','Incredible!'][Math.floor(Math.random()*5)];
+  document.getElementById('celeb-subtitle').textContent = msg || 'You completed the puzzle!';
+  document.getElementById('celeb-stars').textContent = starStr;
+  document.getElementById('cs-time').textContent = totalTime > 0 ? m+':'+String(s).padStart(2,'0') : '∞';
+  document.getElementById('cs-score').textContent = score;
+  document.getElementById('cs-stars').textContent = starStr;
+  showScreen('celebration');
+  startConfetti();
+}
+
+// ============================================================
+// GAME ROUTER
+// ============================================================
+function renderGame(g) {
+  const names = {ttt:'Tic Tac Toe',memory:'Memory Match',tangram:'Tangram Puzzle',balloon:'Balloon Pop Math'};
+  document.getElementById('game-name-badge').textContent = names[g] || g;
+  const area = document.getElementById('game-area');
+  area.innerHTML = '';
+  if (g === 'ttt') renderTTT(area);
+  else if (g === 'memory') renderMemory(area);
+  else if (g === 'tangram') renderTangram(area);
+  else if (g === 'balloon') renderBalloon(area);
+}
+
+// ============================================================
+// TIC TAC TOE
+// ============================================================
+let tttBoard, tttCurrent, tttScores, tttAI, tttOver;
+function renderTTT(area) {
+  tttBoard = Array(9).fill('');
+  tttCurrent = 'X';
+  tttScores = {X:0, O:0, D:0};
+  tttAI = true;
+  tttOver = false;
+
+  area.innerHTML = `
+  <div class="ttt-container">
+    <div class="ttt-mode-row">
+      <button class="ttt-mode-btn active" id="ttt-2p" onclick="tttSetMode(false)">👤 vs 👤</button>
+      <button class="ttt-mode-btn" id="ttt-ai" onclick="tttSetMode(true)">👤 vs 🤖</button>
+    </div>
+    <div class="ttt-status" id="ttt-status">Your turn! ❌</div>
+    <div class="ttt-board" id="ttt-board"></div>
+    <div class="ttt-score-row">
+      <div class="ttt-score-card x-card"><div class="sc-label">❌ Player</div><div class="sc-num" id="sc-x">0</div></div>
+      <div class="ttt-score-card draw-card"><div class="sc-label">🤝 Draw</div><div class="sc-num" id="sc-d">0</div></div>
+      <div class="ttt-score-card o-card"><div class="sc-label">⭕ ${tttAI?'Robot':'Player 2'}</div><div class="sc-num" id="sc-o">0</div></div>
+    </div>
+    <button class="ttt-next-btn" onclick="tttReset()">🔄 New Round</button>
+  </div>`;
+  tttRenderBoard();
+}
+function tttSetMode(ai) {
+  tttAI = ai;
+  document.getElementById('ttt-2p').classList.toggle('active', !ai);
+  document.getElementById('ttt-ai').classList.toggle('active', ai);
+  document.querySelector('#sc-o').closest('.ttt-score-card').querySelector('.sc-label').textContent = '⭕ '+(ai?'Robot':'Player 2');
+  tttReset();
+}
+function tttRenderBoard() {
+  const board = document.getElementById('ttt-board');
+  if (!board) return;
+  board.innerHTML = '';
+  tttBoard.forEach((v, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'ttt-cell' + (v ? ' played '+v.toLowerCase()+'-cell' : '');
+    cell.textContent = v === 'X' ? '❌' : v === 'O' ? '⭕' : '';
+    if (!v && !tttOver) cell.onclick = () => tttPlay(i);
+    board.appendChild(cell);
+  });
+}
+function tttPlay(i) {
+  if (tttBoard[i] || tttOver) return;
+  tttBoard[i] = tttCurrent;
+  tttRenderBoard();
+  const w = tttCheckWin();
+  if (w) { tttEndRound(w); return; }
+  if (tttBoard.every(c=>c)) { tttEndRound('D'); return; }
+  tttCurrent = tttCurrent === 'X' ? 'O' : 'X';
+  tttUpdateStatus();
+  if (tttAI && tttCurrent === 'O') setTimeout(tttAIMove, 500);
+}
+function tttAIMove() {
+  // Try win, then block, then center, then random
+  const best = tttFindMove('O') ?? tttFindMove('X') ?? (tttBoard[4]===''?4:null) ?? tttBoard.map((v,i)=>v===''?i:-1).filter(i=>i>=0)[0];
+  if (best !== null && best !== undefined) tttPlay(best);
+}
+function tttFindMove(p) {
+  const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for (const [a,b,c] of wins) {
+    const line = [tttBoard[a],tttBoard[b],tttBoard[c]];
+    if (line.filter(x=>x===p).length===2 && line.includes('')) {
+      return [a,b,c][line.indexOf('')];
+    }
+  }
+  return null;
+}
+function tttCheckWin() {
+  const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for (const [a,b,c] of wins) {
+    if (tttBoard[a] && tttBoard[a]===tttBoard[b] && tttBoard[b]===tttBoard[c]) return tttBoard[a];
+  }
+  return null;
+}
+function tttEndRound(result) {
+  tttOver = true;
+  if (result === 'D') {
+    tttScores.D++;
+    document.getElementById('ttt-status').textContent = "🤝 It's a Draw!";
+  } else {
+    tttScores[result]++;
+    const isWin = result === 'X' || (!tttAI && result === 'O');
+    document.getElementById('ttt-status').textContent = result === 'X' ? '🎉 Player 1 Wins!' : (tttAI ? '🤖 Robot Wins!' : '🎉 Player 2 Wins!');
+    if (isWin) addScore(10);
+    // highlight winning cells
+    const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    for (const [a,b,c] of wins) {
+      if (tttBoard[a]===result&&tttBoard[b]===result&&tttBoard[c]===result) {
+        [a,b,c].forEach(idx => {
+          const cells = document.querySelectorAll('.ttt-cell');
+          cells[idx].classList.add('winner-cell');
+        });
+      }
+    }
+  }
+  document.getElementById('sc-x').textContent = tttScores.X;
+  document.getElementById('sc-o').textContent = tttScores.O;
+  document.getElementById('sc-d').textContent = tttScores.D;
+  if (tttScores.X >= 3 || tttScores.O >= 3) {
+    setTimeout(() => celebrate('You mastered Tic Tac Toe! 🎯'), 500);
+  }
+}
+function tttUpdateStatus() {
+  const s = document.getElementById('ttt-status');
+  if (!s) return;
+  if (tttCurrent === 'X') s.textContent = 'Your turn! ❌';
+  else s.textContent = tttAI ? '🤖 Robot thinking...' : 'Player 2\'s turn! ⭕';
+}
+function tttReset() {
+  tttBoard = Array(9).fill('');
+  tttCurrent = 'X';
+  tttOver = false;
+  tttRenderBoard();
+  tttUpdateStatus();
+}
+
+// ============================================================
+// MEMORY MATCH
+// ============================================================
+const memEmojis = ['🦁','🐯','🐻','🦊','🐸','🦄','🐳','🦋','🌈','🍕','🎸','⭐','🚀','🎨','🍦','🦀'];
+let memCards, memFlipped, memMatched, memMoves, memLock;
+function renderMemory(area) {
+  const pairs = memEmojis.slice(0, 8);
+  const deck = [...pairs,...pairs].sort(()=>Math.random()-0.5);
+  memCards = deck;
+  memFlipped = [];
+  memMatched = [];
+  memMoves = 0;
+  memLock = false;
+
+  area.innerHTML = `
+  <div class="memory-container">
+    <div class="memory-stats-row">
+      <div class="memory-stat"><div class="ms-label">Moves</div><div class="ms-val" id="mem-moves">0</div></div>
+      <div class="memory-stat"><div class="ms-label">Pairs Found</div><div class="ms-val" id="mem-pairs">0/8</div></div>
+    </div>
+    <div class="memory-grid" id="mem-grid" style="grid-template-columns:repeat(4,1fr);max-width:360px;width:100%;"></div>
+    <button class="action-btn" onclick="renderMemory(document.getElementById('game-area'))">🔄 Shuffle</button>
+  </div>`;
+
+  const grid = document.getElementById('mem-grid');
+  deck.forEach((em, i) => {
+    const card = document.createElement('div');
+    card.className = 'memory-card';
+    card.dataset.index = i;
+    card.dataset.emoji = em;
+    card.innerHTML = `<div class="memory-card-inner"><div class="memory-card-back">🎴</div><div class="memory-card-front">${em}</div></div>`;
+    card.onclick = () => memFlip(i, card);
+    grid.appendChild(card);
+  });
+}
+function memFlip(i, card) {
+  if (memLock || memFlipped.includes(i) || memMatched.includes(i)) return;
+  card.classList.add('flipped');
+  memFlipped.push(i);
+  if (memFlipped.length === 2) {
+    memMoves++;
+    document.getElementById('mem-moves').textContent = memMoves;
+    memLock = true;
+    const [a, b] = memFlipped;
+    const cards = document.querySelectorAll('.memory-card');
+    if (memCards[a] === memCards[b]) {
+      memMatched.push(a, b);
+      cards[a].classList.add('matched');
+      cards[b].classList.add('matched');
+      memFlipped = [];
+      memLock = false;
+      addScore(5);
+      document.getElementById('mem-pairs').textContent = (memMatched.length/2)+'/8';
+      if (memMatched.length === 16) setTimeout(() => celebrate('All pairs matched! Great memory! 🧠'), 400);
+    } else {
+      setTimeout(() => {
+        cards[a].classList.remove('flipped');
+        cards[b].classList.remove('flipped');
+        memFlipped = [];
+        memLock = false;
+      }, 900);
+    }
+  }
+}
+
+// ============================================================
+// TANGRAM
+// ============================================================
+const tangramShapes = [
+  { id:'lt', label:'Large Triangle 1', color:'#EF4444', path:'M 0 0 L 120 0 L 0 120 Z', w:130, h:130 },
+  { id:'lt2', label:'Large Triangle 2', color:'#3B82F6', path:'M 120 0 L 120 120 L 0 120 Z', w:130, h:130 },
+  { id:'mt', label:'Medium Triangle', color:'#22C55E', path:'M 0 0 L 80 0 L 0 80 Z', w:90, h:90 },
+  { id:'st1', label:'Small Triangle 1', color:'#F97316', path:'M 0 0 L 56 0 L 0 56 Z', w:66, h:66 },
+  { id:'st2', label:'Small Triangle 2', color:'#A855F7', path:'M 0 0 L 56 0 L 56 56 Z', w:66, h:66 },
+  { id:'sq', label:'Square', color:'#FFE66D', path:'M 0 0 L 60 0 L 60 60 L 0 60 Z', w:70, h:70 },
+  { id:'par', label:'Parallelogram', color:'#EC4899', path:'M 30 0 L 90 0 L 60 60 L 0 60 Z', w:100, h:70 },
+];
+let tanPlaced = {};
+let dragData = null;
+
+function renderTangram(area) {
+  tanPlaced = {};
+  area.innerHTML = `
+  <div class="tangram-container">
+    <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:var(--shadow);text-align:center;width:100%;max-width:460px;">
+      <div style="font-family:'Fredoka One',cursive;color:var(--purple);font-size:1.1rem;margin-bottom:10px;">🎯 Arrange the tangram pieces!</div>
+      <div style="font-size:0.8rem;color:#888;font-weight:700;">Drag pieces and arrange them however you like. Place all 7 to win!</div>
+    </div>
+    <div class="tangram-board-wrap">
+      <div class="tangram-board-label">Drop Zone 🎯</div>
+      <div class="tangram-board" id="tan-board" style="width:280px;height:280px;"
+        ondragover="event.preventDefault()"
+        ondrop="tanDrop(event)">
+        <div id="tan-placed-container" style="position:absolute;inset:0;pointer-events:none;"></div>
+      </div>
+    </div>
+    <div class="tangram-piece-tray">
+      <h3>🧩 Your Pieces (${tangramShapes.length} total)</h3>
+      <div class="tray-pieces" id="tan-tray"></div>
+    </div>
+    <div style="font-family:'Fredoka One',cursive;color:var(--green);font-size:0.9rem;" id="tan-progress">
+      Placed: 0 / ${tangramShapes.length}
+    </div>
+    <button class="action-btn" onclick="tanReset()">🔄 Reset Pieces</button>
+  </div>`;
+
+  const tray = document.getElementById('tan-tray');
+  tangramShapes.forEach(sh => {
+    const wrap = document.createElement('div');
+    wrap.className = 'tray-piece-wrap';
+    wrap.id = 'tray-' + sh.id;
+    wrap.draggable = true;
+    wrap.title = sh.label;
+    wrap.innerHTML = `<svg width="${sh.w}" height="${sh.h}" viewBox="0 0 ${sh.w} ${sh.h}"><path d="${sh.path}" fill="${sh.color}" stroke="#fff" stroke-width="2"/></svg>`;
+    wrap.addEventListener('dragstart', e => {
+      dragData = sh;
+      wrap.classList.add('dragging');
+      const ghost = document.getElementById('drag-ghost');
+      ghost.innerHTML = `<svg width="${sh.w}" height="${sh.h}" viewBox="0 0 ${sh.w} ${sh.h}"><path d="${sh.path}" fill="${sh.color}" stroke="#fff" stroke-width="2"/></svg>`;
+      ghost.style.display = 'block';
+      e.dataTransfer.setDragImage(new Image(), 0, 0);
+    });
+    wrap.addEventListener('dragend', () => {
+      wrap.classList.remove('dragging');
+      document.getElementById('drag-ghost').style.display = 'none';
+    });
+    // Touch
+    wrap.addEventListener('touchstart', e => { dragData = sh; tanTouchStart(e, sh); }, {passive:true});
+    tray.appendChild(wrap);
+  });
+
+  document.addEventListener('mousemove', e => {
+    const ghost = document.getElementById('drag-ghost');
+    if (ghost.style.display !== 'none') {
+      ghost.style.left = e.clientX + 'px';
+      ghost.style.top = e.clientY + 'px';
+    }
+  });
+}
+
+function tanDrop(event) {
+  if (!dragData) return;
+  event.preventDefault();
+  const board = document.getElementById('tan-board');
+  const rect = board.getBoundingClientRect();
+  const x = event.clientX - rect.left - dragData.w/2;
+  const y = event.clientY - rect.top - dragData.h/2;
+  tanPlacePiece(dragData, x, y);
+  dragData = null;
+}
+
+function tanPlacePiece(sh, x, y) {
+  if (tanPlaced[sh.id]) return;
+  tanPlaced[sh.id] = true;
+  document.getElementById('tray-'+sh.id).classList.add('placed');
+  const container = document.getElementById('tan-placed-container');
+  const pieceEl = document.createElement('div');
+  pieceEl.style.position = 'absolute';
+  pieceEl.style.left = Math.max(0, Math.min(x, 280-sh.w)) + 'px';
+  pieceEl.style.top = Math.max(0, Math.min(y, 280-sh.h)) + 'px';
+  pieceEl.style.pointerEvents = 'all';
+  pieceEl.style.cursor = 'move';
+  pieceEl.innerHTML = `<svg width="${sh.w}" height="${sh.h}" viewBox="0 0 ${sh.w} ${sh.h}"><path d="${sh.path}" fill="${sh.color}" stroke="#fff" stroke-width="2" opacity="0.92"/></svg>`;
+  pieceEl.style.animation = 'celebCardIn 0.3s ease';
+  // Make draggable within board
+  let dragging = false, ox, oy;
+  pieceEl.addEventListener('mousedown', e => {
+    dragging = true;
+    ox = e.clientX - pieceEl.offsetLeft;
+    oy = e.clientY - pieceEl.offsetTop;
+    pieceEl.style.zIndex = 10;
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const board = document.getElementById('tan-board');
+    if (!board) { dragging = false; return; }
+    const rect = board.getBoundingClientRect();
+    pieceEl.style.left = Math.max(0, Math.min(e.clientX - rect.left - ox + pieceEl.offsetLeft, 280-sh.w)) + 'px';
+    pieceEl.style.top = Math.max(0, Math.min(e.clientY - rect.top - oy + pieceEl.offsetTop, 280-sh.h)) + 'px';
+  });
+  document.addEventListener('mouseup', () => { dragging = false; pieceEl.style.zIndex = 1; });
+  container.appendChild(pieceEl);
+  addScore(10);
+  const placed = Object.keys(tanPlaced).length;
+  const prog = document.getElementById('tan-progress');
+  if (prog) prog.textContent = `Placed: ${placed} / ${tangramShapes.length}`;
+  if (placed === tangramShapes.length) setTimeout(() => celebrate('You placed all tangram pieces! 🔷'), 400);
+}
+
+// Touch support for tangram
+let tanTouchEl = null, tanTouchSh = null;
+function tanTouchStart(e, sh) {
+  tanTouchSh = sh;
+}
+
+function tanReset() {
+  tanPlaced = {};
+  tangramShapes.forEach(sh => {
+    const el = document.getElementById('tray-'+sh.id);
+    if (el) el.classList.remove('placed');
+  });
+  const container = document.getElementById('tan-placed-container');
+  if (container) container.innerHTML = '';
+  const prog = document.getElementById('tan-progress');
+  if (prog) prog.textContent = `Placed: 0 / ${tangramShapes.length}`;
+}
+
+// ============================================================
+// BALLOON POP MATH
+// ============================================================
+const balloonColors = ['#EF4444','#F97316','#EAB308','#22C55E','#3B82F6','#A855F7','#EC4899','#06B6D4'];
+let balloonQ, balloonAnswer, balloonRound, balloonTotal;
+function renderBalloon(area) {
+  balloonRound = 0;
+  balloonTotal = 8;
+  area.innerHTML = `
+  <div class="balloon-container" id="balloon-game">
+    <div class="balloon-question"><div class="bq-label">🎈 Pop the right answer!</div><div class="bq-math" id="bq-math">?</div></div>
+    <div class="balloons-area" id="balloons-area"></div>
+    <div class="balloon-progress" id="balloon-progress">Question 1 of ${balloonTotal}</div>
+  </div>`;
+  nextBalloonQ();
+}
+function nextBalloonQ() {
+  if (balloonRound >= balloonTotal) { celebrate('All balloons popped correctly! 🎈'); return; }
+  balloonRound++;
+  document.getElementById('balloon-progress').textContent = `Question ${balloonRound} of ${balloonTotal}`;
+  // Generate question
+  const ops = ['+','-','×'];
+  const op = ops[Math.floor(Math.random()*ops.length)];
+  let a, b, ans;
+  if (op==='+') { a=Math.floor(Math.random()*10)+1; b=Math.floor(Math.random()*10)+1; ans=a+b; }
+  else if (op==='-') { a=Math.floor(Math.random()*10)+5; b=Math.floor(Math.random()*a)+1; ans=a-b; }
+  else { a=Math.floor(Math.random()*6)+1; b=Math.floor(Math.random()*5)+1; ans=a*b; }
+  balloonAnswer = ans;
+  document.getElementById('bq-math').textContent = `${a} ${op} ${b} = ?`;
+  // Generate wrong answers
+  const wrongs = new Set();
+  while (wrongs.size < 4) {
+    const w = ans + (Math.floor(Math.random()*10)-4);
+    if (w !== ans && w > 0) wrongs.add(w);
+  }
+  const options = [ans, ...wrongs].sort(()=>Math.random()-0.5).slice(0,5);
+  if (!options.includes(ans)) options[0] = ans;
+  const shuffled = options.sort(()=>Math.random()-0.5);
+  const area = document.getElementById('balloons-area');
+  area.innerHTML = '';
+  shuffled.forEach((opt, i) => {
+    const color = balloonColors[i % balloonColors.length];
+    const btn = document.createElement('div');
+    btn.className = 'balloon-btn';
+    btn.innerHTML = `
+      <svg width="80" height="100" viewBox="0 0 80 100">
+        <ellipse cx="40" cy="42" rx="34" ry="38" fill="${color}" opacity="0.9"/>
+        <ellipse cx="30" cy="24" rx="8" ry="6" fill="rgba(255,255,255,0.25)"/>
+        <line x1="40" y1="80" x2="40" y2="100" stroke="${color}" stroke-width="2"/>
+        <path d="M 34 80 Q 40 88 46 80" stroke="${color}" fill="none" stroke-width="1.5"/>
+      </svg>
+      <span class="balloon-answer-text">${opt}</span>`;
+    btn.onclick = () => {
+      if (opt === balloonAnswer) {
+        btn.classList.add('pop');
+        addScore(15);
+        setTimeout(nextBalloonQ, 400);
+      } else {
+        btn.classList.add('wrong');
+        setTimeout(() => btn.classList.remove('wrong'), 400);
+      }
+    };
+    area.appendChild(btn);
+  });
+}
+
+// ============================================================
+// CONFETTI
+// ============================================================
+function startConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const particles = Array.from({length:160}, () => ({
+    x: Math.random()*canvas.width,
+    y: Math.random()*canvas.height - canvas.height,
+    r: Math.random()*8+4,
+    d: Math.random()*160+80,
+    color: ['#FFE66D','#FF6B6B','#4ECDC4','#A855F7','#22C55E','#F97316','#EC4899','#3B82F6'][Math.floor(Math.random()*8)],
+    tilt: Math.floor(Math.random()*10)-10,
+    tiltAngle: 0,
+    tiltAngleInc: Math.random()*0.07+0.05
+  }));
+  let angle = 0;
+  let frame;
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    angle += 0.01;
+    particles.forEach(p => {
+      ctx.beginPath();
+      ctx.lineWidth = p.r/2;
+      ctx.strokeStyle = p.color;
+      ctx.fillStyle = p.color;
+      ctx.moveTo(p.x+p.tilt+p.r/4, p.y);
+      ctx.lineTo(p.x+p.tilt, p.y+p.tilt+p.r/4);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      ctx.fill();
+      p.tiltAngle += p.tiltAngleInc;
+      p.y += (Math.cos(angle+p.d)+1+p.r/2)/2;
+      p.x += Math.sin(angle)*2;
+      p.tilt = Math.sin(p.tiltAngle)*15;
+      if (p.y > canvas.height) { p.y = -14; p.x = Math.random()*canvas.width; }
+    });
+    frame = requestAnimationFrame(draw);
+  }
+  draw();
+  setTimeout(() => { cancelAnimationFrame(frame); ctx.clearRect(0,0,canvas.width,canvas.height); }, 6000);
+}
+
+// ============================================================
+// BOARD DRAG SUPPORT (tangram board ondrop)
+// ============================================================
+const tanBoard = document.getElementById('tan-board');
+if (tanBoard) {
+  tanBoard.addEventListener('dragover', e => e.preventDefault());
+  tanBoard.addEventListener('drop', tanDrop);
+}
+</script>
+</body>
+</html>
